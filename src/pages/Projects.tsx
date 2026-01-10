@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Search, Grid3X3, List, Users } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ const stageLabels = {
 };
 
 export default function Projects() {
+  const navigate = useNavigate();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
 
@@ -46,7 +47,7 @@ export default function Projects() {
               Manage and track all your hardware projects.
             </p>
           </div>
-          <Button className="gap-2 shrink-0">
+          <Button className="gap-2 shrink-0" onClick={() => navigate('/projects/new')}>
             <Plus className="h-4 w-4" />
             New Project
           </Button>
