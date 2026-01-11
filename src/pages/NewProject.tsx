@@ -9,24 +9,45 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { 
-  ArrowLeft, 
-  CalendarIcon, 
-  Plus, 
-  X, 
-  Upload, 
-  FileText, 
-  Users, 
-  Building2, 
+import {
+  ArrowLeft,
+  CalendarIcon,
+  Plus,
+  X,
+  Upload,
+  FileText,
+  Users,
+  Building2,
   Paperclip,
   ListTodo,
   ChevronDown,
   ChevronUp,
   Trash2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Palette,
+  Laptop,
+  Wrench,
+  Smartphone,
+  Settings,
+  Zap,
+  Cpu,
+  FlaskConical,
+  Factory,
+  BookOpen,
+  Link as LinkIcon,
+  Globe
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -45,19 +66,21 @@ const projectTypes = [
 ];
 
 const departments = [
-  { id: "design", name: "Design", icon: "🎨" },
-  { id: "development", name: "Development", icon: "💻" },
-  { id: "hardware", name: "Hardware", icon: "🔧" },
-  { id: "software", name: "Software", icon: "📱" },
-  { id: "mechanical", name: "Mechanical", icon: "⚙️" },
-  { id: "electrical", name: "Electrical", icon: "⚡" },
-  { id: "firmware", name: "Firmware", icon: "🔌" },
-  { id: "testing", name: "Testing & QA", icon: "🧪" },
-  { id: "manufacturing", name: "Manufacturing", icon: "🏭" },
-  { id: "documentation", name: "Documentation", icon: "📄" },
+  { id: "design", name: "Design", icon: Palette },
+  // { id: "development", name: "Development", icon: Laptop },
+  { id: "hardware", name: "Hardware", icon: Wrench },
+  { id: "software", name: "Software", icon: Smartphone },
+  { id: "mechanical", name: "Mechanical", icon: Settings },
+  { id: "electrical", name: "Electrical", icon: Zap },
+  { id: "firmware", name: "Firmware", icon: Cpu },
+  { id: "testing", name: "Testing & QA", icon: FlaskConical },
+  { id: "manufacturing", name: "Manufacturing", icon: Factory },
+  { id: "documentation", name: "Documentation", icon: BookOpen },
 ];
 
 const roles = [
+  "Admin",
+  "Member",
   "Project Lead",
   "Developer",
   "Designer",
@@ -73,6 +96,18 @@ const roles = [
 interface TeamMemberAssignment {
   memberId: string;
   role: string;
+}
+
+interface Department {
+  id: string;
+  name: string;
+  icon: React.ElementType;
+}
+
+interface ProjectLink {
+  id: string;
+  name: string;
+  url: string;
 }
 
 interface UploadedFile {
@@ -91,35 +126,41 @@ interface ExtractedTask {
 
 const NewProject = () => {
   const navigate = useNavigate();
-  
+
   // Basic Details
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [projectType, setProjectType] = useState("");
   const [startDate, setStartDate] = useState<Date>();
   const [expectedEndDate, setExpectedEndDate] = useState<Date>();
-  
+
   // Optional Details
   const [showOptionalDetails, setShowOptionalDetails] = useState(false);
   const [clientName, setClientName] = useState("");
   const [clientOrganization, setClientOrganization] = useState("");
   const [clientContact, setClientContact] = useState("");
   const [notes, setNotes] = useState("");
-  
+
   // Team Members
   const [assignedMembers, setAssignedMembers] = useState<TeamMemberAssignment[]>([]);
   const [selectedMember, setSelectedMember] = useState("");
   const [selectedRole, setSelectedRole] = useState("");
-  
+
   // Departments
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
-  
-  // Attachments
+  const [customDepartments, setCustomDepartments] = useState<Department[]>([]);
+  const [newDeptName, setNewDeptName] = useState("");
+  const [isAddDeptOpen, setIsAddDeptOpen] = useState(false);
+
+  // Storage (Attachments & Links)
+  const [links, setLinks] = useState<ProjectLink[]>([]);
+  const [newLinkName, setNewLinkName] = useState("");
+  const [newLinkUrl, setNewLinkUrl] = useState("");
   const [attachments, setAttachments] = useState<UploadedFile[]>([
     { id: "1", name: "Project_Requirements.pdf", size: "2.4 MB", type: "pdf" },
     { id: "2", name: "Technical_Specs.docx", size: "1.1 MB", type: "docx" },
   ]);
-  
+
   // Tasks from document
   const [taskDocument, setTaskDocument] = useState<UploadedFile | null>(null);
   const [extractedTasks, setExtractedTasks] = useState<ExtractedTask[]>([]);
@@ -141,22 +182,50 @@ const NewProject = () => {
   };
 
   const handleDepartmentToggle = (departmentId: string) => {
-    setSelectedDepartments(prev => 
-      prev.includes(departmentId) 
+    setSelectedDepartments(prev =>
+      prev.includes(departmentId)
         ? prev.filter(d => d !== departmentId)
         : [...prev, departmentId]
     );
+  };
+
+  const handleAddCustomDepartment = () => {
+    if (newDeptName.trim()) {
+      const newId = `custom-${Date.now()}`;
+      const newDept: Department = {
+        id: newId,
+        name: newDeptName.trim(),
+        icon: Building2 // Use generic icon for custom departments
+      };
+
+      setCustomDepartments([...customDepartments, newDept]);
+      setSelectedDepartments([...selectedDepartments, newId]); // Auto-select new department
+      setNewDeptName("");
+      setIsAddDeptOpen(false);
+    }
   };
 
   const handleRemoveAttachment = (fileId: string) => {
     setAttachments(attachments.filter(f => f.id !== fileId));
   };
 
+  const handleAddLink = () => {
+    if (newLinkName && newLinkUrl) {
+      setLinks([...links, { id: Math.random().toString(36).substr(2, 9), name: newLinkName, url: newLinkUrl }]);
+      setNewLinkName("");
+      setNewLinkUrl("");
+    }
+  };
+
+  const handleRemoveLink = (linkId: string) => {
+    setLinks(links.filter(l => l.id !== linkId));
+  };
+
   const handleTaskDocumentUpload = () => {
     // Simulate document upload and task extraction
     setTaskDocument({ id: "task-doc", name: "Project_Tasks.xlsx", size: "856 KB", type: "xlsx" });
     setIsProcessing(true);
-    
+
     // Simulate AI processing delay
     setTimeout(() => {
       setExtractedTasks([
@@ -190,6 +259,7 @@ const NewProject = () => {
       assignedMembers,
       selectedDepartments,
       attachments,
+      links,
       extractedTasks,
     });
     navigate("/projects");
@@ -211,9 +281,9 @@ const NewProject = () => {
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => navigate("/projects")}
             className="shrink-0"
           >
@@ -221,7 +291,7 @@ const NewProject = () => {
           </Button>
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Create New Project</h1>
-            <p className="text-muted-foreground">Fill in the details to set up your new project</p>
+            {/* <p className="text-muted-foreground">Fill in the details to set up your new project</p> */}
           </div>
         </div>
 
@@ -438,7 +508,7 @@ const NewProject = () => {
                   const member = getMemberById(assignment.memberId);
                   if (!member) return null;
                   return (
-                    <div 
+                    <div
                       key={assignment.memberId}
                       className="flex items-center justify-between p-3 rounded-lg border bg-card"
                     >
@@ -454,8 +524,8 @@ const NewProject = () => {
                       </div>
                       <div className="flex items-center gap-3">
                         <Badge variant="secondary">{assignment.role}</Badge>
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-muted-foreground hover:text-destructive"
                           onClick={() => handleRemoveTeamMember(assignment.memberId)}
@@ -501,63 +571,195 @@ const NewProject = () => {
                       : "border-border hover:border-primary/50 hover:bg-muted/50"
                   )}
                 >
-                  <span className="text-2xl">{dept.icon}</span>
+                  <dept.icon className={cn(
+                    "h-8 w-8",
+                    selectedDepartments.includes(dept.id) ? "text-primary" : "text-muted-foreground"
+                  )} />
                   <span className="text-sm font-medium text-center">{dept.name}</span>
                   {selectedDepartments.includes(dept.id) && (
                     <div className="h-2 w-2 rounded-full bg-primary" />
                   )}
                 </div>
               ))}
+
+              {/* Custom Departments */}
+              {customDepartments.map((dept) => (
+                <div
+                  key={dept.id}
+                  onClick={() => handleDepartmentToggle(dept.id)}
+                  className={cn(
+                    "flex flex-col items-center gap-2 p-4 rounded-lg border-2 cursor-pointer transition-all",
+                    selectedDepartments.includes(dept.id)
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50 hover:bg-muted/50"
+                  )}
+                >
+                  <dept.icon className={cn(
+                    "h-8 w-8",
+                    selectedDepartments.includes(dept.id) ? "text-primary" : "text-muted-foreground"
+                  )} />
+                  <span className="text-sm font-medium text-center">{dept.name}</span>
+                  {selectedDepartments.includes(dept.id) && (
+                    <div className="h-2 w-2 rounded-full bg-primary" />
+                  )}
+                </div>
+              ))}
+
+              {/* Add Custom Department Button */}
+              <Dialog open={isAddDeptOpen} onOpenChange={setIsAddDeptOpen}>
+                <DialogTrigger asChild>
+                  <div
+                    className="flex flex-col items-center justify-center gap-2 p-4 rounded-lg border-2 border-dashed border-border cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-all"
+                  >
+                    <Plus className="h-8 w-8 text-muted-foreground" />
+                    <span className="text-sm font-medium text-center text-muted-foreground">Add Custom</span>
+                  </div>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add Custom Department</DialogTitle>
+                    <DialogDescription>
+                      Create a new department for this project.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="dept-name">Department Name</Label>
+                      <Input
+                        id="dept-name"
+                        placeholder="e.g., Marketing, Legal, etc."
+                        value={newDeptName}
+                        onChange={(e) => setNewDeptName(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleAddCustomDepartment();
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsAddDeptOpen(false)}>Cancel</Button>
+                    <Button onClick={handleAddCustomDepartment} disabled={!newDeptName.trim()}>Add Department</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </CardContent>
         </Card>
 
-        {/* Section 4: Attachments */}
+        {/* Section 4: Storage */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Paperclip className="h-5 w-5 text-primary" />
-              Attachments & Documents
+              Storage
             </CardTitle>
-            <CardDescription>Upload and manage project documents and files</CardDescription>
+            <CardDescription>Manage project documents, files, and external links</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
-              <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-              <p className="font-medium">Drop files here or click to upload</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Supports PDF, DOC, XLS, PPT, and image files
-              </p>
+          <CardContent className="space-y-6">
+            {/* File Upload Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-medium">Files & Documents</Label>
+              </div>
+              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
+                <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+                <p className="font-medium">Drop files here or click to upload</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Supports PDF, DOC, XLS, PPT, and image files
+                </p>
+              </div>
+
+              {attachments.length > 0 && (
+                <div className="space-y-2">
+                  {attachments.map((file) => (
+                    <div
+                      key={file.id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <FileText className="h-5 w-5 text-primary" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">{file.size}</p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemoveAttachment(file.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {attachments.length > 0 && (
-              <div className="space-y-2">
-                {attachments.map((file) => (
-                  <div 
-                    key={file.id}
-                    className="flex items-center justify-between p-3 rounded-lg border bg-card"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <FileText className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="font-medium text-sm">{file.name}</p>
-                        <p className="text-xs text-muted-foreground">{file.size}</p>
-                      </div>
-                    </div>
-                    <Button 
-                      variant="ghost" 
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => handleRemoveAttachment(file.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+            <Separator />
+
+            {/* Links Section */}
+            <div className="space-y-4">
+              <Label className="text-base font-medium">Project Links</Label>
+              <div className="flex gap-3">
+                <div className="grid gap-3 flex-1 md:grid-cols-2">
+                  <Input
+                    placeholder="Link Name (e.g., Figma Design)"
+                    value={newLinkName}
+                    onChange={(e) => setNewLinkName(e.target.value)}
+                  />
+                  <Input
+                    placeholder="URL (e.g., https://...)"
+                    value={newLinkUrl}
+                    onChange={(e) => setNewLinkUrl(e.target.value)}
+                  />
+                </div>
+                <Button onClick={handleAddLink} disabled={!newLinkName || !newLinkUrl}>
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Link
+                </Button>
               </div>
-            )}
+
+              {links.length > 0 && (
+                <div className="space-y-2">
+                  {links.map((link) => (
+                    <div
+                      key={link.id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                          <Globe className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{link.name}</p>
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-muted-foreground hover:text-primary hover:underline flex items-center gap-1"
+                          >
+                            <LinkIcon className="h-3 w-3" />
+                            {link.url}
+                          </a>
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemoveLink(link.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -574,7 +776,7 @@ const NewProject = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             {!taskDocument ? (
-              <div 
+              <div
                 onClick={handleTaskDocumentUpload}
                 className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer"
               >
@@ -596,8 +798,8 @@ const NewProject = () => {
                       <p className="text-xs text-muted-foreground">{taskDocument.size}</p>
                     </div>
                   </div>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="icon"
                     className="h-8 w-8 text-muted-foreground hover:text-destructive"
                     onClick={() => {
@@ -624,7 +826,7 @@ const NewProject = () => {
                     </div>
                     <div className="space-y-2 max-h-64 overflow-y-auto">
                       {extractedTasks.map((task) => (
-                        <div 
+                        <div
                           key={task.id}
                           className="flex items-start justify-between p-3 rounded-lg border bg-card"
                         >
@@ -636,14 +838,14 @@ const NewProject = () => {
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge 
-                              variant="outline" 
+                            <Badge
+                              variant="outline"
                               className={cn("text-xs capitalize", getPriorityColor(task.priority))}
                             >
                               {task.priority}
                             </Badge>
-                            <Button 
-                              variant="ghost" 
+                            <Button
+                              variant="ghost"
                               size="icon"
                               className="h-7 w-7 text-muted-foreground hover:text-destructive"
                               onClick={() => handleRemoveTask(task.id)}
@@ -666,7 +868,7 @@ const NewProject = () => {
           <Button variant="outline" onClick={() => navigate("/projects")}>
             Cancel
           </Button>
-          <Button 
+          <Button
             onClick={handleCreateProject}
             disabled={!projectName || !projectType || !startDate || !expectedEndDate}
           >
