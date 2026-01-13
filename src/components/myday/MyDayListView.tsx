@@ -1,26 +1,7 @@
 import { useMemo } from 'react';
-import { ChevronDown, ChevronRight, Calendar, Lock, Link2 } from 'lucide-react';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { 
   MyDayTask,
@@ -28,20 +9,8 @@ import {
   groupTasksByProgress,
   groupTasksByDueDate,
   groupTasksByPriority,
-  getModuleInfo,
-  getPriorityInfo,
-  formatDueDate,
-  getDueDateStatus,
 } from '@/lib/myDayUtils';
 import { MyDayGroupBy, TaskStatus } from '@/types';
-import { useState } from 'react';
-
-interface ListGroup {
-  id: string;
-  label: string;
-  color: string;
-  tasks: MyDayTask[];
-}
 
 interface MyDayListViewProps {
   tasks: MyDayTask[];
@@ -50,233 +19,156 @@ interface MyDayListViewProps {
   onStatusUpdate: (taskId: string, status: TaskStatus) => void;
 }
 
-const progressLabels: Record<string, { label: string; color: string }> = {
-  dependency: { label: 'Dependency', color: 'bg-destructive' },
-  notStarted: { label: 'Not Started', color: 'bg-muted-foreground' },
-  inProgress: { label: 'In Progress', color: 'bg-status-inProgress' },
-  completed: { label: 'Completed', color: 'bg-status-done' },
-};
-
-const dueDateLabels: Record<string, { label: string; color: string }> = {
-  late: { label: 'Late', color: 'bg-destructive' },
-  today: { label: 'Today', color: 'bg-priority-high' },
-  tomorrow: { label: 'Tomorrow', color: 'bg-priority-medium' },
-  thisWeek: { label: 'This Week', color: 'bg-status-inProgress' },
-  later: { label: 'Later', color: 'bg-muted-foreground' },
-};
-
-const priorityLabels: Record<string, { label: string; color: string }> = {
-  urgent: { label: 'Urgent', color: 'bg-priority-critical' },
-  important: { label: 'Important', color: 'bg-priority-high' },
-  medium: { label: 'Medium', color: 'bg-priority-medium' },
-  low: { label: 'Low', color: 'bg-priority-low' },
-};
-
 const statusColors: Record<TaskStatus, string> = {
-  'todo': 'bg-status-todo text-foreground',
-  'in-progress': 'bg-status-inProgress text-white',
-  'review': 'bg-status-review text-white',
-  'done': 'bg-status-done text-white',
-  'blocked': 'bg-status-blocked text-white',
+  todo: 'bg-status-todo/20 text-muted-foreground',
+  'in-progress': 'bg-status-in-progress/20 text-status-in-progress',
+  review: 'bg-status-review/20 text-status-review',
+  done: 'bg-status-done/20 text-status-done',
+  blocked: 'bg-status-blocked/20 text-status-blocked',
+};
+
+const statusLabels: Record<TaskStatus, string> = {
+  todo: 'Todo',
+  'in-progress': 'In Progress',
+  review: 'Review',
+  done: 'Done',
+  blocked: 'Blocked',
+};
+
+const priorityColors = {
+  critical: 'bg-priority-critical/20 text-priority-critical',
+  high: 'bg-priority-high/20 text-priority-high',
+  medium: 'bg-priority-medium/20 text-priority-medium',
+  low: 'bg-priority-low/20 text-priority-low',
 };
 
 export function MyDayListView({
   tasks,
   groupBy,
   onTaskClick,
-  onStatusUpdate,
 }: MyDayListViewProps) {
-  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['all']));
-
-  const groups = useMemo((): ListGroup[] => {
+  // Get all tasks in a flat list based on groupBy order
+  const allTasks = useMemo((): MyDayTask[] => {
     switch (groupBy) {
       case 'project': {
         const grouped = groupTasksByProject(tasks);
-        return Array.from(grouped.entries()).map(([id, { name, tasks }]) => ({
-          id,
-          label: name,
-          color: 'bg-primary',
-          tasks,
-        }));
+        return Array.from(grouped.values()).flatMap(data => data.tasks);
       }
       case 'progress': {
         const grouped = groupTasksByProgress(tasks);
-        return Object.entries(grouped).map(([key, tasks]) => ({
-          id: key,
-          ...progressLabels[key],
-          tasks,
-        }));
+        return [
+          ...grouped.dependency,
+          ...grouped.notStarted,
+          ...grouped.inProgress,
+          ...grouped.completed,
+        ];
       }
       case 'dueDate': {
         const grouped = groupTasksByDueDate(tasks);
-        return Object.entries(grouped).map(([key, tasks]) => ({
-          id: key,
-          ...dueDateLabels[key],
-          tasks,
-        }));
+        return [
+          ...grouped.late,
+          ...grouped.today,
+          ...grouped.tomorrow,
+          ...grouped.thisWeek,
+          ...grouped.later,
+        ];
       }
       case 'priority': {
         const grouped = groupTasksByPriority(tasks);
-        return Object.entries(grouped).map(([key, tasks]) => ({
-          id: key,
-          ...priorityLabels[key],
-          tasks,
-        }));
+        return [
+          ...grouped.urgent,
+          ...grouped.important,
+          ...grouped.medium,
+          ...grouped.low,
+        ];
       }
       default:
-        return [];
+        return tasks;
     }
   }, [tasks, groupBy]);
 
-  const toggleGroup = (groupId: string) => {
-    setExpandedGroups(prev => {
-      const next = new Set(prev);
-      if (next.has(groupId)) {
-        next.delete(groupId);
-      } else {
-        next.add(groupId);
-      }
-      return next;
-    });
-  };
-
-  // Initialize all groups as expanded
-  useMemo(() => {
-    setExpandedGroups(new Set(groups.map(g => g.id)));
-  }, [groupBy]);
+  if (allTasks.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        No tasks to display
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4">
-      {groups.map((group) => (
-        <Collapsible
-          key={group.id}
-          open={expandedGroups.has(group.id)}
-          onOpenChange={() => toggleGroup(group.id)}
-        >
-          {/* Group Header */}
-          <CollapsibleTrigger className="flex items-center gap-2 w-full p-2 hover:bg-muted/50 rounded-lg transition-colors">
-            {expandedGroups.has(group.id) ? (
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            )}
-            <div className={cn('w-2 h-2 rounded-full', group.color)} />
-            <span className="font-medium text-sm">{group.label}</span>
-            <Badge variant="secondary" className="ml-2 text-xs">
-              {group.tasks.length}
-            </Badge>
-          </CollapsibleTrigger>
-
-          <CollapsibleContent>
-            {group.tasks.length > 0 ? (
-              <div className="rounded-lg border border-border overflow-hidden mt-2">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/30">
-                      <TableHead className="w-[300px]">Task</TableHead>
-                      <TableHead className="w-[150px]">Project</TableHead>
-                      <TableHead className="w-[100px]">Category</TableHead>
-                      <TableHead className="w-[100px]">Priority</TableHead>
-                      <TableHead className="w-[120px]">Due Date</TableHead>
-                      <TableHead className="w-[100px]">Status</TableHead>
-                      <TableHead className="w-[80px]">Assignee</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {group.tasks.map((task) => {
-                      const moduleInfo = getModuleInfo(task.module);
-                      const priorityInfo = getPriorityInfo(task.priority);
-                      const dueDateStatus = getDueDateStatus(task.dueDate);
-                      
-                      return (
-                        <TableRow 
-                          key={task.id}
-                          className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => onTaskClick(task)}
-                        >
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {task.isBlocked && (
-                                <Lock className="h-3 w-3 text-status-blocked shrink-0" />
-                              )}
-                              {task.isBlockingOthers && !task.isBlocked && (
-                                <Link2 className="h-3 w-3 text-priority-high shrink-0" />
-                              )}
-                              <span className="font-medium text-sm truncate">
-                                {task.title}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs">
-                              {task.projectName}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={cn('text-xs', moduleInfo.color)}>
-                              {moduleInfo.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge className={cn('text-xs', priorityInfo.color)}>
-                              {priorityInfo.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className={cn(
-                              'flex items-center gap-1 text-xs',
-                              dueDateStatus === 'overdue' && 'text-destructive',
-                              dueDateStatus === 'today' && 'text-priority-high',
-                            )}>
-                              <Calendar className="h-3 w-3" />
-                              <span>{formatDueDate(task.dueDate)}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell onClick={(e) => e.stopPropagation()}>
-                            <Select
-                              value={task.status}
-                              onValueChange={(value: TaskStatus) => onStatusUpdate(task.id, value)}
-                            >
-                              <SelectTrigger className="h-7 w-[100px] text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="todo">To Do</SelectItem>
-                                <SelectItem value="in-progress">In Progress</SelectItem>
-                                <SelectItem value="review">Review</SelectItem>
-                                <SelectItem value="blocked">Blocked</SelectItem>
-                                <SelectItem value="done">Done</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            {task.assignee && (
-                              <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-medium">
-                                {task.assignee.initials}
-                              </div>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      );
+    <div className="rounded-lg border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[300px]">Task</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Priority</TableHead>
+            <TableHead>Module</TableHead>
+            <TableHead>Assignee</TableHead>
+            <TableHead>Due Date</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {allTasks.map((task) => (
+            <TableRow 
+              key={task.id} 
+              className="cursor-pointer hover:bg-muted/50"
+              onClick={() => onTaskClick(task)}
+            >
+              <TableCell>
+                <div>
+                  <p className="font-medium">{task.title}</p>
+                  {task.description && (
+                    <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                      {task.description}
+                    </p>
+                  )}
+                </div>
+              </TableCell>
+              <TableCell>
+                <Badge variant="secondary" className={cn('capitalize', statusColors[task.status])}>
+                  {statusLabels[task.status]}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <Badge variant="secondary" className={cn('capitalize', priorityColors[task.priority])}>
+                  {task.priority}
+                </Badge>
+              </TableCell>
+              <TableCell>
+                <span className="text-sm capitalize">{task.module}</span>
+              </TableCell>
+              <TableCell>
+                {task.assignee ? (
+                  <div className="flex items-center gap-2">
+                    <Avatar className="h-6 w-6">
+                      <AvatarFallback className="text-[10px]">
+                        {task.assignee.initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm">{task.assignee.name}</span>
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground text-sm">Unassigned</span>
+                )}
+              </TableCell>
+              <TableCell>
+                {task.dueDate ? (
+                  <span className="text-sm">
+                    {new Date(task.dueDate).toLocaleDateString('en-GB', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
                     })}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                No tasks in this group
-              </div>
-            )}
-          </CollapsibleContent>
-        </Collapsible>
-      ))}
-
-      {/* Empty State */}
-      {groups.length === 0 || groups.every(g => g.tasks.length === 0) && (
-        <div className="flex items-center justify-center h-48 text-muted-foreground">
-          No tasks to display
-        </div>
-      )}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground text-sm">No date</span>
+                )}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

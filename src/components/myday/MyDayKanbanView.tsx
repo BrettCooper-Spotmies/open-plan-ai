@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { MyDayTaskCard } from './MyDayTaskCard';
+import { GripVertical, Check } from 'lucide-react';
 import { 
   MyDayTask, 
   groupTasksByProject, 
@@ -29,18 +30,18 @@ interface MyDayKanbanViewProps {
 }
 
 const progressColumnConfig = [
-  { id: 'dependency', label: 'Dependency', color: 'bg-destructive' },
-  { id: 'notStarted', label: 'Not Started', color: 'bg-muted-foreground' },
-  { id: 'inProgress', label: 'In Progress', color: 'bg-status-inProgress' },
+  { id: 'dependency', label: 'Dependency', color: 'bg-status-blocked' },
+  { id: 'notStarted', label: 'Not Started', color: 'bg-status-todo' },
+  { id: 'inProgress', label: 'In Progress', color: 'bg-status-in-progress' },
   { id: 'completed', label: 'Completed', color: 'bg-status-done' },
 ];
 
 const dueDateColumnConfig = [
-  { id: 'late', label: 'Late', color: 'bg-destructive' },
+  { id: 'late', label: 'Late', color: 'bg-status-blocked' },
   { id: 'today', label: 'Today', color: 'bg-priority-high' },
   { id: 'tomorrow', label: 'Tomorrow', color: 'bg-priority-medium' },
-  { id: 'thisWeek', label: 'This Week', color: 'bg-status-inProgress' },
-  { id: 'later', label: 'Later', color: 'bg-muted-foreground' },
+  { id: 'thisWeek', label: 'This Week', color: 'bg-status-in-progress' },
+  { id: 'later', label: 'Later', color: 'bg-status-todo' },
 ];
 
 const priorityColumnConfig = [
@@ -50,27 +51,36 @@ const priorityColumnConfig = [
   { id: 'low', label: 'Low', color: 'bg-priority-low' },
 ];
 
-function getTaskVariant(task: MyDayTask): 'attention' | 'ready' | 'blocked' {
-  if (task.isBlocked || task.hasUnresolvedDependencies) return 'blocked';
-  if (task.isOverdue || task.isDueToday || task.priority === 'critical' || task.priority === 'high') return 'attention';
-  return 'ready';
-}
+const priorityColors = {
+  critical: 'bg-priority-critical text-white',
+  high: 'bg-priority-high text-white',
+  medium: 'bg-priority-medium text-white',
+  low: 'bg-priority-low text-white',
+};
+
+const moduleColors = {
+  hardware: 'border-l-module-hardware',
+  software: 'border-l-module-software',
+  firmware: 'border-l-module-firmware',
+  testing: 'border-l-module-testing',
+};
 
 export function MyDayKanbanView({
   tasks,
   groupBy,
   onTaskClick,
   onStatusUpdate,
-  onChecklistToggle,
 }: MyDayKanbanViewProps) {
+  const [hoveredTask, setHoveredTask] = useState<string | null>(null);
+
   const columns = useMemo((): KanbanColumn[] => {
     switch (groupBy) {
       case 'project': {
         const grouped = groupTasksByProject(tasks);
-        return Array.from(grouped.entries()).map(([id, { name, tasks }]) => ({
+        return Array.from(grouped.entries()).map(([id, { name, tasks }], index) => ({
           id,
           label: name,
-          color: 'bg-primary',
+          color: `bg-chart-${(index % 5) + 1}`,
           tasks,
         }));
       }
@@ -121,82 +131,155 @@ export function MyDayKanbanView({
     }
   };
 
+  const handleCompleteTask = (taskId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    onStatusUpdate(taskId, 'done');
+  };
+
+  if (columns.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        No tasks to display
+      </div>
+    );
+  }
+
   return (
     <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex gap-4 overflow-x-auto pb-4 min-h-[calc(100vh-320px)]">
-        {columns.map((column) => (
-          <div key={column.id} className="flex-shrink-0 w-[320px]">
-            <Card className="h-full bg-card/50 border-border">
-              {/* Column Header */}
-              <div className="p-3 border-b border-border flex items-center gap-2">
-                <div className={cn('w-2 h-2 rounded-full', column.color)} />
-                <h3 className="font-medium text-sm text-foreground">{column.label}</h3>
-                <Badge variant="secondary" className="ml-auto text-xs">
-                  {column.tasks.length}
-                </Badge>
-              </div>
-
-              {/* Column Content */}
-              <Droppable droppableId={column.id} isDropDisabled={groupBy !== 'progress'}>
+      <Droppable droppableId="board" type="COLUMN" direction="horizontal">
+        {(provided) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className="grid gap-4"
+            style={{
+              gridTemplateColumns: `repeat(${columns.length}, minmax(280px, 1fr))`,
+            }}
+          >
+            {columns.map((column, index) => (
+              <Draggable key={column.id} draggableId={column.id} index={index}>
                 {(provided, snapshot) => (
                   <div
                     ref={provided.innerRef}
-                    {...provided.droppableProps}
+                    {...provided.draggableProps}
                     className={cn(
-                      'p-2 space-y-2 min-h-[200px] transition-colors',
-                      snapshot.isDraggingOver && 'bg-accent/50'
+                      'space-y-3 transition-shadow',
+                      snapshot.isDragging && 'shadow-lg'
                     )}
                   >
-                    {column.tasks.map((task, index) => (
-                      <Draggable 
-                        key={task.id} 
-                        draggableId={task.id} 
-                        index={index}
-                        isDragDisabled={groupBy !== 'progress'}
+                    {/* Column Header */}
+                    <div className="flex items-center gap-2 px-1">
+                      <div
+                        {...provided.dragHandleProps}
+                        className="cursor-grab active:cursor-grabbing"
                       >
-                        {(provided, snapshot) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            {...provided.dragHandleProps}
-                            className={cn(
-                              'transition-shadow',
-                              snapshot.isDragging && 'shadow-lg'
-                            )}
-                          >
-                            <MyDayTaskCard
-                              task={task}
-                              variant={getTaskVariant(task)}
-                              onTaskClick={onTaskClick}
-                              onStatusUpdate={onStatusUpdate}
-                              onChecklistToggle={onChecklistToggle}
-                            />
-                          </div>
-                        )}
-                      </Draggable>
-                    ))}
-                    {provided.placeholder}
-                    
-                    {/* Empty State */}
-                    {column.tasks.length === 0 && (
-                      <div className="flex items-center justify-center h-24 text-muted-foreground text-sm">
-                        No tasks
+                        <GripVertical className="h-4 w-4 text-muted-foreground" />
                       </div>
-                    )}
+                      <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                      <h3 className="font-medium text-sm">{column.label}</h3>
+                      <span className="text-xs text-muted-foreground">
+                        {column.tasks.length}
+                      </span>
+                    </div>
+
+                    {/* Tasks Droppable */}
+                    <Droppable droppableId={column.id} type="TASK" isDropDisabled={groupBy !== 'progress'}>
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.droppableProps}
+                          className={cn(
+                            'space-y-2 min-h-[200px] p-2 rounded-lg transition-colors',
+                            snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30'
+                          )}
+                        >
+                          {column.tasks.map((task, taskIndex) => (
+                            <Draggable 
+                              key={task.id} 
+                              draggableId={task.id} 
+                              index={taskIndex}
+                              isDragDisabled={groupBy !== 'progress'}
+                            >
+                              {(provided, snapshot) => (
+                                <Card
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  {...provided.dragHandleProps}
+                                  className={cn(
+                                    'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
+                                    moduleColors[task.module as keyof typeof moduleColors] || 'border-l-muted',
+                                    snapshot.isDragging && 'shadow-lg rotate-2'
+                                  )}
+                                  onMouseEnter={() => setHoveredTask(task.id)}
+                                  onMouseLeave={() => setHoveredTask(null)}
+                                  onClick={() => onTaskClick(task)}
+                                >
+                                  {/* Completion Checkbox */}
+                                  {hoveredTask === task.id && task.status !== 'done' && (
+                                    <button
+                                      onClick={(e) => handleCompleteTask(task.id, e)}
+                                      className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-status-done text-white flex items-center justify-center shadow-md hover:scale-110 transition-transform z-10"
+                                    >
+                                      <Check className="h-3 w-3" />
+                                    </button>
+                                  )}
+
+                                  <div className="space-y-2">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <h4 className="text-sm font-medium leading-tight">
+                                        {task.title}
+                                      </h4>
+                                      <Badge
+                                        variant="secondary"
+                                        className={cn(
+                                          'text-[10px] px-1.5 py-0 shrink-0',
+                                          priorityColors[task.priority]
+                                        )}
+                                      >
+                                        {task.priority}
+                                      </Badge>
+                                    </div>
+
+                                    {task.description && (
+                                      <p className="text-xs text-muted-foreground line-clamp-2">
+                                        {task.description}
+                                      </p>
+                                    )}
+
+                                    <div className="flex items-center justify-between pt-2">
+                                      {task.assignee && (
+                                        <Avatar className="h-5 w-5">
+                                          <AvatarFallback className="text-[9px] bg-muted">
+                                            {task.assignee.initials}
+                                          </AvatarFallback>
+                                        </Avatar>
+                                      )}
+                                      {task.dueDate && (
+                                        <span className="text-[10px] text-muted-foreground">
+                                          {new Date(task.dueDate).toLocaleDateString('en-US', {
+                                            month: 'short',
+                                            day: 'numeric',
+                                          })}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </Card>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
                   </div>
                 )}
-              </Droppable>
-            </Card>
-          </div>
-        ))}
-
-        {/* Empty State for no columns */}
-        {columns.length === 0 && (
-          <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            No tasks to display
+              </Draggable>
+            ))}
+            {provided.placeholder}
           </div>
         )}
-      </div>
+      </Droppable>
     </DragDropContext>
   );
 }
