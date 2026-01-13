@@ -104,6 +104,10 @@ export interface Activity {
 // View types for the project detail page
 export type ProjectView = 'kanban' | 'timeline' | 'list' | 'dependencies';
 
+// My Day specific types
+export type MyDayView = 'kanban' | 'list';
+export type MyDayGroupBy = 'project' | 'progress' | 'dueDate' | 'priority';
+
 // Filter options
 export interface TaskFilter {
   status?: TaskStatus[];
