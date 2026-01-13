@@ -1,4 +1,4 @@
-import { TeamMember, Project, Activity, Task } from '@/types';
+import { TeamMember, Project, Activity, Task, ExtendedTeamMember, UserSettings, WorkspaceSettings } from '@/types';
 
 // Team Members
 export const teamMembers: TeamMember[] = [
@@ -472,7 +472,6 @@ export const dashboardStats = {
 };
 
 // Extended team members with status and department
-import { ExtendedTeamMember, UserSettings, WorkspaceSettings } from '@/types';
 
 export const extendedTeamMembers: ExtendedTeamMember[] = [
   {
