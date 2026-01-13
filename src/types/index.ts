@@ -111,3 +111,37 @@ export interface TaskFilter {
   module?: ModuleType[];
   assignee?: string[];
 }
+
+// Team member status
+export type MemberStatus = 'active' | 'inactive' | 'pending';
+
+// Extended team member for management
+export interface ExtendedTeamMember extends TeamMember {
+  status: MemberStatus;
+  department?: string;
+  joinedAt?: string;
+  projectCount?: number;
+}
+
+// User settings/preferences
+export interface UserSettings {
+  theme: 'light' | 'dark' | 'system';
+  sidebarCollapsed: boolean;
+  compactMode: boolean;
+  notifications: {
+    taskAssignments: boolean;
+    taskCompletions: boolean;
+    comments: boolean;
+    projectUpdates: boolean;
+    milestoneReminders: boolean;
+    emailDigest: 'daily' | 'weekly' | 'none';
+  };
+}
+
+// Workspace settings
+export interface WorkspaceSettings {
+  name: string;
+  description: string;
+  timezone: string;
+  dateFormat: string;
+}

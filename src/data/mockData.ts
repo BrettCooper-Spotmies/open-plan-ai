@@ -470,3 +470,74 @@ export const dashboardStats = {
     p.milestones.filter(m => !m.completed).slice(0, 2)
   ),
 };
+
+// Extended team members with status and department
+import { ExtendedTeamMember, UserSettings, WorkspaceSettings } from '@/types';
+
+export const extendedTeamMembers: ExtendedTeamMember[] = [
+  {
+    ...teamMembers[0],
+    status: 'active',
+    department: 'Engineering',
+    joinedAt: '2023-06-15',
+    projectCount: 2,
+  },
+  {
+    ...teamMembers[1],
+    status: 'active',
+    department: 'Engineering',
+    joinedAt: '2023-07-20',
+    projectCount: 2,
+  },
+  {
+    ...teamMembers[2],
+    status: 'active',
+    department: 'Engineering',
+    joinedAt: '2023-08-10',
+    projectCount: 2,
+  },
+  {
+    ...teamMembers[3],
+    status: 'active',
+    department: 'Quality Assurance',
+    joinedAt: '2023-09-05',
+    projectCount: 2,
+  },
+  {
+    ...teamMembers[4],
+    status: 'active',
+    department: 'Management',
+    joinedAt: '2023-05-01',
+    projectCount: 2,
+  },
+  {
+    ...teamMembers[5],
+    status: 'pending',
+    department: 'Engineering',
+    joinedAt: '2024-01-10',
+    projectCount: 1,
+  },
+];
+
+// Default user settings
+export const defaultUserSettings: UserSettings = {
+  theme: 'system',
+  sidebarCollapsed: false,
+  compactMode: false,
+  notifications: {
+    taskAssignments: true,
+    taskCompletions: true,
+    comments: true,
+    projectUpdates: true,
+    milestoneReminders: true,
+    emailDigest: 'daily',
+  },
+};
+
+// Workspace settings
+export const workspaceSettings: WorkspaceSettings = {
+  name: 'OpenPlan AI',
+  description: 'Hardware Development Team',
+  timezone: 'America/New_York',
+  dateFormat: 'MM/DD/YYYY',
+};
