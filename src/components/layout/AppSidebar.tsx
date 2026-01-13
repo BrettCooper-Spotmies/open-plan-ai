@@ -6,7 +6,8 @@ import {
   Users,
   Calendar,
   BarChart3,
-  Zap
+  Zap,
+  Sun
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 
@@ -25,6 +26,7 @@ import {
 } from '@/components/ui/sidebar';
 
 const mainNavItems = [
+  { title: 'My Day', url: '/my-day', icon: Sun },
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Projects', url: '/projects', icon: FolderKanban },
   { title: 'Calendar', url: '/calendar', icon: Calendar },

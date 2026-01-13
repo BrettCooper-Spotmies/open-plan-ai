@@ -1,5 +1,15 @@
 import { TeamMember, Project, Activity, Task, ExtendedTeamMember, UserSettings, WorkspaceSettings } from '@/types';
 
+// Current User (simulated logged-in user)
+// In a real app, this would come from authentication context
+export const currentUser: TeamMember = {
+  id: 'tm-1',
+  name: 'Sarah Chen',
+  email: 'sarah.chen@openplan.ai',
+  role: 'Hardware Lead',
+  initials: 'SC',
+};
+
 // Team Members
 export const teamMembers: TeamMember[] = [
   {
@@ -46,6 +56,14 @@ export const teamMembers: TeamMember[] = [
   },
 ];
 
+// Helper to get relative dates
+const today = new Date();
+const formatDate = (daysOffset: number) => {
+  const date = new Date(today);
+  date.setDate(date.getDate() + daysOffset);
+  return date.toISOString().split('T')[0];
+};
+
 // Tasks for Smart Medical Device project
 const medicalDeviceTasks: Task[] = [
   // Hardware Tasks
@@ -57,8 +75,8 @@ const medicalDeviceTasks: Task[] = [
     priority: 'high',
     module: 'hardware',
     assignee: teamMembers[0],
-    dueDate: '2024-01-15',
-    startDate: '2024-01-02',
+    dueDate: formatDate(-5), // 5 days ago
+    startDate: formatDate(-20),
     estimatedHours: 40,
     actualHours: 45,
     dependencies: [],
@@ -75,13 +93,19 @@ const medicalDeviceTasks: Task[] = [
     priority: 'high',
     module: 'hardware',
     assignee: teamMembers[0],
-    dueDate: '2024-02-01',
-    startDate: '2024-01-16',
+    dueDate: formatDate(0), // Due today
+    startDate: formatDate(-10),
     estimatedHours: 60,
     actualHours: 35,
     dependencies: ['task-1'],
     blockedBy: [],
     tags: ['electronics', 'critical-path'],
+    checklist: [
+      { id: 'cl-1', text: 'Place critical components', completed: true },
+      { id: 'cl-2', text: 'Route power planes', completed: true },
+      { id: 'cl-3', text: 'Route high-speed signals', completed: false },
+      { id: 'cl-4', text: 'DRC check', completed: false },
+    ],
     createdAt: '2024-01-16T09:00:00Z',
     updatedAt: '2024-01-25T14:00:00Z',
   },
@@ -93,8 +117,8 @@ const medicalDeviceTasks: Task[] = [
     priority: 'medium',
     module: 'hardware',
     assignee: teamMembers[5],
-    dueDate: '2024-02-10',
-    startDate: '2024-01-20',
+    dueDate: formatDate(7), // Due in 7 days
+    startDate: formatDate(-14),
     estimatedHours: 80,
     actualHours: 40,
     dependencies: [],
@@ -111,8 +135,8 @@ const medicalDeviceTasks: Task[] = [
     priority: 'high',
     module: 'hardware',
     assignee: teamMembers[0],
-    dueDate: '2024-02-15',
-    startDate: '2024-02-02',
+    dueDate: formatDate(14), // Due in 14 days
+    startDate: formatDate(1),
     estimatedHours: 8,
     dependencies: ['task-2'],
     blockedBy: ['task-2'],
