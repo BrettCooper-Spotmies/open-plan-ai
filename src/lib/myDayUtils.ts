@@ -179,3 +179,154 @@ export function formatDueDate(dueDate?: string): string {
       return `Due ${formatted}`;
   }
 }
+
+/**
+ * Check if due date is tomorrow
+ */
+export function isDueTomorrow(dueDate?: string): boolean {
+  if (!dueDate) return false;
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+  
+  return due.getTime() === tomorrow.getTime();
+}
+
+/**
+ * Check if due date is within this week
+ */
+export function isDueThisWeek(dueDate?: string): boolean {
+  if (!dueDate) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const weekEnd = new Date(today);
+  weekEnd.setDate(weekEnd.getDate() + 7);
+  
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
+  
+  return due > today && due <= weekEnd;
+}
+
+/**
+ * Group tasks by project
+ */
+export function groupTasksByProject(tasks: MyDayTask[]): Map<string, { name: string; tasks: MyDayTask[] }> {
+  const groups = new Map<string, { name: string; tasks: MyDayTask[] }>();
+  
+  for (const task of tasks) {
+    const existing = groups.get(task.projectId);
+    if (existing) {
+      existing.tasks.push(task);
+    } else {
+      groups.set(task.projectId, { name: task.projectName, tasks: [task] });
+    }
+  }
+  
+  return groups;
+}
+
+/**
+ * Group tasks by progress/status
+ */
+export function groupTasksByProgress(tasks: MyDayTask[]): {
+  dependency: MyDayTask[];
+  notStarted: MyDayTask[];
+  inProgress: MyDayTask[];
+  completed: MyDayTask[];
+} {
+  const groups = {
+    dependency: [] as MyDayTask[],
+    notStarted: [] as MyDayTask[],
+    inProgress: [] as MyDayTask[],
+    completed: [] as MyDayTask[],
+  };
+  
+  for (const task of tasks) {
+    if (task.status === 'blocked' || task.isBlocked || task.hasUnresolvedDependencies) {
+      groups.dependency.push(task);
+    } else if (task.status === 'done') {
+      groups.completed.push(task);
+    } else if (task.status === 'in-progress' || task.status === 'review') {
+      groups.inProgress.push(task);
+    } else {
+      groups.notStarted.push(task);
+    }
+  }
+  
+  return groups;
+}
+
+/**
+ * Group tasks by due date
+ */
+export function groupTasksByDueDate(tasks: MyDayTask[]): {
+  late: MyDayTask[];
+  today: MyDayTask[];
+  tomorrow: MyDayTask[];
+  thisWeek: MyDayTask[];
+  later: MyDayTask[];
+} {
+  const groups = {
+    late: [] as MyDayTask[],
+    today: [] as MyDayTask[],
+    tomorrow: [] as MyDayTask[],
+    thisWeek: [] as MyDayTask[],
+    later: [] as MyDayTask[],
+  };
+  
+  for (const task of tasks) {
+    if (task.isOverdue) {
+      groups.late.push(task);
+    } else if (task.isDueToday) {
+      groups.today.push(task);
+    } else if (isDueTomorrow(task.dueDate)) {
+      groups.tomorrow.push(task);
+    } else if (isDueThisWeek(task.dueDate)) {
+      groups.thisWeek.push(task);
+    } else {
+      groups.later.push(task);
+    }
+  }
+  
+  return groups;
+}
+
+/**
+ * Group tasks by priority
+ */
+export function groupTasksByPriority(tasks: MyDayTask[]): {
+  urgent: MyDayTask[];
+  important: MyDayTask[];
+  medium: MyDayTask[];
+  low: MyDayTask[];
+} {
+  const groups = {
+    urgent: [] as MyDayTask[],
+    important: [] as MyDayTask[],
+    medium: [] as MyDayTask[],
+    low: [] as MyDayTask[],
+  };
+  
+  for (const task of tasks) {
+    switch (task.priority) {
+      case 'critical':
+        groups.urgent.push(task);
+        break;
+      case 'high':
+        groups.important.push(task);
+        break;
+      case 'medium':
+        groups.medium.push(task);
+        break;
+      default:
+        groups.low.push(task);
+    }
+  }
+  
+  return groups;
+}

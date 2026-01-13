@@ -1,17 +1,22 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
-import { Sun, AlertTriangle, PlayCircle, Lock } from 'lucide-react';
+import { Sun, LayoutGrid, List } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { MyDayStats } from '@/components/myday/MyDayStats';
-import { MyDaySection } from '@/components/myday/MyDaySection';
+import { MyDayKanbanView } from '@/components/myday/MyDayKanbanView';
+import { MyDayListView } from '@/components/myday/MyDayListView';
+import { MyDayGroupBySelector } from '@/components/myday/MyDayGroupBySelector';
 import { TaskDetailModal } from '@/components/project/TaskDetailModal';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { projects, currentUser } from '@/data/mockData';
 import { getUserTasks, categorizeMyDayTasks, MyDayTask } from '@/lib/myDayUtils';
-import { Task, TaskStatus } from '@/types';
+import { Task, TaskStatus, MyDayView, MyDayGroupBy } from '@/types';
 
 export default function MyDay() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [view, setView] = useState<MyDayView>('kanban');
+  const [groupBy, setGroupBy] = useState<MyDayGroupBy>('progress');
 
   // Get all tasks from all projects
   const allTasks = useMemo(() => {
@@ -23,7 +28,7 @@ export default function MyDay() {
     return getUserTasks(projects, currentUser.id);
   }, []);
 
-  // Categorize tasks into sections
+  // Categorize tasks into sections for stats
   const { needsAttention, readyToWork, waitingBlocked } = useMemo(() => {
     return categorizeMyDayTasks(userTasks);
   }, [userTasks]);
@@ -55,9 +60,9 @@ export default function MyDay() {
 
   return (
     <AppLayout>
-      <div className="p-6 lg:p-8 max-w-7xl mx-auto">
+      <div className="p-6 lg:p-8 max-w-full mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 rounded-lg bg-primary/10">
               <Sun className="h-6 w-6 text-primary" />
@@ -80,6 +85,26 @@ export default function MyDay() {
           completedTodayCount={completedTodayCount}
         />
 
+        {/* View Controls */}
+        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+          {/* View Toggle */}
+          <Tabs value={view} onValueChange={(v) => setView(v as MyDayView)}>
+            <TabsList>
+              <TabsTrigger value="kanban" className="gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                Kanban
+              </TabsTrigger>
+              <TabsTrigger value="list" className="gap-2">
+                <List className="h-4 w-4" />
+                List
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {/* Group By Selector */}
+          <MyDayGroupBySelector value={groupBy} onChange={setGroupBy} />
+        </div>
+
         {/* Empty State */}
         {userTasks.length === 0 && (
           <div className="text-center py-16">
@@ -95,39 +120,28 @@ export default function MyDay() {
           </div>
         )}
 
-        {/* Task Sections */}
-        <MyDaySection
-          title="Needs Attention Today"
-          description="Overdue, due today, high priority, or blocking others"
-          icon={AlertTriangle}
-          variant="attention"
-          tasks={needsAttention}
-          onTaskClick={handleTaskClick}
-          onStatusUpdate={handleStatusUpdate}
-          onChecklistToggle={handleChecklistToggle}
-        />
-
-        <MyDaySection
-          title="Ready to Work"
-          description="Tasks with no blockers — start or continue progress"
-          icon={PlayCircle}
-          variant="ready"
-          tasks={readyToWork}
-          onTaskClick={handleTaskClick}
-          onStatusUpdate={handleStatusUpdate}
-          onChecklistToggle={handleChecklistToggle}
-        />
-
-        <MyDaySection
-          title="Waiting / Blocked"
-          description="Tasks waiting on dependencies, approvals, or external factors"
-          icon={Lock}
-          variant="blocked"
-          tasks={waitingBlocked}
-          onTaskClick={handleTaskClick}
-          onStatusUpdate={handleStatusUpdate}
-          onChecklistToggle={handleChecklistToggle}
-        />
+        {/* Task Views */}
+        {userTasks.length > 0 && (
+          <>
+            {view === 'kanban' && (
+              <MyDayKanbanView
+                tasks={userTasks}
+                groupBy={groupBy}
+                onTaskClick={handleTaskClick}
+                onStatusUpdate={handleStatusUpdate}
+                onChecklistToggle={handleChecklistToggle}
+              />
+            )}
+            {view === 'list' && (
+              <MyDayListView
+                tasks={userTasks}
+                groupBy={groupBy}
+                onTaskClick={handleTaskClick}
+                onStatusUpdate={handleStatusUpdate}
+              />
+            )}
+          </>
+        )}
       </div>
 
       {/* Task Detail Modal */}
