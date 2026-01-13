@@ -14,6 +14,29 @@ export interface TeamMember {
   initials: string;
 }
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
+export interface Attachment {
+  id: string;
+  filename: string;
+  fileType: string;
+  fileSize: number;
+  uploadedBy: TeamMember;
+  uploadedAt: string;
+  url: string;
+}
+
+export interface Comment {
+  id: string;
+  content: string;
+  author: TeamMember;
+  createdAt: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -29,6 +52,9 @@ export interface Task {
   dependencies: string[]; // Task IDs this task depends on
   blockedBy: string[]; // Task IDs blocking this task
   tags: string[];
+  checklist?: ChecklistItem[];
+  attachments?: Attachment[];
+  comments?: Comment[];
   createdAt: string;
   updatedAt: string;
 }

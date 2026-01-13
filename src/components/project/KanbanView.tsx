@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { Plus, Check, GripVertical, X } from 'lucide-react';
+import { TaskDetailModal } from './TaskDetailModal';
 
 interface KanbanColumn {
   id: string;
@@ -63,12 +64,24 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
   const [addTaskToColumn, setAddTaskToColumn] = useState<string | null>(null);
   const [newColumnName, setNewColumnName] = useState('');
   const [newColumnColor, setNewColumnColor] = useState('bg-status-todo');
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
     priority: 'medium' as Priority,
     module: 'software' as ModuleType,
   });
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+    setIsTaskModalOpen(true);
+  };
+
+  const handleTaskUpdate = (updatedTask: Task) => {
+    setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+    setSelectedTask(updatedTask);
+  };
 
   const handleDragEnd = (result: DropResult) => {
     const { destination, source, type } = result;
@@ -300,12 +313,13 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
                                       {...provided.draggableProps}
                                       {...provided.dragHandleProps}
                                       className={cn(
-                                        'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group',
+                                        'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
                                         moduleColors[task.module],
                                         snapshot.isDragging && 'shadow-lg rotate-2'
                                       )}
                                       onMouseEnter={() => setHoveredTask(task.id)}
                                       onMouseLeave={() => setHoveredTask(null)}
+                                      onClick={() => handleTaskClick(task)}
                                     >
                                       {/* Completion Checkbox */}
                                       {hoveredTask === task.id && task.status !== 'done' && (
@@ -454,6 +468,18 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Task Detail Modal */}
+      <TaskDetailModal
+        task={selectedTask}
+        allTasks={tasks}
+        isOpen={isTaskModalOpen}
+        onClose={() => {
+          setIsTaskModalOpen(false);
+          setSelectedTask(null);
+        }}
+        onUpdate={handleTaskUpdate}
+      />
     </div>
   );
 }
