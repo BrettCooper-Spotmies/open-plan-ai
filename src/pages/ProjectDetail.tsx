@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, LayoutGrid, GanttChart, List, GitBranch, Users, Calendar, MoreHorizontal } from 'lucide-react';
+import { ArrowLeft, LayoutGrid, GanttChart, List, GitBranch, Users, Calendar, MoreHorizontal, Flag, AlertTriangle } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,8 @@ import { KanbanView } from '@/components/project/KanbanView';
 import { TimelineView } from '@/components/project/TimelineView';
 import { ListView } from '@/components/project/ListView';
 import { DependencyView } from '@/components/project/DependencyView';
+import { MilestonesView } from '@/components/project/MilestonesView';
+import { IssuesView } from '@/components/project/IssuesView';
 import { projects } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 import { ProjectView } from '@/types';
@@ -41,6 +43,9 @@ export default function ProjectDetail() {
       </AppLayout>
     );
   }
+
+  const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'closed').length || 0;
+  const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed').length || 0;
 
   return (
     <AppLayout>
@@ -92,6 +97,12 @@ export default function ProjectDetail() {
               ))}
             </div>
           </div>
+          {criticalIssuesCount > 0 && (
+            <Badge variant="destructive" className="gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              {criticalIssuesCount} Critical Issue{criticalIssuesCount > 1 ? 's' : ''}
+            </Badge>
+          )}
         </div>
 
         {/* View Tabs */}
@@ -113,6 +124,22 @@ export default function ProjectDetail() {
               <GitBranch className="h-4 w-4" />
               Dependencies
             </TabsTrigger>
+            <TabsTrigger value="milestones" className="gap-2">
+              <Flag className="h-4 w-4" />
+              Milestones
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                {project.milestones.length}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="issues" className="gap-2">
+              <AlertTriangle className="h-4 w-4" />
+              Issues
+              {openIssuesCount > 0 && (
+                <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px]">
+                  {openIssuesCount}
+                </Badge>
+              )}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="kanban" className="mt-6">
@@ -126,6 +153,16 @@ export default function ProjectDetail() {
           </TabsContent>
           <TabsContent value="dependencies" className="mt-6">
             <DependencyView tasks={project.tasks} />
+          </TabsContent>
+          <TabsContent value="milestones" className="mt-6">
+            <MilestonesView 
+              milestones={project.milestones} 
+              tasks={project.tasks} 
+              issues={project.issues || []}
+            />
+          </TabsContent>
+          <TabsContent value="issues" className="mt-6">
+            <IssuesView issues={project.issues || []} />
           </TabsContent>
         </Tabs>
       </div>

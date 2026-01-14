@@ -1,0 +1,174 @@
+// Project Utility Functions
+
+import { Task, Milestone, Issue, Module, ModuleType } from '@/types';
+
+/**
+ * Calculate milestone progress from linked tasks
+ */
+export function getMilestoneProgress(milestone: Milestone, tasks: Task[]): number {
+  const linkedTasks = tasks.filter(t => 
+    milestone.linkedTaskIds?.includes(t.id) || t.milestoneId === milestone.id
+  );
+  
+  if (linkedTasks.length === 0) return milestone.completed ? 100 : 0;
+  
+  const completedTasks = linkedTasks.filter(t => t.status === 'done').length;
+  return Math.round((completedTasks / linkedTasks.length) * 100);
+}
+
+/**
+ * Get tasks linked to a milestone
+ */
+export function getMilestoneTasks(milestone: Milestone, tasks: Task[]): Task[] {
+  return tasks.filter(t => 
+    milestone.linkedTaskIds?.includes(t.id) || t.milestoneId === milestone.id
+  );
+}
+
+/**
+ * Get issues blocking a task
+ */
+export function getBlockingIssues(taskId: string, issues: Issue[]): Issue[] {
+  return issues.filter(issue => 
+    issue.blocksTaskIds?.includes(taskId) && 
+    issue.status !== 'resolved' && 
+    issue.status !== 'closed'
+  );
+}
+
+/**
+ * Get issues affecting a milestone
+ */
+export function getMilestoneIssues(milestoneId: string, issues: Issue[]): Issue[] {
+  return issues.filter(issue => 
+    issue.blocksMilestoneIds?.includes(milestoneId) &&
+    issue.status !== 'resolved' && 
+    issue.status !== 'closed'
+  );
+}
+
+/**
+ * Get all tasks for a module (by moduleId or module type)
+ */
+export function getModuleTasks(moduleIdOrType: string, tasks: Task[]): Task[] {
+  return tasks.filter(t => 
+    t.moduleId === moduleIdOrType || t.module === moduleIdOrType
+  );
+}
+
+/**
+ * Get module progress based on tasks
+ */
+export function getModuleProgress(moduleIdOrType: string, tasks: Task[]): number {
+  const moduleTasks = getModuleTasks(moduleIdOrType, tasks);
+  
+  if (moduleTasks.length === 0) return 0;
+  
+  const completedTasks = moduleTasks.filter(t => t.status === 'done').length;
+  return Math.round((completedTasks / moduleTasks.length) * 100);
+}
+
+/**
+ * Check if a task is blocked by issues
+ */
+export function isTaskBlockedByIssues(taskId: string, issues: Issue[]): boolean {
+  return getBlockingIssues(taskId, issues).length > 0;
+}
+
+/**
+ * Check if a milestone is blocked by issues
+ */
+export function isMilestoneBlockedByIssues(milestoneId: string, issues: Issue[]): boolean {
+  return getMilestoneIssues(milestoneId, issues).length > 0;
+}
+
+/**
+ * Get issue counts by severity
+ */
+export function getIssueCounts(issues: Issue[]): Record<string, number> {
+  const openIssues = issues.filter(i => i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix');
+  
+  return {
+    total: openIssues.length,
+    critical: openIssues.filter(i => i.severity === 'critical').length,
+    major: openIssues.filter(i => i.severity === 'major').length,
+    minor: openIssues.filter(i => i.severity === 'minor').length,
+    trivial: openIssues.filter(i => i.severity === 'trivial').length,
+  };
+}
+
+/**
+ * Get milestone status
+ */
+export function getMilestoneStatus(milestone: Milestone, tasks: Task[], issues: Issue[]): 'completed' | 'blocked' | 'at-risk' | 'on-track' {
+  if (milestone.completed) return 'completed';
+  
+  if (isMilestoneBlockedByIssues(milestone.id, issues)) return 'blocked';
+  
+  const progress = getMilestoneProgress(milestone, tasks);
+  const daysUntilDue = Math.ceil((new Date(milestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  
+  // At risk if less than 7 days remaining and less than 80% complete
+  if (daysUntilDue < 7 && progress < 80) return 'at-risk';
+  
+  return 'on-track';
+}
+
+/**
+ * Get module color by type
+ */
+export function getModuleColor(type: ModuleType): string {
+  const colors: Record<ModuleType, string> = {
+    hardware: '#3B82F6',     // Blue
+    software: '#8B5CF6',     // Purple
+    firmware: '#F59E0B',     // Amber
+    testing: '#EC4899',      // Pink
+    design: '#06B6D4',       // Cyan
+    procurement: '#F97316',  // Orange
+    manufacturing: '#10B981',// Emerald
+    qa: '#EF4444',           // Red
+    logistics: '#64748B',    // Slate
+    enclosure: '#22C55E',    // Green
+    pcb: '#0EA5E9',          // Sky
+    power: '#A855F7',        // Violet
+  };
+  
+  return colors[type] || '#6B7280';
+}
+
+/**
+ * Format module type for display
+ */
+export function formatModuleType(type: ModuleType): string {
+  const labels: Record<ModuleType, string> = {
+    hardware: 'Hardware',
+    software: 'Software',
+    firmware: 'Firmware',
+    testing: 'Testing',
+    design: 'Design',
+    procurement: 'Procurement',
+    manufacturing: 'Manufacturing',
+    qa: 'QA',
+    logistics: 'Logistics',
+    enclosure: 'Enclosure',
+    pcb: 'PCB',
+    power: 'Power',
+  };
+  
+  return labels[type] || type;
+}
+
+/**
+ * Sort issues by severity (critical first)
+ */
+export function sortIssuesBySeverity(issues: Issue[]): Issue[] {
+  const severityOrder = { critical: 0, major: 1, minor: 2, trivial: 3 };
+  return [...issues].sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+}
+
+/**
+ * Sort milestones by date
+ */
+export function sortMilestonesByDate(milestones: Milestone[]): Milestone[] {
+  return [...milestones].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}

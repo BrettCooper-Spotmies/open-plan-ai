@@ -2,8 +2,35 @@
 
 export type TaskStatus = 'todo' | 'in-progress' | 'review' | 'done' | 'blocked';
 export type Priority = 'critical' | 'high' | 'medium' | 'low';
-export type ModuleType = 'hardware' | 'software' | 'firmware' | 'testing';
+
+// Expanded ModuleType for hardware workflows
+export type ModuleType = 
+  | 'hardware' 
+  | 'software' 
+  | 'firmware' 
+  | 'testing'
+  | 'design'           // CAD, mechanical design
+  | 'procurement'      // Sourcing, vendor management
+  | 'manufacturing'    // Assembly, production
+  | 'qa'               // Quality assurance
+  | 'logistics'        // Shipping, inventory
+  | 'enclosure'        // Housing, packaging
+  | 'pcb'              // PCB design & layout
+  | 'power';           // Power systems
+
 export type ProjectStage = 'concept' | 'design' | 'development' | 'testing' | 'production';
+
+// Issue types
+export type IssueSeverity = 'critical' | 'major' | 'minor' | 'trivial';
+export type IssueStatus = 'open' | 'investigating' | 'resolved' | 'closed' | 'wont-fix';
+export type IssueCategory = 
+  | 'defect'           // Product defect
+  | 'risk'             // Identified risk
+  | 'supplier'         // Supplier/vendor issue
+  | 'compliance'       // Regulatory/compliance gap
+  | 'test-failure'     // Test failure
+  | 'design-change'    // Design change request
+  | 'other';
 
 export interface TeamMember {
   id: string;
@@ -37,6 +64,29 @@ export interface Comment {
   createdAt: string;
 }
 
+// First-class Module entity
+export interface Module {
+  id: string;
+  name: string;
+  type: ModuleType;
+  description?: string;
+  color?: string;           // For visual distinction
+  owner?: TeamMember;       // Module lead/owner
+  createdAt: string;
+}
+
+// Enhanced Milestone interface
+export interface Milestone {
+  id: string;
+  title: string;
+  description?: string;
+  date: string;              // Target date
+  completed: boolean;
+  completedAt?: string;      // Actual completion date
+  linkedTaskIds?: string[];  // Tasks linked to this milestone
+}
+
+// Enhanced Task interface
 export interface Task {
   id: string;
   title: string;
@@ -57,14 +107,50 @@ export interface Task {
   comments?: Comment[];
   createdAt: string;
   updatedAt: string;
+  
+  // NEW optional fields (backward compatible)
+  milestoneId?: string;      // Link to parent milestone
+  moduleId?: string;         // Link to Module entity (in addition to module type)
+  linkedIssueIds?: string[]; // Issues affecting this task
 }
 
-export interface Milestone {
+// Issue entity (New)
+export interface Issue {
   id: string;
   title: string;
-  date: string;
-  description?: string;
-  completed: boolean;
+  description: string;
+  category: IssueCategory;
+  severity: IssueSeverity;
+  status: IssueStatus;
+  
+  // Relationships
+  projectId: string;
+  moduleId?: string;           // Which module is affected
+  blocksTaskIds?: string[];    // Tasks blocked by this issue
+  blocksMilestoneIds?: string[]; // Milestones affected
+  
+  // Ownership
+  reportedBy: TeamMember;
+  assignedTo?: TeamMember;
+  
+  // Dates
+  reportedAt: string;
+  resolvedAt?: string;
+  dueDate?: string;
+  
+  // Additional context
+  resolution?: string;         // How it was resolved
+  attachments?: Attachment[];
+  comments?: Comment[];
+  tags?: string[];
+}
+
+// Legacy module summary (for backward compatibility)
+export interface ModuleSummary {
+  type: ModuleType;
+  name: string;
+  progress: number;
+  taskCount: number;
 }
 
 export interface Project {
@@ -78,19 +164,16 @@ export interface Project {
   team: TeamMember[];
   tasks: Task[];
   milestones: Milestone[];
-  modules: {
-    type: ModuleType;
-    name: string;
-    progress: number;
-    taskCount: number;
-  }[];
+  modules: ModuleSummary[];  // Legacy support
+  projectModules?: Module[]; // First-class modules (optional for backward compatibility)
+  issues?: Issue[];          // Project-level issues (optional for backward compatibility)
   createdAt: string;
   updatedAt: string;
 }
 
 export interface Activity {
   id: string;
-  type: 'task_created' | 'task_completed' | 'task_updated' | 'comment_added' | 'milestone_reached' | 'status_changed';
+  type: 'task_created' | 'task_completed' | 'task_updated' | 'comment_added' | 'milestone_reached' | 'status_changed' | 'issue_created' | 'issue_resolved';
   title: string;
   description: string;
   user: TeamMember;
@@ -98,11 +181,13 @@ export interface Activity {
   projectName: string;
   taskId?: string;
   taskTitle?: string;
+  issueId?: string;
+  issueTitle?: string;
   timestamp: string;
 }
 
 // View types for the project detail page
-export type ProjectView = 'kanban' | 'timeline' | 'list' | 'dependencies';
+export type ProjectView = 'kanban' | 'timeline' | 'list' | 'dependencies' | 'milestones' | 'issues';
 
 // My Day specific types
 export type MyDayView = 'kanban' | 'list';
@@ -114,6 +199,15 @@ export interface TaskFilter {
   priority?: Priority[];
   module?: ModuleType[];
   assignee?: string[];
+  milestoneId?: string;
+}
+
+export interface IssueFilter {
+  severity?: IssueSeverity[];
+  status?: IssueStatus[];
+  category?: IssueCategory[];
+  assignee?: string[];
+  moduleId?: string;
 }
 
 // Team member status
