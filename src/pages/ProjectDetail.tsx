@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, MoreHorizontal } from 'lucide-react';
+import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -69,62 +69,72 @@ export default function ProjectDetail() {
     setFilters({});
   };
 
+  // Get unique team members from tasks
+  const teamMembers = useMemo(() => {
+    const members = new Map<string, { id: string; name: string; initials: string }>();
+    project.tasks.forEach(task => {
+      if (task.assignee) {
+        members.set(task.assignee.id, {
+          id: task.assignee.id,
+          name: task.assignee.name,
+          initials: task.assignee.initials,
+        });
+      }
+    });
+    return Array.from(members.values());
+  }, [project.tasks]);
+
+  // Get unique tags from tasks
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    project.tasks.forEach(task => {
+      task.tags.forEach(tag => tags.add(tag));
+    });
+    return Array.from(tags);
+  }, [project.tasks]);
+
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <Button variant="ghost" size="icon" asChild className="mt-1">
-              <Link to="/projects">
-                <ArrowLeft className="h-4 w-4" />
-              </Link>
-            </Button>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
-                <Badge variant="secondary" className={cn(stageColors[project.stage])}>
-                  {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
-                </Badge>
-              </div>
-              <p className="text-muted-foreground text-sm mt-1 max-w-2xl">
-                {project.description}
-              </p>
-            </div>
-          </div>
-          <Button variant="ghost" size="icon">
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Project Stats */}
-        <div className="flex flex-wrap items-center gap-6 py-4 border-y">
-          <div className="flex items-center gap-2">
-            <Progress value={project.progress} className="w-24 h-2" />
-            <span className="text-sm font-medium">{project.progress}%</span>
-          </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Calendar className="h-4 w-4" />
-            <span>Due {new Date(project.targetDate).toLocaleDateString()}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Users className="h-4 w-4 text-muted-foreground" />
-            <div className="flex -space-x-2">
-              {project.team.slice(0, 5).map((member) => (
-                <Avatar key={member.id} className="h-6 w-6 border-2 border-background">
-                  <AvatarFallback className="text-[10px] bg-muted">
-                    {member.initials}
-                  </AvatarFallback>
-                </Avatar>
-              ))}
-            </div>
-          </div>
-          {criticalIssuesCount > 0 && (
-            <Badge variant="destructive" className="gap-1">
-              <AlertTriangle className="h-3 w-3" />
-              {criticalIssuesCount} Critical Issue{criticalIssuesCount > 1 ? 's' : ''}
+        {/* Project Stats with Title */}
+        <div className="flex items-center justify-between gap-6 py-4 border-y">
+          {/* Left: Project Title and Stage */}
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+            <Badge variant="secondary" className={cn(stageColors[project.stage])}>
+              {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
             </Badge>
-          )}
+          </div>
+
+          {/* Right: Stats */}
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-2">
+              <Progress value={project.progress} className="w-24 h-2" />
+              <span className="text-sm font-medium">{project.progress}%</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              <span>Due {new Date(project.targetDate).toLocaleDateString()}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <div className="flex -space-x-2">
+                {project.team.slice(0, 5).map((member) => (
+                  <Avatar key={member.id} className="h-6 w-6 border-2 border-background">
+                    <AvatarFallback className="text-[10px] bg-muted">
+                      {member.initials}
+                    </AvatarFallback>
+                  </Avatar>
+                ))}
+              </div>
+            </div>
+            {criticalIssuesCount > 0 && (
+              <Badge variant="destructive" className="gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                {criticalIssuesCount} Critical Issue{criticalIssuesCount > 1 ? 's' : ''}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* Section Tabs - Entity-based navigation */}
@@ -168,8 +178,12 @@ export default function ProjectDetail() {
               <ViewControls
                 viewMode={viewMode}
                 onViewModeChange={setViewMode}
-                isFiltersOpen={isFiltersOpen}
-                onFiltersOpenChange={setIsFiltersOpen}
+                filters={filters}
+                onFiltersChange={setFilters}
+                milestones={project.milestones}
+                modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+                teamMembers={teamMembers}
+                allTags={allTags}
                 activeFilterCount={activeFilterCount}
                 onClearFilters={clearFilters}
               />

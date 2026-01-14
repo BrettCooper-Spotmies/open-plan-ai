@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
-import { LayoutGrid, List, Filter, X } from 'lucide-react';
+import { LayoutGrid, List, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Task, TaskViewMode, TaskFilter, Milestone, Issue, ModuleType, TaskStatus } from '@/types';
+import { Task, TaskViewMode, TaskFilter, Milestone, Issue, ModuleType } from '@/types';
 import { KanbanView } from './KanbanView';
 import { ListView } from './ListView';
 import { TaskFilters } from './TaskFilters';
+import { TaskFiltersDropdown } from './TaskFiltersDropdown';
 import { cn } from '@/lib/utils';
 
 interface TasksSectionProps {
@@ -26,15 +27,23 @@ interface TasksSectionProps {
 export function ViewControls({ 
   viewMode, 
   onViewModeChange,
-  isFiltersOpen,
-  onFiltersOpenChange,
+  filters,
+  onFiltersChange,
+  milestones,
+  modules,
+  teamMembers,
+  allTags,
   activeFilterCount,
   onClearFilters
 }: {
   viewMode: TaskViewMode;
   onViewModeChange: (mode: TaskViewMode) => void;
-  isFiltersOpen: boolean;
-  onFiltersOpenChange: (open: boolean) => void;
+  filters: TaskFilter;
+  onFiltersChange: (filters: TaskFilter) => void;
+  milestones: Milestone[];
+  modules: { id: string; name: string; type: ModuleType }[];
+  teamMembers: { id: string; name: string; initials: string }[];
+  allTags: string[];
   activeFilterCount: number;
   onClearFilters: () => void;
 }) {
@@ -57,21 +66,16 @@ export function ViewControls({
         </ToggleGroupItem>
       </ToggleGroup>
 
-      {/* Filter Button */}
-      <Button
-        variant={isFiltersOpen ? "secondary" : "outline"}
-        size="sm"
-        onClick={() => onFiltersOpenChange(!isFiltersOpen)}
-        className="gap-2"
-      >
-        <Filter className="h-4 w-4" />
-        <span className="hidden sm:inline">Filter</span>
-        {activeFilterCount > 0 && (
-          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-primary text-primary-foreground">
-            {activeFilterCount}
-          </Badge>
-        )}
-      </Button>
+      {/* Filter Dropdown */}
+      <TaskFiltersDropdown
+        filters={filters}
+        onFiltersChange={onFiltersChange}
+        milestones={milestones}
+        modules={modules}
+        teamMembers={teamMembers}
+        allTags={allTags}
+        activeFilterCount={activeFilterCount}
+      />
 
       {/* Clear Filters */}
       {activeFilterCount > 0 && (

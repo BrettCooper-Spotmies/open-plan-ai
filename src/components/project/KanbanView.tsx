@@ -313,56 +313,58 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                             snapshot.isDragging && 'shadow-lg'
                           )}
                         >
-                          {/* Column Header */}
-                          <div className="flex items-center gap-2 px-1">
-                            {!column.isSpecial && (
-                              <div
-                                {...provided.dragHandleProps}
-                                className="cursor-grab active:cursor-grabbing"
-                              >
-                                <GripVertical className="h-4 w-4 text-muted-foreground" />
+                          {/* Column Header - Sticky */}
+                          <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
+                            <div className="flex items-center gap-2 px-1">
+                              {!column.isSpecial && (
+                                <div
+                                  {...provided.dragHandleProps}
+                                  className="cursor-grab active:cursor-grabbing"
+                                >
+                                  <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                              )}
+                              {column.isSpecial && <div {...provided.dragHandleProps} />}
+                              {isDependenciesColumn ? (
+                                <Link2 className="h-4 w-4 text-status-blocked" />
+                              ) : (
+                                <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                              )}
+                              <h3 className={cn(
+                                'font-medium text-sm',
+                                isDependenciesColumn && 'text-status-blocked'
+                              )}>
+                                {column.label}
+                              </h3>
+                              <span className="text-xs text-muted-foreground">
+                                {columnTasks.length}
+                              </span>
+                              {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 ml-auto opacity-50 hover:opacity-100"
+                                  onClick={() => handleRemoveColumn(column.id)}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
+
+                            {/* Add Task Button at Top - not shown for Dependencies */}
+                            {!isDependenciesColumn && (
+                              <div className="px-2">
+                                <Button
+                                  variant="ghost"
+                                  className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                                  onClick={() => openAddTaskDialog(column.id)}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add Task
+                                </Button>
                               </div>
                             )}
-                            {column.isSpecial && <div {...provided.dragHandleProps} />}
-                            {isDependenciesColumn ? (
-                              <Link2 className="h-4 w-4 text-status-blocked" />
-                            ) : (
-                              <div className={cn('w-2 h-2 rounded-full', column.color)} />
-                            )}
-                            <h3 className={cn(
-                              'font-medium text-sm',
-                              isDependenciesColumn && 'text-status-blocked'
-                            )}>
-                              {column.label}
-                            </h3>
-                            <span className="text-xs text-muted-foreground">
-                              {columnTasks.length}
-                            </span>
-                            {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 ml-auto opacity-50 hover:opacity-100"
-                                onClick={() => handleRemoveColumn(column.id)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            )}
                           </div>
-
-                          {/* Add Task Button at Top - not shown for Dependencies */}
-                          {!isDependenciesColumn && (
-                            <div className="px-2">
-                              <Button
-                                variant="ghost"
-                                className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                                onClick={() => openAddTaskDialog(column.id)}
-                              >
-                                <Plus className="h-3 w-3 mr-1" />
-                                Add Task
-                              </Button>
-                            </div>
-                          )}
 
                           {/* Tasks Droppable */}
                           <Droppable 
@@ -494,22 +496,24 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                 {provided.placeholder}
 
                 {/* Add Bucket Button */}
-                <div className="w-[280px] flex-shrink-0 space-y-3">
-                  <div className="flex items-center gap-2 px-1">
-                    <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
-                    <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
-                  </div>
-                  <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
-                    <DialogTrigger asChild>
-                      <div
-                        className="h-[180px] p-4 rounded-lg transition-colors bg-muted/30 hover:bg-muted/50 border-2 border-dashed border-muted-foreground/30 hover:border-muted-foreground/50 cursor-pointer flex items-center justify-center"
-                      >
-                        <div className="text-center">
-                          <Plus className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                          <p className="text-sm text-muted-foreground">Add New Bucket</p>
+                <div className="w-[280px] flex-shrink-0">
+                  <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
+                    <div className="flex items-center gap-2 px-1">
+                      <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                      <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
+                    </div>
+                    <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
+                      <DialogTrigger asChild>
+                        <div className="px-2">
+                          <Button
+                            variant="ghost"
+                            className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Add New Bucket
+                          </Button>
                         </div>
-                      </div>
-                    </DialogTrigger>
+                      </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>Add New Bucket</DialogTitle>
@@ -547,6 +551,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                       </div>
                     </DialogContent>
                   </Dialog>
+                  </div>
                 </div>
               </div>
             </div>
