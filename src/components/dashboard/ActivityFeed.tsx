@@ -5,7 +5,9 @@ import {
   Plus, 
   Flag, 
   ArrowRight,
-  AlertCircle 
+  AlertCircle,
+  AlertTriangle,
+  CheckCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -16,22 +18,26 @@ interface ActivityFeedProps {
   activities: Activity[];
 }
 
-const activityIcons = {
+const activityIcons: Record<Activity['type'], React.ComponentType<{ className?: string }>> = {
   task_created: Plus,
   task_completed: CheckCircle2,
   task_updated: ArrowRight,
   comment_added: MessageSquare,
   milestone_reached: Flag,
   status_changed: AlertCircle,
+  issue_created: AlertTriangle,
+  issue_resolved: CheckCircle,
 };
 
-const activityColors = {
+const activityColors: Record<Activity['type'], string> = {
   task_created: 'text-status-in-progress bg-status-in-progress/10',
   task_completed: 'text-status-done bg-status-done/10',
   task_updated: 'text-muted-foreground bg-muted',
   comment_added: 'text-chart-2 bg-chart-2/10',
   milestone_reached: 'text-chart-4 bg-chart-4/10',
   status_changed: 'text-chart-5 bg-chart-5/10',
+  issue_created: 'text-destructive bg-destructive/10',
+  issue_resolved: 'text-status-done bg-status-done/10',
 };
 
 export function ActivityFeed({ activities }: ActivityFeedProps) {
