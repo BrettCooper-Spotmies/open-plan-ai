@@ -278,54 +278,6 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
 
   return (
     <div className="space-y-4">
-      {/* Add Column Button */}
-      <div className="flex justify-end">
-        <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Bucket
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Bucket</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label>Bucket Name</Label>
-                <Input
-                  placeholder="e.g., QA Testing"
-                  value={newColumnName}
-                  onChange={(e) => setNewColumnName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Color</Label>
-                <Select value={newColumnColor} onValueChange={setNewColumnColor}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {columnColorOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        <div className="flex items-center gap-2">
-                          <div className={cn('w-3 h-3 rounded-full', option.value)} />
-                          {option.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handleAddColumn} className="w-full">
-                Add Bucket
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
       {/* Kanban Board */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="board" type="COLUMN" direction="horizontal">
@@ -333,211 +285,270 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
             <div
               ref={provided.innerRef}
               {...provided.droppableProps}
-              className="grid gap-4"
-              style={{
-                gridTemplateColumns: `repeat(${columns.length}, minmax(260px, 1fr))`,
-              }}
+              className="overflow-x-auto pb-4"
             >
-              {columns.map((column, index) => {
-                const columnTasks = getColumnTasks(column);
-                const isDependenciesColumn = column.isSpecial && column.status === 'blocked';
+              <div
+                className="inline-flex gap-4 min-w-full"
+                style={{
+                  width: 'max-content',
+                }}
+              >
+                {columns.map((column, index) => {
+                  const columnTasks = getColumnTasks(column);
+                  const isDependenciesColumn = column.isSpecial && column.status === 'blocked';
 
-                return (
-                  <Draggable 
-                    key={column.id} 
-                    draggableId={column.id} 
-                    index={index}
-                    isDragDisabled={column.isSpecial}
-                  >
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        className={cn(
-                          'space-y-3 transition-shadow',
-                          snapshot.isDragging && 'shadow-lg'
-                        )}
-                      >
-                        {/* Column Header */}
-                        <div className="flex items-center gap-2 px-1">
-                          {!column.isSpecial && (
-                            <div
-                              {...provided.dragHandleProps}
-                              className="cursor-grab active:cursor-grabbing"
-                            >
-                              <GripVertical className="h-4 w-4 text-muted-foreground" />
+                  return (
+                    <Draggable 
+                      key={column.id} 
+                      draggableId={column.id} 
+                      index={index}
+                      isDragDisabled={column.isSpecial}
+                    >
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          className={cn(
+                            'w-[280px] flex-shrink-0 space-y-3 transition-shadow',
+                            snapshot.isDragging && 'shadow-lg'
+                          )}
+                        >
+                          {/* Column Header */}
+                          <div className="flex items-center gap-2 px-1">
+                            {!column.isSpecial && (
+                              <div
+                                {...provided.dragHandleProps}
+                                className="cursor-grab active:cursor-grabbing"
+                              >
+                                <GripVertical className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
+                            {column.isSpecial && <div {...provided.dragHandleProps} />}
+                            {isDependenciesColumn ? (
+                              <Link2 className="h-4 w-4 text-status-blocked" />
+                            ) : (
+                              <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                            )}
+                            <h3 className={cn(
+                              'font-medium text-sm',
+                              isDependenciesColumn && 'text-status-blocked'
+                            )}>
+                              {column.label}
+                            </h3>
+                            <span className="text-xs text-muted-foreground">
+                              {columnTasks.length}
+                            </span>
+                            {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 ml-auto opacity-50 hover:opacity-100"
+                                onClick={() => handleRemoveColumn(column.id)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+
+                          {/* Add Task Button at Top - not shown for Dependencies */}
+                          {!isDependenciesColumn && (
+                            <div className="px-2">
+                              <Button
+                                variant="ghost"
+                                className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                                onClick={() => openAddTaskDialog(column.id)}
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                Add Task
+                              </Button>
                             </div>
                           )}
-                          {column.isSpecial && <div {...provided.dragHandleProps} />}
-                          {isDependenciesColumn ? (
-                            <Link2 className="h-4 w-4 text-status-blocked" />
-                          ) : (
-                            <div className={cn('w-2 h-2 rounded-full', column.color)} />
-                          )}
-                          <h3 className={cn(
-                            'font-medium text-sm',
-                            isDependenciesColumn && 'text-status-blocked'
-                          )}>
-                            {column.label}
-                          </h3>
-                          <span className="text-xs text-muted-foreground">
-                            {columnTasks.length}
-                          </span>
-                          {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5 ml-auto opacity-50 hover:opacity-100"
-                              onClick={() => handleRemoveColumn(column.id)}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
 
-                        {/* Tasks Droppable */}
-                        <Droppable 
-                          droppableId={column.id} 
-                          type="TASK"
-                          isDropDisabled={isDependenciesColumn}
-                        >
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.droppableProps}
-                              className={cn(
-                                'space-y-2 min-h-[200px] p-2 rounded-lg transition-colors',
-                                isDependenciesColumn 
-                                  ? 'bg-status-blocked/10 border-2 border-dashed border-status-blocked/30' 
-                                  : snapshot.isDraggingOver 
+                          {/* Tasks Droppable */}
+                          <Droppable 
+                            droppableId={column.id} 
+                            type="TASK"
+                            isDropDisabled={isDependenciesColumn}
+                          >
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.droppableProps}
+                                className={cn(
+                                  'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
+                                  snapshot.isDraggingOver 
                                     ? 'bg-muted/50' 
                                     : 'bg-muted/30'
-                              )}
-                            >
-                              {columnTasks.map((task, taskIndex) => {
-                                const isBlocked = blockedTaskIds.has(task.id);
-                                const blockingInfo = isBlocked ? getBlockingInfo(task) : [];
+                                )}
+                              >
+                                {columnTasks.map((task, taskIndex) => {
+                                  const isBlocked = blockedTaskIds.has(task.id);
+                                  const blockingInfo = isBlocked ? getBlockingInfo(task) : [];
 
-                                return (
-                                  <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
-                                    {(provided, snapshot) => (
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Card
-                                              ref={provided.innerRef}
-                                              {...provided.draggableProps}
-                                              {...provided.dragHandleProps}
-                                              className={cn(
-                                                'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
-                                                moduleColors[task.module] || 'border-l-muted',
-                                                snapshot.isDragging && 'shadow-lg rotate-2',
-                                                isBlocked && 'ring-1 ring-status-blocked/50'
-                                              )}
-                                              onMouseEnter={() => setHoveredTask(task.id)}
-                                              onMouseLeave={() => setHoveredTask(null)}
-                                              onClick={() => handleTaskClick(task)}
-                                            >
-                                              {/* Completion Checkbox */}
-                                              {hoveredTask === task.id && task.status !== 'done' && !isBlocked && (
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleCompleteTask(task.id);
-                                                  }}
-                                                  className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-status-done text-white flex items-center justify-center shadow-md hover:scale-110 transition-transform z-10"
-                                                >
-                                                  <Check className="h-3 w-3" />
-                                                </button>
-                                              )}
-
-                                              <div className="space-y-2">
-                                                <div className="flex items-start justify-between gap-2">
-                                                  <div className="flex items-start gap-1.5 flex-1 min-w-0">
-                                                    {isBlocked && (
-                                                      <AlertTriangle className="h-3.5 w-3.5 text-status-blocked shrink-0 mt-0.5" />
-                                                    )}
-                                                    <h4 className="text-sm font-medium leading-tight truncate">
-                                                      {task.title}
-                                                    </h4>
-                                                  </div>
-                                                  <Badge
-                                                    variant="secondary"
-                                                    className={cn(
-                                                      'text-[10px] px-1.5 py-0 shrink-0',
-                                                      priorityColors[task.priority]
-                                                    )}
+                                  return (
+                                    <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
+                                      {(provided, snapshot) => (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Card
+                                                ref={provided.innerRef}
+                                                {...provided.draggableProps}
+                                                {...provided.dragHandleProps}
+                                                className={cn(
+                                                  'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
+                                                  moduleColors[task.module] || 'border-l-muted',
+                                                  snapshot.isDragging && 'shadow-lg rotate-2'
+                                                )}
+                                                onMouseEnter={() => setHoveredTask(task.id)}
+                                                onMouseLeave={() => setHoveredTask(null)}
+                                                onClick={() => handleTaskClick(task)}
+                                              >
+                                                {/* Completion Checkbox */}
+                                                {hoveredTask === task.id && task.status !== 'done' && !isBlocked && (
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleCompleteTask(task.id);
+                                                    }}
+                                                    className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-status-done text-white flex items-center justify-center shadow-md hover:scale-110 transition-transform z-10"
                                                   >
-                                                    {task.priority}
-                                                  </Badge>
-                                                </div>
-
-                                                {task.description && (
-                                                  <p className="text-xs text-muted-foreground line-clamp-2">
-                                                    {task.description}
-                                                  </p>
+                                                    <Check className="h-3 w-3" />
+                                                  </button>
                                                 )}
 
-                                                <div className="flex items-center justify-between pt-2">
-                                                  {task.assignee && (
-                                                    <Avatar className="h-5 w-5">
-                                                      <AvatarFallback className="text-[9px] bg-muted">
-                                                        {task.assignee.initials}
-                                                      </AvatarFallback>
-                                                    </Avatar>
-                                                  )}
-                                                  {task.dueDate && (
-                                                    <span className="text-[10px] text-muted-foreground">
-                                                      {new Date(task.dueDate).toLocaleDateString('en-US', {
-                                                        month: 'short',
-                                                        day: 'numeric',
-                                                      })}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            </Card>
-                                          </TooltipTrigger>
-                                          {isBlocked && blockingInfo.length > 0 && (
-                                            <TooltipContent side="right" className="max-w-xs">
-                                              <div className="space-y-1">
-                                                <p className="font-medium text-xs">Blocked by:</p>
-                                                <ul className="text-xs space-y-0.5">
-                                                  {blockingInfo.map((info, i) => (
-                                                    <li key={i} className="text-muted-foreground">• {info}</li>
-                                                  ))}
-                                                </ul>
-                                              </div>
-                                            </TooltipContent>
-                                          )}
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    )}
-                                  </Draggable>
-                                );
-                              })}
-                              {provided.placeholder}
+                                                <div className="space-y-2">
+                                                  <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                                                      {isBlocked && (
+                                                        <AlertTriangle className="h-3.5 w-3.5 text-status-blocked shrink-0 mt-0.5" />
+                                                      )}
+                                                      <h4 className="text-sm font-medium leading-tight truncate">
+                                                        {task.title}
+                                                      </h4>
+                                                    </div>
+                                                    <Badge
+                                                      variant="secondary"
+                                                      className={cn(
+                                                        'text-[10px] px-1.5 py-0 shrink-0',
+                                                        priorityColors[task.priority]
+                                                      )}
+                                                    >
+                                                      {task.priority}
+                                                    </Badge>
+                                                  </div>
 
-                              {/* Add Task Button - not shown for Dependencies */}
-                              {!isDependenciesColumn && (
-                                <Button
-                                  variant="ghost"
-                                  className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                                  onClick={() => openAddTaskDialog(column.id)}
-                                >
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Add Task
-                                </Button>
-                              )}
-                            </div>
-                          )}
-                        </Droppable>
+                                                  {task.description && (
+                                                    <p className="text-xs text-muted-foreground line-clamp-2">
+                                                      {task.description}
+                                                    </p>
+                                                  )}
+
+                                                  <div className="flex items-center justify-between pt-2">
+                                                    {task.assignee && (
+                                                      <Avatar className="h-5 w-5">
+                                                        <AvatarFallback className="text-[9px] bg-muted">
+                                                          {task.assignee.initials}
+                                                        </AvatarFallback>
+                                                      </Avatar>
+                                                    )}
+                                                    {task.dueDate && (
+                                                      <span className="text-[10px] text-muted-foreground">
+                                                        {new Date(task.dueDate).toLocaleDateString('en-US', {
+                                                          month: 'short',
+                                                          day: 'numeric',
+                                                        })}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </Card>
+                                            </TooltipTrigger>
+                                            {isBlocked && blockingInfo.length > 0 && (
+                                              <TooltipContent side="right" className="max-w-xs">
+                                                <div className="space-y-1">
+                                                  <p className="font-medium text-xs">Blocked by:</p>
+                                                  <ul className="text-xs space-y-0.5">
+                                                    {blockingInfo.map((info, i) => (
+                                                      <li key={i} className="text-muted-foreground">• {info}</li>
+                                                    ))}
+                                                  </ul>
+                                                </div>
+                                              </TooltipContent>
+                                            )}
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      )}
+                                    </Draggable>
+                                  );
+                                })}
+                                {provided.placeholder}
+                              </div>
+                            )}
+                          </Droppable>
+                        </div>
+                      )}
+                    </Draggable>
+                  );
+                })}
+                {provided.placeholder}
+
+                {/* Add Bucket Button */}
+                <div className="w-[280px] flex-shrink-0 space-y-3">
+                  <div className="flex items-center gap-2 px-1">
+                    <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                    <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
+                  </div>
+                  <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
+                    <DialogTrigger asChild>
+                      <div
+                        className="h-[180px] p-4 rounded-lg transition-colors bg-muted/30 hover:bg-muted/50 border-2 border-dashed border-muted-foreground/30 hover:border-muted-foreground/50 cursor-pointer flex items-center justify-center"
+                      >
+                        <div className="text-center">
+                          <Plus className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Add New Bucket</p>
+                        </div>
                       </div>
-                    )}
-                  </Draggable>
-                );
-              })}
-              {provided.placeholder}
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Add New Bucket</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 pt-4">
+                        <div className="space-y-2">
+                          <Label>Bucket Name</Label>
+                          <Input
+                            placeholder="e.g., QA Testing"
+                            value={newColumnName}
+                            onChange={(e) => setNewColumnName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Color</Label>
+                          <Select value={newColumnColor} onValueChange={setNewColumnColor}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {columnColorOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  <div className="flex items-center gap-2">
+                                    <div className={cn('w-3 h-3 rounded-full', option.value)} />
+                                    {option.label}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button onClick={handleAddColumn} className="w-full">
+                          Add Bucket
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              </div>
             </div>
           )}
         </Droppable>

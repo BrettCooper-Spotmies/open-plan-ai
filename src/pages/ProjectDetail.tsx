@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, MoreHorizontal } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -7,13 +7,13 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { TasksSection } from '@/components/project/TasksSection';
+import { TasksSection, ViewControls } from '@/components/project/TasksSection';
 import { ModulesSection } from '@/components/project/ModulesSection';
 import { MilestonesView } from '@/components/project/MilestonesView';
 import { IssuesView } from '@/components/project/IssuesView';
 import { projects, projectModules } from '@/data/mockData';
 import { cn } from '@/lib/utils';
-import { ProjectSection, Module } from '@/types';
+import { ProjectSection, Module, TaskViewMode, TaskFilter } from '@/types';
 
 const stageColors = {
   concept: 'bg-muted text-muted-foreground',
@@ -26,6 +26,9 @@ const stageColors = {
 export default function ProjectDetail() {
   const { id } = useParams();
   const [section, setSection] = useState<ProjectSection>('tasks');
+  const [viewMode, setViewMode] = useState<TaskViewMode>('kanban');
+  const [filters, setFilters] = useState<TaskFilter>({});
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   
   const project = projects.find(p => p.id === id);
 
@@ -47,6 +50,24 @@ export default function ProjectDetail() {
 
   const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'closed').length || 0;
   const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed').length || 0;
+
+  // Calculate active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.status?.length) count++;
+    if (filters.priority?.length) count++;
+    if (filters.module?.length) count++;
+    if (filters.assignee?.length) count++;
+    if (filters.milestoneId) count++;
+    if (filters.dueDate) count++;
+    if (filters.tags?.length) count++;
+    if (filters.hasBlockers) count++;
+    return count;
+  }, [filters]);
+
+  const clearFilters = () => {
+    setFilters({});
+  };
 
   return (
     <AppLayout>
@@ -108,38 +129,52 @@ export default function ProjectDetail() {
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => setSection(v as ProjectSection)} className="w-full">
-          <TabsList className="bg-muted/50">
-            <TabsTrigger value="tasks" className="gap-2">
-              <ListTodo className="h-4 w-4" />
-              Tasks
-              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                {project.tasks.length}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="modules" className="gap-2">
-              <Boxes className="h-4 w-4" />
-              Modules
-              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                {modules.length}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="milestones" className="gap-2">
-              <Flag className="h-4 w-4" />
-              Milestones
-              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                {project.milestones.length}
-              </Badge>
-            </TabsTrigger>
-            <TabsTrigger value="issues" className="gap-2">
-              <AlertTriangle className="h-4 w-4" />
-              Issues
-              {openIssuesCount > 0 && (
-                <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px]">
-                  {openIssuesCount}
+          <div className="flex items-center justify-between gap-4">
+            <TabsList className="bg-muted/50">
+              <TabsTrigger value="tasks" className="gap-2">
+                <ListTodo className="h-4 w-4" />
+                Tasks
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                  {project.tasks.length}
                 </Badge>
-              )}
-            </TabsTrigger>
-          </TabsList>
+              </TabsTrigger>
+              <TabsTrigger value="modules" className="gap-2">
+                <Boxes className="h-4 w-4" />
+                Modules
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                  {modules.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="milestones" className="gap-2">
+                <Flag className="h-4 w-4" />
+                Milestones
+                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                  {project.milestones.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="issues" className="gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Issues
+                {openIssuesCount > 0 && (
+                  <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px]">
+                    {openIssuesCount}
+                  </Badge>
+                )}
+              </TabsTrigger>
+            </TabsList>
+            
+            {/* View Controls - only show for tasks section */}
+            {section === 'tasks' && (
+              <ViewControls
+                viewMode={viewMode}
+                onViewModeChange={setViewMode}
+                isFiltersOpen={isFiltersOpen}
+                onFiltersOpenChange={setIsFiltersOpen}
+                activeFilterCount={activeFilterCount}
+                onClearFilters={clearFilters}
+              />
+            )}
+          </div>
 
           <TabsContent value="tasks" className="mt-6">
             <TasksSection 
@@ -147,6 +182,12 @@ export default function ProjectDetail() {
               milestones={project.milestones}
               issues={project.issues || []}
               modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
+              isFiltersOpen={isFiltersOpen}
+              onFiltersOpenChange={setIsFiltersOpen}
+              filters={filters}
+              onFiltersChange={setFilters}
             />
           </TabsContent>
           <TabsContent value="modules" className="mt-6">

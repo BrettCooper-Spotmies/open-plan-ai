@@ -14,12 +14,104 @@ interface TasksSectionProps {
   milestones: Milestone[];
   issues: Issue[];
   modules: { id: string; name: string; type: ModuleType }[];
+  viewMode?: TaskViewMode;
+  onViewModeChange?: (mode: TaskViewMode) => void;
+  isFiltersOpen?: boolean;
+  onFiltersOpenChange?: (open: boolean) => void;
+  filters?: TaskFilter;
+  onFiltersChange?: (filters: TaskFilter) => void;
 }
 
-export function TasksSection({ tasks, milestones, issues, modules }: TasksSectionProps) {
-  const [viewMode, setViewMode] = useState<TaskViewMode>('kanban');
-  const [filters, setFilters] = useState<TaskFilter>({});
-  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+// Export ViewControls component for use in parent
+export function ViewControls({ 
+  viewMode, 
+  onViewModeChange,
+  isFiltersOpen,
+  onFiltersOpenChange,
+  activeFilterCount,
+  onClearFilters
+}: {
+  viewMode: TaskViewMode;
+  onViewModeChange: (mode: TaskViewMode) => void;
+  isFiltersOpen: boolean;
+  onFiltersOpenChange: (open: boolean) => void;
+  activeFilterCount: number;
+  onClearFilters: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      {/* View Toggle */}
+      <ToggleGroup
+        type="single"
+        value={viewMode}
+        onValueChange={(value) => value && onViewModeChange(value as TaskViewMode)}
+        className="bg-muted/50 p-1 rounded-lg"
+      >
+        <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1.5 px-3 data-[state=on]:bg-background">
+          <LayoutGrid className="h-4 w-4" />
+          <span className="hidden sm:inline">Kanban</span>
+        </ToggleGroupItem>
+        <ToggleGroupItem value="list" aria-label="List view" className="gap-1.5 px-3 data-[state=on]:bg-background">
+          <List className="h-4 w-4" />
+          <span className="hidden sm:inline">List</span>
+        </ToggleGroupItem>
+      </ToggleGroup>
+
+      {/* Filter Button */}
+      <Button
+        variant={isFiltersOpen ? "secondary" : "outline"}
+        size="sm"
+        onClick={() => onFiltersOpenChange(!isFiltersOpen)}
+        className="gap-2"
+      >
+        <Filter className="h-4 w-4" />
+        <span className="hidden sm:inline">Filter</span>
+        {activeFilterCount > 0 && (
+          <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-primary text-primary-foreground">
+            {activeFilterCount}
+          </Badge>
+        )}
+      </Button>
+
+      {/* Clear Filters */}
+      {activeFilterCount > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClearFilters}
+          className="gap-1 text-muted-foreground hover:text-foreground"
+        >
+          <X className="h-4 w-4" />
+          Clear
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export function TasksSection({ 
+  tasks, 
+  milestones, 
+  issues, 
+  modules,
+  viewMode: externalViewMode,
+  onViewModeChange: externalOnViewModeChange,
+  isFiltersOpen: externalIsFiltersOpen,
+  onFiltersOpenChange: externalOnFiltersOpenChange,
+  filters: externalFilters,
+  onFiltersChange: externalOnFiltersChange
+}: TasksSectionProps) {
+  const [internalViewMode, setInternalViewMode] = useState<TaskViewMode>('kanban');
+  const [internalFilters, setInternalFilters] = useState<TaskFilter>({});
+  const [internalIsFiltersOpen, setInternalIsFiltersOpen] = useState(false);
+
+  // Use external props if provided, otherwise use internal state
+  const viewMode = externalViewMode ?? internalViewMode;
+  const setViewMode = externalOnViewModeChange ?? setInternalViewMode;
+  const filters = externalFilters ?? internalFilters;
+  const setFilters = externalOnFiltersChange ?? setInternalFilters;
+  const isFiltersOpen = externalIsFiltersOpen ?? internalIsFiltersOpen;
+  const setIsFiltersOpen = externalOnFiltersOpenChange ?? setInternalIsFiltersOpen;
 
   // Calculate active filter count
   const activeFilterCount = useMemo(() => {
@@ -143,62 +235,6 @@ export function TasksSection({ tasks, milestones, issues, modules }: TasksSectio
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          {/* View Toggle */}
-          <ToggleGroup
-            type="single"
-            value={viewMode}
-            onValueChange={(value) => value && setViewMode(value as TaskViewMode)}
-            className="bg-muted/50 p-1 rounded-lg"
-          >
-            <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1.5 px-3 data-[state=on]:bg-background">
-              <LayoutGrid className="h-4 w-4" />
-              <span className="hidden sm:inline">Kanban</span>
-            </ToggleGroupItem>
-            <ToggleGroupItem value="list" aria-label="List view" className="gap-1.5 px-3 data-[state=on]:bg-background">
-              <List className="h-4 w-4" />
-              <span className="hidden sm:inline">List</span>
-            </ToggleGroupItem>
-          </ToggleGroup>
-
-          {/* Filter Button */}
-          <Button
-            variant={isFiltersOpen ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-            className="gap-2"
-          >
-            <Filter className="h-4 w-4" />
-            <span className="hidden sm:inline">Filter</span>
-            {activeFilterCount > 0 && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-primary text-primary-foreground">
-                {activeFilterCount}
-              </Badge>
-            )}
-          </Button>
-
-          {/* Clear Filters */}
-          {activeFilterCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              className="gap-1 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-              Clear
-            </Button>
-          )}
-        </div>
-
-        {/* Task count */}
-        <div className="text-sm text-muted-foreground">
-          {filteredTasks.length} of {tasks.length} tasks
-        </div>
-      </div>
-
       {/* Filters Panel */}
       {isFiltersOpen && (
         <TaskFilters
