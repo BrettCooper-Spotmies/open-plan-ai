@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { Task, TaskStatus, Priority, ModuleType } from '@/types';
+import { Task, TaskStatus, Priority, ModuleType, Issue } from '@/types';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -10,8 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Plus, Check, GripVertical, X } from 'lucide-react';
+import { Plus, Check, GripVertical, X, AlertTriangle, Link2 } from 'lucide-react';
 import { TaskDetailModal } from './TaskDetailModal';
 
 interface KanbanColumn {
@@ -19,13 +20,17 @@ interface KanbanColumn {
   status: TaskStatus | string;
   label: string;
   color: string;
+  isSpecial?: boolean; // For Dependencies bucket
 }
 
 interface KanbanViewProps {
   tasks: Task[];
+  allTasks?: Task[]; // All tasks for dependency resolution
+  issues?: Issue[]; // Issues for blocking indicator
 }
 
 const defaultColumns: KanbanColumn[] = [
+  { id: 'col-dependencies', status: 'blocked', label: 'Dependencies', color: 'bg-status-blocked', isSpecial: true },
   { id: 'col-todo', status: 'todo', label: 'To Do', color: 'bg-status-todo' },
   { id: 'col-in-progress', status: 'in-progress', label: 'In Progress', color: 'bg-status-in-progress' },
   { id: 'col-review', status: 'review', label: 'Review', color: 'bg-status-review' },
@@ -39,11 +44,19 @@ const priorityColors = {
   low: 'bg-priority-low text-white',
 };
 
-const moduleColors = {
+const moduleColors: Record<string, string> = {
   hardware: 'border-l-module-hardware',
   software: 'border-l-module-software',
   firmware: 'border-l-module-firmware',
   testing: 'border-l-module-testing',
+  design: 'border-l-chart-1',
+  procurement: 'border-l-chart-2',
+  manufacturing: 'border-l-chart-3',
+  qa: 'border-l-chart-4',
+  logistics: 'border-l-chart-5',
+  enclosure: 'border-l-muted-foreground',
+  pcb: 'border-l-primary',
+  power: 'border-l-destructive',
 };
 
 const columnColorOptions = [
@@ -55,7 +68,7 @@ const columnColorOptions = [
   { value: 'bg-chart-4', label: 'Yellow' },
 ];
 
-export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
+export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: KanbanViewProps) {
   const [columns, setColumns] = useState<KanbanColumn[]>(defaultColumns);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const [hoveredTask, setHoveredTask] = useState<string | null>(null);
@@ -73,6 +86,64 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
     module: 'software' as ModuleType,
   });
 
+  // Determine which tasks are blocked
+  const blockedTaskIds = useMemo(() => {
+    const blocked = new Set<string>();
+    const allTasksToCheck = allTasks || tasks;
+    
+    tasks.forEach(task => {
+      // Check if blocked by other tasks
+      if (task.blockedBy && task.blockedBy.length > 0) {
+        const hasUnresolvedBlocker = task.blockedBy.some(blockerId => {
+          const blocker = allTasksToCheck.find(t => t.id === blockerId);
+          return blocker && blocker.status !== 'done';
+        });
+        if (hasUnresolvedBlocker) {
+          blocked.add(task.id);
+        }
+      }
+
+      // Check if blocked by issues
+      if (task.linkedIssueIds && task.linkedIssueIds.length > 0) {
+        const hasBlockingIssue = task.linkedIssueIds.some(issueId => {
+          const issue = issues.find(i => i.id === issueId);
+          return issue && issue.status !== 'resolved' && issue.status !== 'closed';
+        });
+        if (hasBlockingIssue) {
+          blocked.add(task.id);
+        }
+      }
+    });
+
+    return blocked;
+  }, [tasks, allTasks, issues]);
+
+  // Get blocking info for a task
+  const getBlockingInfo = (task: Task) => {
+    const blockers: string[] = [];
+    const allTasksToCheck = allTasks || tasks;
+
+    if (task.blockedBy) {
+      task.blockedBy.forEach(blockerId => {
+        const blocker = allTasksToCheck.find(t => t.id === blockerId);
+        if (blocker && blocker.status !== 'done') {
+          blockers.push(`Task: ${blocker.title}`);
+        }
+      });
+    }
+
+    if (task.linkedIssueIds) {
+      task.linkedIssueIds.forEach(issueId => {
+        const issue = issues.find(i => i.id === issueId);
+        if (issue && issue.status !== 'resolved' && issue.status !== 'closed') {
+          blockers.push(`Issue: ${issue.title}`);
+        }
+      });
+    }
+
+    return blockers;
+  };
+
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
     setIsTaskModalOpen(true);
@@ -84,7 +155,7 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
   };
 
   const handleDragEnd = (result: DropResult) => {
-    const { destination, source, type } = result;
+    const { destination, source, type, draggableId } = result;
 
     if (!destination) return;
 
@@ -102,21 +173,20 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
       return;
     }
 
-    // Dragging tasks
-    const sourceColumn = columns.find(col => col.id === source.droppableId);
+    // Prevent dragging INTO the Dependencies bucket (it's auto-populated)
     const destColumn = columns.find(col => col.id === destination.droppableId);
+    if (destColumn?.isSpecial && destColumn.status === 'blocked') {
+      return;
+    }
+
+    const sourceColumn = columns.find(col => col.id === source.droppableId);
 
     if (!sourceColumn || !destColumn) return;
 
-    // Get tasks for source and destination columns
-    const sourceTasks = tasks.filter(t => t.status === sourceColumn.status);
-    const destTasks = source.droppableId === destination.droppableId 
-      ? sourceTasks 
-      : tasks.filter(t => t.status === destColumn.status);
-
     // Get the task being moved
-    const [movedTask] = sourceTasks.splice(source.index, 1);
-    
+    const movedTask = tasks.find(t => t.id === draggableId);
+    if (!movedTask) return;
+
     // Update task status if moved to different column
     const updatedTask = {
       ...movedTask,
@@ -154,9 +224,10 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
   };
 
   const handleRemoveColumn = (columnId: string) => {
-    // Don't allow removing if there are tasks in the column
     const column = columns.find(c => c.id === columnId);
-    if (column && tasks.some(t => t.status === column.status)) {
+    // Don't allow removing special columns or columns with tasks
+    if (column?.isSpecial) return;
+    if (column && tasks.some(t => t.status === column.status && !blockedTaskIds.has(t.id))) {
       return;
     }
     setColumns(columns.filter(c => c.id !== columnId));
@@ -166,7 +237,7 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
     if (!newTask.title.trim() || !addTaskToColumn) return;
 
     const column = columns.find(c => c.id === addTaskToColumn);
-    if (!column) return;
+    if (!column || column.isSpecial) return;
 
     const task: Task = {
       id: `task-${Date.now()}`,
@@ -189,8 +260,20 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
   };
 
   const openAddTaskDialog = (columnId: string) => {
+    const column = columns.find(c => c.id === columnId);
+    if (column?.isSpecial) return; // Can't add tasks to Dependencies bucket
     setAddTaskToColumn(columnId);
     setIsAddTaskOpen(true);
+  };
+
+  // Get tasks for a column, considering blocked tasks go to Dependencies
+  const getColumnTasks = (column: KanbanColumn) => {
+    if (column.isSpecial && column.status === 'blocked') {
+      // Dependencies bucket shows blocked tasks
+      return tasks.filter(t => blockedTaskIds.has(t.id) && t.status !== 'done');
+    }
+    // Regular columns show non-blocked tasks with that status
+    return tasks.filter(t => t.status === column.status && !blockedTaskIds.has(t.id));
   };
 
   return (
@@ -252,14 +335,20 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
               {...provided.droppableProps}
               className="grid gap-4"
               style={{
-                gridTemplateColumns: `repeat(${columns.length}, minmax(280px, 1fr))`,
+                gridTemplateColumns: `repeat(${columns.length}, minmax(260px, 1fr))`,
               }}
             >
               {columns.map((column, index) => {
-                const columnTasks = tasks.filter(t => t.status === column.status);
+                const columnTasks = getColumnTasks(column);
+                const isDependenciesColumn = column.isSpecial && column.status === 'blocked';
 
                 return (
-                  <Draggable key={column.id} draggableId={column.id} index={index}>
+                  <Draggable 
+                    key={column.id} 
+                    draggableId={column.id} 
+                    index={index}
+                    isDragDisabled={column.isSpecial}
+                  >
                     {(provided, snapshot) => (
                       <div
                         ref={provided.innerRef}
@@ -271,18 +360,30 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
                       >
                         {/* Column Header */}
                         <div className="flex items-center gap-2 px-1">
-                          <div
-                            {...provided.dragHandleProps}
-                            className="cursor-grab active:cursor-grabbing"
-                          >
-                            <GripVertical className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                          <div className={cn('w-2 h-2 rounded-full', column.color)} />
-                          <h3 className="font-medium text-sm">{column.label}</h3>
+                          {!column.isSpecial && (
+                            <div
+                              {...provided.dragHandleProps}
+                              className="cursor-grab active:cursor-grabbing"
+                            >
+                              <GripVertical className="h-4 w-4 text-muted-foreground" />
+                            </div>
+                          )}
+                          {column.isSpecial && <div {...provided.dragHandleProps} />}
+                          {isDependenciesColumn ? (
+                            <Link2 className="h-4 w-4 text-status-blocked" />
+                          ) : (
+                            <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                          )}
+                          <h3 className={cn(
+                            'font-medium text-sm',
+                            isDependenciesColumn && 'text-status-blocked'
+                          )}>
+                            {column.label}
+                          </h3>
                           <span className="text-xs text-muted-foreground">
                             {columnTasks.length}
                           </span>
-                          {columnTasks.length === 0 && columns.length > 1 && (
+                          {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -295,100 +396,139 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
                         </div>
 
                         {/* Tasks Droppable */}
-                        <Droppable droppableId={column.id} type="TASK">
+                        <Droppable 
+                          droppableId={column.id} 
+                          type="TASK"
+                          isDropDisabled={isDependenciesColumn}
+                        >
                           {(provided, snapshot) => (
                             <div
                               ref={provided.innerRef}
                               {...provided.droppableProps}
                               className={cn(
                                 'space-y-2 min-h-[200px] p-2 rounded-lg transition-colors',
-                                snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30'
+                                isDependenciesColumn 
+                                  ? 'bg-status-blocked/10 border-2 border-dashed border-status-blocked/30' 
+                                  : snapshot.isDraggingOver 
+                                    ? 'bg-muted/50' 
+                                    : 'bg-muted/30'
                               )}
                             >
-                              {columnTasks.map((task, taskIndex) => (
-                                <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
-                                  {(provided, snapshot) => (
-                                    <Card
-                                      ref={provided.innerRef}
-                                      {...provided.draggableProps}
-                                      {...provided.dragHandleProps}
-                                      className={cn(
-                                        'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
-                                        moduleColors[task.module],
-                                        snapshot.isDragging && 'shadow-lg rotate-2'
-                                      )}
-                                      onMouseEnter={() => setHoveredTask(task.id)}
-                                      onMouseLeave={() => setHoveredTask(null)}
-                                      onClick={() => handleTaskClick(task)}
-                                    >
-                                      {/* Completion Checkbox */}
-                                      {hoveredTask === task.id && task.status !== 'done' && (
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleCompleteTask(task.id);
-                                          }}
-                                          className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-status-done text-white flex items-center justify-center shadow-md hover:scale-110 transition-transform z-10"
-                                        >
-                                          <Check className="h-3 w-3" />
-                                        </button>
-                                      )}
+                              {columnTasks.map((task, taskIndex) => {
+                                const isBlocked = blockedTaskIds.has(task.id);
+                                const blockingInfo = isBlocked ? getBlockingInfo(task) : [];
 
-                                      <div className="space-y-2">
-                                        <div className="flex items-start justify-between gap-2">
-                                          <h4 className="text-sm font-medium leading-tight">
-                                            {task.title}
-                                          </h4>
-                                          <Badge
-                                            variant="secondary"
-                                            className={cn(
-                                              'text-[10px] px-1.5 py-0 shrink-0',
-                                              priorityColors[task.priority]
-                                            )}
-                                          >
-                                            {task.priority}
-                                          </Badge>
-                                        </div>
+                                return (
+                                  <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
+                                    {(provided, snapshot) => (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger asChild>
+                                            <Card
+                                              ref={provided.innerRef}
+                                              {...provided.draggableProps}
+                                              {...provided.dragHandleProps}
+                                              className={cn(
+                                                'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
+                                                moduleColors[task.module] || 'border-l-muted',
+                                                snapshot.isDragging && 'shadow-lg rotate-2',
+                                                isBlocked && 'ring-1 ring-status-blocked/50'
+                                              )}
+                                              onMouseEnter={() => setHoveredTask(task.id)}
+                                              onMouseLeave={() => setHoveredTask(null)}
+                                              onClick={() => handleTaskClick(task)}
+                                            >
+                                              {/* Completion Checkbox */}
+                                              {hoveredTask === task.id && task.status !== 'done' && !isBlocked && (
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleCompleteTask(task.id);
+                                                  }}
+                                                  className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-status-done text-white flex items-center justify-center shadow-md hover:scale-110 transition-transform z-10"
+                                                >
+                                                  <Check className="h-3 w-3" />
+                                                </button>
+                                              )}
 
-                                        {task.description && (
-                                          <p className="text-xs text-muted-foreground line-clamp-2">
-                                            {task.description}
-                                          </p>
-                                        )}
+                                              <div className="space-y-2">
+                                                <div className="flex items-start justify-between gap-2">
+                                                  <div className="flex items-start gap-1.5 flex-1 min-w-0">
+                                                    {isBlocked && (
+                                                      <AlertTriangle className="h-3.5 w-3.5 text-status-blocked shrink-0 mt-0.5" />
+                                                    )}
+                                                    <h4 className="text-sm font-medium leading-tight truncate">
+                                                      {task.title}
+                                                    </h4>
+                                                  </div>
+                                                  <Badge
+                                                    variant="secondary"
+                                                    className={cn(
+                                                      'text-[10px] px-1.5 py-0 shrink-0',
+                                                      priorityColors[task.priority]
+                                                    )}
+                                                  >
+                                                    {task.priority}
+                                                  </Badge>
+                                                </div>
 
-                                        <div className="flex items-center justify-between pt-2">
-                                          {task.assignee && (
-                                            <Avatar className="h-5 w-5">
-                                              <AvatarFallback className="text-[9px] bg-muted">
-                                                {task.assignee.initials}
-                                              </AvatarFallback>
-                                            </Avatar>
+                                                {task.description && (
+                                                  <p className="text-xs text-muted-foreground line-clamp-2">
+                                                    {task.description}
+                                                  </p>
+                                                )}
+
+                                                <div className="flex items-center justify-between pt-2">
+                                                  {task.assignee && (
+                                                    <Avatar className="h-5 w-5">
+                                                      <AvatarFallback className="text-[9px] bg-muted">
+                                                        {task.assignee.initials}
+                                                      </AvatarFallback>
+                                                    </Avatar>
+                                                  )}
+                                                  {task.dueDate && (
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                      {new Date(task.dueDate).toLocaleDateString('en-US', {
+                                                        month: 'short',
+                                                        day: 'numeric',
+                                                      })}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </Card>
+                                          </TooltipTrigger>
+                                          {isBlocked && blockingInfo.length > 0 && (
+                                            <TooltipContent side="right" className="max-w-xs">
+                                              <div className="space-y-1">
+                                                <p className="font-medium text-xs">Blocked by:</p>
+                                                <ul className="text-xs space-y-0.5">
+                                                  {blockingInfo.map((info, i) => (
+                                                    <li key={i} className="text-muted-foreground">• {info}</li>
+                                                  ))}
+                                                </ul>
+                                              </div>
+                                            </TooltipContent>
                                           )}
-                                          {task.dueDate && (
-                                            <span className="text-[10px] text-muted-foreground">
-                                              {new Date(task.dueDate).toLocaleDateString('en-US', {
-                                                month: 'short',
-                                                day: 'numeric',
-                                              })}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </Card>
-                                  )}
-                                </Draggable>
-                              ))}
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+                                  </Draggable>
+                                );
+                              })}
                               {provided.placeholder}
 
-                              {/* Add Task Button */}
-                              <Button
-                                variant="ghost"
-                                className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                                onClick={() => openAddTaskDialog(column.id)}
-                              >
-                                <Plus className="h-3 w-3 mr-1" />
-                                Add Task
-                              </Button>
+                              {/* Add Task Button - not shown for Dependencies */}
+                              {!isDependenciesColumn && (
+                                <Button
+                                  variant="ghost"
+                                  className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                                  onClick={() => openAddTaskDialog(column.id)}
+                                >
+                                  <Plus className="h-3 w-3 mr-1" />
+                                  Add Task
+                                </Button>
+                              )}
                             </div>
                           )}
                         </Droppable>
@@ -458,6 +598,10 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
                     <SelectItem value="software">Software</SelectItem>
                     <SelectItem value="firmware">Firmware</SelectItem>
                     <SelectItem value="testing">Testing</SelectItem>
+                    <SelectItem value="design">Design</SelectItem>
+                    <SelectItem value="pcb">PCB</SelectItem>
+                    <SelectItem value="enclosure">Enclosure</SelectItem>
+                    <SelectItem value="power">Power</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -472,7 +616,7 @@ export function KanbanView({ tasks: initialTasks }: KanbanViewProps) {
       {/* Task Detail Modal */}
       <TaskDetailModal
         task={selectedTask}
-        allTasks={tasks}
+        allTasks={allTasks || tasks}
         isOpen={isTaskModalOpen}
         onClose={() => {
           setIsTaskModalOpen(false);

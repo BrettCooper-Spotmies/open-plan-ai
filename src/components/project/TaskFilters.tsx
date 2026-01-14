@@ -1,0 +1,315 @@
+import { TaskFilter, Milestone, ModuleType, TaskStatus, Priority } from '@/types';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChevronDown, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
+
+interface TaskFiltersProps {
+  filters: TaskFilter;
+  onFiltersChange: (filters: TaskFilter) => void;
+  milestones: Milestone[];
+  modules: { id: string; name: string; type: ModuleType }[];
+  teamMembers: { id: string; name: string; initials: string }[];
+  allTags: string[];
+}
+
+const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
+  { value: 'todo', label: 'To Do', color: 'bg-status-todo' },
+  { value: 'in-progress', label: 'In Progress', color: 'bg-status-in-progress' },
+  { value: 'review', label: 'Review', color: 'bg-status-review' },
+  { value: 'done', label: 'Done', color: 'bg-status-done' },
+  { value: 'blocked', label: 'Blocked', color: 'bg-status-blocked' },
+];
+
+const priorityOptions: { value: Priority; label: string; color: string }[] = [
+  { value: 'critical', label: 'Critical', color: 'bg-priority-critical' },
+  { value: 'high', label: 'High', color: 'bg-priority-high' },
+  { value: 'medium', label: 'Medium', color: 'bg-priority-medium' },
+  { value: 'low', label: 'Low', color: 'bg-priority-low' },
+];
+
+const moduleTypeOptions: { value: ModuleType; label: string }[] = [
+  { value: 'hardware', label: 'Hardware' },
+  { value: 'software', label: 'Software' },
+  { value: 'firmware', label: 'Firmware' },
+  { value: 'testing', label: 'Testing' },
+  { value: 'design', label: 'Design' },
+  { value: 'procurement', label: 'Procurement' },
+  { value: 'manufacturing', label: 'Manufacturing' },
+  { value: 'qa', label: 'QA' },
+  { value: 'logistics', label: 'Logistics' },
+  { value: 'enclosure', label: 'Enclosure' },
+  { value: 'pcb', label: 'PCB' },
+  { value: 'power', label: 'Power' },
+];
+
+const dueDateOptions = [
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'today', label: 'Today' },
+  { value: 'this-week', label: 'This Week' },
+  { value: 'this-month', label: 'This Month' },
+  { value: 'no-date', label: 'No Date' },
+];
+
+export function TaskFilters({
+  filters,
+  onFiltersChange,
+  milestones,
+  modules,
+  teamMembers,
+  allTags,
+}: TaskFiltersProps) {
+  const toggleStatus = (status: TaskStatus) => {
+    const current = filters.status || [];
+    const updated = current.includes(status)
+      ? current.filter(s => s !== status)
+      : [...current, status];
+    onFiltersChange({ ...filters, status: updated.length ? updated : undefined });
+  };
+
+  const togglePriority = (priority: Priority) => {
+    const current = filters.priority || [];
+    const updated = current.includes(priority)
+      ? current.filter(p => p !== priority)
+      : [...current, priority];
+    onFiltersChange({ ...filters, priority: updated.length ? updated : undefined });
+  };
+
+  const toggleModule = (module: ModuleType) => {
+    const current = filters.module || [];
+    const updated = current.includes(module)
+      ? current.filter(m => m !== module)
+      : [...current, module];
+    onFiltersChange({ ...filters, module: updated.length ? updated : undefined });
+  };
+
+  const toggleAssignee = (assigneeId: string) => {
+    const current = filters.assignee || [];
+    const updated = current.includes(assigneeId)
+      ? current.filter(a => a !== assigneeId)
+      : [...current, assigneeId];
+    onFiltersChange({ ...filters, assignee: updated.length ? updated : undefined });
+  };
+
+  const toggleTag = (tag: string) => {
+    const current = filters.tags || [];
+    const updated = current.includes(tag)
+      ? current.filter(t => t !== tag)
+      : [...current, tag];
+    onFiltersChange({ ...filters, tags: updated.length ? updated : undefined });
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2 p-4 bg-muted/30 rounded-lg border">
+      {/* Status Filter */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-1">
+            Status
+            {filters.status?.length ? (
+              <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                {filters.status.length}
+              </Badge>
+            ) : (
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-48 p-2" align="start">
+          <div className="space-y-2">
+            {statusOptions.map(option => (
+              <label key={option.value} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded">
+                <Checkbox
+                  checked={filters.status?.includes(option.value) || false}
+                  onCheckedChange={() => toggleStatus(option.value)}
+                />
+                <div className={cn('w-2 h-2 rounded-full', option.color)} />
+                <span className="text-sm">{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Priority Filter */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-1">
+            Priority
+            {filters.priority?.length ? (
+              <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                {filters.priority.length}
+              </Badge>
+            ) : (
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-48 p-2" align="start">
+          <div className="space-y-2">
+            {priorityOptions.map(option => (
+              <label key={option.value} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded">
+                <Checkbox
+                  checked={filters.priority?.includes(option.value) || false}
+                  onCheckedChange={() => togglePriority(option.value)}
+                />
+                <div className={cn('w-2 h-2 rounded-full', option.color)} />
+                <span className="text-sm">{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Module Filter */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-1">
+            Module
+            {filters.module?.length ? (
+              <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                {filters.module.length}
+              </Badge>
+            ) : (
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-48 p-2" align="start">
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {moduleTypeOptions.map(option => (
+              <label key={option.value} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded">
+                <Checkbox
+                  checked={filters.module?.includes(option.value) || false}
+                  onCheckedChange={() => toggleModule(option.value)}
+                />
+                <span className="text-sm">{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Milestone Filter */}
+      <Select
+        value={filters.milestoneId || 'all'}
+        onValueChange={(value) => onFiltersChange({ ...filters, milestoneId: value === 'all' ? undefined : value })}
+      >
+        <SelectTrigger className="w-[140px] h-8 text-sm">
+          <SelectValue placeholder="Milestone" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All Milestones</SelectItem>
+          <SelectItem value="none">No Milestone</SelectItem>
+          {milestones.map(m => (
+            <SelectItem key={m.id} value={m.id}>{m.title}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* Due Date Filter */}
+      <Select
+        value={filters.dueDate || 'all'}
+        onValueChange={(value) => onFiltersChange({ 
+          ...filters, 
+          dueDate: value === 'all' ? undefined : value as TaskFilter['dueDate'] 
+        })}
+      >
+        <SelectTrigger className="w-[130px] h-8 text-sm">
+          <SelectValue placeholder="Due Date" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Any Date</SelectItem>
+          {dueDateOptions.map(option => (
+            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* Assignee Filter */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-1">
+            Assignee
+            {filters.assignee?.length ? (
+              <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                {filters.assignee.length}
+              </Badge>
+            ) : (
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-48 p-2" align="start">
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            <label className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded">
+              <Checkbox
+                checked={filters.assignee?.includes('unassigned') || false}
+                onCheckedChange={() => toggleAssignee('unassigned')}
+              />
+              <span className="text-sm text-muted-foreground">Unassigned</span>
+            </label>
+            {teamMembers.map(member => (
+              <label key={member.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded">
+                <Checkbox
+                  checked={filters.assignee?.includes(member.id) || false}
+                  onCheckedChange={() => toggleAssignee(member.id)}
+                />
+                <span className="text-sm">{member.name}</span>
+              </label>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Tags Filter */}
+      {allTags.length > 0 && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1">
+              Tags
+              {filters.tags?.length ? (
+                <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                  {filters.tags.length}
+                </Badge>
+              ) : (
+                <ChevronDown className="h-3 w-3 opacity-50" />
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-48 p-2" align="start">
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {allTags.map(tag => (
+                <label key={tag} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded">
+                  <Checkbox
+                    checked={filters.tags?.includes(tag) || false}
+                    onCheckedChange={() => toggleTag(tag)}
+                  />
+                  <span className="text-sm">{tag}</span>
+                </label>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
+
+      {/* Has Blockers Toggle */}
+      <Button
+        variant={filters.hasBlockers ? "secondary" : "outline"}
+        size="sm"
+        onClick={() => onFiltersChange({ 
+          ...filters, 
+          hasBlockers: filters.hasBlockers === undefined ? true : undefined 
+        })}
+        className="gap-1"
+      >
+        Blocked
+        {filters.hasBlockers && <X className="h-3 w-3" />}
+      </Button>
+    </div>
+  );
+}

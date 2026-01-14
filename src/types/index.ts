@@ -186,20 +186,28 @@ export interface Activity {
   timestamp: string;
 }
 
-// View types for the project detail page
+// View types for the project detail page (legacy - kept for backward compatibility)
 export type ProjectView = 'kanban' | 'timeline' | 'list' | 'dependencies' | 'milestones' | 'issues';
+
+// NEW: Section-based navigation for project detail
+export type ProjectSection = 'tasks' | 'modules' | 'milestones' | 'issues';
+export type TaskViewMode = 'kanban' | 'list';
+export type ModuleViewMode = 'kanban' | 'list';
 
 // My Day specific types
 export type MyDayView = 'kanban' | 'list';
 export type MyDayGroupBy = 'project' | 'progress' | 'dueDate' | 'priority';
 
-// Filter options
+// Filter options - enhanced for hardware workflows
 export interface TaskFilter {
   status?: TaskStatus[];
   priority?: Priority[];
   module?: ModuleType[];
   assignee?: string[];
   milestoneId?: string;
+  dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
+  tags?: string[];
+  hasBlockers?: boolean;
 }
 
 export interface IssueFilter {
