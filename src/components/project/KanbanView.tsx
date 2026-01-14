@@ -285,7 +285,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
             <div
               ref={provided.innerRef}
               {...provided.droppableProps}
-              className="overflow-x-auto pb-4"
+              className="w-full overflow-x-auto pb-4"
             >
               <div
                 className="inline-flex gap-4 min-w-full"

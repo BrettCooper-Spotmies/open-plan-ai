@@ -56,13 +56,11 @@ export function ViewControls({
         onValueChange={(value) => value && onViewModeChange(value as TaskViewMode)}
         className="bg-muted/50 p-1 rounded-lg"
       >
-        <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1.5 px-3 data-[state=on]:bg-background">
+        <ToggleGroupItem value="kanban" aria-label="Kanban view" className="px-2 data-[state=on]:bg-background">
           <LayoutGrid className="h-4 w-4" />
-          <span className="hidden sm:inline">Kanban</span>
         </ToggleGroupItem>
-        <ToggleGroupItem value="list" aria-label="List view" className="gap-1.5 px-3 data-[state=on]:bg-background">
+        <ToggleGroupItem value="list" aria-label="List view" className="px-2 data-[state=on]:bg-background">
           <List className="h-4 w-4" />
-          <span className="hidden sm:inline">List</span>
         </ToggleGroupItem>
       </ToggleGroup>
 
@@ -238,7 +236,7 @@ export function TasksSection({
   }, [tasks]);
 
   return (
-    <div className="space-y-4">
+    <div className="grid grid-cols-1 gap-4 w-full min-w-0">
       {/* Filters Panel */}
       {isFiltersOpen && (
         <TaskFilters
@@ -252,7 +250,7 @@ export function TasksSection({
       )}
 
       {/* View Content */}
-      <div className="min-h-[400px]">
+      <div className="min-h-[400px] w-full min-w-0">
         {viewMode === 'kanban' ? (
           <KanbanView tasks={filteredTasks} allTasks={tasks} issues={issues} />
         ) : (

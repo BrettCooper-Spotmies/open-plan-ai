@@ -8,12 +8,12 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { TasksSection, ViewControls } from '@/components/project/TasksSection';
-import { ModulesSection } from '@/components/project/ModulesSection';
+import { ModulesSection, ModuleViewControls } from '@/components/project/ModulesSection';
 import { MilestonesView } from '@/components/project/MilestonesView';
 import { IssuesView } from '@/components/project/IssuesView';
 import { projects, projectModules } from '@/data/mockData';
 import { cn } from '@/lib/utils';
-import { ProjectSection, Module, TaskViewMode, TaskFilter } from '@/types';
+import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode } from '@/types';
 
 const stageColors = {
   concept: 'bg-muted text-muted-foreground',
@@ -27,10 +27,15 @@ export default function ProjectDetail() {
   const { id } = useParams();
   const [section, setSection] = useState<ProjectSection>('tasks');
   const [viewMode, setViewMode] = useState<TaskViewMode>('kanban');
+  const [moduleViewMode, setModuleViewMode] = useState<ModuleViewMode>('kanban');
   const [filters, setFilters] = useState<TaskFilter>({});
-  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   
   const project = projects.find(p => p.id === id);
+
+  const handleAddModule = () => {
+    // Implement add module logic
+    console.log('Add module clicked');
+  };
 
   if (!project) {
     return (
@@ -95,7 +100,7 @@ export default function ProjectDetail() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 animate-fade-in">
+      <div className="grid grid-cols-1 gap-6 animate-fade-in w-full min-w-0">
         {/* Project Stats with Title */}
         <div className="flex items-center justify-between gap-6 py-4 border-y">
           {/* Left: Project Title and Stage */}
@@ -188,6 +193,14 @@ export default function ProjectDetail() {
                 onClearFilters={clearFilters}
               />
             )}
+            {/* Module View Controls - show for modules section */}
+            {section === 'modules' && (
+              <ModuleViewControls
+                viewMode={moduleViewMode}
+                onViewModeChange={setModuleViewMode}
+                onAddModule={handleAddModule}
+              />
+            )}
           </div>
 
           <TabsContent value="tasks" className="mt-6">
@@ -198,8 +211,6 @@ export default function ProjectDetail() {
               modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
-              isFiltersOpen={isFiltersOpen}
-              onFiltersOpenChange={setIsFiltersOpen}
               filters={filters}
               onFiltersChange={setFilters}
             />
@@ -209,6 +220,8 @@ export default function ProjectDetail() {
               modules={modules} 
               tasks={project.tasks}
               issues={project.issues || []}
+              viewMode={moduleViewMode}
+              onViewModeChange={setModuleViewMode}
             />
           </TabsContent>
           <TabsContent value="milestones" className="mt-6">

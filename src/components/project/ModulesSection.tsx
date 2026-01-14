@@ -11,10 +11,53 @@ interface ModulesSectionProps {
   modules: Module[];
   tasks: Task[];
   issues: Issue[];
+  viewMode?: ModuleViewMode;
+  onViewModeChange?: (mode: ModuleViewMode) => void;
 }
 
-export function ModulesSection({ modules, tasks, issues }: ModulesSectionProps) {
-  const [viewMode, setViewMode] = useState<ModuleViewMode>('kanban');
+export function ModuleViewControls({
+  viewMode,
+  onViewModeChange,
+  onAddModule
+}: {
+  viewMode: ModuleViewMode;
+  onViewModeChange: (mode: ModuleViewMode) => void;
+  onAddModule: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <ToggleGroup
+        type="single"
+        value={viewMode}
+        onValueChange={(value) => value && onViewModeChange(value as ModuleViewMode)}
+        className="bg-muted/50 p-1 rounded-lg"
+      >
+        <ToggleGroupItem value="kanban" aria-label="Kanban view" className="px-2 data-[state=on]:bg-background">
+          <LayoutGrid className="h-4 w-4" />
+        </ToggleGroupItem>
+        <ToggleGroupItem value="list" aria-label="List view" className="px-2 data-[state=on]:bg-background">
+          <List className="h-4 w-4" />
+        </ToggleGroupItem>
+      </ToggleGroup>
+
+      <Button size="sm" className="gap-2" onClick={onAddModule}>
+        <Plus className="h-4 w-4" />
+        Add Module
+      </Button>
+    </div>
+  );
+}
+
+export function ModulesSection({ 
+  modules, 
+  tasks, 
+  issues,
+  viewMode: externalViewMode,
+  onViewModeChange: externalOnViewModeChange
+}: ModulesSectionProps) {
+  const [internalViewMode, setInternalViewMode] = useState<ModuleViewMode>('kanban');
+  
+  const viewMode = externalViewMode ?? internalViewMode;
 
   // Calculate module stats
   const modulesWithStats = useMemo(() => {
@@ -36,36 +79,9 @@ export function ModulesSection({ modules, tasks, issues }: ModulesSectionProps) 
   }, [modules, tasks, issues]);
 
   return (
-    <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          {/* View Toggle */}
-          <ToggleGroup
-            type="single"
-            value={viewMode}
-            onValueChange={(value) => value && setViewMode(value as ModuleViewMode)}
-            className="bg-muted/50 p-1 rounded-lg"
-          >
-            <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1.5 px-3 data-[state=on]:bg-background">
-              <LayoutGrid className="h-4 w-4" />
-              <span className="hidden sm:inline">Kanban</span>
-            </ToggleGroupItem>
-            <ToggleGroupItem value="list" aria-label="List view" className="gap-1.5 px-3 data-[state=on]:bg-background">
-              <List className="h-4 w-4" />
-              <span className="hidden sm:inline">List</span>
-            </ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-
-        <Button size="sm" className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Module
-        </Button>
-      </div>
-
+    <div className="space-y-4 grid grid-cols-1 w-full min-w-0">
       {/* View Content */}
-      <div className="min-h-[400px]">
+      <div className="min-h-[400px] w-full min-w-0">
         {viewMode === 'kanban' ? (
           <ModulesKanbanView modules={modulesWithStats} />
         ) : (
