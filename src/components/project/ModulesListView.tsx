@@ -1,0 +1,119 @@
+import { Module, Task } from '@/types';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Progress } from '@/components/ui/progress';
+import { AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { formatModuleType, getModuleColor } from '@/lib/projectUtils';
+
+interface ModuleWithStats extends Module {
+  taskCount: number;
+  progress: number;
+  openIssues: number;
+  tasks: Task[];
+}
+
+interface ModulesListViewProps {
+  modules: ModuleWithStats[];
+}
+
+export function ModulesListView({ modules }: ModulesListViewProps) {
+  if (modules.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <p className="text-muted-foreground">No modules to display</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[250px]">Module</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Owner</TableHead>
+            <TableHead className="text-center">Tasks</TableHead>
+            <TableHead className="w-[180px]">Progress</TableHead>
+            <TableHead className="text-center">Issues</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {modules.map((module) => {
+            const moduleColor = getModuleColor(module.type);
+            const isComplete = module.progress === 100;
+
+            return (
+              <TableRow 
+                key={module.id} 
+                className="cursor-pointer hover:bg-muted/50"
+              >
+                <TableCell>
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="w-2.5 h-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: moduleColor }}
+                    />
+                    <div>
+                      <p className="font-medium">{module.name}</p>
+                      {module.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                          {module.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary" className="capitalize">
+                    {formatModuleType(module.type)}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  {module.owner ? (
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-[10px]">
+                          {module.owner.initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{module.owner.name}</span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">Unassigned</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-center">
+                  <span className="text-sm font-medium">{module.taskCount}</span>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <Progress value={module.progress} className="h-2 flex-1" />
+                    <span className="text-sm font-medium w-10 text-right">
+                      {Math.round(module.progress)}%
+                    </span>
+                    {isComplete && (
+                      <CheckCircle2 className="h-4 w-4 text-status-done" />
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell className="text-center">
+                  {module.openIssues > 0 ? (
+                    <Badge variant="destructive" className="gap-1">
+                      <AlertTriangle className="h-3 w-3" />
+                      {module.openIssues}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}

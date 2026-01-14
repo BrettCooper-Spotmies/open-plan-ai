@@ -1,21 +1,19 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, LayoutGrid, GanttChart, List, GitBranch, Users, Calendar, MoreHorizontal, Flag, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, MoreHorizontal } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { KanbanView } from '@/components/project/KanbanView';
-import { TimelineView } from '@/components/project/TimelineView';
-import { ListView } from '@/components/project/ListView';
-import { DependencyView } from '@/components/project/DependencyView';
+import { TasksSection } from '@/components/project/TasksSection';
+import { ModulesSection } from '@/components/project/ModulesSection';
 import { MilestonesView } from '@/components/project/MilestonesView';
 import { IssuesView } from '@/components/project/IssuesView';
-import { projects } from '@/data/mockData';
+import { projects, projectModules } from '@/data/mockData';
 import { cn } from '@/lib/utils';
-import { ProjectView } from '@/types';
+import { ProjectSection, Module } from '@/types';
 
 const stageColors = {
   concept: 'bg-muted text-muted-foreground',
@@ -27,7 +25,7 @@ const stageColors = {
 
 export default function ProjectDetail() {
   const { id } = useParams();
-  const [view, setView] = useState<ProjectView>('kanban');
+  const [section, setSection] = useState<ProjectSection>('tasks');
   
   const project = projects.find(p => p.id === id);
 
@@ -43,6 +41,9 @@ export default function ProjectDetail() {
       </AppLayout>
     );
   }
+
+  // Get project modules - use projectModules for now (in real app, filter by projectId)
+  const modules: Module[] = projectModules;
 
   const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'closed').length || 0;
   const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed').length || 0;
@@ -105,24 +106,22 @@ export default function ProjectDetail() {
           )}
         </div>
 
-        {/* View Tabs */}
-        <Tabs value={view} onValueChange={(v) => setView(v as ProjectView)} className="w-full">
+        {/* Section Tabs - Entity-based navigation */}
+        <Tabs value={section} onValueChange={(v) => setSection(v as ProjectSection)} className="w-full">
           <TabsList className="bg-muted/50">
-            <TabsTrigger value="kanban" className="gap-2">
-              <LayoutGrid className="h-4 w-4" />
-              Kanban
+            <TabsTrigger value="tasks" className="gap-2">
+              <ListTodo className="h-4 w-4" />
+              Tasks
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                {project.tasks.length}
+              </Badge>
             </TabsTrigger>
-            <TabsTrigger value="timeline" className="gap-2">
-              <GanttChart className="h-4 w-4" />
-              Timeline
-            </TabsTrigger>
-            <TabsTrigger value="list" className="gap-2">
-              <List className="h-4 w-4" />
-              List
-            </TabsTrigger>
-            <TabsTrigger value="dependencies" className="gap-2">
-              <GitBranch className="h-4 w-4" />
-              Dependencies
+            <TabsTrigger value="modules" className="gap-2">
+              <Boxes className="h-4 w-4" />
+              Modules
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                {modules.length}
+              </Badge>
             </TabsTrigger>
             <TabsTrigger value="milestones" className="gap-2">
               <Flag className="h-4 w-4" />
@@ -142,17 +141,20 @@ export default function ProjectDetail() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="kanban" className="mt-6">
-            <KanbanView tasks={project.tasks} />
+          <TabsContent value="tasks" className="mt-6">
+            <TasksSection 
+              tasks={project.tasks} 
+              milestones={project.milestones}
+              issues={project.issues || []}
+              modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+            />
           </TabsContent>
-          <TabsContent value="timeline" className="mt-6">
-            <TimelineView tasks={project.tasks} milestones={project.milestones} />
-          </TabsContent>
-          <TabsContent value="list" className="mt-6">
-            <ListView tasks={project.tasks} />
-          </TabsContent>
-          <TabsContent value="dependencies" className="mt-6">
-            <DependencyView tasks={project.tasks} />
+          <TabsContent value="modules" className="mt-6">
+            <ModulesSection 
+              modules={modules} 
+              tasks={project.tasks}
+              issues={project.issues || []}
+            />
           </TabsContent>
           <TabsContent value="milestones" className="mt-6">
             <MilestonesView 
