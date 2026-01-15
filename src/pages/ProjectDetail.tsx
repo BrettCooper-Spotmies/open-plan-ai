@@ -78,13 +78,13 @@ export default function ProjectDetail() {
   const teamMembers = useMemo(() => {
     const members = new Map<string, { id: string; name: string; initials: string }>();
     project.tasks.forEach(task => {
-      if (task.assignee) {
-        members.set(task.assignee.id, {
-          id: task.assignee.id,
-          name: task.assignee.name,
-          initials: task.assignee.initials,
+      task.assignees?.forEach(assignee => {
+        members.set(assignee.id, {
+          id: assignee.id,
+          name: assignee.name,
+          initials: assignee.initials,
         });
-      }
+      });
     });
     return Array.from(members.values());
   }, [project.tasks]);
