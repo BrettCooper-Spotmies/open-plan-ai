@@ -74,6 +74,8 @@ interface TaskDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (task: Task) => void;
+  mode?: 'view' | 'create';
+  onCreate?: (task: Task) => void;
 }
 
 const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
@@ -116,6 +118,8 @@ export function TaskDetailModal({
   isOpen,
   onClose,
   onUpdate,
+  mode = 'view',
+  onCreate,
 }: TaskDetailModalProps) {
   const [editedTask, setEditedTask] = useState<Task | null>(task);
   const [newChecklistItem, setNewChecklistItem] = useState('');
@@ -135,6 +139,13 @@ export function TaskDetailModal({
     const updated = { ...editedTask, [field]: value, updatedAt: new Date().toISOString() };
     setEditedTask(updated);
     onUpdate(updated);
+  };
+
+  const handleCreate = () => {
+    if (editedTask && onCreate) {
+      onCreate(editedTask);
+      onClose();
+    }
   };
 
   // Checklist handlers
@@ -237,7 +248,7 @@ export function TaskDetailModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0">
         <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between">
-          <DialogTitle>Task Details</DialogTitle>
+          <DialogTitle>{mode === 'create' ? 'Add New Task' : 'Task Details'}</DialogTitle>
         </DialogHeader>
 
         <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
@@ -803,6 +814,16 @@ export function TaskDetailModal({
             </section>
           </div>
         </ScrollArea>
+        {mode === 'create' && (
+          <div className="px-6 py-4 border-t flex justify-end gap-2 bg-background">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate}>
+              Create Task
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

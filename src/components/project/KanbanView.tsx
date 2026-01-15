@@ -12,7 +12,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Plus, Check, GripVertical, X, AlertTriangle, Link2 } from 'lucide-react';
+import { Plus, Check, GripVertical, X, AlertTriangle, Link2, Calendar as CalendarIcon, Maximize2 } from 'lucide-react';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { teamMembers } from '@/data/mockData';
+import { format } from 'date-fns';
 import { TaskDetailModal } from './TaskDetailModal';
 
 interface KanbanColumn {
@@ -79,11 +95,19 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
   const [newColumnColor, setNewColumnColor] = useState('bg-status-todo');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [newTask, setNewTask] = useState({
+  const [isMaximizedAddTask, setIsMaximizedAddTask] = useState(false);
+  const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
+  const [newTask, setNewTask] = useState<Partial<Task>>({
     title: '',
     description: '',
     priority: 'medium' as Priority,
     module: 'software' as ModuleType,
+    assignees: [],
+    startDate: new Date().toISOString(),
+    tags: [],
+    status: 'todo',
+    dependencies: [],
+    blockedBy: [],
   });
 
   // Determine which tasks are blocked
@@ -233,29 +257,61 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
     setColumns(columns.filter(c => c.id !== columnId));
   };
 
-  const handleAddTask = () => {
-    if (!newTask.title.trim() || !addTaskToColumn) return;
+  const handleAddTask = (taskOverride?: Partial<Task>) => {
+    const taskData = taskOverride || newTask;
+    if (!taskData.title?.trim()) return;
 
-    const column = columns.find(c => c.id === addTaskToColumn);
-    if (!column || column.isSpecial) return;
+    // Determine status: explicit or from column
+    let status = taskData.status as TaskStatus;
+    if (addTaskToColumn) {
+      const column = columns.find(c => c.id === addTaskToColumn);
+      if (column && !column.isSpecial) {
+        status = column.status as TaskStatus;
+      }
+    }
 
     const task: Task = {
       id: `task-${Date.now()}`,
-      title: newTask.title,
-      description: newTask.description,
-      status: column.status as TaskStatus,
-      priority: newTask.priority,
-      module: newTask.module,
-      dependencies: [],
-      blockedBy: [],
-      tags: [],
+      title: taskData.title || '',
+      description: taskData.description || '',
+      status: status || 'todo',
+      priority: taskData.priority || 'medium',
+      module: taskData.module || 'software',
+      dependencies: taskData.dependencies || [],
+      blockedBy: taskData.blockedBy || [],
+      tags: taskData.tags || [],
+      assignees: taskData.assignees || [],
+      startDate: taskData.startDate,
+      dueDate: taskData.dueDate,
+      checklist: taskData.checklist || [],
+      comments: taskData.comments || [],
+      attachments: taskData.attachments || [],
+      linkedIssueIds: taskData.linkedIssueIds || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     setTasks([...tasks, task]);
-    setNewTask({ title: '', description: '', priority: 'medium', module: 'software' });
+    setNewTask({
+      title: '',
+      description: '',
+      priority: 'medium',
+      module: 'software',
+      assignees: [],
+      startDate: new Date().toISOString(),
+      tags: [],
+      status: 'todo',
+      dependencies: [],
+      blockedBy: [],
+    });
     setIsAddTaskOpen(false);
+    setIsMaximizedAddTask(false);
+    setAddTaskToColumn(null);
+  };
+
+  const handleMaximizeAddTask = () => {
+    setIsAddTaskOpen(false);
+    setIsMaximizedAddTask(true);
     setAddTaskToColumn(null);
   };
 
@@ -263,6 +319,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
     const column = columns.find(c => c.id === columnId);
     if (column?.isSpecial) return; // Can't add tasks to Dependencies bucket
     setAddTaskToColumn(columnId);
+    setNewTask(prev => ({ ...prev, status: column?.status as TaskStatus || 'todo' }));
     setIsAddTaskOpen(true);
   };
 
@@ -570,9 +627,19 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
 
       {/* Add Task Dialog */}
       <Dialog open={isAddTaskOpen} onOpenChange={setIsAddTaskOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="max-w-lg">
+          <DialogHeader className="flex flex-row items-center justify-between border-b pb-4">
             <DialogTitle>Add New Task</DialogTitle>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={handleMaximizeAddTask}>
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Maximize</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
@@ -583,15 +650,70 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                 onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Description (optional)</Label>
-              <Textarea
-                placeholder="Enter task description"
-                value={newTask.description}
-                onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-              />
-            </div>
+            
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Assigned To</Label>
+                <div className="flex flex-wrap gap-2 min-h-10 items-center p-2 border rounded-md">
+                  {(newTask.assignees || []).map((assignee) => (
+                    <Badge key={assignee.id} variant="secondary" className="gap-1 p-1 pr-2">
+                      <Avatar className="h-4 w-4">
+                         <AvatarFallback className="text-[9px]">{assignee.initials}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-xs">{assignee.name}</span>
+                      <X 
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => setNewTask({
+                          ...newTask,
+                          assignees: newTask.assignees?.filter(a => a.id !== assignee.id)
+                        })}
+                      />
+                    </Badge>
+                  ))}
+                  <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
+                          <span>
+                            <Plus className="h-3 w-3" />
+                          </span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="p-0 w-[200px]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search members..." />
+                          <CommandList>
+                            <CommandEmpty>No results found.</CommandEmpty>
+                            <CommandGroup heading="Team Members">
+                              {teamMembers
+                                .filter(m => !newTask.assignees?.some(a => a.id === m.id))
+                                .map((member) => (
+                                  <CommandItem
+                                    key={member.id}
+                                    value={member.name}
+                                    onSelect={() => {
+                                      setNewTask({ ...newTask, assignees: [...(newTask.assignees || []), member] });
+                                      setIsAssigneePopoverOpen(false);
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Avatar className="h-5 w-5">
+                                        <AvatarFallback className="text-[9px]">
+                                          {member.initials}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      {member.name}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label>Priority</Label>
                 <Select
@@ -602,14 +724,93 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="critical">
+                      <div className="flex items-center gap-2">
+                         <div className="w-2 h-2 rounded-full bg-priority-critical" />
+                         Critical
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="high">
+                      <div className="flex items-center gap-2">
+                         <div className="w-2 h-2 rounded-full bg-priority-high" />
+                         High
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="medium">
+                      <div className="flex items-center gap-2">
+                         <div className="w-2 h-2 rounded-full bg-priority-medium" />
+                         Medium
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="low">
+                      <div className="flex items-center gap-2">
+                         <div className="w-2 h-2 rounded-full bg-priority-low" />
+                         Low
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-2">
+                  <Label>Start Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          'w-full justify-start text-left font-normal',
+                          !newTask.startDate && 'text-muted-foreground'
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newTask.startDate
+                          ? format(new Date(newTask.startDate), 'PPP')
+                          : 'Pick a date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={newTask.startDate ? new Date(newTask.startDate) : undefined}
+                        onSelect={(date) => setNewTask({ ...newTask, startDate: date?.toISOString() })}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+               </div>
+               <div className="space-y-2">
+                  <Label>Due Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          'w-full justify-start text-left font-normal',
+                          !newTask.dueDate && 'text-muted-foreground'
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newTask.dueDate
+                          ? format(new Date(newTask.dueDate), 'PPP')
+                          : 'Pick a date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={newTask.dueDate ? new Date(newTask.dueDate) : undefined}
+                        onSelect={(date) => setNewTask({ ...newTask, dueDate: date?.toISOString() })}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+               </div>
+            </div>
+
+            <div className="space-y-2">
                 <Label>Module</Label>
                 <Select
                   value={newTask.module}
@@ -629,16 +830,25 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                     <SelectItem value="power">Power</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
             </div>
-            <Button onClick={handleAddTask} className="w-full">
+
+            <div className="space-y-2">
+              <Label>Description (optional)</Label>
+              <Textarea
+                placeholder="Enter task description"
+                value={newTask.description}
+                onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+              />
+            </div>
+            
+            <Button onClick={() => handleAddTask()} className="w-full">
               Add Task
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Task Detail Modal */}
+      {/* Task Detail Modal (Viewing/Editing) */}
       <TaskDetailModal
         task={selectedTask}
         allTasks={allTasks || tasks}
@@ -648,6 +858,36 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
           setSelectedTask(null);
         }}
         onUpdate={handleTaskUpdate}
+      />
+
+      {/* Task Detail Modal (Creating Maximized) */}
+      <TaskDetailModal
+        task={isMaximizedAddTask ? {
+            id: 'new-task-draft',
+            title: newTask.title || '',
+            description: newTask.description || '',
+            status: newTask.status || 'todo',
+            priority: newTask.priority || 'medium',
+            module: newTask.module || 'software',
+            assignees: newTask.assignees || [],
+            tags: newTask.tags || [],
+            dependencies: newTask.dependencies || [],
+            blockedBy: newTask.blockedBy || [],
+            checklist: newTask.checklist || [],
+            comments: newTask.comments || [],
+            attachments: newTask.attachments || [],
+            linkedIssueIds: newTask.linkedIssueIds || [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            startDate: newTask.startDate,
+            dueDate: newTask.dueDate,
+        } : null}
+        allTasks={allTasks || tasks}
+        isOpen={isMaximizedAddTask}
+        onClose={() => setIsMaximizedAddTask(false)}
+        onUpdate={(updated) => setNewTask(updated)}
+        mode="create"
+        onCreate={handleAddTask}
       />
     </div>
   );
