@@ -55,6 +55,8 @@ import {
   User,
   Tag,
   AlertCircle,
+  Pencil,
+  Check,
 } from 'lucide-react';
 import {
   Task,
@@ -100,6 +102,73 @@ const moduleOptions: { value: ModuleType; label: string }[] = [
   { value: 'testing', label: 'Testing' },
 ];
 
+// 30 Colors: 15 Primary (Hard) + 15 Light
+const TAG_PALETTE = [
+  // Red
+  { name: 'Red', color: 'bg-red-500 text-white hover:bg-red-600' },
+  { name: 'Light Red', color: 'bg-red-100 text-red-700 hover:bg-red-200' },
+  // Orange
+  { name: 'Orange', color: 'bg-orange-500 text-white hover:bg-orange-600' },
+  { name: 'Light Orange', color: 'bg-orange-100 text-orange-700 hover:bg-orange-200' },
+  // Amber
+  { name: 'Amber', color: 'bg-amber-500 text-white hover:bg-amber-600' },
+  { name: 'Light Amber', color: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
+  // Yellow
+  { name: 'Yellow', color: 'bg-yellow-500 text-white hover:bg-yellow-600' },
+  { name: 'Light Yellow', color: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
+  // Lime
+  { name: 'Lime', color: 'bg-lime-500 text-white hover:bg-lime-600' },
+  { name: 'Light Lime', color: 'bg-lime-100 text-lime-700 hover:bg-lime-200' },
+  // Green
+  { name: 'Green', color: 'bg-green-500 text-white hover:bg-green-600' },
+  { name: 'Light Green', color: 'bg-green-100 text-green-700 hover:bg-green-200' },
+  // Emerald
+  { name: 'Emerald', color: 'bg-emerald-500 text-white hover:bg-emerald-600' },
+  { name: 'Light Emerald', color: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
+  // Teal
+  { name: 'Teal', color: 'bg-teal-500 text-white hover:bg-teal-600' },
+  { name: 'Light Teal', color: 'bg-teal-100 text-teal-700 hover:bg-teal-200' },
+  // Cyan
+  { name: 'Cyan', color: 'bg-cyan-500 text-white hover:bg-cyan-600' },
+  { name: 'Light Cyan', color: 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200' },
+  // Sky
+  { name: 'Sky', color: 'bg-sky-500 text-white hover:bg-sky-600' },
+  { name: 'Light Sky', color: 'bg-sky-100 text-sky-700 hover:bg-sky-200' },
+  // Blue
+  { name: 'Blue', color: 'bg-blue-500 text-white hover:bg-blue-600' },
+  { name: 'Light Blue', color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
+  // Indigo
+  { name: 'Indigo', color: 'bg-indigo-500 text-white hover:bg-indigo-600' },
+  { name: 'Light Indigo', color: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' },
+  // Violet
+  { name: 'Violet', color: 'bg-violet-500 text-white hover:bg-violet-600' },
+  { name: 'Light Violet', color: 'bg-violet-100 text-violet-700 hover:bg-violet-200' },
+  // Purple
+  { name: 'Purple', color: 'bg-purple-500 text-white hover:bg-purple-600' },
+  { name: 'Light Purple', color: 'bg-purple-100 text-purple-700 hover:bg-purple-200' },
+  // Fuchsia
+  { name: 'Fuchsia', color: 'bg-fuchsia-500 text-white hover:bg-fuchsia-600' },
+  { name: 'Light Fuchsia', color: 'bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-200' },
+];
+
+// Helper to determine color based on tag name
+// If the tag name matches (or was renamed from) a default color, we try to keep it.
+// Since we don't store the metadata, we match by exact name first.
+// If it's a custom name, we hash it to one of the palette colors.
+const getTagColor = (tag: string) => {
+  // Check if it matches a default name directly
+  const directMatch = TAG_PALETTE.find(p => p.name.toLowerCase() === tag.toLowerCase());
+  if (directMatch) return directMatch.color;
+
+  // Otherwise hash to a stable color
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) {
+    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % TAG_PALETTE.length;
+  return TAG_PALETTE[index].color;
+};
+
 const getFileIcon = (fileType: string) => {
   if (fileType.startsWith('image/')) return ImageIcon;
   if (fileType.includes('pdf') || fileType.includes('document')) return FileText;
@@ -127,6 +196,10 @@ export function TaskDetailModal({
   const [selectedBlockingTask, setSelectedBlockingTask] = useState('');
   const [selectedBlockedByTask, setSelectedBlockedByTask] = useState('');
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
+  const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
+  const [tagSearch, setTagSearch] = useState('');
+  const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
+  const [editingTagValue, setEditingTagValue] = useState('');
 
   // Sync editedTask when task prop changes
   if (task && editedTask?.id !== task.id) {
@@ -482,36 +555,141 @@ export function TaskDetailModal({
               </div>
 
               {/* Tags */}
+              {/* Tags */}
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Tag className="h-3 w-3" />
                   Tags
                 </Label>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                   {editedTask.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
+                    <Badge 
+                      key={tag} 
+                      className={cn("text-xs font-normal pointer-events-none pl-2 pr-1 gap-1", getTagColor(tag))}
+                    >
                       {tag}
                       <button
                         onClick={() => handleFieldChange('tags', editedTask.tags.filter(t => t !== tag))}
-                        className="ml-1 hover:text-destructive"
+                        className="pointer-events-auto hover:bg-black/10 rounded-full p-0.5 transition-colors"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
                   ))}
-                  <Input
-                    placeholder="Add tag..."
-                    className="w-24 h-6 text-xs"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        const value = (e.target as HTMLInputElement).value.trim();
-                        if (value && !editedTask.tags.includes(value)) {
-                          handleFieldChange('tags', [...editedTask.tags, value]);
-                          (e.target as HTMLInputElement).value = '';
-                        }
-                      }
+                  
+                  <Popover 
+                    open={isTagPopoverOpen} 
+                    onOpenChange={(open) => {
+                      setIsTagPopoverOpen(open);
+                      if (!open) setEditingTagIndex(null);
                     }}
-                  />
+                  >
+                    <PopoverTrigger asChild>
+                      <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 flex items-center justify-center group relative">
+                         <div className="absolute inset-0 rounded-full border border-muted-foreground/30 group-hover:border-primary transition-colors" />
+                        <Plus className="h-3 w-3 z-10" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[240px] max-h-[350px] flex flex-col overflow-hidden" align="start">
+                      <Command className="flex-1 min-h-0">
+                        <CommandInput 
+                          placeholder="Search tags..." 
+                          value={tagSearch}
+                          onValueChange={setTagSearch}
+                        />
+                        <CommandList className="flex-1 overflow-y-auto min-h-0">
+                          <CommandEmpty className="py-2 px-2">
+                             <div className="text-sm text-center py-2 text-muted-foreground">
+                               No matching tags.
+                             </div>
+                             {tagSearch.trim() && (
+                                <button
+                                  className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                                  onClick={() => {
+                                      handleFieldChange('tags', [...editedTask.tags, tagSearch.trim()]);
+                                      setTagSearch('');
+                                      setIsTagPopoverOpen(false);
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Create "{tagSearch}"
+                                </button>
+                             )}
+                          </CommandEmpty>
+                          {TAG_PALETTE
+                            .filter(item => !editedTask.tags.includes(item.name)) // Simple filter by name
+                            .map((item, index) => (
+                              <CommandItem
+                                key={index}
+                                value={item.name}
+                                onSelect={() => {
+                                  if (editingTagIndex !== index) {
+                                    handleFieldChange('tags', [...editedTask.tags, item.name]);
+                                    setIsTagPopoverOpen(false);
+                                  }
+                                }}
+                                className="cursor-pointer group flex items-center justify-between"
+                              >
+                                {editingTagIndex === index ? (
+                                  <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
+                                    <div className={cn("w-3 h-3 rounded-full shrink-0", item.color.split(' ')[0])} />
+                                    <Input
+                                      autoFocus
+                                      value={editingTagValue}
+                                      onChange={(e) => setEditingTagValue(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.stopPropagation();
+                                          if (editingTagValue.trim()) {
+                                            handleFieldChange('tags', [...editedTask.tags, editingTagValue.trim()]);
+                                            setIsTagPopoverOpen(false);
+                                            setEditingTagIndex(null);
+                                          }
+                                        }
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="h-6 w-full text-xs px-1 py-0 min-w-0"
+                                    />
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6 mt-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (editingTagValue.trim()) {
+                                            handleFieldChange('tags', [...editedTask.tags, editingTagValue.trim()]);
+                                            setIsTagPopoverOpen(false);
+                                            setEditingTagIndex(null);
+                                        }
+                                      }}
+                                    >
+                                      <Check className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center gap-2">
+                                      <div className={cn("w-3 h-3 rounded-full shrink-0", item.color.split(' ')[0])} />
+                                      <span>{item.name}</span>
+                                    </div>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingTagIndex(index);
+                                        setEditingTagValue(item.name);
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 hover:bg-muted p-1 rounded-sm transition-all"
+                                    >
+                                      <Pencil className="h-3 w-3 text-muted-foreground" />
+                                    </button>
+                                  </>
+                                )}
+                              </CommandItem>
+                            ))}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             </section>
