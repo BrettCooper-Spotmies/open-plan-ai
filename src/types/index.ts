@@ -94,7 +94,7 @@ export interface Task {
   status: TaskStatus;
   priority: Priority;
   module: ModuleType;
-  assignee?: TeamMember;
+  assignees?: TeamMember[];
   dueDate?: string;
   startDate?: string;
   estimatedHours?: number;

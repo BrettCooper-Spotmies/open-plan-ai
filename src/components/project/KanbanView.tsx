@@ -447,13 +447,22 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                                                   )}
 
                                                   <div className="flex items-center justify-between pt-2">
-                                                    {task.assignee && (
-                                                      <Avatar className="h-5 w-5">
-                                                        <AvatarFallback className="text-[9px] bg-muted">
-                                                          {task.assignee.initials}
-                                                        </AvatarFallback>
-                                                      </Avatar>
-                                                    )}
+                                                    <div className="flex -space-x-2">
+                                                      {(task.assignees || []).slice(0, 3).map((assignee) => (
+                                                        <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
+                                                          <AvatarFallback className="text-[9px] bg-muted">
+                                                            {assignee.initials}
+                                                          </AvatarFallback>
+                                                        </Avatar>
+                                                      ))}
+                                                      {(task.assignees || []).length > 3 && (
+                                                        <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
+                                                          <span className="text-[8px] text-muted-foreground font-medium">
+                                                            +{task.assignees!.length - 3}
+                                                          </span>
+                                                        </div>
+                                                      )}
+                                                    </div>
                                                     {task.dueDate && (
                                                       <span className="text-[10px] text-muted-foreground">
                                                         {new Date(task.dueDate).toLocaleDateString('en-US', {

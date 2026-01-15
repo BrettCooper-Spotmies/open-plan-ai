@@ -75,7 +75,9 @@ export function ListView({ tasks, milestones = [], onTaskClick }: ListViewProps)
         break;
       }
       case 'assignee':
-        comparison = (a.assignee?.name || 'zzz').localeCompare(b.assignee?.name || 'zzz');
+        const nameA = a.assignees?.[0]?.name || 'zzz';
+        const nameB = b.assignees?.[0]?.name || 'zzz';
+        comparison = nameA.localeCompare(nameB);
         break;
     }
 
@@ -203,14 +205,17 @@ export function ListView({ tasks, milestones = [], onTaskClick }: ListViewProps)
                     )}
                   </TableCell>
                   <TableCell>
-                    {task.assignee ? (
+                    {task.assignees && task.assignees.length > 0 ? (
                       <div className="flex items-center gap-2">
                         <Avatar className="h-6 w-6">
                           <AvatarFallback className="text-[10px]">
-                            {task.assignee.initials}
+                            {task.assignees[0].initials}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="text-sm">{task.assignee.name}</span>
+                        <span className="text-sm">
+                          {task.assignees[0].name}
+                          {task.assignees.length > 1 && ` +${task.assignees.length - 1}`}
+                        </span>
                       </div>
                     ) : (
                       <span className="text-muted-foreground text-sm">Unassigned</span>

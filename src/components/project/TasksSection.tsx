@@ -149,11 +149,12 @@ export function TasksSection({
 
       // Assignee filter
       if (filters.assignee?.length) {
-        if (!task.assignee && !filters.assignee.includes('unassigned')) {
+        if ((!task.assignees || task.assignees.length === 0) && !filters.assignee.includes('unassigned')) {
           return false;
         }
-        if (task.assignee && !filters.assignee.includes(task.assignee.id)) {
-          return false;
+        if (task.assignees && task.assignees.length > 0) {
+          const hasMatchingAssignee = task.assignees.some(a => filters.assignee!.includes(a.id));
+          if (!hasMatchingAssignee) return false;
         }
       }
 
@@ -215,11 +216,13 @@ export function TasksSection({
   const teamMembers = useMemo(() => {
     const members = new Map<string, { id: string; name: string; initials: string }>();
     tasks.forEach(task => {
-      if (task.assignee) {
-        members.set(task.assignee.id, {
-          id: task.assignee.id,
-          name: task.assignee.name,
-          initials: task.assignee.initials,
+      if (task.assignees) {
+        task.assignees.forEach(assignee => {
+          members.set(assignee.id, {
+            id: assignee.id,
+            name: assignee.name,
+            initials: assignee.initials,
+          });
         });
       }
     });

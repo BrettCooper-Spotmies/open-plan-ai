@@ -29,6 +29,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from '@/lib/utils';
 import {
   X,
@@ -114,6 +122,7 @@ export function TaskDetailModal({
   const [newComment, setNewComment] = useState('');
   const [selectedBlockingTask, setSelectedBlockingTask] = useState('');
   const [selectedBlockedByTask, setSelectedBlockedByTask] = useState('');
+  const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
 
   // Sync editedTask when task prop changes
   if (task && editedTask?.id !== task.id) {
@@ -227,20 +236,20 @@ export function TaskDetailModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="sr-only">Task Details</DialogTitle>
+        <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between">
+          <DialogTitle>Task Details</DialogTitle>
+        </DialogHeader>
+
+        <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
+          <div className="p-6 space-y-6">
+            {/* Task Title */}
             <Input
               value={editedTask.title}
               onChange={(e) => handleFieldChange('title', e.target.value)}
               className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0"
               placeholder="Task title..."
             />
-          </div>
-        </DialogHeader>
 
-        <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
-          <div className="p-6 space-y-6">
             {/* Task Overview Section */}
             <section className="space-y-4">
               <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -249,48 +258,71 @@ export function TaskDetailModal({
               </h3>
               
               <div className="grid grid-cols-2 gap-4">
-                {/* Assignee */}
+                {/* Assignees */}
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <User className="h-3 w-3" />
                     Assigned To
                   </Label>
-                  <Select
-                    value={editedTask.assignee?.id || ''}
-                    onValueChange={(value) => {
-                      const member = teamMembers.find(m => m.id === value);
-                      handleFieldChange('assignee', member);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select assignee">
-                        {editedTask.assignee && (
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-5 w-5">
-                              <AvatarFallback className="text-[9px]">
-                                {editedTask.assignee.initials}
-                              </AvatarFallback>
-                            </Avatar>
-                            {editedTask.assignee.name}
-                          </div>
-                        )}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teamMembers.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-5 w-5">
-                              <AvatarFallback className="text-[9px]">
-                                {member.initials}
-                              </AvatarFallback>
-                            </Avatar>
-                            {member.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                    {(editedTask.assignees || []).map((assignee) => (
+                      <Badge key={assignee.id} variant="secondary" className="pl-1 pr-1.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
+                        <Avatar className="h-4 w-4">
+                          <AvatarFallback className="text-[9px]">
+                            {assignee.initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs font-normal">{assignee.name}</span>
+                        <button
+                          onClick={() => handleFieldChange('assignees', (editedTask.assignees || []).filter(a => a.id !== assignee.id))}
+                          className="ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
+                          <span>
+                            <Plus className="h-3 w-3" />
+                          </span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="p-0 w-[200px]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search members..." />
+                          <CommandList>
+                            <CommandEmpty>No results found.</CommandEmpty>
+                            <CommandGroup heading="Team Members">
+                              {teamMembers
+                                .filter(m => !editedTask.assignees?.some(a => a.id === m.id))
+                                .map((member) => (
+                                  <CommandItem
+                                    key={member.id}
+                                    value={member.name}
+                                    onSelect={() => {
+                                      handleFieldChange('assignees', [...(editedTask.assignees || []), member]);
+                                      setIsAssigneePopoverOpen(false);
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Avatar className="h-5 w-5">
+                                        <AvatarFallback className="text-[9px]">
+                                          {member.initials}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      {member.name}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
 
                 {/* Status */}
@@ -508,6 +540,19 @@ export function TaskDetailModal({
               )}
 
               <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-4">
+                  <Input
+                    placeholder="Add checklist item..."
+                    value={newChecklistItem}
+                    onChange={(e) => setNewChecklistItem(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddChecklistItem()}
+                    className="flex-1"
+                  />
+                  <Button size="sm" onClick={handleAddChecklistItem}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+
                 {checklist.map((item) => (
                   <div key={item.id} className="flex items-center gap-3 group">
                     <Checkbox
@@ -527,19 +572,6 @@ export function TaskDetailModal({
                     </Button>
                   </div>
                 ))}
-
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder="Add checklist item..."
-                    value={newChecklistItem}
-                    onChange={(e) => setNewChecklistItem(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddChecklistItem()}
-                    className="flex-1"
-                  />
-                  <Button size="sm" onClick={handleAddChecklistItem}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
               </div>
             </section>
 
@@ -589,60 +621,6 @@ export function TaskDetailModal({
                   <span className="text-sm text-muted-foreground">Drop files or click to upload</span>
                   <input type="file" multiple className="hidden" onChange={handleFileUpload} />
                 </label>
-              </div>
-            </section>
-
-            <Separator />
-
-            {/* Comments Section */}
-            <section className="space-y-3">
-              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                Comments ({comments.length})
-              </h3>
-
-              <div className="space-y-3">
-                {comments.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No comments yet. Start the conversation!
-                  </p>
-                )}
-
-                {comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="text-xs">
-                        {comment.author.initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{comment.author.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">{comment.content}</p>
-                    </div>
-                  </div>
-                ))}
-
-                <div className="flex gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs">SC</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 space-y-2">
-                    <Textarea
-                      placeholder="Add a comment..."
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      className="min-h-[80px]"
-                    />
-                    <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim()}>
-                      Post Comment
-                    </Button>
-                  </div>
-                </div>
               </div>
             </section>
 
@@ -765,6 +743,60 @@ export function TaskDetailModal({
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <Separator />
+
+            {/* Comments Section */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Comments ({comments.length})
+              </h3>
+
+              <div className="space-y-3">
+                {/* {comments.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No comments yet. Start the conversation!
+                  </p>
+                )} */}
+
+                {comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="text-xs">
+                        {comment.author.initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{comment.author.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">{comment.content}</p>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex gap-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="text-xs">SC</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 space-y-2">
+                    <Textarea
+                      placeholder="Add a comment..."
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      className="min-h-[80px]"
+                    />
+                    <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim()}>
+                      Post Comment
+                    </Button>
                   </div>
                 </div>
               </div>

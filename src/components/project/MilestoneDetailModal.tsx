@@ -271,8 +271,11 @@ export function MilestoneDetailModal({
                           )}>
                             {task.title}
                           </p>
-                          {task.assignee && (
-                            <p className="text-xs text-muted-foreground">{task.assignee.name}</p>
+                          {task.assignees && task.assignees.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              {task.assignees[0].name}
+                              {task.assignees.length > 1 && ` +${task.assignees.length - 1}`}
+                            </p>
                           )}
                         </div>
                       </div>

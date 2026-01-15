@@ -193,11 +193,18 @@ export function MyDayTaskCard({
             </SelectContent>
           </Select>
 
-          {task.assignee && (
-            <div className="flex items-center gap-1">
-              <div className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-medium">
-                {task.assignee.initials}
-              </div>
+          {task.assignees && task.assignees.length > 0 && (
+            <div className="flex -space-x-1">
+              {task.assignees.slice(0, 3).map((assignee) => (
+                <div key={assignee.id} className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-medium border-2 border-background">
+                  {assignee.initials}
+                </div>
+              ))}
+              {task.assignees.length > 3 && (
+                <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center text-[8px] border-2 border-background">
+                  +{task.assignees.length - 3}
+                </div>
+              )}
             </div>
           )}
         </div>
