@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Select,
   SelectContent,
@@ -13,13 +14,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { 
-  AlertTriangle, 
-  AlertCircle, 
-  Info, 
-  Bug, 
-  Truck, 
-  FileWarning, 
+import {
+  AlertTriangle,
+  AlertCircle,
+  Info,
+  Bug,
+  Truck,
+  FileWarning,
   FlaskConical,
   Pencil,
   Plus,
@@ -62,11 +63,13 @@ const categoryConfig: Record<IssueCategory, { icon: typeof Bug; label: string }>
 };
 
 export function IssuesView({ issues, tasks = [], onIssueUpdate, onIssueCreate }: IssuesViewProps) {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<IssueSeverity | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<IssueStatus | 'all'>('all');
-  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // We can remove modal state since we navigate now
+  // const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  // const [isModalOpen, setIsModalOpen] = useState(false);
 
   const filteredIssues = issues.filter(issue => {
     const matchesSearch = issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -86,14 +89,47 @@ export function IssuesView({ issues, tasks = [], onIssueUpdate, onIssueCreate }:
   });
 
   const handleIssueClick = (issue: Issue) => {
-    setSelectedIssue(issue);
-    setIsModalOpen(true);
+    // Navigate to issue page
+    navigate(`/projects/${issue.projectId}/issues/${issue.id}`);
   };
 
-  const handleIssueUpdateFromModal = (updatedIssue: Issue) => {
-    setSelectedIssue(updatedIssue);
-    onIssueUpdate?.(updatedIssue);
+  const { id: routeProjectId } = useParams(); // ProjectDetail uses :id, so we grab that or check parent passes projectId
+
+  const handleCreateIssue = () => {
+    const newId = `issue-${Date.now()}`;
+    // Assuming routeProjectId is available since we are inside ProjectDetail
+    const pid = routeProjectId || (issues.length > 0 ? issues[0].projectId : 'p-1'); 
+    
+    const newIssueStub: Partial<Issue> = {
+       id: newId,
+       title: '',
+       description: '',
+       status: 'open',
+       severity: 'minor',
+       category: 'other',
+       projectId: pid, // Ensure projectId is set
+       reportedBy: { id: 'currentUser', name: 'Current User', initials: 'CU', avatar: '', email: 'current.user@example.com', role: 'Member' }
+    };
+    
+    onIssueCreate?.(newIssueStub);
+    
+    // Navigate to the new issue page
+    navigate(`/projects/${pid}/issues/${newId}`);
   };
+
+  // const handleIssueUpdateFromModal = (updatedIssue: Issue) => {
+  //   setSelectedIssue(updatedIssue);
+    
+  //   if (updatedIssue.id.startsWith('new-')) {
+  //      // It was a new draft. Now we create it for real.
+  //      onIssueCreate?.(updatedIssue);
+  //      // We should also close modal or switch ID?
+  //      // Usually close.
+  //      setIsModalOpen(false); 
+  //   } else {
+  //      onIssueUpdate?.(updatedIssue);
+  //   }
+  // };
 
   // Count stats
   const openCount = issues.filter(i => i.status === 'open' || i.status === 'investigating').length;
@@ -117,7 +153,7 @@ export function IssuesView({ issues, tasks = [], onIssueUpdate, onIssueCreate }:
             )}
           </div>
         </div>
-        <Button size="sm" className="gap-2" onClick={() => onIssueCreate?.({})}>
+        <Button size="sm" className="gap-2" onClick={handleCreateIssue}>
           <Plus className="h-4 w-4" />
           Report Issue
         </Button>
@@ -259,13 +295,14 @@ export function IssuesView({ issues, tasks = [], onIssueUpdate, onIssueCreate }:
       </div>
 
       {/* Issue Detail Modal */}
-      <IssueDetailModal
+      {/* Modal is effectively disabled/unused now, handled by IssuePage */}
+      {/* <IssueDetailModal
         issue={selectedIssue}
         tasks={tasks}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onUpdate={handleIssueUpdateFromModal}
-      />
+      /> */}
     </div>
   );
 }

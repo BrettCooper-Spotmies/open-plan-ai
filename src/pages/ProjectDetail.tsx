@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { MilestonesView } from '@/components/project/MilestonesView';
 import { IssuesView } from '@/components/project/IssuesView';
 import { projects, projectModules } from '@/data/mockData';
 import { cn } from '@/lib/utils';
-import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode } from '@/types';
+import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Project, Issue } from '@/types';
 
 const stageColors = {
   concept: 'bg-muted text-muted-foreground',
@@ -25,12 +25,66 @@ const stageColors = {
 
 export default function ProjectDetail() {
   const { id } = useParams();
-  const [section, setSection] = useState<ProjectSection>('tasks');
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const tabParam = searchParams.get('tab') as ProjectSection;
+  
+  const [section, setSection] = useState<ProjectSection>(tabParam || 'tasks');
   const [viewMode, setViewMode] = useState<TaskViewMode>('kanban');
   const [moduleViewMode, setModuleViewMode] = useState<ModuleViewMode>('kanban');
   const [filters, setFilters] = useState<TaskFilter>({});
   
-  const project = projects.find(p => p.id === id);
+  const [projectData, setProjectData] = useState<Project | undefined>(() => projects.find(p => p.id === id));
+
+  useEffect(() => {
+    setProjectData(projects.find(p => p.id === id));
+  }, [id]);
+  
+  const project = projectData;
+
+  const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
+    if (!project) return;
+    
+    const newIssue: Issue = {
+      id: `issue-${Date.now()}`,
+      projectId: project.id,
+      title: newIssuePartial.title || 'New Issue',
+      description: newIssuePartial.description || '',
+      status: 'open',
+      severity: 'minor',
+      category: 'other',
+      priority: 'medium',
+      reportedAt: new Date().toISOString(),
+      assignees: [],
+      tags: [],
+      blocksTaskIds: [],
+      blocksMilestoneIds: [],
+      blockedByTaskIds: [],
+      blockedByMilestoneIds: [],
+      descriptionBlocks: newIssuePartial.descriptionBlocks || [],
+      ...newIssuePartial
+    } as Issue;
+
+    // Mutate mock data for persistence across navigation
+    const originalProject = projects.find(p => p.id === project.id);
+    if (originalProject) {
+       if (!originalProject.issues) originalProject.issues = [];
+       // Add to start
+       originalProject.issues.unshift(newIssue);
+    }
+
+    setProjectData(prev => prev ? ({
+      ...prev,
+      issues: [newIssue, ...(prev.issues || [])]
+    }) : prev);
+  };
+
+  const handleIssueUpdate = (updatedIssue: Issue) => {
+    setProjectData(prev => prev ? ({
+      ...prev,
+      issues: prev.issues?.map(i => i.id === updatedIssue.id ? updatedIssue : i) || []
+    }) : prev);
+  };
 
   const handleAddModule = () => {
     // Implement add module logic
@@ -235,6 +289,8 @@ export default function ProjectDetail() {
             <IssuesView 
               issues={project.issues || []} 
               tasks={project.tasks}
+              onIssueCreate={handleIssueCreate}
+              onIssueUpdate={handleIssueUpdate}
             />
           </TabsContent>
         </Tabs>
