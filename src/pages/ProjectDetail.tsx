@@ -232,7 +232,10 @@ export default function ProjectDetail() {
             />
           </TabsContent>
           <TabsContent value="issues" className="mt-6">
-            <IssuesView issues={project.issues || []} />
+            <IssuesView 
+              issues={project.issues || []} 
+              tasks={project.tasks}
+            />
           </TabsContent>
         </Tabs>
       </div>

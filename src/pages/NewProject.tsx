@@ -47,7 +47,10 @@ import {
   Factory,
   BookOpen,
   Link as LinkIcon,
-  Globe
+  Globe,
+  Flag,
+  Target,
+  Pencil
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -124,6 +127,18 @@ interface ExtractedTask {
   priority: string;
 }
 
+interface ProjectModule {
+  id: string;
+  name: string;
+}
+
+interface ProjectMilestone {
+  id: string;
+  name: string;
+  startDate: Date | undefined;
+  endDate: Date | undefined;
+}
+
 const NewProject = () => {
   const navigate = useNavigate();
 
@@ -165,6 +180,87 @@ const NewProject = () => {
   const [taskDocument, setTaskDocument] = useState<UploadedFile | null>(null);
   const [extractedTasks, setExtractedTasks] = useState<ExtractedTask[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Modules
+  const [modules, setModules] = useState<ProjectModule[]>([]);
+  const [newModuleName, setNewModuleName] = useState("");
+  const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
+
+  // Milestones
+  const [milestones, setMilestones] = useState<ProjectMilestone[]>([]);
+  const [newMilestoneName, setNewMilestoneName] = useState("");
+  const [newMilestoneStart, setNewMilestoneStart] = useState<Date>();
+  const [newMilestoneEnd, setNewMilestoneEnd] = useState<Date>();
+  const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+
+  const handleAddModule = () => {
+    if (newModuleName.trim()) {
+      if (editingModuleId) {
+        setModules(modules.map(m => m.id === editingModuleId ? { ...m, name: newModuleName.trim() } : m));
+        setEditingModuleId(null);
+      } else {
+        setModules([...modules, { id: Math.random().toString(36).substr(2, 9), name: newModuleName.trim() }]);
+      }
+      setNewModuleName("");
+    }
+  };
+
+  const handleEditModule = (module: ProjectModule) => {
+    setNewModuleName(module.name);
+    setEditingModuleId(module.id);
+  };
+
+  const handleRemoveModule = (id: string) => {
+    setModules(modules.filter(m => m.id !== id));
+    if (editingModuleId === id) {
+      setEditingModuleId(null);
+      setNewModuleName("");
+    }
+  };
+
+  const handleAddMilestone = () => {
+    if (newMilestoneName.trim() && newMilestoneStart && newMilestoneEnd) {
+      if (editingMilestoneId) {
+        setMilestones(milestones.map(m => m.id === editingMilestoneId ? {
+          ...m,
+          name: newMilestoneName.trim(),
+          startDate: newMilestoneStart,
+          endDate: newMilestoneEnd
+        } : m));
+        setEditingMilestoneId(null);
+      } else {
+        setMilestones([
+          ...milestones,
+          {
+            id: Math.random().toString(36).substr(2, 9),
+            name: newMilestoneName.trim(),
+            startDate: newMilestoneStart,
+            endDate: newMilestoneEnd
+          }
+        ]);
+      }
+      setNewMilestoneName("");
+      setNewMilestoneStart(undefined);
+      setNewMilestoneEnd(undefined);
+    }
+  };
+
+  const handleEditMilestone = (milestone: ProjectMilestone) => {
+    setNewMilestoneName(milestone.name);
+    setNewMilestoneStart(milestone.startDate);
+    setNewMilestoneEnd(milestone.endDate);
+    setEditingMilestoneId(milestone.id);
+  };
+
+  const handleRemoveMilestone = (id: string) => {
+    setMilestones(milestones.filter(m => m.id !== id));
+    if (editingMilestoneId === id) {
+      setEditingMilestoneId(null);
+      setNewMilestoneName("");
+      setNewMilestoneStart(undefined);
+      setNewMilestoneEnd(undefined);
+    }
+  };
 
   const handleAddTeamMember = () => {
     if (selectedMember && selectedRole) {
@@ -261,6 +357,8 @@ const NewProject = () => {
       attachments,
       links,
       extractedTasks,
+      modules,
+      milestones
     });
     navigate("/projects");
   };
@@ -646,7 +744,191 @@ const NewProject = () => {
           </CardContent>
         </Card>
 
-        {/* Section 4: Storage */}
+        {/* Section 4: Project Modules */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Cpu className="h-5 w-5 text-primary" />
+              Project Modules
+            </CardTitle>
+            <CardDescription>Define the functional modules for this project</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-3">
+              <Input
+                placeholder="Module Name (e.g., User Authentication, Payment Gateway)"
+                value={newModuleName}
+                onChange={(e) => setNewModuleName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddModule();
+                }}
+              />
+              <Button onClick={handleAddModule} disabled={!newModuleName.trim()}>
+                {editingModuleId ? <Pencil className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+                {editingModuleId ? "Update Module" : "Add Module"}
+              </Button>
+            </div>
+
+            {modules.length > 0 ? (
+              <div className="space-y-2">
+                {modules.map((module) => (
+                  <div
+                    key={module.id}
+                    className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                  >
+                    <span className="font-medium text-sm">{module.name}</span>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={() => handleEditModule(module)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemoveModule(module.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No modules added yet. Add modules to organize your project structure.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Section 5: Project Milestones */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Flag className="h-5 w-5 text-primary" />
+              Project Milestones
+            </CardTitle>
+            <CardDescription>Set key milestones and their timelines</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-4 items-end">
+              <div className="md:col-span-2 space-y-1">
+                <Label className="text-xs">Milestone Name</Label>
+                <Input
+                  placeholder="e.g., Alpha Release"
+                  value={newMilestoneName}
+                  onChange={(e) => setNewMilestoneName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Start Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal text-xs h-10",
+                        !newMilestoneStart && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-3 w-3" />
+                      {newMilestoneStart ? format(newMilestoneStart, "PPP") : "Start"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={newMilestoneStart}
+                      onSelect={setNewMilestoneStart}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">End Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal text-xs h-10",
+                        !newMilestoneEnd && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-3 w-3" />
+                      {newMilestoneEnd ? format(newMilestoneEnd, "PPP") : "End"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={newMilestoneEnd}
+                      onSelect={setNewMilestoneEnd}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            <Button 
+              className="w-full" 
+              onClick={handleAddMilestone} 
+              disabled={!newMilestoneName.trim() || !newMilestoneStart || !newMilestoneEnd}
+            >
+              {editingMilestoneId ? <Pencil className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+              {editingMilestoneId ? "Update Milestone" : "Add Milestone"}
+            </Button>
+
+            {milestones.length > 0 ? (
+              <div className="space-y-2 mt-4">
+                {milestones.map((milestone) => (
+                  <div
+                    key={milestone.id}
+                    className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                  >
+                    <div>
+                      <p className="font-medium text-sm">{milestone.name}</p>
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <CalendarIcon className="h-3 w-3" />
+                        {milestone.startDate && format(milestone.startDate, "MMM d, yyyy")} - {milestone.endDate && format(milestone.endDate, "MMM d, yyyy")}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-primary"
+                        onClick={() => handleEditMilestone(milestone)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleRemoveMilestone(milestone.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No milestones added yet. Define key milestones to track progress.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Section 6: Storage */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

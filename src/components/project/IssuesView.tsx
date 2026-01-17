@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Issue, IssueStatus, IssueSeverity, IssueCategory } from '@/types';
+import { Issue, IssueStatus, IssueSeverity, IssueCategory, Task } from '@/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +31,7 @@ import { IssueDetailModal } from './IssueDetailModal';
 
 interface IssuesViewProps {
   issues: Issue[];
+  tasks?: Task[]; // Add tasks prop, optional to avoid breaking other usages if any
   onIssueUpdate?: (issue: Issue) => void;
   onIssueCreate?: (issue: Partial<Issue>) => void;
 }
@@ -60,7 +61,7 @@ const categoryConfig: Record<IssueCategory, { icon: typeof Bug; label: string }>
   other: { icon: Info, label: 'Other' },
 };
 
-export function IssuesView({ issues, onIssueUpdate, onIssueCreate }: IssuesViewProps) {
+export function IssuesView({ issues, tasks = [], onIssueUpdate, onIssueCreate }: IssuesViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<IssueSeverity | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<IssueStatus | 'all'>('all');
@@ -230,14 +231,15 @@ export function IssuesView({ issues, onIssueUpdate, onIssueCreate }: IssuesViewP
                       )}
                     </TableCell>
                     <TableCell>
-                      {issue.assignedTo ? (
-                        <div className="flex items-center gap-2">
-                          <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-[10px]">
-                              {issue.assignedTo.initials}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-sm">{issue.assignedTo.name}</span>
+                      {issue.assignees && issue.assignees.length > 0 ? (
+                        <div className="flex -space-x-2 overflow-hidden">
+                          {issue.assignees.map((assignee) => (
+                            <Avatar key={assignee.id} className="inline-block h-6 w-6 ring-2 ring-background">
+                              <AvatarFallback className="text-[10px]">
+                                {assignee.initials}
+                              </AvatarFallback>
+                            </Avatar>
+                          ))}
                         </div>
                       ) : (
                         <span className="text-muted-foreground text-sm">Unassigned</span>
@@ -259,6 +261,7 @@ export function IssuesView({ issues, onIssueUpdate, onIssueCreate }: IssuesViewP
       {/* Issue Detail Modal */}
       <IssueDetailModal
         issue={selectedIssue}
+        tasks={tasks}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onUpdate={handleIssueUpdateFromModal}

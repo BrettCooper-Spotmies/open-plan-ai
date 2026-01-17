@@ -131,7 +131,7 @@ export interface Issue {
   
   // Ownership
   reportedBy: TeamMember;
-  assignedTo?: TeamMember;
+  assignees?: TeamMember[];
   
   // Dates
   reportedAt: string;
@@ -143,6 +143,9 @@ export interface Issue {
   attachments?: Attachment[];
   comments?: Comment[];
   tags?: string[];
+  checklist?: ChecklistItem[];
+  dependencies?: string[]; // IDs of other issues or tasks it depends on? Sticking to generic for now matching Task
+  blockedBy?: string[];
 }
 
 // Legacy module summary (for backward compatibility)
