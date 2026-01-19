@@ -58,30 +58,38 @@ export function MilestoneDetailModal({
   onClose,
   onUpdate,
 }: MilestoneDetailModalProps) {
-  const [editedMilestone, setEditedMilestone] = useState<Milestone | null>(milestone);
+  const [editedMilestone, setEditedMilestone] = useState<Milestone | null>(null);
 
   useEffect(() => {
-    if (milestone) {
+    // Only set initial state when opening modal with a new milestone
+    if (isOpen && milestone) {
       setEditedMilestone(milestone);
     }
-  }, [milestone]);
+  }, [isOpen, milestone?.id]); // Only depend on isOpen and milestone.id to prevent re-runs
 
   if (!editedMilestone) return null;
 
   const handleFieldChange = <K extends keyof Milestone>(field: K, value: Milestone[K]) => {
-    const updated = { ...editedMilestone, [field]: value };
-    setEditedMilestone(updated);
-    onUpdate(updated);
+    setEditedMilestone(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, [field]: value };
+      // Debounce the update to parent to prevent infinite loops
+      setTimeout(() => onUpdate(updated), 0);
+      return updated;
+    });
   };
 
   const handleToggleComplete = () => {
-    const updated = {
-      ...editedMilestone,
-      completed: !editedMilestone.completed,
-      completedAt: !editedMilestone.completed ? new Date().toISOString() : undefined,
-    };
-    setEditedMilestone(updated);
-    onUpdate(updated);
+    setEditedMilestone(prev => {
+      if (!prev) return prev;
+      const updated = {
+        ...prev,
+        completed: !prev.completed,
+        completedAt: !prev.completed ? new Date().toISOString() : undefined,
+      };
+      setTimeout(() => onUpdate(updated), 0);
+      return updated;
+    });
   };
 
   const progress = getMilestoneProgress(editedMilestone, tasks);
