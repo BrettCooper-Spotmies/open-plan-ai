@@ -60,7 +60,7 @@ export function getUserTasks(projects: Project[], userId: string): MyDayTask[] {
   
   return projects.flatMap(project => 
     project.tasks
-      .filter(task => task.assignee?.id === userId && task.status !== 'done')
+      .filter(task => task.assignees?.some(a => a.id === userId) && task.status !== 'done')
       .map(task => {
         const dueDateStatus = getDueDateStatus(task.dueDate);
         return {

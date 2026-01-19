@@ -29,6 +29,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { cn } from '@/lib/utils';
 import {
   X,
@@ -47,6 +55,8 @@ import {
   User,
   Tag,
   AlertCircle,
+  Pencil,
+  Check,
 } from 'lucide-react';
 import {
   Task,
@@ -66,6 +76,8 @@ interface TaskDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (task: Task) => void;
+  mode?: 'view' | 'create';
+  onCreate?: (task: Task) => void;
 }
 
 const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
@@ -90,6 +102,73 @@ const moduleOptions: { value: ModuleType; label: string }[] = [
   { value: 'testing', label: 'Testing' },
 ];
 
+// 30 Colors: 15 Primary (Hard) + 15 Light
+const TAG_PALETTE = [
+  // Red
+  { name: 'Red', color: 'bg-red-500 text-white hover:bg-red-600' },
+  { name: 'Light Red', color: 'bg-red-100 text-red-700 hover:bg-red-200' },
+  // Orange
+  { name: 'Orange', color: 'bg-orange-500 text-white hover:bg-orange-600' },
+  { name: 'Light Orange', color: 'bg-orange-100 text-orange-700 hover:bg-orange-200' },
+  // Amber
+  { name: 'Amber', color: 'bg-amber-500 text-white hover:bg-amber-600' },
+  { name: 'Light Amber', color: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
+  // Yellow
+  { name: 'Yellow', color: 'bg-yellow-500 text-white hover:bg-yellow-600' },
+  { name: 'Light Yellow', color: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
+  // Lime
+  { name: 'Lime', color: 'bg-lime-500 text-white hover:bg-lime-600' },
+  { name: 'Light Lime', color: 'bg-lime-100 text-lime-700 hover:bg-lime-200' },
+  // Green
+  { name: 'Green', color: 'bg-green-500 text-white hover:bg-green-600' },
+  { name: 'Light Green', color: 'bg-green-100 text-green-700 hover:bg-green-200' },
+  // Emerald
+  { name: 'Emerald', color: 'bg-emerald-500 text-white hover:bg-emerald-600' },
+  { name: 'Light Emerald', color: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
+  // Teal
+  { name: 'Teal', color: 'bg-teal-500 text-white hover:bg-teal-600' },
+  { name: 'Light Teal', color: 'bg-teal-100 text-teal-700 hover:bg-teal-200' },
+  // Cyan
+  { name: 'Cyan', color: 'bg-cyan-500 text-white hover:bg-cyan-600' },
+  { name: 'Light Cyan', color: 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200' },
+  // Sky
+  { name: 'Sky', color: 'bg-sky-500 text-white hover:bg-sky-600' },
+  { name: 'Light Sky', color: 'bg-sky-100 text-sky-700 hover:bg-sky-200' },
+  // Blue
+  { name: 'Blue', color: 'bg-blue-500 text-white hover:bg-blue-600' },
+  { name: 'Light Blue', color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
+  // Indigo
+  { name: 'Indigo', color: 'bg-indigo-500 text-white hover:bg-indigo-600' },
+  { name: 'Light Indigo', color: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' },
+  // Violet
+  { name: 'Violet', color: 'bg-violet-500 text-white hover:bg-violet-600' },
+  { name: 'Light Violet', color: 'bg-violet-100 text-violet-700 hover:bg-violet-200' },
+  // Purple
+  { name: 'Purple', color: 'bg-purple-500 text-white hover:bg-purple-600' },
+  { name: 'Light Purple', color: 'bg-purple-100 text-purple-700 hover:bg-purple-200' },
+  // Fuchsia
+  { name: 'Fuchsia', color: 'bg-fuchsia-500 text-white hover:bg-fuchsia-600' },
+  { name: 'Light Fuchsia', color: 'bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-200' },
+];
+
+// Helper to determine color based on tag name
+// If the tag name matches (or was renamed from) a default color, we try to keep it.
+// Since we don't store the metadata, we match by exact name first.
+// If it's a custom name, we hash it to one of the palette colors.
+const getTagColor = (tag: string) => {
+  // Check if it matches a default name directly
+  const directMatch = TAG_PALETTE.find(p => p.name.toLowerCase() === tag.toLowerCase());
+  if (directMatch) return directMatch.color;
+
+  // Otherwise hash to a stable color
+  let hash = 0;
+  for (let i = 0; i < tag.length; i++) {
+    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % TAG_PALETTE.length;
+  return TAG_PALETTE[index].color;
+};
+
 const getFileIcon = (fileType: string) => {
   if (fileType.startsWith('image/')) return ImageIcon;
   if (fileType.includes('pdf') || fileType.includes('document')) return FileText;
@@ -108,12 +187,19 @@ export function TaskDetailModal({
   isOpen,
   onClose,
   onUpdate,
+  mode = 'view',
+  onCreate,
 }: TaskDetailModalProps) {
   const [editedTask, setEditedTask] = useState<Task | null>(task);
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [newComment, setNewComment] = useState('');
   const [selectedBlockingTask, setSelectedBlockingTask] = useState('');
   const [selectedBlockedByTask, setSelectedBlockedByTask] = useState('');
+  const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
+  const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
+  const [tagSearch, setTagSearch] = useState('');
+  const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
+  const [editingTagValue, setEditingTagValue] = useState('');
 
   // Sync editedTask when task prop changes
   if (task && editedTask?.id !== task.id) {
@@ -126,6 +212,13 @@ export function TaskDetailModal({
     const updated = { ...editedTask, [field]: value, updatedAt: new Date().toISOString() };
     setEditedTask(updated);
     onUpdate(updated);
+  };
+
+  const handleCreate = () => {
+    if (editedTask && onCreate) {
+      onCreate(editedTask);
+      onClose();
+    }
   };
 
   // Checklist handlers
@@ -227,20 +320,20 @@ export function TaskDetailModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="sr-only">Task Details</DialogTitle>
+        <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between">
+          <DialogTitle>{mode === 'create' ? 'Add New Task' : 'Task Details'}</DialogTitle>
+        </DialogHeader>
+
+        <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
+          <div className="p-6 space-y-6">
+            {/* Task Title */}
             <Input
               value={editedTask.title}
               onChange={(e) => handleFieldChange('title', e.target.value)}
               className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0"
               placeholder="Task title..."
             />
-          </div>
-        </DialogHeader>
 
-        <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
-          <div className="p-6 space-y-6">
             {/* Task Overview Section */}
             <section className="space-y-4">
               <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -249,48 +342,71 @@ export function TaskDetailModal({
               </h3>
               
               <div className="grid grid-cols-2 gap-4">
-                {/* Assignee */}
+                {/* Assignees */}
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <User className="h-3 w-3" />
                     Assigned To
                   </Label>
-                  <Select
-                    value={editedTask.assignee?.id || ''}
-                    onValueChange={(value) => {
-                      const member = teamMembers.find(m => m.id === value);
-                      handleFieldChange('assignee', member);
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select assignee">
-                        {editedTask.assignee && (
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-5 w-5">
-                              <AvatarFallback className="text-[9px]">
-                                {editedTask.assignee.initials}
-                              </AvatarFallback>
-                            </Avatar>
-                            {editedTask.assignee.name}
-                          </div>
-                        )}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {teamMembers.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-5 w-5">
-                              <AvatarFallback className="text-[9px]">
-                                {member.initials}
-                              </AvatarFallback>
-                            </Avatar>
-                            {member.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                    {(editedTask.assignees || []).map((assignee) => (
+                      <Badge key={assignee.id} variant="secondary" className="pl-1 pr-1.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
+                        <Avatar className="h-4 w-4">
+                          <AvatarFallback className="text-[9px]">
+                            {assignee.initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs font-normal">{assignee.name}</span>
+                        <button
+                          onClick={() => handleFieldChange('assignees', (editedTask.assignees || []).filter(a => a.id !== assignee.id))}
+                          className="ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                    <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
+                          <span>
+                            <Plus className="h-3 w-3" />
+                          </span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="p-0 w-[200px]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search members..." />
+                          <CommandList>
+                            <CommandEmpty>No results found.</CommandEmpty>
+                            <CommandGroup heading="Team Members">
+                              {teamMembers
+                                .filter(m => !editedTask.assignees?.some(a => a.id === m.id))
+                                .map((member) => (
+                                  <CommandItem
+                                    key={member.id}
+                                    value={member.name}
+                                    onSelect={() => {
+                                      handleFieldChange('assignees', [...(editedTask.assignees || []), member]);
+                                      setIsAssigneePopoverOpen(false);
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Avatar className="h-5 w-5">
+                                        <AvatarFallback className="text-[9px]">
+                                          {member.initials}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      {member.name}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
 
                 {/* Status */}
@@ -439,36 +555,141 @@ export function TaskDetailModal({
               </div>
 
               {/* Tags */}
+              {/* Tags */}
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Tag className="h-3 w-3" />
                   Tags
                 </Label>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                   {editedTask.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-xs">
+                    <Badge 
+                      key={tag} 
+                      className={cn("text-xs font-normal pointer-events-none pl-2 pr-1 gap-1", getTagColor(tag))}
+                    >
                       {tag}
                       <button
                         onClick={() => handleFieldChange('tags', editedTask.tags.filter(t => t !== tag))}
-                        className="ml-1 hover:text-destructive"
+                        className="pointer-events-auto hover:bg-black/10 rounded-full p-0.5 transition-colors"
                       >
                         <X className="h-3 w-3" />
                       </button>
                     </Badge>
                   ))}
-                  <Input
-                    placeholder="Add tag..."
-                    className="w-24 h-6 text-xs"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        const value = (e.target as HTMLInputElement).value.trim();
-                        if (value && !editedTask.tags.includes(value)) {
-                          handleFieldChange('tags', [...editedTask.tags, value]);
-                          (e.target as HTMLInputElement).value = '';
-                        }
-                      }
+                  
+                  <Popover 
+                    open={isTagPopoverOpen} 
+                    onOpenChange={(open) => {
+                      setIsTagPopoverOpen(open);
+                      if (!open) setEditingTagIndex(null);
                     }}
-                  />
+                  >
+                    <PopoverTrigger asChild>
+                      <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 flex items-center justify-center group relative">
+                         <div className="absolute inset-0 rounded-full border border-muted-foreground/30 group-hover:border-primary transition-colors" />
+                        <Plus className="h-3 w-3 z-10" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[240px] max-h-[350px] flex flex-col overflow-hidden" align="start">
+                      <Command className="flex-1 min-h-0">
+                        <CommandInput 
+                          placeholder="Search tags..." 
+                          value={tagSearch}
+                          onValueChange={setTagSearch}
+                        />
+                        <CommandList className="flex-1 overflow-y-auto min-h-0">
+                          <CommandEmpty className="py-2 px-2">
+                             <div className="text-sm text-center py-2 text-muted-foreground">
+                               No matching tags.
+                             </div>
+                             {tagSearch.trim() && (
+                                <button
+                                  className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                                  onClick={() => {
+                                      handleFieldChange('tags', [...editedTask.tags, tagSearch.trim()]);
+                                      setTagSearch('');
+                                      setIsTagPopoverOpen(false);
+                                  }}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Create "{tagSearch}"
+                                </button>
+                             )}
+                          </CommandEmpty>
+                          {TAG_PALETTE
+                            .filter(item => !editedTask.tags.includes(item.name)) // Simple filter by name
+                            .map((item, index) => (
+                              <CommandItem
+                                key={index}
+                                value={item.name}
+                                onSelect={() => {
+                                  if (editingTagIndex !== index) {
+                                    handleFieldChange('tags', [...editedTask.tags, item.name]);
+                                    setIsTagPopoverOpen(false);
+                                  }
+                                }}
+                                className="cursor-pointer group flex items-center justify-between"
+                              >
+                                {editingTagIndex === index ? (
+                                  <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
+                                    <div className={cn("w-3 h-3 rounded-full shrink-0", item.color.split(' ')[0])} />
+                                    <Input
+                                      autoFocus
+                                      value={editingTagValue}
+                                      onChange={(e) => setEditingTagValue(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.stopPropagation();
+                                          if (editingTagValue.trim()) {
+                                            handleFieldChange('tags', [...editedTask.tags, editingTagValue.trim()]);
+                                            setIsTagPopoverOpen(false);
+                                            setEditingTagIndex(null);
+                                          }
+                                        }
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="h-6 w-full text-xs px-1 py-0 min-w-0"
+                                    />
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-6 w-6 mt-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (editingTagValue.trim()) {
+                                            handleFieldChange('tags', [...editedTask.tags, editingTagValue.trim()]);
+                                            setIsTagPopoverOpen(false);
+                                            setEditingTagIndex(null);
+                                        }
+                                      }}
+                                    >
+                                      <Check className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center gap-2">
+                                      <div className={cn("w-3 h-3 rounded-full shrink-0", item.color.split(' ')[0])} />
+                                      <span>{item.name}</span>
+                                    </div>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setEditingTagIndex(index);
+                                        setEditingTagValue(item.name);
+                                      }}
+                                      className="opacity-0 group-hover:opacity-100 hover:bg-muted p-1 rounded-sm transition-all"
+                                    >
+                                      <Pencil className="h-3 w-3 text-muted-foreground" />
+                                    </button>
+                                  </>
+                                )}
+                              </CommandItem>
+                            ))}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
             </section>
@@ -508,6 +729,19 @@ export function TaskDetailModal({
               )}
 
               <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-4">
+                  <Input
+                    placeholder="Add checklist item..."
+                    value={newChecklistItem}
+                    onChange={(e) => setNewChecklistItem(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddChecklistItem()}
+                    className="flex-1"
+                  />
+                  <Button size="sm" onClick={handleAddChecklistItem}>
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+
                 {checklist.map((item) => (
                   <div key={item.id} className="flex items-center gap-3 group">
                     <Checkbox
@@ -527,19 +761,6 @@ export function TaskDetailModal({
                     </Button>
                   </div>
                 ))}
-
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder="Add checklist item..."
-                    value={newChecklistItem}
-                    onChange={(e) => setNewChecklistItem(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddChecklistItem()}
-                    className="flex-1"
-                  />
-                  <Button size="sm" onClick={handleAddChecklistItem}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
               </div>
             </section>
 
@@ -589,60 +810,6 @@ export function TaskDetailModal({
                   <span className="text-sm text-muted-foreground">Drop files or click to upload</span>
                   <input type="file" multiple className="hidden" onChange={handleFileUpload} />
                 </label>
-              </div>
-            </section>
-
-            <Separator />
-
-            {/* Comments Section */}
-            <section className="space-y-3">
-              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                Comments ({comments.length})
-              </h3>
-
-              <div className="space-y-3">
-                {comments.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No comments yet. Start the conversation!
-                  </p>
-                )}
-
-                {comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="text-xs">
-                        {comment.author.initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{comment.author.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">{comment.content}</p>
-                    </div>
-                  </div>
-                ))}
-
-                <div className="flex gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs">SC</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 space-y-2">
-                    <Textarea
-                      placeholder="Add a comment..."
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      className="min-h-[80px]"
-                    />
-                    <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim()}>
-                      Post Comment
-                    </Button>
-                  </div>
-                </div>
               </div>
             </section>
 
@@ -769,8 +936,72 @@ export function TaskDetailModal({
                 </div>
               </div>
             </section>
+
+            <Separator />
+
+            {/* Comments Section */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Comments ({comments.length})
+              </h3>
+
+              <div className="space-y-3">
+                {/* {comments.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No comments yet. Start the conversation!
+                  </p>
+                )} */}
+
+                {comments.map((comment) => (
+                  <div key={comment.id} className="flex gap-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="text-xs">
+                        {comment.author.initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{comment.author.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}
+                        </span>
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">{comment.content}</p>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="flex gap-3">
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="text-xs">SC</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 space-y-2">
+                    <Textarea
+                      placeholder="Add a comment..."
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      className="min-h-[80px]"
+                    />
+                    <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim()}>
+                      Post Comment
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </section>
           </div>
         </ScrollArea>
+        {mode === 'create' && (
+          <div className="px-6 py-4 border-t flex justify-end gap-2 bg-background">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreate}>
+              Create Task
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

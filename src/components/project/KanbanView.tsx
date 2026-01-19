@@ -12,7 +12,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Plus, Check, GripVertical, X, AlertTriangle, Link2 } from 'lucide-react';
+import { Plus, Check, GripVertical, X, AlertTriangle, Link2, Calendar as CalendarIcon, Maximize2 } from 'lucide-react';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { teamMembers } from '@/data/mockData';
+import { format } from 'date-fns';
 import { TaskDetailModal } from './TaskDetailModal';
 
 interface KanbanColumn {
@@ -79,11 +95,19 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
   const [newColumnColor, setNewColumnColor] = useState('bg-status-todo');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
-  const [newTask, setNewTask] = useState({
+  const [isMaximizedAddTask, setIsMaximizedAddTask] = useState(false);
+  const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
+  const [newTask, setNewTask] = useState<Partial<Task>>({
     title: '',
     description: '',
     priority: 'medium' as Priority,
     module: 'software' as ModuleType,
+    assignees: [],
+    startDate: new Date().toISOString(),
+    tags: [],
+    status: 'todo',
+    dependencies: [],
+    blockedBy: [],
   });
 
   // Determine which tasks are blocked
@@ -233,29 +257,61 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
     setColumns(columns.filter(c => c.id !== columnId));
   };
 
-  const handleAddTask = () => {
-    if (!newTask.title.trim() || !addTaskToColumn) return;
+  const handleAddTask = (taskOverride?: Partial<Task>) => {
+    const taskData = taskOverride || newTask;
+    if (!taskData.title?.trim()) return;
 
-    const column = columns.find(c => c.id === addTaskToColumn);
-    if (!column || column.isSpecial) return;
+    // Determine status: explicit or from column
+    let status = taskData.status as TaskStatus;
+    if (addTaskToColumn) {
+      const column = columns.find(c => c.id === addTaskToColumn);
+      if (column && !column.isSpecial) {
+        status = column.status as TaskStatus;
+      }
+    }
 
     const task: Task = {
       id: `task-${Date.now()}`,
-      title: newTask.title,
-      description: newTask.description,
-      status: column.status as TaskStatus,
-      priority: newTask.priority,
-      module: newTask.module,
-      dependencies: [],
-      blockedBy: [],
-      tags: [],
+      title: taskData.title || '',
+      description: taskData.description || '',
+      status: status || 'todo',
+      priority: taskData.priority || 'medium',
+      module: taskData.module || 'software',
+      dependencies: taskData.dependencies || [],
+      blockedBy: taskData.blockedBy || [],
+      tags: taskData.tags || [],
+      assignees: taskData.assignees || [],
+      startDate: taskData.startDate,
+      dueDate: taskData.dueDate,
+      checklist: taskData.checklist || [],
+      comments: taskData.comments || [],
+      attachments: taskData.attachments || [],
+      linkedIssueIds: taskData.linkedIssueIds || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     setTasks([...tasks, task]);
-    setNewTask({ title: '', description: '', priority: 'medium', module: 'software' });
+    setNewTask({
+      title: '',
+      description: '',
+      priority: 'medium',
+      module: 'software',
+      assignees: [],
+      startDate: new Date().toISOString(),
+      tags: [],
+      status: 'todo',
+      dependencies: [],
+      blockedBy: [],
+    });
     setIsAddTaskOpen(false);
+    setIsMaximizedAddTask(false);
+    setAddTaskToColumn(null);
+  };
+
+  const handleMaximizeAddTask = () => {
+    setIsAddTaskOpen(false);
+    setIsMaximizedAddTask(true);
     setAddTaskToColumn(null);
   };
 
@@ -263,6 +319,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
     const column = columns.find(c => c.id === columnId);
     if (column?.isSpecial) return; // Can't add tasks to Dependencies bucket
     setAddTaskToColumn(columnId);
+    setNewTask(prev => ({ ...prev, status: column?.status as TaskStatus || 'todo' }));
     setIsAddTaskOpen(true);
   };
 
@@ -278,54 +335,6 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
 
   return (
     <div className="space-y-4">
-      {/* Add Column Button */}
-      <div className="flex justify-end">
-        <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Plus className="h-4 w-4" />
-              Add Bucket
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Bucket</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label>Bucket Name</Label>
-                <Input
-                  placeholder="e.g., QA Testing"
-                  value={newColumnName}
-                  onChange={(e) => setNewColumnName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Color</Label>
-                <Select value={newColumnColor} onValueChange={setNewColumnColor}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {columnColorOptions.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        <div className="flex items-center gap-2">
-                          <div className={cn('w-3 h-3 rounded-full', option.value)} />
-                          {option.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handleAddColumn} className="w-full">
-                Add Bucket
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
       {/* Kanban Board */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable droppableId="board" type="COLUMN" direction="horizontal">
@@ -333,193 +342,75 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
             <div
               ref={provided.innerRef}
               {...provided.droppableProps}
-              className="grid gap-4"
-              style={{
-                gridTemplateColumns: `repeat(${columns.length}, minmax(260px, 1fr))`,
-              }}
+              className="w-full overflow-x-auto pb-4"
             >
-              {columns.map((column, index) => {
-                const columnTasks = getColumnTasks(column);
-                const isDependenciesColumn = column.isSpecial && column.status === 'blocked';
+              <div
+                className="inline-flex gap-4 min-w-full"
+                style={{
+                  width: 'max-content',
+                }}
+              >
+                {columns.map((column, index) => {
+                  const columnTasks = getColumnTasks(column);
+                  const isDependenciesColumn = column.isSpecial && column.status === 'blocked';
 
-                return (
-                  <Draggable 
-                    key={column.id} 
-                    draggableId={column.id} 
-                    index={index}
-                    isDragDisabled={column.isSpecial}
-                  >
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        className={cn(
-                          'space-y-3 transition-shadow',
-                          snapshot.isDragging && 'shadow-lg'
-                        )}
-                      >
-                        {/* Column Header */}
-                        <div className="flex items-center gap-2 px-1">
-                          {!column.isSpecial && (
-                            <div
-                              {...provided.dragHandleProps}
-                              className="cursor-grab active:cursor-grabbing"
-                            >
-                              <GripVertical className="h-4 w-4 text-muted-foreground" />
-                            </div>
+                  return (
+                    <Draggable 
+                      key={column.id} 
+                      draggableId={column.id} 
+                      index={index}
+                      isDragDisabled={column.isSpecial}
+                    >
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          className={cn(
+                            'w-[280px] flex-shrink-0 space-y-3 transition-shadow',
+                            snapshot.isDragging && 'shadow-lg'
                           )}
-                          {column.isSpecial && <div {...provided.dragHandleProps} />}
-                          {isDependenciesColumn ? (
-                            <Link2 className="h-4 w-4 text-status-blocked" />
-                          ) : (
-                            <div className={cn('w-2 h-2 rounded-full', column.color)} />
-                          )}
-                          <h3 className={cn(
-                            'font-medium text-sm',
-                            isDependenciesColumn && 'text-status-blocked'
-                          )}>
-                            {column.label}
-                          </h3>
-                          <span className="text-xs text-muted-foreground">
-                            {columnTasks.length}
-                          </span>
-                          {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5 ml-auto opacity-50 hover:opacity-100"
-                              onClick={() => handleRemoveColumn(column.id)}
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          )}
-                        </div>
-
-                        {/* Tasks Droppable */}
-                        <Droppable 
-                          droppableId={column.id} 
-                          type="TASK"
-                          isDropDisabled={isDependenciesColumn}
                         >
-                          {(provided, snapshot) => (
-                            <div
-                              ref={provided.innerRef}
-                              {...provided.droppableProps}
-                              className={cn(
-                                'space-y-2 min-h-[200px] p-2 rounded-lg transition-colors',
-                                isDependenciesColumn 
-                                  ? 'bg-status-blocked/10 border-2 border-dashed border-status-blocked/30' 
-                                  : snapshot.isDraggingOver 
-                                    ? 'bg-muted/50' 
-                                    : 'bg-muted/30'
+                          {/* Column Header - Sticky */}
+                          <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
+                            <div className="flex items-center gap-2 px-1">
+                              {!column.isSpecial && (
+                                <div
+                                  {...provided.dragHandleProps}
+                                  className="cursor-grab active:cursor-grabbing"
+                                >
+                                  <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                </div>
                               )}
-                            >
-                              {columnTasks.map((task, taskIndex) => {
-                                const isBlocked = blockedTaskIds.has(task.id);
-                                const blockingInfo = isBlocked ? getBlockingInfo(task) : [];
+                              {column.isSpecial && <div {...provided.dragHandleProps} />}
+                              {isDependenciesColumn ? (
+                                <Link2 className="h-4 w-4 text-status-blocked" />
+                              ) : (
+                                <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                              )}
+                              <h3 className={cn(
+                                'font-medium text-sm',
+                                isDependenciesColumn && 'text-status-blocked'
+                              )}>
+                                {column.label}
+                              </h3>
+                              <span className="text-xs text-muted-foreground">
+                                {columnTasks.length}
+                              </span>
+                              {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 ml-auto opacity-50 hover:opacity-100"
+                                  onClick={() => handleRemoveColumn(column.id)}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
 
-                                return (
-                                  <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
-                                    {(provided, snapshot) => (
-                                      <TooltipProvider>
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <Card
-                                              ref={provided.innerRef}
-                                              {...provided.draggableProps}
-                                              {...provided.dragHandleProps}
-                                              className={cn(
-                                                'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
-                                                moduleColors[task.module] || 'border-l-muted',
-                                                snapshot.isDragging && 'shadow-lg rotate-2',
-                                                isBlocked && 'ring-1 ring-status-blocked/50'
-                                              )}
-                                              onMouseEnter={() => setHoveredTask(task.id)}
-                                              onMouseLeave={() => setHoveredTask(null)}
-                                              onClick={() => handleTaskClick(task)}
-                                            >
-                                              {/* Completion Checkbox */}
-                                              {hoveredTask === task.id && task.status !== 'done' && !isBlocked && (
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleCompleteTask(task.id);
-                                                  }}
-                                                  className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-status-done text-white flex items-center justify-center shadow-md hover:scale-110 transition-transform z-10"
-                                                >
-                                                  <Check className="h-3 w-3" />
-                                                </button>
-                                              )}
-
-                                              <div className="space-y-2">
-                                                <div className="flex items-start justify-between gap-2">
-                                                  <div className="flex items-start gap-1.5 flex-1 min-w-0">
-                                                    {isBlocked && (
-                                                      <AlertTriangle className="h-3.5 w-3.5 text-status-blocked shrink-0 mt-0.5" />
-                                                    )}
-                                                    <h4 className="text-sm font-medium leading-tight truncate">
-                                                      {task.title}
-                                                    </h4>
-                                                  </div>
-                                                  <Badge
-                                                    variant="secondary"
-                                                    className={cn(
-                                                      'text-[10px] px-1.5 py-0 shrink-0',
-                                                      priorityColors[task.priority]
-                                                    )}
-                                                  >
-                                                    {task.priority}
-                                                  </Badge>
-                                                </div>
-
-                                                {task.description && (
-                                                  <p className="text-xs text-muted-foreground line-clamp-2">
-                                                    {task.description}
-                                                  </p>
-                                                )}
-
-                                                <div className="flex items-center justify-between pt-2">
-                                                  {task.assignee && (
-                                                    <Avatar className="h-5 w-5">
-                                                      <AvatarFallback className="text-[9px] bg-muted">
-                                                        {task.assignee.initials}
-                                                      </AvatarFallback>
-                                                    </Avatar>
-                                                  )}
-                                                  {task.dueDate && (
-                                                    <span className="text-[10px] text-muted-foreground">
-                                                      {new Date(task.dueDate).toLocaleDateString('en-US', {
-                                                        month: 'short',
-                                                        day: 'numeric',
-                                                      })}
-                                                    </span>
-                                                  )}
-                                                </div>
-                                              </div>
-                                            </Card>
-                                          </TooltipTrigger>
-                                          {isBlocked && blockingInfo.length > 0 && (
-                                            <TooltipContent side="right" className="max-w-xs">
-                                              <div className="space-y-1">
-                                                <p className="font-medium text-xs">Blocked by:</p>
-                                                <ul className="text-xs space-y-0.5">
-                                                  {blockingInfo.map((info, i) => (
-                                                    <li key={i} className="text-muted-foreground">• {info}</li>
-                                                  ))}
-                                                </ul>
-                                              </div>
-                                            </TooltipContent>
-                                          )}
-                                        </Tooltip>
-                                      </TooltipProvider>
-                                    )}
-                                  </Draggable>
-                                );
-                              })}
-                              {provided.placeholder}
-
-                              {/* Add Task Button - not shown for Dependencies */}
-                              {!isDependenciesColumn && (
+                            {/* Add Task Button at Top - not shown for Dependencies */}
+                            {!isDependenciesColumn && (
+                              <div className="px-2">
                                 <Button
                                   variant="ghost"
                                   className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
@@ -528,16 +419,220 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                                   <Plus className="h-3 w-3 mr-1" />
                                   Add Task
                                 </Button>
-                              )}
-                            </div>
-                          )}
-                        </Droppable>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Tasks Droppable */}
+                          <Droppable 
+                            droppableId={column.id} 
+                            type="TASK"
+                            isDropDisabled={isDependenciesColumn}
+                          >
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.droppableProps}
+                                className={cn(
+                                  'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
+                                  snapshot.isDraggingOver 
+                                    ? 'bg-muted/50' 
+                                    : 'bg-muted/30'
+                                )}
+                              >
+                                {columnTasks.map((task, taskIndex) => {
+                                  const isBlocked = blockedTaskIds.has(task.id);
+                                  const blockingInfo = isBlocked ? getBlockingInfo(task) : [];
+
+                                  return (
+                                    <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
+                                      {(provided, snapshot) => (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Card
+                                                ref={provided.innerRef}
+                                                {...provided.draggableProps}
+                                                {...provided.dragHandleProps}
+                                                className={cn(
+                                                  'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
+                                                  moduleColors[task.module] || 'border-l-muted',
+                                                  snapshot.isDragging && 'shadow-lg rotate-2'
+                                                )}
+                                                onMouseEnter={() => setHoveredTask(task.id)}
+                                                onMouseLeave={() => setHoveredTask(null)}
+                                                onClick={() => handleTaskClick(task)}
+                                              >
+
+
+                                                <div className="space-y-2">
+                                                  <div className="flex items-start justify-between gap-2">
+                                                    <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
+                                                      {(isBlocked || task.status !== 'done') && (
+                                                        <div 
+                                                          className={cn(
+                                                            "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
+                                                            hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
+                                                          )}
+                                                        >
+                                                            {isBlocked ? (
+                                                              <AlertTriangle className="h-4 w-4 text-status-blocked" />
+                                                            ) : (
+                                                                <button
+                                                                  onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleCompleteTask(task.id);
+                                                                  }}
+                                                                  className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
+                                                                >
+                                                                  <Check className="h-3 w-3 text-foreground" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                      )}
+                                                      <h4 
+                                                        className={cn(
+                                                          "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
+                                                          (isBlocked || task.status !== 'done') && hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
+                                                        )}
+                                                      >
+                                                        {task.title}
+                                                      </h4>
+                                                    </div>
+                                                    <Badge
+                                                      variant="secondary"
+                                                      className={cn(
+                                                        'text-[10px] px-1.5 py-0 shrink-0',
+                                                        priorityColors[task.priority]
+                                                      )}
+                                                    >
+                                                      {task.priority}
+                                                    </Badge>
+                                                  </div>
+
+                                                  {task.description && (
+                                                    <p className="text-xs text-muted-foreground line-clamp-2">
+                                                      {task.description}
+                                                    </p>
+                                                  )}
+
+                                                  <div className="flex items-center justify-between pt-2">
+                                                    <div className="flex -space-x-2">
+                                                      {(task.assignees || []).slice(0, 3).map((assignee) => (
+                                                        <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
+                                                          <AvatarFallback className="text-[9px] bg-muted">
+                                                            {assignee.initials}
+                                                          </AvatarFallback>
+                                                        </Avatar>
+                                                      ))}
+                                                      {(task.assignees || []).length > 3 && (
+                                                        <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
+                                                          <span className="text-[8px] text-muted-foreground font-medium">
+                                                            +{task.assignees!.length - 3}
+                                                          </span>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                    {task.dueDate && (
+                                                      <span className="text-[10px] text-muted-foreground">
+                                                        {new Date(task.dueDate).toLocaleDateString('en-US', {
+                                                          month: 'short',
+                                                          day: 'numeric',
+                                                        })}
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                </div>
+                                              </Card>
+                                            </TooltipTrigger>
+                                            {isBlocked && blockingInfo.length > 0 && (
+                                              <TooltipContent side="right" className="max-w-xs">
+                                                <div className="space-y-1">
+                                                  <p className="font-medium text-xs">Blocked by:</p>
+                                                  <ul className="text-xs space-y-0.5">
+                                                    {blockingInfo.map((info, i) => (
+                                                      <li key={i} className="text-muted-foreground">• {info}</li>
+                                                    ))}
+                                                  </ul>
+                                                </div>
+                                              </TooltipContent>
+                                            )}
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      )}
+                                    </Draggable>
+                                  );
+                                })}
+                                {provided.placeholder}
+                              </div>
+                            )}
+                          </Droppable>
+                        </div>
+                      )}
+                    </Draggable>
+                  );
+                })}
+                {provided.placeholder}
+
+                {/* Add Bucket Button */}
+                <div className="w-[280px] flex-shrink-0">
+                  <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
+                    <div className="flex items-center gap-2 px-1">
+                      <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                      <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
+                    </div>
+                    <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
+                      <DialogTrigger asChild>
+                        <div className="px-2">
+                          <Button
+                            variant="ghost"
+                            className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Add New Bucket
+                          </Button>
+                        </div>
+                      </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Add New Bucket</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 pt-4">
+                        <div className="space-y-2">
+                          <Label>Bucket Name</Label>
+                          <Input
+                            placeholder="e.g., QA Testing"
+                            value={newColumnName}
+                            onChange={(e) => setNewColumnName(e.target.value)}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Color</Label>
+                          <Select value={newColumnColor} onValueChange={setNewColumnColor}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {columnColorOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                  <div className="flex items-center gap-2">
+                                    <div className={cn('w-3 h-3 rounded-full', option.value)} />
+                                    {option.label}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button onClick={handleAddColumn} className="w-full">
+                          Add Bucket
+                        </Button>
                       </div>
-                    )}
-                  </Draggable>
-                );
-              })}
-              {provided.placeholder}
+                    </DialogContent>
+                  </Dialog>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
         </Droppable>
@@ -545,9 +640,19 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
 
       {/* Add Task Dialog */}
       <Dialog open={isAddTaskOpen} onOpenChange={setIsAddTaskOpen}>
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="max-w-lg">
+          <DialogHeader className="flex flex-row items-center justify-between border-b pb-4">
             <DialogTitle>Add New Task</DialogTitle>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" onClick={handleMaximizeAddTask}>
+                    <Maximize2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Maximize</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </DialogHeader>
           <div className="space-y-4 pt-4">
             <div className="space-y-2">
@@ -558,15 +663,70 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                 onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Description (optional)</Label>
-              <Textarea
-                placeholder="Enter task description"
-                value={newTask.description}
-                onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-              />
-            </div>
+            
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Assigned To</Label>
+                <div className="flex flex-wrap gap-2 min-h-10 items-center p-2 border rounded-md">
+                  {(newTask.assignees || []).map((assignee) => (
+                    <Badge key={assignee.id} variant="secondary" className="gap-1 p-1 pr-2">
+                      <Avatar className="h-4 w-4">
+                         <AvatarFallback className="text-[9px]">{assignee.initials}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-xs">{assignee.name}</span>
+                      <X 
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => setNewTask({
+                          ...newTask,
+                          assignees: newTask.assignees?.filter(a => a.id !== assignee.id)
+                        })}
+                      />
+                    </Badge>
+                  ))}
+                  <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
+                          <span>
+                            <Plus className="h-3 w-3" />
+                          </span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="p-0 w-[200px]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search members..." />
+                          <CommandList>
+                            <CommandEmpty>No results found.</CommandEmpty>
+                            <CommandGroup heading="Team Members">
+                              {teamMembers
+                                .filter(m => !newTask.assignees?.some(a => a.id === m.id))
+                                .map((member) => (
+                                  <CommandItem
+                                    key={member.id}
+                                    value={member.name}
+                                    onSelect={() => {
+                                      setNewTask({ ...newTask, assignees: [...(newTask.assignees || []), member] });
+                                      setIsAssigneePopoverOpen(false);
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      <Avatar className="h-5 w-5">
+                                        <AvatarFallback className="text-[9px]">
+                                          {member.initials}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      {member.name}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label>Priority</Label>
                 <Select
@@ -577,14 +737,93 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="critical">
+                      <div className="flex items-center gap-2">
+                         <div className="w-2 h-2 rounded-full bg-priority-critical" />
+                         Critical
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="high">
+                      <div className="flex items-center gap-2">
+                         <div className="w-2 h-2 rounded-full bg-priority-high" />
+                         High
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="medium">
+                      <div className="flex items-center gap-2">
+                         <div className="w-2 h-2 rounded-full bg-priority-medium" />
+                         Medium
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="low">
+                      <div className="flex items-center gap-2">
+                         <div className="w-2 h-2 rounded-full bg-priority-low" />
+                         Low
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+               <div className="space-y-2">
+                  <Label>Start Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          'w-full justify-start text-left font-normal',
+                          !newTask.startDate && 'text-muted-foreground'
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newTask.startDate
+                          ? format(new Date(newTask.startDate), 'PPP')
+                          : 'Pick a date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={newTask.startDate ? new Date(newTask.startDate) : undefined}
+                        onSelect={(date) => setNewTask({ ...newTask, startDate: date?.toISOString() })}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+               </div>
+               <div className="space-y-2">
+                  <Label>Due Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          'w-full justify-start text-left font-normal',
+                          !newTask.dueDate && 'text-muted-foreground'
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newTask.dueDate
+                          ? format(new Date(newTask.dueDate), 'PPP')
+                          : 'Pick a date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={newTask.dueDate ? new Date(newTask.dueDate) : undefined}
+                        onSelect={(date) => setNewTask({ ...newTask, dueDate: date?.toISOString() })}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+               </div>
+            </div>
+
+            <div className="space-y-2">
                 <Label>Module</Label>
                 <Select
                   value={newTask.module}
@@ -604,16 +843,25 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                     <SelectItem value="power">Power</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
             </div>
-            <Button onClick={handleAddTask} className="w-full">
+
+            <div className="space-y-2">
+              <Label>Description (optional)</Label>
+              <Textarea
+                placeholder="Enter task description"
+                value={newTask.description}
+                onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+              />
+            </div>
+            
+            <Button onClick={() => handleAddTask()} className="w-full">
               Add Task
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Task Detail Modal */}
+      {/* Task Detail Modal (Viewing/Editing) */}
       <TaskDetailModal
         task={selectedTask}
         allTasks={allTasks || tasks}
@@ -623,6 +871,36 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
           setSelectedTask(null);
         }}
         onUpdate={handleTaskUpdate}
+      />
+
+      {/* Task Detail Modal (Creating Maximized) */}
+      <TaskDetailModal
+        task={isMaximizedAddTask ? {
+            id: 'new-task-draft',
+            title: newTask.title || '',
+            description: newTask.description || '',
+            status: newTask.status || 'todo',
+            priority: newTask.priority || 'medium',
+            module: newTask.module || 'software',
+            assignees: newTask.assignees || [],
+            tags: newTask.tags || [],
+            dependencies: newTask.dependencies || [],
+            blockedBy: newTask.blockedBy || [],
+            checklist: newTask.checklist || [],
+            comments: newTask.comments || [],
+            attachments: newTask.attachments || [],
+            linkedIssueIds: newTask.linkedIssueIds || [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            startDate: newTask.startDate,
+            dueDate: newTask.dueDate,
+        } : null}
+        allTasks={allTasks || tasks}
+        isOpen={isMaximizedAddTask}
+        onClose={() => setIsMaximizedAddTask(false)}
+        onUpdate={(updated) => setNewTask(updated)}
+        mode="create"
+        onCreate={handleAddTask}
       />
     </div>
   );

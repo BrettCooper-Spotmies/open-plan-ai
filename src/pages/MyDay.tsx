@@ -60,7 +60,7 @@ export default function MyDay() {
 
   return (
     <AppLayout>
-      <div className="p-6 lg:p-8 max-w-full mx-auto">
+      <div className="grid grid-cols-1 gap-6 w-full min-w-0">
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
@@ -122,25 +122,26 @@ export default function MyDay() {
 
         {/* Task Views */}
         {userTasks.length > 0 && (
-          <>
-            {view === 'kanban' && (
-              <MyDayKanbanView
-                tasks={userTasks}
-                groupBy={groupBy}
-                onTaskClick={handleTaskClick}
-                onStatusUpdate={handleStatusUpdate}
-                onChecklistToggle={handleChecklistToggle}
-              />
-            )}
-            {view === 'list' && (
-              <MyDayListView
-                tasks={userTasks}
-                groupBy={groupBy}
-                onTaskClick={handleTaskClick}
-                onStatusUpdate={handleStatusUpdate}
-              />
-            )}
-          </>
+          <div className="grid grid-cols-1 w-full min-w-0">
+            <div className="min-h-[400px] w-full min-w-0">
+              {view === 'kanban' ? (
+                <MyDayKanbanView
+                  tasks={userTasks}
+                  groupBy={groupBy}
+                  onTaskClick={handleTaskClick}
+                  onStatusUpdate={handleStatusUpdate}
+                  onChecklistToggle={handleChecklistToggle}
+                />
+              ) : (
+                <MyDayListView
+                  tasks={userTasks}
+                  groupBy={groupBy}
+                  onTaskClick={handleTaskClick}
+                  onStatusUpdate={handleStatusUpdate}
+                />
+              )}
+            </div>
+          </div>
         )}
       </div>
 

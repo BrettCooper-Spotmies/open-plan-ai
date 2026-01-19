@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
-import { LayoutGrid, List, Filter, X } from 'lucide-react';
+import { LayoutGrid, List, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Task, TaskViewMode, TaskFilter, Milestone, Issue, ModuleType, TaskStatus } from '@/types';
+import { Task, TaskViewMode, TaskFilter, Milestone, Issue, ModuleType } from '@/types';
 import { KanbanView } from './KanbanView';
 import { ListView } from './ListView';
 import { TaskFilters } from './TaskFilters';
+import { TaskFiltersDropdown } from './TaskFiltersDropdown';
 import { cn } from '@/lib/utils';
 
 interface TasksSectionProps {
@@ -14,12 +15,105 @@ interface TasksSectionProps {
   milestones: Milestone[];
   issues: Issue[];
   modules: { id: string; name: string; type: ModuleType }[];
+  viewMode?: TaskViewMode;
+  onViewModeChange?: (mode: TaskViewMode) => void;
+  isFiltersOpen?: boolean;
+  onFiltersOpenChange?: (open: boolean) => void;
+  filters?: TaskFilter;
+  onFiltersChange?: (filters: TaskFilter) => void;
 }
 
-export function TasksSection({ tasks, milestones, issues, modules }: TasksSectionProps) {
-  const [viewMode, setViewMode] = useState<TaskViewMode>('kanban');
-  const [filters, setFilters] = useState<TaskFilter>({});
-  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+// Export ViewControls component for use in parent
+export function ViewControls({ 
+  viewMode, 
+  onViewModeChange,
+  filters,
+  onFiltersChange,
+  milestones,
+  modules,
+  teamMembers,
+  allTags,
+  activeFilterCount,
+  onClearFilters
+}: {
+  viewMode: TaskViewMode;
+  onViewModeChange: (mode: TaskViewMode) => void;
+  filters: TaskFilter;
+  onFiltersChange: (filters: TaskFilter) => void;
+  milestones: Milestone[];
+  modules: { id: string; name: string; type: ModuleType }[];
+  teamMembers: { id: string; name: string; initials: string }[];
+  allTags: string[];
+  activeFilterCount: number;
+  onClearFilters: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      {/* View Toggle */}
+      <ToggleGroup
+        type="single"
+        value={viewMode}
+        onValueChange={(value) => value && onViewModeChange(value as TaskViewMode)}
+        className="bg-muted/50 p-1 rounded-lg"
+      >
+        <ToggleGroupItem value="kanban" aria-label="Kanban view" className="px-2 data-[state=on]:bg-background">
+          <LayoutGrid className="h-4 w-4" />
+        </ToggleGroupItem>
+        <ToggleGroupItem value="list" aria-label="List view" className="px-2 data-[state=on]:bg-background">
+          <List className="h-4 w-4" />
+        </ToggleGroupItem>
+      </ToggleGroup>
+
+      {/* Filter Dropdown */}
+      <TaskFiltersDropdown
+        filters={filters}
+        onFiltersChange={onFiltersChange}
+        milestones={milestones}
+        modules={modules}
+        teamMembers={teamMembers}
+        allTags={allTags}
+        activeFilterCount={activeFilterCount}
+      />
+
+      {/* Clear Filters */}
+      {activeFilterCount > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClearFilters}
+          className="gap-1 text-muted-foreground hover:text-foreground"
+        >
+          <X className="h-4 w-4" />
+          Clear
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export function TasksSection({ 
+  tasks, 
+  milestones, 
+  issues, 
+  modules,
+  viewMode: externalViewMode,
+  onViewModeChange: externalOnViewModeChange,
+  isFiltersOpen: externalIsFiltersOpen,
+  onFiltersOpenChange: externalOnFiltersOpenChange,
+  filters: externalFilters,
+  onFiltersChange: externalOnFiltersChange
+}: TasksSectionProps) {
+  const [internalViewMode, setInternalViewMode] = useState<TaskViewMode>('kanban');
+  const [internalFilters, setInternalFilters] = useState<TaskFilter>({});
+  const [internalIsFiltersOpen, setInternalIsFiltersOpen] = useState(false);
+
+  // Use external props if provided, otherwise use internal state
+  const viewMode = externalViewMode ?? internalViewMode;
+  const setViewMode = externalOnViewModeChange ?? setInternalViewMode;
+  const filters = externalFilters ?? internalFilters;
+  const setFilters = externalOnFiltersChange ?? setInternalFilters;
+  const isFiltersOpen = externalIsFiltersOpen ?? internalIsFiltersOpen;
+  const setIsFiltersOpen = externalOnFiltersOpenChange ?? setInternalIsFiltersOpen;
 
   // Calculate active filter count
   const activeFilterCount = useMemo(() => {
@@ -55,11 +149,12 @@ export function TasksSection({ tasks, milestones, issues, modules }: TasksSectio
 
       // Assignee filter
       if (filters.assignee?.length) {
-        if (!task.assignee && !filters.assignee.includes('unassigned')) {
+        if ((!task.assignees || task.assignees.length === 0) && !filters.assignee.includes('unassigned')) {
           return false;
         }
-        if (task.assignee && !filters.assignee.includes(task.assignee.id)) {
-          return false;
+        if (task.assignees && task.assignees.length > 0) {
+          const hasMatchingAssignee = task.assignees.some(a => filters.assignee!.includes(a.id));
+          if (!hasMatchingAssignee) return false;
         }
       }
 
@@ -121,11 +216,13 @@ export function TasksSection({ tasks, milestones, issues, modules }: TasksSectio
   const teamMembers = useMemo(() => {
     const members = new Map<string, { id: string; name: string; initials: string }>();
     tasks.forEach(task => {
-      if (task.assignee) {
-        members.set(task.assignee.id, {
-          id: task.assignee.id,
-          name: task.assignee.name,
-          initials: task.assignee.initials,
+      if (task.assignees) {
+        task.assignees.forEach(assignee => {
+          members.set(assignee.id, {
+            id: assignee.id,
+            name: assignee.name,
+            initials: assignee.initials,
+          });
         });
       }
     });
@@ -142,63 +239,7 @@ export function TasksSection({ tasks, milestones, issues, modules }: TasksSectio
   }, [tasks]);
 
   return (
-    <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2">
-          {/* View Toggle */}
-          <ToggleGroup
-            type="single"
-            value={viewMode}
-            onValueChange={(value) => value && setViewMode(value as TaskViewMode)}
-            className="bg-muted/50 p-1 rounded-lg"
-          >
-            <ToggleGroupItem value="kanban" aria-label="Kanban view" className="gap-1.5 px-3 data-[state=on]:bg-background">
-              <LayoutGrid className="h-4 w-4" />
-              <span className="hidden sm:inline">Kanban</span>
-            </ToggleGroupItem>
-            <ToggleGroupItem value="list" aria-label="List view" className="gap-1.5 px-3 data-[state=on]:bg-background">
-              <List className="h-4 w-4" />
-              <span className="hidden sm:inline">List</span>
-            </ToggleGroupItem>
-          </ToggleGroup>
-
-          {/* Filter Button */}
-          <Button
-            variant={isFiltersOpen ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => setIsFiltersOpen(!isFiltersOpen)}
-            className="gap-2"
-          >
-            <Filter className="h-4 w-4" />
-            <span className="hidden sm:inline">Filter</span>
-            {activeFilterCount > 0 && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-primary text-primary-foreground">
-                {activeFilterCount}
-              </Badge>
-            )}
-          </Button>
-
-          {/* Clear Filters */}
-          {activeFilterCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              className="gap-1 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-              Clear
-            </Button>
-          )}
-        </div>
-
-        {/* Task count */}
-        <div className="text-sm text-muted-foreground">
-          {filteredTasks.length} of {tasks.length} tasks
-        </div>
-      </div>
-
+    <div className="grid grid-cols-1 gap-4 w-full min-w-0">
       {/* Filters Panel */}
       {isFiltersOpen && (
         <TaskFilters
@@ -212,7 +253,7 @@ export function TasksSection({ tasks, milestones, issues, modules }: TasksSectio
       )}
 
       {/* View Content */}
-      <div className="min-h-[400px]">
+      <div className="min-h-[400px] w-full min-w-0">
         {viewMode === 'kanban' ? (
           <KanbanView tasks={filteredTasks} allTasks={tasks} issues={issues} />
         ) : (
