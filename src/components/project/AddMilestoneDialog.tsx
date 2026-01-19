@@ -1,0 +1,383 @@
+import { useState, useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { format } from 'date-fns';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Calendar } from '@/components/ui/calendar';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
+import { cn } from '@/lib/utils';
+import {
+  Calendar as CalendarIcon,
+  ListTodo,
+  Box,
+  AlertTriangle,
+} from 'lucide-react';
+import { Milestone, Task, Issue, Module } from '@/types';
+
+const milestoneSchema = z.object({
+  title: z.string().min(1, 'Title is required').max(100, 'Title must be less than 100 characters'),
+  description: z.string().max(500, 'Description must be less than 500 characters').optional(),
+  date: z.date({ required_error: 'Target date is required' }),
+  linkedTaskIds: z.array(z.string()).optional(),
+  linkedModuleIds: z.array(z.string()).optional(),
+  linkedIssueIds: z.array(z.string()).optional(),
+});
+
+type MilestoneFormData = z.infer<typeof milestoneSchema>;
+
+interface AddMilestoneDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onAdd: (milestone: Omit<Milestone, 'id'>) => void;
+  tasks: Task[];
+  modules: Module[];
+  issues: Issue[];
+}
+
+export function AddMilestoneDialog({
+  isOpen,
+  onClose,
+  onAdd,
+  tasks,
+  modules,
+  issues,
+}: AddMilestoneDialogProps) {
+  const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
+  const [selectedModules, setSelectedModules] = useState<string[]>([]);
+  const [selectedIssues, setSelectedIssues] = useState<string[]>([]);
+
+  const form = useForm<MilestoneFormData>({
+    resolver: zodResolver(milestoneSchema),
+    defaultValues: {
+      title: '',
+      description: '',
+      linkedTaskIds: [],
+      linkedModuleIds: [],
+      linkedIssueIds: [],
+    },
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      form.reset();
+      setSelectedTasks([]);
+      setSelectedModules([]);
+      setSelectedIssues([]);
+    }
+  }, [isOpen, form]);
+
+  const handleSubmit = (data: MilestoneFormData) => {
+    const milestone: Omit<Milestone, 'id'> = {
+      title: data.title,
+      description: data.description,
+      date: data.date.toISOString().split('T')[0],
+      completed: false,
+      linkedTaskIds: selectedTasks,
+      linkedModuleIds: selectedModules,
+    };
+    
+    onAdd(milestone);
+    onClose();
+  };
+
+  const toggleTask = (taskId: string) => {
+    setSelectedTasks(prev =>
+      prev.includes(taskId)
+        ? prev.filter(id => id !== taskId)
+        : [...prev, taskId]
+    );
+  };
+
+  const toggleModule = (moduleId: string) => {
+    setSelectedModules(prev =>
+      prev.includes(moduleId)
+        ? prev.filter(id => id !== moduleId)
+        : [...prev, moduleId]
+    );
+  };
+
+  const toggleIssue = (issueId: string) => {
+    setSelectedIssues(prev =>
+      prev.includes(issueId)
+        ? prev.filter(id => id !== issueId)
+        : [...prev, issueId]
+    );
+  };
+
+  const severityColors: Record<string, string> = {
+    critical: 'border-destructive text-destructive bg-destructive/10',
+    major: 'border-orange-500 text-orange-500 bg-orange-500/10',
+    minor: 'border-yellow-500 text-yellow-500 bg-yellow-500/10',
+    trivial: 'border-muted-foreground text-muted-foreground bg-muted',
+  };
+
+  const openIssues = issues.filter(i => 
+    i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix'
+  );
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0">
+        <DialogHeader className="px-6 py-4 border-b">
+          <DialogTitle>Add Milestone</DialogTitle>
+          <DialogDescription>
+            Create a new milestone to track project progress and deadlines.
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(handleSubmit)}>
+            <ScrollArea className="max-h-[calc(90vh-160px)]">
+              <div className="p-6 space-y-6">
+                {/* Title Field */}
+                <FormField
+                  control={form.control}
+                  name="title"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Title *</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="Enter milestone title..."
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Description Field */}
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Add a description for this milestone..."
+                          className="min-h-[80px] resize-none"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Target Date */}
+                <FormField
+                  control={form.control}
+                  name="date"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Target Date *</FormLabel>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                'w-full justify-start text-left font-normal',
+                                !field.value && 'text-muted-foreground'
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {field.value ? format(field.value, 'PPP') : 'Pick a date'}
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            initialFocus
+                            className="p-3 pointer-events-auto"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Separator />
+
+                {/* Linked Tasks */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <ListTodo className="h-4 w-4 text-muted-foreground" />
+                    <Label className="text-sm font-medium">
+                      Linked Tasks ({selectedTasks.length})
+                    </Label>
+                  </div>
+                  <div className="border rounded-lg max-h-[160px] overflow-y-auto">
+                    {tasks.length === 0 ? (
+                      <p className="p-4 text-sm text-muted-foreground text-center">
+                        No tasks available
+                      </p>
+                    ) : (
+                      <div className="p-2 space-y-1">
+                        {tasks.map(task => (
+                          <div
+                            key={task.id}
+                            className={cn(
+                              'flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors',
+                              selectedTasks.includes(task.id) && 'bg-primary/5'
+                            )}
+                            onClick={() => toggleTask(task.id)}
+                          >
+                            <Checkbox
+                              checked={selectedTasks.includes(task.id)}
+                              onCheckedChange={() => toggleTask(task.id)}
+                            />
+                            <div className={cn(
+                              'w-2 h-2 rounded-full shrink-0',
+                              task.status === 'done' ? 'bg-status-done' :
+                              task.status === 'in-progress' ? 'bg-status-in-progress' :
+                              task.status === 'blocked' ? 'bg-status-blocked' :
+                              'bg-status-todo'
+                            )} />
+                            <span className="text-sm flex-1 truncate">{task.title}</span>
+                            <Badge variant="outline" className="text-xs capitalize shrink-0">
+                              {task.status.replace('-', ' ')}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Linked Modules */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Box className="h-4 w-4 text-muted-foreground" />
+                    <Label className="text-sm font-medium">
+                      Linked Modules ({selectedModules.length})
+                    </Label>
+                  </div>
+                  <div className="border rounded-lg max-h-[160px] overflow-y-auto">
+                    {modules.length === 0 ? (
+                      <p className="p-4 text-sm text-muted-foreground text-center">
+                        No modules available
+                      </p>
+                    ) : (
+                      <div className="p-2 space-y-1">
+                        {modules.map(module => (
+                          <div
+                            key={module.id}
+                            className={cn(
+                              'flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors',
+                              selectedModules.includes(module.id) && 'bg-primary/5'
+                            )}
+                            onClick={() => toggleModule(module.id)}
+                          >
+                            <Checkbox
+                              checked={selectedModules.includes(module.id)}
+                              onCheckedChange={() => toggleModule(module.id)}
+                            />
+                            <div
+                              className="w-3 h-3 rounded-full shrink-0"
+                              style={{ backgroundColor: module.color || '#6B7280' }}
+                            />
+                            <span className="text-sm flex-1 truncate">{module.name}</span>
+                            <Badge variant="outline" className="text-xs capitalize shrink-0">
+                              {module.type}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Linked Issues */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                    <Label className="text-sm font-medium">
+                      Linked Issues ({selectedIssues.length})
+                    </Label>
+                  </div>
+                  <div className="border rounded-lg max-h-[160px] overflow-y-auto">
+                    {openIssues.length === 0 ? (
+                      <p className="p-4 text-sm text-muted-foreground text-center">
+                        No open issues available
+                      </p>
+                    ) : (
+                      <div className="p-2 space-y-1">
+                        {openIssues.map(issue => (
+                          <div
+                            key={issue.id}
+                            className={cn(
+                              'flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors',
+                              selectedIssues.includes(issue.id) && 'bg-primary/5'
+                            )}
+                            onClick={() => toggleIssue(issue.id)}
+                          >
+                            <Checkbox
+                              checked={selectedIssues.includes(issue.id)}
+                              onCheckedChange={() => toggleIssue(issue.id)}
+                            />
+                            <span className="text-sm flex-1 truncate">{issue.title}</span>
+                            <Badge className={cn('text-xs capitalize shrink-0', severityColors[issue.severity])}>
+                              {issue.severity}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+
+            <DialogFooter className="px-6 py-4 border-t">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit">
+                Create Milestone
+              </Button>
+            </DialogFooter>
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}

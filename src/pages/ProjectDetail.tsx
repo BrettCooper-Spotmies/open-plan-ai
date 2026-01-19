@@ -299,6 +299,7 @@ export default function ProjectDetail() {
               milestones={project.milestones} 
               tasks={project.tasks} 
               issues={project.issues || []}
+              modules={modules}
             />
           </TabsContent>
           <TabsContent value="issues" className="mt-6">

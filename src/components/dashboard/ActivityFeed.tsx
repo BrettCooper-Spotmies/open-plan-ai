@@ -10,7 +10,6 @@ import {
   CheckCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Activity } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -43,47 +42,51 @@ const activityColors: Record<Activity['type'], string> = {
 export function ActivityFeed({ activities }: ActivityFeedProps) {
   return (
     <Card className="h-full">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-4">
         <CardTitle className="text-base font-medium">Recent Activity</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-1">
         {activities.map((activity) => {
           const Icon = activityIcons[activity.type];
           const colorClass = activityColors[activity.type];
           
           return (
-            <div key={activity.id} className="flex gap-3 group">
-              <div className={cn('p-2 rounded-lg shrink-0', colorClass)}>
+            <div 
+              key={activity.id} 
+              className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0"
+            >
+              {/* Left: Subtle status icon */}
+              <div className={cn(
+                'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
+                colorClass
+              )}>
                 <Icon className="h-4 w-4" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Avatar className="h-5 w-5">
-                      <AvatarFallback className="text-[10px] bg-muted">
-                        {activity.user.initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm font-medium truncate">
-                      {activity.user.name}
-                    </span>
-                  </div>
-                  <span className="text-xs text-muted-foreground shrink-0">
-                    {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
-                  </span>
-                </div>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {activity.description}
+              
+              {/* Center: Content */}
+              <div className="flex-1 min-w-0 space-y-0.5">
+                {/* Primary: Actor name (bold) + action text */}
+                <p className="text-sm leading-relaxed">
+                  <span className="font-semibold">{activity.user.name}</span>
+                  {' '}
+                  <span className="text-muted-foreground">{activity.description}</span>
                 </p>
+                
+                {/* Secondary: Project name */}
                 {activity.projectName && (
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <p className="text-xs text-muted-foreground">
                     in{' '}
-                    <span className="font-medium text-foreground hover:underline cursor-pointer">
+                    <span className="text-primary hover:underline cursor-pointer">
                       {activity.projectName}
                     </span>
                   </p>
                 )}
               </div>
+              
+              {/* Right: Timestamp aligned top-right */}
+              <span className="text-xs text-muted-foreground shrink-0 pt-0.5">
+                {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
+              </span>
             </div>
           );
         })}
