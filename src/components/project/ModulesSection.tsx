@@ -2,17 +2,32 @@ import { useState, useMemo } from 'react';
 import { LayoutGrid, List, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Module, ModuleViewMode, Task, Issue } from '@/types';
+import { Module, ModuleViewMode, Task, Issue, TeamMember } from '@/types';
 import { ModulesKanbanView } from './ModulesKanbanView';
 import { ModulesListView } from './ModulesListView';
+import { ModuleDetailModal } from './ModuleDetailModal';
+import { AddModuleDialog } from './AddModuleDialog';
 import { getModuleTasks, getModuleProgress } from '@/lib/projectUtils';
+
+interface ModuleWithStats extends Module {
+  taskCount: number;
+  progress: number;
+  openIssues: number;
+  tasks: Task[];
+}
 
 interface ModulesSectionProps {
   modules: Module[];
   tasks: Task[];
   issues: Issue[];
+  teamMembers: TeamMember[];
   viewMode?: ModuleViewMode;
   onViewModeChange?: (mode: ModuleViewMode) => void;
+  onModuleAdd?: (module: Omit<Module, 'id' | 'createdAt'>) => void;
+  onModuleUpdate?: (module: Module) => void;
+  onModuleDelete?: (moduleId: string) => void;
+  onTaskClick?: (task: Task) => void;
+  onIssueClick?: (issue: Issue) => void;
 }
 
 export function ModuleViewControls({
@@ -52,10 +67,19 @@ export function ModulesSection({
   modules, 
   tasks, 
   issues,
+  teamMembers,
   viewMode: externalViewMode,
-  onViewModeChange: externalOnViewModeChange
+  onViewModeChange: externalOnViewModeChange,
+  onModuleAdd,
+  onModuleUpdate,
+  onModuleDelete,
+  onTaskClick,
+  onIssueClick,
 }: ModulesSectionProps) {
   const [internalViewMode, setInternalViewMode] = useState<ModuleViewMode>('kanban');
+  const [selectedModule, setSelectedModule] = useState<ModuleWithStats | null>(null);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   
   const viewMode = externalViewMode ?? internalViewMode;
 
@@ -78,16 +102,73 @@ export function ModulesSection({
     });
   }, [modules, tasks, issues]);
 
+  const handleModuleClick = (module: ModuleWithStats) => {
+    setSelectedModule(module);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleCloseDetailModal = () => {
+    setIsDetailModalOpen(false);
+    setSelectedModule(null);
+  };
+
+  const handleAddModule = (newModule: Omit<Module, 'id' | 'createdAt'>) => {
+    onModuleAdd?.(newModule);
+  };
+
+  const existingModuleNames = modules.map(m => m.name);
+
   return (
-    <div className="space-y-4 grid grid-cols-1 w-full min-w-0">
-      {/* View Content */}
-      <div className="min-h-[400px] w-full min-w-0">
-        {viewMode === 'kanban' ? (
-          <ModulesKanbanView modules={modulesWithStats} />
-        ) : (
-          <ModulesListView modules={modulesWithStats} />
-        )}
+    <>
+      <div className="space-y-4 grid grid-cols-1 w-full min-w-0">
+        {/* View Content */}
+        <div className="min-h-[400px] w-full min-w-0">
+          {viewMode === 'kanban' ? (
+            <ModulesKanbanView 
+              modules={modulesWithStats} 
+              onModuleClick={handleModuleClick}
+            />
+          ) : (
+            <ModulesListView 
+              modules={modulesWithStats} 
+              onModuleClick={handleModuleClick}
+            />
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* Module Detail Modal */}
+      <ModuleDetailModal
+        module={selectedModule}
+        allTasks={tasks}
+        allIssues={issues}
+        teamMembers={teamMembers}
+        isOpen={isDetailModalOpen}
+        onClose={handleCloseDetailModal}
+        onUpdate={onModuleUpdate}
+        onDelete={onModuleDelete}
+        onTaskClick={onTaskClick}
+        onIssueClick={onIssueClick}
+      />
+
+      {/* Add Module Dialog */}
+      <AddModuleDialog
+        isOpen={isAddDialogOpen}
+        onClose={() => setIsAddDialogOpen(false)}
+        onAdd={handleAddModule}
+        teamMembers={teamMembers}
+        existingModuleNames={existingModuleNames}
+      />
+    </>
   );
+}
+
+// Export a function to open the add dialog from parent
+export function useModulesSectionControls() {
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  return {
+    isAddDialogOpen,
+    openAddDialog: () => setIsAddDialogOpen(true),
+    closeAddDialog: () => setIsAddDialogOpen(false),
+  };
 }

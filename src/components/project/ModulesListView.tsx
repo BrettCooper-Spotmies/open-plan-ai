@@ -16,9 +16,10 @@ interface ModuleWithStats extends Module {
 
 interface ModulesListViewProps {
   modules: ModuleWithStats[];
+  onModuleClick?: (module: ModuleWithStats) => void;
 }
 
-export function ModulesListView({ modules }: ModulesListViewProps) {
+export function ModulesListView({ modules, onModuleClick }: ModulesListViewProps) {
   if (modules.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -49,6 +50,7 @@ export function ModulesListView({ modules }: ModulesListViewProps) {
               <TableRow 
                 key={module.id} 
                 className="cursor-pointer hover:bg-muted/50"
+                onClick={() => onModuleClick?.(module)}
               >
                 <TableCell>
                   <div className="flex items-center gap-3">

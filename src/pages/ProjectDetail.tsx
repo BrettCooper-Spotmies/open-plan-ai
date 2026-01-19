@@ -11,7 +11,7 @@ import { TasksSection, ViewControls } from '@/components/project/TasksSection';
 import { ModulesSection, ModuleViewControls } from '@/components/project/ModulesSection';
 import { MilestonesView } from '@/components/project/MilestonesView';
 import { IssuesView } from '@/components/project/IssuesView';
-import { projects, projectModules } from '@/data/mockData';
+import { projects, projectModules, teamMembers as allTeamMembers } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Project, Issue } from '@/types';
 
@@ -274,6 +274,7 @@ export default function ProjectDetail() {
               modules={modules} 
               tasks={project.tasks}
               issues={project.issues || []}
+              teamMembers={allTeamMembers}
               viewMode={moduleViewMode}
               onViewModeChange={setModuleViewMode}
             />
