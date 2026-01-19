@@ -4,6 +4,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -127,6 +128,9 @@ export function AddModuleDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Add New Module</DialogTitle>
+          <DialogDescription>
+            Create a new module to organize tasks by system component.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">

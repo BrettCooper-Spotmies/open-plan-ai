@@ -33,6 +33,7 @@ export default function ProjectDetail() {
   const [viewMode, setViewMode] = useState<TaskViewMode>('kanban');
   const [moduleViewMode, setModuleViewMode] = useState<ModuleViewMode>('kanban');
   const [filters, setFilters] = useState<TaskFilter>({});
+  const [isAddModuleDialogOpen, setIsAddModuleDialogOpen] = useState(false);
   
   const [projectData, setProjectData] = useState<Project | undefined>(() => projects.find(p => p.id === id));
 
@@ -87,8 +88,19 @@ export default function ProjectDetail() {
   };
 
   const handleAddModule = () => {
-    // Implement add module logic
-    console.log('Add module clicked');
+    setIsAddModuleDialogOpen(true);
+  };
+
+  const handleModuleAdd = (newModule: Omit<Module, 'id' | 'createdAt'>) => {
+    const module: Module = {
+      ...newModule,
+      id: `module-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+    };
+    // Add to modules (in real app, this would update state/database)
+    projectModules.push(module);
+    console.log('Module added:', module);
+    setIsAddModuleDialogOpen(false);
   };
 
   if (!project) {
@@ -277,6 +289,9 @@ export default function ProjectDetail() {
               teamMembers={allTeamMembers}
               viewMode={moduleViewMode}
               onViewModeChange={setModuleViewMode}
+              isAddDialogOpen={isAddModuleDialogOpen}
+              onAddDialogClose={() => setIsAddModuleDialogOpen(false)}
+              onModuleAdd={handleModuleAdd}
             />
           </TabsContent>
           <TabsContent value="milestones" className="mt-6">

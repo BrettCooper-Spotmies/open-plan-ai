@@ -23,6 +23,8 @@ interface ModulesSectionProps {
   teamMembers: TeamMember[];
   viewMode?: ModuleViewMode;
   onViewModeChange?: (mode: ModuleViewMode) => void;
+  isAddDialogOpen?: boolean;
+  onAddDialogClose?: () => void;
   onModuleAdd?: (module: Omit<Module, 'id' | 'createdAt'>) => void;
   onModuleUpdate?: (module: Module) => void;
   onModuleDelete?: (moduleId: string) => void;
@@ -70,6 +72,8 @@ export function ModulesSection({
   teamMembers,
   viewMode: externalViewMode,
   onViewModeChange: externalOnViewModeChange,
+  isAddDialogOpen: externalIsAddDialogOpen,
+  onAddDialogClose,
   onModuleAdd,
   onModuleUpdate,
   onModuleDelete,
@@ -79,7 +83,9 @@ export function ModulesSection({
   const [internalViewMode, setInternalViewMode] = useState<ModuleViewMode>('kanban');
   const [selectedModule, setSelectedModule] = useState<ModuleWithStats | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [internalIsAddDialogOpen, setInternalIsAddDialogOpen] = useState(false);
+  
+  const isAddDialogOpen = externalIsAddDialogOpen ?? internalIsAddDialogOpen;
   
   const viewMode = externalViewMode ?? internalViewMode;
 
@@ -154,7 +160,10 @@ export function ModulesSection({
       {/* Add Module Dialog */}
       <AddModuleDialog
         isOpen={isAddDialogOpen}
-        onClose={() => setIsAddDialogOpen(false)}
+        onClose={() => {
+          setInternalIsAddDialogOpen(false);
+          onAddDialogClose?.();
+        }}
         onAdd={handleAddModule}
         teamMembers={teamMembers}
         existingModuleNames={existingModuleNames}
