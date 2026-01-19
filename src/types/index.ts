@@ -84,6 +84,7 @@ export interface Milestone {
   completed: boolean;
   completedAt?: string;      // Actual completion date
   linkedTaskIds?: string[];  // Tasks linked to this milestone
+  linkedModuleIds?: string[]; // Modules linked to this milestone
 }
 
 // Enhanced Task interface

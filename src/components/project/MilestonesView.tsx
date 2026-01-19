@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Milestone, Task, Issue } from '@/types';
+import { Milestone, Task, Issue, Module } from '@/types';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import {
   ChevronDown, 
   ChevronRight,
   Plus,
-  Link2,
+  Box,
 } from 'lucide-react';
 import { 
   getMilestoneProgress, 
@@ -22,8 +22,10 @@ import {
   getMilestoneIssues,
   getMilestoneStatus,
   sortMilestonesByDate,
+  getModuleProgress,
 } from '@/lib/projectUtils';
 import { MilestoneDetailModal } from './MilestoneDetailModal';
+import { AddMilestoneDialog } from './AddMilestoneDialog';
 import {
   Collapsible,
   CollapsibleContent,
@@ -34,8 +36,9 @@ interface MilestonesViewProps {
   milestones: Milestone[];
   tasks: Task[];
   issues?: Issue[];
+  modules?: Module[];
   onMilestoneUpdate?: (milestone: Milestone) => void;
-  onMilestoneCreate?: () => void;
+  onMilestoneCreate?: (milestone: Omit<Milestone, 'id'>) => void;
 }
 
 const statusConfig = {
@@ -49,12 +52,14 @@ export function MilestonesView({
   milestones, 
   tasks, 
   issues = [], 
+  modules = [],
   onMilestoneUpdate,
   onMilestoneCreate,
 }: MilestonesViewProps) {
   const [expandedMilestones, setExpandedMilestones] = useState<string[]>([]);
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 
   const sortedMilestones = sortMilestonesByDate(milestones);
 
@@ -80,6 +85,11 @@ export function MilestonesView({
   const completedCount = milestones.filter(m => m.completed).length;
   const upcomingCount = milestones.filter(m => !m.completed).length;
 
+  const handleAddMilestone = (milestone: Omit<Milestone, 'id'>) => {
+    onMilestoneCreate?.(milestone);
+    setIsAddDialogOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -94,7 +104,7 @@ export function MilestonesView({
             {upcomingCount} Upcoming
           </Badge>
         </div>
-        <Button size="sm" className="gap-2" onClick={onMilestoneCreate}>
+        <Button size="sm" className="gap-2" onClick={() => setIsAddDialogOpen(true)}>
           <Plus className="h-4 w-4" />
           Add Milestone
         </Button>
@@ -111,6 +121,7 @@ export function MilestonesView({
               const progress = getMilestoneProgress(milestone, tasks);
               const milestoneTasks = getMilestoneTasks(milestone, tasks);
               const milestoneIssues = getMilestoneIssues(milestone.id, issues);
+              const linkedModules = modules.filter(m => milestone.linkedModuleIds?.includes(m.id));
               const status = getMilestoneStatus(milestone, tasks, issues);
               const StatusIcon = statusConfig[status].icon;
               const isExpanded = expandedMilestones.includes(milestone.id);
@@ -238,6 +249,36 @@ export function MilestonesView({
                               )}
                             </div>
 
+                            {/* Linked Modules */}
+                            {linkedModules.length > 0 && (
+                              <>
+                                <div className="text-sm font-medium text-muted-foreground flex items-center gap-1.5 mt-4">
+                                  <Box className="h-4 w-4" />
+                                  Linked Modules
+                                </div>
+                                <div className="space-y-2">
+                                  {linkedModules.map(module => {
+                                    const moduleProgress = getModuleProgress(module.id, tasks);
+                                    return (
+                                      <div key={module.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-md">
+                                        <div className="flex items-center gap-2">
+                                          <div
+                                            className="w-2.5 h-2.5 rounded-full"
+                                            style={{ backgroundColor: module.color || '#6B7280' }}
+                                          />
+                                          <span className="text-sm">{module.name}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <Progress value={moduleProgress} className="h-1.5 w-16" />
+                                          <span className="text-xs text-muted-foreground">{moduleProgress}%</span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </>
+                            )}
+
                             {milestoneIssues.length > 0 && (
                               <>
                                 <div className="text-sm font-medium text-destructive flex items-center gap-1.5 mt-4">
@@ -273,9 +314,20 @@ export function MilestonesView({
         milestone={selectedMilestone}
         tasks={tasks}
         issues={issues}
+        modules={modules}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onUpdate={handleMilestoneUpdateFromModal}
+      />
+
+      {/* Add Milestone Dialog */}
+      <AddMilestoneDialog
+        isOpen={isAddDialogOpen}
+        onClose={() => setIsAddDialogOpen(false)}
+        onAdd={handleAddMilestone}
+        tasks={tasks}
+        modules={modules}
+        issues={issues}
       />
     </div>
   );
