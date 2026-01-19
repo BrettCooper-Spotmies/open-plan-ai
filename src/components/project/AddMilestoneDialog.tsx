@@ -92,7 +92,8 @@ export function AddMilestoneDialog({
       setSelectedModules([]);
       setSelectedIssues([]);
     }
-  }, [isOpen, form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   const handleSubmit = (data: MilestoneFormData) => {
     const milestone: Omit<Milestone, 'id'> = {
