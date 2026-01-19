@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -39,6 +39,7 @@ import {
   ListTodo,
   Box,
   AlertTriangle,
+  Search,
 } from 'lucide-react';
 import { Milestone, Task, Issue, Module } from '@/types';
 
@@ -73,6 +74,9 @@ export function AddMilestoneDialog({
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [selectedIssues, setSelectedIssues] = useState<string[]>([]);
+  const [taskSearch, setTaskSearch] = useState('');
+  const [moduleSearch, setModuleSearch] = useState('');
+  const [issueSearch, setIssueSearch] = useState('');
 
   const form = useForm<MilestoneFormData>({
     resolver: zodResolver(milestoneSchema),
@@ -85,15 +89,7 @@ export function AddMilestoneDialog({
     },
   });
 
-  useEffect(() => {
-    if (!isOpen) {
-      form.reset();
-      setSelectedTasks([]);
-      setSelectedModules([]);
-      setSelectedIssues([]);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+
 
   const handleSubmit = (data: MilestoneFormData) => {
     const milestone: Omit<Milestone, 'id'> = {
@@ -104,7 +100,7 @@ export function AddMilestoneDialog({
       linkedTaskIds: selectedTasks,
       linkedModuleIds: selectedModules,
     };
-    
+
     onAdd(milestone);
     onClose();
   };
@@ -140,14 +136,27 @@ export function AddMilestoneDialog({
     trivial: 'border-muted-foreground text-muted-foreground bg-muted',
   };
 
-  const openIssues = issues.filter(i => 
+  const openIssues = issues.filter(i =>
     i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix'
+  );
+
+  // Filtered lists based on search
+  const filteredTasks = tasks.filter(task =>
+    task.title.toLowerCase().includes(taskSearch.toLowerCase())
+  );
+
+  const filteredModules = modules.filter(module =>
+    module.name.toLowerCase().includes(moduleSearch.toLowerCase())
+  );
+
+  const filteredIssues = openIssues.filter(issue =>
+    issue.title.toLowerCase().includes(issueSearch.toLowerCase())
   );
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b">
+      <DialogContent className="max-w-3xl max-h-[90vh] p-0 flex flex-col gap-0">
+        <DialogHeader className="px-6 py-4 border-b shrink-0">
           <DialogTitle>Add Milestone</DialogTitle>
           <DialogDescription>
             Create a new milestone to track project progress and deadlines.
@@ -155,8 +164,8 @@ export function AddMilestoneDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)}>
-            <ScrollArea className="max-h-[calc(90vh-160px)]">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 min-h-0">
+            <div className="overflow-y-auto flex-1">
               <div className="p-6 space-y-6">
                 {/* Title Field */}
                 <FormField
@@ -204,18 +213,16 @@ export function AddMilestoneDialog({
                       <FormLabel>Target Date *</FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                'w-full justify-start text-left font-normal',
-                                !field.value && 'text-muted-foreground'
-                              )}
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {field.value ? format(field.value, 'PPP') : 'Pick a date'}
-                            </Button>
-                          </FormControl>
+                          <Button
+                            variant="outline"
+                            className={cn(
+                              'w-full justify-start text-left font-normal',
+                              !field.value && 'text-muted-foreground'
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {field.value ? format(field.value, 'PPP') : 'Pick a date'}
+                          </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
@@ -236,20 +243,37 @@ export function AddMilestoneDialog({
 
                 {/* Linked Tasks */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <ListTodo className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-sm font-medium">
-                      Linked Tasks ({selectedTasks.length})
-                    </Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <ListTodo className="h-4 w-4 text-muted-foreground" />
+                      <Label className="text-sm font-medium">
+                        Linked Tasks ({selectedTasks.length})
+                      </Label>
+                    </div>
                   </div>
+                  {tasks.length > 0 && (
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search tasks..."
+                        value={taskSearch}
+                        onChange={(e) => setTaskSearch(e.target.value)}
+                        className="pl-9 h-9"
+                      />
+                    </div>
+                  )}
                   <div className="border rounded-lg max-h-[160px] overflow-y-auto">
                     {tasks.length === 0 ? (
                       <p className="p-4 text-sm text-muted-foreground text-center">
                         No tasks available
                       </p>
+                    ) : filteredTasks.length === 0 ? (
+                      <p className="p-4 text-sm text-muted-foreground text-center">
+                        No tasks match your search
+                      </p>
                     ) : (
                       <div className="p-2 space-y-1">
-                        {tasks.map(task => (
+                        {filteredTasks.map(task => (
                           <div
                             key={task.id}
                             className={cn(
@@ -265,9 +289,9 @@ export function AddMilestoneDialog({
                             <div className={cn(
                               'w-2 h-2 rounded-full shrink-0',
                               task.status === 'done' ? 'bg-status-done' :
-                              task.status === 'in-progress' ? 'bg-status-in-progress' :
-                              task.status === 'blocked' ? 'bg-status-blocked' :
-                              'bg-status-todo'
+                                task.status === 'in-progress' ? 'bg-status-in-progress' :
+                                  task.status === 'blocked' ? 'bg-status-blocked' :
+                                    'bg-status-todo'
                             )} />
                             <span className="text-sm flex-1 truncate">{task.title}</span>
                             <Badge variant="outline" className="text-xs capitalize shrink-0">
@@ -284,20 +308,37 @@ export function AddMilestoneDialog({
 
                 {/* Linked Modules */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Box className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-sm font-medium">
-                      Linked Modules ({selectedModules.length})
-                    </Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Box className="h-4 w-4 text-muted-foreground" />
+                      <Label className="text-sm font-medium">
+                        Linked Modules ({selectedModules.length})
+                      </Label>
+                    </div>
                   </div>
+                  {modules.length > 0 && (
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search modules..."
+                        value={moduleSearch}
+                        onChange={(e) => setModuleSearch(e.target.value)}
+                        className="pl-9 h-9"
+                      />
+                    </div>
+                  )}
                   <div className="border rounded-lg max-h-[160px] overflow-y-auto">
                     {modules.length === 0 ? (
                       <p className="p-4 text-sm text-muted-foreground text-center">
                         No modules available
                       </p>
+                    ) : filteredModules.length === 0 ? (
+                      <p className="p-4 text-sm text-muted-foreground text-center">
+                        No modules match your search
+                      </p>
                     ) : (
                       <div className="p-2 space-y-1">
-                        {modules.map(module => (
+                        {filteredModules.map(module => (
                           <div
                             key={module.id}
                             className={cn(
@@ -329,20 +370,37 @@ export function AddMilestoneDialog({
 
                 {/* Linked Issues */}
                 <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-sm font-medium">
-                      Linked Issues ({selectedIssues.length})
-                    </Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                      <Label className="text-sm font-medium">
+                        Linked Issues ({selectedIssues.length})
+                      </Label>
+                    </div>
                   </div>
+                  {openIssues.length > 0 && (
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search issues..."
+                        value={issueSearch}
+                        onChange={(e) => setIssueSearch(e.target.value)}
+                        className="pl-9 h-9"
+                      />
+                    </div>
+                  )}
                   <div className="border rounded-lg max-h-[160px] overflow-y-auto">
                     {openIssues.length === 0 ? (
                       <p className="p-4 text-sm text-muted-foreground text-center">
                         No open issues available
                       </p>
+                    ) : filteredIssues.length === 0 ? (
+                      <p className="p-4 text-sm text-muted-foreground text-center">
+                        No issues match your search
+                      </p>
                     ) : (
                       <div className="p-2 space-y-1">
-                        {openIssues.map(issue => (
+                        {filteredIssues.map(issue => (
                           <div
                             key={issue.id}
                             className={cn(
@@ -366,9 +424,9 @@ export function AddMilestoneDialog({
                   </div>
                 </div>
               </div>
-            </ScrollArea>
+            </div>
 
-            <DialogFooter className="px-6 py-4 border-t">
+            <DialogFooter className="px-6 py-4 border-t shrink-0">
               <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
               </Button>

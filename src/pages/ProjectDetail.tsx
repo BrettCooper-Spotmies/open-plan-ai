@@ -13,7 +13,7 @@ import { MilestonesView } from '@/components/project/MilestonesView';
 import { IssuesView } from '@/components/project/IssuesView';
 import { projects, projectModules, teamMembers as allTeamMembers } from '@/data/mockData';
 import { cn } from '@/lib/utils';
-import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Project, Issue } from '@/types';
+import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Project, Issue, Milestone } from '@/types';
 
 const stageColors = {
   concept: 'bg-muted text-muted-foreground',
@@ -28,24 +28,24 @@ export default function ProjectDetail() {
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const tabParam = searchParams.get('tab') as ProjectSection;
-  
+
   const [section, setSection] = useState<ProjectSection>(tabParam || 'tasks');
   const [viewMode, setViewMode] = useState<TaskViewMode>('kanban');
   const [moduleViewMode, setModuleViewMode] = useState<ModuleViewMode>('kanban');
   const [filters, setFilters] = useState<TaskFilter>({});
   const [isAddModuleDialogOpen, setIsAddModuleDialogOpen] = useState(false);
-  
+
   const [projectData, setProjectData] = useState<Project | undefined>(() => projects.find(p => p.id === id));
 
   useEffect(() => {
     setProjectData(projects.find(p => p.id === id));
   }, [id]);
-  
+
   const project = projectData;
 
   const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
     if (!project) return;
-    
+
     const newIssue: Issue = {
       id: `issue-${Date.now()}`,
       projectId: project.id,
@@ -69,9 +69,9 @@ export default function ProjectDetail() {
     // Mutate mock data for persistence across navigation
     const originalProject = projects.find(p => p.id === project.id);
     if (originalProject) {
-       if (!originalProject.issues) originalProject.issues = [];
-       // Add to start
-       originalProject.issues.unshift(newIssue);
+      if (!originalProject.issues) originalProject.issues = [];
+      // Add to start
+      originalProject.issues.unshift(newIssue);
     }
 
     setProjectData(prev => prev ? ({
@@ -101,6 +101,43 @@ export default function ProjectDetail() {
     projectModules.push(module);
     console.log('Module added:', module);
     setIsAddModuleDialogOpen(false);
+  };
+
+  const handleMilestoneCreate = (newMilestonePartial: Omit<Milestone, 'id'>) => {
+    if (!project) return;
+
+    const newMilestone: Milestone = {
+      id: `milestone-${Date.now()}`,
+      ...newMilestonePartial,
+    };
+
+    // Mutate mock data for persistence across navigation
+    const originalProject = projects.find(p => p.id === project.id);
+    if (originalProject) {
+      if (!originalProject.milestones) originalProject.milestones = [];
+      originalProject.milestones.push(newMilestone);
+    }
+
+    setProjectData(prev => prev ? ({
+      ...prev,
+      milestones: [...(prev.milestones || []), newMilestone]
+    }) : prev);
+  };
+
+  const handleMilestoneUpdate = (updatedMilestone: Milestone) => {
+    // Mutate mock data for persistence
+    const originalProject = projects.find(p => p.id === project?.id);
+    if (originalProject) {
+      const index = originalProject.milestones?.findIndex(m => m.id === updatedMilestone.id);
+      if (index !== undefined && index !== -1 && originalProject.milestones) {
+        originalProject.milestones[index] = updatedMilestone;
+      }
+    }
+
+    setProjectData(prev => prev ? ({
+      ...prev,
+      milestones: prev.milestones?.map(m => m.id === updatedMilestone.id ? updatedMilestone : m) || []
+    }) : prev);
   };
 
   if (!project) {
@@ -243,7 +280,7 @@ export default function ProjectDetail() {
                 )}
               </TabsTrigger>
             </TabsList>
-            
+
             {/* View Controls - only show for tasks section */}
             {section === 'tasks' && (
               <ViewControls
@@ -270,8 +307,8 @@ export default function ProjectDetail() {
           </div>
 
           <TabsContent value="tasks" className="mt-6">
-            <TasksSection 
-              tasks={project.tasks} 
+            <TasksSection
+              tasks={project.tasks}
               milestones={project.milestones}
               issues={project.issues || []}
               modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
@@ -282,8 +319,8 @@ export default function ProjectDetail() {
             />
           </TabsContent>
           <TabsContent value="modules" className="mt-6">
-            <ModulesSection 
-              modules={modules} 
+            <ModulesSection
+              modules={modules}
               tasks={project.tasks}
               issues={project.issues || []}
               teamMembers={allTeamMembers}
@@ -295,16 +332,19 @@ export default function ProjectDetail() {
             />
           </TabsContent>
           <TabsContent value="milestones" className="mt-6">
-            <MilestonesView 
-              milestones={project.milestones} 
-              tasks={project.tasks} 
+            <MilestonesView
+              milestones={project.milestones}
+              tasks={project.tasks}
               issues={project.issues || []}
               modules={modules}
+              onMilestoneUpdate={handleMilestoneUpdate}
+              onMilestoneCreate={handleMilestoneCreate}
+              onIssueUpdate={handleIssueUpdate}
             />
           </TabsContent>
           <TabsContent value="issues" className="mt-6">
-            <IssuesView 
-              issues={project.issues || []} 
+            <IssuesView
+              issues={project.issues || []}
               tasks={project.tasks}
               onIssueCreate={handleIssueCreate}
               onIssueUpdate={handleIssueUpdate}
