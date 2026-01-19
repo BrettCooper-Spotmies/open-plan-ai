@@ -5,20 +5,20 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { 
-  Flag, 
-  Calendar, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Clock, 
-  ChevronDown, 
+import {
+  Flag,
+  Calendar,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  ChevronDown,
   ChevronRight,
   Plus,
   Box,
 } from 'lucide-react';
-import { 
-  getMilestoneProgress, 
-  getMilestoneTasks, 
+import {
+  getMilestoneProgress,
+  getMilestoneTasks,
   getMilestoneIssues,
   getMilestoneStatus,
   sortMilestonesByDate,
@@ -39,6 +39,7 @@ interface MilestonesViewProps {
   modules?: Module[];
   onMilestoneUpdate?: (milestone: Milestone) => void;
   onMilestoneCreate?: (milestone: Omit<Milestone, 'id'>) => void;
+  onIssueUpdate?: (issue: Issue) => void;
 }
 
 const statusConfig = {
@@ -48,13 +49,14 @@ const statusConfig = {
   'on-track': { color: 'bg-chart-2', textColor: 'text-chart-2', label: 'On Track', icon: Flag },
 };
 
-export function MilestonesView({ 
-  milestones, 
-  tasks, 
-  issues = [], 
+export function MilestonesView({
+  milestones,
+  tasks,
+  issues = [],
   modules = [],
   onMilestoneUpdate,
   onMilestoneCreate,
+  onIssueUpdate,
 }: MilestonesViewProps) {
   const [expandedMilestones, setExpandedMilestones] = useState<string[]>([]);
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
@@ -64,8 +66,8 @@ export function MilestonesView({
   const sortedMilestones = sortMilestonesByDate(milestones);
 
   const toggleExpanded = (milestoneId: string) => {
-    setExpandedMilestones(prev => 
-      prev.includes(milestoneId) 
+    setExpandedMilestones(prev =>
+      prev.includes(milestoneId)
         ? prev.filter(id => id !== milestoneId)
         : [...prev, milestoneId]
     );
@@ -177,8 +179,8 @@ export function MilestonesView({
                           <div className="text-right text-sm">
                             <div className="flex items-center gap-1.5 text-muted-foreground">
                               <Calendar className="h-3.5 w-3.5" />
-                              {new Date(milestone.date).toLocaleDateString('en-US', { 
-                                month: 'short', 
+                              {new Date(milestone.date).toLocaleDateString('en-US', {
+                                month: 'short',
                                 day: 'numeric',
                                 year: 'numeric'
                               })}
@@ -188,9 +190,9 @@ export function MilestonesView({
                                 'text-xs mt-1',
                                 daysUntil < 0 ? 'text-destructive' : daysUntil < 7 ? 'text-orange-500' : 'text-muted-foreground'
                               )}>
-                                {daysUntil < 0 
+                                {daysUntil < 0
                                   ? `${Math.abs(daysUntil)} days overdue`
-                                  : daysUntil === 0 
+                                  : daysUntil === 0
                                     ? 'Due today'
                                     : `${daysUntil} days left`
                                 }
@@ -230,9 +232,9 @@ export function MilestonesView({
                                       <div className={cn(
                                         'w-2 h-2 rounded-full',
                                         task.status === 'done' ? 'bg-status-done' :
-                                        task.status === 'in-progress' ? 'bg-status-in-progress' :
-                                        task.status === 'blocked' ? 'bg-status-blocked' :
-                                        'bg-status-todo'
+                                          task.status === 'in-progress' ? 'bg-status-in-progress' :
+                                            task.status === 'blocked' ? 'bg-status-blocked' :
+                                              'bg-status-todo'
                                       )} />
                                       <span className={cn(
                                         'text-sm',
@@ -319,6 +321,7 @@ export function MilestonesView({
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           onUpdate={handleMilestoneUpdateFromModal}
+          onIssueUpdate={onIssueUpdate}
         />
       )}
 

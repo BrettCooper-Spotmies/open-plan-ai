@@ -28,6 +28,8 @@ import {
   AlertTriangle,
   ListTodo,
   Box,
+  Plus,
+  X,
 } from 'lucide-react';
 import { Milestone, Task, Issue, Module } from '@/types';
 import { getMilestoneProgress, getMilestoneTasks, getMilestoneIssues, getMilestoneStatus, getModuleProgress } from '@/lib/projectUtils';
@@ -40,6 +42,7 @@ interface MilestoneDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (milestone: Milestone) => void;
+  onIssueUpdate?: (issue: Issue) => void;
 }
 
 const statusConfig = {
@@ -57,6 +60,7 @@ export function MilestoneDetailModal({
   isOpen,
   onClose,
   onUpdate,
+  onIssueUpdate,
 }: MilestoneDetailModalProps) {
   const [editedMilestone, setEditedMilestone] = useState<Milestone | null>(null);
 
@@ -103,9 +107,55 @@ export function MilestoneDetailModal({
   const blockedTasks = milestoneTasks.filter(t => t.status === 'blocked').length;
 
   // Get linked modules
-  const linkedModules = modules.filter(m => 
+  const linkedModules = modules.filter(m =>
     editedMilestone.linkedModuleIds?.includes(m.id)
   );
+
+  // Available items for linking (not already linked)
+  const availableTasks = tasks.filter(t => !editedMilestone.linkedTaskIds?.includes(t.id));
+  const availableModules = modules.filter(m => !editedMilestone.linkedModuleIds?.includes(m.id));
+  const availableIssues = issues.filter(i =>
+    !milestoneIssues.some(mi => mi.id === i.id) &&
+    i.status !== 'resolved' &&
+    i.status !== 'closed' &&
+    i.status !== 'wont-fix'
+  );
+
+  // Handlers for adding/removing linked items
+  const handleToggleTask = (taskId: string) => {
+    const currentTasks = editedMilestone.linkedTaskIds || [];
+    const updated = currentTasks.includes(taskId)
+      ? currentTasks.filter(id => id !== taskId)
+      : [...currentTasks, taskId];
+    handleFieldChange('linkedTaskIds', updated);
+  };
+
+  const handleToggleModule = (moduleId: string) => {
+    const currentModules = editedMilestone.linkedModuleIds || [];
+    const updated = currentModules.includes(moduleId)
+      ? currentModules.filter(id => id !== moduleId)
+      : [...currentModules, moduleId];
+    handleFieldChange('linkedModuleIds', updated);
+  };
+
+  const handleToggleIssue = (issueId: string) => {
+    if (!onIssueUpdate) return;
+
+    const issue = issues.find(i => i.id === issueId);
+    if (!issue) return;
+
+    const currentMilestones = issue.blocksMilestoneIds || [];
+    const isLinked = currentMilestones.includes(editedMilestone.id);
+
+    const updatedIssue = {
+      ...issue,
+      blocksMilestoneIds: isLinked
+        ? currentMilestones.filter(id => id !== editedMilestone.id)
+        : [...currentMilestones, editedMilestone.id]
+    };
+
+    onIssueUpdate(updatedIssue);
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -138,8 +188,8 @@ export function MilestoneDetailModal({
                 <Progress value={progress} className="h-2 flex-1" />
                 <span className="text-sm font-medium w-12 text-right">{progress}%</span>
                 <div className="flex items-center gap-2 ml-4">
-                  <Checkbox 
-                    id="completed" 
+                  <Checkbox
+                    id="completed"
                     checked={editedMilestone.completed}
                     onCheckedChange={handleToggleComplete}
                   />
@@ -208,19 +258,19 @@ export function MilestoneDetailModal({
                 <Label className="text-xs text-muted-foreground">Time Remaining</Label>
                 <div className={cn(
                   'p-2 rounded-md text-sm font-medium h-10 flex items-center',
-                  editedMilestone.completed 
+                  editedMilestone.completed
                     ? 'bg-status-done/10 text-status-done'
-                    : daysUntil < 0 
+                    : daysUntil < 0
                       ? 'bg-destructive/10 text-destructive'
-                      : daysUntil < 7 
+                      : daysUntil < 7
                         ? 'bg-orange-500/10 text-orange-500'
                         : 'bg-muted text-foreground'
                 )}>
-                  {editedMilestone.completed 
+                  {editedMilestone.completed
                     ? `Completed ${editedMilestone.completedAt ? format(new Date(editedMilestone.completedAt), 'MMM d, yyyy') : ''}`
-                    : daysUntil < 0 
+                    : daysUntil < 0
                       ? `${Math.abs(daysUntil)} days overdue`
-                      : daysUntil === 0 
+                      : daysUntil === 0
                         ? 'Due today'
                         : `${daysUntil} days remaining`
                   }
@@ -247,7 +297,7 @@ export function MilestoneDetailModal({
                 <ListTodo className="h-4 w-4" />
                 Linked Tasks ({milestoneTasks.length})
               </h3>
-              
+
               {milestoneTasks.length === 0 ? (
                 <p className="text-sm text-muted-foreground italic py-4 text-center bg-muted/30 rounded-lg">
                   No tasks are linked to this milestone
@@ -255,17 +305,17 @@ export function MilestoneDetailModal({
               ) : (
                 <div className="space-y-2 max-h-[200px] overflow-y-auto">
                   {milestoneTasks.map(task => (
-                    <div 
-                      key={task.id} 
-                      className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted/70 transition-colors"
+                    <div
+                      key={task.id}
+                      className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted/70 transition-colors group"
                     >
                       <div className={cn(
                         'w-2.5 h-2.5 rounded-full shrink-0',
                         task.status === 'done' ? 'bg-status-done' :
-                        task.status === 'in-progress' ? 'bg-status-in-progress' :
-                        task.status === 'blocked' ? 'bg-status-blocked' :
-                        task.status === 'review' ? 'bg-status-review' :
-                        'bg-status-todo'
+                          task.status === 'in-progress' ? 'bg-status-in-progress' :
+                            task.status === 'blocked' ? 'bg-status-blocked' :
+                              task.status === 'review' ? 'bg-status-review' :
+                                'bg-status-todo'
                       )} />
                       <div className="flex-1 min-w-0">
                         <p className={cn(
@@ -284,89 +334,233 @@ export function MilestoneDetailModal({
                       <Badge variant="outline" className="text-xs capitalize shrink-0">
                         {task.status.replace('-', ' ')}
                       </Badge>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => handleToggleTask(task.id)}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
                     </div>
                   ))}
                 </div>
               )}
+
+              {/* Add Tasks Section */}
+              {availableTasks.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Add Tasks</Label>
+                  <div className="border rounded-lg max-h-[120px] overflow-y-auto">
+                    <div className="p-2 space-y-1">
+                      {availableTasks.slice(0, 5).map(task => (
+                        <div
+                          key={task.id}
+                          className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => handleToggleTask(task.id)}
+                        >
+                          <Checkbox
+                            checked={false}
+                            onCheckedChange={() => handleToggleTask(task.id)}
+                          />
+                          <div className={cn(
+                            'w-2 h-2 rounded-full shrink-0',
+                            task.status === 'done' ? 'bg-status-done' :
+                              task.status === 'in-progress' ? 'bg-status-in-progress' :
+                                task.status === 'blocked' ? 'bg-status-blocked' :
+                                  'bg-status-todo'
+                          )} />
+                          <span className="text-sm flex-1 truncate">{task.title}</span>
+                          <Badge variant="outline" className="text-xs capitalize shrink-0">
+                            {task.status.replace('-', ' ')}
+                          </Badge>
+                        </div>
+                      ))}
+                      {availableTasks.length > 5 && (
+                        <p className="text-xs text-muted-foreground text-center py-1">
+                          +{availableTasks.length - 5} more available
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
+
+            <Separator />
+
             {/* Linked Modules */}
-            {linkedModules.length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-3">
-                  <h3 className="text-sm font-medium flex items-center gap-2">
-                    <Box className="h-4 w-4" />
-                    Linked Modules ({linkedModules.length})
-                  </h3>
-                  
-                  <div className="space-y-2">
-                    {linkedModules.map(module => {
-                      const moduleProgress = getModuleProgress(module.id, tasks);
-                      return (
-                        <div 
-                          key={module.id} 
-                          className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium flex items-center gap-2">
+                <Box className="h-4 w-4" />
+                Linked Modules ({linkedModules.length})
+              </h3>
+
+              {linkedModules.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic py-4 text-center bg-muted/30 rounded-lg">
+                  No modules are linked to this milestone
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                  {linkedModules.map(module => {
+                    const moduleProgress = getModuleProgress(module.id, tasks);
+                    return (
+                      <div
+                        key={module.id}
+                        className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg hover:bg-muted/70 transition-colors group"
+                      >
+                        <div
+                          className="w-3 h-3 rounded-full shrink-0"
+                          style={{ backgroundColor: module.color || '#6B7280' }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{module.name}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Progress value={moduleProgress} className="h-1.5 flex-1 max-w-[120px]" />
+                            <span className="text-xs text-muted-foreground">{moduleProgress}%</span>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="text-xs capitalize shrink-0">
+                          {module.type}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleToggleModule(module.id)}
                         >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Add Modules Section */}
+              {availableModules.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Add Modules</Label>
+                  <div className="border rounded-lg max-h-[120px] overflow-y-auto">
+                    <div className="p-2 space-y-1">
+                      {availableModules.map(module => (
+                        <div
+                          key={module.id}
+                          className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => handleToggleModule(module.id)}
+                        >
+                          <Checkbox
+                            checked={false}
+                            onCheckedChange={() => handleToggleModule(module.id)}
+                          />
                           <div
-                            className="w-3 h-3 rounded-full shrink-0"
+                            className="w-2.5 h-2.5 rounded-full shrink-0"
                             style={{ backgroundColor: module.color || '#6B7280' }}
                           />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{module.name}</p>
-                            <div className="flex items-center gap-2 mt-1">
-                              <Progress value={moduleProgress} className="h-1.5 flex-1 max-w-[120px]" />
-                              <span className="text-xs text-muted-foreground">{moduleProgress}%</span>
-                            </div>
-                          </div>
+                          <span className="text-sm flex-1 truncate">{module.name}</span>
                           <Badge variant="outline" className="text-xs capitalize shrink-0">
                             {module.type}
                           </Badge>
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </>
-            )}
+              )}
+            </div>
 
-            {/* Blocking Issues */}
-            {milestoneIssues.length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-3">
-                  <h3 className="text-sm font-medium text-destructive flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4" />
-                    Blocking Issues ({milestoneIssues.length})
-                  </h3>
-                  
-                  <div className="space-y-2">
-                    {milestoneIssues.map(issue => (
-                      <div 
-                        key={issue.id} 
-                        className="flex items-center gap-3 p-3 bg-destructive/10 rounded-lg border border-destructive/20"
-                      >
-                        <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{issue.title}</p>
-                          <p className="text-xs text-muted-foreground capitalize">{issue.category.replace('-', ' ')}</p>
-                        </div>
-                        <Badge 
-                          variant="outline" 
-                          className={cn(
-                            'text-xs capitalize shrink-0',
-                            issue.severity === 'critical' && 'border-destructive text-destructive',
-                            issue.severity === 'major' && 'border-orange-500 text-orange-500'
-                          )}
-                        >
-                          {issue.severity}
-                        </Badge>
+
+            <Separator />
+
+            {/* Linked Issues */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-destructive flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                Linked Issues ({milestoneIssues.length})
+              </h3>
+
+              {milestoneIssues.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic py-4 text-center bg-muted/30 rounded-lg">
+                  No issues are linked to this milestone
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                  {milestoneIssues.map(issue => (
+                    <div
+                      key={issue.id}
+                      className="flex items-center gap-3 p-3 bg-destructive/10 rounded-lg border border-destructive/20 group hover:bg-destructive/15 transition-colors"
+                    >
+                      <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{issue.title}</p>
+                        <p className="text-xs text-muted-foreground capitalize">{issue.category.replace('-', ' ')}</p>
                       </div>
-                    ))}
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'text-xs capitalize shrink-0',
+                          issue.severity === 'critical' && 'border-destructive text-destructive',
+                          issue.severity === 'major' && 'border-orange-500 text-orange-500'
+                        )}
+                      >
+                        {issue.severity}
+                      </Badge>
+                      {onIssueUpdate && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => handleToggleIssue(issue.id)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add Issues Section */}
+              {onIssueUpdate && availableIssues.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground">Add Issues</Label>
+                  <div className="border rounded-lg max-h-[120px] overflow-y-auto">
+                    <div className="p-2 space-y-1">
+                      {availableIssues.slice(0, 5).map(issue => (
+                        <div
+                          key={issue.id}
+                          className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => handleToggleIssue(issue.id)}
+                        >
+                          <Checkbox
+                            checked={false}
+                            onCheckedChange={() => handleToggleIssue(issue.id)}
+                          />
+                          <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
+                          <span className="text-sm flex-1 truncate">{issue.title}</span>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              'text-xs capitalize shrink-0',
+                              issue.severity === 'critical' && 'border-destructive text-destructive',
+                              issue.severity === 'major' && 'border-orange-500 text-orange-500'
+                            )}
+                          >
+                            {issue.severity}
+                          </Badge>
+                        </div>
+                      ))}
+                      {availableIssues.length > 5 && (
+                        <p className="text-xs text-muted-foreground text-center py-1">
+                          +{availableIssues.length - 5} more available
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </>
-            )}
+              )}
+            </div>
           </div>
         </ScrollArea>
       </DialogContent>
