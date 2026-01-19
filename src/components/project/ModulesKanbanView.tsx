@@ -16,9 +16,10 @@ interface ModuleWithStats extends Module {
 
 interface ModulesKanbanViewProps {
   modules: ModuleWithStats[];
+  onModuleClick?: (module: ModuleWithStats) => void;
 }
 
-export function ModulesKanbanView({ modules }: ModulesKanbanViewProps) {
+export function ModulesKanbanView({ modules, onModuleClick }: ModulesKanbanViewProps) {
   if (modules.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -44,10 +45,10 @@ export function ModulesKanbanView({ modules }: ModulesKanbanViewProps) {
           <Card
             key={module.id}
             className={cn(
-              'p-4 cursor-pointer hover:shadow-md transition-all border-l-4 group',
-              `border-l-[${moduleColor}]`
+              'p-4 cursor-pointer hover:shadow-md transition-all border-l-4 group'
             )}
             style={{ borderLeftColor: moduleColor }}
+            onClick={() => onModuleClick?.(module)}
           >
             {/* Header */}
             <div className="flex items-start justify-between gap-2 mb-3">
