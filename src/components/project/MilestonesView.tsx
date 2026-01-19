@@ -310,25 +310,29 @@ export function MilestonesView({
       </Card>
 
       {/* Milestone Detail Modal */}
-      <MilestoneDetailModal
-        milestone={selectedMilestone}
-        tasks={tasks}
-        issues={issues}
-        modules={modules}
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onUpdate={handleMilestoneUpdateFromModal}
-      />
+      {isModalOpen && selectedMilestone && (
+        <MilestoneDetailModal
+          milestone={selectedMilestone}
+          tasks={tasks}
+          issues={issues}
+          modules={modules}
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onUpdate={handleMilestoneUpdateFromModal}
+        />
+      )}
 
       {/* Add Milestone Dialog */}
-      <AddMilestoneDialog
-        isOpen={isAddDialogOpen}
-        onClose={() => setIsAddDialogOpen(false)}
-        onAdd={handleAddMilestone}
-        tasks={tasks}
-        modules={modules}
-        issues={issues}
-      />
+      {isAddDialogOpen && (
+        <AddMilestoneDialog
+          isOpen={isAddDialogOpen}
+          onClose={() => setIsAddDialogOpen(false)}
+          onAdd={handleAddMilestone}
+          tasks={tasks}
+          modules={modules}
+          issues={issues}
+        />
+      )}
     </div>
   );
 }
