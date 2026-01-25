@@ -2,6 +2,7 @@ import { FolderKanban, CheckCircle2, Clock, AlertTriangle, TrendingUp } from 'lu
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
+
 interface StatCardProps {
   title: string;
   value: string | number;
@@ -11,10 +12,14 @@ interface StatCardProps {
     value: number;
     label: string;
   };
+  progress?: {
+    value: number;
+    color: string;
+  };
   variant?: 'default' | 'success' | 'warning' | 'info';
 }
 
-function StatCard({ title, value, subtitle, icon, trend, variant = 'default' }: StatCardProps) {
+function StatCard({ title, value, subtitle, icon, trend, progress, variant = 'default' }: StatCardProps) {
   const variantStyles = {
     default: 'text-foreground',
     success: 'text-status-done',
@@ -23,20 +28,42 @@ function StatCard({ title, value, subtitle, icon, trend, variant = 'default' }: 
   };
 
   return (
-    <Card className="card-hover">
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-        <div className={cn('p-2 rounded-lg bg-muted/50', variantStyles[variant])}>
+    <Card className="h-full shadow-sm hover:shadow-md transition-shadow">
+      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+        <CardTitle className="text-sm font-medium text-muted-foreground/80">{title}</CardTitle>
+        <div className={cn('h-4 w-4 opacity-80', variantStyles[variant])}>
           {icon}
         </div>
       </CardHeader>
       <CardContent>
-        <div className={cn('text-2xl font-semibold', variantStyles[variant])}>{value}</div>
-        {subtitle && (
-          <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+        <div className="flex items-baseline gap-2">
+          <span className="text-3xl font-bold tracking-tight">{value}</span>
+        </div>
+
+        <div className="mt-1 flex items-center justify-between gap-2 text-xs">
+          <span className="text-muted-foreground truncate">{subtitle}</span>
+          {progress && trend && (
+            <div className="flex items-center gap-1 shrink-0">
+              <TrendingUp className="h-3 w-3 text-status-done" />
+              <span className="text-status-done font-medium">+{trend.value}%</span>
+              <span className="text-muted-foreground hidden sm:inline">{trend.label}</span>
+            </div>
+          )}
+        </div>
+
+        {progress && (
+          <div className="mt-2">
+            <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
+              <div
+                className={cn("h-full rounded-full transition-all duration-500", progress.color)}
+                style={{ width: `${Math.min(100, Math.max(0, progress.value))}%` }}
+              />
+            </div>
+          </div>
         )}
-        {trend && (
-          <div className="flex items-center gap-1 mt-2 text-xs">
+
+        {!progress && trend && (
+          <div className="flex items-center gap-1.5 text-xs mt-3">
             <TrendingUp className="h-3 w-3 text-status-done" />
             <span className="text-status-done font-medium">+{trend.value}%</span>
             <span className="text-muted-foreground">{trend.label}</span>
@@ -59,35 +86,40 @@ interface DashboardStatsProps {
 }
 
 export function DashboardStats({ stats }: DashboardStatsProps) {
+  const completionRate = stats.totalTasks > 0 ? (stats.completedTasks / stats.totalTasks) * 100 : 0;
+  const inProgressRate = stats.totalTasks > 0 ? (stats.inProgressTasks / stats.totalTasks) * 100 : 0;
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <StatCard
         title="Active Projects"
         value={stats.activeProjects}
         subtitle={`${stats.totalProjects} total projects`}
-        icon={<FolderKanban className="h-4 w-4" />}
+        icon={<FolderKanban className="h-full w-full" />}
         variant="info"
       />
       <StatCard
         title="Tasks Completed"
         value={stats.completedTasks}
-        subtitle={`of ${stats.totalTasks} total tasks`}
-        icon={<CheckCircle2 className="h-4 w-4" />}
-        trend={{ value: 12, label: 'this week' }}
+        subtitle={`of ${stats.totalTasks} tasks`}
+        icon={<CheckCircle2 className="h-full w-full" />}
+        progress={{ value: completionRate, color: 'bg-status-done' }}
+        trend={{ value: 12, label: 'vs last week' }}
         variant="success"
       />
       <StatCard
         title="In Progress"
         value={stats.inProgressTasks}
-        subtitle="Tasks being worked on"
-        icon={<Clock className="h-4 w-4" />}
+        subtitle="Current workload"
+        icon={<Clock className="h-full w-full" />}
+        progress={{ value: inProgressRate, color: 'bg-status-in-progress' }}
         variant="info"
       />
       <StatCard
         title="Blocked"
         value={stats.blockedTasks}
-        subtitle="Tasks need attention"
-        icon={<AlertTriangle className="h-4 w-4" />}
+        subtitle="Issues requiring attention"
+        icon={<AlertTriangle className="h-full w-full" />}
         variant="warning"
       />
     </div>

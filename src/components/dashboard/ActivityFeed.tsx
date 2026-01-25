@@ -1,9 +1,9 @@
 import { formatDistanceToNow } from 'date-fns';
-import { 
-  CheckCircle2, 
-  MessageSquare, 
-  Plus, 
-  Flag, 
+import {
+  CheckCircle2,
+  MessageSquare,
+  Plus,
+  Flag,
   ArrowRight,
   AlertCircle,
   AlertTriangle,
@@ -41,7 +41,7 @@ const activityColors: Record<Activity['type'], string> = {
 
 export function ActivityFeed({ activities }: ActivityFeedProps) {
   return (
-    <Card className="h-full">
+    <Card>
       <CardHeader className="pb-4">
         <CardTitle className="text-base font-medium">Recent Activity</CardTitle>
       </CardHeader>
@@ -49,10 +49,10 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
         {activities.map((activity) => {
           const Icon = activityIcons[activity.type];
           const colorClass = activityColors[activity.type];
-          
+
           return (
-            <div 
-              key={activity.id} 
+            <div
+              key={activity.id}
               className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0"
             >
               {/* Left: Subtle status icon */}
@@ -62,31 +62,32 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
               )}>
                 <Icon className="h-4 w-4" />
               </div>
-              
+
               {/* Center: Content */}
-              <div className="flex-1 min-w-0 space-y-0.5">
+              <div className="flex-1 min-w-0">
                 {/* Primary: Actor name (bold) + action text */}
-                <p className="text-sm leading-relaxed">
+                <p className="text-sm leading-snug break-words">
                   <span className="font-semibold">{activity.user.name}</span>
                   {' '}
-                  <span className="text-muted-foreground">{activity.description}</span>
+                  <span className="text-muted-foreground text-foreground/80">{activity.description}</span>
                 </p>
-                
-                {/* Secondary: Project name */}
-                {activity.projectName && (
-                  <p className="text-xs text-muted-foreground">
-                    in{' '}
-                    <span className="text-primary hover:underline cursor-pointer">
-                      {activity.projectName}
-                    </span>
-                  </p>
-                )}
+
+                {/* Secondary: Project name & Timestamp row */}
+                <div className="flex items-center justify-between mt-1.5 gap-2">
+                  {activity.projectName ? (
+                    <p className="text-xs text-muted-foreground truncate">
+                      in{' '}
+                      <span className="text-primary hover:underline cursor-pointer font-medium">
+                        {activity.projectName}
+                      </span>
+                    </p>
+                  ) : <div></div>}
+
+                  <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
+                    {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
+                  </span>
+                </div>
               </div>
-              
-              {/* Right: Timestamp aligned top-right */}
-              <span className="text-xs text-muted-foreground shrink-0 pt-0.5">
-                {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
-              </span>
             </div>
           );
         })}
