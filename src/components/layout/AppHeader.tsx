@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Search, Bell, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,11 +14,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 export function AppHeader() {
+  const navigate = useNavigate();
+
   return (
     <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-4">
         <SidebarTrigger className="-ml-1" />
-        
+
         <div className="relative hidden md:flex">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -28,7 +31,7 @@ export function AppHeader() {
       </div>
 
       <div className="flex items-center gap-2">
-        <Button size="sm" className="hidden sm:flex gap-2">
+        <Button size="sm" className="hidden sm:flex gap-2" onClick={() => navigate('/projects/new')}>
           <Plus className="h-4 w-4" />
           New Project
         </Button>
@@ -56,13 +59,14 @@ export function AppHeader() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Profile</DropdownMenuItem>
-            <DropdownMenuItem>Settings</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>Profile</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings')}>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Log out</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/login')}>Log out</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
     </header>
   );
 }
+
