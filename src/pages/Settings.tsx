@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { defaultUserSettings, workspaceSettings } from '@/data/mockData';
 import { UserSettings, WorkspaceSettings } from '@/types';
@@ -24,19 +24,28 @@ import {
   User,
   Bell,
   Palette,
-  Plug,
   Save,
   Upload,
-  Github,
-  Slack,
-  Mail,
+  Gavel,
+  ShieldAlert,
+  Trash2,
   Lock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+// Extended interface for local state
+interface ExtendedWorkspaceSettings extends WorkspaceSettings {
+  companyName?: string;
+  companySize?: string;
+}
+
 const Settings = () => {
   const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings);
-  const [workspace, setWorkspace] = useState<WorkspaceSettings>(workspaceSettings);
+  const [workspace, setWorkspace] = useState<ExtendedWorkspaceSettings>({
+    ...workspaceSettings,
+    companyName: 'OpenPlan AI',
+    companySize: '10-50',
+  });
   const [profile, setProfile] = useState({
     name: 'Anna Kowalski',
     email: 'anna.k@openplan.ai',
@@ -44,6 +53,8 @@ const Settings = () => {
     role: 'Project Manager',
     bio: 'Experienced project manager specializing in hardware development projects.',
   });
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSaveGeneral = () => {
     toast.success('Workspace settings saved');
@@ -61,29 +72,27 @@ const Settings = () => {
     toast.success('Appearance settings saved');
   };
 
-  const integrations = [
-    {
-      id: 'github',
-      name: 'GitHub',
-      description: 'Connect your repositories for code tracking',
-      icon: Github,
-      connected: false,
-    },
-    {
-      id: 'slack',
-      name: 'Slack',
-      description: 'Get notifications in your Slack channels',
-      icon: Slack,
-      connected: true,
-    },
-    {
-      id: 'email',
-      name: 'Email Integration',
-      description: 'Send task updates via email',
-      icon: Mail,
-      connected: true,
-    },
-  ];
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('File size must be less than 2MB');
+        return;
+      }
+      toast.success('Avatar updated successfully');
+      // In a real app, we would upload the file here
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+      toast.error('Account deletion not implemented in this demo');
+    }
+  };
 
   return (
     <AppLayout>
@@ -115,9 +124,9 @@ const Settings = () => {
               <Palette className="h-4 w-4 hidden sm:block" />
               Appearance
             </TabsTrigger>
-            <TabsTrigger value="integrations" className="gap-2">
-              <Plug className="h-4 w-4 hidden sm:block" />
-              Integrations
+            <TabsTrigger value="danger" className="gap-2 text-destructive data-[state=active]:text-destructive">
+              <ShieldAlert className="h-4 w-4 hidden sm:block" />
+              Danger
             </TabsTrigger>
           </TabsList>
 
@@ -152,6 +161,41 @@ const Settings = () => {
                     rows={3}
                   />
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="company-name">Company Name</Label>
+                    <Input
+                      id="company-name"
+                      value={workspace.companyName}
+                      onChange={(e) =>
+                        setWorkspace({ ...workspace, companyName: e.target.value })
+                      }
+                      placeholder="e.g. Acme Corp"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="company-size">Company Size</Label>
+                    <Select
+                      value={workspace.companySize}
+                      onValueChange={(value) =>
+                        setWorkspace({ ...workspace, companySize: value })
+                      }
+                    >
+                      <SelectTrigger id="company-size">
+                        <SelectValue placeholder="Select size" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1-10">1-10 employees</SelectItem>
+                        <SelectItem value="10-50">10-50 employees</SelectItem>
+                        <SelectItem value="50-200">50-200 employees</SelectItem>
+                        <SelectItem value="200-500">200-500 employees</SelectItem>
+                        <SelectItem value="500+">500+ employees</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Timezone</Label>
@@ -182,6 +226,9 @@ const Settings = () => {
                         </SelectItem>
                         <SelectItem value="Europe/Paris">
                           Central European Time (CET)
+                        </SelectItem>
+                        <SelectItem value="Asia/Kolkata">
+                          India Standard Time (IST)
                         </SelectItem>
                       </SelectContent>
                     </Select>
@@ -231,7 +278,14 @@ const Settings = () => {
                       </AvatarFallback>
                     </Avatar>
                     <div className="space-y-2">
-                      <Button variant="outline" size="sm">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept="image/png, image/jpeg, image/gif"
+                        onChange={handleFileChange}
+                      />
+                      <Button variant="outline" size="sm" onClick={handleAvatarClick}>
                         <Upload className="h-4 w-4 mr-2" />
                         Change Avatar
                       </Button>
@@ -287,35 +341,6 @@ const Settings = () => {
                   <Button onClick={handleSaveProfile}>
                     <Save className="h-4 w-4 mr-2" />
                     Save Profile
-                  </Button>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Change Password</CardTitle>
-                  <CardDescription>
-                    Update your password to keep your account secure
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="current-password">Current Password</Label>
-                    <Input id="current-password" type="password" />
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="new-password">New Password</Label>
-                      <Input id="new-password" type="password" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="confirm-password">Confirm Password</Label>
-                      <Input id="confirm-password" type="password" />
-                    </div>
-                  </div>
-                  <Button variant="outline">
-                    <Lock className="h-4 w-4 mr-2" />
-                    Update Password
                   </Button>
                 </CardContent>
               </Card>
@@ -496,20 +521,18 @@ const Settings = () => {
                         onClick={() =>
                           setUserSettings({ ...userSettings, theme })
                         }
-                        className={`p-4 rounded-lg border-2 transition-colors ${
-                          userSettings.theme === theme
+                        className={`p-4 rounded-lg border-2 transition-colors ${userSettings.theme === theme
                             ? 'border-primary bg-primary/5'
                             : 'border-border hover:border-primary/50'
-                        }`}
+                          }`}
                       >
                         <div
-                          className={`h-12 rounded mb-2 ${
-                            theme === 'light'
+                          className={`h-12 rounded mb-2 ${theme === 'light'
                               ? 'bg-white border'
                               : theme === 'dark'
-                              ? 'bg-zinc-900'
-                              : 'bg-gradient-to-r from-white to-zinc-900'
-                          }`}
+                                ? 'bg-zinc-900'
+                                : 'bg-gradient-to-r from-white to-zinc-900'
+                            }`}
                         />
                         <span className="text-sm font-medium capitalize">
                           {theme}
@@ -564,52 +587,59 @@ const Settings = () => {
             </Card>
           </TabsContent>
 
-          {/* Integrations Tab */}
-          <TabsContent value="integrations">
-            <Card>
-              <CardHeader>
-                <CardTitle>Integrations</CardTitle>
-                <CardDescription>
-                  Connect OpenPlan with your favorite tools
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {integrations.map((integration) => (
-                  <div
-                    key={integration.id}
-                    className="flex items-center justify-between p-4 rounded-lg border"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="p-2 rounded-lg bg-muted">
-                        <integration.icon className="h-6 w-6" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium">{integration.name}</h4>
-                          {integration.connected && (
-                            <Badge
-                              variant="outline"
-                              className="bg-green-500/10 text-green-600 border-green-500/20"
-                            >
-                              Connected
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {integration.description}
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      variant={integration.connected ? 'outline' : 'default'}
-                      size="sm"
-                    >
-                      {integration.connected ? 'Disconnect' : 'Connect'}
-                    </Button>
+          {/* Danger Tab */}
+          <TabsContent value="danger">
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Change Password</CardTitle>
+                  <CardDescription>
+                    Update your password to keep your account secure
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="current-password">Current Password</Label>
+                    <Input id="current-password" type="password" />
                   </div>
-                ))}
-              </CardContent>
-            </Card>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="new-password">New Password</Label>
+                      <Input id="new-password" type="password" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirm-password">Confirm Password</Label>
+                      <Input id="confirm-password" type="password" />
+                    </div>
+                  </div>
+                  <Button variant="outline">
+                    <Lock className="h-4 w-4 mr-2" />
+                    Update Password
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="border-destructive/30 bg-destructive/5">
+                <CardHeader>
+                  <CardTitle className="text-destructive">Delete Account</CardTitle>
+                  <CardDescription>
+                    Permanently delete your account and all of your content.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    This action is irreversible. Please continue with caution.
+                  </p>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteAccount}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Account
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

@@ -5,12 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { GripVertical, Check } from 'lucide-react';
-import { 
-  MyDayTask, 
-  groupTasksByProject, 
-  groupTasksByProgress, 
-  groupTasksByDueDate, 
-  groupTasksByPriority 
+import {
+  MyDayTask,
+  groupTasksByProject,
+  groupTasksByProgress,
+  groupTasksByDueDate,
+  groupTasksByPriority
 } from '@/lib/myDayUtils';
 import { MyDayGroupBy, TaskStatus } from '@/types';
 
@@ -112,9 +112,9 @@ export function MyDayKanbanView({
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
-    
+
     const { source, destination, draggableId } = result;
-    
+
     // Only allow status updates when grouping by progress
     if (groupBy === 'progress' && source.droppableId !== destination.droppableId) {
       const statusMap: Record<string, TaskStatus> = {
@@ -123,7 +123,7 @@ export function MyDayKanbanView({
         inProgress: 'in-progress',
         completed: 'done',
       };
-      
+
       const newStatus = statusMap[destination.droppableId];
       if (newStatus) {
         onStatusUpdate(draggableId, newStatus);
@@ -200,9 +200,9 @@ export function MyDayKanbanView({
                               )}
                             >
                               {column.tasks.map((task, taskIndex) => (
-                                <Draggable 
-                                  key={task.id} 
-                                  draggableId={task.id} 
+                                <Draggable
+                                  key={task.id}
+                                  draggableId={task.id}
                                   index={taskIndex}
                                   isDragDisabled={groupBy !== 'progress'}
                                 >
@@ -220,21 +220,33 @@ export function MyDayKanbanView({
                                       onMouseLeave={() => setHoveredTask(null)}
                                       onClick={() => onTaskClick(task)}
                                     >
-                                      {/* Completion Checkbox */}
-                                      {hoveredTask === task.id && task.status !== 'done' && (
-                                        <button
-                                          onClick={(e) => handleCompleteTask(task.id, e)}
-                                          className="absolute -left-1 top-1/2 -translate-y-1/2 -translate-x-1/2 w-6 h-6 rounded-full bg-status-done text-white flex items-center justify-center shadow-md hover:scale-110 transition-transform z-10"
-                                        >
-                                          <Check className="h-3 w-3" />
-                                        </button>
-                                      )}
-
                                       <div className="space-y-2">
                                         <div className="flex items-start justify-between gap-2">
-                                          <h4 className="text-sm font-medium leading-tight text-left">
-                                            {task.title}
-                                          </h4>
+                                          <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
+                                            {task.status !== 'done' && (
+                                              <div
+                                                className={cn(
+                                                  "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
+                                                  hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
+                                                )}
+                                              >
+                                                <button
+                                                  onClick={(e) => handleCompleteTask(task.id, e)}
+                                                  className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
+                                                >
+                                                  <Check className="h-3 w-3 text-foreground" />
+                                                </button>
+                                              </div>
+                                            )}
+                                            <h4
+                                              className={cn(
+                                                "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
+                                                task.status !== 'done' && hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
+                                              )}
+                                            >
+                                              {task.title}
+                                            </h4>
+                                          </div>
                                           <Badge
                                             variant="secondary"
                                             className={cn(
