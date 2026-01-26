@@ -7,7 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { queryClient } from "@/lib/queryClient";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { SuspenseFallback } from "@/components/SuspenseFallback";
+import { AppLayoutSkeleton } from "@/components/layout/AppLayoutSkeleton";
 
 // Eagerly loaded routes (initial page load)
 import Login from "./pages/Login";
@@ -44,7 +44,7 @@ const App = () => (
             <Route 
               path="/" 
               element={
-                <Suspense fallback={<SuspenseFallback fullScreen />}>
+                <Suspense fallback={<AppLayoutSkeleton variant="dashboard" />}>
                   <Dashboard />
                 </Suspense>
               } 
@@ -52,7 +52,7 @@ const App = () => (
             <Route 
               path="/my-day" 
               element={
-                <Suspense fallback={<SuspenseFallback fullScreen />}>
+                <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
                   <MyDay />
                 </Suspense>
               } 
@@ -60,7 +60,7 @@ const App = () => (
             <Route 
               path="/calendar" 
               element={
-                <Suspense fallback={<SuspenseFallback fullScreen />}>
+                <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
                   <Calendar />
                 </Suspense>
               } 
@@ -68,7 +68,7 @@ const App = () => (
             <Route 
               path="/projects" 
               element={
-                <Suspense fallback={<SuspenseFallback fullScreen />}>
+                <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
                   <Projects />
                 </Suspense>
               } 
@@ -76,7 +76,7 @@ const App = () => (
             <Route 
               path="/projects/new" 
               element={
-                <Suspense fallback={<SuspenseFallback fullScreen />}>
+                <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
                   <NewProject />
                 </Suspense>
               } 
@@ -84,7 +84,7 @@ const App = () => (
             <Route 
               path="/projects/:id" 
               element={
-                <Suspense fallback={<SuspenseFallback fullScreen />}>
+                <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
                   <ProjectDetail />
                 </Suspense>
               } 
@@ -92,7 +92,7 @@ const App = () => (
             <Route 
               path="/projects/:projectId/issues/:issueId" 
               element={
-                <Suspense fallback={<SuspenseFallback fullScreen />}>
+                <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
                   <IssuePage />
                 </Suspense>
               } 
@@ -100,7 +100,7 @@ const App = () => (
             <Route 
               path="/team" 
               element={
-                <Suspense fallback={<SuspenseFallback fullScreen />}>
+                <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
                   <Team />
                 </Suspense>
               } 
@@ -108,7 +108,7 @@ const App = () => (
             <Route 
               path="/settings" 
               element={
-                <Suspense fallback={<SuspenseFallback fullScreen />}>
+                <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
                   <Settings />
                 </Suspense>
               } 
@@ -116,7 +116,7 @@ const App = () => (
             <Route 
               path="/reports" 
               element={
-                <Suspense fallback={<SuspenseFallback fullScreen />}>
+                <Suspense fallback={<AppLayoutSkeleton variant="dashboard" />}>
                   <Reports />
                 </Suspense>
               } 
