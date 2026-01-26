@@ -402,6 +402,451 @@ export const tasksService = {
 };
 ```
 
+---
+
+### Task 1.3B: Supabase Integration (Alternative to REST API)
+
+> **IMPORTANT ARCHITECTURAL NOTE**: This application will initially use **Supabase** as the backend, with the flexibility to migrate to REST APIs in the future. The service layer pattern allows seamless switching between data sources without changing UI code.
+
+#### **Architecture Pattern: Service Layer Abstraction**
+
+```
+UI Components → React Query Hooks → Service Layer → Backend (Supabase/REST/Mock)
+     ↓                ↓                   ↓                    ↓
+  (Display)      (Caching/State)    (Abstraction)      (Data Source)
+```
+
+**Key Principle**: 
+- ❌ **NEVER** call Supabase directly from UI components or Zustand stores
+- ✅ **ALWAYS** use the service layer as an abstraction
+- ✅ Use environment variables to switch between data sources
+
+---
+
+#### **Step 1: Install Supabase Client**
+
+```bash
+npm install @supabase/supabase-js
+```
+
+#### **Step 2: Setup Supabase Client**
+
+Create `src/services/supabase/client.ts`:
+
+```typescript
+import { createClient } from '@supabase/supabase-js';
+import { Database } from './types'; // Generated types from Supabase CLI
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+  global: {
+    headers: {
+      'x-application-name': 'open-plan-ai',
+    },
+  },
+});
+
+// Helper function to handle Supabase errors
+export function handleSupabaseError(error: any): never {
+  console.error('Supabase error:', error);
+  throw new Error(error.message || 'An unexpected error occurred');
+}
+```
+
+#### **Step 3: Generate TypeScript Types from Supabase**
+
+```bash
+# Install Supabase CLI
+npm install -D supabase
+
+# Login to Supabase
+npx supabase login
+
+# Generate types (run this whenever your database schema changes)
+npx supabase gen types typescript --project-id YOUR_PROJECT_ID > src/services/supabase/types.ts
+```
+
+#### **Step 4: Create Supabase-Aware Service Layer**
+
+Update `src/services/projects.service.ts` to support **three data sources**:
+
+```typescript
+import { supabase, handleSupabaseError } from './supabase/client';
+import { apiClient } from './api/client';
+import { API_ENDPOINTS } from './api/endpoints';
+import { Project, Task } from '@/types';
+import { projects as mockProjects } from '@/data/mockData';
+
+// Environment flags to control data source
+const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
+const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+
+export const projectsService = {
+  /**
+   * Get all projects
+   * Supports: Mock Data, Supabase, REST API
+   */
+  async getAll(): Promise<Project[]> {
+    // 1. Mock data (for development without backend)
+    if (USE_MOCK_DATA) {
+      return Promise.resolve(mockProjects);
+    }
+
+    // 2. Supabase (current implementation)
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase
+        .from('projects')
+        .select(`
+          *,
+          tasks (*),
+          milestones (*),
+          issues (*)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) handleSupabaseError(error);
+      return data as Project[];
+    }
+
+    // 3. REST API (future implementation)
+    return apiClient.get<Project[]>(API_ENDPOINTS.PROJECTS);
+  },
+
+  /**
+   * Get project by ID
+   */
+  async getById(id: string): Promise<Project> {
+    if (USE_MOCK_DATA) {
+      const project = mockProjects.find(p => p.id === id);
+      if (!project) throw new Error('Project not found');
+      return Promise.resolve(project);
+    }
+
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase
+        .from('projects')
+        .select(`
+          *,
+          tasks (*),
+          milestones (*),
+          issues (*)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) handleSupabaseError(error);
+      return data as Project;
+    }
+
+    return apiClient.get<Project>(API_ENDPOINTS.PROJECT_BY_ID(id));
+  },
+
+  /**
+   * Create new project
+   */
+  async create(project: Omit<Project, 'id' | 'created_at'>): Promise<Project> {
+    if (USE_MOCK_DATA) {
+      const newProject = { 
+        ...project, 
+        id: `proj-${Date.now()}`,
+        created_at: new Date().toISOString()
+      } as Project;
+      return Promise.resolve(newProject);
+    }
+
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase
+        .from('projects')
+        .insert(project)
+        .select()
+        .single();
+
+      if (error) handleSupabaseError(error);
+      return data as Project;
+    }
+
+    return apiClient.post<Project>(API_ENDPOINTS.PROJECTS, project);
+  },
+
+  /**
+   * Update existing project
+   */
+  async update(id: string, updates: Partial<Project>): Promise<Project> {
+    if (USE_MOCK_DATA) {
+      const project = mockProjects.find(p => p.id === id);
+      if (!project) throw new Error('Project not found');
+      return Promise.resolve({ ...project, ...updates });
+    }
+
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase
+        .from('projects')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) handleSupabaseError(error);
+      return data as Project;
+    }
+
+    return apiClient.patch<Project>(API_ENDPOINTS.PROJECT_BY_ID(id), updates);
+  },
+
+  /**
+   * Delete project
+   */
+  async delete(id: string): Promise<void> {
+    if (USE_MOCK_DATA) {
+      return Promise.resolve();
+    }
+
+    if (USE_SUPABASE) {
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', id);
+
+      if (error) handleSupabaseError(error);
+      return;
+    }
+
+    return apiClient.delete(API_ENDPOINTS.PROJECT_BY_ID(id));
+  },
+
+  /**
+   * Get tasks for a project
+   */
+  async getTasks(projectId: string): Promise<Task[]> {
+    if (USE_MOCK_DATA) {
+      const project = mockProjects.find(p => p.id === projectId);
+      return Promise.resolve(project?.tasks || []);
+    }
+
+    if (USE_SUPABASE) {
+      const { data, error } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false });
+
+      if (error) handleSupabaseError(error);
+      return data as Task[];
+    }
+
+    return apiClient.get<Task[]>(API_ENDPOINTS.PROJECT_TASKS(projectId));
+  },
+
+  /**
+   * Subscribe to real-time changes (Supabase-specific feature)
+   * Falls back gracefully if not using Supabase
+   */
+  subscribeToChanges(callback: (payload: any) => void) {
+    if (!USE_SUPABASE) {
+      console.warn('Real-time subscriptions only available with Supabase');
+      return { unsubscribe: () => {} };
+    }
+
+    const subscription = supabase
+      .channel('projects-changes')
+      .on(
+        'postgres_changes',
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'projects' 
+        },
+        (payload) => {
+          console.log('Real-time update:', payload);
+          callback(payload);
+        }
+      )
+      .subscribe();
+
+    return subscription;
+  },
+};
+```
+
+#### **Step 5: Update Environment Variables**
+
+Update `.env.example`:
+
+```env
+# API Configuration
+VITE_API_BASE_URL=http://localhost:3000/api
+VITE_USE_MOCK_DATA=false
+VITE_USE_SUPABASE=true
+
+# Supabase Configuration
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+
+# Feature Flags
+VITE_ENABLE_ANALYTICS=false
+VITE_ENABLE_ERROR_TRACKING=false
+
+# App Configuration
+VITE_APP_NAME=Open Plan AI
+VITE_APP_VERSION=1.0.0
+```
+
+Create `.env.development`:
+
+```env
+# Development: Use Supabase
+VITE_USE_MOCK_DATA=false
+VITE_USE_SUPABASE=true
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+```
+
+Create `.env.production`:
+
+```env
+# Production: Can switch to REST API in future
+VITE_USE_MOCK_DATA=false
+VITE_USE_SUPABASE=true
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+
+# When migrating to REST API, change to:
+# VITE_USE_SUPABASE=false
+# VITE_API_BASE_URL=https://api.yourapp.com
+```
+
+#### **Step 6: Create Authentication Service (Supabase)**
+
+Create `src/services/auth.service.ts`:
+
+```typescript
+import { supabase, handleSupabaseError } from './supabase/client';
+import { User } from '@supabase/supabase-js';
+
+const USE_SUPABASE = import.meta.env.VITE_USE_SUPABASE === 'true';
+
+export const authService = {
+  /**
+   * Sign up with email and password
+   */
+  async signUp(email: string, password: string, metadata?: any): Promise<User> {
+    if (!USE_SUPABASE) {
+      throw new Error('Authentication requires Supabase');
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: metadata,
+      },
+    });
+
+    if (error) handleSupabaseError(error);
+    if (!data.user) throw new Error('Failed to create user');
+    
+    return data.user;
+  },
+
+  /**
+   * Sign in with email and password
+   */
+  async signIn(email: string, password: string): Promise<User> {
+    if (!USE_SUPABASE) {
+      throw new Error('Authentication requires Supabase');
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) handleSupabaseError(error);
+    if (!data.user) throw new Error('Failed to sign in');
+    
+    return data.user;
+  },
+
+  /**
+   * Sign out
+   */
+  async signOut(): Promise<void> {
+    if (!USE_SUPABASE) return;
+
+    const { error } = await supabase.auth.signOut();
+    if (error) handleSupabaseError(error);
+  },
+
+  /**
+   * Get current user
+   */
+  async getCurrentUser(): Promise<User | null> {
+    if (!USE_SUPABASE) return null;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    return user;
+  },
+
+  /**
+   * Subscribe to auth state changes
+   */
+  onAuthStateChange(callback: (user: User | null) => void) {
+    if (!USE_SUPABASE) {
+      return { unsubscribe: () => {} };
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        callback(session?.user ?? null);
+      }
+    );
+
+    return subscription;
+  },
+};
+```
+
+---
+
+#### **Benefits of This Architecture**
+
+1. ✅ **Flexibility**: Switch between Supabase ↔ REST API ↔ Mock Data with one env variable
+2. ✅ **Type Safety**: Full TypeScript support across all layers
+3. ✅ **Testability**: Easy to mock the service layer in tests
+4. ✅ **Separation of Concerns**: UI doesn't know about Supabase
+5. ✅ **Real-time Support**: Supabase subscriptions work seamlessly
+6. ✅ **Future-Proof**: Easy migration path to REST APIs
+7. ✅ **No Vendor Lock-in**: Not tied to Supabase forever
+
+---
+
+#### **Migration Path**
+
+**Current (Supabase):**
+```
+UI → useProjects() → projectsService → Supabase
+```
+
+**Future (REST API):**
+```
+UI → useProjects() → projectsService → REST API
+```
+
+**Your UI code doesn't change at all!** Just flip the environment variable.
+
+---
+
 ### Task 1.4: Setup React Query Integration
 
 #### `src/lib/queryClient.ts`
@@ -429,6 +874,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsService } from '@/services/projects.service';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { Project } from '@/types';
+import { useEffect } from 'react';
 
 export const QUERY_KEYS = {
   PROJECTS: ['projects'],
@@ -436,10 +882,14 @@ export const QUERY_KEYS = {
   PROJECT_TASKS: (id: string) => ['projects', id, 'tasks'],
 };
 
+/**
+ * Fetch all projects with real-time updates (if using Supabase)
+ */
 export function useProjects() {
+  const queryClient = useQueryClient();
   const setProjects = useProjectStore((state) => state.setProjects);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: QUERY_KEYS.PROJECTS,
     queryFn: async () => {
       const projects = await projectsService.getAll();
@@ -447,8 +897,26 @@ export function useProjects() {
       return projects;
     },
   });
+
+  // Subscribe to real-time changes (Supabase only)
+  useEffect(() => {
+    const subscription = projectsService.subscribeToChanges((payload) => {
+      console.log('Project changed:', payload);
+      // Refetch projects when data changes
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROJECTS });
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [queryClient]);
+
+  return query;
 }
 
+/**
+ * Fetch single project by ID
+ */
 export function useProject(projectId: string) {
   return useQuery({
     queryKey: QUERY_KEYS.PROJECT(projectId),
@@ -457,6 +925,9 @@ export function useProject(projectId: string) {
   });
 }
 
+/**
+ * Create new project with optimistic updates
+ */
 export function useCreateProject() {
   const queryClient = useQueryClient();
   const addProject = useProjectStore((state) => state.addProject);
@@ -470,6 +941,9 @@ export function useCreateProject() {
   });
 }
 
+/**
+ * Update project with optimistic updates
+ */
 export function useUpdateProject() {
   const queryClient = useQueryClient();
   const updateProject = useProjectStore((state) => state.updateProject);
@@ -477,6 +951,27 @@ export function useUpdateProject() {
   return useMutation({
     mutationFn: ({ id, updates }: { id: string; updates: Partial<Project> }) =>
       projectsService.update(id, updates),
+    // Optimistic update
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.PROJECT(id) });
+      const previous = queryClient.getQueryData(QUERY_KEYS.PROJECT(id));
+      
+      queryClient.setQueryData(QUERY_KEYS.PROJECT(id), (old: any) => ({
+        ...old,
+        ...updates,
+      }));
+
+      return { previous };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previous) {
+        queryClient.setQueryData(
+          QUERY_KEYS.PROJECT(variables.id),
+          context.previous
+        );
+      }
+    },
     onSuccess: (updatedProject) => {
       updateProject(updatedProject.id, updatedProject);
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.PROJECTS });
@@ -485,6 +980,9 @@ export function useUpdateProject() {
   });
 }
 
+/**
+ * Delete project
+ */
 export function useDeleteProject() {
   const queryClient = useQueryClient();
   const deleteProject = useProjectStore((state) => state.deleteProject);
