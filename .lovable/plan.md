@@ -1,219 +1,266 @@
 
-# Phase 4: Performance Optimizations - Implementation Plan
+# Phase 5: Additional Improvements - Implementation Plan
 
 ## Current State Analysis
 
-| Component | Status | Notes |
-|-----------|--------|-------|
-| Web Worker | **Created but unused** | `reportCalculations.worker.ts` exists but Reports.tsx still uses synchronous `calculateKPIs` |
-| Worker Hook | **Created but unused** | `useReportWorker.ts` exists but not imported anywhere |
-| Virtual List Hook | **Created but unused** | `useVirtualList.ts` exists with helpers but no components use it |
-| React.memo | **Not implemented** | 0 components use React.memo |
-| useCallback | **Minimal** | Only 3 uses in AddMilestoneDialog |
-| Bundle Optimization | **Not configured** | No bundle analyzer or optimization scripts |
+| Item | Status | Notes |
+|------|--------|-------|
+| **Logging Service** | Complete | `src/services/monitoring/logger.ts` exists with styled console output |
+| **Husky Pre-commit** | Not Installed | No `.husky` directory, no `husky` or `lint-staged` in package.json |
+| **TypeScript Strict Mode** | Disabled | `strict: false` in tsconfig.app.json |
+| **ESLint Config** | Basic | Some rules disabled (unused-vars off) |
+| **Documentation** | Minimal | Only PRD.md and default README |
+
+---
 
 ## Implementation Plan
 
----
+### Step 1: Enhanced Logging Service
 
-### Step 1: Integrate Web Worker into Reports Page
+The logger already exists but needs enhancements for production readiness:
 
-**File:** `src/features/reports/Reports.tsx`
+**File:** `src/services/monitoring/logger.ts`
 
-Currently the Reports page calculates KPIs synchronously on every filter change:
+**Enhancements:**
+- Add `performance` method for timing measurements
+- Add `group`/`groupEnd` for nested logging
+- Add event tracking for analytics preparation
+- Add environment-aware log level filtering
+
 ```typescript
-const kpis = useMemo(() => {
-  return calculateKPIs(filteredTasks, issues, dateRange);
-}, [filteredTasks, issues, dateRange]);
+// New methods to add:
+- performance(label: string, startTime: number)
+- group(label: string)
+- groupEnd()
+- track(event: string, properties?: Record<string, unknown>)
 ```
 
-**Changes:**
-- Import `useReportWorker` hook
-- Replace synchronous `calculateKPIs` with async worker-based calculation
-- Add loading state while worker processes
-- Show skeleton/spinner during calculation
-
 ---
 
-### Step 2: Apply Virtual Scrolling to Large Lists
+### Step 2: Pre-commit Hooks with Husky & lint-staged
 
-**Target Components:**
+**New dependencies to add:**
+- `husky` (devDependency)
+- `lint-staged` (devDependency)
 
-| Component | Current Rows | Virtualization Benefit |
-|-----------|--------------|------------------------|
-| `ListView.tsx` (Projects) | All tasks rendered | High - could have 100+ tasks |
-| `MyDayListView.tsx` | All tasks rendered | Medium - typically 10-50 tasks |
-| `ReportOpenIssuesTable.tsx` | All issues rendered | Medium - could have 50+ issues |
-| `KanbanView.tsx` | Per-column tasks | Low - already column-scoped |
+**New files to create:**
 
-**Priority: Start with ListView.tsx**
+| File | Purpose |
+|------|---------|
+| `.husky/pre-commit` | Run lint-staged before commits |
+| `.lintstagedrc.json` | Configure which commands run on which files |
 
-**Implementation approach:**
-1. Import `useVirtualList`, `getVirtualContainerStyle`, `getVirtualItemStyle` helpers
-2. Wrap table body in virtual container
-3. Only render visible rows + overscan buffer
-4. Maintain table header sticky behavior
-
----
-
-### Step 3: Add React.memo to Expensive Components
-
-**High-impact candidates for React.memo:**
-
-| Component | Why Expensive | Re-render Trigger |
-|-----------|---------------|-------------------|
-| Task cards in Kanban | Many instances, drag operations | Parent column re-renders |
-| Chart components | SVG rendering | Any filter change |
-| Avatar groups | Multiple per row | Row re-renders |
-| Badge components | Styling calculations | Parent re-renders |
-
-**Target files:**
-- `src/features/myday/components/MyDayTaskCard.tsx`
-- `src/features/reports/components/ReportTaskStatusChart.tsx`
-- `src/features/reports/components/ReportTeamWorkload.tsx`
-- `src/features/reports/components/ReportMilestoneHealth.tsx`
-- `src/features/reports/components/ReportModuleProgress.tsx`
-
----
-
-### Step 4: Add useCallback to Event Handlers
-
-**Current problem:** Event handlers recreated on every render, causing child re-renders.
-
-**Target areas:**
-- `Reports.tsx` handlers: `handleKPIClick`, `handleStatusClick`, `handleMemberClick`, etc.
-- `ListView.tsx` handlers: `handleSort`, `handleRowClick`
-- `KanbanView.tsx` handlers: `handleDragEnd`, `handleTaskClick`, `handleAddTask`
-- `MyDay.tsx` handlers: `handleTaskClick`, `handleStatusUpdate`
-
----
-
-### Step 5: Add Bundle Optimization Scripts
-
-**Add to package.json:**
+**Package.json script additions:**
 ```json
 {
   "scripts": {
-    "build:analyze": "vite build --mode production && npx vite-bundle-analyzer",
+    "prepare": "husky",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "type-check": "tsc --noEmit"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --max-warnings 0"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   }
+}
+```
+
+**Pre-commit hook workflow:**
+1. Run ESLint with auto-fix on staged `.ts/.tsx` files
+2. Type-check the entire project
+3. Run tests in non-watch mode
+
+---
+
+### Step 3: TypeScript Strict Mode Configuration
+
+**Files to modify:**
+
+| File | Changes |
+|------|---------|
+| `tsconfig.json` | Enable strict options in base config |
+| `tsconfig.app.json` | Enable strict mode for app files |
+
+**Strict options to enable:**
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitReturns": true,
+    "forceConsistentCasingInFileNames": true
+  }
+}
+```
+
+**Expected type errors to fix:** Based on current codebase patterns, anticipate:
+- Optional chaining needed for array index access
+- Unused parameters in event handlers
+- Missing return type annotations
+- Potential null checks on store selectors
+
+---
+
+### Step 4: Enhanced ESLint Configuration
+
+**File:** `eslint.config.js`
+
+**Rules to add:**
+```javascript
+rules: {
+  // Re-enable with exceptions
+  "@typescript-eslint/no-unused-vars": ["warn", { 
+    "argsIgnorePattern": "^_",
+    "varsIgnorePattern": "^_" 
+  }],
+  
+  // React best practices
+  "react-hooks/exhaustive-deps": "warn",
+  
+  // Code quality
+  "no-console": ["warn", { "allow": ["warn", "error"] }],
+  "prefer-const": "error",
+  "no-var": "error"
 }
 ```
 
 ---
 
-### Step 6: Optimize Vite Configuration
+### Step 5: Documentation Updates
 
-**Add to vite.config.ts:**
-- Manual chunk splitting for large libraries (recharts, date-fns)
-- Rollup treeshake options
+**Files to create/update:**
 
----
+| File | Purpose |
+|------|---------|
+| `README.md` | Update with project-specific information |
+| `CONTRIBUTING.md` | Development workflow guidelines |
+| `docs/ARCHITECTURE.md` | Technical architecture overview |
 
-## Files to Modify
+**README.md structure:**
+1. Project overview (Open Plan AI)
+2. Quick start guide
+3. Available scripts
+4. Project structure summary
+5. Tech stack
+6. Contributing link
 
-| File | Changes | Priority |
-|------|---------|----------|
-| `src/features/reports/Reports.tsx` | Integrate useReportWorker hook | HIGH |
-| `src/features/projects/components/ListView.tsx` | Add virtual scrolling | HIGH |
-| `src/features/myday/components/MyDayTaskCard.tsx` | Wrap with React.memo | MEDIUM |
-| `src/features/reports/components/ReportTaskStatusChart.tsx` | Wrap with React.memo | MEDIUM |
-| `src/features/reports/components/ReportTeamWorkload.tsx` | Wrap with React.memo | MEDIUM |
-| `src/features/reports/components/ReportMilestoneHealth.tsx` | Wrap with React.memo | MEDIUM |
-| `src/features/reports/components/ReportModuleProgress.tsx` | Wrap with React.memo | MEDIUM |
-| `src/features/reports/components/ReportsKPIRow.tsx` | Wrap with React.memo | MEDIUM |
-| `package.json` | Add build:analyze and type-check scripts | LOW |
-| `vite.config.ts` | Add chunk splitting configuration | LOW |
+**CONTRIBUTING.md structure:**
+1. Development setup
+2. Code style guidelines
+3. Commit message conventions
+4. Testing requirements
+5. PR process
 
 ---
 
 ## Files to Create
 
-| File | Purpose |
-|------|---------|
-| `src/components/VirtualTable.tsx` | Reusable virtual scrolling table component |
+| File | Lines (est.) | Priority |
+|------|--------------|----------|
+| `.husky/pre-commit` | ~10 | HIGH |
+| `CONTRIBUTING.md` | ~100 | MEDIUM |
+| `docs/ARCHITECTURE.md` | ~150 | MEDIUM |
+
+## Files to Modify
+
+| File | Changes | Priority |
+|------|---------|----------|
+| `src/services/monitoring/logger.ts` | Add performance tracking methods | LOW |
+| `tsconfig.json` | Enable strict options | HIGH |
+| `tsconfig.app.json` | Enable strict mode | HIGH |
+| `eslint.config.js` | Add stricter rules | MEDIUM |
+| `package.json` | Add husky, lint-staged, scripts | HIGH |
+| `README.md` | Project-specific documentation | MEDIUM |
 
 ---
 
-## Technical Implementation Details
+## Type Error Fixes Expected
 
-### Virtual Table Component Pattern
+When enabling strict mode, the following patterns will need updates:
 
+### Pattern 1: Array Index Access
 ```typescript
-interface VirtualTableProps<T> {
-  items: T[];
-  columns: ColumnDef<T>[];
-  estimateRowHeight?: number;
-  onRowClick?: (item: T) => void;
-}
+// Before (unsafe)
+const item = items[0];
 
-export function VirtualTable<T>({ items, columns, estimateRowHeight = 60, onRowClick }: VirtualTableProps<T>) {
-  const { parentRef, virtualItems, totalSize } = useVirtualList({
-    items,
-    estimateSize: estimateRowHeight,
-  });
-
-  return (
-    <div ref={parentRef} style={{ height: '500px', overflow: 'auto' }}>
-      <table>
-        <thead>{/* Sticky header */}</thead>
-        <tbody style={getVirtualContainerStyle(totalSize)}>
-          {virtualItems.map((virtualRow) => (
-            <tr key={virtualRow.key} style={getVirtualItemStyle(virtualRow.start)}>
-              {/* Render row for items[virtualRow.index] */}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
+// After (safe with noUncheckedIndexedAccess)
+const item = items[0];
+if (item) { /* use item */ }
 ```
 
-### React.memo Pattern
-
+### Pattern 2: Unused Parameters
 ```typescript
-import { memo } from 'react';
+// Before
+const handler = (event, index, array) => { ... }
 
-interface TaskCardProps {
-  task: Task;
-  onComplete: (id: string) => void;
-}
-
-export const MyDayTaskCard = memo(function MyDayTaskCard({ task, onComplete }: TaskCardProps) {
-  // Component implementation
-});
+// After (prefix unused with _)
+const handler = (_event, index, _array) => { ... }
 ```
 
-### useCallback Pattern
-
+### Pattern 3: Optional Chaining
 ```typescript
-const handleStatusClick = useCallback((status: string) => {
-  setFilter(prev => ({ ...prev, status: [status] }));
-}, []);
+// Before
+project.tasks.length
 
-const handleMemberClick = useCallback((memberId: string) => {
-  setFilter(prev => ({ ...prev, assigneeIds: [memberId] }));
-}, []);
+// After (when project could be undefined)
+project?.tasks?.length ?? 0
 ```
+
+---
+
+## Implementation Order
+
+1. **Husky + lint-staged setup** - Establishes quality gates
+2. **TypeScript strict mode** - Catches type issues
+3. **Fix type errors** - Make codebase compile under strict mode
+4. **Enhanced ESLint** - Additional code quality rules
+5. **Logger enhancements** - Production readiness
+6. **Documentation** - Developer experience
 
 ---
 
 ## Success Criteria
 
 After implementation:
-- Reports page offloads KPI calculations to Web Worker
-- ListView renders 100+ tasks without jank
-- Chart components don't re-render on unrelated state changes
-- Bundle size analyzed and optimized
-- Lighthouse performance score improves
+- Pre-commit hooks run lint, type-check, and tests
+- TypeScript compiles with `strict: true` 
+- Zero ESLint warnings on staged files
+- README documents project setup
+- CONTRIBUTING.md exists with guidelines
+- Logger supports performance tracking
 
 ---
 
-## Implementation Order
+## Technical Notes
 
-1. **Web Worker Integration** (Reports.tsx) - Immediate benefit for large datasets
-2. **Virtual Scrolling** (ListView.tsx) - Critical for scalability
-3. **React.memo** (Chart components) - Reduce unnecessary re-renders
-4. **useCallback** (Event handlers) - Enable React.memo effectiveness
-5. **Bundle Optimization** (Vite config) - Final polish
+### Husky v9 Setup
+Husky v9 uses a simplified configuration:
+```bash
+# Initialize husky
+npx husky init
+
+# This creates .husky/ directory and adds "prepare" script
+```
+
+### lint-staged Configuration
+Two options for config location:
+1. `lint-staged` key in package.json (simpler)
+2. `.lintstagedrc.json` file (cleaner separation)
+
+Recommend option 1 for this project size.
+
+### TypeScript Strict Mode Gradual Adoption
+If too many errors arise, can enable strict options incrementally:
+1. First: `strict: true`
+2. Then: `noUncheckedIndexedAccess: true`
+3. Finally: `noImplicitReturns: true`
+
+This allows fixing issues in batches.
