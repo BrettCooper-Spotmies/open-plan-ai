@@ -7,8 +7,34 @@ interface LogEntry {
   context?: Record<string, unknown>;
 }
 
+interface PerformanceEntry {
+  label: string;
+  duration: number;
+  timestamp: string;
+}
+
+interface TrackingEvent {
+  event: string;
+  properties?: Record<string, unknown>;
+  timestamp: string;
+}
+
 class Logger {
   private isDevelopment = import.meta.env.DEV;
+  private minLogLevel: LogLevel = this.isDevelopment ? 'debug' : 'info';
+  private performanceMarks = new Map<string, number>();
+  private eventQueue: TrackingEvent[] = [];
+
+  private readonly LOG_LEVELS: Record<LogLevel, number> = {
+    debug: 0,
+    info: 1,
+    warn: 2,
+    error: 3,
+  };
+
+  private shouldLog(level: LogLevel): boolean {
+    return this.LOG_LEVELS[level] >= this.LOG_LEVELS[this.minLogLevel];
+  }
 
   private formatEntry(level: LogLevel, message: string, context?: Record<string, unknown>): LogEntry {
     return {
@@ -20,6 +46,8 @@ class Logger {
   }
 
   private log(level: LogLevel, message: string, context?: Record<string, unknown>) {
+    if (!this.shouldLog(level)) return;
+
     const entry = this.formatEntry(level, message, context);
 
     if (this.isDevelopment) {
@@ -70,6 +98,111 @@ class Logger {
 
   userAction(action: string, details?: Record<string, unknown>) {
     this.info(`User: ${action}`, details);
+  }
+
+  // Performance timing methods
+  startPerformance(label: string): void {
+    this.performanceMarks.set(label, performance.now());
+    if (this.isDevelopment) {
+      console.time(label);
+    }
+  }
+
+  endPerformance(label: string): number | undefined {
+    const startTime = this.performanceMarks.get(label);
+    if (startTime === undefined) {
+      this.warn(`Performance mark "${label}" not found`);
+      return undefined;
+    }
+
+    const duration = performance.now() - startTime;
+    this.performanceMarks.delete(label);
+
+    if (this.isDevelopment) {
+      console.timeEnd(label);
+    }
+
+    const entry: PerformanceEntry = {
+      label,
+      duration,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.debug(`Performance: ${label}`, { duration: `${duration.toFixed(2)}ms` });
+
+    // Future: Send performance metrics to analytics
+    // this.sendPerformanceMetric(entry);
+
+    return duration;
+  }
+
+  performance(label: string, startTime: number): void {
+    const duration = performance.now() - startTime;
+    this.debug(`Performance: ${label}`, { duration: `${duration.toFixed(2)}ms` });
+  }
+
+  // Grouping methods for nested logging
+  group(label: string): void {
+    if (this.isDevelopment) {
+      console.group(`%c${label}`, 'color: #8B5CF6; font-weight: bold');
+    }
+  }
+
+  groupCollapsed(label: string): void {
+    if (this.isDevelopment) {
+      console.groupCollapsed(`%c${label}`, 'color: #8B5CF6; font-weight: bold');
+    }
+  }
+
+  groupEnd(): void {
+    if (this.isDevelopment) {
+      console.groupEnd();
+    }
+  }
+
+  // Event tracking for analytics preparation
+  track(event: string, properties?: Record<string, unknown>): void {
+    const trackingEvent: TrackingEvent = {
+      event,
+      properties,
+      timestamp: new Date().toISOString(),
+    };
+
+    this.eventQueue.push(trackingEvent);
+
+    if (this.isDevelopment) {
+      console.log(
+        `%c[TRACK]%c ${event}`,
+        'color: #10B981; font-weight: bold',
+        'color: inherit',
+        properties || ''
+      );
+    }
+
+    // Future: Send to analytics service (Mixpanel, Amplitude, etc.)
+    // this.flushEvents();
+  }
+
+  // Get queued events for batch sending
+  getEventQueue(): TrackingEvent[] {
+    return [...this.eventQueue];
+  }
+
+  // Clear event queue after successful send
+  clearEventQueue(): void {
+    this.eventQueue = [];
+  }
+
+  // Set minimum log level
+  setLogLevel(level: LogLevel): void {
+    this.minLogLevel = level;
+  }
+
+  // Table logging for structured data
+  table(data: Record<string, unknown>[] | Record<string, unknown>): void {
+    if (this.isDevelopment) {
+      console.table(data);
+    }
   }
 }
 
