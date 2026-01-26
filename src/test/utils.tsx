@@ -1,5 +1,6 @@
 import { ReactElement, ReactNode } from 'react';
-import { render, RenderOptions } from '@testing-library/react';
+import { render, RenderOptions, renderHook } from '@testing-library/react';
+import { screen, waitFor, within, fireEvent } from '@testing-library/dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -56,7 +57,25 @@ function customRender(
   };
 }
 
-// Re-export everything from testing-library
-export * from '@testing-library/react';
+// Create a wrapper for renderHook
+export function createWrapper() {
+  const queryClient = createTestQueryClient();
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <TooltipProvider>
+            {children}
+          </TooltipProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    );
+  };
+}
+
+// Export commonly used utilities
 export { customRender as render };
 export { userEvent };
+export { screen, waitFor, within, fireEvent };
+export { renderHook };
+export type { RenderOptions };
