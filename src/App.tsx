@@ -12,6 +12,7 @@ import NewProject from "./pages/NewProject";
 import IssuePage from "./pages/IssuePage";
 import Team from "./pages/Team";
 import Settings from "./pages/Settings";
+import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/projects/:projectId/issues/:issueId" element={<IssuePage />} />
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/reports" element={<Reports />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
