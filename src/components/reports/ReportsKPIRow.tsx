@@ -26,18 +26,18 @@ interface KPICardProps {
   onClick?: () => void;
 }
 
-function KPICard({ 
-  title, 
-  value, 
-  subtitle, 
-  icon, 
-  visual, 
-  tooltip, 
+function KPICard({
+  title,
+  value,
+  subtitle,
+  icon,
+  visual,
+  tooltip,
   variant = 'default',
-  onClick 
+  onClick
 }: KPICardProps) {
   return (
-    <Card 
+    <Card
       className={cn(
         "cursor-pointer transition-all hover:shadow-md hover:border-primary/20",
         variant === 'warning' && "border-l-4 border-l-amber-500",
@@ -67,12 +67,12 @@ function KPICard({
             </TooltipContent>
           </Tooltip>
         </div>
-        
+
         <div className="space-y-1">
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-semibold">{value}</span>
             {typeof value === 'number' && value > 0 && variant !== 'default' && (
-              <Badge 
+              <Badge
                 variant={variant === 'danger' ? 'destructive' : 'outline'}
                 className={cn(
                   "text-xs",
@@ -85,7 +85,7 @@ function KPICard({
           </div>
           <p className="text-xs text-muted-foreground">{subtitle}</p>
         </div>
-        
+
         {visual && (
           <div className="mt-3">
             {visual}
@@ -108,7 +108,7 @@ export function ReportsKPIRow({ kpis, onKPIClick }: ReportsKPIRowProps) {
         tooltip="Percentage of completed tasks out of total tasks: (Completed / Total) × 100"
         onClick={() => onKPIClick?.('progress')}
       />
-      
+
       <KPICard
         title="Open Issues"
         value={kpis.openIssues}
@@ -118,7 +118,7 @@ export function ReportsKPIRow({ kpis, onKPIClick }: ReportsKPIRowProps) {
         variant={kpis.criticalIssues > 0 ? 'danger' : 'default'}
         onClick={() => onKPIClick?.('issues')}
       />
-      
+
       <KPICard
         title="Overdue Tasks"
         value={kpis.overdueTasks}
@@ -128,7 +128,7 @@ export function ReportsKPIRow({ kpis, onKPIClick }: ReportsKPIRowProps) {
         variant={kpis.overdueTasks > 0 ? 'warning' : 'default'}
         onClick={() => onKPIClick?.('overdue')}
       />
-      
+
       <KPICard
         title="Avg Cycle Time"
         value={`${kpis.avgCycleTime}`}
