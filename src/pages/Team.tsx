@@ -56,7 +56,7 @@ import { toast } from 'sonner';
 
 const Team = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('');
@@ -158,9 +158,9 @@ const Team = () => {
             {member.projectCount} project{member.projectCount !== 1 ? 's' : ''} • Joined{' '}
             {member.joinedAt
               ? new Date(member.joinedAt).toLocaleDateString('en-US', {
-                  month: 'short',
-                  year: 'numeric',
-                })
+                month: 'short',
+                year: 'numeric',
+              })
               : 'N/A'}
           </p>
         </div>

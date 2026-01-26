@@ -140,6 +140,22 @@ export default function ProjectDetail() {
     }) : prev);
   };
 
+  const handleTaskUpdate = (updatedTask: any) => {
+    // Mutate mock data for persistence
+    const originalProject = projects.find(p => p.id === project?.id);
+    if (originalProject) {
+      const index = originalProject.tasks?.findIndex(t => t.id === updatedTask.id);
+      if (index !== undefined && index !== -1 && originalProject.tasks) {
+        originalProject.tasks[index] = updatedTask;
+      }
+    }
+
+    setProjectData(prev => prev ? ({
+      ...prev,
+      tasks: prev.tasks?.map(t => t.id === updatedTask.id ? updatedTask : t) || []
+    }) : prev);
+  };
+
   if (!project) {
     return (
       <AppLayout>
@@ -329,6 +345,8 @@ export default function ProjectDetail() {
               isAddDialogOpen={isAddModuleDialogOpen}
               onAddDialogClose={() => setIsAddModuleDialogOpen(false)}
               onModuleAdd={handleModuleAdd}
+              onTaskUpdate={handleTaskUpdate}
+              onIssueUpdate={handleIssueUpdate}
             />
           </TabsContent>
           <TabsContent value="milestones" className="mt-6">

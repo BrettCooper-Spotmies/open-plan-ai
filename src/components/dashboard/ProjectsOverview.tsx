@@ -30,7 +30,7 @@ const stageLabels = {
 
 export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
   return (
-    <Card className="h-full">
+    <Card>
       <CardHeader className="pb-3 flex flex-row items-center justify-between">
         <CardTitle className="text-base font-medium">Active Projects</CardTitle>
         <Button variant="ghost" size="sm" asChild>
@@ -42,8 +42,8 @@ export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
       </CardHeader>
       <CardContent className="space-y-4">
         {projects.map((project) => (
-          <Link 
-            key={project.id} 
+          <Link
+            key={project.id}
             to={`/projects/${project.id}`}
             className="block"
           >

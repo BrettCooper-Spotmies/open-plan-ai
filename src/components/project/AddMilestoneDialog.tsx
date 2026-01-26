@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -105,29 +105,29 @@ export function AddMilestoneDialog({
     onClose();
   };
 
-  const toggleTask = (taskId: string) => {
+  const toggleTask = useCallback((taskId: string) => {
     setSelectedTasks(prev =>
       prev.includes(taskId)
         ? prev.filter(id => id !== taskId)
         : [...prev, taskId]
     );
-  };
+  }, []);
 
-  const toggleModule = (moduleId: string) => {
+  const toggleModule = useCallback((moduleId: string) => {
     setSelectedModules(prev =>
       prev.includes(moduleId)
         ? prev.filter(id => id !== moduleId)
         : [...prev, moduleId]
     );
-  };
+  }, []);
 
-  const toggleIssue = (issueId: string) => {
+  const toggleIssue = useCallback((issueId: string) => {
     setSelectedIssues(prev =>
       prev.includes(issueId)
         ? prev.filter(id => id !== issueId)
         : [...prev, issueId]
     );
-  };
+  }, []);
 
   const severityColors: Record<string, string> = {
     critical: 'border-destructive text-destructive bg-destructive/10',
@@ -158,9 +158,9 @@ export function AddMilestoneDialog({
       <DialogContent className="max-w-3xl max-h-[90vh] p-0 flex flex-col gap-0">
         <DialogHeader className="px-6 py-4 border-b shrink-0">
           <DialogTitle>Add Milestone</DialogTitle>
-          <DialogDescription>
+          {/* <DialogDescription>
             Create a new milestone to track project progress and deadlines.
-          </DialogDescription>
+          </DialogDescription> */}
         </DialogHeader>
 
         <Form {...form}>
@@ -277,10 +277,9 @@ export function AddMilestoneDialog({
                           <div
                             key={task.id}
                             className={cn(
-                              'flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors',
+                              'flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors',
                               selectedTasks.includes(task.id) && 'bg-primary/5'
                             )}
-                            onClick={() => toggleTask(task.id)}
                           >
                             <Checkbox
                               checked={selectedTasks.includes(task.id)}
@@ -342,10 +341,9 @@ export function AddMilestoneDialog({
                           <div
                             key={module.id}
                             className={cn(
-                              'flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors',
+                              'flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors',
                               selectedModules.includes(module.id) && 'bg-primary/5'
                             )}
-                            onClick={() => toggleModule(module.id)}
                           >
                             <Checkbox
                               checked={selectedModules.includes(module.id)}
@@ -404,10 +402,9 @@ export function AddMilestoneDialog({
                           <div
                             key={issue.id}
                             className={cn(
-                              'flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors',
+                              'flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors',
                               selectedIssues.includes(issue.id) && 'bg-primary/5'
                             )}
-                            onClick={() => toggleIssue(issue.id)}
                           >
                             <Checkbox
                               checked={selectedIssues.includes(issue.id)}

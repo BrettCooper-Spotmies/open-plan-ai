@@ -30,6 +30,8 @@ interface ModulesSectionProps {
   onModuleDelete?: (moduleId: string) => void;
   onTaskClick?: (task: Task) => void;
   onIssueClick?: (issue: Issue) => void;
+  onTaskUpdate?: (task: Task) => void;
+  onIssueUpdate?: (issue: Issue) => void;
 }
 
 export function ModuleViewControls({
@@ -65,9 +67,9 @@ export function ModuleViewControls({
   );
 }
 
-export function ModulesSection({ 
-  modules, 
-  tasks, 
+export function ModulesSection({
+  modules,
+  tasks,
   issues,
   teamMembers,
   viewMode: externalViewMode,
@@ -79,14 +81,16 @@ export function ModulesSection({
   onModuleDelete,
   onTaskClick,
   onIssueClick,
+  onTaskUpdate,
+  onIssueUpdate,
 }: ModulesSectionProps) {
   const [internalViewMode, setInternalViewMode] = useState<ModuleViewMode>('kanban');
   const [selectedModule, setSelectedModule] = useState<ModuleWithStats | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [internalIsAddDialogOpen, setInternalIsAddDialogOpen] = useState(false);
-  
+
   const isAddDialogOpen = externalIsAddDialogOpen ?? internalIsAddDialogOpen;
-  
+
   const viewMode = externalViewMode ?? internalViewMode;
 
   // Calculate module stats
@@ -122,6 +126,34 @@ export function ModulesSection({
     onModuleAdd?.(newModule);
   };
 
+  const handleLinkTask = (taskId: string, moduleId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task && onTaskUpdate) {
+      onTaskUpdate({ ...task, moduleId });
+    }
+  };
+
+  const handleUnlinkTask = (taskId: string, moduleId: string) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (task && onTaskUpdate) {
+      onTaskUpdate({ ...task, moduleId: undefined });
+    }
+  };
+
+  const handleLinkIssue = (issueId: string, moduleId: string) => {
+    const issue = issues.find(i => i.id === issueId);
+    if (issue && onIssueUpdate) {
+      onIssueUpdate({ ...issue, moduleId });
+    }
+  };
+
+  const handleUnlinkIssue = (issueId: string, moduleId: string) => {
+    const issue = issues.find(i => i.id === issueId);
+    if (issue && onIssueUpdate) {
+      onIssueUpdate({ ...issue, moduleId: undefined });
+    }
+  };
+
   const existingModuleNames = modules.map(m => m.name);
 
   return (
@@ -130,13 +162,13 @@ export function ModulesSection({
         {/* View Content */}
         <div className="min-h-[400px] w-full min-w-0">
           {viewMode === 'kanban' ? (
-            <ModulesKanbanView 
-              modules={modulesWithStats} 
+            <ModulesKanbanView
+              modules={modulesWithStats}
               onModuleClick={handleModuleClick}
             />
           ) : (
-            <ModulesListView 
-              modules={modulesWithStats} 
+            <ModulesListView
+              modules={modulesWithStats}
               onModuleClick={handleModuleClick}
             />
           )}
@@ -155,6 +187,10 @@ export function ModulesSection({
         onDelete={onModuleDelete}
         onTaskClick={onTaskClick}
         onIssueClick={onIssueClick}
+        onLinkTask={handleLinkTask}
+        onUnlinkTask={handleUnlinkTask}
+        onLinkIssue={handleLinkIssue}
+        onUnlinkIssue={handleUnlinkIssue}
       />
 
       {/* Add Module Dialog */}
