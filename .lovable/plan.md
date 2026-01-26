@@ -1,325 +1,320 @@
 
-# Phase 2 Completion Plan
+# Phase 3: Complete Testing Infrastructure
 
-## Overview
+## Current State
 
-Complete the feature-based restructuring by migrating remaining features (Projects, MyDay components) and cleaning up duplicate files. This will achieve the target architecture with all features properly organized under `src/features/`.
+Good news - the audit report was outdated! Testing infrastructure is **further along** than reported:
 
-## Current State Analysis
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Test infrastructure | Complete | Vitest + Testing Library configured |
+| Test utilities | Complete | Custom render with providers |
+| Feature utility tests | Partial | 3 test files exist (595+ lines) |
+| Service layer tests | Not started | 0 files |
+| Store tests | Not started | 0 files |
+| Hook tests | Not started | 0 files |
+| Component tests | Not started | 0 files |
 
-### Features Already Migrated (In `src/features/`)
-| Feature | Status | Notes |
-|---------|--------|-------|
-| reports | Complete | Components, utils, barrel export |
-| calendar | Complete | Components, utils, barrel export |
-| dashboard | Complete | Components, barrel export |
-| myday | Partial | Main page only, components still in old location |
-| team | Complete | Main page, barrel export |
-| settings | Complete | Main page, barrel export |
-
-### Features Needing Migration
-| Feature | Files to Move | Effort |
-|---------|---------------|--------|
-| projects | 4 pages + 19 components + 1 util | High |
-| myday | 6 components | Low |
-
-### Duplicate Files to Delete
-| Directory | Status |
-|-----------|--------|
-| `src/components/reports/` | 10 files - should be deleted |
-| `src/components/calendar/` | 8 files - should be deleted |
-| `src/components/dashboard/` | 4 files - should be deleted |
-| `src/components/myday/` | 6 files - after migration |
-| `src/components/project/` | 19 files - after projects migration |
-| `src/pages/Reports.tsx` | Should be deleted |
-| `src/pages/Calendar.tsx` | Should be deleted |
-| `src/pages/Dashboard.tsx` | Should be deleted |
-| `src/pages/MyDay.tsx` | Should be deleted |
-| `src/pages/Projects.tsx` | After migration |
-| `src/pages/ProjectDetail.tsx` | After migration |
-| `src/pages/NewProject.tsx` | After migration |
-| `src/pages/IssuePage.tsx` | After migration |
+**Current Tests Found:**
+- `src/features/reports/__tests__/reportsUtils.test.ts` - 349 lines, 30+ test cases
+- `src/features/reports/__tests__/ReportsKPIRow.test.tsx` - 131 lines, 14 test cases
+- `src/features/projects/__tests__/projectUtils.test.ts` - 246 lines, 20+ test cases
 
 ---
 
-## Implementation Steps
+## Implementation Plan
 
-### Step 1: Complete MyDay Feature Migration
+### Step 1: Service Layer Tests (High Priority)
 
-Move the 6 MyDay components from `src/components/myday/` to `src/features/myday/components/`:
+Create tests for all three service modules that handle data operations.
 
-| Source | Destination |
-|--------|-------------|
-| `src/components/myday/MyDayStats.tsx` | `src/features/myday/components/MyDayStats.tsx` |
-| `src/components/myday/MyDayKanbanView.tsx` | `src/features/myday/components/MyDayKanbanView.tsx` |
-| `src/components/myday/MyDayListView.tsx` | `src/features/myday/components/MyDayListView.tsx` |
-| `src/components/myday/MyDayGroupBySelector.tsx` | `src/features/myday/components/MyDayGroupBySelector.tsx` |
-| `src/components/myday/MyDaySection.tsx` | `src/features/myday/components/MyDaySection.tsx` |
-| `src/components/myday/MyDayTaskCard.tsx` | `src/features/myday/components/MyDayTaskCard.tsx` |
+**File: `src/services/__tests__/projects.service.test.ts`**
+- Test `getAll()` returns array of projects
+- Test `getById()` returns project or null
+- Test `create()` adds new project with generated ID
+- Test `update()` modifies existing project
+- Test `delete()` removes project
+- Test `getTasks()` returns project tasks
+- Test `getMilestones()` returns project milestones
+- Test `getIssues()` returns project issues
+- Test error cases (project not found)
 
-Update `src/features/myday/MyDay.tsx` imports to use relative paths.
+**File: `src/services/__tests__/tasks.service.test.ts`**
+- Test `getAll()` returns all tasks across projects
+- Test `getById()` returns task or null
+- Test `create()` adds task to project
+- Test `update()` modifies existing task
+- Test `delete()` removes task
+- Test `batchUpdate()` updates multiple tasks
+- Test error cases (project/task not found)
 
----
-
-### Step 2: Create Projects Feature Structure
-
-Create the projects feature with all pages and components:
-
-```text
-src/features/projects/
-├── components/
-│   ├── AddMilestoneDialog.tsx
-│   ├── AddModuleDialog.tsx
-│   ├── DependencyView.tsx
-│   ├── IssueDetailContent.tsx
-│   ├── IssueDetailModal.tsx
-│   ├── IssuesView.tsx
-│   ├── KanbanView.tsx
-│   ├── ListView.tsx
-│   ├── MilestoneDetailModal.tsx
-│   ├── MilestonesView.tsx
-│   ├── ModuleDetailModal.tsx
-│   ├── ModulesKanbanView.tsx
-│   ├── ModulesListView.tsx
-│   ├── ModulesSection.tsx
-│   ├── TaskDetailModal.tsx
-│   ├── TaskFilters.tsx
-│   ├── TaskFiltersDropdown.tsx
-│   ├── TasksSection.tsx
-│   └── TimelineView.tsx
-├── utils/
-│   └── projectUtils.ts
-├── Projects.tsx
-├── ProjectDetail.tsx
-├── NewProject.tsx
-├── IssuePage.tsx
-└── index.ts
-```
-
-Files to move:
-- `src/pages/Projects.tsx` → `src/features/projects/Projects.tsx`
-- `src/pages/ProjectDetail.tsx` → `src/features/projects/ProjectDetail.tsx`
-- `src/pages/NewProject.tsx` → `src/features/projects/NewProject.tsx`
-- `src/pages/IssuePage.tsx` → `src/features/projects/IssuePage.tsx`
-- `src/components/project/*` (19 files) → `src/features/projects/components/*`
-- `src/lib/projectUtils.ts` → `src/features/projects/utils/projectUtils.ts`
+**File: `src/services/__tests__/issues.service.test.ts`**
+- Test `getAll()` returns all issues
+- Test `getById()` returns issue or null
+- Test `create()` adds issue to project
+- Test `update()` modifies existing issue
+- Test `delete()` removes issue
+- Test `getOpenCount()` returns correct counts
+- Test critical issue counting
 
 ---
 
-### Step 3: Update App.tsx Routes
+### Step 2: Zustand Store Tests (High Priority)
 
-Add lazy loading for the new projects feature pages:
+Test all store actions and selectors for the three Zustand stores.
 
+**File: `src/stores/__tests__/useProjectStore.test.ts`**
+- Test initial state
+- Test `setProjects()` updates projects array
+- Test `selectProject()` sets selected ID
+- Test `addProject()` adds to array
+- Test `updateProject()` modifies project
+- Test `deleteProject()` removes project
+- Test task CRUD actions (addTask, updateTask, deleteTask)
+- Test milestone CRUD actions
+- Test issue CRUD actions
+- Test selectors (useSelectedProject, useProjectById, useAllTasks, useAllIssues)
+- Test persistence (store survives reset)
+- Test reset() clears state
+
+**File: `src/stores/__tests__/useFilterStore.test.ts`**
+- Test initial state (default filters)
+- Test `setReportFilters()` partial updates
+- Test `resetReportFilters()` returns to defaults
+- Test `setTaskFilters()` partial updates
+- Test `resetTaskFilters()` returns to defaults
+- Test `setSearchQuery()` updates search
+- Test `setProjectViewPreference()` per-project prefs
+- Test persistence
+
+**File: `src/stores/__tests__/useUserStore.test.ts`**
+- Test initial state (null user, not authenticated)
+- Test `setUser()` sets user and auth flag
+- Test `updatePreferences()` merges preferences
+- Test `logout()` clears user state
+- Test sidebar state toggles
+- Test persistence of user preferences
+
+---
+
+### Step 3: React Query Hook Tests (Medium Priority)
+
+Test the custom hooks that wrap React Query for data fetching.
+
+**File: `src/hooks/__tests__/useProjects.test.tsx`**
+- Test `useProjects()` fetches and returns projects
+- Test `useProject(id)` fetches single project
+- Test `useCreateProject()` mutation calls service
+- Test `useUpdateProject()` mutation with optimistic update
+- Test `useDeleteProject()` mutation
+- Test query invalidation after mutations
+- Test loading and error states
+- Test `enabled` flag behavior
+
+**File: `src/hooks/__tests__/useTasks.test.tsx`**
+- Test `useAllTasks()` fetches all tasks
+- Test `useProjectTasks(projectId)` filters by project
+- Test `useTask(taskId)` fetches single task
+- Test `useCreateTask()` mutation
+- Test `useUpdateTask()` mutation with optimistic update
+- Test `useDeleteTask()` mutation
+- Test `useBatchUpdateTasks()` for drag-drop
+- Test query invalidation
+
+**File: `src/hooks/__tests__/useIssues.test.tsx`**
+- Test `useAllIssues()` fetches all issues
+- Test `useProjectIssues(projectId)` filters by project
+- Test `useCreateIssue()` mutation
+- Test `useUpdateIssue()` mutation
+- Test `useDeleteIssue()` mutation
+- Test query invalidation
+
+---
+
+### Step 4: Component Tests (Medium Priority)
+
+Test key shared components for correct rendering and behavior.
+
+**File: `src/components/__tests__/ErrorBoundary.test.tsx`**
+- Test renders children when no error
+- Test catches error and shows fallback UI
+- Test error message is displayed
+- Test "Try Again" button resets state
+- Test "Refresh Page" button calls reload
+- Test "Go Home" button navigates
+- Test custom fallback prop is used
+- Test logger is called on error
+- Test `withErrorBoundary` HOC works
+
+**File: `src/components/__tests__/SuspenseFallback.test.tsx`**
+- Test renders loading spinner by default
+- Test different variant props (card, list, chart)
+- Test correct skeleton counts
+- Test accessibility (aria labels)
+
+**File: `src/components/__tests__/NavLink.test.tsx`**
+- Test renders link with correct href
+- Test active state styling
+- Test icon and label rendering
+- Test click navigation
+
+---
+
+### Step 5: Integration Tests (Lower Priority)
+
+Test complete workflows spanning multiple components.
+
+**File: `src/__tests__/integration/project-workflow.test.tsx`**
+- Test creating a new project
+- Test viewing project list
+- Test navigating to project detail
+- Test updating project
+- Test deleting project
+
+**File: `src/__tests__/integration/task-workflow.test.tsx`**
+- Test creating a task within project
+- Test changing task status
+- Test filtering tasks
+- Test drag-drop reordering (batch update)
+
+---
+
+## Files to Create
+
+| File | Lines (est.) | Tests (est.) | Priority |
+|------|--------------|--------------|----------|
+| `src/services/__tests__/projects.service.test.ts` | 150-200 | 15-20 | HIGH |
+| `src/services/__tests__/tasks.service.test.ts` | 150-180 | 15-18 | HIGH |
+| `src/services/__tests__/issues.service.test.ts` | 140-160 | 12-15 | HIGH |
+| `src/stores/__tests__/useProjectStore.test.ts` | 200-250 | 20-25 | HIGH |
+| `src/stores/__tests__/useFilterStore.test.ts` | 100-120 | 12-15 | HIGH |
+| `src/stores/__tests__/useUserStore.test.ts` | 80-100 | 10-12 | HIGH |
+| `src/hooks/__tests__/useProjects.test.tsx` | 150-180 | 12-15 | MEDIUM |
+| `src/hooks/__tests__/useTasks.test.tsx` | 160-200 | 15-18 | MEDIUM |
+| `src/hooks/__tests__/useIssues.test.tsx` | 130-150 | 12-14 | MEDIUM |
+| `src/components/__tests__/ErrorBoundary.test.tsx` | 120-150 | 10-12 | MEDIUM |
+| `src/components/__tests__/SuspenseFallback.test.tsx` | 60-80 | 6-8 | MEDIUM |
+| `src/components/__tests__/NavLink.test.tsx` | 60-80 | 6-8 | MEDIUM |
+| `src/__tests__/integration/project-workflow.test.tsx` | 150-200 | 8-10 | LOW |
+| `src/__tests__/integration/task-workflow.test.tsx` | 150-180 | 8-10 | LOW |
+
+**Total: ~1,600-1,900 lines of test code, 150-200 test cases**
+
+---
+
+## Test Patterns to Follow
+
+### Service Test Pattern
 ```typescript
-const Projects = lazy(() => import("./features/projects"));
-const ProjectDetail = lazy(() => 
-  import("./features/projects/ProjectDetail").then(m => ({ default: m.default }))
-);
-const NewProject = lazy(() => 
-  import("./features/projects/NewProject").then(m => ({ default: m.default }))
-);
-const IssuePage = lazy(() => 
-  import("./features/projects/IssuePage").then(m => ({ default: m.default }))
-);
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { projectsService } from '../projects.service';
+
+// Mock the config to use mock data
+vi.mock('@/config', () => ({
+  config: { api: { useMockData: true } }
+}));
+
+describe('projectsService', () => {
+  describe('getAll', () => {
+    it('should return array of projects', async () => {
+      const projects = await projectsService.getAll();
+      expect(Array.isArray(projects)).toBe(true);
+      expect(projects.length).toBeGreaterThan(0);
+    });
+  });
+});
+```
+
+### Store Test Pattern
+```typescript
+import { describe, it, expect, beforeEach } from 'vitest';
+import { useProjectStore } from '../useProjectStore';
+
+describe('useProjectStore', () => {
+  beforeEach(() => {
+    useProjectStore.getState().reset();
+  });
+
+  it('should add project to store', () => {
+    const { addProject } = useProjectStore.getState();
+    const project = { id: 'test-1', name: 'Test', ... };
+    
+    addProject(project);
+    
+    expect(useProjectStore.getState().projects).toHaveLength(1);
+  });
+});
+```
+
+### Hook Test Pattern (with renderHook)
+```typescript
+import { describe, it, expect } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react';
+import { useProjects } from '../useProjects';
+import { createWrapper } from '@/test/utils';
+
+describe('useProjects', () => {
+  it('should fetch projects', async () => {
+    const { result } = renderHook(() => useProjects(), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toBeDefined();
+  });
+});
 ```
 
 ---
 
-### Step 4: Delete Duplicate Old Files
+## Technical Considerations
 
-After migration is complete, delete:
+### Mocking Strategy
+- Mock `@/config` to control mock data flag
+- Mock services for hook tests (isolate from real data)
+- Use `vi.spyOn` for partial mocking
+- Reset mocks in `beforeEach`
 
-**Old component directories:**
-- `src/components/reports/` (10 files)
-- `src/components/calendar/` (8 files)
-- `src/components/dashboard/` (4 files)
-- `src/components/myday/` (6 files)
-- `src/components/project/` (19 files)
-
-**Old page files:**
-- `src/pages/Reports.tsx`
-- `src/pages/Calendar.tsx`
-- `src/pages/Dashboard.tsx`
-- `src/pages/MyDay.tsx`
-- `src/pages/Projects.tsx`
-- `src/pages/ProjectDetail.tsx`
-- `src/pages/NewProject.tsx`
-- `src/pages/IssuePage.tsx`
-
-**Keep in `src/pages/`:**
-- `Login.tsx` (auth pages stay for now)
-- `Signup.tsx`
-- `ForgotPassword.tsx`
-- `NotFound.tsx`
-- `Index.tsx`
-
----
-
-### Step 5: Update Cross-Feature Imports
-
-Some features depend on project components. Update these imports:
-
-| Feature | Component Used | New Import Path |
-|---------|----------------|-----------------|
-| calendar | TaskDetailModal | `@/features/projects/components/TaskDetailModal` |
-| myday | TaskDetailModal | `@/features/projects/components/TaskDetailModal` |
-
----
-
-## Files Summary
-
-### Files to Create
-
-| File | Purpose |
-|------|---------|
-| `src/features/myday/components/MyDayStats.tsx` | Stats component |
-| `src/features/myday/components/MyDayKanbanView.tsx` | Kanban view |
-| `src/features/myday/components/MyDayListView.tsx` | List view |
-| `src/features/myday/components/MyDayGroupBySelector.tsx` | Group selector |
-| `src/features/myday/components/MyDaySection.tsx` | Section component |
-| `src/features/myday/components/MyDayTaskCard.tsx` | Task card |
-| `src/features/projects/Projects.tsx` | Projects list page |
-| `src/features/projects/ProjectDetail.tsx` | Project detail page |
-| `src/features/projects/NewProject.tsx` | New project form |
-| `src/features/projects/IssuePage.tsx` | Issue detail page |
-| `src/features/projects/components/*.tsx` | 19 component files |
-| `src/features/projects/utils/projectUtils.ts` | Project utilities |
-| `src/features/projects/index.ts` | Barrel export |
-
-### Files to Update
-
-| File | Changes |
-|------|---------|
-| `src/features/myday/MyDay.tsx` | Update imports to relative paths |
-| `src/features/calendar/Calendar.tsx` | Update TaskDetailModal import |
-| `src/App.tsx` | Update Projects route imports |
-
-### Files to Delete (After Migration)
-
-- `src/components/reports/*` (10 files)
-- `src/components/calendar/*` (8 files)
-- `src/components/dashboard/*` (4 files)
-- `src/components/myday/*` (6 files)
-- `src/components/project/*` (19 files)
-- `src/lib/projectUtils.ts`
-- `src/pages/Reports.tsx`
-- `src/pages/Calendar.tsx`
-- `src/pages/Dashboard.tsx`
-- `src/pages/MyDay.tsx`
-- `src/pages/Projects.tsx`
-- `src/pages/ProjectDetail.tsx`
-- `src/pages/NewProject.tsx`
-- `src/pages/IssuePage.tsx`
-
----
-
-## Target Structure After Completion
-
-```text
-src/
-├── features/
-│   ├── calendar/
-│   │   ├── components/     (7 files)
-│   │   ├── utils/
-│   │   ├── Calendar.tsx
-│   │   └── index.ts
-│   ├── dashboard/
-│   │   ├── components/     (4 files)
-│   │   ├── Dashboard.tsx
-│   │   └── index.ts
-│   ├── myday/
-│   │   ├── components/     (6 files)
-│   │   ├── MyDay.tsx
-│   │   └── index.ts
-│   ├── projects/
-│   │   ├── components/     (19 files)
-│   │   ├── utils/
-│   │   ├── Projects.tsx
-│   │   ├── ProjectDetail.tsx
-│   │   ├── NewProject.tsx
-│   │   ├── IssuePage.tsx
-│   │   └── index.ts
-│   ├── reports/
-│   │   ├── components/     (9 files)
-│   │   ├── utils/
-│   │   ├── Reports.tsx
-│   │   └── index.ts
-│   ├── settings/
-│   │   ├── Settings.tsx
-│   │   └── index.ts
-│   └── team/
-│       ├── Team.tsx
-│       └── index.ts
-├── components/
-│   ├── layout/            (AppLayout, AppSidebar, AppHeader)
-│   ├── ui/                (50+ shadcn components - unchanged)
-│   ├── ErrorBoundary.tsx
-│   ├── SuspenseFallback.tsx
-│   └── NavLink.tsx
-├── pages/
-│   ├── Login.tsx
-│   ├── Signup.tsx
-│   ├── ForgotPassword.tsx
-│   ├── NotFound.tsx
-│   └── Index.tsx
-├── hooks/
-├── lib/
-├── services/
-├── stores/
-├── config/
-└── types/
+### Test Utilities Enhancement
+Add `createWrapper` function for renderHook:
+```typescript
+export function createWrapper() {
+  const queryClient = createTestQueryClient();
+  return ({ children }) => (
+    <QueryClientProvider client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+}
 ```
+
+### Store Testing
+- Use `getState()` to access store directly
+- Call `reset()` in `beforeEach` to clean state
+- Test selectors with mock state
 
 ---
 
 ## Success Criteria
 
 After implementation:
-
-- All feature code organized under `src/features/`
-- Each feature has its own components, utils, and barrel exports
-- No duplicate files between old and new locations
-- All routes use lazy loading from feature directories
-- Cross-feature dependencies use absolute imports (`@/features/...`)
-- Application functions correctly with no broken imports
-- Build succeeds without errors
+- 14+ new test files created
+- 150+ new test cases
+- All services have 80%+ coverage
+- All stores have 90%+ coverage
+- All hooks have 70%+ coverage
+- ErrorBoundary has full coverage
+- Tests run in under 10 seconds
+- No flaky tests
 
 ---
 
-## Technical Notes
+## Implementation Order
 
-### Import Path Updates
+1. **Service tests first** (foundation - everything else depends on these)
+2. **Store tests** (critical for state management validation)
+3. **Hook tests** (integration between services and stores)
+4. **Component tests** (UI behavior)
+5. **Integration tests** (end-to-end workflows)
 
-Each migrated component needs import path updates:
-
-```typescript
-// Before (in ProjectDetail.tsx)
-import { TasksSection } from '@/components/project/TasksSection';
-import { ModulesSection } from '@/components/project/ModulesSection';
-
-// After (in src/features/projects/ProjectDetail.tsx)
-import { TasksSection } from './components/TasksSection';
-import { ModulesSection } from './components/ModulesSection';
-```
-
-### Barrel Export Pattern
-
-```typescript
-// src/features/projects/index.ts
-export { default } from './Projects';
-export { default as ProjectDetail } from './ProjectDetail';
-export { default as NewProject } from './NewProject';
-export { default as IssuePage } from './IssuePage';
-```
-
-### Cross-Feature Component Usage
-
-The `TaskDetailModal` is used by multiple features. After migration:
-
-```typescript
-// In src/features/calendar/Calendar.tsx
-import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
-
-// In src/features/myday/MyDay.tsx
-import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
-```
+Recommend starting with `src/services/__tests__/projects.service.test.ts` as it's the most used service.
