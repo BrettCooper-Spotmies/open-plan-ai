@@ -183,20 +183,20 @@ Update the `projects.service.ts` to use the centralized config module.
 - [x] Testing infrastructure setup
 - [x] Error boundaries added
 - [x] Environment configuration (`.env.example`)
-- [ ] Config module created
-- [ ] Logging service implemented
+- [x] Config module created
+- [x] Logging service implemented
 
 ### Configuration
 - [x] `.env.example` created
-- [ ] `src/config/index.ts` created
-- [ ] Services updated to use config
+- [x] `src/config/index.ts` created
+- [x] Services updated to use config
 
 ### Developer Experience
 - [x] Query key factory implemented
 - [x] Loading states components created
 - [x] Error boundary integrated in App.tsx
 - [x] React Query DevTools configured
-- [ ] Logger integrated in services
+- [x] Logger integrated in services
 
 ---
 

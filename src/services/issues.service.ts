@@ -2,9 +2,10 @@ import { apiClient } from './api/client';
 import { API_ENDPOINTS } from './api/endpoints';
 import { Issue } from '@/types';
 import { projects as mockProjects, projectIssues as mockIssues } from '@/data/mockData';
+import { config } from '@/config';
 
 // Environment flag to control data source
-const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA !== 'false';
+const USE_MOCK_DATA = config.api.useMockData;
 
 // Simulate network delay for mock data
 const mockDelay = (ms: number = 100) => new Promise(resolve => setTimeout(resolve, ms));
