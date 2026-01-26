@@ -1,6 +1,8 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import { config } from '@/config';
+import { logger } from '@/services/monitoring/logger';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+const API_BASE_URL = config.api.baseUrl;
 
 class ApiClient {
   private client: AxiosInstance;
@@ -20,13 +22,14 @@ class ApiClient {
   private setupInterceptors() {
     // Request interceptor
     this.client.interceptors.request.use(
-      (config) => {
+      (reqConfig) => {
+        logger.apiCall(reqConfig.method?.toUpperCase() || 'GET', reqConfig.url || '');
         // Add auth token if available
         const token = localStorage.getItem('auth_token');
         if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
+          reqConfig.headers.Authorization = `Bearer ${token}`;
         }
-        return config;
+        return reqConfig;
       },
       (error) => {
         return Promise.reject(error);
@@ -35,8 +38,21 @@ class ApiClient {
 
     // Response interceptor
     this.client.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        logger.apiCall(
+          response.config.method?.toUpperCase() || 'GET',
+          response.config.url || '',
+          response.status
+        );
+        return response;
+      },
       (error: AxiosError) => {
+        logger.error('API Error', {
+          url: error.config?.url,
+          method: error.config?.method?.toUpperCase(),
+          status: error.response?.status,
+          message: error.message,
+        });
         // Handle common errors
         if (error.response?.status === 401) {
           // Handle unauthorized

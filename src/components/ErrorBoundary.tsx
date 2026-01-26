@@ -1,7 +1,8 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { logger } from '@/services/monitoring/logger';
 
 interface Props {
   children: ReactNode;
@@ -26,9 +27,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Uncaught error:', error, errorInfo);
+    logger.error('React Error Boundary caught error', {
+      error: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+    });
     this.setState({ errorInfo });
-    // TODO: Send to error tracking service (Sentry, LogRocket, etc.)
   }
 
   private handleReset = () => {
@@ -69,9 +73,13 @@ export class ErrorBoundary extends Component<Props, State> {
                 <Button onClick={this.handleReset} variant="outline">
                   Try Again
                 </Button>
-                <Button onClick={this.handleReload}>
+                <Button onClick={this.handleReload} variant="outline">
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh Page
+                </Button>
+                <Button onClick={() => window.location.href = '/'}>
+                  <Home className="h-4 w-4 mr-2" />
+                  Go Home
                 </Button>
               </div>
             </CardContent>
