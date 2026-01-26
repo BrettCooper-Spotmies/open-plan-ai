@@ -9,7 +9,7 @@ import {
   groupTasksByProgress,
   groupTasksByDueDate,
   groupTasksByPriority,
-} from '@/lib/myDayUtils';
+} from '../utils/myDayUtils';
 import { MyDayGroupBy, TaskStatus } from '@/types';
 
 interface MyDayListViewProps {

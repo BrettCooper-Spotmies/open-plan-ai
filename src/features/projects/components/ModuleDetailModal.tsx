@@ -36,7 +36,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { Module, Task, Issue, ModuleType, TeamMember } from '@/types';
-import { formatModuleType, getModuleColor, getModuleTasks, getModuleProgress } from '@/lib/projectUtils';
+import { formatModuleType, getModuleColor, getModuleTasks, getModuleProgress } from '../utils/projectUtils';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 

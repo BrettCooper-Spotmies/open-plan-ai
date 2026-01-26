@@ -32,7 +32,7 @@ import {
   X,
 } from 'lucide-react';
 import { Milestone, Task, Issue, Module } from '@/types';
-import { getMilestoneProgress, getMilestoneTasks, getMilestoneIssues, getMilestoneStatus, getModuleProgress } from '@/lib/projectUtils';
+import { getMilestoneProgress, getMilestoneTasks, getMilestoneIssues, getMilestoneStatus, getModuleProgress } from '../utils/projectUtils';
 
 interface MilestoneDetailModalProps {
   milestone: Milestone | null;

@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Module, ModuleType, TeamMember } from '@/types';
-import { formatModuleType, getModuleColor } from '@/lib/projectUtils';
+import { formatModuleType, getModuleColor } from '../utils/projectUtils';
 import { cn } from '@/lib/utils';
 
 interface AddModuleDialogProps {

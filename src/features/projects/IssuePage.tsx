@@ -2,8 +2,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
-import { IssueDetailContent } from '@/components/project/IssueDetailContent';
-import { projects, projectModules } from '@/data/mockData'; // Assuming tasks are here/linked or we find them
+import { IssueDetailContent } from './components/IssueDetailContent';
+import { projects, projectModules } from '@/data/mockData';
 import { Issue } from '@/types';
 
 export default function IssuePage() {
