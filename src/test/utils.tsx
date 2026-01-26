@@ -2,6 +2,7 @@ import { ReactElement, ReactNode } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import userEvent from '@testing-library/user-event';
 
 // Create a fresh QueryClient for each test
@@ -28,7 +29,9 @@ function AllTheProviders({ children }: AllTheProvidersProps) {
   return (
     <QueryClientProvider client={testQueryClient}>
       <BrowserRouter>
-        {children}
+        <TooltipProvider>
+          {children}
+        </TooltipProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );
