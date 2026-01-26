@@ -1,3 +1,4 @@
+import { memo, useMemo, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBreakdown, getStatusLabel, getStatusColor } from '../utils/reportsUtils';
@@ -7,17 +8,21 @@ interface ReportTaskStatusChartProps {
   onStatusClick?: (status: string) => void;
 }
 
-export function ReportTaskStatusChart({ data, onStatusClick }: ReportTaskStatusChartProps) {
-  const chartData = data.map(item => ({
+export const ReportTaskStatusChart = memo(function ReportTaskStatusChart({ data, onStatusClick }: ReportTaskStatusChartProps) {
+  const chartData = useMemo(() => data.map(item => ({
     name: getStatusLabel(item.status),
     value: item.count,
     count: item.count,
     status: item.status,
     percentage: item.percentage,
     color: getStatusColor(item.status),
-  }));
+  })), [data]);
   
-  const totalTasks = data.reduce((sum, item) => sum + item.count, 0);
+  const totalTasks = useMemo(() => data.reduce((sum, item) => sum + item.count, 0), [data]);
+
+  const handlePieClick = useCallback((pieData: { status: string }) => {
+    onStatusClick?.(pieData.status);
+  }, [onStatusClick]);
   
   return (
     <Card className="h-full">
@@ -41,7 +46,7 @@ export function ReportTaskStatusChart({ data, onStatusClick }: ReportTaskStatusC
                   outerRadius={90}
                   paddingAngle={2}
                   dataKey="value"
-                  onClick={(data) => onStatusClick?.(data.status)}
+                  onClick={handlePieClick}
                   className="cursor-pointer"
                 >
                   {chartData.map((entry, index) => (
@@ -99,4 +104,4 @@ export function ReportTaskStatusChart({ data, onStatusClick }: ReportTaskStatusC
       </CardContent>
     </Card>
   );
-}
+});

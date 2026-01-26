@@ -30,6 +30,7 @@ export interface KPIResult {
   criticalIssues: number;
   overdueTasks: number;
   avgCycleTime: number;
+  trendData: { date: string; value: number }[];
 }
 
 self.onmessage = (e: MessageEvent<WorkerMessage>) => {
@@ -90,6 +91,24 @@ function calculateKPIs(tasks: Task[], issues: Issue[]): KPIResult {
     avgCycleTime = Math.round((totalDays / completedTasks.length) * 10) / 10;
   }
 
+  // Generate trend data for the last 30 days
+  const trendData: { date: string; value: number }[] = [];
+  const now = new Date();
+  for (let i = 29; i >= 0; i--) {
+    const date = new Date(now);
+    date.setDate(date.getDate() - i);
+    const dateStr = date.toISOString().split('T')[0];
+    
+    // Count tasks completed on or before this date
+    const completedByDate = tasks.filter(t => {
+      if (t.status !== 'done' || !t.updatedAt) return false;
+      const taskDate = new Date(t.updatedAt).toISOString().split('T')[0];
+      return taskDate <= dateStr;
+    }).length;
+    
+    trendData.push({ date: dateStr, value: completedByDate });
+  }
+
   return {
     projectProgress,
     completedTasks: completed,
@@ -98,6 +117,7 @@ function calculateKPIs(tasks: Task[], issues: Issue[]): KPIResult {
     criticalIssues,
     overdueTasks,
     avgCycleTime,
+    trendData,
   };
 }
 

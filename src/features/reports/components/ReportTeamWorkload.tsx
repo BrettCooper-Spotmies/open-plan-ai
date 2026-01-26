@@ -1,3 +1,4 @@
+import { memo, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Users } from 'lucide-react';
@@ -8,8 +9,8 @@ interface ReportTeamWorkloadProps {
   onMemberClick?: (memberId: string) => void;
 }
 
-export function ReportTeamWorkload({ data, onMemberClick }: ReportTeamWorkloadProps) {
-  const chartData = data.map(item => ({
+export const ReportTeamWorkload = memo(function ReportTeamWorkload({ data, onMemberClick }: ReportTeamWorkloadProps) {
+  const chartData = useMemo(() => data.map(item => ({
     name: item.member.name.split(' ')[0],
     fullName: item.member.name,
     initials: item.member.initials,
@@ -19,9 +20,13 @@ export function ReportTeamWorkload({ data, onMemberClick }: ReportTeamWorkloadPr
     regular: item.totalTasks - item.overdueTasks,
     completed: item.completedTasks,
     inProgress: item.inProgressTasks,
-  }));
+  })), [data]);
   
-  const maxTasks = Math.max(...data.map(d => d.totalTasks), 1);
+  const maxTasks = useMemo(() => Math.max(...data.map(d => d.totalTasks), 1), [data]);
+
+  const handleMemberClick = useCallback((memberId: string) => {
+    onMemberClick?.(memberId);
+  }, [onMemberClick]);
   
   return (
     <Card className="h-full">
@@ -42,7 +47,7 @@ export function ReportTeamWorkload({ data, onMemberClick }: ReportTeamWorkloadPr
               <div 
                 key={member.memberId}
                 className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 p-2 -mx-2 rounded-lg transition-colors"
-                onClick={() => onMemberClick?.(member.memberId)}
+                onClick={() => handleMemberClick(member.memberId)}
               >
                 <Avatar className="h-8 w-8">
                   <AvatarFallback className="text-xs bg-primary/10 text-primary">
@@ -119,4 +124,4 @@ export function ReportTeamWorkload({ data, onMemberClick }: ReportTeamWorkloadPr
       </CardContent>
     </Card>
   );
-}
+});

@@ -1,3 +1,4 @@
+import { memo, useCallback } from 'react';
 import { TrendingUp, AlertCircle, Clock, Timer, Info } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -26,7 +27,7 @@ interface KPICardProps {
   onClick?: () => void;
 }
 
-function KPICard({
+const KPICard = memo(function KPICard({
   title,
   value,
   subtitle,
@@ -94,9 +95,13 @@ function KPICard({
       </CardContent>
     </Card>
   );
-}
+});
 
-export function ReportsKPIRow({ kpis, onKPIClick }: ReportsKPIRowProps) {
+export const ReportsKPIRow = memo(function ReportsKPIRow({ kpis, onKPIClick }: ReportsKPIRowProps) {
+  const handleProgressClick = useCallback(() => onKPIClick?.('progress'), [onKPIClick]);
+  const handleIssuesClick = useCallback(() => onKPIClick?.('issues'), [onKPIClick]);
+  const handleOverdueClick = useCallback(() => onKPIClick?.('overdue'), [onKPIClick]);
+  const handleCycleClick = useCallback(() => onKPIClick?.('cycle'), [onKPIClick]);
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
       <KPICard
@@ -106,7 +111,7 @@ export function ReportsKPIRow({ kpis, onKPIClick }: ReportsKPIRowProps) {
         icon={<TrendingUp className="h-4 w-4" />}
         visual={<Progress value={kpis.projectProgress} className="h-2" />}
         tooltip="Percentage of completed tasks out of total tasks: (Completed / Total) × 100"
-        onClick={() => onKPIClick?.('progress')}
+        onClick={handleProgressClick}
       />
 
       <KPICard
@@ -116,7 +121,7 @@ export function ReportsKPIRow({ kpis, onKPIClick }: ReportsKPIRowProps) {
         icon={<AlertCircle className="h-4 w-4" />}
         tooltip="Count of issues with status 'open' or 'investigating'"
         variant={kpis.criticalIssues > 0 ? 'danger' : 'default'}
-        onClick={() => onKPIClick?.('issues')}
+        onClick={handleIssuesClick}
       />
 
       <KPICard
@@ -126,7 +131,7 @@ export function ReportsKPIRow({ kpis, onKPIClick }: ReportsKPIRowProps) {
         icon={<Clock className="h-4 w-4" />}
         tooltip="Tasks where due date is before today and status is not 'done'"
         variant={kpis.overdueTasks > 0 ? 'warning' : 'default'}
-        onClick={() => onKPIClick?.('overdue')}
+        onClick={handleOverdueClick}
       />
 
       <KPICard
@@ -135,8 +140,8 @@ export function ReportsKPIRow({ kpis, onKPIClick }: ReportsKPIRowProps) {
         subtitle="days per task"
         icon={<Timer className="h-4 w-4" />}
         tooltip="Average days from task start date to completion for all completed tasks"
-        onClick={() => onKPIClick?.('cycle')}
+        onClick={handleCycleClick}
       />
     </div>
   );
-}
+});

@@ -9,6 +9,7 @@ interface KPIResult {
   criticalIssues: number;
   overdueTasks: number;
   avgCycleTime: number;
+  trendData: { date: string; value: number }[];
 }
 
 interface WorkerResponse {
@@ -66,6 +67,7 @@ export function useReportWorker() {
           criticalIssues: 0,
           overdueTasks: 0,
           avgCycleTime: 0,
+          trendData: [],
         });
         return;
       }

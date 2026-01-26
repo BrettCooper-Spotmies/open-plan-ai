@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { 
   Calendar, 
   AlertTriangle, 
@@ -38,7 +38,7 @@ interface MyDayTaskCardProps {
   onChecklistToggle: (taskId: string, itemId: string) => void;
 }
 
-export function MyDayTaskCard({
+export const MyDayTaskCard = memo(function MyDayTaskCard({
   task,
   variant,
   onTaskClick,
@@ -61,13 +61,26 @@ export function MyDayTaskCard({
     blocked: 'border-l-4 border-l-muted bg-muted/30 opacity-75 hover:opacity-100',
   };
 
-  const handleCardClick = (e: React.MouseEvent) => {
+  const handleCardClick = useCallback((e: React.MouseEvent) => {
     // Don't trigger if clicking on interactive elements
     if ((e.target as HTMLElement).closest('button, [role="combobox"], input')) {
       return;
     }
     onTaskClick(task);
-  };
+  }, [onTaskClick, task]);
+
+  const handleChecklistToggle = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setChecklistExpanded(prev => !prev);
+  }, []);
+
+  const handleStatusChange = useCallback((value: TaskStatus) => {
+    onStatusUpdate(task.id, value);
+  }, [onStatusUpdate, task.id]);
+
+  const handleChecklistItemToggle = useCallback((itemId: string) => {
+    onChecklistToggle(task.id, itemId);
+  }, [onChecklistToggle, task.id]);
 
   return (
     <Card 
@@ -133,10 +146,7 @@ export function MyDayTaskCard({
           <div className="mb-3">
             <button
               className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground w-full"
-              onClick={(e) => {
-                e.stopPropagation();
-                setChecklistExpanded(!checklistExpanded);
-              }}
+              onClick={handleChecklistToggle}
             >
               <CheckSquare className="h-3 w-3" />
               <span>{completedItems}/{totalItems} completed</span>
@@ -159,7 +169,7 @@ export function MyDayTaskCard({
                   >
                     <Checkbox
                       checked={item.completed}
-                      onCheckedChange={() => onChecklistToggle(task.id, item.id)}
+                      onCheckedChange={() => handleChecklistItemToggle(item.id)}
                       className="h-3 w-3"
                     />
                     <span className={cn(item.completed && 'line-through text-muted-foreground')}>
@@ -176,7 +186,7 @@ export function MyDayTaskCard({
         <div className="flex items-center justify-between pt-2 border-t border-border">
           <Select
             value={task.status}
-            onValueChange={(value: TaskStatus) => onStatusUpdate(task.id, value)}
+            onValueChange={handleStatusChange}
           >
             <SelectTrigger 
               className="h-7 w-auto text-xs border-0 bg-transparent hover:bg-muted"
@@ -211,4 +221,4 @@ export function MyDayTaskCard({
       </CardContent>
     </Card>
   );
-}
+});

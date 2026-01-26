@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ReportsHeader } from './components/ReportsHeader';
@@ -10,10 +10,13 @@ import { ReportTeamWorkload } from './components/ReportTeamWorkload';
 import { ReportModuleProgress } from './components/ReportModuleProgress';
 import { ReportOpenIssuesTable } from './components/ReportOpenIssuesTable';
 import { ReportTrendChart } from './components/ReportTrendChart';
+import { useReportWorker } from '@/hooks/useReportWorker';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   ReportFilter,
+  ReportKPI,
   getDateRangeFromTimeRange,
-  calculateKPIs,
+  calculateKPIs as calculateKPIsSync,
   getTaskStatusBreakdown,
   getMilestoneHealth,
   getTeamWorkload,
@@ -24,12 +27,27 @@ import {
 import { projects, teamMembers, projectModules, projectIssues } from '@/data/mockData';
 import { Task, Issue, Milestone } from '@/types';
 
+// Default KPIs for loading state
+const defaultKPIs: ReportKPI = {
+  projectProgress: 0,
+  completedTasks: 0,
+  totalTasks: 0,
+  openIssues: 0,
+  criticalIssues: 0,
+  overdueTasks: 0,
+  avgCycleTime: 0,
+  trendData: [],
+};
+
 export default function Reports() {
   const navigate = useNavigate();
+  const { calculateKPIs, isCalculating } = useReportWorker();
 
   const [filter, setFilter] = useState<ReportFilter>({
     timeRange: '30d',
   });
+  
+  const [kpis, setKpis] = useState<ReportKPI>(defaultKPIs);
 
   // Aggregate data from all projects or selected project
   const { tasks, issues, milestones, projectName } = useMemo(() => {
@@ -74,10 +92,12 @@ export default function Reports() {
     return getDateRangeFromTimeRange(filter.timeRange, filter.customDateRange);
   }, [filter.timeRange, filter.customDateRange]);
 
-  // Calculate KPIs
-  const kpis = useMemo(() => {
-    return calculateKPIs(filteredTasks, issues, dateRange);
-  }, [filteredTasks, issues, dateRange]);
+  // Calculate KPIs using Web Worker for heavy calculations
+  useEffect(() => {
+    calculateKPIs(filteredTasks, issues).then((result) => {
+      setKpis(result);
+    });
+  }, [filteredTasks, issues, calculateKPIs]);
 
   // Get chart data
   const statusBreakdown = useMemo(() => {
@@ -111,42 +131,39 @@ export default function Reports() {
     }
   }, [filter.timeRange]);
 
-  // Handlers
-  const handleKPIClick = (type: 'progress' | 'issues' | 'overdue' | 'cycle') => {
-    // For MVP, navigate to project detail with appropriate section
+  // Handlers with useCallback to prevent unnecessary re-renders
+  const handleKPIClick = useCallback((type: 'progress' | 'issues' | 'overdue' | 'cycle') => {
     if (filter.projectId) {
       navigate(`/projects/${filter.projectId}`);
     }
-  };
+  }, [filter.projectId, navigate]);
 
-  const handleStatusClick = (status: string) => {
-    setFilter({ ...filter, status: [status as any] });
-  };
+  const handleStatusClick = useCallback((status: string) => {
+    setFilter(prev => ({ ...prev, status: [status as 'todo' | 'in-progress' | 'review' | 'done' | 'blocked'] }));
+  }, []);
 
-  const handleMilestoneClick = (milestoneId: string) => {
-    // Navigate to milestone detail
+  const handleMilestoneClick = useCallback((milestoneId: string) => {
     if (filter.projectId) {
       navigate(`/projects/${filter.projectId}`);
     }
-  };
+  }, [filter.projectId, navigate]);
 
-  const handleMemberClick = (memberId: string) => {
-    setFilter({ ...filter, assigneeIds: [memberId] });
-  };
+  const handleMemberClick = useCallback((memberId: string) => {
+    setFilter(prev => ({ ...prev, assigneeIds: [memberId] }));
+  }, []);
 
-  const handleModuleClick = (moduleId: string) => {
-    setFilter({ ...filter, moduleIds: [moduleId] });
-  };
+  const handleModuleClick = useCallback((moduleId: string) => {
+    setFilter(prev => ({ ...prev, moduleIds: [moduleId] }));
+  }, []);
 
-  const handleIssueClick = (issueId: string) => {
-    // Find the project containing this issue
+  const handleIssueClick = useCallback((issueId: string) => {
     const projectWithIssue = projects.find(p =>
       p.issues?.some(i => i.id === issueId)
     );
     if (projectWithIssue) {
       navigate(`/projects/${projectWithIssue.id}/issues/${issueId}`);
     }
-  };
+  }, [navigate]);
 
   return (
     <AppLayout>
@@ -165,10 +182,18 @@ export default function Reports() {
           onFilterChange={setFilter}
         />
 
-        <ReportsKPIRow
-          kpis={kpis}
-          onKPIClick={handleKPIClick}
-        />
+        {isCalculating ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-32" />
+            ))}
+          </div>
+        ) : (
+          <ReportsKPIRow
+            kpis={kpis}
+            onKPIClick={handleKPIClick}
+          />
+        )}
 
         {/* 2-Column Grid for Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
