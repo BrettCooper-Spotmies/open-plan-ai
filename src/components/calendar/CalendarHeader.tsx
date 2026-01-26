@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarViewMode } from '@/types';
@@ -12,6 +12,7 @@ interface CalendarHeaderProps {
   onNavigatePrevious: () => void;
   onNavigateNext: () => void;
   onNavigateToday: () => void;
+  actions?: React.ReactNode;
 }
 
 export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
@@ -21,17 +22,15 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
   onNavigatePrevious,
   onNavigateNext,
   onNavigateToday,
+  actions,
 }) => {
   const dateLabel = formatDateRangeLabel(currentDate, viewMode);
 
   return (
-    <div className="flex items-center justify-between gap-4 pb-4 border-b border-border">
+    <div className="flex items-center justify-between gap-4">
       {/* Left: Title and date navigation */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Calendar className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-xl font-semibold">Calendar</h1>
-        </div>
+
 
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" onClick={onNavigatePrevious} className="h-8 w-8">
@@ -50,20 +49,23 @@ export const CalendarHeader: React.FC<CalendarHeaderProps> = ({
         </span>
       </div>
 
-      {/* Right: View mode toggle */}
-      <Tabs value={viewMode} onValueChange={(v) => onViewModeChange(v as CalendarViewMode)}>
-        <TabsList className="h-9">
-          <TabsTrigger value="month" className="text-xs px-3">
-            Month
-          </TabsTrigger>
-          <TabsTrigger value="week" className="text-xs px-3">
-            Week
-          </TabsTrigger>
-          <TabsTrigger value="day" className="text-xs px-3">
-            Day
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {/* Right: View mode toggle and Actions */}
+      <div className="flex items-center gap-2">
+        <Tabs value={viewMode} onValueChange={(v) => onViewModeChange(v as CalendarViewMode)}>
+          <TabsList className="h-9">
+            <TabsTrigger value="month" className="text-xs px-3">
+              Month
+            </TabsTrigger>
+            <TabsTrigger value="week" className="text-xs px-3">
+              Week
+            </TabsTrigger>
+            <TabsTrigger value="day" className="text-xs px-3">
+              Day
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {actions}
+      </div>
     </div>
   );
 };
