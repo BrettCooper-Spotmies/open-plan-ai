@@ -23,7 +23,7 @@ import {
   getMilestoneStatus,
   sortMilestonesByDate,
   getModuleProgress,
-} from '@/lib/projectUtils';
+} from '../utils/projectUtils';
 import { MilestoneDetailModal } from './MilestoneDetailModal';
 import { AddMilestoneDialog } from './AddMilestoneDialog';
 import {

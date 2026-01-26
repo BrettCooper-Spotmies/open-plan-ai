@@ -27,7 +27,7 @@ import {
   getPriorityInfo, 
   formatDueDate,
   getDueDateStatus 
-} from '@/lib/myDayUtils';
+} from '../utils/myDayUtils';
 import { TaskStatus, ChecklistItem } from '@/types';
 
 interface MyDayTaskCardProps {

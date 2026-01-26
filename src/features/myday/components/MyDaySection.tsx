@@ -1,7 +1,7 @@
 import { LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { MyDayTaskCard } from './MyDayTaskCard';
-import { MyDayTask } from '@/lib/myDayUtils';
+import { MyDayTask } from '../utils/myDayUtils';
 import { TaskStatus } from '@/types';
 
 interface MyDaySectionProps {

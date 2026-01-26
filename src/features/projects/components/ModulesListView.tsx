@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { formatModuleType, getModuleColor } from '@/lib/projectUtils';
+import { formatModuleType, getModuleColor } from '../utils/projectUtils';
 
 interface ModuleWithStats extends Module {
   taskCount: number;

@@ -5,9 +5,9 @@ import { CalendarFilters } from './components/CalendarFilters';
 import { CalendarMonthView } from './components/CalendarMonthView';
 import { CalendarWeekView } from './components/CalendarWeekView';
 import { CalendarDayView } from './components/CalendarDayView';
-import { TaskDetailModal } from '@/components/project/TaskDetailModal';
-import { MilestoneDetailModal } from '@/components/project/MilestoneDetailModal';
-import { IssueDetailModal } from '@/components/project/IssueDetailModal';
+import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
+import { MilestoneDetailModal } from '@/features/projects/components/MilestoneDetailModal';
+import { IssueDetailModal } from '@/features/projects/components/IssueDetailModal';
 import {
   getMonthDays,
   getWeekDays,

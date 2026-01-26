@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 import { ArrowUpDown, AlertTriangle, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TaskDetailModal } from './TaskDetailModal';
-import { formatModuleType } from '@/lib/projectUtils';
+import { formatModuleType } from '../utils/projectUtils';
 
 interface ListViewProps {
   tasks: Task[];

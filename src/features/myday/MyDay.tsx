@@ -2,14 +2,14 @@ import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { Sun, LayoutGrid, List } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { MyDayStats } from '@/components/myday/MyDayStats';
-import { MyDayKanbanView } from '@/components/myday/MyDayKanbanView';
-import { MyDayListView } from '@/components/myday/MyDayListView';
-import { MyDayGroupBySelector } from '@/components/myday/MyDayGroupBySelector';
-import { TaskDetailModal } from '@/components/project/TaskDetailModal';
+import { MyDayStats } from './components/MyDayStats';
+import { MyDayKanbanView } from './components/MyDayKanbanView';
+import { MyDayListView } from './components/MyDayListView';
+import { MyDayGroupBySelector } from './components/MyDayGroupBySelector';
+import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { projects, currentUser } from '@/data/mockData';
-import { getUserTasks, categorizeMyDayTasks, MyDayTask } from '@/lib/myDayUtils';
+import { getUserTasks, categorizeMyDayTasks, MyDayTask } from './utils/myDayUtils';
 import { Task, TaskStatus, MyDayView, MyDayGroupBy } from '@/types';
 
 export default function MyDay() {

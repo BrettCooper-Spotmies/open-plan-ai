@@ -7,7 +7,7 @@ import { ModulesKanbanView } from './ModulesKanbanView';
 import { ModulesListView } from './ModulesListView';
 import { ModuleDetailModal } from './ModuleDetailModal';
 import { AddModuleDialog } from './AddModuleDialog';
-import { getModuleTasks, getModuleProgress } from '@/lib/projectUtils';
+import { getModuleTasks, getModuleProgress } from '../utils/projectUtils';
 
 interface ModuleWithStats extends Module {
   taskCount: number;
