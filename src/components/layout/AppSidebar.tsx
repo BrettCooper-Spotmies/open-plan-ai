@@ -94,7 +94,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-4">
-        {!collapsed && <div className="text-xs text-muted-foreground">© 2026 OpenPlan AI</div>}
+        {!collapsed && <div className="text-xs text-muted-foreground">© 2026 OpenPlanAI</div>}
       </SidebarFooter>
     </Sidebar>;
 }
