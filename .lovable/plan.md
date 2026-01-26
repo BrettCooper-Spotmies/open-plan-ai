@@ -1,320 +1,219 @@
 
-# Phase 3: Complete Testing Infrastructure
+# Phase 4: Performance Optimizations - Implementation Plan
 
-## Current State
-
-Good news - the audit report was outdated! Testing infrastructure is **further along** than reported:
+## Current State Analysis
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Test infrastructure | Complete | Vitest + Testing Library configured |
-| Test utilities | Complete | Custom render with providers |
-| Feature utility tests | Partial | 3 test files exist (595+ lines) |
-| Service layer tests | Not started | 0 files |
-| Store tests | Not started | 0 files |
-| Hook tests | Not started | 0 files |
-| Component tests | Not started | 0 files |
-
-**Current Tests Found:**
-- `src/features/reports/__tests__/reportsUtils.test.ts` - 349 lines, 30+ test cases
-- `src/features/reports/__tests__/ReportsKPIRow.test.tsx` - 131 lines, 14 test cases
-- `src/features/projects/__tests__/projectUtils.test.ts` - 246 lines, 20+ test cases
-
----
+| Web Worker | **Created but unused** | `reportCalculations.worker.ts` exists but Reports.tsx still uses synchronous `calculateKPIs` |
+| Worker Hook | **Created but unused** | `useReportWorker.ts` exists but not imported anywhere |
+| Virtual List Hook | **Created but unused** | `useVirtualList.ts` exists with helpers but no components use it |
+| React.memo | **Not implemented** | 0 components use React.memo |
+| useCallback | **Minimal** | Only 3 uses in AddMilestoneDialog |
+| Bundle Optimization | **Not configured** | No bundle analyzer or optimization scripts |
 
 ## Implementation Plan
 
-### Step 1: Service Layer Tests (High Priority)
+---
 
-Create tests for all three service modules that handle data operations.
+### Step 1: Integrate Web Worker into Reports Page
 
-**File: `src/services/__tests__/projects.service.test.ts`**
-- Test `getAll()` returns array of projects
-- Test `getById()` returns project or null
-- Test `create()` adds new project with generated ID
-- Test `update()` modifies existing project
-- Test `delete()` removes project
-- Test `getTasks()` returns project tasks
-- Test `getMilestones()` returns project milestones
-- Test `getIssues()` returns project issues
-- Test error cases (project not found)
+**File:** `src/features/reports/Reports.tsx`
 
-**File: `src/services/__tests__/tasks.service.test.ts`**
-- Test `getAll()` returns all tasks across projects
-- Test `getById()` returns task or null
-- Test `create()` adds task to project
-- Test `update()` modifies existing task
-- Test `delete()` removes task
-- Test `batchUpdate()` updates multiple tasks
-- Test error cases (project/task not found)
+Currently the Reports page calculates KPIs synchronously on every filter change:
+```typescript
+const kpis = useMemo(() => {
+  return calculateKPIs(filteredTasks, issues, dateRange);
+}, [filteredTasks, issues, dateRange]);
+```
 
-**File: `src/services/__tests__/issues.service.test.ts`**
-- Test `getAll()` returns all issues
-- Test `getById()` returns issue or null
-- Test `create()` adds issue to project
-- Test `update()` modifies existing issue
-- Test `delete()` removes issue
-- Test `getOpenCount()` returns correct counts
-- Test critical issue counting
+**Changes:**
+- Import `useReportWorker` hook
+- Replace synchronous `calculateKPIs` with async worker-based calculation
+- Add loading state while worker processes
+- Show skeleton/spinner during calculation
 
 ---
 
-### Step 2: Zustand Store Tests (High Priority)
+### Step 2: Apply Virtual Scrolling to Large Lists
 
-Test all store actions and selectors for the three Zustand stores.
+**Target Components:**
 
-**File: `src/stores/__tests__/useProjectStore.test.ts`**
-- Test initial state
-- Test `setProjects()` updates projects array
-- Test `selectProject()` sets selected ID
-- Test `addProject()` adds to array
-- Test `updateProject()` modifies project
-- Test `deleteProject()` removes project
-- Test task CRUD actions (addTask, updateTask, deleteTask)
-- Test milestone CRUD actions
-- Test issue CRUD actions
-- Test selectors (useSelectedProject, useProjectById, useAllTasks, useAllIssues)
-- Test persistence (store survives reset)
-- Test reset() clears state
+| Component | Current Rows | Virtualization Benefit |
+|-----------|--------------|------------------------|
+| `ListView.tsx` (Projects) | All tasks rendered | High - could have 100+ tasks |
+| `MyDayListView.tsx` | All tasks rendered | Medium - typically 10-50 tasks |
+| `ReportOpenIssuesTable.tsx` | All issues rendered | Medium - could have 50+ issues |
+| `KanbanView.tsx` | Per-column tasks | Low - already column-scoped |
 
-**File: `src/stores/__tests__/useFilterStore.test.ts`**
-- Test initial state (default filters)
-- Test `setReportFilters()` partial updates
-- Test `resetReportFilters()` returns to defaults
-- Test `setTaskFilters()` partial updates
-- Test `resetTaskFilters()` returns to defaults
-- Test `setSearchQuery()` updates search
-- Test `setProjectViewPreference()` per-project prefs
-- Test persistence
+**Priority: Start with ListView.tsx**
 
-**File: `src/stores/__tests__/useUserStore.test.ts`**
-- Test initial state (null user, not authenticated)
-- Test `setUser()` sets user and auth flag
-- Test `updatePreferences()` merges preferences
-- Test `logout()` clears user state
-- Test sidebar state toggles
-- Test persistence of user preferences
+**Implementation approach:**
+1. Import `useVirtualList`, `getVirtualContainerStyle`, `getVirtualItemStyle` helpers
+2. Wrap table body in virtual container
+3. Only render visible rows + overscan buffer
+4. Maintain table header sticky behavior
 
 ---
 
-### Step 3: React Query Hook Tests (Medium Priority)
+### Step 3: Add React.memo to Expensive Components
 
-Test the custom hooks that wrap React Query for data fetching.
+**High-impact candidates for React.memo:**
 
-**File: `src/hooks/__tests__/useProjects.test.tsx`**
-- Test `useProjects()` fetches and returns projects
-- Test `useProject(id)` fetches single project
-- Test `useCreateProject()` mutation calls service
-- Test `useUpdateProject()` mutation with optimistic update
-- Test `useDeleteProject()` mutation
-- Test query invalidation after mutations
-- Test loading and error states
-- Test `enabled` flag behavior
+| Component | Why Expensive | Re-render Trigger |
+|-----------|---------------|-------------------|
+| Task cards in Kanban | Many instances, drag operations | Parent column re-renders |
+| Chart components | SVG rendering | Any filter change |
+| Avatar groups | Multiple per row | Row re-renders |
+| Badge components | Styling calculations | Parent re-renders |
 
-**File: `src/hooks/__tests__/useTasks.test.tsx`**
-- Test `useAllTasks()` fetches all tasks
-- Test `useProjectTasks(projectId)` filters by project
-- Test `useTask(taskId)` fetches single task
-- Test `useCreateTask()` mutation
-- Test `useUpdateTask()` mutation with optimistic update
-- Test `useDeleteTask()` mutation
-- Test `useBatchUpdateTasks()` for drag-drop
-- Test query invalidation
-
-**File: `src/hooks/__tests__/useIssues.test.tsx`**
-- Test `useAllIssues()` fetches all issues
-- Test `useProjectIssues(projectId)` filters by project
-- Test `useCreateIssue()` mutation
-- Test `useUpdateIssue()` mutation
-- Test `useDeleteIssue()` mutation
-- Test query invalidation
+**Target files:**
+- `src/features/myday/components/MyDayTaskCard.tsx`
+- `src/features/reports/components/ReportTaskStatusChart.tsx`
+- `src/features/reports/components/ReportTeamWorkload.tsx`
+- `src/features/reports/components/ReportMilestoneHealth.tsx`
+- `src/features/reports/components/ReportModuleProgress.tsx`
 
 ---
 
-### Step 4: Component Tests (Medium Priority)
+### Step 4: Add useCallback to Event Handlers
 
-Test key shared components for correct rendering and behavior.
+**Current problem:** Event handlers recreated on every render, causing child re-renders.
 
-**File: `src/components/__tests__/ErrorBoundary.test.tsx`**
-- Test renders children when no error
-- Test catches error and shows fallback UI
-- Test error message is displayed
-- Test "Try Again" button resets state
-- Test "Refresh Page" button calls reload
-- Test "Go Home" button navigates
-- Test custom fallback prop is used
-- Test logger is called on error
-- Test `withErrorBoundary` HOC works
-
-**File: `src/components/__tests__/SuspenseFallback.test.tsx`**
-- Test renders loading spinner by default
-- Test different variant props (card, list, chart)
-- Test correct skeleton counts
-- Test accessibility (aria labels)
-
-**File: `src/components/__tests__/NavLink.test.tsx`**
-- Test renders link with correct href
-- Test active state styling
-- Test icon and label rendering
-- Test click navigation
+**Target areas:**
+- `Reports.tsx` handlers: `handleKPIClick`, `handleStatusClick`, `handleMemberClick`, etc.
+- `ListView.tsx` handlers: `handleSort`, `handleRowClick`
+- `KanbanView.tsx` handlers: `handleDragEnd`, `handleTaskClick`, `handleAddTask`
+- `MyDay.tsx` handlers: `handleTaskClick`, `handleStatusUpdate`
 
 ---
 
-### Step 5: Integration Tests (Lower Priority)
+### Step 5: Add Bundle Optimization Scripts
 
-Test complete workflows spanning multiple components.
+**Add to package.json:**
+```json
+{
+  "scripts": {
+    "build:analyze": "vite build --mode production && npx vite-bundle-analyzer",
+    "type-check": "tsc --noEmit"
+  }
+}
+```
 
-**File: `src/__tests__/integration/project-workflow.test.tsx`**
-- Test creating a new project
-- Test viewing project list
-- Test navigating to project detail
-- Test updating project
-- Test deleting project
+---
 
-**File: `src/__tests__/integration/task-workflow.test.tsx`**
-- Test creating a task within project
-- Test changing task status
-- Test filtering tasks
-- Test drag-drop reordering (batch update)
+### Step 6: Optimize Vite Configuration
+
+**Add to vite.config.ts:**
+- Manual chunk splitting for large libraries (recharts, date-fns)
+- Rollup treeshake options
+
+---
+
+## Files to Modify
+
+| File | Changes | Priority |
+|------|---------|----------|
+| `src/features/reports/Reports.tsx` | Integrate useReportWorker hook | HIGH |
+| `src/features/projects/components/ListView.tsx` | Add virtual scrolling | HIGH |
+| `src/features/myday/components/MyDayTaskCard.tsx` | Wrap with React.memo | MEDIUM |
+| `src/features/reports/components/ReportTaskStatusChart.tsx` | Wrap with React.memo | MEDIUM |
+| `src/features/reports/components/ReportTeamWorkload.tsx` | Wrap with React.memo | MEDIUM |
+| `src/features/reports/components/ReportMilestoneHealth.tsx` | Wrap with React.memo | MEDIUM |
+| `src/features/reports/components/ReportModuleProgress.tsx` | Wrap with React.memo | MEDIUM |
+| `src/features/reports/components/ReportsKPIRow.tsx` | Wrap with React.memo | MEDIUM |
+| `package.json` | Add build:analyze and type-check scripts | LOW |
+| `vite.config.ts` | Add chunk splitting configuration | LOW |
 
 ---
 
 ## Files to Create
 
-| File | Lines (est.) | Tests (est.) | Priority |
-|------|--------------|--------------|----------|
-| `src/services/__tests__/projects.service.test.ts` | 150-200 | 15-20 | HIGH |
-| `src/services/__tests__/tasks.service.test.ts` | 150-180 | 15-18 | HIGH |
-| `src/services/__tests__/issues.service.test.ts` | 140-160 | 12-15 | HIGH |
-| `src/stores/__tests__/useProjectStore.test.ts` | 200-250 | 20-25 | HIGH |
-| `src/stores/__tests__/useFilterStore.test.ts` | 100-120 | 12-15 | HIGH |
-| `src/stores/__tests__/useUserStore.test.ts` | 80-100 | 10-12 | HIGH |
-| `src/hooks/__tests__/useProjects.test.tsx` | 150-180 | 12-15 | MEDIUM |
-| `src/hooks/__tests__/useTasks.test.tsx` | 160-200 | 15-18 | MEDIUM |
-| `src/hooks/__tests__/useIssues.test.tsx` | 130-150 | 12-14 | MEDIUM |
-| `src/components/__tests__/ErrorBoundary.test.tsx` | 120-150 | 10-12 | MEDIUM |
-| `src/components/__tests__/SuspenseFallback.test.tsx` | 60-80 | 6-8 | MEDIUM |
-| `src/components/__tests__/NavLink.test.tsx` | 60-80 | 6-8 | MEDIUM |
-| `src/__tests__/integration/project-workflow.test.tsx` | 150-200 | 8-10 | LOW |
-| `src/__tests__/integration/task-workflow.test.tsx` | 150-180 | 8-10 | LOW |
-
-**Total: ~1,600-1,900 lines of test code, 150-200 test cases**
+| File | Purpose |
+|------|---------|
+| `src/components/VirtualTable.tsx` | Reusable virtual scrolling table component |
 
 ---
 
-## Test Patterns to Follow
+## Technical Implementation Details
 
-### Service Test Pattern
+### Virtual Table Component Pattern
+
 ```typescript
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { projectsService } from '../projects.service';
+interface VirtualTableProps<T> {
+  items: T[];
+  columns: ColumnDef<T>[];
+  estimateRowHeight?: number;
+  onRowClick?: (item: T) => void;
+}
 
-// Mock the config to use mock data
-vi.mock('@/config', () => ({
-  config: { api: { useMockData: true } }
-}));
-
-describe('projectsService', () => {
-  describe('getAll', () => {
-    it('should return array of projects', async () => {
-      const projects = await projectsService.getAll();
-      expect(Array.isArray(projects)).toBe(true);
-      expect(projects.length).toBeGreaterThan(0);
-    });
-  });
-});
-```
-
-### Store Test Pattern
-```typescript
-import { describe, it, expect, beforeEach } from 'vitest';
-import { useProjectStore } from '../useProjectStore';
-
-describe('useProjectStore', () => {
-  beforeEach(() => {
-    useProjectStore.getState().reset();
+export function VirtualTable<T>({ items, columns, estimateRowHeight = 60, onRowClick }: VirtualTableProps<T>) {
+  const { parentRef, virtualItems, totalSize } = useVirtualList({
+    items,
+    estimateSize: estimateRowHeight,
   });
 
-  it('should add project to store', () => {
-    const { addProject } = useProjectStore.getState();
-    const project = { id: 'test-1', name: 'Test', ... };
-    
-    addProject(project);
-    
-    expect(useProjectStore.getState().projects).toHaveLength(1);
-  });
-});
-```
-
-### Hook Test Pattern (with renderHook)
-```typescript
-import { describe, it, expect } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
-import { useProjects } from '../useProjects';
-import { createWrapper } from '@/test/utils';
-
-describe('useProjects', () => {
-  it('should fetch projects', async () => {
-    const { result } = renderHook(() => useProjects(), {
-      wrapper: createWrapper(),
-    });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data).toBeDefined();
-  });
-});
-```
-
----
-
-## Technical Considerations
-
-### Mocking Strategy
-- Mock `@/config` to control mock data flag
-- Mock services for hook tests (isolate from real data)
-- Use `vi.spyOn` for partial mocking
-- Reset mocks in `beforeEach`
-
-### Test Utilities Enhancement
-Add `createWrapper` function for renderHook:
-```typescript
-export function createWrapper() {
-  const queryClient = createTestQueryClient();
-  return ({ children }) => (
-    <QueryClientProvider client={queryClient}>
-      {children}
-    </QueryClientProvider>
+  return (
+    <div ref={parentRef} style={{ height: '500px', overflow: 'auto' }}>
+      <table>
+        <thead>{/* Sticky header */}</thead>
+        <tbody style={getVirtualContainerStyle(totalSize)}>
+          {virtualItems.map((virtualRow) => (
+            <tr key={virtualRow.key} style={getVirtualItemStyle(virtualRow.start)}>
+              {/* Render row for items[virtualRow.index] */}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 ```
 
-### Store Testing
-- Use `getState()` to access store directly
-- Call `reset()` in `beforeEach` to clean state
-- Test selectors with mock state
+### React.memo Pattern
+
+```typescript
+import { memo } from 'react';
+
+interface TaskCardProps {
+  task: Task;
+  onComplete: (id: string) => void;
+}
+
+export const MyDayTaskCard = memo(function MyDayTaskCard({ task, onComplete }: TaskCardProps) {
+  // Component implementation
+});
+```
+
+### useCallback Pattern
+
+```typescript
+const handleStatusClick = useCallback((status: string) => {
+  setFilter(prev => ({ ...prev, status: [status] }));
+}, []);
+
+const handleMemberClick = useCallback((memberId: string) => {
+  setFilter(prev => ({ ...prev, assigneeIds: [memberId] }));
+}, []);
+```
 
 ---
 
 ## Success Criteria
 
 After implementation:
-- 14+ new test files created
-- 150+ new test cases
-- All services have 80%+ coverage
-- All stores have 90%+ coverage
-- All hooks have 70%+ coverage
-- ErrorBoundary has full coverage
-- Tests run in under 10 seconds
-- No flaky tests
+- Reports page offloads KPI calculations to Web Worker
+- ListView renders 100+ tasks without jank
+- Chart components don't re-render on unrelated state changes
+- Bundle size analyzed and optimized
+- Lighthouse performance score improves
 
 ---
 
 ## Implementation Order
 
-1. **Service tests first** (foundation - everything else depends on these)
-2. **Store tests** (critical for state management validation)
-3. **Hook tests** (integration between services and stores)
-4. **Component tests** (UI behavior)
-5. **Integration tests** (end-to-end workflows)
-
-Recommend starting with `src/services/__tests__/projects.service.test.ts` as it's the most used service.
+1. **Web Worker Integration** (Reports.tsx) - Immediate benefit for large datasets
+2. **Virtual Scrolling** (ListView.tsx) - Critical for scalability
+3. **React.memo** (Chart components) - Reduce unnecessary re-renders
+4. **useCallback** (Event handlers) - Enable React.memo effectiveness
+5. **Bundle Optimization** (Vite config) - Final polish
