@@ -16,6 +16,8 @@ interface CalendarFiltersProps {
   projects: Project[];
   teamMembers: TeamMember[];
   availableTags: string[];
+  hideTrigger?: boolean;
+  hideActiveFilters?: boolean;
 }
 
 const statusOptions: { value: TaskStatus; label: string }[] = [
@@ -45,6 +47,8 @@ export const CalendarFilters: React.FC<CalendarFiltersProps> = ({
   projects,
   teamMembers,
   availableTags,
+  hideTrigger,
+  hideActiveFilters,
 }) => {
   const activeFilterCount = [
     filters.projectIds?.length,
@@ -117,192 +121,245 @@ export const CalendarFilters: React.FC<CalendarFiltersProps> = ({
 
   return (
     <div className="flex items-center gap-2">
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="h-8 gap-2">
-            <Filter className="h-3.5 w-3.5" />
-            Filters
-            {activeFilterCount > 0 && (
-              <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                {activeFilterCount}
-              </Badge>
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-80 p-0" align="start">
-          <ScrollArea className="max-h-[400px]">
-            <div className="p-4 space-y-4">
-              {/* Projects */}
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Projects
-                </Label>
-                <div className="space-y-1">
-                  {projects.map((project) => (
-                    <div key={project.id} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`project-${project.id}`}
-                        checked={filters.projectIds?.includes(project.id) || false}
-                        onCheckedChange={() => handleProjectToggle(project.id)}
-                      />
-                      <Label htmlFor={`project-${project.id}`} className="text-sm cursor-pointer">
-                        {project.name}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Assignees */}
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Assigned To
-                </Label>
-                <div className="space-y-1">
-                  {teamMembers.map((member) => (
-                    <div key={member.id} className="flex items-center gap-2">
-                      <Checkbox
-                        id={`assignee-${member.id}`}
-                        checked={filters.assigneeIds?.includes(member.id) || false}
-                        onCheckedChange={() => handleAssigneeToggle(member.id)}
-                      />
-                      <Label htmlFor={`assignee-${member.id}`} className="text-sm cursor-pointer">
-                        {member.name}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Entity Types */}
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Type
-                </Label>
-                <div className="flex flex-wrap gap-1">
-                  {entityTypeOptions.map((option) => (
-                    <Badge
-                      key={option.value}
-                      variant={filters.entityType?.includes(option.value) ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      onClick={() => handleEntityTypeToggle(option.value)}
-                    >
-                      {option.label}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Status */}
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Status
-                </Label>
-                <div className="flex flex-wrap gap-1">
-                  {statusOptions.map((option) => (
-                    <Badge
-                      key={option.value}
-                      variant={filters.status?.includes(option.value) ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      onClick={() => handleStatusToggle(option.value)}
-                    >
-                      {option.label}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Priority */}
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Priority
-                </Label>
-                <div className="flex flex-wrap gap-1">
-                  {priorityOptions.map((option) => (
-                    <Badge
-                      key={option.value}
-                      variant={filters.priority?.includes(option.value) ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      onClick={() => handlePriorityToggle(option.value)}
-                    >
-                      {option.label}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-
-              <Separator />
-
-              {/* Blocked toggle */}
-              <div className="space-y-2">
-                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Dependency State
-                </Label>
-                <div className="flex gap-1">
-                  <Badge
-                    variant={filters.isBlocked === true ? 'default' : 'outline'}
-                    className={cn('cursor-pointer', filters.isBlocked === true && 'bg-destructive hover:bg-destructive/90')}
-                    onClick={() => onFiltersChange({ ...filters, isBlocked: filters.isBlocked === true ? undefined : true })}
+      {!hideTrigger && (
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="h-9 px-3 gap-2 bg-background border-dashed hover:border-solid transition-all">
+              <Filter className="h-3.5 w-3.5" />
+              <span className="text-sm font-medium">Filters</span>
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-xs ml-0.5 font-normal">
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[340px] p-0" align="end" sideOffset={8}>
+            <div className="flex flex-col h-full max-h-[80vh]">
+              <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+                <h4 className="font-medium text-sm">Filter View</h4>
+                {activeFilterCount > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground h-auto font-normal"
+                    onClick={clearAllFilters}
                   >
-                    Blocked Only
-                  </Badge>
-                  <Badge
-                    variant={filters.isBlocked === false ? 'default' : 'outline'}
-                    className="cursor-pointer"
-                    onClick={() => onFiltersChange({ ...filters, isBlocked: filters.isBlocked === false ? undefined : false })}
-                  >
-                    Unblocked Only
-                  </Badge>
-                </div>
+                    Reset all
+                  </Button>
+                )}
               </div>
 
-              {/* Tags */}
-              {availableTags.length > 0 && (
-                <>
-                  <Separator />
-                  <div className="space-y-2">
-                    <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                      Tags
+              <ScrollArea className="flex-1">
+                <div className="p-4 space-y-6">
+                  {/* Projects */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Projects
                     </Label>
-                    <div className="flex flex-wrap gap-1">
-                      {availableTags.slice(0, 10).map((tag) => (
-                        <Badge
-                          key={tag}
-                          variant={filters.tags?.includes(tag) ? 'default' : 'outline'}
-                          className="cursor-pointer text-xs"
-                          onClick={() => handleTagToggle(tag)}
-                        >
-                          {tag}
-                        </Badge>
+                    <div className="space-y-2">
+                      {projects.map((project) => (
+                        <div key={project.id} className="flex items-start gap-2 group">
+                          <Checkbox
+                            id={`project-${project.id}`}
+                            checked={filters.projectIds?.includes(project.id) || false}
+                            onCheckedChange={() => handleProjectToggle(project.id)}
+                            className="mt-0.5"
+                          />
+                          <Label
+                            htmlFor={`project-${project.id}`}
+                            className="text-sm cursor-pointer leading-tight group-hover:text-primary transition-colors font-normal"
+                          >
+                            {project.name}
+                          </Label>
+                        </div>
                       ))}
                     </div>
                   </div>
-                </>
-              )}
-            </div>
-          </ScrollArea>
 
-          {activeFilterCount > 0 && (
-            <div className="p-2 border-t border-border">
-              <Button variant="ghost" size="sm" className="w-full h-8 text-xs" onClick={clearAllFilters}>
-                <X className="h-3 w-3 mr-1" />
-                Clear all filters
-              </Button>
+                  <Separator />
+
+                  {/* Entity Types */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Type
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {entityTypeOptions.map((option) => {
+                        const isSelected = filters.entityType?.includes(option.value);
+                        return (
+                          <div
+                            key={option.value}
+                            onClick={() => handleEntityTypeToggle(option.value)}
+                            className={cn(
+                              "cursor-pointer rounded-md px-3 py-1.5 text-sm border transition-all",
+                              isSelected
+                                ? "bg-primary/5 border-primary/50 text-foreground font-medium"
+                                : "bg-card hover:bg-accent hover:text-accent-foreground text-muted-foreground border-border"
+                            )}
+                          >
+                            {option.label}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Status */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Status
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {statusOptions.map((option) => {
+                        const isSelected = filters.status?.includes(option.value);
+                        return (
+                          <div
+                            key={option.value}
+                            onClick={() => handleStatusToggle(option.value)}
+                            className={cn(
+                              "cursor-pointer rounded-md px-3 py-1.5 text-sm border transition-all",
+                              isSelected
+                                ? "bg-primary/5 border-primary/50 text-foreground font-medium"
+                                : "bg-card hover:bg-accent hover:text-accent-foreground text-muted-foreground border-border"
+                            )}
+                          >
+                            {option.label}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Priority */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Priority
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {priorityOptions.map((option) => {
+                        const isSelected = filters.priority?.includes(option.value);
+                        return (
+                          <div
+                            key={option.value}
+                            onClick={() => handlePriorityToggle(option.value)}
+                            className={cn(
+                              "cursor-pointer rounded-md px-3 py-1.5 text-sm border transition-all",
+                              isSelected
+                                ? "bg-primary/5 border-primary/50 text-foreground font-medium"
+                                : "bg-card hover:bg-accent hover:text-accent-foreground text-muted-foreground border-border"
+                            )}
+                          >
+                            {option.label}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Assignees */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Assigned To
+                    </Label>
+                    <div className="space-y-2">
+                      {teamMembers.map((member) => (
+                        <div key={member.id} className="flex items-center gap-2 group">
+                          <Checkbox
+                            id={`assignee-${member.id}`}
+                            checked={filters.assigneeIds?.includes(member.id) || false}
+                            onCheckedChange={() => handleAssigneeToggle(member.id)}
+                          />
+                          <Label
+                            htmlFor={`assignee-${member.id}`}
+                            className="text-sm cursor-pointer group-hover:text-primary transition-colors font-normal"
+                          >
+                            {member.name}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  {/* Blocked toggle */}
+                  <div className="space-y-3">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                      Dependency State
+                    </Label>
+                    <div className="flex gap-2">
+                      <div
+                        onClick={() => onFiltersChange({ ...filters, isBlocked: filters.isBlocked === true ? undefined : true })}
+                        className={cn(
+                          "cursor-pointer rounded-md px-3 py-1.5 text-sm border transition-all flex items-center gap-2",
+                          filters.isBlocked === true
+                            ? "bg-destructive/10 border-destructive/__50 text-destructive font-medium"
+                            : "bg-card hover:bg-accent hover:text-accent-foreground text-muted-foreground border-border"
+                        )}
+                      >
+                        <div className={cn("w-2 h-2 rounded-full", filters.isBlocked === true ? "bg-destructive" : "bg-muted-foreground")} />
+                        Blocked
+                      </div>
+                      <div
+                        onClick={() => onFiltersChange({ ...filters, isBlocked: filters.isBlocked === false ? undefined : false })}
+                        className={cn(
+                          "cursor-pointer rounded-md px-3 py-1.5 text-sm border transition-all flex items-center gap-2",
+                          filters.isBlocked === false
+                            ? "bg-green-500/10 border-green-500/50 text-green-700 dark:text-green-400 font-medium"
+                            : "bg-card hover:bg-accent hover:text-accent-foreground text-muted-foreground border-border"
+                        )}
+                      >
+                        <div className={cn("w-2 h-2 rounded-full", filters.isBlocked === false ? "bg-green-500" : "bg-muted-foreground")} />
+                        Unblocked
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  {availableTags.length > 0 && (
+                    <>
+                      <Separator />
+                      <div className="space-y-3">
+                        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                          Tags
+                        </Label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {availableTags.slice(0, 10).map((tag) => {
+                            const isSelected = filters.tags?.includes(tag);
+                            return (
+                              <Badge
+                                key={tag}
+                                variant={isSelected ? 'default' : 'outline'}
+                                className={cn(
+                                  "cursor-pointer text-xs font-normal border-dashed",
+                                  !isSelected && "hover:border-solid hover:bg-muted"
+                                )}
+                                onClick={() => handleTagToggle(tag)}
+                              >
+                                {tag}
+                              </Badge>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </ScrollArea>
             </div>
-          )}
-        </PopoverContent>
-      </Popover>
+          </PopoverContent>
+        </Popover>
+      )}
 
       {/* Active filter pills */}
-      {activeFilterCount > 0 && (
+      {!hideActiveFilters && activeFilterCount > 0 && (
         <div className="flex items-center gap-1 flex-wrap">
           {filters.entityType?.map((type) => (
             <Badge key={type} variant="secondary" className="h-6 gap-1 text-xs">

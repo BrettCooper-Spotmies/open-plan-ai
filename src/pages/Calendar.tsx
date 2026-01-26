@@ -21,7 +21,7 @@ import { projects, teamMembers } from '@/data/mockData';
 import { CalendarFilter, CalendarViewMode, Task, Milestone, Issue } from '@/types';
 
 const CalendarPage: React.FC = () => {
-  
+
   // State
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<CalendarViewMode>('month');
@@ -38,7 +38,7 @@ const CalendarPage: React.FC = () => {
   // Aggregate all events from all projects
   const allEvents = useMemo(() => {
     const events: CalendarEvent[] = [];
-    
+
     projects.forEach((project) => {
       const projectEvents = convertToCalendarEvents(
         project.tasks,
@@ -135,26 +135,48 @@ const CalendarPage: React.FC = () => {
 
   return (
     <AppLayout>
-      <div className="flex flex-col h-full p-6">
-        {/* Header */}
-        <CalendarHeader
-          currentDate={currentDate}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          onNavigatePrevious={handleNavigatePrevious}
-          onNavigateNext={handleNavigateNext}
-          onNavigateToday={handleNavigateToday}
-        />
+      <div className="flex flex-col h-full gap-6 animate-fade-in">
+        {/* Page Header */}
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            View and manage project timelines, milestones, and tasks.
+          </p>
+        </div>
 
-        {/* Filters */}
-        <div className="py-4">
-          <CalendarFilters
-            filters={filters}
-            onFiltersChange={setFilters}
-            projects={projects}
-            teamMembers={teamMembers}
-            availableTags={availableTags}
+        {/* Controls Layout */}
+        <div className="flex flex-col">
+          {/* Header */}
+          <CalendarHeader
+            currentDate={currentDate}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onNavigatePrevious={handleNavigatePrevious}
+            onNavigateNext={handleNavigateNext}
+            onNavigateToday={handleNavigateToday}
+            actions={
+              <CalendarFilters
+                filters={filters}
+                onFiltersChange={setFilters}
+                projects={projects}
+                teamMembers={teamMembers}
+                availableTags={availableTags}
+                hideActiveFilters
+              />
+            }
           />
+
+          {/* Active Filters */}
+          <div className="py-2 empty:hidden">
+            <CalendarFilters
+              filters={filters}
+              onFiltersChange={setFilters}
+              projects={projects}
+              teamMembers={teamMembers}
+              availableTags={availableTags}
+              hideTrigger
+            />
+          </div>
         </div>
 
         {/* Calendar View */}
@@ -194,7 +216,7 @@ const CalendarPage: React.FC = () => {
             setTaskModalOpen(false);
             setSelectedTask(null);
           }}
-          onUpdate={() => {}}
+          onUpdate={() => { }}
           allTasks={findProjectForEntity('task', selectedTask.id).tasks}
         />
       )}
@@ -208,7 +230,7 @@ const CalendarPage: React.FC = () => {
             setMilestoneModalOpen(false);
             setSelectedMilestone(null);
           }}
-          onUpdate={() => {}}
+          onUpdate={() => { }}
           tasks={findProjectForEntity('milestone', selectedMilestone.id).tasks}
           issues={findProjectForEntity('milestone', selectedMilestone.id).issues || []}
           modules={findProjectForEntity('milestone', selectedMilestone.id).projectModules || []}
@@ -224,7 +246,7 @@ const CalendarPage: React.FC = () => {
             setIssueModalOpen(false);
             setSelectedIssue(null);
           }}
-          onUpdate={() => {}}
+          onUpdate={() => { }}
           tasks={findProjectForEntity('issue', selectedIssue.id).tasks}
         />
       )}
