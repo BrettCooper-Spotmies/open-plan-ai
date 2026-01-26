@@ -10,22 +10,22 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SuspenseFallback } from "@/components/SuspenseFallback";
 
 // Eagerly loaded routes (initial page load)
-import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import NotFound from "./pages/NotFound";
 
-// Lazy loaded routes (code splitting)
-const MyDay = lazy(() => import("./pages/MyDay"));
-const Calendar = lazy(() => import("./pages/Calendar"));
+// Lazy loaded feature routes (code splitting)
+const Dashboard = lazy(() => import("./features/dashboard"));
+const MyDay = lazy(() => import("./features/myday"));
+const Calendar = lazy(() => import("./features/calendar"));
 const Projects = lazy(() => import("./pages/Projects"));
 const ProjectDetail = lazy(() => import("./pages/ProjectDetail"));
 const NewProject = lazy(() => import("./pages/NewProject"));
 const IssuePage = lazy(() => import("./pages/IssuePage"));
-const Team = lazy(() => import("./pages/Team"));
-const Settings = lazy(() => import("./pages/Settings"));
-const Reports = lazy(() => import("./pages/Reports"));
+const Team = lazy(() => import("./features/team"));
+const Settings = lazy(() => import("./features/settings"));
+const Reports = lazy(() => import("./features/reports"));
 
 const App = () => (
   <ErrorBoundary>
@@ -36,12 +36,19 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             {/* Eagerly loaded routes */}
-            <Route path="/" element={<Dashboard />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             
-            {/* Lazy loaded routes with Suspense */}
+            {/* Lazy loaded feature routes with Suspense */}
+            <Route 
+              path="/" 
+              element={
+                <Suspense fallback={<SuspenseFallback fullScreen />}>
+                  <Dashboard />
+                </Suspense>
+              } 
+            />
             <Route 
               path="/my-day" 
               element={

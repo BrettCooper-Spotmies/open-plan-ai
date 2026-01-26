@@ -1,0 +1,142 @@
+import { TrendingUp, AlertCircle, Clock, Timer, Info } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import { ReportKPI } from '../utils/reportsUtils';
+import { cn } from '@/lib/utils';
+
+interface ReportsKPIRowProps {
+  kpis: ReportKPI;
+  onKPIClick?: (type: 'progress' | 'issues' | 'overdue' | 'cycle') => void;
+}
+
+interface KPICardProps {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: React.ReactNode;
+  visual?: React.ReactNode;
+  tooltip: string;
+  variant?: 'default' | 'warning' | 'danger';
+  onClick?: () => void;
+}
+
+function KPICard({
+  title,
+  value,
+  subtitle,
+  icon,
+  visual,
+  tooltip,
+  variant = 'default',
+  onClick
+}: KPICardProps) {
+  return (
+    <Card
+      className={cn(
+        "cursor-pointer transition-all hover:shadow-md hover:border-primary/20",
+        variant === 'warning' && "border-l-4 border-l-amber-500",
+        variant === 'danger' && "border-l-4 border-l-destructive"
+      )}
+      onClick={onClick}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              "p-2 rounded-lg",
+              variant === 'default' && "bg-primary/10 text-primary",
+              variant === 'warning' && "bg-amber-500/10 text-amber-600",
+              variant === 'danger' && "bg-destructive/10 text-destructive"
+            )}>
+              {icon}
+            </div>
+            <span className="text-sm font-medium text-muted-foreground">{title}</span>
+          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="h-4 w-4 text-muted-foreground/50 hover:text-muted-foreground cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs">
+              <p className="text-xs">{tooltip}</p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+
+        <div className="space-y-1">
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-semibold">{value}</span>
+            {typeof value === 'number' && value > 0 && variant !== 'default' && (
+              <Badge
+                variant={variant === 'danger' ? 'destructive' : 'outline'}
+                className={cn(
+                  "text-xs",
+                  variant === 'warning' && "border-amber-500 text-amber-600"
+                )}
+              >
+                Needs attention
+              </Badge>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+
+        {visual && (
+          <div className="mt-3">
+            {visual}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ReportsKPIRow({ kpis, onKPIClick }: ReportsKPIRowProps) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <KPICard
+        title="Project Progress"
+        value={`${kpis.projectProgress}%`}
+        subtitle={`${kpis.completedTasks} of ${kpis.totalTasks} tasks`}
+        icon={<TrendingUp className="h-4 w-4" />}
+        visual={<Progress value={kpis.projectProgress} className="h-2" />}
+        tooltip="Percentage of completed tasks out of total tasks: (Completed / Total) × 100"
+        onClick={() => onKPIClick?.('progress')}
+      />
+
+      <KPICard
+        title="Open Issues"
+        value={kpis.openIssues}
+        subtitle={kpis.criticalIssues > 0 ? `${kpis.criticalIssues} critical` : 'No critical issues'}
+        icon={<AlertCircle className="h-4 w-4" />}
+        tooltip="Count of issues with status 'open' or 'investigating'"
+        variant={kpis.criticalIssues > 0 ? 'danger' : 'default'}
+        onClick={() => onKPIClick?.('issues')}
+      />
+
+      <KPICard
+        title="Overdue Tasks"
+        value={kpis.overdueTasks}
+        subtitle={kpis.overdueTasks > 0 ? 'Needs attention' : 'All on track'}
+        icon={<Clock className="h-4 w-4" />}
+        tooltip="Tasks where due date is before today and status is not 'done'"
+        variant={kpis.overdueTasks > 0 ? 'warning' : 'default'}
+        onClick={() => onKPIClick?.('overdue')}
+      />
+
+      <KPICard
+        title="Avg Cycle Time"
+        value={`${kpis.avgCycleTime}`}
+        subtitle="days per task"
+        icon={<Timer className="h-4 w-4" />}
+        tooltip="Average days from task start date to completion for all completed tasks"
+        onClick={() => onKPIClick?.('cycle')}
+      />
+    </div>
+  );
+}
