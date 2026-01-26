@@ -1,345 +1,210 @@
 
-# Scalability Implementation Plan for Open Plan AI
+# Phase 1 Completion Plan
 
 ## Current State Analysis
 
-After exploring the codebase, I've identified the following architecture:
+After exploring the codebase, I've identified what's already done and what remains:
 
-### What You Already Have
-- **React Query**: Already installed and configured in `App.tsx`
-- **Routing**: React Router DOM with 13+ routes
-- **Mock Data Layer**: Comprehensive mock data in `src/data/mockData.ts` (810 lines)
-- **Component Organization**: Partially feature-based (`calendar/`, `reports/`, `project/`, etc.)
-- **Utilities**: Some utilities in `src/lib/` and feature-specific utils
+### Already Implemented
+| Component | Status | Location |
+|-----------|--------|----------|
+| Zustand Stores | Done | `src/stores/` (3 stores) |
+| Service Layer | Done | `src/services/` (projects, tasks, issues) |
+| React Query Hooks | Done | `src/hooks/` (useProjects, useTasks, useIssues) |
+| Query Client + Keys | Done | `src/lib/queryClient.ts` |
+| Error Boundary | Done | `src/components/ErrorBoundary.tsx` |
+| Suspense Fallback | Done | `src/components/SuspenseFallback.tsx` |
+| Environment Example | Partial | `.env.example` exists but missing config module |
+| App Provider Setup | Done | `src/App.tsx` properly configured |
 
-### Key Issues to Address
-1. **No global state**: All state is local `useState` with prop drilling
-2. **Direct mock data imports**: Pages import directly from `mockData.ts`
-3. **No service abstraction**: No layer between UI and data source
-4. **No error boundaries**: Application can crash without recovery
-5. **No testing infrastructure**: No test files or testing setup
-6. **Loose TypeScript**: `strict: false`, `noImplicitAny: false`
-
----
-
-## Implementation Plan (5 Phases)
-
-### Phase 1: Foundation - Global State & Service Layer
-
-**1.1 Install Dependencies**
-```bash
-npm install zustand immer axios
-npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom
-```
-
-**1.2 Create Zustand Stores**
-
-| File | Purpose |
-|------|---------|
-| `src/stores/useProjectStore.ts` | Projects, tasks, milestones, issues state |
-| `src/stores/useFilterStore.ts` | Report and task filter preferences |
-| `src/stores/useUserStore.ts` | User preferences and theme settings |
-| `src/stores/index.ts` | Barrel export for all stores |
-
-**1.3 Create Service Layer**
-
-| File | Purpose |
-|------|---------|
-| `src/services/api/client.ts` | Axios client with interceptors |
-| `src/services/api/endpoints.ts` | Centralized API endpoint definitions |
-| `src/services/projects.service.ts` | Project CRUD operations |
-| `src/services/tasks.service.ts` | Task CRUD operations |
-| `src/services/issues.service.ts` | Issue CRUD operations |
-| `src/services/index.ts` | Barrel export |
-
-The service layer supports three data sources controlled by environment variables:
-- `VITE_USE_MOCK_DATA=true` → Uses mock data
-- `VITE_USE_SUPABASE=true` → Uses Supabase (future)
-- Otherwise → Uses REST API
-
-**1.4 Update React Query Configuration**
-
-Create `src/lib/queryClient.ts` with:
-- 5-minute stale time
-- 10-minute garbage collection
-- Retry configuration
-- Window focus refetch disabled
-
-**1.5 Create React Query Hooks**
-
-| File | Exports |
-|------|---------|
-| `src/hooks/useProjects.ts` | `useProjects`, `useProject`, `useCreateProject`, `useUpdateProject`, `useDeleteProject` |
-| `src/hooks/useTasks.ts` | `useProjectTasks`, `useCreateTask`, `useUpdateTask`, `useDeleteTask` |
-| `src/hooks/useIssues.ts` | `useProjectIssues`, `useCreateIssue`, `useUpdateIssue` |
-
-**1.6 Create Error Boundaries**
-
-| File | Purpose |
-|------|---------|
-| `src/components/ErrorBoundary.tsx` | Global error boundary with recovery UI |
-| `src/components/SuspenseFallback.tsx` | Loading state for lazy-loaded routes |
-
-**1.7 Environment Configuration**
-
-Create `.env.example`:
-```env
-VITE_API_BASE_URL=http://localhost:3000/api
-VITE_USE_MOCK_DATA=true
-VITE_USE_SUPABASE=false
-VITE_APP_NAME=Open Plan AI
-```
+### Remaining Tasks
+| Task | Priority | Effort |
+|------|----------|--------|
+| Create Config Module | HIGH | 10 min |
+| Create Logging Service | MEDIUM | 15 min |
+| Enhance Error Boundary | LOW | 10 min |
+| Update Services to Use Config | LOW | 5 min |
 
 ---
 
-### Phase 2: Feature-Based Folder Restructure
+## Implementation Steps
 
-**New Folder Structure:**
-```
-src/
-├── features/
-│   ├── reports/
-│   │   ├── components/
-│   │   │   ├── ReportsHeader.tsx
-│   │   │   ├── ReportsFilters.tsx
-│   │   │   ├── ReportsKPIRow.tsx
-│   │   │   ├── ReportTaskStatusChart.tsx
-│   │   │   ├── ReportMilestoneHealth.tsx
-│   │   │   ├── ReportTeamWorkload.tsx
-│   │   │   ├── ReportModuleProgress.tsx
-│   │   │   ├── ReportOpenIssuesTable.tsx
-│   │   │   └── ReportTrendChart.tsx
-│   │   ├── hooks/
-│   │   │   ├── useReportData.ts
-│   │   │   └── useReportFilters.ts
-│   │   ├── utils/
-│   │   │   └── reportsUtils.ts
-│   │   ├── Reports.tsx
-│   │   └── index.ts
-│   ├── calendar/
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   ├── utils/
-│   │   └── index.ts
-│   ├── projects/
-│   │   ├── components/
-│   │   ├── hooks/
-│   │   └── index.ts
-│   ├── dashboard/
-│   ├── myday/
-│   ├── team/
-│   └── settings/
-├── shared/
-│   ├── components/
-│   │   ├── ui/          (shadcn components - unchanged)
-│   │   ├── layout/      (AppLayout, AppSidebar, etc.)
-│   │   └── ErrorBoundary.tsx
-│   ├── hooks/
-│   │   ├── use-mobile.tsx
-│   │   └── use-toast.ts
-│   └── lib/
-│       ├── utils.ts
-│       └── queryClient.ts
-├── services/
-├── stores/
-└── types/
-```
+### Step 1: Create Config Module
 
-**File Moves:**
-- `src/components/reports/*` → `src/features/reports/components/*`
-- `src/components/calendar/*` → `src/features/calendar/components/*`
-- `src/components/project/*` → `src/features/projects/components/*`
-- `src/components/dashboard/*` → `src/features/dashboard/components/*`
-- `src/components/myday/*` → `src/features/myday/components/*`
-- `src/pages/Reports.tsx` → `src/features/reports/Reports.tsx`
-- etc.
+Create a centralized configuration module that provides type-safe access to environment variables.
 
-**Create Barrel Exports** for each feature:
+**File: `src/config/index.ts`**
+
 ```typescript
-// src/features/reports/index.ts
-export { default } from './Reports';
-export * from './hooks/useReportData';
+export const config = {
+  app: {
+    name: import.meta.env.VITE_APP_NAME || 'Open Plan AI',
+    version: import.meta.env.VITE_APP_VERSION || '1.0.0',
+  },
+  api: {
+    baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
+    useMockData: import.meta.env.VITE_USE_MOCK_DATA !== 'false',
+    useSupabase: import.meta.env.VITE_USE_SUPABASE === 'true',
+  },
+  supabase: {
+    url: import.meta.env.VITE_SUPABASE_URL || '',
+    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
+  },
+  features: {
+    analytics: import.meta.env.VITE_ENABLE_ANALYTICS === 'true',
+    errorTracking: import.meta.env.VITE_ENABLE_ERROR_TRACKING === 'true',
+  },
+  isDevelopment: import.meta.env.DEV,
+  isProduction: import.meta.env.PROD,
+} as const;
+
+export type Config = typeof config;
 ```
 
 ---
 
-### Phase 3: Testing Infrastructure
+### Step 2: Create Logging Service
 
-**3.1 Vitest Configuration**
+Create a structured logging service for debugging and future integration with external monitoring.
 
-Create `vitest.config.ts`:
-- jsdom environment
-- Global test utilities
-- Coverage reporting (v8 provider)
-- Path alias support
+**File: `src/services/monitoring/logger.ts`**
 
-**3.2 Test Setup**
+```typescript
+type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-Create `src/test/setup.ts`:
-- Import `@testing-library/jest-dom`
-- Mock `window.matchMedia`
-- Cleanup after each test
+interface LogEntry {
+  level: LogLevel;
+  message: string;
+  timestamp: string;
+  context?: Record<string, unknown>;
+}
 
-Create `src/test/utils.tsx`:
-- Custom render with all providers (QueryClient, Router)
-- Re-export testing-library utilities
+class Logger {
+  private isDevelopment = import.meta.env.DEV;
 
-**3.3 Update TypeScript Config**
+  private formatEntry(level: LogLevel, message: string, context?: Record<string, unknown>): LogEntry {
+    return {
+      level,
+      message,
+      timestamp: new Date().toISOString(),
+      context,
+    };
+  }
 
-Add `"vitest/globals"` to `tsconfig.app.json` types array.
+  private log(level: LogLevel, message: string, context?: Record<string, unknown>) {
+    const entry = this.formatEntry(level, message, context);
 
-**3.4 Sample Tests**
+    if (this.isDevelopment) {
+      console[level](`[${level.toUpperCase()}] ${message}`, context || '');
+    }
 
-| Test File | Coverage |
-|-----------|----------|
-| `src/features/reports/__tests__/reportsUtils.test.ts` | KPI calculations, status breakdown |
-| `src/features/reports/__tests__/ReportsKPIRow.test.tsx` | Component rendering, click handlers |
-| `src/stores/__tests__/useProjectStore.test.ts` | Store actions and state updates |
+    // Future: Send to Sentry, LogRocket, etc.
+  }
 
-**3.5 Update package.json Scripts**
+  debug(message: string, context?: Record<string, unknown>) {
+    this.log('debug', message, context);
+  }
 
-```json
-{
-  "scripts": {
-    "test": "vitest",
-    "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage",
-    "type-check": "tsc --noEmit"
+  info(message: string, context?: Record<string, unknown>) {
+    this.log('info', message, context);
+  }
+
+  warn(message: string, context?: Record<string, unknown>) {
+    this.log('warn', message, context);
+  }
+
+  error(message: string, context?: Record<string, unknown>) {
+    this.log('error', message, context);
+  }
+
+  apiCall(method: string, url: string, status?: number) {
+    this.info(`API ${method} ${url}`, { status });
   }
 }
+
+export const logger = new Logger();
 ```
 
 ---
 
-### Phase 4: Update Core Pages to Use New Architecture
+### Step 3: Enhance Error Boundary with Logging
 
-**4.1 Update `main.tsx`**
+Update the existing `ErrorBoundary.tsx` to use the logger service and add a "Go Home" option.
 
-- Move QueryClient to `src/lib/queryClient.ts`
-- Add ReactQueryDevtools (dev only)
-- Wrap app in ErrorBoundary
-
-**4.2 Update `App.tsx`**
-
-- Add lazy loading for routes using `React.lazy`
-- Wrap routes in Suspense with fallback
-- Add Error Boundary per-route
-
-**4.3 Migrate Reports Page**
-
-Transform from direct mock data imports to:
-1. Use `useProjects()` hook for data fetching
-2. Use `useFilterStore()` for filter state persistence
-3. Use service layer for any mutations
-
-**4.4 Migrate ProjectDetail Page**
-
-Current issues:
-- Directly mutates `projects` array from mock data
-- Local state doesn't sync with global state
-
-Transform to:
-1. Use `useProject(id)` hook for data
-2. Use `useUpdateProject()` mutation
-3. Use `useUpdateTask()` for task changes
-4. Remove direct mock data mutations
+**Changes to `src/components/ErrorBoundary.tsx`:**
+- Import and use `logger` from the logging service
+- Add a "Go Home" button alongside the existing buttons
+- Log errors with component stack trace
 
 ---
 
-### Phase 5: Performance & Polish
+### Step 4: Update API Client with Logging
 
-**5.1 Add Virtual Scrolling**
+Integrate the logger into the API client for request/response tracking.
 
-Install `@tanstack/react-virtual` for large lists:
-- Task lists in Project Detail
-- Issues tables
-- Any list > 50 items
-
-**5.2 Memoization Improvements**
-
-- Add `React.memo` to expensive list item components
-- Ensure `useCallback` for handlers passed to children
-- Use `useMemo` for derived data calculations
-
-**5.3 Code Splitting Verification**
-
-Ensure all routes are lazy-loaded:
-```typescript
-const Reports = lazy(() => import('@/features/reports'));
-const Projects = lazy(() => import('@/features/projects'));
-const Calendar = lazy(() => import('@/features/calendar'));
-```
-
-**5.4 TypeScript Strictness (Optional)**
-
-Gradually enable strict mode:
-1. First: Enable `noImplicitAny: true`
-2. Later: Enable `strict: true`
+**Changes to `src/services/api/client.ts`:**
+- Import logger
+- Log outgoing requests
+- Log successful responses with status codes
+- Log errors with details
 
 ---
 
-## Migration Strategy
+### Step 5: Update Services to Use Config
 
-### Safe Migration Order
+Update the `projects.service.ts` to use the centralized config module.
 
-1. **Add new infrastructure** (stores, services, hooks) - non-breaking
-2. **Update one feature at a time** starting with Reports
-3. **Keep mock data** working throughout
-4. **Move files** after functionality is verified
-5. **Add tests** for critical paths
-6. **Enable stricter TypeScript** last
-
-### Parallel Development
-
-During migration:
-- Old direct imports continue working
-- New patterns available for new code
-- Gradual adoption per-feature
+**Changes:**
+- Import config from `@/config`
+- Replace direct `import.meta.env` access with `config.api.useMockData`
 
 ---
 
-## Files to Create (Summary)
+## Files Summary
 
-| Category | Files |
-|----------|-------|
-| **Stores** | `useProjectStore.ts`, `useFilterStore.ts`, `useUserStore.ts`, `index.ts` |
-| **Services** | `api/client.ts`, `api/endpoints.ts`, `projects.service.ts`, `tasks.service.ts`, `issues.service.ts` |
-| **Hooks** | `useProjects.ts`, `useTasks.ts`, `useIssues.ts` |
-| **Core** | `lib/queryClient.ts`, `components/ErrorBoundary.tsx` |
-| **Testing** | `vitest.config.ts`, `test/setup.ts`, `test/utils.tsx` |
-| **Config** | `.env.example`, updates to `package.json`, `tsconfig.app.json` |
-
----
-
-## Success Metrics
-
-After implementation:
-- Zero prop drilling for global state
-- Service layer abstracts data source
-- Feature-based folder structure
-- Test coverage infrastructure ready
-- Error recovery for crashes
-- State persists across navigation
-- React Query DevTools for debugging
+| Action | File Path | Description |
+|--------|-----------|-------------|
+| Create | `src/config/index.ts` | Centralized configuration module |
+| Create | `src/services/monitoring/logger.ts` | Structured logging service |
+| Update | `src/components/ErrorBoundary.tsx` | Add logging and "Go Home" button |
+| Update | `src/services/api/client.ts` | Integrate logger for API calls |
+| Update | `src/services/projects.service.ts` | Use config module |
+| Update | `src/services/tasks.service.ts` | Use config module |
+| Update | `src/services/issues.service.ts` | Use config module |
 
 ---
 
-## Technical Notes
+## Phase 1 Completion Checklist (After Implementation)
 
-### Data Flow (After Migration)
-```
-UI Component
-    ↓
-React Query Hook (useProjects, useTasks)
-    ↓
-Service Layer (projectsService.getAll)
-    ↓
-Data Source (Mock → Supabase → REST API)
-```
+### Core Infrastructure
+- [x] Zustand stores created (projects, filters, user)
+- [x] Service layer implemented (projects, tasks, issues)
+- [x] React Query hooks created
+- [x] Testing infrastructure setup
+- [x] Error boundaries added
+- [x] Environment configuration (`.env.example`)
+- [ ] Config module created
+- [ ] Logging service implemented
 
-### Backward Compatibility
+### Configuration
+- [x] `.env.example` created
+- [ ] `src/config/index.ts` created
+- [ ] Services updated to use config
 
-- Mock data remains unchanged
-- Service layer returns same data shapes
-- Existing component props unchanged
-- Only internal data fetching changes
+### Developer Experience
+- [x] Query key factory implemented
+- [x] Loading states components created
+- [x] Error boundary integrated in App.tsx
+- [x] React Query DevTools configured
+- [ ] Logger integrated in services
+
+---
+
+## Success Criteria
+
+After these changes:
+1. **Centralized Config** - All environment variables accessed through one module
+2. **Structured Logging** - Debug-friendly console output in development
+3. **Enhanced Error Recovery** - Users can navigate home after errors
+4. **API Observability** - All API calls logged for debugging
+5. **Clean Architecture** - No direct `import.meta.env` access in business logic
