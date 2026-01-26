@@ -1,73 +1,112 @@
-# Welcome to your Lovable project
+# Open Plan AI
 
-## Project info
+A modern project management application built with React, TypeScript, and a feature-based architecture.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## 🚀 Quick Start
 
-## How can I edit this code?
+```bash
+# Install dependencies
+npm install
 
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
+
+# Run tests
+npm test
+
+# Type check
+npm run type-check
+
+# Lint code
+npm run lint
 ```
 
-**Edit a file directly in GitHub**
+## 📦 Available Scripts
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start development server with hot reload |
+| `npm run build` | Build production bundle |
+| `npm run preview` | Preview production build locally |
+| `npm run lint` | Run ESLint on all TypeScript files |
+| `npm run type-check` | Run TypeScript compiler checks |
+| `npm test` | Run test suite |
+| `npm run test:watch` | Run tests in watch mode |
 
-**Use GitHub Codespaces**
+## 🏗️ Project Structure
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```
+src/
+├── components/          # Shared UI components
+│   ├── ui/             # shadcn/ui components
+│   └── layout/         # Layout components (Header, Sidebar)
+├── features/           # Feature-based modules
+│   ├── dashboard/      # Dashboard feature
+│   ├── projects/       # Projects management
+│   ├── calendar/       # Calendar views
+│   ├── myday/          # My Day task view
+│   ├── reports/        # Reports and analytics
+│   ├── settings/       # User settings
+│   └── team/           # Team management
+├── hooks/              # Custom React hooks
+├── services/           # API services and monitoring
+│   ├── api/           # HTTP client and endpoints
+│   └── monitoring/    # Logging service
+├── stores/             # Zustand state stores
+├── types/              # TypeScript type definitions
+├── lib/                # Utility functions
+└── test/               # Test utilities and setup
+```
 
-## What technologies are used for this project?
+## 🛠️ Tech Stack
 
-This project is built with:
+- **Framework:** React 18 with TypeScript
+- **Build Tool:** Vite
+- **Styling:** Tailwind CSS with shadcn/ui components
+- **State Management:** Zustand
+- **Data Fetching:** TanStack Query (React Query)
+- **Routing:** React Router v6
+- **Forms:** React Hook Form with Zod validation
+- **Testing:** Vitest with React Testing Library
+- **Charts:** Recharts
+- **Date Handling:** date-fns
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 🧪 Testing
 
-## How can I deploy this project?
+The project uses Vitest with React Testing Library for testing:
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+```bash
+# Run all tests
+npm test
 
-## Can I connect a custom domain to my Lovable project?
+# Run tests in watch mode
+npm run test:watch
 
-Yes, you can!
+# Run tests with coverage
+npm test -- --coverage
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Tests are organized alongside their components:
+- `ComponentName.test.tsx` for component tests
+- `__tests__/` directories for grouped tests
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 📝 Code Quality
+
+This project uses:
+- **ESLint** for code linting
+- **TypeScript** in strict mode for type safety
+- **Husky** for pre-commit hooks
+- **lint-staged** for running linters on staged files
+
+Pre-commit hooks automatically run:
+1. ESLint with auto-fix on staged files
+2. TypeScript type checking
+3. Test suite
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines.
+
+## 📄 License
+
+MIT License - see LICENSE file for details.
