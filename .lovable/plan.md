@@ -1,235 +1,153 @@
 
-# Phase 2: Feature-Based Restructuring Plan
+# Phase 2 Completion Plan
 
 ## Overview
 
-Reorganize the codebase from a flat component structure to a scalable feature-based architecture. This will improve maintainability, enable better code splitting, and make the codebase easier to navigate as it grows.
+Complete the feature-based restructuring by migrating remaining features (Projects, MyDay components) and cleaning up duplicate files. This will achieve the target architecture with all features properly organized under `src/features/`.
 
-## Current vs Target Structure
+## Current State Analysis
+
+### Features Already Migrated (In `src/features/`)
+| Feature | Status | Notes |
+|---------|--------|-------|
+| reports | Complete | Components, utils, barrel export |
+| calendar | Complete | Components, utils, barrel export |
+| dashboard | Complete | Components, barrel export |
+| myday | Partial | Main page only, components still in old location |
+| team | Complete | Main page, barrel export |
+| settings | Complete | Main page, barrel export |
+
+### Features Needing Migration
+| Feature | Files to Move | Effort |
+|---------|---------------|--------|
+| projects | 4 pages + 19 components + 1 util | High |
+| myday | 6 components | Low |
+
+### Duplicate Files to Delete
+| Directory | Status |
+|-----------|--------|
+| `src/components/reports/` | 10 files - should be deleted |
+| `src/components/calendar/` | 8 files - should be deleted |
+| `src/components/dashboard/` | 4 files - should be deleted |
+| `src/components/myday/` | 6 files - after migration |
+| `src/components/project/` | 19 files - after projects migration |
+| `src/pages/Reports.tsx` | Should be deleted |
+| `src/pages/Calendar.tsx` | Should be deleted |
+| `src/pages/Dashboard.tsx` | Should be deleted |
+| `src/pages/MyDay.tsx` | Should be deleted |
+| `src/pages/Projects.tsx` | After migration |
+| `src/pages/ProjectDetail.tsx` | After migration |
+| `src/pages/NewProject.tsx` | After migration |
+| `src/pages/IssuePage.tsx` | After migration |
+
+---
+
+## Implementation Steps
+
+### Step 1: Complete MyDay Feature Migration
+
+Move the 6 MyDay components from `src/components/myday/` to `src/features/myday/components/`:
+
+| Source | Destination |
+|--------|-------------|
+| `src/components/myday/MyDayStats.tsx` | `src/features/myday/components/MyDayStats.tsx` |
+| `src/components/myday/MyDayKanbanView.tsx` | `src/features/myday/components/MyDayKanbanView.tsx` |
+| `src/components/myday/MyDayListView.tsx` | `src/features/myday/components/MyDayListView.tsx` |
+| `src/components/myday/MyDayGroupBySelector.tsx` | `src/features/myday/components/MyDayGroupBySelector.tsx` |
+| `src/components/myday/MyDaySection.tsx` | `src/features/myday/components/MyDaySection.tsx` |
+| `src/components/myday/MyDayTaskCard.tsx` | `src/features/myday/components/MyDayTaskCard.tsx` |
+
+Update `src/features/myday/MyDay.tsx` imports to use relative paths.
+
+---
+
+### Step 2: Create Projects Feature Structure
+
+Create the projects feature with all pages and components:
 
 ```text
-CURRENT STRUCTURE                          TARGET STRUCTURE
-─────────────────                          ─────────────────
-src/                                       src/
-├── components/                            ├── features/
-│   ├── calendar/                          │   ├── reports/
-│   ├── dashboard/                         │   │   ├── components/
-│   ├── layout/                            │   │   ├── utils/
-│   ├── myday/                             │   │   ├── Reports.tsx
-│   ├── project/                           │   │   └── index.ts
-│   ├── reports/                           │   ├── calendar/
-│   └── ui/                                │   ├── projects/
-├── pages/                                 │   ├── dashboard/
-│   ├── Reports.tsx                        │   ├── myday/
-│   ├── Calendar.tsx                       │   ├── team/
-│   ├── Projects.tsx                       │   └── settings/
-│   └── ...                                ├── components/
-├── hooks/                                 │   ├── ui/     (shadcn - unchanged)
-├── lib/                                   │   ├── layout/ (shared layout)
-└── stores/                                │   └── shared/ (common components)
-                                           ├── hooks/     (shared hooks)
-                                           ├── lib/       (shared utilities)
-                                           ├── stores/    (global state)
-                                           ├── services/  (API layer)
-                                           └── types/     (shared types)
+src/features/projects/
+├── components/
+│   ├── AddMilestoneDialog.tsx
+│   ├── AddModuleDialog.tsx
+│   ├── DependencyView.tsx
+│   ├── IssueDetailContent.tsx
+│   ├── IssueDetailModal.tsx
+│   ├── IssuesView.tsx
+│   ├── KanbanView.tsx
+│   ├── ListView.tsx
+│   ├── MilestoneDetailModal.tsx
+│   ├── MilestonesView.tsx
+│   ├── ModuleDetailModal.tsx
+│   ├── ModulesKanbanView.tsx
+│   ├── ModulesListView.tsx
+│   ├── ModulesSection.tsx
+│   ├── TaskDetailModal.tsx
+│   ├── TaskFilters.tsx
+│   ├── TaskFiltersDropdown.tsx
+│   ├── TasksSection.tsx
+│   └── TimelineView.tsx
+├── utils/
+│   └── projectUtils.ts
+├── Projects.tsx
+├── ProjectDetail.tsx
+├── NewProject.tsx
+├── IssuePage.tsx
+└── index.ts
 ```
 
----
-
-## Implementation Strategy
-
-### Approach: Incremental Migration
-
-1. Create new `src/features/` folder structure
-2. Move one feature at a time (starting with Reports)
-3. Update imports as we go
-4. Keep shared components in `src/components/`
-5. Update `App.tsx` to use new paths
-
-### Key Principles
-
-- **No breaking changes** - Keep app working throughout migration
-- **Preserve lazy loading** - Maintain code splitting via dynamic imports
-- **Shared components stay shared** - `ui/`, `layout/` remain in `src/components/`
-- **Feature isolation** - Each feature owns its components, utils, and hooks
+Files to move:
+- `src/pages/Projects.tsx` → `src/features/projects/Projects.tsx`
+- `src/pages/ProjectDetail.tsx` → `src/features/projects/ProjectDetail.tsx`
+- `src/pages/NewProject.tsx` → `src/features/projects/NewProject.tsx`
+- `src/pages/IssuePage.tsx` → `src/features/projects/IssuePage.tsx`
+- `src/components/project/*` (19 files) → `src/features/projects/components/*`
+- `src/lib/projectUtils.ts` → `src/features/projects/utils/projectUtils.ts`
 
 ---
 
-## Files to Create/Move
+### Step 3: Update App.tsx Routes
 
-### Feature 1: Reports
-
-| Action | Source | Destination |
-|--------|--------|-------------|
-| Move | `src/pages/Reports.tsx` | `src/features/reports/Reports.tsx` |
-| Move | `src/components/reports/ReportsHeader.tsx` | `src/features/reports/components/ReportsHeader.tsx` |
-| Move | `src/components/reports/ReportsFilters.tsx` | `src/features/reports/components/ReportsFilters.tsx` |
-| Move | `src/components/reports/ReportsKPIRow.tsx` | `src/features/reports/components/ReportsKPIRow.tsx` |
-| Move | `src/components/reports/ReportTaskStatusChart.tsx` | `src/features/reports/components/ReportTaskStatusChart.tsx` |
-| Move | `src/components/reports/ReportMilestoneHealth.tsx` | `src/features/reports/components/ReportMilestoneHealth.tsx` |
-| Move | `src/components/reports/ReportTeamWorkload.tsx` | `src/features/reports/components/ReportTeamWorkload.tsx` |
-| Move | `src/components/reports/ReportModuleProgress.tsx` | `src/features/reports/components/ReportModuleProgress.tsx` |
-| Move | `src/components/reports/ReportOpenIssuesTable.tsx` | `src/features/reports/components/ReportOpenIssuesTable.tsx` |
-| Move | `src/components/reports/ReportTrendChart.tsx` | `src/features/reports/components/ReportTrendChart.tsx` |
-| Move | `src/components/reports/reportsUtils.ts` | `src/features/reports/utils/reportsUtils.ts` |
-| Create | - | `src/features/reports/index.ts` (barrel export) |
-
-### Feature 2: Calendar
-
-| Action | Source | Destination |
-|--------|--------|-------------|
-| Move | `src/pages/Calendar.tsx` | `src/features/calendar/Calendar.tsx` |
-| Move | `src/components/calendar/*` (8 files) | `src/features/calendar/components/*` |
-| Create | - | `src/features/calendar/index.ts` |
-
-### Feature 3: Projects
-
-| Action | Source | Destination |
-|--------|--------|-------------|
-| Move | `src/pages/Projects.tsx` | `src/features/projects/Projects.tsx` |
-| Move | `src/pages/ProjectDetail.tsx` | `src/features/projects/ProjectDetail.tsx` |
-| Move | `src/pages/NewProject.tsx` | `src/features/projects/NewProject.tsx` |
-| Move | `src/pages/IssuePage.tsx` | `src/features/projects/IssuePage.tsx` |
-| Move | `src/components/project/*` (19 files) | `src/features/projects/components/*` |
-| Move | `src/lib/projectUtils.ts` | `src/features/projects/utils/projectUtils.ts` |
-| Create | - | `src/features/projects/index.ts` |
-
-### Feature 4: Dashboard
-
-| Action | Source | Destination |
-|--------|--------|-------------|
-| Move | `src/pages/Dashboard.tsx` | `src/features/dashboard/Dashboard.tsx` |
-| Move | `src/components/dashboard/*` (4 files) | `src/features/dashboard/components/*` |
-| Create | - | `src/features/dashboard/index.ts` |
-
-### Feature 5: MyDay
-
-| Action | Source | Destination |
-|--------|--------|-------------|
-| Move | `src/pages/MyDay.tsx` | `src/features/myday/MyDay.tsx` |
-| Move | `src/components/myday/*` (6 files) | `src/features/myday/components/*` |
-| Move | `src/lib/myDayUtils.ts` | `src/features/myday/utils/myDayUtils.ts` |
-| Create | - | `src/features/myday/index.ts` |
-
-### Feature 6: Team
-
-| Action | Source | Destination |
-|--------|--------|-------------|
-| Move | `src/pages/Team.tsx` | `src/features/team/Team.tsx` |
-| Create | - | `src/features/team/index.ts` |
-
-### Feature 7: Settings
-
-| Action | Source | Destination |
-|--------|--------|-------------|
-| Move | `src/pages/Settings.tsx` | `src/features/settings/Settings.tsx` |
-| Create | - | `src/features/settings/index.ts` |
-
----
-
-## Barrel Export Pattern
-
-Each feature will have an `index.ts` that exports the main page component as default:
+Add lazy loading for the new projects feature pages:
 
 ```typescript
-// src/features/reports/index.ts
-export { default } from './Reports';
-
-// Optional: Re-export components for use elsewhere
-export { ReportsHeader } from './components/ReportsHeader';
-export { ReportsKPIRow } from './components/ReportsKPIRow';
-
-// Re-export utilities if needed by other features
-export * from './utils/reportsUtils';
-```
-
----
-
-## App.tsx Changes
-
-Update lazy imports to point to new feature locations:
-
-```typescript
-// Before
-const Reports = lazy(() => import("./pages/Reports"));
-const Calendar = lazy(() => import("./pages/Calendar"));
-const Projects = lazy(() => import("./pages/Projects"));
-
-// After
-const Reports = lazy(() => import("./features/reports"));
-const Calendar = lazy(() => import("./features/calendar"));
 const Projects = lazy(() => import("./features/projects"));
+const ProjectDetail = lazy(() => 
+  import("./features/projects/ProjectDetail").then(m => ({ default: m.default }))
+);
+const NewProject = lazy(() => 
+  import("./features/projects/NewProject").then(m => ({ default: m.default }))
+);
+const IssuePage = lazy(() => 
+  import("./features/projects/IssuePage").then(m => ({ default: m.default }))
+);
 ```
 
 ---
 
-## Shared Components (Stay in Place)
+### Step 4: Delete Duplicate Old Files
 
-These will **NOT** move - they're shared across features:
+After migration is complete, delete:
 
-| Component | Location | Used By |
-|-----------|----------|---------|
-| `ui/*` | `src/components/ui/` | All features |
-| `AppLayout` | `src/components/layout/` | All pages |
-| `AppSidebar` | `src/components/layout/` | AppLayout |
-| `AppHeader` | `src/components/layout/` | AppLayout |
-| `ErrorBoundary` | `src/components/` | App.tsx |
-| `SuspenseFallback` | `src/components/` | App.tsx |
-| `NavLink` | `src/components/` | AppSidebar |
-| `TaskDetailModal` | `src/features/projects/components/` | Calendar, MyDay |
+**Old component directories:**
+- `src/components/reports/` (10 files)
+- `src/components/calendar/` (8 files)
+- `src/components/dashboard/` (4 files)
+- `src/components/myday/` (6 files)
+- `src/components/project/` (19 files)
 
----
+**Old page files:**
+- `src/pages/Reports.tsx`
+- `src/pages/Calendar.tsx`
+- `src/pages/Dashboard.tsx`
+- `src/pages/MyDay.tsx`
+- `src/pages/Projects.tsx`
+- `src/pages/ProjectDetail.tsx`
+- `src/pages/NewProject.tsx`
+- `src/pages/IssuePage.tsx`
 
-## Cross-Feature Dependencies
-
-Some components are used across features:
-
-| Component | Owner Feature | Used By |
-|-----------|---------------|---------|
-| `TaskDetailModal` | projects | calendar, myday |
-| `MilestoneDetailModal` | projects | calendar |
-| `IssueDetailModal` | projects | calendar |
-
-These will stay in `projects` feature and be imported by other features as needed.
-
----
-
-## Implementation Order
-
-1. **Create folder structure** - Empty feature folders
-2. **Reports feature** - Move all reports files
-3. **Calendar feature** - Move calendar files
-4. **Projects feature** - Move projects files (largest)
-5. **Dashboard feature** - Move dashboard files
-6. **MyDay feature** - Move myday files
-7. **Team feature** - Move team files
-8. **Settings feature** - Move settings files
-9. **Update App.tsx** - Point to new locations
-10. **Cleanup** - Remove empty folders
-
----
-
-## Technical Details
-
-### Import Updates Required
-
-Each moved file needs import path updates:
-
-```typescript
-// Before (in Reports.tsx)
-import { AppLayout } from '@/components/layout/AppLayout';
-import { ReportsHeader } from '@/components/reports/ReportsHeader';
-
-// After (in src/features/reports/Reports.tsx)
-import { AppLayout } from '@/components/layout/AppLayout';  // unchanged - shared
-import { ReportsHeader } from './components/ReportsHeader'; // relative import
-```
-
-### Pages That Stay in src/pages/
-
-These auth-related pages don't need feature folders:
-
-- `Login.tsx`
+**Keep in `src/pages/`:**
+- `Login.tsx` (auth pages stay for now)
 - `Signup.tsx`
 - `ForgotPassword.tsx`
 - `NotFound.tsx`
@@ -237,37 +155,171 @@ These auth-related pages don't need feature folders:
 
 ---
 
+### Step 5: Update Cross-Feature Imports
+
+Some features depend on project components. Update these imports:
+
+| Feature | Component Used | New Import Path |
+|---------|----------------|-----------------|
+| calendar | TaskDetailModal | `@/features/projects/components/TaskDetailModal` |
+| myday | TaskDetailModal | `@/features/projects/components/TaskDetailModal` |
+
+---
+
+## Files Summary
+
+### Files to Create
+
+| File | Purpose |
+|------|---------|
+| `src/features/myday/components/MyDayStats.tsx` | Stats component |
+| `src/features/myday/components/MyDayKanbanView.tsx` | Kanban view |
+| `src/features/myday/components/MyDayListView.tsx` | List view |
+| `src/features/myday/components/MyDayGroupBySelector.tsx` | Group selector |
+| `src/features/myday/components/MyDaySection.tsx` | Section component |
+| `src/features/myday/components/MyDayTaskCard.tsx` | Task card |
+| `src/features/projects/Projects.tsx` | Projects list page |
+| `src/features/projects/ProjectDetail.tsx` | Project detail page |
+| `src/features/projects/NewProject.tsx` | New project form |
+| `src/features/projects/IssuePage.tsx` | Issue detail page |
+| `src/features/projects/components/*.tsx` | 19 component files |
+| `src/features/projects/utils/projectUtils.ts` | Project utilities |
+| `src/features/projects/index.ts` | Barrel export |
+
+### Files to Update
+
+| File | Changes |
+|------|---------|
+| `src/features/myday/MyDay.tsx` | Update imports to relative paths |
+| `src/features/calendar/Calendar.tsx` | Update TaskDetailModal import |
+| `src/App.tsx` | Update Projects route imports |
+
+### Files to Delete (After Migration)
+
+- `src/components/reports/*` (10 files)
+- `src/components/calendar/*` (8 files)
+- `src/components/dashboard/*` (4 files)
+- `src/components/myday/*` (6 files)
+- `src/components/project/*` (19 files)
+- `src/lib/projectUtils.ts`
+- `src/pages/Reports.tsx`
+- `src/pages/Calendar.tsx`
+- `src/pages/Dashboard.tsx`
+- `src/pages/MyDay.tsx`
+- `src/pages/Projects.tsx`
+- `src/pages/ProjectDetail.tsx`
+- `src/pages/NewProject.tsx`
+- `src/pages/IssuePage.tsx`
+
+---
+
+## Target Structure After Completion
+
+```text
+src/
+├── features/
+│   ├── calendar/
+│   │   ├── components/     (7 files)
+│   │   ├── utils/
+│   │   ├── Calendar.tsx
+│   │   └── index.ts
+│   ├── dashboard/
+│   │   ├── components/     (4 files)
+│   │   ├── Dashboard.tsx
+│   │   └── index.ts
+│   ├── myday/
+│   │   ├── components/     (6 files)
+│   │   ├── MyDay.tsx
+│   │   └── index.ts
+│   ├── projects/
+│   │   ├── components/     (19 files)
+│   │   ├── utils/
+│   │   ├── Projects.tsx
+│   │   ├── ProjectDetail.tsx
+│   │   ├── NewProject.tsx
+│   │   ├── IssuePage.tsx
+│   │   └── index.ts
+│   ├── reports/
+│   │   ├── components/     (9 files)
+│   │   ├── utils/
+│   │   ├── Reports.tsx
+│   │   └── index.ts
+│   ├── settings/
+│   │   ├── Settings.tsx
+│   │   └── index.ts
+│   └── team/
+│       ├── Team.tsx
+│       └── index.ts
+├── components/
+│   ├── layout/            (AppLayout, AppSidebar, AppHeader)
+│   ├── ui/                (50+ shadcn components - unchanged)
+│   ├── ErrorBoundary.tsx
+│   ├── SuspenseFallback.tsx
+│   └── NavLink.tsx
+├── pages/
+│   ├── Login.tsx
+│   ├── Signup.tsx
+│   ├── ForgotPassword.tsx
+│   ├── NotFound.tsx
+│   └── Index.tsx
+├── hooks/
+├── lib/
+├── services/
+├── stores/
+├── config/
+└── types/
+```
+
+---
+
 ## Success Criteria
 
-After Phase 2 completion:
+After implementation:
 
-- All feature-related code lives in `src/features/[feature-name]/`
-- Each feature has its own `index.ts` barrel export
-- Lazy loading works correctly for all routes
-- Shared components remain accessible at `@/components/`
-- No broken imports or runtime errors
+- All feature code organized under `src/features/`
+- Each feature has its own components, utils, and barrel exports
+- No duplicate files between old and new locations
+- All routes use lazy loading from feature directories
+- Cross-feature dependencies use absolute imports (`@/features/...`)
+- Application functions correctly with no broken imports
 - Build succeeds without errors
 
 ---
 
-## File Count Summary
+## Technical Notes
 
-| Feature | Components | Utils | Pages | Total Files |
-|---------|------------|-------|-------|-------------|
-| Reports | 9 | 1 | 1 | 11 + index |
-| Calendar | 8 | 1 | 1 | 10 + index |
-| Projects | 19 | 1 | 4 | 24 + index |
-| Dashboard | 4 | 0 | 1 | 5 + index |
-| MyDay | 6 | 1 | 1 | 8 + index |
-| Team | 0 | 0 | 1 | 1 + index |
-| Settings | 0 | 0 | 1 | 1 + index |
-| **Total** | **46** | **4** | **10** | **60 + 7 indexes** |
+### Import Path Updates
 
----
+Each migrated component needs import path updates:
 
-## Risk Mitigation
+```typescript
+// Before (in ProjectDetail.tsx)
+import { TasksSection } from '@/components/project/TasksSection';
+import { ModulesSection } from '@/components/project/ModulesSection';
 
-1. **Broken imports** - Use TypeScript to catch missing imports at compile time
-2. **Lazy loading issues** - Test each route after migration
-3. **Circular dependencies** - Keep shared components in `src/components/`
-4. **Lost context** - Maintain same component names and file structure within features
+// After (in src/features/projects/ProjectDetail.tsx)
+import { TasksSection } from './components/TasksSection';
+import { ModulesSection } from './components/ModulesSection';
+```
+
+### Barrel Export Pattern
+
+```typescript
+// src/features/projects/index.ts
+export { default } from './Projects';
+export { default as ProjectDetail } from './ProjectDetail';
+export { default as NewProject } from './NewProject';
+export { default as IssuePage } from './IssuePage';
+```
+
+### Cross-Feature Component Usage
+
+The `TaskDetailModal` is used by multiple features. After migration:
+
+```typescript
+// In src/features/calendar/Calendar.tsx
+import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
+
+// In src/features/myday/MyDay.tsx
+import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
+```
