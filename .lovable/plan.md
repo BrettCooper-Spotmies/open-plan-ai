@@ -1,210 +1,273 @@
 
-# Phase 1 Completion Plan
+# Phase 2: Feature-Based Restructuring Plan
 
-## Current State Analysis
+## Overview
 
-After exploring the codebase, I've identified what's already done and what remains:
+Reorganize the codebase from a flat component structure to a scalable feature-based architecture. This will improve maintainability, enable better code splitting, and make the codebase easier to navigate as it grows.
 
-### Already Implemented
-| Component | Status | Location |
-|-----------|--------|----------|
-| Zustand Stores | Done | `src/stores/` (3 stores) |
-| Service Layer | Done | `src/services/` (projects, tasks, issues) |
-| React Query Hooks | Done | `src/hooks/` (useProjects, useTasks, useIssues) |
-| Query Client + Keys | Done | `src/lib/queryClient.ts` |
-| Error Boundary | Done | `src/components/ErrorBoundary.tsx` |
-| Suspense Fallback | Done | `src/components/SuspenseFallback.tsx` |
-| Environment Example | Partial | `.env.example` exists but missing config module |
-| App Provider Setup | Done | `src/App.tsx` properly configured |
+## Current vs Target Structure
 
-### Remaining Tasks
-| Task | Priority | Effort |
-|------|----------|--------|
-| Create Config Module | HIGH | 10 min |
-| Create Logging Service | MEDIUM | 15 min |
-| Enhance Error Boundary | LOW | 10 min |
-| Update Services to Use Config | LOW | 5 min |
-
----
-
-## Implementation Steps
-
-### Step 1: Create Config Module
-
-Create a centralized configuration module that provides type-safe access to environment variables.
-
-**File: `src/config/index.ts`**
-
-```typescript
-export const config = {
-  app: {
-    name: import.meta.env.VITE_APP_NAME || 'Open Plan AI',
-    version: import.meta.env.VITE_APP_VERSION || '1.0.0',
-  },
-  api: {
-    baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api',
-    useMockData: import.meta.env.VITE_USE_MOCK_DATA !== 'false',
-    useSupabase: import.meta.env.VITE_USE_SUPABASE === 'true',
-  },
-  supabase: {
-    url: import.meta.env.VITE_SUPABASE_URL || '',
-    anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || '',
-  },
-  features: {
-    analytics: import.meta.env.VITE_ENABLE_ANALYTICS === 'true',
-    errorTracking: import.meta.env.VITE_ENABLE_ERROR_TRACKING === 'true',
-  },
-  isDevelopment: import.meta.env.DEV,
-  isProduction: import.meta.env.PROD,
-} as const;
-
-export type Config = typeof config;
+```text
+CURRENT STRUCTURE                          TARGET STRUCTURE
+─────────────────                          ─────────────────
+src/                                       src/
+├── components/                            ├── features/
+│   ├── calendar/                          │   ├── reports/
+│   ├── dashboard/                         │   │   ├── components/
+│   ├── layout/                            │   │   ├── utils/
+│   ├── myday/                             │   │   ├── Reports.tsx
+│   ├── project/                           │   │   └── index.ts
+│   ├── reports/                           │   ├── calendar/
+│   └── ui/                                │   ├── projects/
+├── pages/                                 │   ├── dashboard/
+│   ├── Reports.tsx                        │   ├── myday/
+│   ├── Calendar.tsx                       │   ├── team/
+│   ├── Projects.tsx                       │   └── settings/
+│   └── ...                                ├── components/
+├── hooks/                                 │   ├── ui/     (shadcn - unchanged)
+├── lib/                                   │   ├── layout/ (shared layout)
+└── stores/                                │   └── shared/ (common components)
+                                           ├── hooks/     (shared hooks)
+                                           ├── lib/       (shared utilities)
+                                           ├── stores/    (global state)
+                                           ├── services/  (API layer)
+                                           └── types/     (shared types)
 ```
 
 ---
 
-### Step 2: Create Logging Service
+## Implementation Strategy
 
-Create a structured logging service for debugging and future integration with external monitoring.
+### Approach: Incremental Migration
 
-**File: `src/services/monitoring/logger.ts`**
+1. Create new `src/features/` folder structure
+2. Move one feature at a time (starting with Reports)
+3. Update imports as we go
+4. Keep shared components in `src/components/`
+5. Update `App.tsx` to use new paths
+
+### Key Principles
+
+- **No breaking changes** - Keep app working throughout migration
+- **Preserve lazy loading** - Maintain code splitting via dynamic imports
+- **Shared components stay shared** - `ui/`, `layout/` remain in `src/components/`
+- **Feature isolation** - Each feature owns its components, utils, and hooks
+
+---
+
+## Files to Create/Move
+
+### Feature 1: Reports
+
+| Action | Source | Destination |
+|--------|--------|-------------|
+| Move | `src/pages/Reports.tsx` | `src/features/reports/Reports.tsx` |
+| Move | `src/components/reports/ReportsHeader.tsx` | `src/features/reports/components/ReportsHeader.tsx` |
+| Move | `src/components/reports/ReportsFilters.tsx` | `src/features/reports/components/ReportsFilters.tsx` |
+| Move | `src/components/reports/ReportsKPIRow.tsx` | `src/features/reports/components/ReportsKPIRow.tsx` |
+| Move | `src/components/reports/ReportTaskStatusChart.tsx` | `src/features/reports/components/ReportTaskStatusChart.tsx` |
+| Move | `src/components/reports/ReportMilestoneHealth.tsx` | `src/features/reports/components/ReportMilestoneHealth.tsx` |
+| Move | `src/components/reports/ReportTeamWorkload.tsx` | `src/features/reports/components/ReportTeamWorkload.tsx` |
+| Move | `src/components/reports/ReportModuleProgress.tsx` | `src/features/reports/components/ReportModuleProgress.tsx` |
+| Move | `src/components/reports/ReportOpenIssuesTable.tsx` | `src/features/reports/components/ReportOpenIssuesTable.tsx` |
+| Move | `src/components/reports/ReportTrendChart.tsx` | `src/features/reports/components/ReportTrendChart.tsx` |
+| Move | `src/components/reports/reportsUtils.ts` | `src/features/reports/utils/reportsUtils.ts` |
+| Create | - | `src/features/reports/index.ts` (barrel export) |
+
+### Feature 2: Calendar
+
+| Action | Source | Destination |
+|--------|--------|-------------|
+| Move | `src/pages/Calendar.tsx` | `src/features/calendar/Calendar.tsx` |
+| Move | `src/components/calendar/*` (8 files) | `src/features/calendar/components/*` |
+| Create | - | `src/features/calendar/index.ts` |
+
+### Feature 3: Projects
+
+| Action | Source | Destination |
+|--------|--------|-------------|
+| Move | `src/pages/Projects.tsx` | `src/features/projects/Projects.tsx` |
+| Move | `src/pages/ProjectDetail.tsx` | `src/features/projects/ProjectDetail.tsx` |
+| Move | `src/pages/NewProject.tsx` | `src/features/projects/NewProject.tsx` |
+| Move | `src/pages/IssuePage.tsx` | `src/features/projects/IssuePage.tsx` |
+| Move | `src/components/project/*` (19 files) | `src/features/projects/components/*` |
+| Move | `src/lib/projectUtils.ts` | `src/features/projects/utils/projectUtils.ts` |
+| Create | - | `src/features/projects/index.ts` |
+
+### Feature 4: Dashboard
+
+| Action | Source | Destination |
+|--------|--------|-------------|
+| Move | `src/pages/Dashboard.tsx` | `src/features/dashboard/Dashboard.tsx` |
+| Move | `src/components/dashboard/*` (4 files) | `src/features/dashboard/components/*` |
+| Create | - | `src/features/dashboard/index.ts` |
+
+### Feature 5: MyDay
+
+| Action | Source | Destination |
+|--------|--------|-------------|
+| Move | `src/pages/MyDay.tsx` | `src/features/myday/MyDay.tsx` |
+| Move | `src/components/myday/*` (6 files) | `src/features/myday/components/*` |
+| Move | `src/lib/myDayUtils.ts` | `src/features/myday/utils/myDayUtils.ts` |
+| Create | - | `src/features/myday/index.ts` |
+
+### Feature 6: Team
+
+| Action | Source | Destination |
+|--------|--------|-------------|
+| Move | `src/pages/Team.tsx` | `src/features/team/Team.tsx` |
+| Create | - | `src/features/team/index.ts` |
+
+### Feature 7: Settings
+
+| Action | Source | Destination |
+|--------|--------|-------------|
+| Move | `src/pages/Settings.tsx` | `src/features/settings/Settings.tsx` |
+| Create | - | `src/features/settings/index.ts` |
+
+---
+
+## Barrel Export Pattern
+
+Each feature will have an `index.ts` that exports the main page component as default:
 
 ```typescript
-type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+// src/features/reports/index.ts
+export { default } from './Reports';
 
-interface LogEntry {
-  level: LogLevel;
-  message: string;
-  timestamp: string;
-  context?: Record<string, unknown>;
-}
+// Optional: Re-export components for use elsewhere
+export { ReportsHeader } from './components/ReportsHeader';
+export { ReportsKPIRow } from './components/ReportsKPIRow';
 
-class Logger {
-  private isDevelopment = import.meta.env.DEV;
-
-  private formatEntry(level: LogLevel, message: string, context?: Record<string, unknown>): LogEntry {
-    return {
-      level,
-      message,
-      timestamp: new Date().toISOString(),
-      context,
-    };
-  }
-
-  private log(level: LogLevel, message: string, context?: Record<string, unknown>) {
-    const entry = this.formatEntry(level, message, context);
-
-    if (this.isDevelopment) {
-      console[level](`[${level.toUpperCase()}] ${message}`, context || '');
-    }
-
-    // Future: Send to Sentry, LogRocket, etc.
-  }
-
-  debug(message: string, context?: Record<string, unknown>) {
-    this.log('debug', message, context);
-  }
-
-  info(message: string, context?: Record<string, unknown>) {
-    this.log('info', message, context);
-  }
-
-  warn(message: string, context?: Record<string, unknown>) {
-    this.log('warn', message, context);
-  }
-
-  error(message: string, context?: Record<string, unknown>) {
-    this.log('error', message, context);
-  }
-
-  apiCall(method: string, url: string, status?: number) {
-    this.info(`API ${method} ${url}`, { status });
-  }
-}
-
-export const logger = new Logger();
+// Re-export utilities if needed by other features
+export * from './utils/reportsUtils';
 ```
 
 ---
 
-### Step 3: Enhance Error Boundary with Logging
+## App.tsx Changes
 
-Update the existing `ErrorBoundary.tsx` to use the logger service and add a "Go Home" option.
+Update lazy imports to point to new feature locations:
 
-**Changes to `src/components/ErrorBoundary.tsx`:**
-- Import and use `logger` from the logging service
-- Add a "Go Home" button alongside the existing buttons
-- Log errors with component stack trace
+```typescript
+// Before
+const Reports = lazy(() => import("./pages/Reports"));
+const Calendar = lazy(() => import("./pages/Calendar"));
+const Projects = lazy(() => import("./pages/Projects"));
 
----
-
-### Step 4: Update API Client with Logging
-
-Integrate the logger into the API client for request/response tracking.
-
-**Changes to `src/services/api/client.ts`:**
-- Import logger
-- Log outgoing requests
-- Log successful responses with status codes
-- Log errors with details
+// After
+const Reports = lazy(() => import("./features/reports"));
+const Calendar = lazy(() => import("./features/calendar"));
+const Projects = lazy(() => import("./features/projects"));
+```
 
 ---
 
-### Step 5: Update Services to Use Config
+## Shared Components (Stay in Place)
 
-Update the `projects.service.ts` to use the centralized config module.
+These will **NOT** move - they're shared across features:
 
-**Changes:**
-- Import config from `@/config`
-- Replace direct `import.meta.env` access with `config.api.useMockData`
-
----
-
-## Files Summary
-
-| Action | File Path | Description |
-|--------|-----------|-------------|
-| Create | `src/config/index.ts` | Centralized configuration module |
-| Create | `src/services/monitoring/logger.ts` | Structured logging service |
-| Update | `src/components/ErrorBoundary.tsx` | Add logging and "Go Home" button |
-| Update | `src/services/api/client.ts` | Integrate logger for API calls |
-| Update | `src/services/projects.service.ts` | Use config module |
-| Update | `src/services/tasks.service.ts` | Use config module |
-| Update | `src/services/issues.service.ts` | Use config module |
+| Component | Location | Used By |
+|-----------|----------|---------|
+| `ui/*` | `src/components/ui/` | All features |
+| `AppLayout` | `src/components/layout/` | All pages |
+| `AppSidebar` | `src/components/layout/` | AppLayout |
+| `AppHeader` | `src/components/layout/` | AppLayout |
+| `ErrorBoundary` | `src/components/` | App.tsx |
+| `SuspenseFallback` | `src/components/` | App.tsx |
+| `NavLink` | `src/components/` | AppSidebar |
+| `TaskDetailModal` | `src/features/projects/components/` | Calendar, MyDay |
 
 ---
 
-## Phase 1 Completion Checklist (After Implementation)
+## Cross-Feature Dependencies
 
-### Core Infrastructure
-- [x] Zustand stores created (projects, filters, user)
-- [x] Service layer implemented (projects, tasks, issues)
-- [x] React Query hooks created
-- [x] Testing infrastructure setup
-- [x] Error boundaries added
-- [x] Environment configuration (`.env.example`)
-- [x] Config module created
-- [x] Logging service implemented
+Some components are used across features:
 
-### Configuration
-- [x] `.env.example` created
-- [x] `src/config/index.ts` created
-- [x] Services updated to use config
+| Component | Owner Feature | Used By |
+|-----------|---------------|---------|
+| `TaskDetailModal` | projects | calendar, myday |
+| `MilestoneDetailModal` | projects | calendar |
+| `IssueDetailModal` | projects | calendar |
 
-### Developer Experience
-- [x] Query key factory implemented
-- [x] Loading states components created
-- [x] Error boundary integrated in App.tsx
-- [x] React Query DevTools configured
-- [x] Logger integrated in services
+These will stay in `projects` feature and be imported by other features as needed.
+
+---
+
+## Implementation Order
+
+1. **Create folder structure** - Empty feature folders
+2. **Reports feature** - Move all reports files
+3. **Calendar feature** - Move calendar files
+4. **Projects feature** - Move projects files (largest)
+5. **Dashboard feature** - Move dashboard files
+6. **MyDay feature** - Move myday files
+7. **Team feature** - Move team files
+8. **Settings feature** - Move settings files
+9. **Update App.tsx** - Point to new locations
+10. **Cleanup** - Remove empty folders
+
+---
+
+## Technical Details
+
+### Import Updates Required
+
+Each moved file needs import path updates:
+
+```typescript
+// Before (in Reports.tsx)
+import { AppLayout } from '@/components/layout/AppLayout';
+import { ReportsHeader } from '@/components/reports/ReportsHeader';
+
+// After (in src/features/reports/Reports.tsx)
+import { AppLayout } from '@/components/layout/AppLayout';  // unchanged - shared
+import { ReportsHeader } from './components/ReportsHeader'; // relative import
+```
+
+### Pages That Stay in src/pages/
+
+These auth-related pages don't need feature folders:
+
+- `Login.tsx`
+- `Signup.tsx`
+- `ForgotPassword.tsx`
+- `NotFound.tsx`
+- `Index.tsx`
 
 ---
 
 ## Success Criteria
 
-After these changes:
-1. **Centralized Config** - All environment variables accessed through one module
-2. **Structured Logging** - Debug-friendly console output in development
-3. **Enhanced Error Recovery** - Users can navigate home after errors
-4. **API Observability** - All API calls logged for debugging
-5. **Clean Architecture** - No direct `import.meta.env` access in business logic
+After Phase 2 completion:
+
+- All feature-related code lives in `src/features/[feature-name]/`
+- Each feature has its own `index.ts` barrel export
+- Lazy loading works correctly for all routes
+- Shared components remain accessible at `@/components/`
+- No broken imports or runtime errors
+- Build succeeds without errors
+
+---
+
+## File Count Summary
+
+| Feature | Components | Utils | Pages | Total Files |
+|---------|------------|-------|-------|-------------|
+| Reports | 9 | 1 | 1 | 11 + index |
+| Calendar | 8 | 1 | 1 | 10 + index |
+| Projects | 19 | 1 | 4 | 24 + index |
+| Dashboard | 4 | 0 | 1 | 5 + index |
+| MyDay | 6 | 1 | 1 | 8 + index |
+| Team | 0 | 0 | 1 | 1 + index |
+| Settings | 0 | 0 | 1 | 1 + index |
+| **Total** | **46** | **4** | **10** | **60 + 7 indexes** |
+
+---
+
+## Risk Mitigation
+
+1. **Broken imports** - Use TypeScript to catch missing imports at compile time
+2. **Lazy loading issues** - Test each route after migration
+3. **Circular dependencies** - Keep shared components in `src/components/`
+4. **Lost context** - Maintain same component names and file structure within features
