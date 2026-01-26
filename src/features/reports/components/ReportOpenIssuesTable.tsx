@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useCallback, memo } from 'react';
 import { AlertCircle, AlertTriangle, Info, ChevronUp, ChevronDown, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -27,15 +27,15 @@ const severityConfig: Record<IssueSeverity, {
   trivial: { icon: Info, color: 'text-muted-foreground', order: 3 },
 };
 
-export function ReportOpenIssuesTable({ issues, onIssueClick }: ReportOpenIssuesTableProps) {
+export const ReportOpenIssuesTable = memo(function ReportOpenIssuesTable({ issues, onIssueClick }: ReportOpenIssuesTableProps) {
   const [sortField, setSortField] = useState<SortField>('severity');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   
-  const openIssues = issues.filter(i => 
+  const openIssues = useMemo(() => issues.filter(i => 
     i.status === 'open' || i.status === 'investigating'
-  );
+  ), [issues]);
   
-  const sortedIssues = [...openIssues].sort((a, b) => {
+  const sortedIssues = useMemo(() => [...openIssues].sort((a, b) => {
     let comparison = 0;
     
     switch (sortField) {
@@ -56,16 +56,20 @@ export function ReportOpenIssuesTable({ issues, onIssueClick }: ReportOpenIssues
     }
     
     return sortDirection === 'asc' ? comparison : -comparison;
-  });
+  }), [openIssues, sortField, sortDirection]);
   
-  const handleSort = (field: SortField) => {
+  const handleSort = useCallback((field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
       setSortField(field);
       setSortDirection('asc');
     }
-  };
+  }, []);
+
+  const handleIssueClick = useCallback((issueId: string) => {
+    onIssueClick?.(issueId);
+  }, [onIssueClick]);
   
   const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
     <button
@@ -128,7 +132,7 @@ export function ReportOpenIssuesTable({ issues, onIssueClick }: ReportOpenIssues
                     <tr 
                       key={issue.id}
                       className="border-b last:border-0 hover:bg-muted/50 cursor-pointer transition-colors"
-                      onClick={() => onIssueClick?.(issue.id)}
+                      onClick={() => handleIssueClick(issue.id)}
                     >
                       <td className="py-3 px-2">
                         <Badge 
@@ -197,4 +201,4 @@ export function ReportOpenIssuesTable({ issues, onIssueClick }: ReportOpenIssues
       </CardContent>
     </Card>
   );
-}
+});

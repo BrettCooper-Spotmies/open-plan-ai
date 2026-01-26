@@ -1,3 +1,4 @@
+import { memo, useMemo, useCallback } from 'react';
 import { Flag, CheckCircle2, AlertTriangle, XCircle, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -46,11 +47,15 @@ const statusConfig = {
   },
 };
 
-export function ReportMilestoneHealth({ data, onMilestoneClick }: ReportMilestoneHealthProps) {
-  const sortedData = [...data].sort((a, b) => {
+export const ReportMilestoneHealth = memo(function ReportMilestoneHealth({ data, onMilestoneClick }: ReportMilestoneHealthProps) {
+  const sortedData = useMemo(() => [...data].sort((a, b) => {
     const order = { 'blocked': 0, 'at-risk': 1, 'on-track': 2, 'complete': 3 };
     return order[a.status] - order[b.status];
-  });
+  }), [data]);
+
+  const handleMilestoneClick = useCallback((milestoneId: string) => {
+    onMilestoneClick?.(milestoneId);
+  }, [onMilestoneClick]);
   
   return (
     <Card className="h-full">
@@ -78,7 +83,7 @@ export function ReportMilestoneHealth({ data, onMilestoneClick }: ReportMileston
                     "p-3 rounded-lg border cursor-pointer transition-all hover:shadow-sm",
                     item.status === 'complete' && "opacity-60"
                   )}
-                  onClick={() => onMilestoneClick?.(item.milestone.id)}
+                  onClick={() => handleMilestoneClick(item.milestone.id)}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -131,4 +136,4 @@ export function ReportMilestoneHealth({ data, onMilestoneClick }: ReportMileston
       </CardContent>
     </Card>
   );
-}
+});
