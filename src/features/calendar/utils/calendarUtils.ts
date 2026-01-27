@@ -16,7 +16,7 @@ import {
   subDays,
   parseISO,
 } from 'date-fns';
-import { Task, Milestone, Issue, CalendarFilter, CalendarViewMode } from '@/types';
+import { Task, Milestone, Issue, CalendarFilter, CalendarViewMode, TaskStatus, Priority } from '@/types';
 
 export interface CalendarDay {
   date: Date;
@@ -258,7 +258,7 @@ export function filterCalendarEvents(
 
     // Status filter (only applies to tasks)
     if (filters.status?.length && event.type === 'task') {
-      if (!event.status || !filters.status.includes(event.status as any)) {
+      if (!event.status || !filters.status.includes(event.status as TaskStatus)) {
         return false;
       }
     }
@@ -267,7 +267,7 @@ export function filterCalendarEvents(
     if (filters.priority?.length) {
       if (event.type === 'task' || event.type === 'issue') {
         const priority = event.type === 'task' ? event.priority : event.severity;
-        if (!priority || !filters.priority.includes(priority as any)) {
+        if (!priority || !filters.priority.includes(priority as Priority)) {
           return false;
         }
       }

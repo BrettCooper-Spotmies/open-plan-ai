@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import {
   Plus,
@@ -16,7 +16,7 @@ import {
   Type,
   MoreHorizontal,
   Upload,
-  X
+  LucideIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -57,7 +57,7 @@ interface SlashBlockEditorProps {
   readOnly?: boolean;
 }
 
-const BLOCK_TYPES: { type: BlockType; label: string; icon: any }[] = [
+const BLOCK_TYPES: { type: BlockType; label: string; icon: LucideIcon }[] = [
   { type: 'text', label: 'Text', icon: Type },
   { type: 'h1', label: 'Heading 1', icon: Heading1 },
   { type: 'h2', label: 'Heading 2', icon: Heading2 },
@@ -75,7 +75,7 @@ export function SlashBlockEditor({ initialBlocks, onChange, readOnly = false }: 
     initialBlocks && initialBlocks.length > 0 ? initialBlocks : [
       { id: 'block-' + Date.now(), type: 'text', content: '' }
     ]);
-  const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
+  const [, setFocusedBlockId] = useState<string | null>(null);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [activeBlockIdForMenu, setActiveBlockIdForMenu] = useState<string | null>(null);
 

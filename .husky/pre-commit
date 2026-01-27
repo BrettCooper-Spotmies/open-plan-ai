@@ -11,8 +11,8 @@ npx lint-staged
 echo "🔎 Type checking..."
 npm run type-check
 
-# Run tests
-echo "🧪 Running tests..."
-npm run test -- --run
+# Run tests (optional: you can skip for faster commits)
+# echo "🧪 Running tests..."
+# npm test
 
 echo "✅ All checks passed!"

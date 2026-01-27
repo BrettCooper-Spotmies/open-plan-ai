@@ -37,12 +37,12 @@ export default function MyDay() {
     setIsModalOpen(true);
   };
 
-  const handleStatusUpdate = (taskId: string, status: TaskStatus) => {
-    console.log('Status update:', taskId, status);
+  const handleStatusUpdate = (_taskId: string, _status: TaskStatus) => {
+    // TODO: Implement status update via store or event
   };
 
-  const handleChecklistToggle = (taskId: string, itemId: string) => {
-    console.log('Checklist toggle:', taskId, itemId);
+  const handleChecklistToggle = (_taskId: string, _itemId: string) => {
+    // TODO: Implement checklist toggle via store or event
   };
 
   const handleCloseModal = () => {

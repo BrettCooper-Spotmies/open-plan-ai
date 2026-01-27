@@ -120,7 +120,7 @@ describe('reportsUtils', () => {
     it('should not count completed tasks even if overdue', () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 7);
-      
+
       const tasks = [
         createTask({ status: 'done', dueDate: pastDate.toISOString() }),
       ];
@@ -132,7 +132,7 @@ describe('reportsUtils', () => {
     it('should count incomplete overdue tasks', () => {
       const pastDate = new Date();
       pastDate.setDate(pastDate.getDate() - 7);
-      
+
       const tasks = [
         createTask({ status: 'in-progress', dueDate: pastDate.toISOString() }),
         createTask({ status: 'todo', dueDate: pastDate.toISOString() }),
@@ -178,7 +178,7 @@ describe('reportsUtils', () => {
       ];
 
       const breakdown = getTaskStatusBreakdown(tasks);
-      
+
       expect(breakdown.length).toBe(1);
       expect(breakdown[0].status).toBe('done');
     });
@@ -206,9 +206,17 @@ describe('reportsUtils', () => {
     it('should use custom range when provided', () => {
       const customRange = { start: '2024-01-01', end: '2024-01-15' };
       const { start, end } = getDateRangeFromTimeRange('custom', customRange);
-      
-      expect(start.toISOString().split('T')[0]).toBe('2024-01-01');
-      expect(end.toISOString().split('T')[0]).toBe('2024-01-15');
+
+      // Use local date formatting to avoid timezone issues
+      const formatLocalDate = (d: Date) => {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      };
+
+      expect(formatLocalDate(start)).toBe('2024-01-01');
+      expect(formatLocalDate(end)).toBe('2024-01-15');
     });
   });
 
