@@ -37,6 +37,7 @@ import { toast } from 'sonner';
 interface ExtendedWorkspaceSettings extends WorkspaceSettings {
   companyName?: string;
   companySize?: string;
+  logo?: string;
 }
 
 const Settings = () => {
@@ -45,6 +46,7 @@ const Settings = () => {
     ...workspaceSettings,
     companyName: 'OpenPlan AI',
     companySize: '10-50',
+    logo: '',
   });
   const [profile, setProfile] = useState({
     name: 'Anna Kowalski',
@@ -55,6 +57,7 @@ const Settings = () => {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const handleSaveGeneral = () => {
     toast.success('Workspace settings saved');
@@ -76,6 +79,10 @@ const Settings = () => {
     fileInputRef.current?.click();
   };
 
+  const handleLogoClick = () => {
+    logoInputRef.current?.click();
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -86,6 +93,28 @@ const Settings = () => {
       toast.success('Avatar updated successfully');
       // In a real app, we would upload the file here
     }
+  };
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 2 * 1024 * 1024) {
+        toast.error('File size must be less than 2MB');
+        return;
+      }
+      // Create a preview URL for the logo
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setWorkspace({ ...workspace, logo: reader.result as string });
+        toast.success('Organization logo updated successfully');
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    setWorkspace({ ...workspace, logo: '' });
+    toast.success('Organization logo removed');
   };
 
   const handleDeleteAccount = () => {
@@ -140,6 +169,53 @@ const Settings = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* Organization Logo */}
+                <div className="space-y-2">
+                  <Label>Organization Logo</Label>
+                  <div className="flex items-center gap-6">
+                    <div className="h-20 w-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-muted/30 overflow-hidden">
+                      {workspace.logo ? (
+                        <img
+                          src={workspace.logo}
+                          alt="Organization logo"
+                          className="h-full w-full object-contain"
+                        />
+                      ) : (
+                        <div className="text-center">
+                          <Upload className="h-6 w-6 mx-auto text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">No logo</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <input
+                        type="file"
+                        ref={logoInputRef}
+                        className="hidden"
+                        accept="image/png, image/jpeg, image/gif, image/svg+xml"
+                        onChange={handleLogoChange}
+                      />
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={handleLogoClick}>
+                          <Upload className="h-4 w-4 mr-2" />
+                          {workspace.logo ? 'Change Logo' : 'Upload Logo'}
+                        </Button>
+                        {workspace.logo && (
+                          <Button variant="outline" size="sm" onClick={handleRemoveLogo}>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        JPG, PNG, GIF or SVG. Max 2MB. Recommended size: 200x200px.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
                 <div className="space-y-2">
                   <Label htmlFor="workspace-name">Workspace Name</Label>
                   <Input
@@ -522,16 +598,16 @@ const Settings = () => {
                           setUserSettings({ ...userSettings, theme })
                         }
                         className={`p-4 rounded-lg border-2 transition-colors ${userSettings.theme === theme
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/50'
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border hover:border-primary/50'
                           }`}
                       >
                         <div
                           className={`h-12 rounded mb-2 ${theme === 'light'
-                              ? 'bg-white border'
-                              : theme === 'dark'
-                                ? 'bg-zinc-900'
-                                : 'bg-gradient-to-r from-white to-zinc-900'
+                            ? 'bg-white border'
+                            : theme === 'dark'
+                              ? 'bg-zinc-900'
+                              : 'bg-gradient-to-r from-white to-zinc-900'
                             }`}
                         />
                         <span className="text-sm font-medium capitalize">
