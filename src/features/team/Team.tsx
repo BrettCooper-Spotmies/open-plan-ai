@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { extendedTeamMembers, projects } from '@/data/mockData';
-import { ExtendedTeamMember } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTeamMembers, useInviteTeamMember, useRemoveTeamMember, type TeamMember } from '@/hooks/useTeam';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -55,6 +56,11 @@ import {
 import { toast } from 'sonner';
 
 const Team = () => {
+  const { data: teamMembers, isLoading, error } = useTeamMembers();
+  const { currentOrganization } = useOrganization();
+  const inviteMutation = useInviteTeamMember();
+  const removeMutation = useRemoveTeamMember();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -62,7 +68,9 @@ const Team = () => {
   const [inviteRole, setInviteRole] = useState('');
   const [inviteDepartment, setInviteDepartment] = useState('');
 
-  const filteredMembers = extendedTeamMembers.filter(
+  const members = teamMembers || [];
+
+  const filteredMembers = members.filter(
     (member) =>
       member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -71,25 +79,54 @@ const Team = () => {
   );
 
   const stats = {
-    total: extendedTeamMembers.length,
-    active: extendedTeamMembers.filter((m) => m.status === 'active').length,
-    pending: extendedTeamMembers.filter((m) => m.status === 'pending').length,
-    departments: [...new Set(extendedTeamMembers.map((m) => m.department))].length,
+    total: members.length,
+    active: members.filter((m) => m.status === 'active').length,
+    pending: members.filter((m) => m.status === 'pending').length,
+    departments: [...new Set(members.map((m) => m.department).filter(Boolean))].length,
   };
 
-  const handleInvite = () => {
+  const handleInvite = async () => {
     if (!inviteEmail || !inviteRole) {
       toast.error('Please fill in all required fields');
       return;
     }
-    toast.success(`Invitation sent to ${inviteEmail}`);
-    setIsInviteDialogOpen(false);
-    setInviteEmail('');
-    setInviteRole('');
-    setInviteDepartment('');
+
+    if (!currentOrganization) {
+      toast.error('No organization selected');
+      return;
+    }
+
+    try {
+      await inviteMutation.mutateAsync({
+        email: inviteEmail,
+        role: inviteRole,
+        orgId: currentOrganization.id,
+      });
+      toast.success(`Invitation sent to ${inviteEmail}`);
+      setIsInviteDialogOpen(false);
+      setInviteEmail('');
+      setInviteRole('');
+      setInviteDepartment('');
+    } catch (err) {
+      toast.error('Failed to send invitation');
+    }
   };
 
-  const getStatusColor = (status: ExtendedTeamMember['status']) => {
+  const handleRemove = async (memberId: string) => {
+    if (!currentOrganization) return;
+    
+    try {
+      await removeMutation.mutateAsync({
+        memberId,
+        orgId: currentOrganization.id,
+      });
+      toast.success('Member removed');
+    } catch (err) {
+      toast.error('Failed to remove member');
+    }
+  };
+
+  const getStatusColor = (status: TeamMember['status']) => {
     switch (status) {
       case 'active':
         return 'bg-green-500/10 text-green-600 border-green-500/20';
@@ -100,7 +137,7 @@ const Team = () => {
     }
   };
 
-  const MemberCard = ({ member }: { member: ExtendedTeamMember }) => (
+  const MemberCard = ({ member }: { member: TeamMember }) => (
     <Card className="group hover:shadow-md transition-shadow">
       <CardContent className="p-6">
         <div className="flex items-start justify-between">
@@ -134,7 +171,10 @@ const Team = () => {
                 <Mail className="h-4 w-4 mr-2" />
                 Send Email
               </DropdownMenuItem>
-              <DropdownMenuItem className="text-destructive">
+              <DropdownMenuItem 
+                className="text-destructive"
+                onClick={() => handleRemove(member.id)}
+              >
                 <Trash2 className="h-4 w-4 mr-2" />
                 Remove
               </DropdownMenuItem>
@@ -167,6 +207,40 @@ const Team = () => {
       </CardContent>
     </Card>
   );
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="space-y-6">
+          <div className="flex justify-between">
+            <div>
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-64 mt-2" />
+            </div>
+            <Skeleton className="h-10 w-32" />
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-24" />
+            ))}
+          </div>
+          <Skeleton className="h-[400px]" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AppLayout>
+        <div className="text-center py-12">
+          <Users className="h-12 w-12 mx-auto text-muted-foreground/50" />
+          <h3 className="mt-4 text-lg font-medium">Failed to load team members</h3>
+          <p className="text-muted-foreground">Please try again later</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -211,10 +285,8 @@ const Team = () => {
                       <SelectValue placeholder="Select a role" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="engineer">Engineer</SelectItem>
-                      <SelectItem value="designer">Designer</SelectItem>
-                      <SelectItem value="manager">Project Manager</SelectItem>
-                      <SelectItem value="qa">QA Engineer</SelectItem>
+                      <SelectItem value="member">Member</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -237,7 +309,9 @@ const Team = () => {
                 <Button variant="outline" onClick={() => setIsInviteDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleInvite}>Send Invitation</Button>
+                <Button onClick={handleInvite} disabled={inviteMutation.isPending}>
+                  {inviteMutation.isPending ? 'Sending...' : 'Send Invitation'}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -385,7 +459,10 @@ const Team = () => {
                             <Mail className="h-4 w-4 mr-2" />
                             Send Email
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
+                          <DropdownMenuItem 
+                            className="text-destructive"
+                            onClick={() => handleRemove(member.id)}
+                          >
                             <Trash2 className="h-4 w-4 mr-2" />
                             Remove
                           </DropdownMenuItem>
@@ -404,7 +481,9 @@ const Team = () => {
             <Users className="h-12 w-12 mx-auto text-muted-foreground/50" />
             <h3 className="mt-4 text-lg font-medium">No members found</h3>
             <p className="text-muted-foreground">
-              Try adjusting your search query
+              {members.length === 0 
+                ? 'Start by inviting team members to your organization'
+                : 'Try adjusting your search query'}
             </p>
           </div>
         )}
