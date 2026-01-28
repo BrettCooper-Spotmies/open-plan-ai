@@ -1,12 +1,20 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Json } from '@/integrations/supabase/types';
 
+export interface OrganizationSettings {
+  companyName?: string;
+  companySize?: string;
+  timezone?: string;
+  dateFormat?: string;
+  logoUrl?: string;
+}
+
 export interface Organization {
   id: string;
   name: string;
   slug: string;
   description: string | null;
-  settings: Json;
+  settings: OrganizationSettings | Json;
   created_at: string;
   updated_at: string;
 }
@@ -180,6 +188,92 @@ export const organizationsService = {
       .eq('user_id', userId);
 
     if (error) throw error;
+  },
+
+  /**
+   * Update organization settings (stored in JSONB field)
+   */
+  async updateSettings(orgId: string, settings: OrganizationSettings): Promise<Organization> {
+    // Get current settings and merge with new ones
+    const { data: current, error: fetchError } = await supabase
+      .from('organizations')
+      .select('settings')
+      .eq('id', orgId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const mergedSettings = {
+      ...(current?.settings as OrganizationSettings || {}),
+      ...settings,
+    };
+
+    const { data, error } = await supabase
+      .from('organizations')
+      .update({ settings: mergedSettings as unknown as Json })
+      .eq('id', orgId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  /**
+   * Upload organization logo to storage bucket
+   */
+  async uploadLogo(orgId: string, file: File): Promise<string> {
+    // Generate unique filename
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${orgId}/logo-${Date.now()}.${fileExt}`;
+
+    // Delete old logo if exists
+    const { data: existingFiles } = await supabase.storage
+      .from('logos')
+      .list(orgId);
+    
+    if (existingFiles && existingFiles.length > 0) {
+      const filesToDelete = existingFiles.map(f => `${orgId}/${f.name}`);
+      await supabase.storage.from('logos').remove(filesToDelete);
+    }
+
+    // Upload new logo
+    const { error: uploadError } = await supabase.storage
+      .from('logos')
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+
+    if (uploadError) throw uploadError;
+
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('logos')
+      .getPublicUrl(fileName);
+
+    // Update organization settings with new logo URL
+    await this.updateSettings(orgId, { logoUrl: publicUrl });
+
+    return publicUrl;
+  },
+
+  /**
+   * Delete organization logo from storage
+   */
+  async deleteLogo(orgId: string): Promise<void> {
+    // List and delete all logo files for this org
+    const { data: files } = await supabase.storage
+      .from('logos')
+      .list(orgId);
+
+    if (files && files.length > 0) {
+      const filesToDelete = files.map(f => `${orgId}/${f.name}`);
+      await supabase.storage.from('logos').remove(filesToDelete);
+    }
+
+    // Clear logoUrl in settings
+    await this.updateSettings(orgId, { logoUrl: undefined });
   },
 
   /**
