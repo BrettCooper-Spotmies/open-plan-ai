@@ -1,307 +1,221 @@
 
-# Full Backend Integration Plan
+
+# Settings Page Backend Integration Plan
 
 ## Overview
 
-This plan addresses two critical requirements:
-1. **OTP Email Verification** - Implement proper email verification during account creation using OTP codes
-2. **Replace Mock Data** - Integrate Supabase backend across ALL features, eliminating mock data usage
+This plan updates the Settings page with two modifications:
+1. **Add "Coming Soon" badges** to the Notifications and Appearance tabs
+2. **Integrate backend** for General, Profile, and Danger tabs using Supabase
 
 ---
 
-## Part 1: OTP Email Verification
+## Current State Analysis
 
-### Current State
-- Auto-confirm is enabled (users bypass email verification)
-- No OTP/verification flow exists
-- Signup directly navigates to dashboard after creation
+| Tab | Current Status |
+|-----|---------------|
+| **General** | Uses local state from `mockData.ts`, no backend persistence |
+| **Profile** | Hardcoded mock data, no connection to authenticated user |
+| **Notifications** | Uses local state, will be marked as "Coming Soon" |
+| **Appearance** | Uses local state, will be marked as "Coming Soon" |
+| **Danger** | Password change non-functional, delete account shows error |
 
-### Implementation
+### Database Schema
 
-#### 1.1 Create Email Sending Edge Function
+**`profiles` table:**
+- `id`, `email`, `name`, `avatar_url`, `initials` (exists)
+- Missing: `role`, `bio` fields needed for Profile tab
 
-**New File:** `supabase/functions/send-otp/index.ts`
+**`organizations` table:**
+- `id`, `name`, `slug`, `description`, `settings` (JSONB)
+- The `settings` column can store: `companyName`, `companySize`, `timezone`, `dateFormat`, `logo`
 
-Creates an edge function using Resend to send OTP codes:
-- Generates 6-digit OTP
-- Stores OTP in a new `email_verifications` table with expiry
-- Sends branded email via Resend API
+**Storage:** No buckets exist for avatar/logo uploads
 
-```typescript
-// Key functionality:
-- Generate secure 6-digit OTP
-- Store in email_verifications table (email, otp_hash, expires_at)
-- Send email via Resend
-- Rate limiting (max 3 requests per email per 10 minutes)
-```
+---
 
-#### 1.2 Database Migration for OTP Storage
+## Implementation Plan
 
-**New Table:** `email_verifications`
+### Phase 1: Database Schema Updates
+
+**Migration: Add profile fields and storage buckets**
+
 ```sql
-CREATE TABLE email_verifications (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT NOT NULL,
-  otp_hash TEXT NOT NULL,
-  expires_at TIMESTAMPTZ NOT NULL,
-  verified_at TIMESTAMPTZ,
-  attempts INT DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+-- Add role and bio fields to profiles table
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT '';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT '';
 
-CREATE INDEX idx_email_verifications_email ON email_verifications(email);
+-- Create storage buckets for avatars and logos
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('avatars', 'avatars', true)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('logos', 'logos', true)
+ON CONFLICT DO NOTHING;
+
+-- RLS policies for avatar bucket
+CREATE POLICY "Users can upload their own avatar"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Users can update their own avatar"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Users can delete their own avatar"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Avatars are publicly viewable"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'avatars');
+
+-- RLS policies for logos bucket (org members can manage)
+CREATE POLICY "Org members can upload logos"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'logos');
+
+CREATE POLICY "Org members can update logos"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'logos');
+
+CREATE POLICY "Org members can delete logos"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'logos');
+
+CREATE POLICY "Logos are publicly viewable"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'logos');
 ```
-
-#### 1.3 Create Verify OTP Edge Function
-
-**New File:** `supabase/functions/verify-otp/index.ts`
-
-Verifies the submitted OTP:
-- Checks OTP against stored hash
-- Validates expiry (10 minutes)
-- Limits attempts (max 5)
-- Returns success/failure
-
-#### 1.4 Update Auth Flow
-
-**Modify:** `src/services/auth.service.ts`
-- Add `sendOtp(email: string)` method
-- Add `verifyOtp(email: string, otp: string)` method
-
-**New File:** `src/pages/VerifyEmail.tsx`
-
-OTP verification page with:
-- 6-digit OTP input using `input-otp` component
-- Countdown timer for resend
-- Error handling for invalid/expired codes
-- Auto-submit on complete entry
-
-**Modify:** `src/pages/Signup.tsx`
-- After successful signup, redirect to `/verify-email` instead of `/`
-- Pass email via state or URL param
-
-**Modify:** `src/App.tsx`
-- Add `/verify-email` route
-- Update protected route logic to check email verification status
-
-#### 1.5 Disable Auto-Confirm
-
-Disable auto-confirm via Supabase auth configuration to enforce email verification.
-
-#### 1.6 Required Secret
-
-**RESEND_API_KEY** - Required for sending emails via Resend
 
 ---
 
-## Part 2: Replace All Mock Data with Real Supabase Data
+### Phase 2: Create Profile Service
 
-### Current Mock Data Usage
+**New File:** `src/services/profile.service.ts`
 
-| Feature | Current Import | Mock Data Used |
-|---------|---------------|----------------|
-| Dashboard | `mockData.ts` | `projects`, `recentActivity`, `dashboardStats` |
-| Team | `mockData.ts` | `extendedTeamMembers`, `projects` |
-| My Day | `mockData.ts` | `projects`, `currentUser` |
-| Calendar | `mockData.ts` | `projects`, `teamMembers` |
-| Reports | `mockData.ts` | `projects`, `teamMembers`, `projectModules`, `projectIssues` |
-| Projects | `mockData.ts` | `projects` |
-
-### Implementation
-
-#### 2.1 New Services
-
-**New File:** `src/services/milestones.service.ts`
-```typescript
-export const milestonesService = {
-  getAll(): Promise<Milestone[]>
-  getByProjectId(projectId: string): Promise<Milestone[]>
-  getById(id: string): Promise<Milestone | null>
-  create(projectId: string, milestone: Omit<Milestone, 'id'>): Promise<Milestone>
-  update(id: string, updates: Partial<Milestone>): Promise<Milestone>
-  delete(id: string): Promise<void>
-}
-```
-
-**New File:** `src/services/modules.service.ts`
-```typescript
-export const modulesService = {
-  getAll(): Promise<Module[]>
-  getByProjectId(projectId: string): Promise<Module[]>
-  getById(id: string): Promise<Module | null>
-  create(projectId: string, module: Omit<Module, 'id' | 'createdAt'>): Promise<Module>
-  update(id: string, updates: Partial<Module>): Promise<Module>
-  delete(id: string): Promise<void>
-}
-```
-
-**New File:** `src/services/activities.service.ts`
-```typescript
-export const activitiesService = {
-  getAll(): Promise<Activity[]>
-  getByProjectId(projectId: string): Promise<Activity[]>
-  getRecent(limit?: number): Promise<Activity[]>
-  create(activity: Omit<Activity, 'id' | 'timestamp'>): Promise<Activity>
-}
-```
-
-**New File:** `src/services/team.service.ts`
-```typescript
-export const teamService = {
-  getAll(): Promise<ExtendedTeamMember[]>
-  getByOrganization(orgId: string): Promise<ExtendedTeamMember[]>
-  getById(id: string): Promise<ExtendedTeamMember | null>
-  invite(email: string, role: string, department?: string): Promise<void>
-  updateRole(memberId: string, role: string): Promise<void>
-  remove(memberId: string): Promise<void>
-}
-```
-
-**New File:** `src/services/dashboard.service.ts`
-```typescript
-export const dashboardService = {
-  getStats(orgId: string): Promise<DashboardStats>
-  getRecentActivity(limit?: number): Promise<Activity[]>
-  getUpcomingMilestones(limit?: number): Promise<Milestone[]>
-}
-```
-
-#### 2.2 New React Query Hooks
-
-**New File:** `src/hooks/useMilestones.ts`
-```typescript
-export function useProjectMilestones(projectId: string)
-export function useMilestone(milestoneId: string)
-export function useCreateMilestone()
-export function useUpdateMilestone()
-export function useDeleteMilestone()
-```
-
-**New File:** `src/hooks/useModules.ts`
-```typescript
-export function useProjectModules(projectId: string)
-export function useModule(moduleId: string)
-export function useCreateModule()
-export function useUpdateModule()
-export function useDeleteModule()
-```
-
-**New File:** `src/hooks/useActivities.ts`
-```typescript
-export function useRecentActivities(limit?: number)
-export function useProjectActivities(projectId: string)
-```
-
-**New File:** `src/hooks/useTeam.ts`
-```typescript
-export function useTeamMembers()
-export function useTeamMember(memberId: string)
-export function useInviteTeamMember()
-export function useUpdateTeamMember()
-export function useRemoveTeamMember()
-```
-
-**New File:** `src/hooks/useDashboard.ts`
-```typescript
-export function useDashboardStats()
-export function useRecentActivity()
-export function useUpcomingMilestones()
-```
-
-#### 2.3 Update Query Keys
-
-**Modify:** `src/lib/queryClient.ts`
-
-Add keys for:
-- `activities.recent`, `activities.byProject`
-- `milestones.byProject`, `milestones.detail`
-- `modules.byProject`, `modules.detail`
-- `dashboard.stats`, `dashboard.activity`, `dashboard.milestones`
-- `organizations.current`, `organizations.members`
-
-#### 2.4 Update Feature Components
-
-**Modify:** `src/features/dashboard/Dashboard.tsx`
-```typescript
-// FROM:
-import { projects, recentActivity, dashboardStats } from '@/data/mockData';
-
-// TO:
-import { useProjects } from '@/hooks/useProjects';
-import { useDashboardStats, useRecentActivity, useUpcomingMilestones } from '@/hooks/useDashboard';
-```
-
-**Modify:** `src/features/team/Team.tsx`
-```typescript
-// FROM:
-import { extendedTeamMembers, projects } from '@/data/mockData';
-
-// TO:
-import { useTeamMembers, useInviteTeamMember, useRemoveTeamMember } from '@/hooks/useTeam';
-```
-
-**Modify:** `src/features/myday/MyDay.tsx`
-```typescript
-// FROM:
-import { projects, currentUser } from '@/data/mockData';
-
-// TO:
-import { useAllTasks } from '@/hooks/useTasks';
-import { useAuth } from '@/contexts/AuthContext';
-```
-
-**Modify:** `src/features/calendar/Calendar.tsx`
-```typescript
-// FROM:
-import { projects, teamMembers } from '@/data/mockData';
-
-// TO:
-import { useProjects } from '@/hooks/useProjects';
-import { useTeamMembers } from '@/hooks/useTeam';
-```
-
-**Modify:** `src/features/reports/Reports.tsx`
-```typescript
-// FROM:
-import { projects, teamMembers, projectModules, projectIssues } from '@/data/mockData';
-
-// TO:
-import { useProjects } from '@/hooks/useProjects';
-import { useTeamMembers } from '@/hooks/useTeam';
-import { useAllIssues } from '@/hooks/useIssues';
-```
-
-**Modify:** `src/features/projects/Projects.tsx`
-```typescript
-// FROM:
-import { projects } from '@/data/mockData';
-
-// TO:
-import { useProjects } from '@/hooks/useProjects';
-```
-
-#### 2.5 Update Environment Configuration
-
-**Modify:** `.env` or config system
-- Set `VITE_USE_SUPABASE=true`
-- Set `VITE_USE_MOCK_DATA=false`
-
-This will activate Supabase queries in all services that have dual-mode support.
-
-#### 2.6 Add Loading States to All Features
-
-Each feature component needs proper loading and error states:
+Service to handle profile operations:
 
 ```typescript
-function Dashboard() {
-  const { data: projects, isLoading, error } = useProjects();
+export const profileService = {
+  // Get current user profile
+  async getProfile(): Promise<Profile>
   
-  if (isLoading) return <DashboardSkeleton />;
-  if (error) return <ErrorState error={error} />;
+  // Update profile fields (name, role, bio, initials)
+  async updateProfile(updates: Partial<Profile>): Promise<Profile>
   
-  return <DashboardContent projects={projects} />;
+  // Upload avatar image to storage bucket
+  async uploadAvatar(file: File): Promise<string>
+  
+  // Delete avatar from storage
+  async deleteAvatar(): Promise<void>
+  
+  // Update password (wrapper around auth.updateUser)
+  async updatePassword(newPassword: string): Promise<void>
+  
+  // Delete account (soft delete profile + sign out)
+  async deleteAccount(): Promise<void>
 }
 ```
+
+---
+
+### Phase 3: Extend Organization Service
+
+**Modify:** `src/services/organizations.service.ts`
+
+Add methods for organization settings:
+
+```typescript
+// Add to organizationsService:
+
+// Update organization settings (in JSONB field)
+async updateSettings(orgId: string, settings: OrganizationSettings): Promise<void>
+
+// Upload organization logo
+async uploadLogo(orgId: string, file: File): Promise<string>
+
+// Delete organization logo
+async deleteLogo(orgId: string): Promise<void>
+```
+
+**Organization Settings Interface:**
+```typescript
+interface OrganizationSettings {
+  companyName?: string;
+  companySize?: string;
+  timezone?: string;
+  dateFormat?: string;
+  logoUrl?: string;
+}
+```
+
+---
+
+### Phase 4: Update AuthContext
+
+**Modify:** `src/contexts/AuthContext.tsx`
+
+Add function to refresh profile after updates:
+```typescript
+// Add to AuthContextValue:
+refreshProfile: () => Promise<void>
+updatePassword: (newPassword: string) => Promise<{ error: Error | null }>
+deleteAccount: () => Promise<{ error: Error | null }>
+```
+
+---
+
+### Phase 5: Update Settings Component
+
+**Modify:** `src/features/settings/Settings.tsx`
+
+Major changes:
+
+1. **Add "Coming Soon" Badges:**
+   - Add `Badge` component with "Coming Soon" text next to Notifications and Appearance tab triggers
+   - Disable form controls within those tabs
+
+2. **General Tab Integration:**
+   - Import `useOrganization` hook to get current organization
+   - Load organization data including settings from JSONB field
+   - Implement `handleSaveGeneral` to update organization via `organizationsService.update()`
+   - Implement logo upload using storage bucket
+
+3. **Profile Tab Integration:**
+   - Import `useAuth` hook to get current user profile
+   - Pre-fill form with `profile.name`, `profile.email`, `profile.role`, `profile.bio`, `profile.avatar_url`
+   - Implement `handleSaveProfile` to update via `profileService.updateProfile()`
+   - Implement avatar upload using storage bucket
+
+4. **Danger Tab Integration:**
+   - Add password state management with validation
+   - Implement `handleUpdatePassword` using `authService.updatePassword()`
+   - Implement `handleDeleteAccount` with confirmation dialog
+   - Add proper error handling and loading states
+
+---
+
+## Component Changes Summary
+
+| Section | Change |
+|---------|--------|
+| **Imports** | Add `useAuth`, `useOrganization`, `profileService`, `organizationsService`, `supabase` |
+| **State** | Replace hardcoded mock data with hooks; add loading/error states |
+| **General Tab** | Bind to organization data, save to Supabase |
+| **Profile Tab** | Bind to authenticated user profile, save to Supabase |
+| **Notifications Tab** | Add "Coming Soon" badge, disable controls |
+| **Appearance Tab** | Add "Coming Soon" badge, disable controls |
+| **Danger Tab** | Implement real password change and account deletion |
 
 ---
 
@@ -309,82 +223,57 @@ function Dashboard() {
 
 | File | Purpose |
 |------|---------|
-| `supabase/functions/send-otp/index.ts` | Send OTP email via Resend |
-| `supabase/functions/verify-otp/index.ts` | Verify submitted OTP |
-| `src/pages/VerifyEmail.tsx` | OTP input page |
-| `src/services/milestones.service.ts` | Milestones CRUD |
-| `src/services/modules.service.ts` | Modules CRUD |
-| `src/services/activities.service.ts` | Activity feed service |
-| `src/services/team.service.ts` | Team management |
-| `src/services/dashboard.service.ts` | Dashboard aggregations |
-| `src/hooks/useMilestones.ts` | Milestone hooks |
-| `src/hooks/useModules.ts` | Module hooks |
-| `src/hooks/useActivities.ts` | Activity hooks |
-| `src/hooks/useTeam.ts` | Team hooks |
-| `src/hooks/useDashboard.ts` | Dashboard hooks |
+| `src/services/profile.service.ts` | Profile CRUD, avatar upload, password/account management |
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/services/auth.service.ts` | Add OTP send/verify methods |
-| `src/pages/Signup.tsx` | Redirect to verify-email after signup |
-| `src/App.tsx` | Add verify-email route |
-| `src/lib/queryClient.ts` | Add new query keys |
-| `src/features/dashboard/Dashboard.tsx` | Use real data hooks |
-| `src/features/team/Team.tsx` | Use real data hooks |
-| `src/features/myday/MyDay.tsx` | Use real data hooks |
-| `src/features/calendar/Calendar.tsx` | Use real data hooks |
-| `src/features/reports/Reports.tsx` | Use real data hooks |
-| `src/features/projects/Projects.tsx` | Use real data hooks |
-| `src/services/index.ts` | Export new services |
+| `src/features/settings/Settings.tsx` | Full integration with backend, add Coming Soon badges |
+| `src/services/organizations.service.ts` | Add settings update and logo upload methods |
+| `src/contexts/AuthContext.tsx` | Add `refreshProfile`, `updatePassword`, `deleteAccount` methods |
+| `src/services/index.ts` | Export `profileService` |
 
 ## Database Migration
 
-One migration to add:
-- `email_verifications` table for OTP storage
+One migration to:
+- Add `role` and `bio` columns to profiles table
+- Create `avatars` and `logos` storage buckets
+- Add RLS policies for storage buckets
 
 ---
 
-## Required Secret
+## Visual Changes
 
-Before implementing OTP email verification, you'll need to provide a **RESEND_API_KEY**. 
+### Coming Soon Badge Design
+- Yellow/amber badge next to tab text: "Coming Soon"
+- Form controls in those tabs will be visually disabled with reduced opacity
+- Tooltip on hover explaining feature is in development
 
-Do you have a Resend account? If not:
-1. Sign up at https://resend.com
-2. Verify your email domain at https://resend.com/domains
-3. Create an API key at https://resend.com/api-keys
-
----
-
-## Implementation Order
-
-| Phase | Description | Dependencies |
-|-------|-------------|--------------|
-| 1 | Create new services (milestones, modules, activities, team, dashboard) | None |
-| 2 | Create new React Query hooks | Phase 1 |
-| 3 | Update query keys in queryClient.ts | None |
-| 4 | Update Dashboard to use real data | Phase 1-3 |
-| 5 | Update Team page to use real data | Phase 1-3 |
-| 6 | Update My Day to use real data | Phase 1-3 |
-| 7 | Update Calendar to use real data | Phase 1-3 |
-| 8 | Update Reports to use real data | Phase 1-3 |
-| 9 | Update Projects list to use real data | Phase 1-3 |
-| 10 | Set up Resend API key secret | User input |
-| 11 | Create OTP edge functions | Phase 10 |
-| 12 | Create VerifyEmail page | Phase 11 |
-| 13 | Update Signup flow | Phase 11-12 |
-| 14 | Disable auto-confirm | Phase 11-13 |
+### Example Tab Trigger:
+```tsx
+<TabsTrigger value="notifications" className="gap-2">
+  <Bell className="h-4 w-4 hidden sm:block" />
+  Notifications
+  <Badge variant="outline" className="ml-1 bg-amber-100 text-amber-800 border-amber-300 text-xs">
+    Coming Soon
+  </Badge>
+</TabsTrigger>
+```
 
 ---
 
 ## Success Criteria
 
 After implementation:
-- New users receive OTP email on signup
-- Users must verify email before accessing the app
-- All features display real data from Supabase
-- No direct imports from `mockData.ts` in feature components
-- Loading states shown during data fetch
-- Error states for failed requests
-- Team invitations work with real email sending
+- Notifications and Appearance tabs display "Coming Soon" badges with disabled controls
+- Profile tab loads authenticated user's data from the database
+- Profile changes (name, role, bio) are saved to Supabase
+- Avatar upload stores image in storage bucket and updates profile
+- General tab loads current organization settings
+- Organization settings changes are saved to Supabase `settings` JSONB column
+- Logo upload stores image in storage bucket
+- Password change works via Supabase Auth
+- Account deletion performs soft delete and signs user out
+- All save actions show proper loading states and toast notifications
+
