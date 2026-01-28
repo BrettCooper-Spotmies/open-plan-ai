@@ -185,6 +185,36 @@ export type Database = {
           },
         ]
       }
+      email_verifications: {
+        Row: {
+          attempts: number | null
+          created_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          otp_hash: string
+          verified_at: string | null
+        }
+        Insert: {
+          attempts?: number | null
+          created_at?: string | null
+          email: string
+          expires_at: string
+          id?: string
+          otp_hash: string
+          verified_at?: string | null
+        }
+        Update: {
+          attempts?: number | null
+          created_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          otp_hash?: string
+          verified_at?: string | null
+        }
+        Relationships: []
+      }
       issue_assignees: {
         Row: {
           assigned_at: string | null
@@ -823,6 +853,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_expired_verifications: { Args: never; Returns: undefined }
       get_user_org_ids: { Args: never; Returns: string[] }
       has_org_access: { Args: { _org_id: string }; Returns: boolean }
       has_org_role: {
