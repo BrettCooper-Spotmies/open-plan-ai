@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { EMAIL_FROM } from "../_shared/constants.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -59,7 +60,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
+
     // Hash the OTP for storage
     const encoder = new TextEncoder();
     const data = encoder.encode(otp);
@@ -69,7 +70,7 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Store OTP with 10-minute expiry
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    
+
     const { error: insertError } = await supabase
       .from("email_verifications")
       .insert({
@@ -119,7 +120,7 @@ const handler = async (req: Request): Promise<Response> => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "OpenPlan AI <onboarding@resend.dev>",
+        from: EMAIL_FROM,
         to: [email],
         subject: "Your verification code for OpenPlan AI",
         html: emailHtml,
