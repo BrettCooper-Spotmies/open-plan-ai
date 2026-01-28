@@ -9,6 +9,7 @@ import { Layers, Mail, Lock, User, Building2, Factory, ArrowRight, Check, AlertC
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const industries = [
   "Medical Devices",
@@ -71,6 +72,20 @@ const Signup = () => {
       return;
     }
 
+    // Send OTP for email verification
+    try {
+      const { data, error: otpError } = await supabase.functions.invoke('send-otp', {
+        body: { email: formData.email },
+      });
+      
+      if (otpError || data?.error) {
+        console.error('Error sending OTP:', otpError || data?.error);
+        // Still allow navigation to verify page
+      }
+    } catch (err) {
+      console.error('Error sending OTP:', err);
+    }
+
     // Create their organization after successful signup
     try {
       await createOrganization(formData.companyName, `${formData.industry} company`);
@@ -80,7 +95,8 @@ const Signup = () => {
     }
 
     setIsLoading(false);
-    navigate("/");
+    // Navigate to verify email page
+    navigate("/verify-email", { state: { email: formData.email } });
   };
 
   const passwordsMatch = formData.password === formData.confirmPassword && formData.confirmPassword.length > 0;

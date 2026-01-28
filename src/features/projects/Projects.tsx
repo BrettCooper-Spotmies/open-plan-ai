@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { projects } from '@/data/mockData';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useProjects } from '@/hooks/useProjects';
 import { cn } from '@/lib/utils';
 
 const stageColors = {
@@ -29,13 +29,52 @@ const stageLabels = {
 
 export default function Projects() {
   const navigate = useNavigate();
+  const { data: projects, isLoading, error } = useProjects();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
 
-  const filteredProjects = projects.filter(p =>
+  const projectList = projects || [];
+
+  const filteredProjects = projectList.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
-    p.description.toLowerCase().includes(search.toLowerCase())
+    (p.description || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex justify-between">
+            <div>
+              <Skeleton className="h-8 w-32" />
+              <Skeleton className="h-4 w-64 mt-2" />
+            </div>
+            <Skeleton className="h-10 w-32" />
+          </div>
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-10 flex-1 max-w-sm" />
+            <Skeleton className="h-10 w-20" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-48" />
+            ))}
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AppLayout>
+        <div className="text-center py-12">
+          <h3 className="text-lg font-medium">Failed to load projects</h3>
+          <p className="text-muted-foreground">Please try again later</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -83,55 +122,63 @@ export default function Projects() {
           </div>
         </div>
 
-        <div className={cn(
-          view === 'grid' 
-            ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3' 
-            : 'space-y-3'
-        )}>
-          {filteredProjects.map((project) => (
-            <Link key={project.id} to={`/projects/${project.id}`}>
-              <Card className="p-5 card-hover cursor-pointer">
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div className="min-w-0">
-                    <h3 className="font-medium truncate">{project.name}</h3>
-                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
-                      {project.description}
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className={cn('shrink-0', stageColors[project.stage])}>
-                    {stageLabels[project.stage]}
-                  </Badge>
-                </div>
-
-                <div className="space-y-2 mb-4">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Progress</span>
-                    <span className="font-medium">{project.progress}%</span>
-                  </div>
-                  <Progress value={project.progress} className="h-2" />
-                </div>
-
-                <div className="flex items-center justify-between pt-3 border-t">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-muted-foreground" />
-                    <div className="flex -space-x-2">
-                      {project.team.slice(0, 4).map((member) => (
-                        <Avatar key={member.id} className="h-6 w-6 border-2 border-background">
-                          <AvatarFallback className="text-[10px] bg-muted">
-                            {member.initials}
-                          </AvatarFallback>
-                        </Avatar>
-                      ))}
+        {filteredProjects.length === 0 ? (
+          <div className="text-center py-12">
+            <h3 className="text-lg font-medium">No projects found</h3>
+            <p className="text-muted-foreground">
+              {projectList.length === 0 
+                ? 'Create your first project to get started'
+                : 'Try adjusting your search query'}
+            </p>
+            {projectList.length === 0 && (
+              <Button className="mt-4" onClick={() => navigate('/projects/new')}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Project
+              </Button>
+            )}
+          </div>
+        ) : (
+          <div className={cn(
+            view === 'grid' 
+              ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3' 
+              : 'space-y-3'
+          )}>
+            {filteredProjects.map((project) => (
+              <Link key={project.id} to={`/projects/${project.id}`}>
+                <Card className="p-5 card-hover cursor-pointer">
+                  <div className="flex items-start justify-between gap-3 mb-4">
+                    <div className="min-w-0">
+                      <h3 className="font-medium truncate">{project.name}</h3>
+                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                        {project.description || 'No description'}
+                      </p>
                     </div>
+                    <Badge variant="secondary" className={cn('shrink-0', stageColors[project.stage as keyof typeof stageColors] || stageColors.concept)}>
+                      {stageLabels[project.stage as keyof typeof stageLabels] || project.stage}
+                    </Badge>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {project.tasks.length} tasks
-                  </span>
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
+
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Progress</span>
+                      <span className="font-medium">{project.progress || 0}%</span>
+                    </div>
+                    <Progress value={project.progress || 0} className="h-2" />
+                  </div>
+
+                  <div className="flex items-center justify-between pt-3 border-t">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      Updated {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : 'N/A'}
+                    </span>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
       </div>
     </AppLayout>
   );

@@ -113,4 +113,52 @@ export const authService = {
     const { data, error } = await supabase.auth.refreshSession();
     return { session: data.session, error };
   },
+
+  /**
+   * Send OTP for email verification
+   */
+  async sendOtp(email: string): Promise<{ success: boolean; error: string | null }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('send-otp', {
+        body: { email },
+      });
+      
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      
+      if (data?.error) {
+        return { success: false, error: data.error };
+      }
+      
+      return { success: true, error: null };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to send verification code';
+      return { success: false, error: message };
+    }
+  },
+
+  /**
+   * Verify OTP for email verification
+   */
+  async verifyOtp(email: string, otp: string): Promise<{ success: boolean; error: string | null }> {
+    try {
+      const { data, error } = await supabase.functions.invoke('verify-otp', {
+        body: { email, otp },
+      });
+      
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      
+      if (data?.error) {
+        return { success: false, error: data.error };
+      }
+      
+      return { success: true, error: null };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to verify code';
+      return { success: false, error: message };
+    }
+  },
 };
