@@ -4,21 +4,30 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Layers, Mail, ArrowLeft, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Layers, Mail, ArrowLeft, ArrowRight, CheckCircle2, AlertCircle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const ForgotPassword = () => {
+  const { resetPassword } = useAuth();
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate password reset email for prototype
-    setTimeout(() => {
-      setIsLoading(false);
+    setError(null);
+
+    const result = await resetPassword(email);
+
+    setIsLoading(false);
+    if (result.error) {
+      setError(result.error.message);
+    } else {
       setIsSubmitted(true);
-    }, 1000);
+    }
   };
 
   return (
@@ -65,6 +74,12 @@ const ForgotPassword = () => {
               </CardHeader>
               <form onSubmit={handleSubmit}>
                 <CardContent className="space-y-4">
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="email">Work Email</Label>
                     <div className="relative">
