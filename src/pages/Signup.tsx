@@ -5,7 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, Mail, Lock, User, Building2, Factory, ArrowRight, Check } from "lucide-react";
+import { Layers, Mail, Lock, User, Building2, Factory, ArrowRight, Check, AlertCircle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useOrganization } from "@/contexts/OrganizationContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const industries = [
   "Medical Devices",
@@ -22,7 +26,10 @@ const industries = [
 
 const Signup = () => {
   const navigate = useNavigate();
+  const { signUp, isLoading: authLoading } = useAuth();
+  const { createOrganization } = useOrganization();
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -36,14 +43,60 @@ const Signup = () => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters");
+      return;
+    }
+
     setIsLoading(true);
-    // Simulate signup for prototype
-    setTimeout(() => {
+    
+    // Sign up the user
+    const result = await signUp(formData.email, formData.password, {
+      name: formData.fullName,
+      company: formData.companyName,
+      industry: formData.industry,
+    });
+
+    if (result.error) {
+      setError(result.error.message);
       setIsLoading(false);
-      navigate("/");
-    }, 1000);
+      return;
+    }
+
+    // Send OTP for email verification
+    try {
+      const { data, error: otpError } = await supabase.functions.invoke('send-otp', {
+        body: { email: formData.email },
+      });
+      
+      if (otpError || data?.error) {
+        console.error('Error sending OTP:', otpError || data?.error);
+        // Still allow navigation to verify page
+      }
+    } catch (err) {
+      console.error('Error sending OTP:', err);
+    }
+
+    // Create their organization after successful signup
+    try {
+      await createOrganization(formData.companyName, `${formData.industry} company`);
+    } catch (err) {
+      console.error('Error creating organization:', err);
+      // Don't block signup if org creation fails
+    }
+
+    setIsLoading(false);
+    // Navigate to verify email page
+    navigate("/verify-email", { state: { email: formData.email } });
   };
 
   const passwordsMatch = formData.password === formData.confirmPassword && formData.confirmPassword.length > 0;
@@ -120,6 +173,12 @@ const Signup = () => {
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="fullName">Full Name</Label>
                 <div className="relative">
@@ -132,6 +191,7 @@ const Signup = () => {
                     onChange={(e) => handleChange("fullName", e.target.value)}
                     className="pl-10"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -148,6 +208,7 @@ const Signup = () => {
                     onChange={(e) => handleChange("email", e.target.value)}
                     className="pl-10"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -165,6 +226,7 @@ const Signup = () => {
                       onChange={(e) => handleChange("password", e.target.value)}
                       className="pl-10"
                       required
+                      disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -180,6 +242,7 @@ const Signup = () => {
                       onChange={(e) => handleChange("confirmPassword", e.target.value)}
                       className={`pl-10 ${formData.confirmPassword && (passwordsMatch ? "border-green-500" : "border-red-500")}`}
                       required
+                      disabled={isLoading}
                     />
                   </div>
                 </div>
@@ -197,6 +260,7 @@ const Signup = () => {
                     onChange={(e) => handleChange("companyName", e.target.value)}
                     className="pl-10"
                     required
+                    disabled={isLoading}
                   />
                 </div>
               </div>
@@ -209,6 +273,7 @@ const Signup = () => {
                     value={formData.industry}
                     onValueChange={(value) => handleChange("industry", value)}
                     required
+                    disabled={isLoading}
                   >
                     <SelectTrigger className="pl-10">
                       <SelectValue placeholder="Select your industry" />
@@ -225,7 +290,7 @@ const Signup = () => {
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading || authLoading}>
                 {isLoading ? (
                   "Creating account..."
                 ) : (

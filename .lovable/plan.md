@@ -1,136 +1,221 @@
 
 
-# Fix Full-Screen Loading Issue
+# Settings Page Backend Integration Plan
 
-## Problem Identified
+## Overview
 
-When navigating to any route for the first time, users see a blank full-screen loading spinner instead of a more informative skeleton UI. This happens because:
+This plan updates the Settings page with two modifications:
+1. **Add "Coming Soon" badges** to the Notifications and Appearance tabs
+2. **Integrate backend** for General, Profile, and Danger tabs using Supabase
 
-1. All feature routes use `React.lazy()` for code splitting
-2. Each route wraps the lazy component with `<Suspense fallback={<SuspenseFallback fullScreen />}>`
-3. The `SuspenseFallback` component with `fullScreen={true}` renders only a centered spinner with no app shell
+---
 
-**Current behavior:**
-```
-+---------------------------+
-|                           |
-|                           |
-|        (spinner)          |
-|        Loading...         |
-|                           |
-+---------------------------+
-```
+## Current State Analysis
 
-**Desired behavior:**
-```
-+---------------------------+
-| [Logo] OpenPlan AI        |
-+--------+------------------+
-| My Day | [shimmer blocks] |
-| Dash   | [shimmer blocks] |
-| Proj   | [shimmer blocks] |
-| ...    |                  |
-+--------+------------------+
+| Tab | Current Status |
+|-----|---------------|
+| **General** | Uses local state from `mockData.ts`, no backend persistence |
+| **Profile** | Hardcoded mock data, no connection to authenticated user |
+| **Notifications** | Uses local state, will be marked as "Coming Soon" |
+| **Appearance** | Uses local state, will be marked as "Coming Soon" |
+| **Danger** | Password change non-functional, delete account shows error |
+
+### Database Schema
+
+**`profiles` table:**
+- `id`, `email`, `name`, `avatar_url`, `initials` (exists)
+- Missing: `role`, `bio` fields needed for Profile tab
+
+**`organizations` table:**
+- `id`, `name`, `slug`, `description`, `settings` (JSONB)
+- The `settings` column can store: `companyName`, `companySize`, `timezone`, `dateFormat`, `logo`
+
+**Storage:** No buckets exist for avatar/logo uploads
+
+---
+
+## Implementation Plan
+
+### Phase 1: Database Schema Updates
+
+**Migration: Add profile fields and storage buckets**
+
+```sql
+-- Add role and bio fields to profiles table
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT '';
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bio TEXT DEFAULT '';
+
+-- Create storage buckets for avatars and logos
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('avatars', 'avatars', true)
+ON CONFLICT DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('logos', 'logos', true)
+ON CONFLICT DO NOTHING;
+
+-- RLS policies for avatar bucket
+CREATE POLICY "Users can upload their own avatar"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Users can update their own avatar"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Users can delete their own avatar"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'avatars' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+CREATE POLICY "Avatars are publicly viewable"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'avatars');
+
+-- RLS policies for logos bucket (org members can manage)
+CREATE POLICY "Org members can upload logos"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'logos');
+
+CREATE POLICY "Org members can update logos"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'logos');
+
+CREATE POLICY "Org members can delete logos"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (bucket_id = 'logos');
+
+CREATE POLICY "Logos are publicly viewable"
+ON storage.objects FOR SELECT
+TO public
+USING (bucket_id = 'logos');
 ```
 
 ---
 
-## Solution Overview
+### Phase 2: Create Profile Service
 
-Create an `AppLayoutSkeleton` component that renders the full app shell (sidebar + header) with skeleton content, giving users immediate visual feedback about the page structure.
+**New File:** `src/services/profile.service.ts`
+
+Service to handle profile operations:
+
+```typescript
+export const profileService = {
+  // Get current user profile
+  async getProfile(): Promise<Profile>
+  
+  // Update profile fields (name, role, bio, initials)
+  async updateProfile(updates: Partial<Profile>): Promise<Profile>
+  
+  // Upload avatar image to storage bucket
+  async uploadAvatar(file: File): Promise<string>
+  
+  // Delete avatar from storage
+  async deleteAvatar(): Promise<void>
+  
+  // Update password (wrapper around auth.updateUser)
+  async updatePassword(newPassword: string): Promise<void>
+  
+  // Delete account (soft delete profile + sign out)
+  async deleteAccount(): Promise<void>
+}
+```
 
 ---
 
-## Implementation Steps
+### Phase 3: Extend Organization Service
 
-### Step 1: Create AppLayoutSkeleton Component
+**Modify:** `src/services/organizations.service.ts`
 
-Create a new component that renders the AppLayout shell with skeleton placeholders for the content area.
-
-**File:** `src/components/layout/AppLayoutSkeleton.tsx`
-
-The component will:
-- Render the actual `AppLayout` wrapper (sidebar + header are static)
-- Show skeleton blocks in the content area that match typical page layouts
-- Support different skeleton variants for different page types (dashboard, list, detail)
+Add methods for organization settings:
 
 ```typescript
-import { AppLayout } from '@/components/layout/AppLayout';
-import { Skeleton } from '@/components/ui/skeleton';
+// Add to organizationsService:
 
-interface AppLayoutSkeletonProps {
-  variant?: 'dashboard' | 'list' | 'detail' | 'default';
-}
+// Update organization settings (in JSONB field)
+async updateSettings(orgId: string, settings: OrganizationSettings): Promise<void>
 
-export function AppLayoutSkeleton({ variant = 'default' }: AppLayoutSkeletonProps) {
-  return (
-    <AppLayout>
-      {/* Render appropriate skeleton based on variant */}
-      {variant === 'dashboard' && <DashboardSkeleton />}
-      {variant === 'list' && <ListPageSkeleton />}
-      {variant === 'detail' && <DetailPageSkeleton />}
-      {variant === 'default' && <DefaultPageSkeleton />}
-    </AppLayout>
-  );
+// Upload organization logo
+async uploadLogo(orgId: string, file: File): Promise<string>
+
+// Delete organization logo
+async deleteLogo(orgId: string): Promise<void>
+```
+
+**Organization Settings Interface:**
+```typescript
+interface OrganizationSettings {
+  companyName?: string;
+  companySize?: string;
+  timezone?: string;
+  dateFormat?: string;
+  logoUrl?: string;
 }
 ```
 
-### Step 2: Create Page-Specific Skeleton Components
+---
 
-Within the same file, create skeleton patterns that match actual page layouts:
+### Phase 4: Update AuthContext
 
-**Dashboard Skeleton:**
-- Page title placeholder
-- 4 KPI card skeletons in a row
-- 2-column grid with card skeletons
+**Modify:** `src/contexts/AuthContext.tsx`
 
-**List Skeleton:**
-- Page title + action buttons placeholder
-- Filter bar skeleton
-- Table/list rows skeleton
-
-**Detail Skeleton:**
-- Breadcrumb skeleton
-- Main content card with sections
-
-### Step 3: Update App.tsx Route Fallbacks
-
-Replace the generic `<SuspenseFallback fullScreen />` with appropriate `<AppLayoutSkeleton variant="..." />` for each route:
-
-| Route | Skeleton Variant |
-|-------|-----------------|
-| `/` (Dashboard) | `dashboard` |
-| `/my-day` | `list` |
-| `/calendar` | `default` |
-| `/projects` | `list` |
-| `/projects/:id` | `detail` |
-| `/projects/new` | `detail` |
-| `/team` | `list` |
-| `/settings` | `detail` |
-| `/reports` | `dashboard` |
-
-**Example change:**
+Add function to refresh profile after updates:
 ```typescript
-// Before
-<Route 
-  path="/" 
-  element={
-    <Suspense fallback={<SuspenseFallback fullScreen />}>
-      <Dashboard />
-    </Suspense>
-  } 
-/>
-
-// After
-<Route 
-  path="/" 
-  element={
-    <Suspense fallback={<AppLayoutSkeleton variant="dashboard" />}>
-      <Dashboard />
-    </Suspense>
-  } 
-/>
+// Add to AuthContextValue:
+refreshProfile: () => Promise<void>
+updatePassword: (newPassword: string) => Promise<{ error: Error | null }>
+deleteAccount: () => Promise<{ error: Error | null }>
 ```
+
+---
+
+### Phase 5: Update Settings Component
+
+**Modify:** `src/features/settings/Settings.tsx`
+
+Major changes:
+
+1. **Add "Coming Soon" Badges:**
+   - Add `Badge` component with "Coming Soon" text next to Notifications and Appearance tab triggers
+   - Disable form controls within those tabs
+
+2. **General Tab Integration:**
+   - Import `useOrganization` hook to get current organization
+   - Load organization data including settings from JSONB field
+   - Implement `handleSaveGeneral` to update organization via `organizationsService.update()`
+   - Implement logo upload using storage bucket
+
+3. **Profile Tab Integration:**
+   - Import `useAuth` hook to get current user profile
+   - Pre-fill form with `profile.name`, `profile.email`, `profile.role`, `profile.bio`, `profile.avatar_url`
+   - Implement `handleSaveProfile` to update via `profileService.updateProfile()`
+   - Implement avatar upload using storage bucket
+
+4. **Danger Tab Integration:**
+   - Add password state management with validation
+   - Implement `handleUpdatePassword` using `authService.updatePassword()`
+   - Implement `handleDeleteAccount` with confirmation dialog
+   - Add proper error handling and loading states
+
+---
+
+## Component Changes Summary
+
+| Section | Change |
+|---------|--------|
+| **Imports** | Add `useAuth`, `useOrganization`, `profileService`, `organizationsService`, `supabase` |
+| **State** | Replace hardcoded mock data with hooks; add loading/error states |
+| **General Tab** | Bind to organization data, save to Supabase |
+| **Profile Tab** | Bind to authenticated user profile, save to Supabase |
+| **Notifications Tab** | Add "Coming Soon" badge, disable controls |
+| **Appearance Tab** | Add "Coming Soon" badge, disable controls |
+| **Danger Tab** | Implement real password change and account deletion |
 
 ---
 
@@ -138,71 +223,42 @@ Replace the generic `<SuspenseFallback fullScreen />` with appropriate `<AppLayo
 
 | File | Purpose |
 |------|---------|
-| `src/components/layout/AppLayoutSkeleton.tsx` | Skeleton with app shell + content placeholders |
+| `src/services/profile.service.ts` | Profile CRUD, avatar upload, password/account management |
 
 ## Files to Modify
 
 | File | Changes |
 |------|---------|
-| `src/App.tsx` | Replace `SuspenseFallback` with `AppLayoutSkeleton` in route fallbacks |
+| `src/features/settings/Settings.tsx` | Full integration with backend, add Coming Soon badges |
+| `src/services/organizations.service.ts` | Add settings update and logo upload methods |
+| `src/contexts/AuthContext.tsx` | Add `refreshProfile`, `updatePassword`, `deleteAccount` methods |
+| `src/services/index.ts` | Export `profileService` |
+
+## Database Migration
+
+One migration to:
+- Add `role` and `bio` columns to profiles table
+- Create `avatars` and `logos` storage buckets
+- Add RLS policies for storage buckets
 
 ---
 
-## Technical Considerations
+## Visual Changes
 
-### Why AppLayout Inside Skeleton Works
+### Coming Soon Badge Design
+- Yellow/amber badge next to tab text: "Coming Soon"
+- Form controls in those tabs will be visually disabled with reduced opacity
+- Tooltip on hover explaining feature is in development
 
-The `AppLayout` component contains:
-- `SidebarProvider` - Context provider (renders immediately)
-- `AppSidebar` - Static sidebar navigation (renders immediately)
-- `AppHeader` - Static header (renders immediately)
-
-These components don't depend on the lazy-loaded page data, so they can render instantly while only the content area shows loading skeletons.
-
-### Performance Impact
-
-- **Minimal**: The sidebar and header are simple components with no data fetching
-- The skeleton content is just CSS animations (no JavaScript overhead)
-- Users perceive faster load times due to progressive rendering
-
-### Animation Consistency
-
-Use the existing `animate-pulse` class from Tailwind and the `Skeleton` component from shadcn/ui to maintain visual consistency with other loading states in the app.
-
----
-
-## Visual Examples
-
-### Dashboard Skeleton
-```text
-+----------------------------------------------------------+
-| [logo] OpenPlan AI                          [avatar]     |
-+--------+-------------------------------------------------+
-| [nav]  |  [title ████████████]                           |
-|        |                                                 |
-| My Day |  [KPI] [KPI] [KPI] [KPI]    <- 4 shimmer cards |
-| Dash   |  ░░░░░ ░░░░░ ░░░░░ ░░░░░                        |
-| Proj   |                                                 |
-| Cal    |  [Large Card ████████]  [Side Card ████]        |
-| Report |  ░░░░░░░░░░░░░░░░░░░░░  ░░░░░░░░░░░░░░         |
-|        |  ░░░░░░░░░░░░░░░░░░░░░  ░░░░░░░░░░░░░░         |
-+--------+-------------------------------------------------+
-```
-
-### List Page Skeleton
-```text
-+----------------------------------------------------------+
-| [logo] OpenPlan AI                          [avatar]     |
-+--------+-------------------------------------------------+
-| [nav]  |  [title ████████████]     [+ New Button]        |
-|        |                                                 |
-| My Day |  [Filter ░░░] [Sort ░░░]                        |
-| Dash   |                                                 |
-| Proj   |  [Row ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   |
-| Cal    |  [Row ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   |
-| Report |  [Row ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   |
-|        |  [Row ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   |
-+--------+-------------------------------------------------+
+### Example Tab Trigger:
+```tsx
+<TabsTrigger value="notifications" className="gap-2">
+  <Bell className="h-4 w-4 hidden sm:block" />
+  Notifications
+  <Badge variant="outline" className="ml-1 bg-amber-100 text-amber-800 border-amber-300 text-xs">
+    Coming Soon
+  </Badge>
+</TabsTrigger>
 ```
 
 ---
@@ -210,9 +266,14 @@ Use the existing `animate-pulse` class from Tailwind and the `Skeleton` componen
 ## Success Criteria
 
 After implementation:
-- Navigating to any route shows the sidebar and header immediately
-- Content area displays appropriate skeleton placeholders
-- Skeleton layout matches the actual page layout
-- Smooth transition from skeleton to actual content
-- No flash of empty content or layout shift
+- Notifications and Appearance tabs display "Coming Soon" badges with disabled controls
+- Profile tab loads authenticated user's data from the database
+- Profile changes (name, role, bio) are saved to Supabase
+- Avatar upload stores image in storage bucket and updates profile
+- General tab loads current organization settings
+- Organization settings changes are saved to Supabase `settings` JSONB column
+- Logo upload stores image in storage bucket
+- Password change works via Supabase Auth
+- Account deletion performs soft delete and signs user out
+- All save actions show proper loading states and toast notifications
 

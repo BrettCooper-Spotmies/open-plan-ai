@@ -35,6 +35,7 @@ export const queryKeys = {
     list: (projectId: string) => [...queryKeys.tasks.lists(), projectId] as const,
     details: () => [...queryKeys.tasks.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.tasks.details(), id] as const,
+    userTasks: (userId: string) => [...queryKeys.tasks.all, 'user', userId] as const,
   },
   
   // Issues
@@ -51,6 +52,7 @@ export const queryKeys = {
   milestones: {
     all: ['milestones'] as const,
     list: (projectId: string) => [...queryKeys.milestones.all, 'list', projectId] as const,
+    detail: (id: string) => [...queryKeys.milestones.all, 'detail', id] as const,
   },
   
   // Team
@@ -63,7 +65,30 @@ export const queryKeys = {
   // Modules
   modules: {
     all: ['modules'] as const,
-    list: () => [...queryKeys.modules.all, 'list'] as const,
+    list: (projectId?: string) => [...queryKeys.modules.all, 'list', projectId] as const,
+    detail: (id: string) => [...queryKeys.modules.all, 'detail', id] as const,
+  },
+  
+  // Activities
+  activities: {
+    all: ['activities'] as const,
+    byProject: (projectId: string) => [...queryKeys.activities.all, 'project', projectId] as const,
+  },
+  
+  // Dashboard
+  dashboard: {
+    all: ['dashboard'] as const,
+    stats: () => [...queryKeys.dashboard.all, 'stats'] as const,
+    activity: (limit?: number) => [...queryKeys.dashboard.all, 'activity', limit] as const,
+    milestones: (limit?: number) => [...queryKeys.dashboard.all, 'milestones', limit] as const,
+    projects: () => [...queryKeys.dashboard.all, 'projects'] as const,
+  },
+  
+  // Organizations
+  organizations: {
+    all: ['organizations'] as const,
+    current: () => [...queryKeys.organizations.all, 'current'] as const,
+    members: (orgId: string) => [...queryKeys.organizations.all, 'members', orgId] as const,
   },
   
   // Reports
