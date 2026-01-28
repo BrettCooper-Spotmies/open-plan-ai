@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Task, TaskStatus, Priority, ModuleType, Issue } from '@/types';
 import { Card } from '@/components/ui/card';
@@ -43,6 +43,8 @@ interface KanbanViewProps {
   tasks: Task[];
   allTasks?: Task[]; // All tasks for dependency resolution
   issues?: Issue[]; // Issues for blocking indicator
+  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onTaskUpdate?: (task: Task) => void;
 }
 
 const defaultColumns: KanbanColumn[] = [
@@ -84,9 +86,14 @@ const columnColorOptions = [
   { value: 'bg-chart-4', label: 'Yellow' },
 ];
 
-export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: KanbanViewProps) {
+export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskCreate, onTaskUpdate }: KanbanViewProps) {
   const [columns, setColumns] = useState<KanbanColumn[]>(defaultColumns);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
+
+  // Sync local state with props when they change
+  useEffect(() => {
+    setTasks(initialTasks);
+  }, [initialTasks]);
   const [hoveredTask, setHoveredTask] = useState<string | null>(null);
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
@@ -174,7 +181,13 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
   };
 
   const handleTaskUpdate = (updatedTask: Task) => {
-    setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+    // Call backend mutation if available
+    if (onTaskUpdate) {
+      onTaskUpdate(updatedTask);
+    } else {
+      // Fallback to local state update
+      setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+    }
     setSelectedTask(updatedTask);
   };
 
@@ -217,18 +230,28 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
       status: destColumn.status as TaskStatus,
     };
 
-    // Update tasks array
-    const newTasks = tasks.map(t =>
-      t.id === movedTask.id ? updatedTask : t
-    );
-
-    setTasks(newTasks);
+    // Call backend mutation if available
+    if (onTaskUpdate) {
+      onTaskUpdate(updatedTask);
+    } else {
+      // Fallback to local state update
+      const newTasks = tasks.map(t =>
+        t.id === movedTask.id ? updatedTask : t
+      );
+      setTasks(newTasks);
+    }
   };
 
   const handleCompleteTask = (taskId: string) => {
-    setTasks(tasks.map(t =>
-      t.id === taskId ? { ...t, status: 'done' as TaskStatus } : t
-    ));
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    const updatedTask = { ...task, status: 'done' as TaskStatus };
+    if (onTaskUpdate) {
+      onTaskUpdate(updatedTask);
+    } else {
+      setTasks(tasks.map(t => t.id === taskId ? updatedTask : t));
+    }
   };
 
   const handleAddColumn = () => {
@@ -270,8 +293,8 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
       }
     }
 
-    const task: Task = {
-      id: `task-${Date.now()}`,
+    // Create task data for backend
+    const taskToCreate = {
       title: taskData.title || '',
       description: taskData.description || '',
       status: status || 'todo',
@@ -284,15 +307,26 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
       startDate: taskData.startDate,
       dueDate: taskData.dueDate,
       checklist: taskData.checklist || [],
-      comments: taskData.comments || [],
-      attachments: taskData.attachments || [],
-      linkedIssueIds: taskData.linkedIssueIds || [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      createdBy: teamMembers[0], // Mock current user as creator
     };
 
-    setTasks([...tasks, task]);
+    // Call backend mutation if available
+    if (onTaskCreate) {
+      onTaskCreate(taskToCreate as Omit<Task, 'id' | 'createdAt' | 'updatedAt'>);
+    } else {
+      // Fallback to local state update for mock mode
+      const task: Task = {
+        ...taskToCreate,
+        id: `task-${Date.now()}`,
+        comments: [],
+        attachments: [],
+        linkedIssueIds: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      } as Task;
+      setTasks([...tasks, task]);
+    }
+
+    // Reset form state
     setNewTask({
       title: '',
       description: '',

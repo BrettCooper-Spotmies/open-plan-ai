@@ -67,6 +67,64 @@ export default function ProjectDetail() {
     }
   }, [tabParam]);
 
+  // Calculate active filter count - moved before early returns
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (filters.status?.length) count++;
+    if (filters.priority?.length) count++;
+    if (filters.module?.length) count++;
+    if (filters.assignee?.length) count++;
+    if (filters.milestoneId) count++;
+    if (filters.dueDate) count++;
+    if (filters.tags?.length) count++;
+    if (filters.hasBlockers) count++;
+    return count;
+  }, [filters]);
+
+  // Get unique team members from tasks - moved before early returns
+  const teamMembers = useMemo(() => {
+    if (!project?.tasks) return [];
+    const members = new Map<string, { id: string; name: string; initials: string }>();
+    project.tasks.forEach(task => {
+      task.assignees?.forEach(assignee => {
+        members.set(assignee.id, {
+          id: assignee.id,
+          name: assignee.name,
+          initials: assignee.initials,
+        });
+      });
+    });
+    return Array.from(members.values());
+  }, [project?.tasks]);
+
+  // Get unique tags from tasks - moved before early returns
+  const allTags = useMemo(() => {
+    if (!project?.tasks) return [];
+    const tags = new Set<string>();
+    project.tasks.forEach(task => {
+      task.tags?.forEach(tag => tags.add(tag));
+    });
+    return Array.from(tags);
+  }, [project?.tasks]);
+
+  // Map database modules to frontend Module type
+  const modules: Module[] = useMemo(() => {
+    return projectModules.map((m: any) => ({
+      id: m.id,
+      name: m.name,
+      type: m.module_type,
+      description: m.description || '',
+      progress: m.progress || 0,
+      status: m.status || 'active',
+      owner: m.owner_id ? { id: m.owner_id, name: '', initials: '', email: '', role: 'member' } : undefined,
+      createdAt: m.created_at,
+    }));
+  }, [projectModules]);
+
+  const clearFilters = () => {
+    setFilters({});
+  };
+
   const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
     if (!project) return;
 
@@ -135,6 +193,10 @@ export default function ProjectDetail() {
     });
   };
 
+  const handleTaskCreate = (newTask: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
+    createTaskMutation.mutate(newTask);
+  };
+
   const handleTaskUpdate = (updatedTask: Task) => {
     updateTaskMutation.mutate({
       taskId: updatedTask.id,
@@ -168,62 +230,8 @@ export default function ProjectDetail() {
     );
   }
 
-  // Map database modules to frontend Module type
-  const modules: Module[] = projectModules.map((m: any) => ({
-    id: m.id,
-    name: m.name,
-    type: m.module_type,
-    description: m.description || '',
-    progress: m.progress || 0,
-    status: m.status || 'active',
-    owner: m.owner_id ? { id: m.owner_id, name: '', initials: '', email: '', role: 'member' } : undefined,
-    createdAt: m.created_at,
-  }));
-
   const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'closed').length || 0;
   const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed').length || 0;
-
-  // Calculate active filter count
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (filters.status?.length) count++;
-    if (filters.priority?.length) count++;
-    if (filters.module?.length) count++;
-    if (filters.assignee?.length) count++;
-    if (filters.milestoneId) count++;
-    if (filters.dueDate) count++;
-    if (filters.tags?.length) count++;
-    if (filters.hasBlockers) count++;
-    return count;
-  }, [filters]);
-
-  const clearFilters = () => {
-    setFilters({});
-  };
-
-  // Get unique team members from tasks
-  const teamMembers = useMemo(() => {
-    const members = new Map<string, { id: string; name: string; initials: string }>();
-    (project.tasks || []).forEach(task => {
-      task.assignees?.forEach(assignee => {
-        members.set(assignee.id, {
-          id: assignee.id,
-          name: assignee.name,
-          initials: assignee.initials,
-        });
-      });
-    });
-    return Array.from(members.values());
-  }, [project.tasks]);
-
-  // Get unique tags from tasks
-  const allTags = useMemo(() => {
-    const tags = new Set<string>();
-    (project.tasks || []).forEach(task => {
-      task.tags?.forEach(tag => tags.add(tag));
-    });
-    return Array.from(tags);
-  }, [project.tasks]);
 
   return (
     <AppLayout>
@@ -340,6 +348,8 @@ export default function ProjectDetail() {
               onViewModeChange={setViewMode}
               filters={filters}
               onFiltersChange={setFilters}
+              onTaskCreate={handleTaskCreate}
+              onTaskUpdate={handleTaskUpdate}
             />
           </TabsContent>
           <TabsContent value="modules" className="mt-6">
