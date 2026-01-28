@@ -21,6 +21,8 @@ interface TasksSectionProps {
   onFiltersOpenChange?: (open: boolean) => void;
   filters?: TaskFilter;
   onFiltersChange?: (filters: TaskFilter) => void;
+  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onTaskUpdate?: (task: Task) => void;
 }
 
 // Export ViewControls component for use in parent
@@ -101,7 +103,9 @@ export function TasksSection({
   isFiltersOpen: externalIsFiltersOpen,
   onFiltersOpenChange: externalOnFiltersOpenChange,
   filters: externalFilters,
-  onFiltersChange: externalOnFiltersChange
+  onFiltersChange: externalOnFiltersChange,
+  onTaskCreate,
+  onTaskUpdate,
 }: TasksSectionProps) {
   const [internalViewMode, setInternalViewMode] = useState<TaskViewMode>('kanban');
   const [internalFilters, setInternalFilters] = useState<TaskFilter>({});
@@ -255,7 +259,13 @@ export function TasksSection({
       {/* View Content */}
       <div className="min-h-[400px] w-full min-w-0">
         {viewMode === 'kanban' ? (
-          <KanbanView tasks={filteredTasks} allTasks={tasks} issues={issues} />
+          <KanbanView 
+            tasks={filteredTasks} 
+            allTasks={tasks} 
+            issues={issues}
+            onTaskCreate={onTaskCreate}
+            onTaskUpdate={onTaskUpdate}
+          />
         ) : (
           <ListView 
             tasks={filteredTasks} 

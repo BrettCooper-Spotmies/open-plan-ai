@@ -267,7 +267,7 @@ export const projectsService = {
         *,
         task_assignees(
           user_id,
-          profile:profiles(id, name, email, avatar_url, initials)
+          profile:profiles!task_assignees_user_id_fkey(id, name, email, avatar_url, initials)
         )
       `)
       .eq('project_id', projectId)
