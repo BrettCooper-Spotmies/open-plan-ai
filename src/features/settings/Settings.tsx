@@ -227,6 +227,10 @@ const Settings = () => {
         toast.error('Failed to upload logo');
       } finally {
         setLogoLoading(false);
+        // Reset file input to allow re-uploading the same file
+        if (logoInputRef.current) {
+          logoInputRef.current.value = '';
+        }
       }
     }
   };
@@ -732,20 +736,18 @@ const Settings = () => {
                       <button
                         key={theme}
                         disabled
-                        className={`p-4 rounded-lg border-2 transition-colors ${
-                          userSettings.theme === theme
+                        className={`p-4 rounded-lg border-2 transition-colors ${userSettings.theme === theme
                             ? 'border-primary bg-primary/5'
                             : 'border-border'
-                        }`}
+                          }`}
                       >
                         <div
-                          className={`h-12 rounded mb-2 ${
-                            theme === 'light'
+                          className={`h-12 rounded mb-2 ${theme === 'light'
                               ? 'bg-white border'
                               : theme === 'dark'
                                 ? 'bg-zinc-900'
                                 : 'bg-gradient-to-r from-white to-zinc-900'
-                          }`}
+                            }`}
                         />
                         <span className="text-sm font-medium capitalize">
                           {theme}
