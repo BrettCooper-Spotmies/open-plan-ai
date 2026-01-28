@@ -340,7 +340,7 @@ export function TaskDetailModal({
                 <CheckSquare className="h-4 w-4" />
                 Task Overview
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 {/* Assignees */}
                 <div className="space-y-2">
@@ -552,6 +552,24 @@ export function TaskDetailModal({
                     </PopoverContent>
                   </Popover>
                 </div>
+
+                {/* Created By */}
+                {mode !== 'create' && editedTask.createdBy && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <User className="h-3 w-3" />
+                      Created By
+                    </Label>
+                    <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-input bg-muted/30">
+                      <Avatar className="h-5 w-5">
+                        <AvatarFallback className="text-[9px]">
+                          {editedTask.createdBy.initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{editedTask.createdBy.name}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Tags */}
@@ -563,8 +581,8 @@ export function TaskDetailModal({
                 </Label>
                 <div className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                   {editedTask.tags.map((tag) => (
-                    <Badge 
-                      key={tag} 
+                    <Badge
+                      key={tag}
                       className={cn("text-xs font-normal pointer-events-none pl-2 pr-1 gap-1", getTagColor(tag))}
                     >
                       {tag}
@@ -576,9 +594,9 @@ export function TaskDetailModal({
                       </button>
                     </Badge>
                   ))}
-                  
-                  <Popover 
-                    open={isTagPopoverOpen} 
+
+                  <Popover
+                    open={isTagPopoverOpen}
                     onOpenChange={(open) => {
                       setIsTagPopoverOpen(open);
                       if (!open) setEditingTagIndex(null);
@@ -586,35 +604,35 @@ export function TaskDetailModal({
                   >
                     <PopoverTrigger asChild>
                       <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 flex items-center justify-center group relative">
-                         <div className="absolute inset-0 rounded-full border border-muted-foreground/30 group-hover:border-primary transition-colors" />
+                        <div className="absolute inset-0 rounded-full border border-muted-foreground/30 group-hover:border-primary transition-colors" />
                         <Plus className="h-3 w-3 z-10" />
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="p-0 w-[240px] max-h-[350px] flex flex-col overflow-hidden" align="start">
                       <Command className="flex-1 min-h-0">
-                        <CommandInput 
-                          placeholder="Search tags..." 
+                        <CommandInput
+                          placeholder="Search tags..."
                           value={tagSearch}
                           onValueChange={setTagSearch}
                         />
                         <CommandList className="flex-1 overflow-y-auto min-h-0">
                           <CommandEmpty className="py-2 px-2">
-                             <div className="text-sm text-center py-2 text-muted-foreground">
-                               No matching tags.
-                             </div>
-                             {tagSearch.trim() && (
-                                <button
-                                  className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                                  onClick={() => {
-                                      handleFieldChange('tags', [...editedTask.tags, tagSearch.trim()]);
-                                      setTagSearch('');
-                                      setIsTagPopoverOpen(false);
-                                  }}
-                                >
-                                  <Plus className="h-3 w-3" />
-                                  Create "{tagSearch}"
-                                </button>
-                             )}
+                            <div className="text-sm text-center py-2 text-muted-foreground">
+                              No matching tags.
+                            </div>
+                            {tagSearch.trim() && (
+                              <button
+                                className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                                onClick={() => {
+                                  handleFieldChange('tags', [...editedTask.tags, tagSearch.trim()]);
+                                  setTagSearch('');
+                                  setIsTagPopoverOpen(false);
+                                }}
+                              >
+                                <Plus className="h-3 w-3" />
+                                Create "{tagSearch}"
+                              </button>
+                            )}
                           </CommandEmpty>
                           {TAG_PALETTE
                             .filter(item => !editedTask.tags.includes(item.name)) // Simple filter by name
@@ -657,9 +675,9 @@ export function TaskDetailModal({
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         if (editingTagValue.trim()) {
-                                            handleFieldChange('tags', [...editedTask.tags, editingTagValue.trim()]);
-                                            setIsTagPopoverOpen(false);
-                                            setEditingTagIndex(null);
+                                          handleFieldChange('tags', [...editedTask.tags, editingTagValue.trim()]);
+                                          setIsTagPopoverOpen(false);
+                                          setEditingTagIndex(null);
                                         }
                                       }}
                                     >

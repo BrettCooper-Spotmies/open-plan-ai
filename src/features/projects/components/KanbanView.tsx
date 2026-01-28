@@ -114,7 +114,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
   const blockedTaskIds = useMemo(() => {
     const blocked = new Set<string>();
     const allTasksToCheck = allTasks || tasks;
-    
+
     tasks.forEach(task => {
       // Check if blocked by other tasks
       if (task.blockedBy && task.blockedBy.length > 0) {
@@ -218,7 +218,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
     };
 
     // Update tasks array
-    const newTasks = tasks.map(t => 
+    const newTasks = tasks.map(t =>
       t.id === movedTask.id ? updatedTask : t
     );
 
@@ -226,7 +226,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
   };
 
   const handleCompleteTask = (taskId: string) => {
-    setTasks(tasks.map(t => 
+    setTasks(tasks.map(t =>
       t.id === taskId ? { ...t, status: 'done' as TaskStatus } : t
     ));
   };
@@ -289,6 +289,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
       linkedIssueIds: taskData.linkedIssueIds || [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      createdBy: teamMembers[0], // Mock current user as creator
     };
 
     setTasks([...tasks, task]);
@@ -355,9 +356,9 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                   const isDependenciesColumn = column.isSpecial && column.status === 'blocked';
 
                   return (
-                    <Draggable 
-                      key={column.id} 
-                      draggableId={column.id} 
+                    <Draggable
+                      key={column.id}
+                      draggableId={column.id}
                       index={index}
                       isDragDisabled={column.isSpecial}
                     >
@@ -424,8 +425,8 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                           </div>
 
                           {/* Tasks Droppable */}
-                          <Droppable 
-                            droppableId={column.id} 
+                          <Droppable
+                            droppableId={column.id}
                             type="TASK"
                             isDropDisabled={isDependenciesColumn}
                           >
@@ -435,8 +436,8 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                                 {...provided.droppableProps}
                                 className={cn(
                                   'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
-                                  snapshot.isDraggingOver 
-                                    ? 'bg-muted/50' 
+                                  snapshot.isDraggingOver
+                                    ? 'bg-muted/50'
                                     : 'bg-muted/30'
                                 )}
                               >
@@ -469,28 +470,28 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                                                   <div className="flex items-start justify-between gap-2">
                                                     <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
                                                       {(isBlocked || task.status !== 'done') && (
-                                                        <div 
+                                                        <div
                                                           className={cn(
                                                             "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
                                                             hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
                                                           )}
                                                         >
-                                                            {isBlocked ? (
-                                                              <AlertTriangle className="h-4 w-4 text-status-blocked" />
-                                                            ) : (
-                                                                <button
-                                                                  onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleCompleteTask(task.id);
-                                                                  }}
-                                                                  className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
-                                                                >
-                                                                  <Check className="h-3 w-3 text-foreground" />
-                                                                </button>
-                                                            )}
+                                                          {isBlocked ? (
+                                                            <AlertTriangle className="h-4 w-4 text-status-blocked" />
+                                                          ) : (
+                                                            <button
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleCompleteTask(task.id);
+                                                              }}
+                                                              className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
+                                                            >
+                                                              <Check className="h-3 w-3 text-foreground" />
+                                                            </button>
+                                                          )}
                                                         </div>
                                                       )}
-                                                      <h4 
+                                                      <h4
                                                         className={cn(
                                                           "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
                                                           (isBlocked || task.status !== 'done') && hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
@@ -593,43 +594,43 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                           </Button>
                         </div>
                       </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Add New Bucket</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4 pt-4">
-                        <div className="space-y-2">
-                          <Label>Bucket Name</Label>
-                          <Input
-                            placeholder="e.g., QA Testing"
-                            value={newColumnName}
-                            onChange={(e) => setNewColumnName(e.target.value)}
-                          />
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Add New Bucket</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 pt-4">
+                          <div className="space-y-2">
+                            <Label>Bucket Name</Label>
+                            <Input
+                              placeholder="e.g., QA Testing"
+                              value={newColumnName}
+                              onChange={(e) => setNewColumnName(e.target.value)}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Color</Label>
+                            <Select value={newColumnColor} onValueChange={setNewColumnColor}>
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {columnColorOptions.map((option) => (
+                                  <SelectItem key={option.value} value={option.value}>
+                                    <div className="flex items-center gap-2">
+                                      <div className={cn('w-3 h-3 rounded-full', option.value)} />
+                                      {option.label}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <Button onClick={handleAddColumn} className="w-full">
+                            Add Bucket
+                          </Button>
                         </div>
-                        <div className="space-y-2">
-                          <Label>Color</Label>
-                          <Select value={newColumnColor} onValueChange={setNewColumnColor}>
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {columnColorOptions.map((option) => (
-                                <SelectItem key={option.value} value={option.value}>
-                                  <div className="flex items-center gap-2">
-                                    <div className={cn('w-3 h-3 rounded-full', option.value)} />
-                                    {option.label}
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button onClick={handleAddColumn} className="w-full">
-                          Add Bucket
-                        </Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
+                      </DialogContent>
+                    </Dialog>
                   </div>
                 </div>
               </div>
@@ -663,7 +664,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                 onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
               />
             </div>
-            
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Assigned To</Label>
@@ -671,10 +672,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                   {(newTask.assignees || []).map((assignee) => (
                     <Badge key={assignee.id} variant="secondary" className="gap-1 p-1 pr-2">
                       <Avatar className="h-4 w-4">
-                         <AvatarFallback className="text-[9px]">{assignee.initials}</AvatarFallback>
+                        <AvatarFallback className="text-[9px]">{assignee.initials}</AvatarFallback>
                       </Avatar>
                       <span className="text-xs">{assignee.name}</span>
-                      <X 
+                      <X
                         className="h-3 w-3 cursor-pointer hover:text-destructive"
                         onClick={() => setNewTask({
                           ...newTask,
@@ -684,46 +685,46 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                     </Badge>
                   ))}
                   <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
-                          <span>
-                            <Plus className="h-3 w-3" />
-                          </span>
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="p-0 w-[200px]" align="start">
-                        <Command>
-                          <CommandInput placeholder="Search members..." />
-                          <CommandList>
-                            <CommandEmpty>No results found.</CommandEmpty>
-                            <CommandGroup heading="Team Members">
-                              {teamMembers
-                                .filter(m => !newTask.assignees?.some(a => a.id === m.id))
-                                .map((member) => (
-                                  <CommandItem
-                                    key={member.id}
-                                    value={member.name}
-                                    onSelect={() => {
-                                      setNewTask({ ...newTask, assignees: [...(newTask.assignees || []), member] });
-                                      setIsAssigneePopoverOpen(false);
-                                    }}
-                                    className="cursor-pointer"
-                                  >
-                                    <div className="flex items-center gap-2">
-                                      <Avatar className="h-5 w-5">
-                                        <AvatarFallback className="text-[9px]">
-                                          {member.initials}
-                                        </AvatarFallback>
-                                      </Avatar>
-                                      {member.name}
-                                    </div>
-                                  </CommandItem>
-                                ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
+                    <PopoverTrigger asChild>
+                      <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
+                        <span>
+                          <Plus className="h-3 w-3" />
+                        </span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[200px]" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search members..." />
+                        <CommandList>
+                          <CommandEmpty>No results found.</CommandEmpty>
+                          <CommandGroup heading="Team Members">
+                            {teamMembers
+                              .filter(m => !newTask.assignees?.some(a => a.id === m.id))
+                              .map((member) => (
+                                <CommandItem
+                                  key={member.id}
+                                  value={member.name}
+                                  onSelect={() => {
+                                    setNewTask({ ...newTask, assignees: [...(newTask.assignees || []), member] });
+                                    setIsAssigneePopoverOpen(false);
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Avatar className="h-5 w-5">
+                                      <AvatarFallback className="text-[9px]">
+                                        {member.initials}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    {member.name}
+                                  </div>
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 
@@ -739,26 +740,26 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                   <SelectContent>
                     <SelectItem value="critical">
                       <div className="flex items-center gap-2">
-                         <div className="w-2 h-2 rounded-full bg-priority-critical" />
-                         Critical
+                        <div className="w-2 h-2 rounded-full bg-priority-critical" />
+                        Critical
                       </div>
                     </SelectItem>
                     <SelectItem value="high">
                       <div className="flex items-center gap-2">
-                         <div className="w-2 h-2 rounded-full bg-priority-high" />
-                         High
+                        <div className="w-2 h-2 rounded-full bg-priority-high" />
+                        High
                       </div>
                     </SelectItem>
                     <SelectItem value="medium">
                       <div className="flex items-center gap-2">
-                         <div className="w-2 h-2 rounded-full bg-priority-medium" />
-                         Medium
+                        <div className="w-2 h-2 rounded-full bg-priority-medium" />
+                        Medium
                       </div>
                     </SelectItem>
                     <SelectItem value="low">
                       <div className="flex items-center gap-2">
-                         <div className="w-2 h-2 rounded-full bg-priority-low" />
-                         Low
+                        <div className="w-2 h-2 rounded-full bg-priority-low" />
+                        Low
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -767,82 +768,82 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-               <div className="space-y-2">
-                  <Label>Start Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          'w-full justify-start text-left font-normal',
-                          !newTask.startDate && 'text-muted-foreground'
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newTask.startDate
-                          ? format(new Date(newTask.startDate), 'PPP')
-                          : 'Pick a date'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={newTask.startDate ? new Date(newTask.startDate) : undefined}
-                        onSelect={(date) => setNewTask({ ...newTask, startDate: date?.toISOString() })}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-               </div>
-               <div className="space-y-2">
-                  <Label>Due Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          'w-full justify-start text-left font-normal',
-                          !newTask.dueDate && 'text-muted-foreground'
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {newTask.dueDate
-                          ? format(new Date(newTask.dueDate), 'PPP')
-                          : 'Pick a date'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={newTask.dueDate ? new Date(newTask.dueDate) : undefined}
-                        onSelect={(date) => setNewTask({ ...newTask, dueDate: date?.toISOString() })}
-                        initialFocus
-                      />
-                    </PopoverContent>
-                  </Popover>
-               </div>
+              <div className="space-y-2">
+                <Label>Start Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        'w-full justify-start text-left font-normal',
+                        !newTask.startDate && 'text-muted-foreground'
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {newTask.startDate
+                        ? format(new Date(newTask.startDate), 'PPP')
+                        : 'Pick a date'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={newTask.startDate ? new Date(newTask.startDate) : undefined}
+                      onSelect={(date) => setNewTask({ ...newTask, startDate: date?.toISOString() })}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label>Due Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        'w-full justify-start text-left font-normal',
+                        !newTask.dueDate && 'text-muted-foreground'
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {newTask.dueDate
+                        ? format(new Date(newTask.dueDate), 'PPP')
+                        : 'Pick a date'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={newTask.dueDate ? new Date(newTask.dueDate) : undefined}
+                      onSelect={(date) => setNewTask({ ...newTask, dueDate: date?.toISOString() })}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
 
             <div className="space-y-2">
-                <Label>Module</Label>
-                <Select
-                  value={newTask.module}
-                  onValueChange={(v) => setNewTask({ ...newTask, module: v as ModuleType })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hardware">Hardware</SelectItem>
-                    <SelectItem value="software">Software</SelectItem>
-                    <SelectItem value="firmware">Firmware</SelectItem>
-                    <SelectItem value="testing">Testing</SelectItem>
-                    <SelectItem value="design">Design</SelectItem>
-                    <SelectItem value="pcb">PCB</SelectItem>
-                    <SelectItem value="enclosure">Enclosure</SelectItem>
-                    <SelectItem value="power">Power</SelectItem>
-                  </SelectContent>
-                </Select>
+              <Label>Module</Label>
+              <Select
+                value={newTask.module}
+                onValueChange={(v) => setNewTask({ ...newTask, module: v as ModuleType })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="hardware">Hardware</SelectItem>
+                  <SelectItem value="software">Software</SelectItem>
+                  <SelectItem value="firmware">Firmware</SelectItem>
+                  <SelectItem value="testing">Testing</SelectItem>
+                  <SelectItem value="design">Design</SelectItem>
+                  <SelectItem value="pcb">PCB</SelectItem>
+                  <SelectItem value="enclosure">Enclosure</SelectItem>
+                  <SelectItem value="power">Power</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">
@@ -853,7 +854,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
                 onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
               />
             </div>
-            
+
             <Button onClick={() => handleAddTask()} className="w-full">
               Add Task
             </Button>
@@ -876,24 +877,24 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [] }: Kanba
       {/* Task Detail Modal (Creating Maximized) */}
       <TaskDetailModal
         task={isMaximizedAddTask ? {
-            id: 'new-task-draft',
-            title: newTask.title || '',
-            description: newTask.description || '',
-            status: newTask.status || 'todo',
-            priority: newTask.priority || 'medium',
-            module: newTask.module || 'software',
-            assignees: newTask.assignees || [],
-            tags: newTask.tags || [],
-            dependencies: newTask.dependencies || [],
-            blockedBy: newTask.blockedBy || [],
-            checklist: newTask.checklist || [],
-            comments: newTask.comments || [],
-            attachments: newTask.attachments || [],
-            linkedIssueIds: newTask.linkedIssueIds || [],
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            startDate: newTask.startDate,
-            dueDate: newTask.dueDate,
+          id: 'new-task-draft',
+          title: newTask.title || '',
+          description: newTask.description || '',
+          status: newTask.status || 'todo',
+          priority: newTask.priority || 'medium',
+          module: newTask.module || 'software',
+          assignees: newTask.assignees || [],
+          tags: newTask.tags || [],
+          dependencies: newTask.dependencies || [],
+          blockedBy: newTask.blockedBy || [],
+          checklist: newTask.checklist || [],
+          comments: newTask.comments || [],
+          attachments: newTask.attachments || [],
+          linkedIssueIds: newTask.linkedIssueIds || [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          startDate: newTask.startDate,
+          dueDate: newTask.dueDate,
         } : null}
         allTasks={allTasks || tasks}
         isOpen={isMaximizedAddTask}

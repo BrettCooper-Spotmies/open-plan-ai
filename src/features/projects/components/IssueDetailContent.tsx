@@ -481,6 +481,22 @@ export function IssueDetailContent({
                             </Popover>
                         </div>
 
+                        {/* Reported By */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                <User className="h-3 w-3" />
+                                Reported By
+                            </Label>
+                            <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/20">
+                                <Avatar className="h-5 w-5">
+                                    <AvatarFallback className="text-[9px]">
+                                        {editedIssue.reportedBy.initials}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm">{editedIssue.reportedBy.name}</span>
+                            </div>
+                        </div>
+
                         {/* Severity */}
                         <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground flex items-center gap-1.5">

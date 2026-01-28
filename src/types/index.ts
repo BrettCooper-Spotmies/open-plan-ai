@@ -4,10 +4,10 @@ export type TaskStatus = 'todo' | 'in-progress' | 'review' | 'done' | 'blocked';
 export type Priority = 'critical' | 'high' | 'medium' | 'low';
 
 // Expanded ModuleType for hardware workflows
-export type ModuleType = 
-  | 'hardware' 
-  | 'software' 
-  | 'firmware' 
+export type ModuleType =
+  | 'hardware'
+  | 'software'
+  | 'firmware'
   | 'testing'
   | 'design'           // CAD, mechanical design
   | 'procurement'      // Sourcing, vendor management
@@ -23,7 +23,7 @@ export type ProjectStage = 'concept' | 'design' | 'development' | 'testing' | 'p
 // Issue types
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'trivial';
 export type IssueStatus = 'open' | 'investigating' | 'resolved' | 'closed' | 'wont-fix';
-export type IssueCategory = 
+export type IssueCategory =
   | 'defect'           // Product defect
   | 'risk'             // Identified risk
   | 'supplier'         // Supplier/vendor issue
@@ -73,6 +73,7 @@ export interface Module {
   color?: string;           // For visual distinction
   owner?: TeamMember;       // Module lead/owner
   createdAt: string;
+  createdBy?: TeamMember;  // Who created this module
 }
 
 // Enhanced Milestone interface
@@ -85,6 +86,7 @@ export interface Milestone {
   completedAt?: string;      // Actual completion date
   linkedTaskIds?: string[];  // Tasks linked to this milestone
   linkedModuleIds?: string[]; // Modules linked to this milestone
+  createdBy?: TeamMember;  // Who created this milestone
 }
 
 // Enhanced Task interface
@@ -108,7 +110,8 @@ export interface Task {
   comments?: Comment[];
   createdAt: string;
   updatedAt: string;
-  
+  createdBy?: TeamMember;  // Who created this task
+
   // NEW optional fields (backward compatible)
   milestoneId?: string;      // Link to parent milestone
   moduleId?: string;         // Link to Module entity (in addition to module type)
@@ -124,22 +127,22 @@ export interface Issue {
   category: IssueCategory;
   severity: IssueSeverity;
   status: IssueStatus;
-  
+
   // Relationships
   projectId: string;
   moduleId?: string;           // Which module is affected
   blocksTaskIds?: string[];    // Tasks blocked by this issue
   blocksMilestoneIds?: string[]; // Milestones affected
-  
+
   // Ownership
   reportedBy: TeamMember;
   assignees?: TeamMember[];
-  
+
   // Dates
   reportedAt: string;
   resolvedAt?: string;
   dueDate?: string;
-  
+
   // Additional context
   resolution?: string;         // How it was resolved
   attachments?: Attachment[];

@@ -320,6 +320,18 @@ export function ModuleDetailModal({
                       </p>
                     </div>
                   )}
+
+                  {module.createdBy && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Created By</Label>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Avatar className="h-5 w-5">
+                          <AvatarFallback className="text-[9px]">{module.createdBy.initials}</AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm">{module.createdBy.name}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Statistics */}
