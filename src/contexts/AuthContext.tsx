@@ -9,6 +9,8 @@ interface Profile {
   name: string;
   avatar_url: string | null;
   initials: string;
+  role?: string;
+  bio?: string;
 }
 
 interface AuthContextValue {
@@ -21,6 +23,9 @@ interface AuthContextValue {
   signUp: (email: string, password: string, metadata?: SignUpMetadata) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
+  refreshProfile: () => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<{ error: Error | null }>;
+  deleteAccount: () => Promise<{ error: Error | null }>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -36,7 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, name, avatar_url, initials')
+        .select('id, email, name, avatar_url, initials, role, bio')
         .eq('id', userId)
         .maybeSingle();
 
@@ -50,6 +55,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return null;
     }
   }, []);
+
+  // Refresh the current user's profile
+  const refreshProfile = useCallback(async () => {
+    if (!user) return;
+    const profileData = await fetchProfile(user.id);
+    setProfile(profileData);
+  }, [user, fetchProfile]);
 
   useEffect(() => {
     // Set up auth state listener BEFORE checking session
@@ -130,6 +142,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: null };
   }, []);
 
+  const updatePassword = useCallback(async (newPassword: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+      if (error) {
+        return { error: new Error(error.message) };
+      }
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err : new Error('Failed to update password') };
+    }
+  }, []);
+
+  const deleteAccount = useCallback(async () => {
+    if (!user) return { error: new Error('Not authenticated') };
+
+    try {
+      // Soft delete the profile
+      const { error } = await supabase
+        .from('profiles')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', user.id);
+
+      if (error) {
+        return { error: new Error(error.message) };
+      }
+
+      // Sign out
+      await authService.signOut();
+      setUser(null);
+      setProfile(null);
+      setSession(null);
+
+      return { error: null };
+    } catch (err) {
+      return { error: err instanceof Error ? err : new Error('Failed to delete account') };
+    }
+  }, [user]);
+
   const value: AuthContextValue = {
     user,
     profile,
@@ -140,6 +192,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp,
     signOut,
     resetPassword,
+    refreshProfile,
+    updatePassword,
+    deleteAccount,
   };
 
   return (
