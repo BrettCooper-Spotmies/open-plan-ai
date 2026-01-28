@@ -39,8 +39,10 @@ export function useCreateProject() {
   const addProject = useProjectStore((state) => state.addProject);
 
   return useMutation({
-    mutationFn: (project: Omit<Project, 'id' | 'createdAt' | 'updatedAt'>) => 
-      projectsService.create(project),
+    mutationFn: ({ project, organizationId }: { 
+      project: { name: string; description?: string; stage?: string; progress?: number; startDate?: string; targetDate?: string };
+      organizationId: string;
+    }) => projectsService.create(project, organizationId),
     onSuccess: (newProject) => {
       addProject(newProject);
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });

@@ -5,8 +5,10 @@ import { Project } from '@/types';
 
 // Mock the config to ensure we're using mock data
 vi.mock('@/config', () => ({
-  config: { api: { useMockData: true } }
+  config: { api: { useMockData: true, useSupabase: false } }
 }));
+
+const MOCK_ORG_ID = 'test-org-123';
 
 describe('projectsService', () => {
   describe('getAll', () => {
@@ -79,13 +81,9 @@ describe('projectsService', () => {
         progress: 0,
         startDate: '2024-01-01',
         targetDate: '2024-12-31',
-        team: [],
-        tasks: [],
-        milestones: [],
-        modules: [],
       };
 
-      const createdProject = await projectsService.create(newProjectData);
+      const createdProject = await projectsService.create(newProjectData, MOCK_ORG_ID);
       
       expect(createdProject).toHaveProperty('id');
       expect(createdProject.id).toMatch(/^proj-/);
@@ -106,11 +104,7 @@ describe('projectsService', () => {
         progress: 10,
         startDate: '2024-02-01',
         targetDate: '2024-11-30',
-        team: [],
-        tasks: [],
-        milestones: [],
-        modules: [],
-      });
+      }, MOCK_ORG_ID);
 
       const updatedProjects = await projectsService.getAll();
       
@@ -165,11 +159,7 @@ describe('projectsService', () => {
         progress: 0,
         startDate: '2024-01-01',
         targetDate: '2024-12-31',
-        team: [],
-        tasks: [],
-        milestones: [],
-        modules: [],
-      });
+      }, MOCK_ORG_ID);
 
       const projectsBeforeDelete = await projectsService.getAll();
       expect(projectsBeforeDelete.find(p => p.id === newProject.id)).toBeDefined();
@@ -209,11 +199,7 @@ describe('projectsService', () => {
         progress: 0,
         startDate: '2024-01-01',
         targetDate: '2024-12-31',
-        team: [],
-        tasks: [],
-        milestones: [],
-        modules: [],
-      });
+      }, MOCK_ORG_ID);
 
       const tasks = await projectsService.getTasks(emptyProject.id);
       

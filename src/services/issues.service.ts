@@ -1,33 +1,83 @@
-import { apiClient } from './api/client';
-import { API_ENDPOINTS } from './api/endpoints';
-import { Issue } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
+import { Issue, TeamMember } from '@/types';
 import { projects as mockProjects, projectIssues as mockIssues } from '@/data/mockData';
 import { config } from '@/config';
 
 // Environment flag to control data source
 const USE_MOCK_DATA = config.api.useMockData;
+const USE_SUPABASE = config.api.useSupabase;
 
 // Simulate network delay for mock data
 const mockDelay = (ms: number = 100) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Map database issue to frontend Issue type
+function mapDbIssueToIssue(dbIssue: any, assignees: TeamMember[] = [], reportedBy?: TeamMember): Issue {
+  const defaultReporter: TeamMember = {
+    id: dbIssue.reported_by || 'unknown',
+    name: 'Unknown User',
+    email: '',
+    role: 'member',
+    initials: 'UN',
+  };
+
+  return {
+    id: dbIssue.id,
+    projectId: dbIssue.project_id,
+    title: dbIssue.title,
+    description: dbIssue.description || '',
+    severity: dbIssue.severity,
+    status: dbIssue.status,
+    category: dbIssue.category || 'other',
+    reportedBy: reportedBy || defaultReporter,
+    reportedAt: dbIssue.reported_at || dbIssue.created_at,
+    resolvedAt: dbIssue.resolved_at || undefined,
+    assignees,
+  };
+}
 
 export const issuesService = {
   /**
    * Get all issues across all projects
    */
   async getAll(): Promise<Issue[]> {
-    if (USE_MOCK_DATA) {
+    if (USE_MOCK_DATA && !USE_SUPABASE) {
       await mockDelay();
       const projectIssues = mockProjects.flatMap(p => p.issues || []);
       return [...projectIssues, ...mockIssues];
     }
-    return apiClient.get<Issue[]>(API_ENDPOINTS.ISSUES);
+
+    const { data, error } = await supabase
+      .from('issues')
+      .select(`
+        *,
+        issue_assignees(
+          user_id,
+          profile:profiles(id, name, email, avatar_url, initials)
+        )
+      `)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map(issue => {
+      const assignees: TeamMember[] = (issue.issue_assignees || []).map((ia: any) => ({
+        id: ia.profile?.id || ia.user_id,
+        name: ia.profile?.name || 'Unknown',
+        role: 'member',
+        avatar: ia.profile?.avatar_url || undefined,
+        initials: ia.profile?.initials || 'UN',
+        email: ia.profile?.email || '',
+      }));
+      return mapDbIssueToIssue(issue, assignees);
+    });
   },
 
   /**
    * Get issue by ID
    */
   async getById(issueId: string): Promise<Issue | null> {
-    if (USE_MOCK_DATA) {
+    if (USE_MOCK_DATA && !USE_SUPABASE) {
       await mockDelay();
       // Check project issues first
       for (const project of mockProjects) {
@@ -38,14 +88,40 @@ export const issuesService = {
       const standaloneIssue = mockIssues.find(i => i.id === issueId);
       return standaloneIssue ? { ...standaloneIssue } : null;
     }
-    return apiClient.get<Issue>(API_ENDPOINTS.ISSUE_BY_ID(issueId));
+
+    const { data, error } = await supabase
+      .from('issues')
+      .select(`
+        *,
+        issue_assignees(
+          user_id,
+          profile:profiles(id, name, email, avatar_url, initials)
+        )
+      `)
+      .eq('id', issueId)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    const assignees: TeamMember[] = (data.issue_assignees || []).map((ia: any) => ({
+      id: ia.profile?.id || ia.user_id,
+      name: ia.profile?.name || 'Unknown',
+      role: 'member',
+      avatar: ia.profile?.avatar_url || undefined,
+      initials: ia.profile?.initials || 'UN',
+      email: ia.profile?.email || '',
+    }));
+
+    return mapDbIssueToIssue(data, assignees);
   },
 
   /**
    * Create new issue
    */
   async create(projectId: string, issue: Omit<Issue, 'id' | 'reportedAt'>): Promise<Issue> {
-    if (USE_MOCK_DATA) {
+    if (USE_MOCK_DATA && !USE_SUPABASE) {
       await mockDelay();
       const project = mockProjects.find(p => p.id === projectId);
       if (!project) throw new Error('Project not found');
@@ -63,14 +139,44 @@ export const issuesService = {
       project.issues.push(newIssue);
       return newIssue;
     }
-    return apiClient.post<Issue>(API_ENDPOINTS.PROJECT_ISSUES(projectId), issue);
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase
+      .from('issues')
+      .insert({
+        project_id: projectId,
+        title: issue.title,
+        description: issue.description || null,
+        severity: issue.severity,
+        status: issue.status,
+        category: issue.category || 'other',
+        reported_by: user?.id || null,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Add assignees if provided
+    if (issue.assignees && issue.assignees.length > 0) {
+      const assigneeInserts = issue.assignees.map(a => ({
+        issue_id: data.id,
+        user_id: a.id,
+        assigned_by: user?.id || null,
+      }));
+
+      await supabase.from('issue_assignees').insert(assigneeInserts);
+    }
+
+    return mapDbIssueToIssue(data, issue.assignees || [], issue.reportedBy);
   },
 
   /**
    * Update existing issue
    */
   async update(issueId: string, updates: Partial<Issue>): Promise<Issue> {
-    if (USE_MOCK_DATA) {
+    if (USE_MOCK_DATA && !USE_SUPABASE) {
       await mockDelay();
       
       // Check project issues first
@@ -99,14 +205,47 @@ export const issuesService = {
       
       throw new Error('Issue not found');
     }
-    return apiClient.patch<Issue>(API_ENDPOINTS.ISSUE_BY_ID(issueId), updates);
+
+    const updateData: any = {};
+    if (updates.title !== undefined) updateData.title = updates.title;
+    if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.severity !== undefined) updateData.severity = updates.severity;
+    if (updates.status !== undefined) updateData.status = updates.status;
+    if (updates.category !== undefined) updateData.category = updates.category;
+    if (updates.resolvedAt !== undefined) updateData.resolved_at = updates.resolvedAt;
+
+    const { data, error } = await supabase
+      .from('issues')
+      .update(updateData)
+      .eq('id', issueId)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Update assignees if provided
+    if (updates.assignees !== undefined) {
+      await supabase.from('issue_assignees').delete().eq('issue_id', issueId);
+      
+      if (updates.assignees.length > 0) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const assigneeInserts = updates.assignees.map(a => ({
+          issue_id: issueId,
+          user_id: a.id,
+          assigned_by: user?.id || null,
+        }));
+        await supabase.from('issue_assignees').insert(assigneeInserts);
+      }
+    }
+
+    return mapDbIssueToIssue(data, updates.assignees || []);
   },
 
   /**
-   * Delete issue
+   * Delete issue (soft delete)
    */
   async delete(issueId: string): Promise<void> {
-    if (USE_MOCK_DATA) {
+    if (USE_MOCK_DATA && !USE_SUPABASE) {
       await mockDelay();
       
       // Check project issues first
@@ -127,14 +266,20 @@ export const issuesService = {
       }
       return;
     }
-    return apiClient.delete(API_ENDPOINTS.ISSUE_BY_ID(issueId));
+
+    const { error } = await supabase
+      .from('issues')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', issueId);
+
+    if (error) throw error;
   },
 
   /**
    * Get open issues count
    */
   async getOpenCount(): Promise<{ total: number; critical: number }> {
-    if (USE_MOCK_DATA) {
+    if (USE_MOCK_DATA && !USE_SUPABASE) {
       await mockDelay();
       const allIssues = await this.getAll();
       const openIssues = allIssues.filter(i => i.status === 'open' || i.status === 'investigating');
@@ -144,6 +289,27 @@ export const issuesService = {
         critical: criticalIssues.length,
       };
     }
-    return apiClient.get<{ total: number; critical: number }>(`${API_ENDPOINTS.ISSUES}/count`);
+
+    const { count: total, error: totalError } = await supabase
+      .from('issues')
+      .select('*', { count: 'exact', head: true })
+      .in('status', ['open', 'investigating'])
+      .is('deleted_at', null);
+
+    if (totalError) throw totalError;
+
+    const { count: critical, error: criticalError } = await supabase
+      .from('issues')
+      .select('*', { count: 'exact', head: true })
+      .in('status', ['open', 'investigating'])
+      .eq('severity', 'critical')
+      .is('deleted_at', null);
+
+    if (criticalError) throw criticalError;
+
+    return {
+      total: total || 0,
+      critical: critical || 0,
+    };
   },
 };
