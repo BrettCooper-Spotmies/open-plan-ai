@@ -11,9 +11,20 @@ import { TasksSection, ViewControls } from './components/TasksSection';
 import { ModulesSection, ModuleViewControls } from './components/ModulesSection';
 import { MilestonesView } from './components/MilestonesView';
 import { IssuesView } from './components/IssuesView';
-import { projects, projectModules, teamMembers as allTeamMembers } from '@/data/mockData';
+import { ProjectDetailSkeleton } from './components/ProjectDetailSkeleton';
+import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
+import { useTeamMembers } from '@/hooks/useProjectTeam';
+import {
+  useCreateTask,
+  useUpdateTask,
+  useCreateIssue,
+  useUpdateIssue,
+  useCreateMilestone,
+  useUpdateMilestone,
+  useCreateModule,
+} from '@/hooks/useProjectMutations';
 import { cn } from '@/lib/utils';
-import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Project, Issue, Milestone } from '@/types';
+import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task } from '@/types';
 
 const stageColors = {
   concept: 'bg-muted text-muted-foreground',
@@ -35,56 +46,55 @@ export default function ProjectDetail() {
   const [filters, setFilters] = useState<TaskFilter>({});
   const [isAddModuleDialogOpen, setIsAddModuleDialogOpen] = useState(false);
 
-  const [projectData, setProjectData] = useState<Project | undefined>(() => projects.find(p => p.id === id));
+  // Fetch project data using React Query
+  const { data: project, isLoading, error } = useProjectDetail(id);
+  const { data: projectModules = [] } = useProjectModules(id);
+  const { data: allTeamMembers = [] } = useTeamMembers();
 
+  // Mutation hooks
+  const createTaskMutation = useCreateTask(id || '');
+  const updateTaskMutation = useUpdateTask(id || '');
+  const createIssueMutation = useCreateIssue(id || '');
+  const updateIssueMutation = useUpdateIssue(id || '');
+  const createMilestoneMutation = useCreateMilestone(id || '');
+  const updateMilestoneMutation = useUpdateMilestone(id || '');
+  const createModuleMutation = useCreateModule(id || '');
+
+  // Update section from URL params
   useEffect(() => {
-    setProjectData(projects.find(p => p.id === id));
-  }, [id]);
-
-  const project = projectData;
+    if (tabParam) {
+      setSection(tabParam);
+    }
+  }, [tabParam]);
 
   const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
     if (!project) return;
 
-    const newIssue: Issue = {
-      id: `issue-${Date.now()}`,
+    createIssueMutation.mutate({
       projectId: project.id,
       title: newIssuePartial.title || 'New Issue',
       description: newIssuePartial.description || '',
       status: 'open',
-      severity: 'minor',
-      category: 'other',
-      priority: 'medium',
-      reportedAt: new Date().toISOString(),
-      assignees: [],
-      tags: [],
-      blocksTaskIds: [],
-      blocksMilestoneIds: [],
-      blockedByTaskIds: [],
-      blockedByMilestoneIds: [],
+      severity: newIssuePartial.severity || 'minor',
+      category: newIssuePartial.category || 'other',
+      assignees: newIssuePartial.assignees || [],
+      reportedBy: {
+        id: 'current-user',
+        name: 'Current User',
+        email: '',
+        role: 'member',
+        initials: 'CU',
+      },
       descriptionBlocks: newIssuePartial.descriptionBlocks || [],
-      ...newIssuePartial
-    } as Issue;
-
-    // Mutate mock data for persistence across navigation
-    const originalProject = projects.find(p => p.id === project.id);
-    if (originalProject) {
-      if (!originalProject.issues) originalProject.issues = [];
-      // Add to start
-      originalProject.issues.unshift(newIssue);
-    }
-
-    setProjectData(prev => prev ? ({
-      ...prev,
-      issues: [newIssue, ...(prev.issues || [])]
-    }) : prev);
+      ...newIssuePartial,
+    } as Omit<Issue, 'id' | 'reportedAt'>);
   };
 
   const handleIssueUpdate = (updatedIssue: Issue) => {
-    setProjectData(prev => prev ? ({
-      ...prev,
-      issues: prev.issues?.map(i => i.id === updatedIssue.id ? updatedIssue : i) || []
-    }) : prev);
+    updateIssueMutation.mutate({
+      issueId: updatedIssue.id,
+      updates: updatedIssue,
+    });
   };
 
   const handleAddModule = () => {
@@ -92,75 +102,64 @@ export default function ProjectDetail() {
   };
 
   const handleModuleAdd = (newModule: Omit<Module, 'id' | 'createdAt'>) => {
-    const module: Module = {
-      ...newModule,
-      id: `module-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-    };
-    // Add to modules (in real app, this would update state/database)
-    projectModules.push(module);
-    console.log('Module added:', module);
+    createModuleMutation.mutate({
+      name: newModule.name,
+      module_type: newModule.type,
+      description: newModule.description || null,
+      status: 'active',
+      progress: 0,
+    });
     setIsAddModuleDialogOpen(false);
   };
 
   const handleMilestoneCreate = (newMilestonePartial: Omit<Milestone, 'id'>) => {
     if (!project) return;
 
-    const newMilestone: Milestone = {
-      id: `milestone-${Date.now()}`,
-      ...newMilestonePartial,
-    };
-
-    // Mutate mock data for persistence across navigation
-    const originalProject = projects.find(p => p.id === project.id);
-    if (originalProject) {
-      if (!originalProject.milestones) originalProject.milestones = [];
-      originalProject.milestones.push(newMilestone);
-    }
-
-    setProjectData(prev => prev ? ({
-      ...prev,
-      milestones: [...(prev.milestones || []), newMilestone]
-    }) : prev);
+    createMilestoneMutation.mutate({
+      name: newMilestonePartial.title,
+      due_date: newMilestonePartial.date || null,
+      description: newMilestonePartial.description || null,
+      status: newMilestonePartial.completed ? 'completed' : 'upcoming',
+    });
   };
 
   const handleMilestoneUpdate = (updatedMilestone: Milestone) => {
-    // Mutate mock data for persistence
-    const originalProject = projects.find(p => p.id === project?.id);
-    if (originalProject) {
-      const index = originalProject.milestones?.findIndex(m => m.id === updatedMilestone.id);
-      if (index !== undefined && index !== -1 && originalProject.milestones) {
-        originalProject.milestones[index] = updatedMilestone;
-      }
-    }
-
-    setProjectData(prev => prev ? ({
-      ...prev,
-      milestones: prev.milestones?.map(m => m.id === updatedMilestone.id ? updatedMilestone : m) || []
-    }) : prev);
+    updateMilestoneMutation.mutate({
+      milestoneId: updatedMilestone.id,
+      updates: {
+        name: updatedMilestone.title,
+        due_date: updatedMilestone.date || null,
+        description: updatedMilestone.description || null,
+        status: updatedMilestone.completed ? 'completed' : 'upcoming',
+      },
+    });
   };
 
-  const handleTaskUpdate = (updatedTask: any) => {
-    // Mutate mock data for persistence
-    const originalProject = projects.find(p => p.id === project?.id);
-    if (originalProject) {
-      const index = originalProject.tasks?.findIndex(t => t.id === updatedTask.id);
-      if (index !== undefined && index !== -1 && originalProject.tasks) {
-        originalProject.tasks[index] = updatedTask;
-      }
-    }
-
-    setProjectData(prev => prev ? ({
-      ...prev,
-      tasks: prev.tasks?.map(t => t.id === updatedTask.id ? updatedTask : t) || []
-    }) : prev);
+  const handleTaskUpdate = (updatedTask: Task) => {
+    updateTaskMutation.mutate({
+      taskId: updatedTask.id,
+      updates: updatedTask,
+    });
   };
 
-  if (!project) {
+  // Loading state
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <ProjectDetailSkeleton />
+      </AppLayout>
+    );
+  }
+
+  // Error or not found state
+  if (error || !project) {
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center h-[60vh]">
           <h2 className="text-xl font-medium">Project not found</h2>
+          <p className="text-muted-foreground mt-2">
+            {error ? 'An error occurred while loading the project.' : 'The project you are looking for does not exist.'}
+          </p>
           <Button asChild className="mt-4">
             <Link to="/projects">Back to Projects</Link>
           </Button>
@@ -169,8 +168,17 @@ export default function ProjectDetail() {
     );
   }
 
-  // Get project modules - use projectModules for now (in real app, filter by projectId)
-  const modules: Module[] = projectModules;
+  // Map database modules to frontend Module type
+  const modules: Module[] = projectModules.map((m: any) => ({
+    id: m.id,
+    name: m.name,
+    type: m.module_type,
+    description: m.description || '',
+    progress: m.progress || 0,
+    status: m.status || 'active',
+    owner: m.owner_id ? { id: m.owner_id, name: '', initials: '', email: '', role: 'member' } : undefined,
+    createdAt: m.created_at,
+  }));
 
   const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'closed').length || 0;
   const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed').length || 0;
@@ -196,7 +204,7 @@ export default function ProjectDetail() {
   // Get unique team members from tasks
   const teamMembers = useMemo(() => {
     const members = new Map<string, { id: string; name: string; initials: string }>();
-    project.tasks.forEach(task => {
+    (project.tasks || []).forEach(task => {
       task.assignees?.forEach(assignee => {
         members.set(assignee.id, {
           id: assignee.id,
@@ -211,8 +219,8 @@ export default function ProjectDetail() {
   // Get unique tags from tasks
   const allTags = useMemo(() => {
     const tags = new Set<string>();
-    project.tasks.forEach(task => {
-      task.tags.forEach(tag => tags.add(tag));
+    (project.tasks || []).forEach(task => {
+      task.tags?.forEach(tag => tags.add(tag));
     });
     return Array.from(tags);
   }, [project.tasks]);
@@ -238,12 +246,12 @@ export default function ProjectDetail() {
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="h-4 w-4" />
-              <span>Due {new Date(project.targetDate).toLocaleDateString()}</span>
+              <span>Due {project.targetDate ? new Date(project.targetDate).toLocaleDateString() : 'Not set'}</span>
             </div>
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-muted-foreground" />
               <div className="flex -space-x-2">
-                {project.team.slice(0, 5).map((member) => (
+                {(project.team || []).slice(0, 5).map((member) => (
                   <Avatar key={member.id} className="h-6 w-6 border-2 border-background">
                     <AvatarFallback className="text-[10px] bg-muted">
                       {member.initials}
@@ -269,7 +277,7 @@ export default function ProjectDetail() {
                 <ListTodo className="h-4 w-4" />
                 Tasks
                 <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                  {project.tasks.length}
+                  {(project.tasks || []).length}
                 </Badge>
               </TabsTrigger>
               <TabsTrigger value="modules" className="gap-2">
@@ -283,7 +291,7 @@ export default function ProjectDetail() {
                 <Flag className="h-4 w-4" />
                 Milestones
                 <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                  {project.milestones.length}
+                  {(project.milestones || []).length}
                 </Badge>
               </TabsTrigger>
               <TabsTrigger value="issues" className="gap-2">
@@ -304,7 +312,7 @@ export default function ProjectDetail() {
                 onViewModeChange={setViewMode}
                 filters={filters}
                 onFiltersChange={setFilters}
-                milestones={project.milestones}
+                milestones={project.milestones || []}
                 modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
                 teamMembers={teamMembers}
                 allTags={allTags}
@@ -324,8 +332,8 @@ export default function ProjectDetail() {
 
           <TabsContent value="tasks" className="mt-6">
             <TasksSection
-              tasks={project.tasks}
-              milestones={project.milestones}
+              tasks={project.tasks || []}
+              milestones={project.milestones || []}
               issues={project.issues || []}
               modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
               viewMode={viewMode}
@@ -337,7 +345,7 @@ export default function ProjectDetail() {
           <TabsContent value="modules" className="mt-6">
             <ModulesSection
               modules={modules}
-              tasks={project.tasks}
+              tasks={project.tasks || []}
               issues={project.issues || []}
               teamMembers={allTeamMembers}
               viewMode={moduleViewMode}
@@ -351,8 +359,8 @@ export default function ProjectDetail() {
           </TabsContent>
           <TabsContent value="milestones" className="mt-6">
             <MilestonesView
-              milestones={project.milestones}
-              tasks={project.tasks}
+              milestones={project.milestones || []}
+              tasks={project.tasks || []}
               issues={project.issues || []}
               modules={modules}
               onMilestoneUpdate={handleMilestoneUpdate}
@@ -363,7 +371,7 @@ export default function ProjectDetail() {
           <TabsContent value="issues" className="mt-6">
             <IssuesView
               issues={project.issues || []}
-              tasks={project.tasks}
+              tasks={project.tasks || []}
               onIssueCreate={handleIssueCreate}
               onIssueUpdate={handleIssueUpdate}
             />

@@ -50,12 +50,19 @@ import {
   Globe,
   Flag,
   Target,
-  Pencil
+  Pencil,
+  Loader2
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { teamMembers } from "@/data/mockData";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { toast } from "sonner";
+import { useOrganization } from "@/contexts/OrganizationContext";
+import { useCreateProject } from "@/hooks/useProjects";
+import { useOrganizationMembers } from "@/hooks/useProjectTeam";
+import { modulesService } from "@/services/modules.service";
+import { milestonesService } from "@/services/milestones.service";
+import type { Database } from "@/integrations/supabase/types";
 
 const projectTypes = [
   "Hardware Development",
@@ -141,6 +148,10 @@ interface ProjectMilestone {
 
 const NewProject = () => {
   const navigate = useNavigate();
+  const { currentOrganization } = useOrganization();
+  const createProjectMutation = useCreateProject();
+  const { data: teamMembers = [] } = useOrganizationMembers(currentOrganization?.id);
+  const [isCreating, setIsCreating] = useState(false);
 
   // Basic Details
   const [projectName, setProjectName] = useState("");
@@ -340,27 +351,70 @@ const NewProject = () => {
     setExtractedTasks(extractedTasks.filter(t => t.id !== taskId));
   };
 
-  const handleCreateProject = () => {
-    // In a real app, this would save to database
-    console.log("Creating project:", {
-      projectName,
-      projectDescription,
-      projectType,
-      startDate,
-      expectedEndDate,
-      clientName,
-      clientOrganization,
-      clientContact,
-      notes,
-      assignedMembers,
-      selectedDepartments,
-      attachments,
-      links,
-      extractedTasks,
-      modules,
-      milestones
-    });
-    navigate("/projects");
+  const handleCreateProject = async () => {
+    if (!currentOrganization) {
+      toast.error('Please select an organization first');
+      return;
+    }
+
+    if (!projectName.trim()) {
+      toast.error('Project name is required');
+      return;
+    }
+
+    setIsCreating(true);
+    
+    try {
+      // Determine project stage from type
+      let stage: Database['public']['Enums']['project_stage'] = 'concept';
+      const typeLower = projectType.toLowerCase();
+      if (typeLower.includes('production')) stage = 'production';
+      else if (typeLower.includes('prototype')) stage = 'development';
+      else if (typeLower.includes('testing')) stage = 'testing';
+      else if (typeLower.includes('design')) stage = 'design';
+
+      // Create the project
+      const project = await createProjectMutation.mutateAsync({
+        project: {
+          name: projectName,
+          description: projectDescription || undefined,
+          stage,
+          startDate: startDate?.toISOString().split('T')[0],
+          targetDate: expectedEndDate?.toISOString().split('T')[0],
+        },
+        organizationId: currentOrganization.id,
+      });
+
+      // Create initial modules if specified
+      if (modules.length > 0) {
+        await Promise.all(modules.map(m => 
+          modulesService.create({
+            project_id: project.id,
+            name: m.name,
+            module_type: 'software', // Default type
+          })
+        ));
+      }
+
+      // Create initial milestones if specified  
+      if (milestones.length > 0) {
+        await Promise.all(milestones.map(m =>
+          milestonesService.create({
+            project_id: project.id,
+            name: m.name,
+            due_date: m.endDate?.toISOString().split('T')[0] || null,
+          })
+        ));
+      }
+
+      toast.success('Project created successfully!');
+      navigate(`/projects/${project.id}`);
+    } catch (error) {
+      console.error('Error creating project:', error);
+      toast.error('Failed to create project');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const getMemberById = (id: string) => teamMembers.find(m => m.id === id);
@@ -1152,9 +1206,16 @@ const NewProject = () => {
           </Button>
           <Button
             onClick={handleCreateProject}
-            disabled={!projectName || !projectType || !startDate || !expectedEndDate}
+            disabled={!projectName || !projectType || !startDate || !expectedEndDate || isCreating || !currentOrganization}
           >
-            Create Project
+            {isCreating ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating...
+              </>
+            ) : (
+              'Create Project'
+            )}
           </Button>
         </div>
       </div>
