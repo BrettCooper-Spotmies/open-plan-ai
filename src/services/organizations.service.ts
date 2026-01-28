@@ -68,34 +68,15 @@ export const organizationsService = {
    * Create a new organization and add current user as owner
    */
   async create(org: { name: string; slug: string; description?: string }): Promise<Organization> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+    // Use the SECURITY DEFINER function to create organization + owner membership atomically
+    const { data, error } = await supabase.rpc('create_organization_with_owner', {
+      org_name: org.name,
+      org_slug: org.slug,
+      org_description: org.description || null,
+    });
 
-    // Create the organization
-    const { data: newOrg, error: orgError } = await supabase
-      .from('organizations')
-      .insert({
-        name: org.name,
-        slug: org.slug,
-        description: org.description || null,
-      })
-      .select()
-      .single();
-
-    if (orgError) throw orgError;
-
-    // Add creator as owner
-    const { error: memberError } = await supabase
-      .from('organization_members')
-      .insert({
-        organization_id: newOrg.id,
-        user_id: user.id,
-        role: 'owner',
-      });
-
-    if (memberError) throw memberError;
-
-    return newOrg;
+    if (error) throw error;
+    return data as Organization;
   },
 
   /**

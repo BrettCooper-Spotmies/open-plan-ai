@@ -860,6 +860,25 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_verifications: { Args: never; Returns: undefined }
+      create_organization_with_owner: {
+        Args: { org_description?: string; org_name: string; org_slug: string }
+        Returns: {
+          created_at: string | null
+          deleted_at: string | null
+          description: string | null
+          id: string
+          name: string
+          settings: Json | null
+          slug: string
+          updated_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "organizations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_user_org_ids: { Args: never; Returns: string[] }
       has_org_access: { Args: { _org_id: string }; Returns: boolean }
       has_org_role: {
