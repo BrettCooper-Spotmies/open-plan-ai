@@ -48,17 +48,19 @@ import {
   Trash2,
   Lock,
   Loader2,
+  Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { profileService } from '@/services/profile.service';
 import { organizationsService, OrganizationSettings } from '@/services/organizations.service';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const Settings = () => {
   const navigate = useNavigate();
   const { profile, refreshProfile, updatePassword, deleteAccount } = useAuth();
-  const { currentOrganization, refreshOrganizations } = useOrganization();
+  const { currentOrganization, refreshOrganizations, createOrganization, isLoading: orgContextLoading } = useOrganization();
 
   // User settings for notifications/appearance (still local - coming soon)
   const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings);
@@ -86,6 +88,13 @@ const Settings = () => {
   const [orgLoading, setOrgLoading] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
 
+  // New organization creation state
+  const [isCreatingOrg, setIsCreatingOrg] = useState(false);
+  const [newOrgForm, setNewOrgForm] = useState({
+    name: '',
+    description: '',
+  });
+
   // Password form state
   const [passwordForm, setPasswordForm] = useState({
     newPassword: '',
@@ -109,21 +118,41 @@ const Settings = () => {
     }
   }, [profile]);
 
-  // Sync organization data to form
+  // Sync organization data to form - preserve local logoUrl if server hasn't updated yet
   useEffect(() => {
     if (currentOrganization) {
       const settings = (currentOrganization.settings || {}) as OrganizationSettings;
-      setOrgForm({
+      setOrgForm(prev => ({
+        ...prev,
         name: currentOrganization.name || '',
         description: currentOrganization.description || '',
         companyName: settings.companyName || '',
         companySize: settings.companySize || '',
         timezone: settings.timezone || 'America/New_York',
         dateFormat: settings.dateFormat || 'MM/DD/YYYY',
-        logoUrl: settings.logoUrl || '',
-      });
+        logoUrl: settings.logoUrl || prev.logoUrl, // Preserve local logoUrl if server hasn't updated yet
+      }));
     }
   }, [currentOrganization]);
+
+  const handleCreateOrganization = async () => {
+    if (!newOrgForm.name.trim()) {
+      toast.error('Workspace name is required');
+      return;
+    }
+
+    setIsCreatingOrg(true);
+    try {
+      await createOrganization(newOrgForm.name, newOrgForm.description);
+      toast.success('Workspace created successfully');
+      setNewOrgForm({ name: '', description: '' });
+    } catch (error) {
+      console.error('Error creating workspace:', error);
+      toast.error('Failed to create workspace');
+    } finally {
+      setIsCreatingOrg(false);
+    }
+  };
 
   const handleSaveGeneral = async () => {
     if (!currentOrganization) {
@@ -370,149 +399,235 @@ const Settings = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Organization Logo */}
-                <div className="space-y-2">
-                  <Label>Organization Logo</Label>
-                  <div className="flex items-center gap-6">
-                    <div className="h-20 w-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-muted/30 overflow-hidden">
-                      {logoLoading ? (
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                      ) : orgForm.logoUrl ? (
-                        <img
-                          src={orgForm.logoUrl}
-                          alt="Organization logo"
-                          className="h-full w-full object-contain"
-                        />
-                      ) : (
-                        <div className="text-center">
-                          <Upload className="h-6 w-6 mx-auto text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">No logo</span>
-                        </div>
-                      )}
+                {/* Loading State */}
+                {orgContextLoading ? (
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-6">
+                      <Skeleton className="h-20 w-20 rounded-lg" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-9 w-32" />
+                        <Skeleton className="h-4 w-48" />
+                      </div>
+                    </div>
+                    <Skeleton className="h-px w-full" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-10 w-full" />
                     </div>
                     <div className="space-y-2">
-                      <input
-                        type="file"
-                        ref={logoInputRef}
-                        className="hidden"
-                        accept="image/png, image/jpeg, image/gif, image/svg+xml"
-                        onChange={handleLogoChange}
-                      />
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={handleLogoClick} disabled={logoLoading}>
-                          <Upload className="h-4 w-4 mr-2" />
-                          {orgForm.logoUrl ? 'Change Logo' : 'Upload Logo'}
-                        </Button>
-                        {orgForm.logoUrl && (
-                          <Button variant="outline" size="sm" onClick={handleRemoveLogo} disabled={logoLoading}>
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Remove
-                          </Button>
-                        )}
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-20 w-full" />
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-10 w-full" />
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        JPG, PNG, GIF or SVG. Max 2MB. Recommended size: 200x200px.
-                      </p>
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-10 w-full" />
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : !currentOrganization ? (
+                  /* Create Workspace Form */
+                  <div className="space-y-6">
+                    <div className="text-center py-6">
+                      <div className="mx-auto w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                        <Building2 className="h-8 w-8 text-primary" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-foreground mb-2">
+                        Welcome! Let's set up your workspace
+                      </h3>
+                      <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                        Create a workspace to organize your projects, invite team members, and start collaborating.
+                      </p>
+                    </div>
 
-                <Separator />
+                    <Separator />
 
-                <div className="space-y-2">
-                  <Label htmlFor="workspace-name">Workspace Name</Label>
-                  <Input
-                    id="workspace-name"
-                    value={orgForm.name}
-                    onChange={(e) => setOrgForm({ ...orgForm, name: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="workspace-desc">Description</Label>
-                  <Textarea
-                    id="workspace-desc"
-                    value={orgForm.description}
-                    onChange={(e) => setOrgForm({ ...orgForm, description: e.target.value })}
-                    rows={3}
-                  />
-                </div>
+                    <div className="space-y-4 max-w-md mx-auto">
+                      <div className="space-y-2">
+                        <Label htmlFor="new-workspace-name">Workspace Name *</Label>
+                        <Input
+                          id="new-workspace-name"
+                          value={newOrgForm.name}
+                          onChange={(e) => setNewOrgForm({ ...newOrgForm, name: e.target.value })}
+                          placeholder="e.g. My Company"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="new-workspace-desc">Description (optional)</Label>
+                        <Textarea
+                          id="new-workspace-desc"
+                          value={newOrgForm.description}
+                          onChange={(e) => setNewOrgForm({ ...newOrgForm, description: e.target.value })}
+                          placeholder="Brief description of your workspace"
+                          rows={3}
+                        />
+                      </div>
+                      <Button
+                        onClick={handleCreateOrganization}
+                        disabled={isCreatingOrg || !newOrgForm.name.trim()}
+                        className="w-full"
+                      >
+                        {isCreatingOrg ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Building2 className="h-4 w-4 mr-2" />
+                        )}
+                        Create Workspace
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Existing Workspace Settings */
+                  <>
+                    {/* Organization Logo */}
+                    <div className="space-y-2">
+                      <Label>Organization Logo</Label>
+                      <div className="flex items-center gap-6">
+                        <div className="h-20 w-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-muted/30 overflow-hidden">
+                          {logoLoading ? (
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                          ) : orgForm.logoUrl ? (
+                            <img
+                              src={orgForm.logoUrl}
+                              alt="Organization logo"
+                              className="h-full w-full object-contain"
+                            />
+                          ) : (
+                            <div className="text-center">
+                              <Upload className="h-6 w-6 mx-auto text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground">No logo</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          <input
+                            type="file"
+                            ref={logoInputRef}
+                            className="hidden"
+                            accept="image/png, image/jpeg, image/gif, image/svg+xml"
+                            onChange={handleLogoChange}
+                          />
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={handleLogoClick} disabled={logoLoading}>
+                              <Upload className="h-4 w-4 mr-2" />
+                              {orgForm.logoUrl ? 'Change Logo' : 'Upload Logo'}
+                            </Button>
+                            {orgForm.logoUrl && (
+                              <Button variant="outline" size="sm" onClick={handleRemoveLogo} disabled={logoLoading}>
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remove
+                              </Button>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            JPG, PNG, GIF or SVG. Max 2MB. Recommended size: 200x200px.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="company-name">Company Name</Label>
-                    <Input
-                      id="company-name"
-                      value={orgForm.companyName}
-                      onChange={(e) => setOrgForm({ ...orgForm, companyName: e.target.value })}
-                      placeholder="e.g. Acme Corp"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="company-size">Company Size</Label>
-                    <Select
-                      value={orgForm.companySize}
-                      onValueChange={(value) => setOrgForm({ ...orgForm, companySize: value })}
-                    >
-                      <SelectTrigger id="company-size">
-                        <SelectValue placeholder="Select size" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1-10">1-10 employees</SelectItem>
-                        <SelectItem value="10-50">10-50 employees</SelectItem>
-                        <SelectItem value="50-200">50-200 employees</SelectItem>
-                        <SelectItem value="200-500">200-500 employees</SelectItem>
-                        <SelectItem value="500+">500+ employees</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+                    <Separator />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Timezone</Label>
-                    <Select
-                      value={orgForm.timezone}
-                      onValueChange={(value) => setOrgForm({ ...orgForm, timezone: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
-                        <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
-                        <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
-                        <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
-                        <SelectItem value="Europe/London">Greenwich Mean Time (GMT)</SelectItem>
-                        <SelectItem value="Europe/Paris">Central European Time (CET)</SelectItem>
-                        <SelectItem value="Asia/Kolkata">India Standard Time (IST)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Date Format</Label>
-                    <Select
-                      value={orgForm.dateFormat}
-                      onValueChange={(value) => setOrgForm({ ...orgForm, dateFormat: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
-                        <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
-                        <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <Button onClick={handleSaveGeneral} disabled={orgLoading}>
-                  {orgLoading ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
-                  Save Changes
-                </Button>
+                    <div className="space-y-2">
+                      <Label htmlFor="workspace-name">Workspace Name</Label>
+                      <Input
+                        id="workspace-name"
+                        value={orgForm.name}
+                        onChange={(e) => setOrgForm({ ...orgForm, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="workspace-desc">Description</Label>
+                      <Textarea
+                        id="workspace-desc"
+                        value={orgForm.description}
+                        onChange={(e) => setOrgForm({ ...orgForm, description: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="company-name">Company Name</Label>
+                        <Input
+                          id="company-name"
+                          value={orgForm.companyName}
+                          onChange={(e) => setOrgForm({ ...orgForm, companyName: e.target.value })}
+                          placeholder="e.g. Acme Corp"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="company-size">Company Size</Label>
+                        <Select
+                          value={orgForm.companySize}
+                          onValueChange={(value) => setOrgForm({ ...orgForm, companySize: value })}
+                        >
+                          <SelectTrigger id="company-size">
+                            <SelectValue placeholder="Select size" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1-10">1-10 employees</SelectItem>
+                            <SelectItem value="10-50">10-50 employees</SelectItem>
+                            <SelectItem value="50-200">50-200 employees</SelectItem>
+                            <SelectItem value="200-500">200-500 employees</SelectItem>
+                            <SelectItem value="500+">500+ employees</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Timezone</Label>
+                        <Select
+                          value={orgForm.timezone}
+                          onValueChange={(value) => setOrgForm({ ...orgForm, timezone: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
+                            <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
+                            <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
+                            <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
+                            <SelectItem value="Europe/London">Greenwich Mean Time (GMT)</SelectItem>
+                            <SelectItem value="Europe/Paris">Central European Time (CET)</SelectItem>
+                            <SelectItem value="Asia/Kolkata">India Standard Time (IST)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Date Format</Label>
+                        <Select
+                          value={orgForm.dateFormat}
+                          onValueChange={(value) => setOrgForm({ ...orgForm, dateFormat: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
+                            <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
+                            <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Button onClick={handleSaveGeneral} disabled={orgLoading}>
+                      {orgLoading ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-2" />
+                      )}
+                      Save Changes
+                    </Button>
+                  </>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
