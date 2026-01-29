@@ -12,6 +12,14 @@ interface SendOtpRequest {
   email: string;
 }
 
+// Get client IP from request headers
+function getClientIp(req: Request): string {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    req.headers.get("cf-connecting-ip") ||
+    "unknown";
+}
+
 const handler = async (req: Request): Promise<Response> => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -31,6 +39,36 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Supabase configuration is missing");
     }
 
+    // Initialize Supabase client with service role
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Get client IP for rate limiting
+    const clientIp = getClientIp(req);
+    const endpoint = "send-otp";
+
+    // Check IP-based rate limiting (20 requests per hour per IP)
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: ipCount } = await supabase
+      .from("ip_rate_limits")
+      .select("*", { count: "exact", head: true })
+      .eq("ip_address", clientIp)
+      .eq("endpoint", endpoint)
+      .gte("created_at", oneHourAgo);
+
+    if (ipCount && ipCount >= 20) {
+      console.warn(`IP rate limit exceeded for ${clientIp} on ${endpoint}`);
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please try again later." }),
+        { status: 429, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
+
+    // Record this IP request
+    await supabase.from("ip_rate_limits").insert({
+      ip_address: clientIp,
+      endpoint: endpoint,
+    });
+
     const { email }: SendOtpRequest = await req.json();
 
     if (!email) {
@@ -40,10 +78,16 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Initialize Supabase client with service role
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email) || email.length > 255) {
+      return new Response(
+        JSON.stringify({ error: "Invalid email format" }),
+        { status: 400, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
-    // Rate limiting: Check recent OTP requests
+    // Rate limiting: Check recent OTP requests per email
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     const { count } = await supabase
       .from("email_verifications")
