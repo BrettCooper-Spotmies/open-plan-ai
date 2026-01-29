@@ -1,103 +1,148 @@
-# Project Backend Integration Plan - ✅ COMPLETED
 
-## Overview
+# Backend Integration for Project Creation Form
 
-This plan integrates the Projects feature with the Supabase backend, replacing the current mock data dependencies. This includes full CRUD operations for projects, tasks, milestones, issues, and modules.
+## Summary
+The project creation form has UI for file attachments, team assignment, and project links, but the backend integration is incomplete. Files are uploaded to blob storage but not tracked in the database, team members aren't assigned to projects, and there's no storage for project links.
 
-## Status: ✅ COMPLETED
+## Changes Overview
+
+### 1. Database Schema Changes
+
+**Create `project_links` table** for storing external links:
+- `id` (UUID, primary key)
+- `project_id` (UUID, foreign key to projects)
+- `name` (text) - Display name for the link
+- `url` (text) - The actual URL
+- `created_by` (UUID, foreign key to profiles)
+- `created_at` (timestamp)
+- `deleted_at` (timestamp, for soft delete)
+
+**Add RLS policies** for the new table:
+- SELECT: Users with project access can view links
+- INSERT: Users with project access can create links
+- UPDATE: Users with project access can update links
+- DELETE: Users with project access can delete links
+
+### 2. Service Layer Updates
+
+**Create `attachmentsService`** (new file: `src/services/attachments.service.ts`):
+- `create()` - Insert attachment metadata after file upload
+- `getByProject()` - List all attachments for a project
+- `getByEntity()` - List attachments for a specific task/issue
+- `delete()` - Soft delete attachment record and file from storage
+
+**Create `projectLinksService`** (new file: `src/services/projectLinks.service.ts`):
+- `create()` - Add a new link to a project
+- `getByProject()` - List all links for a project
+- `update()` - Update link name/URL
+- `delete()` - Remove a link
+
+**Update `projectStorageService`**:
+- Integrate with `attachmentsService` to persist metadata after upload
+- Add method to upload and track in one operation
+
+**Create `projectMembersService`** (new file: `src/services/projectMembers.service.ts`):
+- `addMember()` - Add a team member to a project with a role
+- `addMembers()` - Batch add multiple members
+- `removeMember()` - Remove a member from a project
+- `updateRole()` - Update a member's project role
+- `getByProject()` - Get all members for a project
+
+### 3. Project Creation Flow Integration
+
+**Update `NewProject.tsx` to use new services**:
+After project creation:
+1. Upload files to storage using `projectStorageService`
+2. Create attachment records using `attachmentsService.create()` with `entity_type: 'project'`
+3. Add team members using `projectMembersService.addMembers()`
+4. Create project links using `projectLinksService.create()`
+
+### 4. Hook Updates
+
+**Create custom hooks**:
+- `useProjectAttachments(projectId)` - Query attachments for a project
+- `useProjectLinks(projectId)` - Query links for a project  
+- `useProjectMembers(projectId)` - Already exists in `useProjectTeam.ts`
 
 ---
 
-## What Was Implemented
+## Technical Details
 
-### New Files Created
-| File | Purpose |
-|------|---------|
-| `src/hooks/useProjectDetail.ts` | Hook for fetching project with all related data |
-| `src/hooks/useProjectMutations.ts` | Mutation hooks for tasks, milestones, issues, modules |
-| `src/hooks/useProjectTeam.ts` | Hook for fetching team/organization members |
-| `src/features/projects/components/ProjectDetailSkeleton.tsx` | Loading skeleton for project detail page |
-
-### Files Modified
-| File | Changes |
-|------|---------|
-| `src/features/projects/ProjectDetail.tsx` | Replaced mock data with React Query hooks, added loading/error states |
-| `src/features/projects/NewProject.tsx` | Connected form to createProject mutation with proper backend persistence |
-| `src/config/index.ts` | Changed defaults to use Supabase instead of mock data |
-
----
-
-## Key Changes
-
-### 1. Config Update
-Changed defaults to use Supabase by default:
-```typescript
-useMockData: import.meta.env.VITE_USE_MOCK_DATA === 'true', // Default to false
-useSupabase: import.meta.env.VITE_USE_SUPABASE !== 'false', // Default to true
-```
-
-### 2. ProjectDetail.tsx Refactor
-- Removed direct mock data imports
-- Uses `useProjectDetail(id)` for project data
-- Uses `useProjectModules(id)` for modules  
-- All CRUD operations use mutation hooks with optimistic updates
-- Proper loading skeleton and error states
-
-### 3. NewProject.tsx Backend Integration
-- Uses `useCreateProject()` mutation
-- Uses `useOrganizationMembers()` for team member selection
-- Creates project with modules and milestones atomically
-- Shows loading state during creation
-- Navigates to new project on success
-
-### 4. Mutation Hooks
-All mutations include:
-- Optimistic updates for better UX
-- Automatic cache invalidation
-- Toast notifications for success/error
-- Rollback on error
-
----
-
-## Data Flow
+### Database Migration SQL
 
 ```text
-User Action (Create/Update/Delete)
-         │
-         ▼
-   Component calls mutation hook
-         │
-         ▼
-   Optimistic update (UI updates immediately)
-         │
-         ▼
-   Service layer calls Supabase
-         │
-         ▼
-   Query invalidation triggers refetch
-         │
-         ▼
-   UI syncs with server state
+-- Create project_links table
+CREATE TABLE public.project_links (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    created_by UUID REFERENCES profiles(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    deleted_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Index for faster lookups
+CREATE INDEX idx_project_links_project_id ON public.project_links(project_id);
+
+-- RLS Policies
+ALTER TABLE public.project_links ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view links in accessible projects"
+ON public.project_links FOR SELECT
+USING (has_project_access(project_id) AND deleted_at IS NULL);
+
+CREATE POLICY "Users can create links in accessible projects"
+ON public.project_links FOR INSERT
+WITH CHECK (has_project_access(project_id));
+
+CREATE POLICY "Users can update links in accessible projects"
+ON public.project_links FOR UPDATE
+USING (has_project_access(project_id));
+
+CREATE POLICY "Users can delete links in accessible projects"
+ON public.project_links FOR DELETE
+USING (has_project_access(project_id));
+```
+
+### Service Files Structure
+
+```text
+src/services/
+├── attachments.service.ts    (new)
+├── projectLinks.service.ts   (new)
+├── projectMembers.service.ts (new)
+├── projectStorage.service.ts (update)
+├── projects.service.ts       (update)
+└── index.ts                  (update exports)
+```
+
+### Updated Project Creation Flow
+
+```text
+1. User submits form
+2. Create project in database → get projectId
+3. Create modules (existing)
+4. Create milestones (existing)
+5. Upload files to storage
+   └── For each file: create attachment record with entity_type='project'
+6. Add team members to project_members table
+7. Create project links in project_links table
+8. Navigate to project detail page
 ```
 
 ---
 
-## Testing Notes
+## Files to Create/Modify
 
-To test the integration:
-1. Navigate to Projects page - should load from database
-2. Click "New Project" - fill form and create
-3. View project detail - should show loading skeleton then data
-4. Create tasks, issues, milestones - should persist to database
-5. Updates should work with optimistic UI
-
----
-
-## Database Operations Covered
-- Projects: Create, Read, Update, Delete
-- Tasks: Create, Read, Update, Delete, Batch Update
-- Milestones: Create, Read, Update, Delete
-- Issues: Create, Read, Update, Delete
-- Modules: Create, Read, Update, Delete
-- Task Assignees: Manage via task mutations
-- Issue Assignees: Manage via issue mutations
+| File | Action |
+|------|--------|
+| `supabase/migrations/xxx_add_project_links.sql` | Create |
+| `src/services/attachments.service.ts` | Create |
+| `src/services/projectLinks.service.ts` | Create |
+| `src/services/projectMembers.service.ts` | Create |
+| `src/services/projectStorage.service.ts` | Update |
+| `src/services/index.ts` | Update |
+| `src/features/projects/NewProject.tsx` | Update |
+| `src/hooks/useProjectAttachments.ts` | Create |
+| `src/hooks/useProjectLinks.ts` | Create |
