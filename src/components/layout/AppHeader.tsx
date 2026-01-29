@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Search, Bell, Plus } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/contexts/AuthContext';
+import { NotificationsPopover } from './NotificationsPopover';
 
 export function AppHeader() {
   const navigate = useNavigate();
@@ -38,16 +39,10 @@ export function AppHeader() {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* <Button size="sm" className="hidden sm:flex gap-2" onClick={() => navigate('/projects/new')}>
-          <Plus className="h-4 w-4" />
-          New Project
-        </Button> */}
+        {/* Notifications */}
+        <NotificationsPopover />
 
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-4 w-4" />
-          <span className="absolute -top-0.5 -right-0.5 h-2 w-2 bg-status-in-progress rounded-full" />
-        </Button>
-
+        {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
@@ -77,4 +72,3 @@ export function AppHeader() {
     </header>
   );
 }
-

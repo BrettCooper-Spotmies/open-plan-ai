@@ -30,6 +30,7 @@ const IssuePage = lazy(() => import("./features/projects/IssuePage"));
 const Team = lazy(() => import("./features/team"));
 const Settings = lazy(() => import("./features/settings"));
 const Reports = lazy(() => import("./features/reports"));
+const Notifications = lazy(() => import("./features/notifications"));
 
 const App = () => (
   <ErrorBoundary>
@@ -46,91 +47,99 @@ const App = () => (
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
-                
+
                 {/* Protected routes */}
                 <Route element={<ProtectedRoute />}>
-                  <Route 
-                    path="/" 
+                  <Route
+                    path="/"
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="dashboard" />}>
                         <Dashboard />
                       </Suspense>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/my-day" 
+                  <Route
+                    path="/my-day"
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
                         <MyDay />
                       </Suspense>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/calendar" 
+                  <Route
+                    path="/calendar"
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
                         <Calendar />
                       </Suspense>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/projects" 
+                  <Route
+                    path="/projects"
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
                         <Projects />
                       </Suspense>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/projects/new" 
+                  <Route
+                    path="/projects/new"
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
                         <NewProject />
                       </Suspense>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/projects/:id" 
+                  <Route
+                    path="/projects/:id"
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
                         <ProjectDetail />
                       </Suspense>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/projects/:projectId/issues/:issueId" 
+                  <Route
+                    path="/projects/:projectId/issues/:issueId"
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
                         <IssuePage />
                       </Suspense>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/team" 
+                  <Route
+                    path="/team"
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
                         <Team />
                       </Suspense>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/settings" 
+                  <Route
+                    path="/settings"
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
                         <Settings />
                       </Suspense>
-                    } 
+                    }
                   />
-                  <Route 
-                    path="/reports" 
+                  <Route
+                    path="/reports"
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="dashboard" />}>
                         <Reports />
                       </Suspense>
-                    } 
+                    }
+                  />
+                  <Route
+                    path="/notifications"
+                    element={
+                      <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
+                        <Notifications />
+                      </Suspense>
+                    }
                   />
                 </Route>
-                
+
                 {/* 404 route */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
