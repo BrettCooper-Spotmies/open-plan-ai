@@ -215,6 +215,27 @@ export type Database = {
         }
         Relationships: []
       }
+      ip_rate_limits: {
+        Row: {
+          created_at: string
+          endpoint: string
+          id: string
+          ip_address: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint: string
+          id?: string
+          ip_address: string
+        }
+        Update: {
+          created_at?: string
+          endpoint?: string
+          id?: string
+          ip_address?: string
+        }
+        Relationships: []
+      }
       issue_assignees: {
         Row: {
           assigned_at: string | null
@@ -860,6 +881,7 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_verifications: { Args: never; Returns: undefined }
+      cleanup_old_rate_limits: { Args: never; Returns: undefined }
       create_organization_with_owner: {
         Args: { org_description?: string; org_name: string; org_slug: string }
         Returns: {
