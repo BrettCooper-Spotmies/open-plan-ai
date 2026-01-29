@@ -204,8 +204,27 @@ export const organizationsService = {
    * Upload organization logo to storage bucket
    */
   async uploadLogo(orgId: string, file: File): Promise<string> {
-    // Generate unique filename
-    const fileExt = file.name.split('.').pop();
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/svg+xml'];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('Invalid file type. Only JPEG, PNG, WebP, and SVG images are allowed.');
+    }
+
+    // Validate file size (5MB limit)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      throw new Error('File too large. Maximum size is 5MB.');
+    }
+
+    // Use MIME type for extension to prevent spoofing
+    const mimeToExt: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+      'image/svg+xml': 'svg',
+    };
+    const fileExt = mimeToExt[file.type] || 'png';
     const fileName = `${orgId}/logo-${Date.now()}.${fileExt}`;
 
     // Delete old logo if exists
@@ -218,12 +237,13 @@ export const organizationsService = {
       await supabase.storage.from('logos').remove(filesToDelete);
     }
 
-    // Upload new logo
+    // Upload new logo with content type enforcement
     const { error: uploadError } = await supabase.storage
       .from('logos')
       .upload(fileName, file, {
         cacheControl: '3600',
         upsert: true,
+        contentType: file.type,
       });
 
     if (uploadError) throw uploadError;

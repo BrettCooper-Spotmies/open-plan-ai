@@ -63,8 +63,26 @@ export const profileService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    // Generate unique filename
-    const fileExt = file.name.split('.').pop();
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('Invalid file type. Only JPEG, PNG, and WebP images are allowed.');
+    }
+
+    // Validate file size (5MB limit)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      throw new Error('File too large. Maximum size is 5MB.');
+    }
+
+    // Use MIME type for extension to prevent spoofing
+    const mimeToExt: Record<string, string> = {
+      'image/jpeg': 'jpg',
+      'image/jpg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp',
+    };
+    const fileExt = mimeToExt[file.type] || 'jpg';
     const fileName = `${user.id}/avatar-${Date.now()}.${fileExt}`;
 
     // Delete old avatar if exists
@@ -77,12 +95,13 @@ export const profileService = {
       await supabase.storage.from('avatars').remove(filesToDelete);
     }
 
-    // Upload new avatar
+    // Upload new avatar with content type enforcement
     const { error: uploadError } = await supabase.storage
       .from('avatars')
       .upload(fileName, file, {
         cacheControl: '3600',
         upsert: true,
+        contentType: file.type,
       });
 
     if (uploadError) throw uploadError;
