@@ -188,7 +188,8 @@ export const projectsService = {
         progress: project.progress || 0,
         start_date: project.startDate || null,
         target_date: project.targetDate || null,
-        icon: project.icon || '📁',
+        // Note: icon column requires DB migration - uncomment when applied:
+        // icon: project.icon || '📁',
         created_by: user?.id || null,
       }])
       .select()
@@ -224,7 +225,8 @@ export const projectsService = {
         progress: updates.progress,
         start_date: updates.startDate,
         target_date: updates.targetDate,
-        icon: updates.icon,
+        // Note: icon column requires DB migration - uncomment when applied:
+        // icon: updates.icon,
       })
       .eq('id', id)
       .select()
