@@ -169,6 +169,7 @@ export interface Project {
   progress: number; // 0-100
   startDate: string;
   targetDate: string;
+  icon?: string; // Emoji icon for the project
   team: TeamMember[];
   tasks: Task[];
   milestones: Milestone[];

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -51,7 +51,8 @@ import {
   Flag,
   Target,
   Pencil,
-  Loader2
+  Loader2,
+  Smile
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,7 @@ import { useCreateProject } from "@/hooks/useProjects";
 import { useOrganizationMembers } from "@/hooks/useProjectTeam";
 import { modulesService } from "@/services/modules.service";
 import { milestonesService } from "@/services/milestones.service";
+import { projectStorageService, UploadedProjectFile } from "@/services/projectStorage.service";
 import type { Database } from "@/integrations/supabase/types";
 
 const projectTypes = [
@@ -125,6 +127,9 @@ interface UploadedFile {
   name: string;
   size: string;
   type: string;
+  url?: string;
+  path?: string;
+  file?: File; // For pending uploads before project creation
 }
 
 interface ExtractedTask {
@@ -157,8 +162,18 @@ const NewProject = () => {
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [projectType, setProjectType] = useState("");
+  const [projectEmoji, setProjectEmoji] = useState<string>("📁");
+  const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [startDate, setStartDate] = useState<Date>();
   const [expectedEndDate, setExpectedEndDate] = useState<Date>();
+
+  // Common project emojis
+  const projectEmojis = [
+    "📁", "📂", "🚀", "💡", "⚡", "🎯", "🔧", "⚙️", "🛠️", "💻",
+    "📱", "🖥️", "🔌", "🔋", "📡", "🛰️", "🤖", "🧠", "🔬", "🧪",
+    "📊", "📈", "📉", "🎨", "🎬", "🎮", "🏗️", "🏭", "🌐", "🔐",
+    "✨", "🌟", "⭐", "💎", "🏆", "🎖️", "🥇", "🎁", "📦", "🗃️"
+  ];
 
   // Optional Details
   const [showOptionalDetails, setShowOptionalDetails] = useState(false);
@@ -182,10 +197,10 @@ const NewProject = () => {
   const [links, setLinks] = useState<ProjectLink[]>([]);
   const [newLinkName, setNewLinkName] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
-  const [attachments, setAttachments] = useState<UploadedFile[]>([
-    { id: "1", name: "Project_Requirements.pdf", size: "2.4 MB", type: "pdf" },
-    { id: "2", name: "Technical_Specs.docx", size: "1.1 MB", type: "docx" },
-  ]);
+  const [attachments, setAttachments] = useState<UploadedFile[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Tasks from document
   const [taskDocument, setTaskDocument] = useState<UploadedFile | null>(null);
@@ -328,23 +343,115 @@ const NewProject = () => {
     setLinks(links.filter(l => l.id !== linkId));
   };
 
-  const handleTaskDocumentUpload = () => {
-    // Simulate document upload and task extraction
-    setTaskDocument({ id: "task-doc", name: "Project_Tasks.xlsx", size: "856 KB", type: "xlsx" });
-    setIsProcessing(true);
+  // File upload handlers
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
-    // Simulate AI processing delay
-    setTimeout(() => {
-      setExtractedTasks([
-        { id: "t1", title: "Initial hardware design review", description: "Review and approve initial schematic designs", priority: "high" },
-        { id: "t2", title: "PCB layout completion", description: "Complete PCB layout for main control board", priority: "high" },
-        { id: "t3", title: "Firmware architecture planning", description: "Define firmware modules and interfaces", priority: "medium" },
-        { id: "t4", title: "Component sourcing", description: "Source and order critical components", priority: "critical" },
-        { id: "t5", title: "Prototype assembly", description: "Assemble first prototype units", priority: "medium" },
-        { id: "t6", title: "Integration testing", description: "Test hardware-firmware integration", priority: "high" },
-      ]);
-      setIsProcessing(false);
-    }, 2000);
+  const getFileExtension = (filename: string): string => {
+    return filename.split('.').pop()?.toLowerCase() || 'file';
+  };
+
+  const processFiles = useCallback((files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/plain',
+      'text/csv',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/svg+xml',
+      'application/zip',
+      'application/x-rar-compressed',
+    ];
+
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    const newFiles: UploadedFile[] = [];
+    const errors: string[] = [];
+
+    Array.from(files).forEach(file => {
+      if (!allowedTypes.includes(file.type)) {
+        errors.push(`${file.name}: Unsupported file type`);
+        return;
+      }
+      if (file.size > maxSize) {
+        errors.push(`${file.name}: File too large (max 50MB)`);
+        return;
+      }
+
+      newFiles.push({
+        id: Math.random().toString(36).substring(2, 11),
+        name: file.name,
+        size: formatFileSize(file.size),
+        type: getFileExtension(file.name),
+        file: file, // Store file for later upload
+      });
+    });
+
+    if (errors.length > 0) {
+      toast.error('Some files could not be added', {
+        description: errors.join('\n'),
+      });
+    }
+
+    if (newFiles.length > 0) {
+      setAttachments(prev => [...prev, ...newFiles]);
+      toast.success(`${newFiles.length} file(s) added`, {
+        description: 'Files will be uploaded when the project is created.',
+      });
+    }
+  }, []);
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    processFiles(e.target.files);
+    // Reset input value to allow selecting the same file again
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    processFiles(e.dataTransfer.files);
+  }, [processFiles]);
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleTaskDocumentUpload = () => {
+    // Task import feature - coming soon
+    toast.info('Task import feature coming soon!', {
+      description: 'This feature will allow you to upload Excel or CSV files to automatically extract tasks.'
+    });
   };
 
   const handleRemoveTask = (taskId: string) => {
@@ -363,7 +470,7 @@ const NewProject = () => {
     }
 
     setIsCreating(true);
-    
+
     try {
       // Determine project stage from type
       let stage: Database['public']['Enums']['project_stage'] = 'concept';
@@ -381,13 +488,14 @@ const NewProject = () => {
           stage,
           startDate: startDate?.toISOString().split('T')[0],
           targetDate: expectedEndDate?.toISOString().split('T')[0],
+          icon: projectEmoji,
         },
         organizationId: currentOrganization.id,
       });
 
       // Create initial modules if specified
       if (modules.length > 0) {
-        await Promise.all(modules.map(m => 
+        await Promise.all(modules.map(m =>
           modulesService.create({
             project_id: project.id,
             name: m.name,
@@ -405,6 +513,23 @@ const NewProject = () => {
             due_date: m.endDate?.toISOString().split('T')[0] || null,
           })
         ));
+      }
+
+      // Upload files to Supabase Storage if any
+      if (attachments.length > 0) {
+        const filesToUpload = attachments.filter(att => att.file);
+        if (filesToUpload.length > 0) {
+          try {
+            const uploadPromises = filesToUpload.map(att =>
+              projectStorageService.uploadFile(att.file!, project.id)
+            );
+            await Promise.all(uploadPromises);
+            toast.success(`${filesToUpload.length} file(s) uploaded successfully`);
+          } catch (uploadError) {
+            console.error('Error uploading files:', uploadError);
+            toast.warning('Project created but some files failed to upload');
+          }
+        }
       }
 
       toast.success('Project created successfully!');
@@ -460,12 +585,54 @@ const NewProject = () => {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="projectName">Project Name *</Label>
-                <Input
-                  id="projectName"
-                  placeholder="Enter project name"
-                  value={projectName}
-                  onChange={(e) => setProjectName(e.target.value)}
-                />
+                <div className="flex gap-2">
+                  <Popover open={isEmojiPickerOpen} onOpenChange={setIsEmojiPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 shrink-0 text-xl"
+                        title="Select project icon"
+                      >
+                        {projectEmoji}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72 p-3" align="start">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Smile className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">Select Project Icon</span>
+                        </div>
+                        <div className="grid grid-cols-8 gap-1">
+                          {projectEmojis.map((emoji) => (
+                            <Button
+                              key={emoji}
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                "h-8 w-8 text-lg hover:bg-primary/10",
+                                projectEmoji === emoji && "bg-primary/20 ring-1 ring-primary"
+                              )}
+                              onClick={() => {
+                                setProjectEmoji(emoji);
+                                setIsEmojiPickerOpen(false);
+                              }}
+                            >
+                              {emoji}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <Input
+                    id="projectName"
+                    placeholder="Enter project name"
+                    value={projectName}
+                    onChange={(e) => setProjectName(e.target.value)}
+                    className="flex-1"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="projectType">Project Type *</Label>
@@ -930,9 +1097,9 @@ const NewProject = () => {
                 </Popover>
               </div>
             </div>
-            <Button 
-              className="w-full" 
-              onClick={handleAddMilestone} 
+            <Button
+              className="w-full"
+              onClick={handleAddMilestone}
               disabled={!newMilestoneName.trim() || !newMilestoneStart || !newMilestoneEnd}
             >
               {editingMilestoneId ? <Pencil className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
@@ -996,12 +1163,43 @@ const NewProject = () => {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label className="text-base font-medium">Files & Documents</Label>
+                {attachments.length > 0 && (
+                  <Badge variant="secondary">{attachments.length} file(s)</Badge>
+                )}
               </div>
-              <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-                <p className="font-medium">Drop files here or click to upload</p>
+
+              {/* Hidden file input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileInputChange}
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.jpg,.jpeg,.png,.gif,.webp,.svg,.zip,.rar"
+                className="hidden"
+              />
+
+              {/* Drag and drop zone */}
+              <div
+                onClick={handleUploadClick}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={cn(
+                  "border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer",
+                  isDragOver
+                    ? "border-primary bg-primary/5 scale-[1.01]"
+                    : "border-border hover:border-primary/50 hover:bg-muted/30"
+                )}
+              >
+                <Upload className={cn(
+                  "h-10 w-10 mx-auto mb-3 transition-colors",
+                  isDragOver ? "text-primary" : "text-muted-foreground"
+                )} />
+                <p className="font-medium">
+                  {isDragOver ? "Drop files here" : "Drop files here or click to upload"}
+                </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Supports PDF, DOC, XLS, PPT, and image files
+                  Supports PDF, DOC, XLS, PPT, images, and archives (max 50MB each)
                 </p>
               </div>
 
@@ -1100,7 +1298,7 @@ const NewProject = () => {
         </Card>
 
         {/* Section 5: Task Import */}
-        <Card>
+        {/* <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ListTodo className="h-5 w-5 text-primary" />
@@ -1197,7 +1395,7 @@ const NewProject = () => {
               </div>
             )}
           </CardContent>
-        </Card>
+        </Card> */}
 
         {/* Action Buttons */}
         <div className="flex justify-end gap-3 pb-8">

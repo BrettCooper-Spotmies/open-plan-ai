@@ -45,6 +45,7 @@ function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: M
     progress: dbProject.progress || 0,
     startDate: dbProject.start_date || '',
     targetDate: dbProject.target_date || '',
+    icon: dbProject.icon || '📁',
     tasks,
     milestones,
     issues,
@@ -102,7 +103,7 @@ export const projectsService = {
       await mockDelay();
       return [...mockProjects];
     }
-    
+
     const { data, error } = await supabase
       .from('projects')
       .select('*')
@@ -122,7 +123,7 @@ export const projectsService = {
       const project = mockProjects.find(p => p.id === id);
       return project ? { ...project } : null;
     }
-    
+
     const { data: project, error } = await supabase
       .from('projects')
       .select('*')
@@ -147,7 +148,7 @@ export const projectsService = {
    * Create new project
    */
   async create(
-    project: { name: string; description?: string; stage?: string; progress?: number; startDate?: string; targetDate?: string },
+    project: { name: string; description?: string; stage?: string; progress?: number; startDate?: string; targetDate?: string; icon?: string },
     organizationId: string
   ): Promise<Project> {
     if (USE_MOCK_DATA && !USE_SUPABASE) {
@@ -160,6 +161,7 @@ export const projectsService = {
         progress: project.progress || 0,
         startDate: project.startDate || '',
         targetDate: project.targetDate || '',
+        icon: project.icon || '📁',
         tasks: [],
         milestones: [],
         issues: [],
@@ -173,9 +175,9 @@ export const projectsService = {
     }
 
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     const stage = (project.stage || 'concept') as 'concept' | 'design' | 'development' | 'testing' | 'production';
-    
+
     const { data, error } = await supabase
       .from('projects')
       .insert([{
@@ -186,6 +188,7 @@ export const projectsService = {
         progress: project.progress || 0,
         start_date: project.startDate || null,
         target_date: project.targetDate || null,
+        icon: project.icon || '📁',
         created_by: user?.id || null,
       }])
       .select()
@@ -203,7 +206,7 @@ export const projectsService = {
       await mockDelay();
       const index = mockProjects.findIndex(p => p.id === id);
       if (index === -1) throw new Error('Project not found');
-      
+
       mockProjects[index] = {
         ...mockProjects[index],
         ...updates,
@@ -221,6 +224,7 @@ export const projectsService = {
         progress: updates.progress,
         start_date: updates.startDate,
         target_date: updates.targetDate,
+        icon: updates.icon,
       })
       .eq('id', id)
       .select()
@@ -361,7 +365,7 @@ export const projectsService = {
       .is('deleted_at', null);
 
     if (error) throw error;
-    
+
     return (data || []).map(p => ({
       id: p.id,
       name: p.name,

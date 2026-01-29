@@ -39,8 +39,8 @@ export function useCreateProject() {
   const addProject = useProjectStore((state) => state.addProject);
 
   return useMutation({
-    mutationFn: ({ project, organizationId }: { 
-      project: { name: string; description?: string; stage?: string; progress?: number; startDate?: string; targetDate?: string };
+    mutationFn: ({ project, organizationId }: {
+      project: { name: string; description?: string; stage?: string; progress?: number; startDate?: string; targetDate?: string; icon?: string };
       organizationId: string;
     }) => projectsService.create(project, organizationId),
     onSuccess: (newProject) => {
@@ -63,12 +63,12 @@ export function useUpdateProject() {
     onMutate: async ({ id, updates }) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.projects.detail(id) });
-      
+
       // Snapshot the previous value
       const previousProject = queryClient.getQueryData(queryKeys.projects.detail(id));
-      
+
       // Optimistically update
-      queryClient.setQueryData(queryKeys.projects.detail(id), (old: Project | undefined) => 
+      queryClient.setQueryData(queryKeys.projects.detail(id), (old: Project | undefined) =>
         old ? { ...old, ...updates } : old
       );
 
