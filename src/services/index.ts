@@ -14,3 +14,13 @@ export { teamService } from './team.service';
 export { dashboardService } from './dashboard.service';
 export { apiClient } from './api/client';
 export { API_ENDPOINTS } from './api/endpoints';
+
+// New services for project creation flow
+export { attachmentsService } from './attachments.service';
+export type { AttachmentRecord, CreateAttachmentInput } from './attachments.service';
+export { projectLinksService } from './projectLinks.service';
+export type { ProjectLink, CreateProjectLinkInput, UpdateProjectLinkInput } from './projectLinks.service';
+export { projectMembersService } from './projectMembers.service';
+export type { ProjectMember, ProjectMemberWithProfile, AddProjectMemberInput } from './projectMembers.service';
+export { projectStorageService } from './projectStorage.service';
+export type { UploadedProjectFile } from './projectStorage.service';

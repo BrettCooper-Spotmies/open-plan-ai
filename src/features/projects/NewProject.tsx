@@ -64,6 +64,9 @@ import { useOrganizationMembers } from "@/hooks/useProjectTeam";
 import { modulesService } from "@/services/modules.service";
 import { milestonesService } from "@/services/milestones.service";
 import { projectStorageService, UploadedProjectFile } from "@/services/projectStorage.service";
+import { attachmentsService } from "@/services/attachments.service";
+import { projectLinksService } from "@/services/projectLinks.service";
+import { projectMembersService } from "@/services/projectMembers.service";
 import type { Database } from "@/integrations/supabase/types";
 
 const projectTypes = [
@@ -515,20 +518,59 @@ const NewProject = () => {
         ));
       }
 
-      // Upload files to Supabase Storage if any
+      // Upload files to Supabase Storage and create attachment records
       if (attachments.length > 0) {
         const filesToUpload = attachments.filter(att => att.file);
         if (filesToUpload.length > 0) {
           try {
-            const uploadPromises = filesToUpload.map(att =>
-              projectStorageService.uploadFile(att.file!, project.id)
+            const uploadResults = await Promise.all(
+              filesToUpload.map(att => projectStorageService.uploadFile(att.file!, project.id))
             );
-            await Promise.all(uploadPromises);
+            
+            // Create attachment records in the database
+            const attachmentRecords = uploadResults.map(result => ({
+              entity_id: project.id,
+              entity_type: 'project' as const,
+              file_name: result.name,
+              file_path: result.path,
+              file_size: parseInt(result.size) || 0,
+              mime_type: result.type,
+              project_id: project.id,
+            }));
+            
+            await attachmentsService.createMany(attachmentRecords);
             toast.success(`${filesToUpload.length} file(s) uploaded successfully`);
           } catch (uploadError) {
             console.error('Error uploading files:', uploadError);
             toast.warning('Project created but some files failed to upload');
           }
+        }
+      }
+
+      // Add team members to the project
+      if (assignedMembers.length > 0) {
+        try {
+          const memberData = assignedMembers.map(m => ({
+            userId: m.memberId,
+            role: m.role.toLowerCase() === 'admin' ? 'admin' as const : 'member' as const,
+          }));
+          await projectMembersService.addMembers(project.id, memberData);
+        } catch (memberError) {
+          console.error('Error adding team members:', memberError);
+          toast.warning('Project created but some team members could not be added');
+        }
+      }
+
+      // Create project links
+      if (links.length > 0) {
+        try {
+          await projectLinksService.createMany(
+            project.id,
+            links.map(l => ({ name: l.name, url: l.url }))
+          );
+        } catch (linkError) {
+          console.error('Error creating project links:', linkError);
+          toast.warning('Project created but some links could not be saved');
         }
       }
 
