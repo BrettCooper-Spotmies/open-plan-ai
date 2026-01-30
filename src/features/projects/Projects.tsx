@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Plus, Search, Grid3X3, List, Users } from 'lucide-react';
+import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, Trash2 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,8 +8,27 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useProjects } from '@/hooks/useProjects';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { useProjects, useDeleteProject } from '@/hooks/useProjects';
+import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { useProjectAttachments } from '@/hooks/useProjectAttachments';
+import { useProjectLinks } from '@/hooks/useProjectLinks';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const stageColors = {
   concept: 'bg-muted text-muted-foreground',
@@ -32,6 +51,18 @@ export default function Projects() {
   const { data: projects, isLoading, error } = useProjects();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  // Delete mutation
+  const deleteProjectMutation = useDeleteProject();
+
+  // Fetch full project details when a project is selected for viewing details
+  const { data: selectedProjectDetails, isLoading: isLoadingDetails } = useProjectDetail(selectedProjectId || undefined);
+  const { data: projectAttachments = [] } = useProjectAttachments(selectedProjectId || undefined);
+  const { data: projectLinks = [] } = useProjectLinks(selectedProjectId || undefined);
 
   const projectList = projects || [];
 
@@ -39,6 +70,40 @@ export default function Projects() {
     p.name.toLowerCase().includes(search.toLowerCase()) ||
     (p.description || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  const handleViewDetails = (projectId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedProjectId(projectId);
+    setDetailsDialogOpen(true);
+  };
+
+  const handleEdit = (projectId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigate(`/projects/${projectId}/edit`);
+  };
+
+  const handleDeleteClick = (project: { id: string; name: string }, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setProjectToDelete(project);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!projectToDelete) return;
+
+    try {
+      await deleteProjectMutation.mutateAsync(projectToDelete.id);
+      toast.success('Project deleted successfully');
+      setDeleteDialogOpen(false);
+      setProjectToDelete(null);
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      toast.error('Failed to delete project');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -126,7 +191,7 @@ export default function Projects() {
           <div className="text-center py-12">
             <h3 className="text-lg font-medium">No projects found</h3>
             <p className="text-muted-foreground">
-              {projectList.length === 0 
+              {projectList.length === 0
                 ? 'Create your first project to get started'
                 : 'Try adjusting your search query'}
             </p>
@@ -139,23 +204,54 @@ export default function Projects() {
           </div>
         ) : (
           <div className={cn(
-            view === 'grid' 
-              ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3' 
+            view === 'grid'
+              ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3'
               : 'space-y-3'
           )}>
             {filteredProjects.map((project) => (
               <Link key={project.id} to={`/projects/${project.id}`}>
                 <Card className="p-5 card-hover cursor-pointer">
                   <div className="flex items-start justify-between gap-3 mb-4">
-                    <div className="min-w-0">
-                      <h3 className="font-medium truncate">{project.name}</h3>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-medium truncate flex items-center gap-2">
+                        {project.icon && <span className="text-lg">{project.icon}</span>}
+                        {project.name}
+                      </h3>
                       <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
                         {project.description || 'No description'}
                       </p>
                     </div>
-                    <Badge variant="secondary" className={cn('shrink-0', stageColors[project.stage as keyof typeof stageColors] || stageColors.concept)}>
-                      {stageLabels[project.stage as keyof typeof stageLabels] || project.stage}
-                    </Badge>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Badge variant="secondary" className={cn(stageColors[project.stage as keyof typeof stageColors] || stageColors.concept)}>
+                        {stageLabels[project.stage as keyof typeof stageLabels] || project.stage}
+                      </Badge>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                            <span className="sr-only">Project menu</span>
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={(e) => handleViewDetails(project.id, e)}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => handleEdit(project.id, e)}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onClick={(e) => handleDeleteClick({ id: project.id, name: project.name }, e)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
 
                   <div className="space-y-2 mb-4">
@@ -180,6 +276,241 @@ export default function Projects() {
           </div>
         )}
       </div>
+
+      {/* Project Details Dialog */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedProjectDetails?.name || 'Project Details'}
+              {selectedProjectDetails?.stage && (
+                <Badge variant="secondary" className={cn(stageColors[selectedProjectDetails.stage as keyof typeof stageColors] || stageColors.concept)}>
+                  {stageLabels[selectedProjectDetails.stage as keyof typeof stageLabels] || selectedProjectDetails.stage}
+                </Badge>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {isLoadingDetails ? (
+            <div className="space-y-4">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          ) : selectedProjectDetails ? (
+            <div className="space-y-6">
+              {/* Description */}
+              {selectedProjectDetails.description && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Description
+                  </h4>
+                  <p className="text-sm text-muted-foreground">{selectedProjectDetails.description}</p>
+                </div>
+              )}
+
+              {/* Progress */}
+              <div>
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <Target className="h-4 w-4" />
+                  Progress
+                </h4>
+                <div className="flex items-center gap-3">
+                  <Progress value={selectedProjectDetails.progress || 0} className="flex-1" />
+                  <span className="text-sm font-medium">{selectedProjectDetails.progress || 0}%</span>
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <Calendar className="h-4 w-4" />
+                    Start Date
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedProjectDetails.startDate ? new Date(selectedProjectDetails.startDate).toLocaleDateString() : 'Not set'}
+                  </p>
+                </div>
+                <div>
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <Flag className="h-4 w-4" />
+                    Target Date
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    {selectedProjectDetails.targetDate ? new Date(selectedProjectDetails.targetDate).toLocaleDateString() : 'Not set'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Team Members */}
+              {selectedProjectDetails.team && selectedProjectDetails.team.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Team Members ({selectedProjectDetails.team.length})
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedProjectDetails.team.map((member) => (
+                      <Badge key={member.id} variant="outline" className="flex items-center gap-1">
+                        <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium">
+                          {member.initials}
+                        </div>
+                        {member.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Attachments */}
+              {projectAttachments.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <Paperclip className="h-4 w-4" />
+                    Attachments ({projectAttachments.length})
+                  </h4>
+                  <div className="space-y-2">
+                    {projectAttachments.map((attachment: any) => (
+                      <a
+                        key={attachment.id}
+                        href={attachment.url || '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(
+                          "flex items-center gap-2 p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors",
+                          attachment.url ? "cursor-pointer" : "cursor-default"
+                        )}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!attachment.url) {
+                            e.preventDefault();
+                          }
+                        }}
+                      >
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm flex-1 truncate">{attachment.name || attachment.file_name}</span>
+                        {attachment.url && (
+                          <span className="text-xs text-primary">Open ↗</span>
+                        )}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Links */}
+              {projectLinks.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <LinkIcon className="h-4 w-4" />
+                    Links ({projectLinks.length})
+                  </h4>
+                  <div className="space-y-2">
+                    {projectLinks.map((link: any) => (
+                      <div key={link.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
+                        <LinkIcon className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm flex-1">{link.name || link.title}</span>
+                        {link.url && (
+                          <a
+                            href={link.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary hover:underline truncate max-w-[200px]"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {link.url}
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Milestones count */}
+              {selectedProjectDetails.milestones && selectedProjectDetails.milestones.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <Flag className="h-4 w-4" />
+                    Milestones ({selectedProjectDetails.milestones.length})
+                  </h4>
+                  <div className="space-y-1">
+                    {selectedProjectDetails.milestones.slice(0, 3).map((milestone) => (
+                      <div key={milestone.id} className="flex items-center gap-2 text-sm">
+                        <div className={cn(
+                          "w-2 h-2 rounded-full",
+                          milestone.completed ? "bg-green-500" : "bg-muted-foreground"
+                        )} />
+                        <span className={milestone.completed ? "line-through text-muted-foreground" : ""}>
+                          {milestone.title}
+                        </span>
+                      </div>
+                    ))}
+                    {selectedProjectDetails.milestones.length > 3 && (
+                      <p className="text-xs text-muted-foreground">
+                        +{selectedProjectDetails.milestones.length - 3} more
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="flex gap-2 pt-4 border-t">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setDetailsDialogOpen(false);
+                    navigate(`/projects/${selectedProjectId}`);
+                  }}
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  Open Project
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={() => {
+                    setDetailsDialogOpen(false);
+                    navigate(`/projects/${selectedProjectId}/edit`);
+                  }}
+                >
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Edit Project
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No project details available.</p>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Project</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete <strong>"{projectToDelete?.name}"</strong>? This action cannot be undone and will permanently delete all associated data including tasks, milestones, and files.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleteProjectMutation.isPending}
+            >
+              {deleteProjectMutation.isPending ? 'Deleting...' : 'Delete Project'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

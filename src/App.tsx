@@ -26,6 +26,7 @@ const Calendar = lazy(() => import("./features/calendar"));
 const Projects = lazy(() => import("./features/projects"));
 const ProjectDetail = lazy(() => import("./features/projects/ProjectDetail"));
 const NewProject = lazy(() => import("./features/projects/NewProject"));
+const EditProject = lazy(() => import("./features/projects/EditProject"));
 const IssuePage = lazy(() => import("./features/projects/IssuePage"));
 const Team = lazy(() => import("./features/team"));
 const Settings = lazy(() => import("./features/settings"));
@@ -95,6 +96,14 @@ const App = () => (
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
                         <ProjectDetail />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/projects/:id/edit"
+                    element={
+                      <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                        <EditProject />
                       </Suspense>
                     }
                   />

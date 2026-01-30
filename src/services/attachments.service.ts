@@ -11,6 +11,7 @@ export interface AttachmentRecord {
   project_id: string | null;
   uploaded_by: string | null;
   uploaded_at: string | null;
+  url?: string;
 }
 
 export interface CreateAttachmentInput {
@@ -51,7 +52,12 @@ export const attachmentsService = {
       throw new Error(`Failed to create attachment: ${error.message}`);
     }
 
-    return data;
+    // Generate URL for the created attachment
+    const { data: { publicUrl } } = supabase.storage
+      .from('project-files')
+      .getPublicUrl(input.file_path);
+
+    return { ...data, url: publicUrl };
   },
 
   /**
@@ -84,7 +90,13 @@ export const attachmentsService = {
       throw new Error(`Failed to create attachments: ${error.message}`);
     }
 
-    return data || [];
+    // Generate URLs for created attachments
+    return (data || []).map(record => {
+      const { data: { publicUrl } } = supabase.storage
+        .from('project-files')
+        .getPublicUrl(record.file_path);
+      return { ...record, url: publicUrl };
+    });
   },
 
   /**
@@ -102,7 +114,13 @@ export const attachmentsService = {
       throw new Error(`Failed to fetch attachments: ${error.message}`);
     }
 
-    return data || [];
+    // Generate public URLs for all attachments
+    return (data || []).map(record => {
+      const { data: { publicUrl } } = supabase.storage
+        .from('project-files')
+        .getPublicUrl(record.file_path);
+      return { ...record, url: publicUrl };
+    });
   },
 
   /**
@@ -121,7 +139,13 @@ export const attachmentsService = {
       throw new Error(`Failed to fetch attachments: ${error.message}`);
     }
 
-    return data || [];
+    // Generate public URLs for all attachments
+    return (data || []).map(record => {
+      const { data: { publicUrl } } = supabase.storage
+        .from('project-files')
+        .getPublicUrl(record.file_path);
+      return { ...record, url: publicUrl };
+    });
   },
 
   /**
