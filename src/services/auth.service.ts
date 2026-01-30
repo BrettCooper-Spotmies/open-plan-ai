@@ -18,8 +18,8 @@ export const authService = {
    * Sign up a new user with email and password
    */
   async signUp(
-    email: string, 
-    password: string, 
+    email: string,
+    password: string,
     metadata?: SignUpMetadata
   ): Promise<AuthResult> {
     const { data, error } = await supabase.auth.signUp({
@@ -30,7 +30,7 @@ export const authService = {
         emailRedirectTo: window.location.origin,
       },
     });
-    
+
     return {
       user: data.user,
       session: data.session,
@@ -46,7 +46,7 @@ export const authService = {
       email,
       password,
     });
-    
+
     return {
       user: data.user,
       session: data.session,
@@ -122,15 +122,25 @@ export const authService = {
       const { data, error } = await supabase.functions.invoke('send-otp', {
         body: { email },
       });
-      
+
       if (error) {
-        return { success: false, error: error.message };
+        // Try to extract the actual error message from the response context
+        let errorMessage = 'Failed to send verification code';
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const errorData = await error.context.json();
+            errorMessage = errorData?.error || errorMessage;
+          }
+        } catch {
+          errorMessage = error.message || errorMessage;
+        }
+        return { success: false, error: errorMessage };
       }
-      
+
       if (data?.error) {
         return { success: false, error: data.error };
       }
-      
+
       return { success: true, error: null };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to send verification code';
@@ -146,15 +156,25 @@ export const authService = {
       const { data, error } = await supabase.functions.invoke('verify-otp', {
         body: { email, otp },
       });
-      
+
       if (error) {
-        return { success: false, error: error.message };
+        // Try to extract the actual error message from the response context
+        let errorMessage = 'Failed to verify code';
+        try {
+          if (error.context && typeof error.context.json === 'function') {
+            const errorData = await error.context.json();
+            errorMessage = errorData?.error || errorMessage;
+          }
+        } catch {
+          errorMessage = error.message || errorMessage;
+        }
+        return { success: false, error: errorMessage };
       }
-      
+
       if (data?.error) {
         return { success: false, error: data.error };
       }
-      
+
       return { success: true, error: null };
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to verify code';

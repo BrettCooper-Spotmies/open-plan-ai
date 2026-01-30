@@ -11,7 +11,7 @@ const VerifyEmail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const email = location.state?.email || "";
-  
+
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -43,7 +43,7 @@ const VerifyEmail = () => {
 
   const handleVerify = async () => {
     if (otp.length !== 6) return;
-    
+
     setIsLoading(true);
     setError(null);
 
@@ -53,7 +53,29 @@ const VerifyEmail = () => {
       });
 
       if (fnError) {
-        throw fnError;
+        // Try to extract the actual error message from the response context
+        let errorMessage = "Verification failed";
+        try {
+          // The fnError.context contains the Response object for FunctionsHttpError
+          if (fnError.context && typeof fnError.context.json === "function") {
+            const errorData = await fnError.context.json();
+            errorMessage = errorData?.error || errorMessage;
+          } else if (fnError.message) {
+            // Check if the message itself is JSON
+            const parsed = JSON.parse(fnError.message);
+            errorMessage = parsed?.error || errorMessage;
+          }
+        } catch {
+          // If parsing fails, use a user-friendly message based on error type
+          if (fnError.message?.includes("non-2xx")) {
+            errorMessage = "Invalid or expired verification code";
+          } else {
+            errorMessage = fnError.message || "Verification failed";
+          }
+        }
+        setError(errorMessage);
+        setOtp("");
+        return;
       }
 
       if (data?.error) {
@@ -63,14 +85,14 @@ const VerifyEmail = () => {
       }
 
       setSuccess(true);
-      
+
       // Wait briefly, then redirect to login
       setTimeout(() => {
-        navigate("/login", { 
-          state: { 
+        navigate("/login", {
+          state: {
             message: "Email verified! You can now sign in.",
-            email 
-          } 
+            email
+          }
         });
       }, 2000);
     } catch (err) {
@@ -92,7 +114,25 @@ const VerifyEmail = () => {
       });
 
       if (fnError) {
-        throw fnError;
+        // Try to extract the actual error message from the response context
+        let errorMessage = "Failed to resend code";
+        try {
+          if (fnError.context && typeof fnError.context.json === "function") {
+            const errorData = await fnError.context.json();
+            errorMessage = errorData?.error || errorMessage;
+          } else if (fnError.message) {
+            const parsed = JSON.parse(fnError.message);
+            errorMessage = parsed?.error || errorMessage;
+          }
+        } catch {
+          if (fnError.message?.includes("non-2xx")) {
+            errorMessage = "Failed to resend verification code. Please try again.";
+          } else {
+            errorMessage = fnError.message || "Failed to resend code";
+          }
+        }
+        setError(errorMessage);
+        return;
       }
 
       if (data?.error) {
@@ -188,8 +228,8 @@ const VerifyEmail = () => {
               {isResending
                 ? "Sending..."
                 : countdown > 0
-                ? `Resend in ${countdown}s`
-                : "Resend code"}
+                  ? `Resend in ${countdown}s`
+                  : "Resend code"}
             </Button>
           </div>
 
