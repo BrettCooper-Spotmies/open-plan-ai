@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signIn, isLoading: authLoading } = useAuth();
+  const { signIn, isLoading: authLoading, pendingVerificationEmail } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -20,16 +20,55 @@ const Login = () => {
   // Get the redirect path from location state, or default to "/"
   const from = (location.state as any)?.from?.pathname || "/";
 
+  // Auto-redirect to verification if there's a pending verification email
+  useEffect(() => {
+    if (pendingVerificationEmail) {
+      navigate("/verify-email", {
+        state: {
+          email: pendingVerificationEmail,
+          fromLogin: true,
+          message: "Please verify your email to access your account."
+        }
+      });
+    }
+  }, [pendingVerificationEmail, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-    
+
     const result = await signIn(email, password);
-    
+
     if (result.error) {
+      // Check if the error is "Email not confirmed" - redirect to verify page
+      const errorMessage = result.error.message.toLowerCase();
+      if (errorMessage.includes("email not confirmed") || errorMessage.includes("email_not_confirmed")) {
+        // Import authService to send OTP
+        const { authService } = await import("@/services/auth.service");
+        await authService.sendOtp(email);
+
+        navigate("/verify-email", {
+          state: {
+            email: email,
+            fromLogin: true,
+            message: "Please verify your email to continue. A new verification code has been sent."
+          }
+        });
+        return;
+      }
+
       setError(result.error.message);
       setIsLoading(false);
+    } else if (result.requiresVerification) {
+      // Redirect to verification page with message
+      navigate("/verify-email", {
+        state: {
+          email: result.email || email,
+          fromLogin: true,
+          message: "Please verify your email to continue."
+        }
+      });
     } else {
       navigate(from, { replace: true });
     }

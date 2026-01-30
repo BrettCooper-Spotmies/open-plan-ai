@@ -11,6 +11,8 @@ const VerifyEmail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const email = location.state?.email || "";
+  const fromLogin = location.state?.fromLogin || false;
+  const redirectMessage = location.state?.message || "";
 
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -165,7 +167,9 @@ const VerifyEmail = () => {
           </div>
           <CardTitle className="text-2xl font-bold">Verify your email</CardTitle>
           <CardDescription>
-            We sent a 6-digit code to
+            {fromLogin
+              ? "Please verify your email to access your account"
+              : "We sent a 6-digit code to"}
           </CardDescription>
           <div className="flex items-center justify-center gap-2 pt-2">
             <Mail className="h-4 w-4 text-muted-foreground" />
@@ -173,6 +177,15 @@ const VerifyEmail = () => {
           </div>
         </CardHeader>
         <CardContent className="space-y-6">
+          {redirectMessage && !error && !success && (
+            <Alert className="border-yellow-500/50 bg-yellow-500/10">
+              <AlertCircle className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-700">
+                {redirectMessage}
+              </AlertDescription>
+            </Alert>
+          )}
+
           {error && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />

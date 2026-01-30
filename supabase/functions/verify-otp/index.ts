@@ -162,16 +162,64 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // Update the user's email_confirmed_at in auth.users
-    // This requires getting the user by email first
-    const { data: userData, error: userError } = await supabase.auth.admin.listUsers();
-    
-    if (!userError && userData) {
-      const user = userData.users.find(u => u.email === email);
+    // First, get users by email using the admin API
+    try {
+      // Use the admin API to list users filtered by email
+      const { data: usersData, error: listError } = await supabase.auth.admin.listUsers({
+        page: 1,
+        perPage: 1,
+      });
+
+      if (listError) {
+        console.error("Error listing users:", listError);
+      }
+
+      // Find the specific user by email
+      const user = usersData?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+
       if (user && !user.email_confirmed_at) {
-        await supabase.auth.admin.updateUserById(user.id, {
+        console.log(`Updating email_confirmed_at for user ${user.id}`);
+
+        const { error: updateUserError } = await supabase.auth.admin.updateUserById(user.id, {
           email_confirm: true,
         });
+
+        if (updateUserError) {
+          console.error("Error updating user email_confirmed_at:", updateUserError);
+          // Don't throw - the verification itself succeeded, this is just a secondary update
+        } else {
+          console.log(`Successfully updated email_confirmed_at for user ${user.id}`);
+        }
+      } else if (user) {
+        console.log(`User ${user.id} already has email_confirmed_at set`);
+      } else {
+        // If the user wasn't found in the first page, search more explicitly
+        console.log(`User not found in first page, searching all users for email: ${email}`);
+
+        // Note: In production with many users, you'd want to implement proper pagination
+        // or use a different approach like a database trigger
+        const { data: allUsersData } = await supabase.auth.admin.listUsers({
+          page: 1,
+          perPage: 1000, // Adjust based on your expected user count
+        });
+
+        const foundUser = allUsersData?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+
+        if (foundUser && !foundUser.email_confirmed_at) {
+          const { error: updateFoundUserError } = await supabase.auth.admin.updateUserById(foundUser.id, {
+            email_confirm: true,
+          });
+
+          if (updateFoundUserError) {
+            console.error("Error updating user email_confirmed_at:", updateFoundUserError);
+          } else {
+            console.log(`Successfully updated email_confirmed_at for user ${foundUser.id}`);
+          }
+        }
       }
+    } catch (authError) {
+      console.error("Error updating auth user:", authError);
+      // Don't throw - the verification record was updated successfully
     }
 
     console.log("Email verified successfully for:", email);
