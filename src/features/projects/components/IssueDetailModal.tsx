@@ -86,29 +86,20 @@ export function IssueDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0">
-        {/* Minimal Header for Modal Actions (Close/Expand) - Content handles its own title */}
-        {/* We actually want to let Content handle most things, but Modal needs a wrapper */}
-        {/* Let's keep the standard Dialog header for consistency but make it lighter */}
-
-        <ScrollArea className="flex-1 max-h-[90vh]">
+      <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden">
+        <ScrollArea className="flex-1 overflow-y-auto">
           <div className="p-6">
             <IssueDetailContent
               issue={issue}
               tasks={tasks}
               onUpdate={onUpdate}
-              onExpand={() => {
+              onExpand={mode === 'create' ? undefined : () => {
                 const pathParts = window.location.pathname.split('/');
-                // Expected: ["", "projects", "project-1"]
-                // We want: /projects/project-1/issues/issue-id
-                // If path is longer e.g. /projects/project-1/settings, we might need to be careful.
-                // Safe bet: find 'projects' and the next segment.
                 const projectIndex = pathParts.indexOf('projects');
                 if (projectIndex !== -1 && pathParts[projectIndex + 1]) {
                   const projectId = pathParts[projectIndex + 1];
                   navigate(`/projects/${projectId}/issues/${issue.id}`);
                 } else {
-                  // Fallback
                   console.warn("Could not determine project ID from URL");
                 }
                 onClose();

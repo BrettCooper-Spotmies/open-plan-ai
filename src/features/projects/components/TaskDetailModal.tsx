@@ -879,7 +879,8 @@ export function TaskDetailModal({
                   return (
                     <div
                       key={attachment.id}
-                      className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 group"
+                      className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 group cursor-pointer hover:bg-muted"
+                      onClick={() => window.open(attachment.url, '_blank')}
                     >
                       <FileIcon className="h-8 w-8 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
@@ -889,14 +890,25 @@ export function TaskDetailModal({
                         </p>
                       </div>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(attachment.url, '_blank');
+                          }}
+                        >
                           <Download className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7"
-                          onClick={() => handleRemoveAttachment(attachment.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveAttachment(attachment.id);
+                          }}
                         >
                           <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                         </Button>
