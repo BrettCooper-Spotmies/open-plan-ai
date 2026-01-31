@@ -1,148 +1,126 @@
 
-# Backend Integration for Project Creation Form
+
+# Fix Issue Creation Modal and Task File Preview
 
 ## Summary
-The project creation form has UI for file attachments, team assignment, and project links, but the backend integration is incomplete. Files are uploaded to blob storage but not tracked in the database, team members aren't assigned to projects, and there's no storage for project links.
+Three UI bugs need to be fixed in the project detail flow:
+1. "Issue not found" error when clicking maximize in issue creation modal
+2. Scrolling not working in the issue creation modal  
+3. Clicking on uploaded files in task creation doesn't open them
 
-## Changes Overview
+## Root Cause Analysis
 
-### 1. Database Schema Changes
+### Issue 1: "Issue not found" on maximize
+The `IssueDetailModal` passes an `onExpand` callback to `IssueDetailContent`, which attempts to navigate to `/projects/:projectId/issues/:issueId`. In "create" mode, the issue only exists as a draft in local state and hasn't been saved to the database. When `IssuePage.tsx` loads, it looks for the issue in mock data, fails to find it, and shows "Issue not found".
 
-**Create `project_links` table** for storing external links:
-- `id` (UUID, primary key)
-- `project_id` (UUID, foreign key to projects)
-- `name` (text) - Display name for the link
-- `url` (text) - The actual URL
-- `created_by` (UUID, foreign key to profiles)
-- `created_at` (timestamp)
-- `deleted_at` (timestamp, for soft delete)
+**Fix**: Conditionally pass `onExpand` only when in "view" mode. When `mode === 'create'`, don't provide the expand function so the maximize button won't render.
 
-**Add RLS policies** for the new table:
-- SELECT: Users with project access can view links
-- INSERT: Users with project access can create links
-- UPDATE: Users with project access can update links
-- DELETE: Users with project access can delete links
+### Issue 2: Scrolling not working
+The `IssueDetailModal` uses `ScrollArea` with `className="flex-1 max-h-[90vh]"` inside a `DialogContent` that also has `max-h-[90vh]`. The content area contains a `div` with `p-6` padding that wraps `IssueDetailContent`. The issue is:
+- The `ScrollArea` is fighting with the dialog's max-height constraints
+- The ScrollArea Viewport doesn't have proper overflow settings
 
-### 2. Service Layer Updates
+**Fix**: Add `overflow-y-auto` to ensure proper scrolling and adjust the layout to properly cascade the height constraints through the component tree.
 
-**Create `attachmentsService`** (new file: `src/services/attachments.service.ts`):
-- `create()` - Insert attachment metadata after file upload
-- `getByProject()` - List all attachments for a project
-- `getByEntity()` - List attachments for a specific task/issue
-- `delete()` - Soft delete attachment record and file from storage
+### Issue 3: File preview not opening
+In `TaskDetailModal.tsx`, the attachment row has a Download button that renders an icon but has no `onClick` handler. Users expect clicking the attachment or the download button to open the file in a new window.
 
-**Create `projectLinksService`** (new file: `src/services/projectLinks.service.ts`):
-- `create()` - Add a new link to a project
-- `getByProject()` - List all links for a project
-- `update()` - Update link name/URL
-- `delete()` - Remove a link
+**Fix**: 
+- Add an `onClick` handler to the Download button that opens the attachment URL in a new window/tab
+- Make the entire attachment clickable to preview the file
 
-**Update `projectStorageService`**:
-- Integrate with `attachmentsService` to persist metadata after upload
-- Add method to upload and track in one operation
+## Changes
 
-**Create `projectMembersService`** (new file: `src/services/projectMembers.service.ts`):
-- `addMember()` - Add a team member to a project with a role
-- `addMembers()` - Batch add multiple members
-- `removeMember()` - Remove a member from a project
-- `updateRole()` - Update a member's project role
-- `getByProject()` - Get all members for a project
+### File: `src/features/projects/components/IssueDetailModal.tsx`
 
-### 3. Project Creation Flow Integration
+**Change 1**: Only pass `onExpand` when not in create mode
+- Move the navigation logic to only run when `mode !== 'create'`
+- Pass `undefined` for `onExpand` when in create mode so the maximize button doesn't render
 
-**Update `NewProject.tsx` to use new services**:
-After project creation:
-1. Upload files to storage using `projectStorageService`
-2. Create attachment records using `attachmentsService.create()` with `entity_type: 'project'`
-3. Add team members using `projectMembersService.addMembers()`
-4. Create project links using `projectLinksService.create()`
+**Change 2**: Fix ScrollArea for proper scrolling
+- Add `overflow-y-auto` to the ScrollArea wrapper
+- Ensure the DialogContent flexbox layout properly constrains children
 
-### 4. Hook Updates
+### File: `src/features/projects/components/TaskDetailModal.tsx`
 
-**Create custom hooks**:
-- `useProjectAttachments(projectId)` - Query attachments for a project
-- `useProjectLinks(projectId)` - Query links for a project  
-- `useProjectMembers(projectId)` - Already exists in `useProjectTeam.ts`
-
----
+**Change 1**: Add click handler to open attachments
+- Add `onClick` handler to the file row that opens the attachment URL in a new tab
+- Add `onClick` handler to the Download button that triggers file download
+- Add `cursor-pointer` to make the attachment row visually clickable
 
 ## Technical Details
 
-### Database Migration SQL
+### IssueDetailModal.tsx Changes
 
 ```text
--- Create project_links table
-CREATE TABLE public.project_links (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    url TEXT NOT NULL,
-    created_by UUID REFERENCES profiles(id),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    deleted_at TIMESTAMP WITH TIME ZONE
-);
+Line 94-118: Update the onExpand prop logic
 
--- Index for faster lookups
-CREATE INDEX idx_project_links_project_id ON public.project_links(project_id);
+Current code passes onExpand in all cases:
+<IssueDetailContent
+  issue={issue}
+  tasks={tasks}
+  onUpdate={onUpdate}
+  onExpand={() => { ... }}
+/>
 
--- RLS Policies
-ALTER TABLE public.project_links ENABLE ROW LEVEL SECURITY;
+New code will check mode first:
+<IssueDetailContent
+  issue={issue}
+  tasks={tasks}
+  onUpdate={onUpdate}
+  onExpand={mode === 'create' ? undefined : () => { ... }}
+/>
 
-CREATE POLICY "Users can view links in accessible projects"
-ON public.project_links FOR SELECT
-USING (has_project_access(project_id) AND deleted_at IS NULL);
+Line 89: Fix DialogContent flex layout
+- Change to: className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden"
 
-CREATE POLICY "Users can create links in accessible projects"
-ON public.project_links FOR INSERT
-WITH CHECK (has_project_access(project_id));
-
-CREATE POLICY "Users can update links in accessible projects"
-ON public.project_links FOR UPDATE
-USING (has_project_access(project_id));
-
-CREATE POLICY "Users can delete links in accessible projects"
-ON public.project_links FOR DELETE
-USING (has_project_access(project_id));
+Line 94: Fix ScrollArea for scrolling
+- Change to: className="flex-1 overflow-y-auto"
+- Remove duplicated max-h constraint that conflicts with parent
 ```
 
-### Service Files Structure
+### TaskDetailModal.tsx Changes
 
 ```text
-src/services/
-├── attachments.service.ts    (new)
-├── projectLinks.service.ts   (new)
-├── projectMembers.service.ts (new)
-├── projectStorage.service.ts (update)
-├── projects.service.ts       (update)
-└── index.ts                  (update exports)
+Lines 877-906: Update attachment row with click handlers
+
+Add onClick handler to the attachment container:
+<div
+  key={attachment.id}
+  className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 group cursor-pointer hover:bg-muted"
+  onClick={() => window.open(attachment.url, '_blank')}
+>
+  ...
+
+Update Download button with click handler:
+<Button 
+  variant="ghost" 
+  size="icon" 
+  className="h-7 w-7"
+  onClick={(e) => {
+    e.stopPropagation();
+    window.open(attachment.url, '_blank');
+  }}
+>
+  <Download className="h-4 w-4" />
+</Button>
+
+Add stopPropagation to the delete button to prevent file opening when deleting:
+<Button
+  variant="ghost"
+  size="icon"
+  className="h-7 w-7"
+  onClick={(e) => {
+    e.stopPropagation();
+    handleRemoveAttachment(attachment.id);
+  }}
+>
 ```
 
-### Updated Project Creation Flow
+## Files to Modify
 
-```text
-1. User submits form
-2. Create project in database → get projectId
-3. Create modules (existing)
-4. Create milestones (existing)
-5. Upload files to storage
-   └── For each file: create attachment record with entity_type='project'
-6. Add team members to project_members table
-7. Create project links in project_links table
-8. Navigate to project detail page
-```
+| File | Changes |
+|------|---------|
+| `src/features/projects/components/IssueDetailModal.tsx` | Conditional onExpand, fix ScrollArea |
+| `src/features/projects/components/TaskDetailModal.tsx` | Add attachment click handlers |
 
----
-
-## Files to Create/Modify
-
-| File | Action |
-|------|--------|
-| `supabase/migrations/xxx_add_project_links.sql` | Create |
-| `src/services/attachments.service.ts` | Create |
-| `src/services/projectLinks.service.ts` | Create |
-| `src/services/projectMembers.service.ts` | Create |
-| `src/services/projectStorage.service.ts` | Update |
-| `src/services/index.ts` | Update |
-| `src/features/projects/NewProject.tsx` | Update |
-| `src/hooks/useProjectAttachments.ts` | Create |
-| `src/hooks/useProjectLinks.ts` | Create |
