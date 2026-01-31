@@ -1,18 +1,23 @@
 import { useState } from 'react';
-import { Task, Milestone } from '@/types';
+import { Task, Milestone, ModuleType } from '@/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { ArrowUpDown, AlertTriangle, Link2 } from 'lucide-react';
+import { ArrowUpDown, AlertTriangle, Link2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TaskDetailModal } from './TaskDetailModal';
 import { formatModuleType } from '../utils/projectUtils';
 
 interface ListViewProps {
+  projectId?: string;
   tasks: Task[];
   milestones?: Milestone[];
+  modules?: { id: string; name: string; type: ModuleType }[];
   onTaskClick?: (task: Task) => void;
+  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onTaskUpdate?: (task: Task) => void;
+  onAddModule?: () => void;
 }
 
 const statusColors = {
@@ -33,11 +38,12 @@ const priorityColors = {
 type SortField = 'title' | 'status' | 'priority' | 'module' | 'dueDate' | 'assignee';
 type SortDirection = 'asc' | 'desc';
 
-export function ListView({ tasks, milestones = [], onTaskClick }: ListViewProps) {
+export function ListView({ tasks, milestones = [], modules = [], onTaskClick, onTaskCreate, onTaskUpdate, projectId, onAddModule }: ListViewProps) {
   const [sortField, setSortField] = useState<SortField>('priority');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -120,16 +126,81 @@ export function ListView({ tasks, milestones = [], onTaskClick }: ListViewProps)
     </Button>
   );
 
+  // Create a new task template for the create modal
+  const newTaskTemplate: Task = {
+    id: '',
+    title: '',
+    description: '',
+    status: 'todo',
+    priority: 'medium',
+    module: modules.length > 0 ? modules[0].type : 'software',
+    dependencies: [],
+    blockedBy: [],
+    tags: [],
+    assignees: [],
+    checklist: [],
+    comments: [],
+    attachments: [],
+    linkedIssueIds: [],
+    moduleId: modules.length > 0 ? modules[0].id : undefined,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const handleTaskUpdate = (updatedTask: Task) => {
+    setSelectedTask(updatedTask);
+    // Call the parent callback
+    if (onTaskUpdate) {
+      onTaskUpdate(updatedTask);
+    }
+  };
+
+  const handleTaskCreate = (newTask: Task) => {
+    if (onTaskCreate) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { id, createdAt, updatedAt, ...taskWithoutIds } = newTask;
+      onTaskCreate(taskWithoutIds);
+    }
+    setIsCreateModalOpen(false);
+  };
+
   if (tasks.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
+      <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
         <p className="text-muted-foreground">No tasks to display</p>
+        {onTaskCreate && (
+          <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Create Task
+          </Button>
+        )}
+        {/* Create Task Modal */}
+        <TaskDetailModal
+          task={newTaskTemplate}
+          allTasks={tasks}
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onUpdate={() => { }}
+          mode="create"
+          onCreate={handleTaskCreate}
+          modules={modules}
+        />
       </div>
     );
   }
 
   return (
     <>
+      {/* Create Task Button */}
+      {onTaskCreate && (
+        <div className="flex justify-end mb-4">
+          <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2">
+            <Plus className="h-4 w-4" />
+            Create Task
+          </Button>
+        </div>
+      )}
+
       <div className="rounded-lg border">
         <Table>
           <TableHeader>
@@ -162,8 +233,8 @@ export function ListView({ tasks, milestones = [], onTaskClick }: ListViewProps)
               const milestoneName = getMilestoneName(task.milestoneId);
 
               return (
-                <TableRow 
-                  key={task.id} 
+                <TableRow
+                  key={task.id}
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => handleRowClick(task)}
                 >
@@ -256,9 +327,24 @@ export function ListView({ tasks, milestones = [], onTaskClick }: ListViewProps)
           setIsModalOpen(false);
           setSelectedTask(null);
         }}
-        onUpdate={(updatedTask) => {
-          setSelectedTask(updatedTask);
-        }}
+        onUpdate={handleTaskUpdate}
+        modules={modules}
+        projectId={projectId}
+        onAddModule={onAddModule}
+      />
+
+      {/* Create Task Modal */}
+      <TaskDetailModal
+        task={newTaskTemplate as Task}
+        allTasks={tasks}
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onUpdate={() => { }} // Not used in create mode
+        mode="create"
+        onCreate={handleTaskCreate}
+        modules={modules}
+        projectId={projectId}
+        onAddModule={onAddModule}
       />
     </>
   );

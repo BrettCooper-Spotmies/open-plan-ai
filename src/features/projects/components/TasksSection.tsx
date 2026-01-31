@@ -11,6 +11,7 @@ import { TaskFiltersDropdown } from './TaskFiltersDropdown';
 import { cn } from '@/lib/utils';
 
 interface TasksSectionProps {
+  projectId: string;
   tasks: Task[];
   milestones: Milestone[];
   issues: Issue[];
@@ -23,11 +24,12 @@ interface TasksSectionProps {
   onFiltersChange?: (filters: TaskFilter) => void;
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onTaskUpdate?: (task: Task) => void;
+  onAddModule?: () => void;
 }
 
 // Export ViewControls component for use in parent
-export function ViewControls({ 
-  viewMode, 
+export function ViewControls({
+  viewMode,
   onViewModeChange,
   filters,
   onFiltersChange,
@@ -93,10 +95,11 @@ export function ViewControls({
   );
 }
 
-export function TasksSection({ 
-  tasks, 
-  milestones, 
-  issues, 
+export function TasksSection({
+  projectId,
+  tasks,
+  milestones,
+  issues,
   modules,
   viewMode: externalViewMode,
   onViewModeChange: externalOnViewModeChange,
@@ -106,6 +109,7 @@ export function TasksSection({
   onFiltersChange: externalOnFiltersChange,
   onTaskCreate,
   onTaskUpdate,
+  onAddModule,
 }: TasksSectionProps) {
   const [internalViewMode, setInternalViewMode] = useState<TaskViewMode>('kanban');
   const [internalFilters, setInternalFilters] = useState<TaskFilter>({});
@@ -259,18 +263,25 @@ export function TasksSection({
       {/* View Content */}
       <div className="min-h-[400px] w-full min-w-0">
         {viewMode === 'kanban' ? (
-          <KanbanView 
-            tasks={filteredTasks} 
-            allTasks={tasks} 
+          <KanbanView
+            projectId={projectId}
+            tasks={filteredTasks}
+            allTasks={tasks}
             issues={issues}
             onTaskCreate={onTaskCreate}
             onTaskUpdate={onTaskUpdate}
+            modules={modules}
+            onAddModule={onAddModule}
           />
         ) : (
-          <ListView 
-            tasks={filteredTasks} 
+          <ListView
+            projectId={projectId}
+            tasks={filteredTasks}
             milestones={milestones}
-            onTaskClick={() => {}}
+            modules={modules}
+            onTaskCreate={onTaskCreate}
+            onTaskUpdate={onTaskUpdate}
+            onAddModule={onAddModule}
           />
         )}
       </div>

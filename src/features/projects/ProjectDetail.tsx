@@ -341,6 +341,7 @@ export default function ProjectDetail() {
           <TabsContent value="tasks" className="mt-6">
             <TasksSection
               tasks={project.tasks || []}
+              projectId={project.id}
               milestones={project.milestones || []}
               issues={project.issues || []}
               modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
@@ -350,6 +351,7 @@ export default function ProjectDetail() {
               onFiltersChange={setFilters}
               onTaskCreate={handleTaskCreate}
               onTaskUpdate={handleTaskUpdate}
+              onAddModule={handleAddModule}
             />
           </TabsContent>
           <TabsContent value="modules" className="mt-6">

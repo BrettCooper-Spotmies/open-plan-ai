@@ -57,7 +57,10 @@ import {
   AlertCircle,
   Pencil,
   Check,
+  Loader2,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { attachmentsService } from '@/services/attachments.service';
 import {
   Task,
   TaskStatus,
@@ -78,6 +81,9 @@ interface TaskDetailModalProps {
   onUpdate: (task: Task) => void;
   mode?: 'view' | 'create';
   onCreate?: (task: Task) => void;
+  modules?: { id: string; name: string; type: ModuleType }[];
+  projectId?: string;
+  onAddModule?: () => void;
 }
 
 const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
@@ -189,6 +195,9 @@ export function TaskDetailModal({
   onUpdate,
   mode = 'view',
   onCreate,
+  modules = [],
+  projectId,
+  onAddModule,
 }: TaskDetailModalProps) {
   const [editedTask, setEditedTask] = useState<Task | null>(task);
   const [newChecklistItem, setNewChecklistItem] = useState('');
@@ -200,6 +209,11 @@ export function TaskDetailModal({
   const [tagSearch, setTagSearch] = useState('');
   const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
   const [editingTagValue, setEditingTagValue] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCreatingModule, setIsCreatingModule] = useState(false);
+  const [newModuleName, setNewModuleName] = useState('');
+  const [newModuleType, setNewModuleType] = useState<ModuleType>('software');
 
   // Sync editedTask when task prop changes
   if (task && editedTask?.id !== task.id) {
@@ -251,21 +265,55 @@ export function TaskDetailModal({
   // Attachment handlers
   const attachments = editedTask.attachments || [];
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
+    if (!files || files.length === 0) return;
 
-    const newAttachments: Attachment[] = Array.from(files).map(file => ({
-      id: `attachment-${Date.now()}-${Math.random()}`,
-      filename: file.name,
-      fileType: file.type,
-      fileSize: file.size,
-      uploadedBy: teamMembers[0], // Mock current user
-      uploadedAt: new Date().toISOString(),
-      url: URL.createObjectURL(file),
-    }));
+    setIsUploading(true);
+    try {
+      const newAttachments: Attachment[] = [];
 
-    handleFieldChange('attachments', [...attachments, ...newAttachments]);
+      for (const file of Array.from(files)) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+        const filePath = `${projectId || 'temp'}/${fileName}`;
+
+        // Upload to Supabase Storage
+        const { error: uploadError } = await supabase.storage
+          .from('project-files')
+          .upload(filePath, file);
+
+        if (uploadError) {
+          console.error('Error uploading file:', uploadError);
+          continue;
+        }
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('project-files')
+          .getPublicUrl(filePath);
+
+        // Create attachment record
+        // In a real app we'd wait for DB confirmation, but for now we'll mock the ID if service fails or used primarily for UI
+        const attachment: Attachment = {
+          id: `attachment-${Date.now()}-${Math.random()}`,
+          filename: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          uploadedBy: teamMembers[0], // Mock current user
+          uploadedAt: new Date().toISOString(),
+          url: publicUrl,
+        };
+
+        newAttachments.push(attachment);
+      }
+
+      handleFieldChange('attachments', [...attachments, ...newAttachments]);
+    } catch (error) {
+      console.error('Error handling file upload:', error);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleRemoveAttachment = (attachmentId: string) => {
@@ -299,6 +347,18 @@ export function TaskDetailModal({
     if (!selectedBlockingTask) return;
     handleFieldChange('dependencies', [...editedTask.dependencies, selectedBlockingTask]);
     setSelectedBlockingTask('');
+  };
+
+  const handleUpdateTask = async () => {
+    setIsSaving(true);
+    try {
+      await onUpdate(editedTask);
+      onClose();
+    } catch (error) {
+      console.error('Failed to update task:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleRemoveBlockingTask = (taskId: string) => {
@@ -471,18 +531,40 @@ export function TaskDetailModal({
                     Module
                   </Label>
                   <Select
-                    value={editedTask.module}
-                    onValueChange={(value) => handleFieldChange('module', value as ModuleType)}
+                    value={editedTask.moduleId || (modules?.find(m => m.type === editedTask.module)?.id || '')}
+                    onValueChange={(value) => {
+                      const selected = modules?.find(m => m.id === value);
+                      if (selected) {
+                        handleFieldChange('moduleId', selected.id);
+                        handleFieldChange('module', selected.type);
+                      }
+                    }}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select Module" />
                     </SelectTrigger>
                     <SelectContent>
-                      {moduleOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
+                      {modules && modules.length > 0 ? (
+                        modules.map((module) => (
+                          <SelectItem key={module.id} value={module.id}>
+                            {module.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="p-2 flex justify-center">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full text-xs h-8"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              onAddModule?.();
+                            }}
+                          >
+                            <Plus className="h-3 w-3 mr-1" /> Create Module
+                          </Button>
+                        </div>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -823,10 +905,19 @@ export function TaskDetailModal({
                   );
                 })}
 
-                <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors">
-                  <Upload className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Drop files or click to upload</span>
-                  <input type="file" multiple className="hidden" onChange={handleFileUpload} />
+                <label className={cn(
+                  "flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors",
+                  isUploading && "opacity-50 pointer-events-none"
+                )}>
+                  {isUploading ? (
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  ) : (
+                    <Upload className="h-5 w-5 text-muted-foreground" />
+                  )}
+                  <span className="text-sm text-muted-foreground">
+                    {isUploading ? "Uploading..." : "Drop files or click to upload"}
+                  </span>
+                  <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={isUploading} />
                 </label>
               </div>
             </section>
@@ -1017,6 +1108,17 @@ export function TaskDetailModal({
             </Button>
             <Button onClick={handleCreate}>
               Create Task
+            </Button>
+          </div>
+        )}
+        {mode === 'view' && (
+          <div className="px-6 py-4 border-t flex justify-end gap-2 bg-background">
+            <Button variant="outline" onClick={onClose} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateTask} disabled={isSaving}>
+              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Update Task
             </Button>
           </div>
         )}

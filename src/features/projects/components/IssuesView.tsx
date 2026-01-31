@@ -67,13 +67,15 @@ export function IssuesView({ issues, tasks = [], onIssueUpdate, onIssueCreate }:
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<IssueSeverity | 'all'>('all');
   const [statusFilter, setStatusFilter] = useState<IssueStatus | 'all'>('all');
-  // We can remove modal state since we navigate now
-  // const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
-  // const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'view' | 'create'>('view');
+  // Temporary state for new issue creation
+  const [newIssueDraft, setNewIssueDraft] = useState<Issue | null>(null);
 
   const filteredIssues = issues.filter(issue => {
     const matchesSearch = issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          issue.description.toLowerCase().includes(searchQuery.toLowerCase());
+      issue.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSeverity = severityFilter === 'all' || issue.severity === severityFilter;
     const matchesStatus = statusFilter === 'all' || issue.status === statusFilter;
     return matchesSearch && matchesSeverity && matchesStatus;
@@ -98,38 +100,50 @@ export function IssuesView({ issues, tasks = [], onIssueUpdate, onIssueCreate }:
   const handleCreateIssue = () => {
     const newId = `issue-${Date.now()}`;
     // Assuming routeProjectId is available since we are inside ProjectDetail
-    const pid = routeProjectId || (issues.length > 0 ? issues[0].projectId : 'p-1'); 
-    
-    const newIssueStub: Partial<Issue> = {
-       id: newId,
-       title: '',
-       description: '',
-       status: 'open',
-       severity: 'minor',
-       category: 'other',
-       projectId: pid, // Ensure projectId is set
-       reportedBy: { id: 'currentUser', name: 'Current User', initials: 'CU', avatar: '', email: 'current.user@example.com', role: 'Member' }
-    };
-    
-    onIssueCreate?.(newIssueStub);
-    
-    // Navigate to the new issue page
-    navigate(`/projects/${pid}/issues/${newId}`);
+    const pid = routeProjectId || (issues.length > 0 ? issues[0].projectId : 'p-1'); // Fallback if no issues
+
+    const newIssueStub: Issue = {
+      id: newId,
+      title: '',
+      description: '',
+      status: 'open',
+      severity: 'minor',
+      category: 'other',
+      projectId: pid, // Ensure projectId is set
+      reportedBy: { id: 'currentUser', name: 'Current User', initials: 'CU', avatar: '', email: 'current.user@example.com', role: 'Member' },
+      reportedAt: new Date().toISOString(), // Add reportedAt
+      assignees: [],
+      tags: [],
+      attachments: [],
+      comments: [],
+      checklist: [],
+      descriptionBlocks: [],
+      blocksTaskIds: [],
+      blocksMilestoneIds: [],
+      blockedBy: [],
+      // Add other required fields if any, defaulting to empty or safe values
+      updatedAt: new Date().toISOString(),
+    } as Issue; // Cast to Issue since we might be missing some optional fields but trying to fit checks
+
+    setNewIssueDraft(newIssueStub);
+    setModalMode('create');
+    setIsModalOpen(true);
   };
 
-  // const handleIssueUpdateFromModal = (updatedIssue: Issue) => {
-  //   setSelectedIssue(updatedIssue);
-    
-  //   if (updatedIssue.id.startsWith('new-')) {
-  //      // It was a new draft. Now we create it for real.
-  //      onIssueCreate?.(updatedIssue);
-  //      // We should also close modal or switch ID?
-  //      // Usually close.
-  //      setIsModalOpen(false); 
-  //   } else {
-  //      onIssueUpdate?.(updatedIssue);
-  //   }
-  // };
+  const handleIssueUpdateFromModal = (updatedIssue: Issue) => {
+    if (modalMode === 'create') {
+      setNewIssueDraft(updatedIssue);
+    } else {
+      onIssueUpdate?.(updatedIssue);
+    }
+  };
+
+  const handleCreateSubmit = (issueToCreate: Issue) => {
+    onIssueCreate?.(issueToCreate);
+    setIsModalOpen(false);
+    // Optional: Navigate to it if desired, or just stay on list
+    // navigate(`/projects/${issueToCreate.projectId}/issues/${issueToCreate.id}`);
+  };
 
   // Count stats
   const openCount = issues.filter(i => i.status === 'open' || i.status === 'investigating').length;
@@ -226,8 +240,8 @@ export function IssuesView({ issues, tasks = [], onIssueUpdate, onIssueCreate }:
                 const blockingCount = (issue.blocksTaskIds?.length || 0) + (issue.blocksMilestoneIds?.length || 0);
 
                 return (
-                  <TableRow 
-                    key={issue.id} 
+                  <TableRow
+                    key={issue.id}
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => handleIssueClick(issue)}
                   >
@@ -295,14 +309,15 @@ export function IssuesView({ issues, tasks = [], onIssueUpdate, onIssueCreate }:
       </div>
 
       {/* Issue Detail Modal */}
-      {/* Modal is effectively disabled/unused now, handled by IssuePage */}
-      {/* <IssueDetailModal
-        issue={selectedIssue}
+      <IssueDetailModal
+        issue={modalMode === 'create' ? newIssueDraft : selectedIssue}
         tasks={tasks}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onUpdate={handleIssueUpdateFromModal}
-      /> */}
+        mode={modalMode}
+        onCreate={handleCreateSubmit}
+      />
     </div>
   );
 }

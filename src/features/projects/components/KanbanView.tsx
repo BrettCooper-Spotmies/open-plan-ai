@@ -45,6 +45,9 @@ interface KanbanViewProps {
   issues?: Issue[]; // Issues for blocking indicator
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onTaskUpdate?: (task: Task) => void;
+  modules?: { id: string; name: string; type: ModuleType }[];
+  projectId?: string;
+  onAddModule?: () => void;
 }
 
 const defaultColumns: KanbanColumn[] = [
@@ -86,7 +89,12 @@ const columnColorOptions = [
   { value: 'bg-chart-4', label: 'Yellow' },
 ];
 
-export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskCreate, onTaskUpdate }: KanbanViewProps) {
+export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskCreate,
+  onTaskUpdate,
+  modules = [],
+  projectId,
+  onAddModule,
+}: KanbanViewProps) {
   const [columns, setColumns] = useState<KanbanColumn[]>(defaultColumns);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
 
@@ -116,6 +124,17 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     dependencies: [],
     blockedBy: [],
   });
+
+  // Initialize newTask module if modules change
+  useEffect(() => {
+    if (modules && modules.length > 0 && !newTask.moduleId) {
+      setNewTask(prev => ({
+        ...prev,
+        module: modules[0].type,
+        moduleId: modules[0].id
+      }));
+    }
+  }, [modules, newTask.moduleId]);
 
   // Determine which tasks are blocked
   const blockedTaskIds = useMemo(() => {
@@ -245,7 +264,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
   const handleCompleteTask = (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    
+
     const updatedTask = { ...task, status: 'done' as TaskStatus };
     if (onTaskUpdate) {
       onTaskUpdate(updatedTask);
@@ -300,6 +319,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       status: status || 'todo',
       priority: taskData.priority || 'medium',
       module: taskData.module || 'software',
+      moduleId: taskData.moduleId,
       dependencies: taskData.dependencies || [],
       blockedBy: taskData.blockedBy || [],
       tags: taskData.tags || [],
@@ -320,9 +340,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
         comments: [],
         attachments: [],
         linkedIssueIds: [],
+        moduleId: modules.length > 0 ? modules[0].id : undefined,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      } as Task;
+      };
       setTasks([...tasks, task]);
     }
 
@@ -861,21 +882,39 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
             <div className="space-y-2">
               <Label>Module</Label>
               <Select
-                value={newTask.module}
-                onValueChange={(v) => setNewTask({ ...newTask, module: v as ModuleType })}
+                value={newTask.moduleId || (modules?.find(m => m.type === newTask.module)?.id || '')}
+                onValueChange={(v) => {
+                  const selected = modules?.find(m => m.id === v);
+                  if (selected) {
+                    setNewTask({ ...newTask, moduleId: selected.id, module: selected.type });
+                  }
+                }}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder="Select Module" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="hardware">Hardware</SelectItem>
-                  <SelectItem value="software">Software</SelectItem>
-                  <SelectItem value="firmware">Firmware</SelectItem>
-                  <SelectItem value="testing">Testing</SelectItem>
-                  <SelectItem value="design">Design</SelectItem>
-                  <SelectItem value="pcb">PCB</SelectItem>
-                  <SelectItem value="enclosure">Enclosure</SelectItem>
-                  <SelectItem value="power">Power</SelectItem>
+                  {modules && modules.length > 0 ? (
+                    modules.map((module) => (
+                      <SelectItem key={module.id} value={module.id}>
+                        {module.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="p-2 flex justify-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full text-xs h-8"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          onAddModule?.();
+                        }}
+                      >
+                        <Plus className="h-3 w-3 mr-1" /> Create Module
+                      </Button>
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -899,44 +938,39 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       {/* Task Detail Modal (Viewing/Editing) */}
       <TaskDetailModal
         task={selectedTask}
-        allTasks={allTasks || tasks}
+        allTasks={
+          // Include current task if not in allTasks to verify dependencies
+          allTasks || (selectedTask ? [selectedTask, ...tasks.filter(t => t.id !== selectedTask.id)] : tasks)
+        }
         isOpen={isTaskModalOpen}
         onClose={() => {
           setIsTaskModalOpen(false);
           setSelectedTask(null);
         }}
         onUpdate={handleTaskUpdate}
+        modules={modules}
+        projectId={projectId}
+        onAddModule={onAddModule}
       />
 
       {/* Task Detail Modal (Creating Maximized) */}
       <TaskDetailModal
-        task={isMaximizedAddTask ? {
-          id: 'new-task-draft',
-          title: newTask.title || '',
-          description: newTask.description || '',
-          status: newTask.status || 'todo',
-          priority: newTask.priority || 'medium',
-          module: newTask.module || 'software',
-          assignees: newTask.assignees || [],
-          tags: newTask.tags || [],
-          dependencies: newTask.dependencies || [],
-          blockedBy: newTask.blockedBy || [],
-          checklist: newTask.checklist || [],
-          comments: newTask.comments || [],
-          attachments: newTask.attachments || [],
-          linkedIssueIds: newTask.linkedIssueIds || [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          startDate: newTask.startDate,
-          dueDate: newTask.dueDate,
-        } : null}
+        task={newTask as Task} // Cast for template
         allTasks={allTasks || tasks}
         isOpen={isMaximizedAddTask}
         onClose={() => setIsMaximizedAddTask(false)}
-        onUpdate={(updated) => setNewTask(updated)}
+        onUpdate={(updated) => setNewTask(updated as unknown as Partial<Task>)}
         mode="create"
-        onCreate={handleAddTask}
+        onCreate={(newTask) => {
+          onTaskCreate?.(newTask as Omit<Task, 'id' | 'createdAt' | 'updatedAt'>);
+          // Just close the maximized view
+          setIsMaximizedAddTask(false);
+        }}
+        modules={modules}
+        projectId={projectId}
+        onAddModule={onAddModule}
       />
     </div>
   );
 }
+
