@@ -384,6 +384,7 @@ export default function ProjectDetail() {
             <IssuesView
               issues={project.issues || []}
               tasks={project.tasks || []}
+              teamMembers={allTeamMembers}
               onIssueCreate={handleIssueCreate}
               onIssueUpdate={handleIssueUpdate}
             />

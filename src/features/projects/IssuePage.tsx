@@ -1,67 +1,127 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { IssueDetailContent } from './components/IssueDetailContent';
-import { projects, projectModules } from '@/data/mockData';
 import { Issue } from '@/types';
+import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { useIssue, useUpdateIssue } from '@/hooks/useIssues';
+import { useTeamMembers } from '@/hooks/useProjectTeam';
 
 export default function IssuePage() {
   const { projectId, issueId } = useParams();
   const navigate = useNavigate();
 
-  // Mock Data Retrieval
-  const project = projects.find(p => p.id === projectId);
-  const issue = project?.issues?.find(i => i.id === issueId);
+  const {
+    data: project,
+    isLoading: isProjectLoading,
+    error: projectError
+  } = useProjectDetail(projectId);
 
-  // In real app, we would fetch issue and related tasks here
-  
-  if (!project || !issue) {
+  const {
+    data: directIssue,
+    isLoading: isIssueLoading,
+    error: issueError
+  } = useIssue(issueId);
+
+  const { data: teamMembers = [], isLoading: isTeamLoading } = useTeamMembers();
+  const updateIssueMutation = useUpdateIssue();
+
+  // Find issue in project data as a fallback
+  const projectIssue = project?.issues?.find(i => i.id === issueId);
+  const issue = directIssue || projectIssue;
+
+  const isLoading = isProjectLoading || (isIssueLoading && !projectIssue) || isTeamLoading;
+  const hasError = !!projectError || (!!issueError && !projectIssue);
+
+  if (isLoading) {
     return (
       <AppLayout>
-        <div className="flex flex-col items-center justify-center h-[60vh]">
-            <h2 className="text-xl font-medium">Issue not found</h2>
-            <Button variant="ghost" className="mt-4" onClick={() => navigate(-1)}>
-                Go Back
-            </Button>
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-primary opacity-80" />
+          <p className="text-muted-foreground animate-pulse">Loading issue details...</p>
         </div>
       </AppLayout>
     );
   }
 
-  const handleUpdate = (updatedIssue: Issue) => {
-     // In a real app ensuring data consistency is key.
-     // Here we just update the local mock object in memory for the session if possible, 
-     // or mostly just reflect it in UI state within IssueDetailContent.
-     // Since mock data is imported, mutating it *might* work for local session persistence across components if same ref.
-     const index = project.issues?.findIndex(i => i.id === updatedIssue.id);
-     if (index !== undefined && index !== -1 && project.issues) {
-         project.issues[index] = updatedIssue;
-     }
+  if (hasError || !project || !issue) {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center h-[60vh] max-w-md mx-auto text-center px-4">
+          <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mb-6">
+            <ArrowLeft className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <h2 className="text-2xl font-semibold tracking-tight">
+            {hasError ? 'Error loading issue' : 'Issue not found'}
+          </h2>
+          <p className="text-muted-foreground mt-3 text-balance">
+            {hasError
+              ? 'There was a problem fetching the issue data. Please check your connection or try again.'
+              : !project
+                ? 'The project associated with this issue could not be found.'
+                : 'The specific issue you are looking for does not exist or has been removed.'}
+          </p>
+          <div className="flex gap-4 mt-8">
+            <Button variant="outline" onClick={() => window.location.reload()}>
+              Retry
+            </Button>
+            <Button variant="default" className="px-8" onClick={() => navigate(-1)}>
+              Go Back
+            </Button>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  const handleUpdate = async (updatedIssue: Issue) => {
+    try {
+      await updateIssueMutation.mutateAsync({
+        projectId: project.id,
+        issueId: updatedIssue.id,
+        updates: updatedIssue,
+      });
+      navigate(`/projects/${projectId}?tab=issues`);
+    } catch (error) {
+      console.error('Failed to update issue:', error);
+    }
   };
 
   return (
     <AppLayout>
-        <div className="container max-w-5xl mx-auto py-6 space-y-6">
-            <div className="flex items-center gap-4">
-                <Button variant="ghost" size="sm" onClick={() => navigate(`/projects/${projectId}?tab=issues`)}>
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back to Project
-                </Button>
-                <div className="text-sm text-muted-foreground">
-                    {project.name} / Issues / {issue.id}
-                </div>
-            </div>
-
-            <div className="bg-background rounded-lg border shadow-sm p-6 min-h-[80vh]">
-                <IssueDetailContent 
-                   issue={issue} 
-                   tasks={project.tasks} 
-                   onUpdate={handleUpdate}
-                   isExpanded={true}
-                />
-            </div>
+      <div className="container max-w-5xl mx-auto py-8 px-4 space-y-8 animate-in fade-in duration-500">
+        <div className="flex flex-col gap-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-fit -ml-2 text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => navigate(`/projects/${projectId}?tab=issues`)}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Project
+          </Button>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground overflow-hidden">
+            <span className="truncate max-w-[200px]">{project.name}</span>
+            <span className="opacity-40">/</span>
+            <span>Issues</span>
+            <span className="opacity-40">/</span>
+            <span className="font-mono text-[10px] bg-muted px-2 py-0.5 rounded tracking-wider uppercase text-muted-foreground/80">
+              {issue.id.slice(0, 8)}
+            </span>
+          </div>
         </div>
+
+        <div className="bg-card text-card-foreground rounded-xl border shadow-sm p-8 min-h-[80vh] ring-1 ring-border/50">
+          <IssueDetailContent
+            issue={issue}
+            tasks={project.tasks}
+            teamMembers={teamMembers}
+            onUpdate={handleUpdate}
+            isExpanded={true}
+          />
+        </div>
+      </div>
     </AppLayout>
   );
 }

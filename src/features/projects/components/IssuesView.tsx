@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Issue, IssueStatus, IssueSeverity, IssueCategory, Task } from '@/types';
+import { Issue, IssueStatus, IssueSeverity, IssueCategory, Task, TeamMember } from '@/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ import { IssueDetailModal } from './IssueDetailModal';
 interface IssuesViewProps {
   issues: Issue[];
   tasks?: Task[]; // Add tasks prop, optional to avoid breaking other usages if any
+  teamMembers?: TeamMember[];
   onIssueUpdate?: (issue: Issue) => void;
   onIssueCreate?: (issue: Partial<Issue>) => void;
 }
@@ -62,7 +63,7 @@ const categoryConfig: Record<IssueCategory, { icon: typeof Bug; label: string }>
   other: { icon: Info, label: 'Other' },
 };
 
-export function IssuesView({ issues, tasks = [], onIssueUpdate, onIssueCreate }: IssuesViewProps) {
+export function IssuesView({ issues, tasks = [], teamMembers = [], onIssueUpdate, onIssueCreate }: IssuesViewProps) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [severityFilter, setSeverityFilter] = useState<IssueSeverity | 'all'>('all');
@@ -312,6 +313,7 @@ export function IssuesView({ issues, tasks = [], onIssueUpdate, onIssueCreate }:
       <IssueDetailModal
         issue={modalMode === 'create' ? newIssueDraft : selectedIssue}
         tasks={tasks}
+        teamMembers={teamMembers}
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onUpdate={handleIssueUpdateFromModal}

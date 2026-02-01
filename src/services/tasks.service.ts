@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Task, TeamMember } from '@/types';
 import { projects as mockProjects } from '@/data/mockData';
 import { config } from '@/config';
+import { attachmentsService } from './attachments.service';
 
 // Environment flag to control data source
 const USE_MOCK_DATA = config.api.useMockData;
@@ -352,6 +353,29 @@ export const tasksService = {
         await supabase.from('task_dependencies').insert(dependencyInserts);
       }
     }
+    // Update attachments if provided
+    if (updates.attachments !== undefined) {
+      // Fetch current attachments in DB for this task
+      const { data: currentDbAttachments, error: fetchErr } = await supabase
+        .from('attachments')
+        .select('id')
+        .eq('entity_id', taskId)
+        .eq('entity_type', 'task');
+
+      if (!fetchErr && currentDbAttachments) {
+        const updatedIds = updates.attachments.map(a => a.id);
+        const toDelete = currentDbAttachments.filter(dbA => !updatedIds.includes(dbA.id));
+
+        for (const attachment of toDelete) {
+          try {
+            await attachmentsService.delete(attachment.id);
+          } catch (err) {
+            console.error('Failed to delete attachment during task update:', err);
+          }
+        }
+      }
+    }
+
 
     return this.getById(taskId) as Promise<Task>;
   },

@@ -56,6 +56,8 @@ import {
     Check,
     Maximize2,
     MoreVertical,
+    Loader2,
+    Upload,
 } from 'lucide-react';
 import {
     Command,
@@ -74,14 +76,18 @@ import {
     ChecklistItem,
     Attachment,
     Task,
+    TeamMember,
 } from '@/types';
 import { SlashBlockEditor, EditorBlock } from '@/components/ui/SlashBlockEditor';
 import { Switch } from '@/components/ui/switch';
-import { teamMembers } from '@/data/mockData';
+import { supabase } from '@/integrations/supabase/client';
+import { attachmentsService } from '@/services/attachments.service';
+import { toast } from 'sonner';
 
 interface IssueDetailContentProps {
     issue: Issue | null;
     tasks?: Task[];
+    teamMembers?: TeamMember[];
     onUpdate: (issue: Issue) => void;
     onExpand?: () => void; // Optional expanded view action
     isExpanded?: boolean;
@@ -187,6 +193,7 @@ const formatFileSize = (bytes: number) => {
 export function IssueDetailContent({
     issue,
     tasks = [],
+    teamMembers = [],
     onUpdate,
     onExpand,
     isExpanded = false,
@@ -202,6 +209,8 @@ export function IssueDetailContent({
     const [tagSearch, setTagSearch] = useState('');
     const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
     const [editingTagValue, setEditingTagValue] = useState('');
+    const [isUploading, setIsUploading] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         if (issue) {
@@ -218,7 +227,7 @@ export function IssueDetailContent({
     const handleFieldChange = <K extends keyof Issue>(field: K, value: Issue[K]) => {
         const updated = { ...editedIssue, [field]: value };
         setEditedIssue(updated);
-        onUpdate(updated);
+        // We now rely on the explicit "Save Changes" button
     };
 
     const checklist = editedIssue.checklist || [];
@@ -248,20 +257,75 @@ export function IssueDetailContent({
     };
 
     const attachments = editedIssue.attachments || [];
-
-    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = e.target.files;
-        if (!files) return;
-        const newAttachments: Attachment[] = Array.from(files).map(file => ({
-            id: `attachment-${Date.now()}-${Math.random()}`,
-            filename: file.name,
-            fileType: file.type,
-            fileSize: file.size,
-            uploadedBy: teamMembers[0],
-            uploadedAt: new Date().toISOString(),
-            url: URL.createObjectURL(file),
-        }));
-        handleFieldChange('attachments', [...attachments, ...newAttachments]);
+        if (!files || files.length === 0) return;
+
+        setIsUploading(true);
+        try {
+            const newAttachments: Attachment[] = [];
+
+            for (const file of Array.from(files)) {
+                // Generate a unique path for the file
+                const fileExt = file.name.split('.').pop();
+                const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
+                const filePath = `${editedIssue.projectId || 'issues'}/${fileName}`;
+
+                // Upload to Supabase Storage
+                const { error: uploadError } = await supabase.storage
+                    .from('project-files')
+                    .upload(filePath, file);
+
+                if (uploadError) {
+                    console.error('Error uploading file:', uploadError);
+                    toast.error(`Failed to upload ${file.name}`);
+                    continue;
+                }
+
+                // Get public URL
+                const { data: { publicUrl } } = supabase.storage
+                    .from('project-files')
+                    .getPublicUrl(filePath);
+
+                // Create attachment record in database
+                let attachmentId = `temp-${Date.now()}-${Math.random()}`;
+
+                try {
+                    const dbAttachment = await attachmentsService.create({
+                        entity_id: editedIssue.id,
+                        entity_type: 'issue',
+                        file_name: file.name,
+                        file_path: filePath,
+                        file_size: file.size,
+                        mime_type: file.type,
+                        project_id: editedIssue.projectId,
+                    });
+                    attachmentId = dbAttachment.id;
+                } catch (dbError) {
+                    console.error('Error creating attachment record:', dbError);
+                }
+
+                const attachment: Attachment = {
+                    id: attachmentId,
+                    filename: file.name,
+                    fileType: file.type,
+                    fileSize: file.size,
+                    uploadedBy: teamMembers[0] || { id: 'unknown', name: 'Unknown User', initials: 'UN', email: '', role: 'member' },
+                    uploadedAt: new Date().toISOString(),
+                    url: publicUrl,
+                };
+
+                newAttachments.push(attachment);
+            }
+
+            handleFieldChange('attachments', [...attachments, ...newAttachments]);
+            toast.success('Files uploaded successfully');
+        } catch (error) {
+            console.error('File upload error:', error);
+            toast.error('Failed to upload files');
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     const handleRemoveAttachment = (attachmentId: string) => {
@@ -309,7 +373,7 @@ export function IssueDetailContent({
         const newCommentObj: Comment = {
             id: `comment-${Date.now()}`,
             content: newComment,
-            author: teamMembers[0],
+            author: teamMembers[0] || { id: 'unknown', name: 'Unknown User', initials: 'UN', email: '', role: 'member' },
             createdAt: new Date().toISOString(),
         };
         handleFieldChange('comments', [...comments, newCommentObj]);
@@ -750,7 +814,8 @@ export function IssueDetailContent({
                                 return (
                                     <div
                                         key={attachment.id}
-                                        className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 group"
+                                        className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 group cursor-pointer hover:bg-muted"
+                                        onClick={() => window.open(attachment.url, '_blank')}
                                     >
                                         <FileIcon className="h-8 w-8 text-muted-foreground" />
                                         <div className="flex-1 min-w-0">
@@ -760,14 +825,25 @@ export function IssueDetailContent({
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    window.open(attachment.url, '_blank');
+                                                }}
+                                            >
                                                 <Download className="h-4 w-4" />
                                             </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 className="h-7 w-7"
-                                                onClick={() => handleRemoveAttachment(attachment.id)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRemoveAttachment(attachment.id);
+                                                }}
                                             >
                                                 <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
                                             </Button>
@@ -777,15 +853,24 @@ export function IssueDetailContent({
                             })}
 
                             <div className="flex items-center justify-center w-full">
-                                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-lg cursor-pointer bg-muted/20 hover:bg-muted/40 transition-colors">
+                                <label className={cn(
+                                    "flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-lg cursor-pointer bg-muted/20 hover:bg-muted/40 transition-colors",
+                                    isUploading && "opacity-50 pointer-events-none"
+                                )}>
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">
                                         <div className="flex items-center gap-2 text-muted-foreground">
-                                            <Plus className="h-5 w-5" />
-                                            <span className="text-sm font-medium">Add Attachment</span>
+                                            {isUploading ? (
+                                                <Loader2 className="h-5 w-5 animate-spin" />
+                                            ) : (
+                                                <Upload className="h-5 w-5" />
+                                            )}
+                                            <span className="text-sm font-medium">
+                                                {isUploading ? 'Uploading...' : 'Add Attachment'}
+                                            </span>
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-1">or drag and drop</p>
+                                        {!isUploading && <p className="text-xs text-muted-foreground mt-1">or drag and drop</p>}
                                     </div>
-                                    <input type="file" className="hidden" multiple onChange={handleFileUpload} />
+                                    <input type="file" className="hidden" multiple onChange={handleFileUpload} disabled={isUploading} />
                                 </label>
                             </div>
                         </div>
@@ -957,6 +1042,39 @@ export function IssueDetailContent({
                             </Button>
                         </div>
                     </section>
+
+                    {/* Action Bar */}
+                    <div className="pt-6 border-t flex items-center justify-between">
+                        <div className="text-xs text-muted-foreground italic">
+                            {isSaving ? 'Saving changes...' : 'Last updated ' + format(new Date(), 'h:mm a')}
+                        </div>
+                        <div className="flex gap-3">
+                            {onExpand && !isExpanded && (
+                                <Button variant="outline" onClick={onExpand}>
+                                    <Maximize2 className="h-4 w-4 mr-2" />
+                                    Full Page
+                                </Button>
+                            )}
+                            <Button
+                                onClick={async () => {
+                                    setIsSaving(true);
+                                    try {
+                                        await onUpdate(editedIssue);
+                                        toast.success('Issue updated successfully');
+                                    } catch (err) {
+                                        toast.error('Failed to update issue');
+                                    } finally {
+                                        setIsSaving(false);
+                                    }
+                                }}
+                                disabled={isSaving || isUploading}
+                                className="min-w-[120px]"
+                            >
+                                {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                Save Changes
+                            </Button>
+                        </div>
+                    </div>
                 </div>
 
 

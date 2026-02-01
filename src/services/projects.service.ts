@@ -121,6 +121,7 @@ function mapDbIssueToIssue(dbIssue: any, assignees: TeamMember[] = [], reportedB
     reportedAt: dbIssue.reported_at || dbIssue.created_at,
     resolvedAt: dbIssue.resolved_at || undefined,
     assignees,
+    attachments: dbIssue.attachments || [],
   };
 }
 
@@ -376,14 +377,28 @@ export const projectsService = {
       .from('issues')
       .select(`
         *,
-        reporter:profiles!issues_reported_by_fkey(id, name, email, avatar_url, initials)
+        reporter:profiles!issues_reported_by_fkey(id, name, email, avatar_url, initials),
+        issue_assignees(
+          user_id,
+          profile:profiles!issue_assignees_user_id_fkey(id, name, email, avatar_url, initials)
+        )
       `)
       .eq('project_id', projectId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+
+    // Fetch attachments for these issues in one query
+    const issueIds = (data || []).map(i => i.id);
+    const { data: attachmentsData } = await supabase
+      .from('attachments')
+      .select('*, profiles:profiles(id, name, email, initials)')
+      .in('entity_id', issueIds)
+      .eq('entity_type', 'issue');
+
     return (data || []).map(issue => {
+      const issueAttachments = (attachmentsData || []).filter(a => a.entity_id === issue.id);
       const reporter = issue.reporter ? {
         id: issue.reporter.id,
         name: issue.reporter.name,
@@ -392,7 +407,39 @@ export const projectsService = {
         avatar: issue.reporter.avatar_url || undefined,
         initials: issue.reporter.initials,
       } : undefined;
-      return mapDbIssueToIssue(issue, [], reporter);
+
+      const assignees: TeamMember[] = (issue.issue_assignees || []).map((ia: any) => ({
+        id: ia.profile?.id || ia.user_id,
+        name: ia.profile?.name || 'Unknown',
+        role: 'member',
+        avatar: ia.profile?.avatar_url || undefined,
+        initials: ia.profile?.initials || 'UN',
+        email: ia.profile?.email || '',
+      }));
+
+      const attachments = (issueAttachments || []).map((a: any) => {
+        const { data: { publicUrl } } = supabase.storage
+          .from('project-files')
+          .getPublicUrl(a.file_path);
+
+        return {
+          id: a.id,
+          filename: a.file_name,
+          fileType: a.mime_type || '',
+          fileSize: a.file_size || 0,
+          url: publicUrl,
+          uploadedAt: a.uploaded_at,
+          uploadedBy: a.profiles ? {
+            id: a.profiles.id,
+            name: a.profiles.name,
+            email: a.profiles.email,
+            initials: a.profiles.initials,
+            role: 'member',
+          } : { id: a.uploaded_by, name: 'Unknown', email: '', initials: 'UN', role: 'member' }
+        };
+      });
+
+      return mapDbIssueToIssue({ ...issue, attachments }, assignees, reporter);
     });
   },
 

@@ -2,25 +2,21 @@ import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
-  DialogTitle,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Issue,
   Task,
   IssueSeverity,
-  IssueStatus,
+  TeamMember,
 } from '@/types';
 import { IssueDetailContent } from './IssueDetailContent';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
-import { AlertTriangle, AlertCircle, Info, Maximize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface IssueDetailModalProps {
   issue: Issue | null;
   tasks?: Task[];
+  teamMembers?: TeamMember[];
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (issue: Issue) => void;
@@ -38,6 +34,7 @@ const severityOptions: { value: IssueSeverity; label: string; color: string }[] 
 export function IssueDetailModal({
   issue,
   tasks = [],
+  teamMembers = [],
   isOpen,
   onClose,
   onUpdate,
@@ -92,6 +89,7 @@ export function IssueDetailModal({
             <IssueDetailContent
               issue={issue}
               tasks={tasks}
+              teamMembers={teamMembers}
               onUpdate={onUpdate}
               onExpand={mode === 'create' ? undefined : () => {
                 const pathParts = window.location.pathname.split('/');

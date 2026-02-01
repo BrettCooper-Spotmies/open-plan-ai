@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Issue, TeamMember } from '@/types';
 import { projects as mockProjects, projectIssues as mockIssues } from '@/data/mockData';
 import { config } from '@/config';
+import { attachmentsService } from './attachments.service';
 
 // Environment flag to control data source
 const USE_MOCK_DATA = config.api.useMockData;
@@ -32,6 +33,7 @@ function mapDbIssueToIssue(dbIssue: any, assignees: TeamMember[] = [], reportedB
     reportedAt: dbIssue.reported_at || dbIssue.created_at,
     resolvedAt: dbIssue.resolved_at || undefined,
     assignees,
+    attachments: dbIssue.attachments || [],
   };
 }
 
@@ -50,9 +52,10 @@ export const issuesService = {
       .from('issues')
       .select(`
         *,
+        reporter:profiles!issues_reported_by_fkey(id, name, email, avatar_url, initials),
         issue_assignees(
           user_id,
-          profile:profiles(id, name, email, avatar_url, initials)
+          profile:profiles!issue_assignees_user_id_fkey(id, name, email, avatar_url, initials)
         )
       `)
       .is('deleted_at', null)
@@ -60,7 +63,26 @@ export const issuesService = {
 
     if (error) throw error;
 
+    // Fetch attachments for these issues
+    const issueIds = (data || []).map(i => i.id);
+    const { data: attachmentsData } = await supabase
+      .from('attachments')
+      .select('*, profiles:profiles(id, name, email, initials)')
+      .in('entity_id', issueIds)
+      .eq('entity_type', 'issue');
+
     return (data || []).map(issue => {
+      const issueAttachments = (attachmentsData || []).filter(a => a.entity_id === issue.id);
+
+      const reporter = issue.reporter ? {
+        id: issue.reporter.id,
+        name: issue.reporter.name,
+        email: issue.reporter.email,
+        role: 'member',
+        avatar: issue.reporter.avatar_url || undefined,
+        initials: issue.reporter.initials,
+      } as TeamMember : undefined;
+
       const assignees: TeamMember[] = (issue.issue_assignees || []).map((ia: any) => ({
         id: ia.profile?.id || ia.user_id,
         name: ia.profile?.name || 'Unknown',
@@ -69,7 +91,30 @@ export const issuesService = {
         initials: ia.profile?.initials || 'UN',
         email: ia.profile?.email || '',
       }));
-      return mapDbIssueToIssue(issue, assignees);
+
+      const attachments = (issueAttachments || []).map((a: any) => {
+        const { data: { publicUrl } } = supabase.storage
+          .from('project-files')
+          .getPublicUrl(a.file_path);
+
+        return {
+          id: a.id,
+          filename: a.file_name,
+          fileType: a.mime_type || '',
+          fileSize: a.file_size || 0,
+          url: publicUrl,
+          uploadedAt: a.uploaded_at,
+          uploadedBy: a.profiles ? {
+            id: a.profiles.id,
+            name: a.profiles.name,
+            email: a.profiles.email,
+            initials: a.profiles.initials,
+            role: 'member',
+          } : { id: a.uploaded_by, name: 'Unknown', email: '', initials: 'UN', role: 'member' }
+        };
+      });
+
+      return mapDbIssueToIssue({ ...issue, attachments }, assignees, reporter);
     });
   },
 
@@ -93,9 +138,10 @@ export const issuesService = {
       .from('issues')
       .select(`
         *,
+        reporter:profiles!issues_reported_by_fkey(id, name, email, avatar_url, initials),
         issue_assignees(
           user_id,
-          profile:profiles(id, name, email, avatar_url, initials)
+          profile:profiles!issue_assignees_user_id_fkey(id, name, email, avatar_url, initials)
         )
       `)
       .eq('id', issueId)
@@ -104,6 +150,22 @@ export const issuesService = {
 
     if (error) throw error;
     if (!data) return null;
+
+    // Fetch attachments for this issue
+    const { data: attachmentsData } = await supabase
+      .from('attachments')
+      .select('*, profiles:profiles(id, name, email, initials)')
+      .eq('entity_id', issueId)
+      .eq('entity_type', 'issue');
+
+    const reporter = data.reporter ? {
+      id: data.reporter.id,
+      name: data.reporter.name,
+      email: data.reporter.email,
+      role: 'member',
+      avatar: data.reporter.avatar_url || undefined,
+      initials: data.reporter.initials,
+    } as TeamMember : undefined;
 
     const assignees: TeamMember[] = (data.issue_assignees || []).map((ia: any) => ({
       id: ia.profile?.id || ia.user_id,
@@ -114,7 +176,29 @@ export const issuesService = {
       email: ia.profile?.email || '',
     }));
 
-    return mapDbIssueToIssue(data, assignees);
+    const attachments = (attachmentsData || []).map((a: any) => {
+      const { data: { publicUrl } } = supabase.storage
+        .from('project-files')
+        .getPublicUrl(a.file_path);
+
+      return {
+        id: a.id,
+        filename: a.file_name,
+        fileType: a.mime_type || '',
+        fileSize: a.file_size || 0,
+        url: publicUrl,
+        uploadedAt: a.uploaded_at,
+        uploadedBy: a.profiles ? {
+          id: a.profiles.id,
+          name: a.profiles.name,
+          email: a.profiles.email,
+          initials: a.profiles.initials,
+          role: 'member',
+        } : { id: a.uploaded_by, name: 'Unknown', email: '', initials: 'UN', role: 'member' }
+      };
+    });
+
+    return mapDbIssueToIssue({ ...data, attachments }, assignees, reporter);
   },
 
   /**
@@ -125,14 +209,14 @@ export const issuesService = {
       await mockDelay();
       const project = mockProjects.find(p => p.id === projectId);
       if (!project) throw new Error('Project not found');
-      
+
       const newIssue: Issue = {
         ...issue,
         id: `issue-${Date.now()}`,
         projectId,
         reportedAt: new Date().toISOString(),
       };
-      
+
       if (!project.issues) {
         project.issues = [];
       }
@@ -169,7 +253,27 @@ export const issuesService = {
       await supabase.from('issue_assignees').insert(assigneeInserts);
     }
 
-    return mapDbIssueToIssue(data, issue.assignees || [], issue.reportedBy);
+    // Add attachments if provided
+    if (issue.attachments && issue.attachments.length > 0) {
+      const attachmentInserts = issue.attachments.map(att => {
+        const urlParts = att.url.split('project-files/');
+        const filePath = urlParts.length > 1 ? urlParts[1] : (att.id.includes('temp') ? att.url : att.url.split('/').pop() || '');
+
+        return {
+          entity_id: data.id,
+          entity_type: 'issue',
+          file_name: att.filename,
+          file_path: filePath,
+          file_size: att.fileSize,
+          mime_type: att.fileType,
+          project_id: projectId,
+          uploaded_by: user?.id || null
+        };
+      });
+      await supabase.from('attachments').insert(attachmentInserts);
+    }
+
+    return this.getById(data.id) as Promise<Issue>;
   },
 
   /**
@@ -178,7 +282,7 @@ export const issuesService = {
   async update(issueId: string, updates: Partial<Issue>): Promise<Issue> {
     if (USE_MOCK_DATA && !USE_SUPABASE) {
       await mockDelay();
-      
+
       // Check project issues first
       for (const project of mockProjects) {
         if (project.issues) {
@@ -192,7 +296,7 @@ export const issuesService = {
           }
         }
       }
-      
+
       // Check standalone issues
       const standaloneIndex = mockIssues.findIndex(i => i.id === issueId);
       if (standaloneIndex !== -1) {
@@ -202,7 +306,7 @@ export const issuesService = {
         };
         return { ...mockIssues[standaloneIndex] };
       }
-      
+
       throw new Error('Issue not found');
     }
 
@@ -226,7 +330,7 @@ export const issuesService = {
     // Update assignees if provided
     if (updates.assignees !== undefined) {
       await supabase.from('issue_assignees').delete().eq('issue_id', issueId);
-      
+
       if (updates.assignees.length > 0) {
         const { data: { user } } = await supabase.auth.getUser();
         const assigneeInserts = updates.assignees.map(a => ({
@@ -238,7 +342,30 @@ export const issuesService = {
       }
     }
 
-    return mapDbIssueToIssue(data, updates.assignees || []);
+    // Update attachments if provided
+    if (updates.attachments !== undefined) {
+      // Fetch current attachments in DB for this issue
+      const { data: currentDbAttachments, error: fetchErr } = await supabase
+        .from('attachments')
+        .select('id')
+        .eq('entity_id', issueId)
+        .eq('entity_type', 'issue');
+
+      if (!fetchErr && currentDbAttachments) {
+        const updatedIds = updates.attachments.map(a => a.id);
+        const toDelete = currentDbAttachments.filter(dbA => !updatedIds.includes(dbA.id));
+
+        for (const attachment of toDelete) {
+          try {
+            await attachmentsService.delete(attachment.id);
+          } catch (err) {
+            console.error('Failed to delete attachment during issue update:', err);
+          }
+        }
+      }
+    }
+
+    return this.getById(issueId) as Promise<Issue>;
   },
 
   /**
@@ -247,7 +374,7 @@ export const issuesService = {
   async delete(issueId: string): Promise<void> {
     if (USE_MOCK_DATA && !USE_SUPABASE) {
       await mockDelay();
-      
+
       // Check project issues first
       for (const project of mockProjects) {
         if (project.issues) {
@@ -258,7 +385,7 @@ export const issuesService = {
           }
         }
       }
-      
+
       // Check standalone issues
       const standaloneIndex = mockIssues.findIndex(i => i.id === issueId);
       if (standaloneIndex !== -1) {
