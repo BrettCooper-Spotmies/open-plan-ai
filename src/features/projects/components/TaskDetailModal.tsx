@@ -293,14 +293,35 @@ export function TaskDetailModal({
           .from('project-files')
           .getPublicUrl(filePath);
 
-        // Create attachment record
-        // In a real app we'd wait for DB confirmation, but for now we'll mock the ID if service fails or used primarily for UI
+        // Create attachment record in the database if task exists
+        let attachmentId = `attachment-${Date.now()}-${Math.random()}`;
+        let uploadedBy = teamMembers[0]; // Mock current user for fallback
+
+        if (mode !== 'create' && editedTask.id) {
+          try {
+            const dbAttachment = await attachmentsService.create({
+              entity_id: editedTask.id,
+              entity_type: 'task',
+              file_name: file.name,
+              file_path: filePath,
+              file_size: file.size,
+              mime_type: file.type,
+              project_id: projectId,
+            });
+            attachmentId = dbAttachment.id;
+            // Map db user to TeamMember if needed, but for now we keep the mock or use real user if we had one
+          } catch (dbError) {
+            console.error('Error creating attachment record in DB:', dbError);
+            // Even if DB fails, we have the file in storage and it will show in UI temporarily
+          }
+        }
+
         const attachment: Attachment = {
-          id: `attachment-${Date.now()}-${Math.random()}`,
+          id: attachmentId,
           filename: file.name,
           fileType: file.type,
           fileSize: file.size,
-          uploadedBy: teamMembers[0], // Mock current user
+          uploadedBy: uploadedBy,
           uploadedAt: new Date().toISOString(),
           url: publicUrl,
         };
@@ -890,9 +911,9 @@ export function TaskDetailModal({
                         </p>
                       </div>
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-7 w-7"
                           onClick={(e) => {
                             e.stopPropagation();

@@ -11,7 +11,32 @@ const USE_SUPABASE = config.api.useSupabase;
 const mockDelay = (ms: number = 100) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Map database task to frontend Task type
+// Map database task to frontend Task type
 function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
+  // Map attachments if available
+  const attachments = (dbTask.attachments || []).map((a: any) => {
+    // Determine public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('project-files')
+      .getPublicUrl(a.file_path);
+
+    return {
+      id: a.id,
+      filename: a.file_name,
+      fileType: a.mime_type || '',
+      fileSize: a.file_size || 0,
+      url: publicUrl,
+      uploadedAt: a.uploaded_at,
+      uploadedBy: a.profiles ? {
+        id: a.profiles.id,
+        name: a.profiles.name,
+        email: a.profiles.email,
+        initials: a.profiles.initials,
+        role: 'member',
+      } : { id: a.uploaded_by, name: 'Unknown', email: '', initials: 'UN', role: 'member' }
+    };
+  });
+
   return {
     id: dbTask.id,
     title: dbTask.title,
@@ -23,9 +48,14 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
     startDate: dbTask.start_date || undefined,
     assignees,
     tags: dbTask.tags || [],
-    checklist: [],
-    dependencies: [],
-    blockedBy: [],
+    checklist: (dbTask.checklists || []).map((c: any) => ({
+      id: c.id,
+      text: c.text,
+      completed: c.completed
+    })),
+    dependencies: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id),
+    blockedBy: (dbTask.blocked_by || []).map((d: any) => d.task_id),
+    attachments,
     createdAt: dbTask.created_at,
     updatedAt: dbTask.updated_at,
     estimatedHours: dbTask.estimated_hours ? parseFloat(dbTask.estimated_hours) : undefined,
@@ -274,7 +304,10 @@ export const projectsService = {
         task_assignees(
           user_id,
           profile:profiles!task_assignees_user_id_fkey(id, name, email, avatar_url, initials)
-        )
+        ),
+        checklists(*),
+        task_dependencies!task_dependencies_task_id_fkey(depends_on_id),
+        blocked_by:task_dependencies!task_dependencies_depends_on_id_fkey(task_id)
       `)
       .eq('project_id', projectId)
       .is('deleted_at', null)
@@ -282,7 +315,18 @@ export const projectsService = {
 
     if (error) throw error;
 
+    // Fetch attachments for these tasks
+    const taskIds = (data || []).map(t => t.id);
+    const { data: attachmentsData } = await supabase
+      .from('attachments')
+      .select('*, profiles:profiles(id, name, email, initials)')
+      .in('entity_id', taskIds)
+      .eq('entity_type', 'task');
+
     return (data || []).map(task => {
+      const taskAttachments = (attachmentsData || []).filter(a => a.entity_id === task.id);
+      const taskWithAttachments = { ...task, attachments: taskAttachments };
+
       const assignees: TeamMember[] = (task.task_assignees || []).map((ta: any) => ({
         id: ta.profile?.id || ta.user_id,
         name: ta.profile?.name || 'Unknown',
@@ -291,7 +335,7 @@ export const projectsService = {
         initials: ta.profile?.initials || 'UN',
         email: ta.profile?.email || '',
       }));
-      return mapDbTaskToTask(task, assignees);
+      return mapDbTaskToTask(taskWithAttachments, assignees);
     });
   },
 
