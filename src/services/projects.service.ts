@@ -54,7 +54,7 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
       completed: c.completed
     })),
     dependencies: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id),
-    blockedBy: (dbTask.blocked_by || []).map((d: any) => d.task_id),
+    blockedBy: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id), // Same as dependencies - tasks I depend on = tasks that block me
     attachments,
     createdAt: dbTask.created_at,
     updatedAt: dbTask.updated_at,
