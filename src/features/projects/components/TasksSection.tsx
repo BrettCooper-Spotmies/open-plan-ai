@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
-import { LayoutGrid, List, X } from 'lucide-react';
+import { LayoutGrid, List, X, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Task, TaskViewMode, TaskFilter, Milestone, Issue, ModuleType } from '@/types';
 import { KanbanView } from './KanbanView';
@@ -38,7 +39,9 @@ export function ViewControls({
   teamMembers,
   allTags,
   activeFilterCount,
-  onClearFilters
+  onClearFilters,
+  searchQuery,
+  onSearchQueryChange,
 }: {
   viewMode: TaskViewMode;
   onViewModeChange: (mode: TaskViewMode) => void;
@@ -50,9 +53,47 @@ export function ViewControls({
   allTags: string[];
   activeFilterCount: number;
   onClearFilters: () => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
 }) {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
   return (
     <div className="flex items-center gap-2">
+      {/* Search Icon/Input */}
+      {isSearchOpen ? (
+        <div className="relative flex items-center">
+          <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search tasks..."
+            value={searchQuery || ''}
+            onChange={(e) => onSearchQueryChange?.(e.target.value)}
+            className="pl-9 w-[200px] h-8"
+            autoFocus
+          />
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 ml-1"
+            onClick={() => {
+              setIsSearchOpen(false);
+              onSearchQueryChange?.('');
+            }}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => setIsSearchOpen(true)}
+        >
+          <Search className="h-4 w-4" />
+        </Button>
+      )}
+
       {/* View Toggle */}
       <ToggleGroup
         type="single"
@@ -277,6 +318,7 @@ export function TasksSection({
           <ListView
             projectId={projectId}
             tasks={filteredTasks}
+            allTasks={tasks}
             milestones={milestones}
             modules={modules}
             onTaskCreate={onTaskCreate}

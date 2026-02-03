@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Issue, IssueStatus, IssueSeverity, IssueCategory, Task, TeamMember } from '@/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +14,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   AlertTriangle,
   AlertCircle,
@@ -32,8 +38,15 @@ import { IssueDetailModal } from './IssueDetailModal';
 
 interface IssuesViewProps {
   issues: Issue[];
-  tasks?: Task[]; // Add tasks prop, optional to avoid breaking other usages if any
+  tasks?: Task[];
   teamMembers?: TeamMember[];
+  searchQuery?: string;
+  severityFilter?: IssueSeverity | 'all';
+  statusFilter?: IssueStatus | 'all';
+  assigneeFilter?: string | 'all';
+  dueDateFilter?: boolean | 'all';
+  isAddDialogOpen?: boolean;
+  onAddDialogClose?: () => void;
   onIssueUpdate?: (issue: Issue) => void;
   onIssueCreate?: (issue: Partial<Issue>) => void;
 }
@@ -63,23 +76,50 @@ const categoryConfig: Record<IssueCategory, { icon: typeof Bug; label: string }>
   other: { icon: Info, label: 'Other' },
 };
 
-export function IssuesView({ issues, tasks = [], teamMembers = [], onIssueUpdate, onIssueCreate }: IssuesViewProps) {
+export function IssuesView({
+  issues,
+  tasks = [],
+  teamMembers = [],
+  searchQuery: externalSearchQuery,
+  severityFilter: externalSeverityFilter = 'all',
+  statusFilter: externalStatusFilter = 'all',
+  assigneeFilter: externalAssigneeFilter = 'all',
+  dueDateFilter: externalDueDateFilter = 'all',
+  isAddDialogOpen: externalIsAddDialogOpen,
+  onAddDialogClose,
+  onIssueUpdate,
+  onIssueCreate,
+}: IssuesViewProps) {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [severityFilter, setSeverityFilter] = useState<IssueSeverity | 'all'>('all');
-  const [statusFilter, setStatusFilter] = useState<IssueStatus | 'all'>('all');
+  const [internalSearchQuery, setInternalSearchQuery] = useState('');
+  const [internalSeverityFilter, setInternalSeverityFilter] = useState<IssueSeverity | 'all'>('all');
+  const [internalStatusFilter, setInternalStatusFilter] = useState<IssueStatus | 'all'>('all');
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'view' | 'create'>('view');
-  // Temporary state for new issue creation
   const [newIssueDraft, setNewIssueDraft] = useState<Issue | null>(null);
+  const [internalIsAddDialogOpen, setInternalIsAddDialogOpen] = useState(false);
+
+  // Use external props if provided
+  const searchQuery = externalSearchQuery ?? internalSearchQuery;
+  const severityFilter = externalSeverityFilter ?? internalSeverityFilter;
+  const statusFilter = externalStatusFilter ?? internalStatusFilter;
+  const assigneeFilter = externalAssigneeFilter;
+  const dueDateFilter = externalDueDateFilter;
+  const isAddDialogOpen = externalIsAddDialogOpen ?? internalIsAddDialogOpen;
+
 
   const filteredIssues = issues.filter(issue => {
     const matchesSearch = issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       issue.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSeverity = severityFilter === 'all' || issue.severity === severityFilter;
     const matchesStatus = statusFilter === 'all' || issue.status === statusFilter;
-    return matchesSearch && matchesSeverity && matchesStatus;
+    const matchesAssignee = assigneeFilter === 'all' ||
+      (assigneeFilter === 'unassigned' ? (issue.assignees?.length === 0) : issue.assignees?.some(a => a.id === assigneeFilter));
+    const matchesDueDate = dueDateFilter === 'all' ||
+      (dueDateFilter ? !!issue.dueDate : !issue.dueDate);
+
+    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesDueDate;
   });
 
   // Sort by severity (critical first), then by date
@@ -131,6 +171,14 @@ export function IssuesView({ issues, tasks = [], teamMembers = [], onIssueUpdate
     setIsModalOpen(true);
   };
 
+  // Handle external add dialog trigger
+  useEffect(() => {
+    if (externalIsAddDialogOpen && !isModalOpen) {
+      handleCreateIssue();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalIsAddDialogOpen]);
+
   const handleIssueUpdateFromModal = (updatedIssue: Issue) => {
     if (modalMode === 'create') {
       setNewIssueDraft(updatedIssue);
@@ -142,77 +190,12 @@ export function IssuesView({ issues, tasks = [], teamMembers = [], onIssueUpdate
   const handleCreateSubmit = (issueToCreate: Issue) => {
     onIssueCreate?.(issueToCreate);
     setIsModalOpen(false);
-    // Optional: Navigate to it if desired, or just stay on list
-    // navigate(`/projects/${issueToCreate.projectId}/issues/${issueToCreate.id}`);
+    setInternalIsAddDialogOpen(false);
+    onAddDialogClose?.();
   };
-
-  // Count stats
-  const openCount = issues.filter(i => i.status === 'open' || i.status === 'investigating').length;
-  const criticalCount = issues.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed').length;
 
   return (
     <div className="space-y-4">
-      {/* Header with stats */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="gap-1">
-              <AlertCircle className="h-3 w-3" />
-              {openCount} Open
-            </Badge>
-            {criticalCount > 0 && (
-              <Badge variant="destructive" className="gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                {criticalCount} Critical
-              </Badge>
-            )}
-          </div>
-        </div>
-        <Button size="sm" className="gap-2" onClick={handleCreateIssue}>
-          <Plus className="h-4 w-4" />
-          Report Issue
-        </Button>
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search issues..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Select value={severityFilter} onValueChange={(v) => setSeverityFilter(v as IssueSeverity | 'all')}>
-          <SelectTrigger className="w-[140px]">
-            <Filter className="h-4 w-4 mr-2" />
-            <SelectValue placeholder="Severity" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Severity</SelectItem>
-            <SelectItem value="critical">Critical</SelectItem>
-            <SelectItem value="major">Major</SelectItem>
-            <SelectItem value="minor">Minor</SelectItem>
-            <SelectItem value="trivial">Trivial</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as IssueStatus | 'all')}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="open">Open</SelectItem>
-            <SelectItem value="investigating">Investigating</SelectItem>
-            <SelectItem value="resolved">Resolved</SelectItem>
-            <SelectItem value="closed">Closed</SelectItem>
-            <SelectItem value="wont-fix">Won't Fix</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
       {/* Issues Table */}
       <div className="rounded-lg border">
         <Table>

@@ -1,12 +1,26 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
-import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar } from 'lucide-react';
+import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { TasksSection, ViewControls } from './components/TasksSection';
 import { ModulesSection, ModuleViewControls } from './components/ModulesSection';
 import { MilestonesView } from './components/MilestonesView';
@@ -24,7 +38,15 @@ import {
   useCreateModule,
 } from '@/hooks/useProjectMutations';
 import { cn } from '@/lib/utils';
-import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task } from '@/types';
+import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember } from '@/types';
+
+// Issue Filter interface
+interface IssueFilter {
+  status?: IssueStatus | 'all';
+  severity?: IssueSeverity | 'all';
+  assigneeId?: string | 'all';
+  hasDueDate?: boolean | 'all';
+}
 
 const stageColors = {
   concept: 'bg-muted text-muted-foreground',
@@ -33,6 +55,255 @@ const stageColors = {
   testing: 'bg-chart-4/10 text-chart-4',
   production: 'bg-chart-3/10 text-chart-3',
 };
+
+// Milestone View Controls Component
+function MilestoneViewControls({
+  searchQuery,
+  onSearchQueryChange,
+  onAddMilestone,
+}: {
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
+  onAddMilestone: () => void;
+}) {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* Search Icon / Input */}
+      <div className="flex items-center">
+        {isSearchOpen ? (
+          <div className="flex items-center gap-1">
+            <Input
+              type="text"
+              placeholder="Search milestones..."
+              value={searchQuery}
+              onChange={(e) => onSearchQueryChange(e.target.value)}
+              className="h-8 w-40"
+              autoFocus
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                setIsSearchOpen(false);
+                onSearchQueryChange('');
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setIsSearchOpen(true)}
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      <Button size="sm" className="gap-2" onClick={onAddMilestone}>
+        <Plus className="h-4 w-4" />
+        Add Milestone
+      </Button>
+    </div>
+  );
+}
+
+// Issue View Controls Component
+function IssueViewControls({
+  searchQuery,
+  onSearchQueryChange,
+  filters,
+  onFiltersChange,
+  teamMembers,
+  activeFilterCount,
+  onClearFilters,
+  onReportIssue,
+}: {
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
+  filters: IssueFilter;
+  onFiltersChange: (filters: IssueFilter) => void;
+  teamMembers: TeamMember[];
+  activeFilterCount: number;
+  onClearFilters: () => void;
+  onReportIssue: () => void;
+}) {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* Search Icon / Input */}
+      <div className="flex items-center">
+        {isSearchOpen ? (
+          <div className="flex items-center gap-1">
+            <Input
+              type="text"
+              placeholder="Search issues..."
+              value={searchQuery}
+              onChange={(e) => onSearchQueryChange(e.target.value)}
+              className="h-8 w-40"
+              autoFocus
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                setIsSearchOpen(false);
+                onSearchQueryChange('');
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setIsSearchOpen(true)}
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
+      {/* Filter Dropdown */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2 relative">
+            <Filter className="h-4 w-4" />
+            Filter
+            {activeFilterCount > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                {activeFilterCount}
+              </Badge>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72" align="end">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-sm">Filter Issues</h4>
+              {activeFilterCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={onClearFilters} className="h-6 px-2 text-xs">
+                  Clear all
+                </Button>
+              )}
+            </div>
+
+            {/* Status Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Status
+              </Label>
+              <Select
+                value={filters.status || 'all'}
+                onValueChange={(v) => onFiltersChange({ ...filters, status: v as IssueStatus | 'all' })}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="investigating">Investigating</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                  <SelectItem value="wont-fix">Won't Fix</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Severity Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <Flag className="h-3 w-3" />
+                Severity
+              </Label>
+              <Select
+                value={filters.severity || 'all'}
+                onValueChange={(v) => onFiltersChange({ ...filters, severity: v as IssueSeverity | 'all' })}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Severity</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="major">Major</SelectItem>
+                  <SelectItem value="minor">Minor</SelectItem>
+                  <SelectItem value="trivial">Trivial</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Assignee Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <User className="h-3 w-3" />
+                Assignee
+              </Label>
+              <Select
+                value={filters.assigneeId || 'all'}
+                onValueChange={(v) => onFiltersChange({ ...filters, assigneeId: v })}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Assignees</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {teamMembers.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Due Date Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Due Date
+              </Label>
+              <Select
+                value={filters.hasDueDate === undefined || filters.hasDueDate === 'all' ? 'all' : filters.hasDueDate ? 'has-due' : 'no-due'}
+                onValueChange={(v) => onFiltersChange({
+                  ...filters,
+                  hasDueDate: v === 'all' ? 'all' : v === 'has-due'
+                })}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="has-due">Has Due Date</SelectItem>
+                  <SelectItem value="no-due">No Due Date</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      <Button size="sm" className="gap-2" onClick={onReportIssue}>
+        <Plus className="h-4 w-4" />
+        Report Issue
+      </Button>
+    </div>
+  );
+}
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -44,7 +315,14 @@ export default function ProjectDetail() {
   const [viewMode, setViewMode] = useState<TaskViewMode>('kanban');
   const [moduleViewMode, setModuleViewMode] = useState<ModuleViewMode>('kanban');
   const [filters, setFilters] = useState<TaskFilter>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [moduleSearchQuery, setModuleSearchQuery] = useState('');
+  const [milestoneSearchQuery, setMilestoneSearchQuery] = useState('');
+  const [issueSearchQuery, setIssueSearchQuery] = useState('');
+  const [issueFilters, setIssueFilters] = useState<IssueFilter>({});
   const [isAddModuleDialogOpen, setIsAddModuleDialogOpen] = useState(false);
+  const [isAddMilestoneDialogOpen, setIsAddMilestoneDialogOpen] = useState(false);
+  const [isAddIssueDialogOpen, setIsAddIssueDialogOpen] = useState(false);
 
   // Fetch project data using React Query
   const { data: project, isLoading, error } = useProjectDetail(id);
@@ -121,8 +399,33 @@ export default function ProjectDetail() {
     }));
   }, [projectModules]);
 
+  // Filter tasks by search query
+  const filteredTasks = useMemo(() => {
+    if (!project?.tasks || !searchQuery.trim()) return project?.tasks || [];
+    const query = searchQuery.toLowerCase();
+    return project.tasks.filter(task =>
+      task.title.toLowerCase().includes(query) ||
+      task.description?.toLowerCase().includes(query) ||
+      task.tags?.some(tag => tag.toLowerCase().includes(query))
+    );
+  }, [project?.tasks, searchQuery]);
+
   const clearFilters = () => {
     setFilters({});
+  };
+
+  // Calculate active issue filter count
+  const activeIssueFilterCount = useMemo(() => {
+    let count = 0;
+    if (issueFilters.status && issueFilters.status !== 'all') count++;
+    if (issueFilters.severity && issueFilters.severity !== 'all') count++;
+    if (issueFilters.assigneeId && issueFilters.assigneeId !== 'all') count++;
+    if (issueFilters.hasDueDate !== undefined && issueFilters.hasDueDate !== 'all') count++;
+    return count;
+  }, [issueFilters]);
+
+  const clearIssueFilters = () => {
+    setIssueFilters({});
   };
 
   const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
@@ -326,6 +629,8 @@ export default function ProjectDetail() {
                 allTags={allTags}
                 activeFilterCount={activeFilterCount}
                 onClearFilters={clearFilters}
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
               />
             )}
             {/* Module View Controls - show for modules section */}
@@ -334,13 +639,36 @@ export default function ProjectDetail() {
                 viewMode={moduleViewMode}
                 onViewModeChange={setModuleViewMode}
                 onAddModule={handleAddModule}
+                searchQuery={moduleSearchQuery}
+                onSearchQueryChange={setModuleSearchQuery}
+              />
+            )}
+            {/* Milestones View Controls */}
+            {section === 'milestones' && (
+              <MilestoneViewControls
+                searchQuery={milestoneSearchQuery}
+                onSearchQueryChange={setMilestoneSearchQuery}
+                onAddMilestone={() => setIsAddMilestoneDialogOpen(true)}
+              />
+            )}
+            {/* Issues View Controls */}
+            {section === 'issues' && (
+              <IssueViewControls
+                searchQuery={issueSearchQuery}
+                onSearchQueryChange={setIssueSearchQuery}
+                filters={issueFilters}
+                onFiltersChange={setIssueFilters}
+                teamMembers={allTeamMembers}
+                activeFilterCount={activeIssueFilterCount}
+                onClearFilters={clearIssueFilters}
+                onReportIssue={() => setIsAddIssueDialogOpen(true)}
               />
             )}
           </div>
 
           <TabsContent value="tasks" className="mt-6">
             <TasksSection
-              tasks={project.tasks || []}
+              tasks={filteredTasks}
               projectId={project.id}
               milestones={project.milestones || []}
               issues={project.issues || []}
@@ -362,6 +690,7 @@ export default function ProjectDetail() {
               teamMembers={allTeamMembers}
               viewMode={moduleViewMode}
               onViewModeChange={setModuleViewMode}
+              searchQuery={moduleSearchQuery}
               isAddDialogOpen={isAddModuleDialogOpen}
               onAddDialogClose={() => setIsAddModuleDialogOpen(false)}
               onModuleAdd={handleModuleAdd}
@@ -375,6 +704,9 @@ export default function ProjectDetail() {
               tasks={project.tasks || []}
               issues={project.issues || []}
               modules={modules}
+              searchQuery={milestoneSearchQuery}
+              isAddDialogOpen={isAddMilestoneDialogOpen}
+              onAddDialogClose={() => setIsAddMilestoneDialogOpen(false)}
               onMilestoneUpdate={handleMilestoneUpdate}
               onMilestoneCreate={handleMilestoneCreate}
               onIssueUpdate={handleIssueUpdate}
@@ -385,6 +717,13 @@ export default function ProjectDetail() {
               issues={project.issues || []}
               tasks={project.tasks || []}
               teamMembers={allTeamMembers}
+              searchQuery={issueSearchQuery}
+              severityFilter={issueFilters.severity}
+              statusFilter={issueFilters.status}
+              assigneeFilter={issueFilters.assigneeId}
+              dueDateFilter={issueFilters.hasDueDate}
+              isAddDialogOpen={isAddIssueDialogOpen}
+              onAddDialogClose={() => setIsAddIssueDialogOpen(false)}
               onIssueCreate={handleIssueCreate}
               onIssueUpdate={handleIssueUpdate}
             />

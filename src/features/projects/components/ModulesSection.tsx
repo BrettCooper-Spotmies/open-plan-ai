@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { LayoutGrid, List, Plus } from 'lucide-react';
+import { LayoutGrid, List, Plus, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Module, ModuleViewMode, Task, Issue, TeamMember } from '@/types';
 import { ModulesKanbanView } from './ModulesKanbanView';
@@ -23,6 +24,7 @@ interface ModulesSectionProps {
   teamMembers: TeamMember[];
   viewMode?: ModuleViewMode;
   onViewModeChange?: (mode: ModuleViewMode) => void;
+  searchQuery?: string;
   isAddDialogOpen?: boolean;
   onAddDialogClose?: () => void;
   onModuleAdd?: (module: Omit<Module, 'id' | 'createdAt'>) => void;
@@ -37,14 +39,56 @@ interface ModulesSectionProps {
 export function ModuleViewControls({
   viewMode,
   onViewModeChange,
-  onAddModule
+  onAddModule,
+  searchQuery = '',
+  onSearchQueryChange,
 }: {
   viewMode: ModuleViewMode;
   onViewModeChange: (mode: ModuleViewMode) => void;
   onAddModule: () => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
 }) {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
   return (
     <div className="flex items-center gap-2">
+      {/* Search Icon / Input */}
+      <div className="flex items-center">
+        {isSearchOpen ? (
+          <div className="flex items-center gap-1">
+            <Input
+              type="text"
+              placeholder="Search modules..."
+              value={searchQuery}
+              onChange={(e) => onSearchQueryChange?.(e.target.value)}
+              className="h-8 w-40"
+              autoFocus
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => {
+                setIsSearchOpen(false);
+                onSearchQueryChange?.('');
+              }}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => setIsSearchOpen(true)}
+          >
+            <Search className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+
       <ToggleGroup
         type="single"
         value={viewMode}
@@ -74,6 +118,7 @@ export function ModulesSection({
   teamMembers,
   viewMode: externalViewMode,
   onViewModeChange: externalOnViewModeChange,
+  searchQuery = '',
   isAddDialogOpen: externalIsAddDialogOpen,
   onAddDialogClose,
   onModuleAdd,
@@ -93,9 +138,17 @@ export function ModulesSection({
 
   const viewMode = externalViewMode ?? internalViewMode;
 
+  // Filter modules by search query
+  const filteredModules = searchQuery.trim()
+    ? modules.filter(m =>
+      m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    : modules;
+
   // Calculate module stats
   const modulesWithStats = useMemo(() => {
-    return modules.map(module => {
+    return filteredModules.map(module => {
       const moduleTasks = getModuleTasks(module.type, tasks);
       const progress = getModuleProgress(module.type, tasks);
       const openIssues = issues.filter(
@@ -110,7 +163,7 @@ export function ModulesSection({
         tasks: moduleTasks,
       };
     });
-  }, [modules, tasks, issues]);
+  }, [filteredModules, tasks, issues]);
 
   const handleModuleClick = (module: ModuleWithStats) => {
     setSelectedModule(module);

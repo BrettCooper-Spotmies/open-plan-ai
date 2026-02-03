@@ -38,7 +38,7 @@ export function DependencyView({ tasks }: DependencyViewProps) {
                       <AlertCircle className="h-4 w-4 text-status-blocked" />
                     )}
                   </div>
-                  
+
                   {task.blockedBy.length > 0 && (
                     <div className="mb-3">
                       <p className="text-xs text-muted-foreground mb-1">Blocked by:</p>
@@ -46,8 +46,8 @@ export function DependencyView({ tasks }: DependencyViewProps) {
                         {task.blockedBy.map((depId) => {
                           const depTask = getTaskById(depId);
                           return depTask ? (
-                            <Badge 
-                              key={depId} 
+                            <Badge
+                              key={depId}
                               variant="outline"
                               className={cn(
                                 'text-xs',

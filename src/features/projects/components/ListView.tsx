@@ -12,6 +12,7 @@ import { formatModuleType } from '../utils/projectUtils';
 interface ListViewProps {
   projectId?: string;
   tasks: Task[];
+  allTasks?: Task[]; // All tasks for dependency resolution
   milestones?: Milestone[];
   modules?: { id: string; name: string; type: ModuleType }[];
   onTaskClick?: (task: Task) => void;
@@ -38,7 +39,9 @@ const priorityColors = {
 type SortField = 'title' | 'status' | 'priority' | 'module' | 'dueDate' | 'assignee';
 type SortDirection = 'asc' | 'desc';
 
-export function ListView({ tasks, milestones = [], modules = [], onTaskClick, onTaskCreate, onTaskUpdate, projectId, onAddModule }: ListViewProps) {
+export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modules = [], onTaskClick, onTaskCreate, onTaskUpdate, projectId, onAddModule }: ListViewProps) {
+  // Use allTasks prop if provided, otherwise fallback to tasks
+  const allTasksForDependencies = allTasksProp || tasks;
   const [sortField, setSortField] = useState<SortField>('priority');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -177,7 +180,7 @@ export function ListView({ tasks, milestones = [], modules = [], onTaskClick, on
         {/* Create Task Modal */}
         <TaskDetailModal
           task={newTaskTemplate}
-          allTasks={tasks}
+          allTasks={allTasksForDependencies}
           isOpen={isCreateModalOpen}
           onClose={() => setIsCreateModalOpen(false)}
           onUpdate={() => { }}
@@ -321,7 +324,7 @@ export function ListView({ tasks, milestones = [], modules = [], onTaskClick, on
       {/* Task Detail Modal */}
       <TaskDetailModal
         task={selectedTask}
-        allTasks={tasks}
+        allTasks={allTasksForDependencies}
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
@@ -336,7 +339,7 @@ export function ListView({ tasks, milestones = [], modules = [], onTaskClick, on
       {/* Create Task Modal */}
       <TaskDetailModal
         task={newTaskTemplate as Task}
-        allTasks={tasks}
+        allTasks={allTasksForDependencies}
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onUpdate={() => { }} // Not used in create mode
