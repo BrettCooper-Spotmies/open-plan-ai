@@ -55,7 +55,7 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
       completed: c.completed
     })),
     dependencies: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id),
-    blockedBy: (dbTask.blocked_by || []).map((d: any) => d.task_id),
+    blockedBy: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id), // Same as dependencies - tasks I depend on = tasks that block me
     attachments,
     createdAt: dbTask.created_at,
     updatedAt: dbTask.updated_at,
@@ -342,11 +342,18 @@ export const tasksService = {
       }
     }
 
-    // Update dependencies if provided
-    if (updates.dependencies !== undefined) {
+    // Update dependencies if provided (blockedBy represents the same relationship)
+    if (updates.dependencies !== undefined || updates.blockedBy !== undefined) {
+      // Merge dependencies and blockedBy - they represent the same DB relationship
+      const allDependencies = [
+        ...(updates.dependencies || []),
+        ...(updates.blockedBy || [])
+      ];
+      const uniqueDependencies = [...new Set(allDependencies)];
+
       await supabase.from('task_dependencies').delete().eq('task_id', taskId);
-      if (updates.dependencies && updates.dependencies.length > 0) {
-        const dependencyInserts = updates.dependencies.map(depId => ({
+      if (uniqueDependencies.length > 0) {
+        const dependencyInserts = uniqueDependencies.map(depId => ({
           task_id: taskId,
           depends_on_id: depId
         }));
