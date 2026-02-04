@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import {
   Dialog,
@@ -357,16 +357,29 @@ export function TaskDetailModal({
   };
 
   // Dependencies handlers
+  // Compute "Blocking To" client-side - tasks that have THIS task in their blockedBy
+  const blockingToTaskIds = useMemo(() => {
+    return allTasks
+      .filter(task => task.blockedBy.includes(editedTask.id))
+      .map(task => task.id);
+  }, [allTasks, editedTask.id]);
+
   const availableTasksForBlocking = allTasks.filter(
-    t => t.id !== editedTask.id && !editedTask.dependencies.includes(t.id)
+    t => t.id !== editedTask.id && !blockingToTaskIds.includes(t.id)
   );
   const availableTasksForBlockedBy = allTasks.filter(
     t => t.id !== editedTask.id && !editedTask.blockedBy.includes(t.id)
   );
 
+  // Adding to "Blocking To" - update the OTHER task's blockedBy
   const handleAddBlockingTask = () => {
     if (!selectedBlockingTask) return;
-    handleFieldChange('dependencies', [...editedTask.dependencies, selectedBlockingTask]);
+    const taskToUpdate = allTasks.find(t => t.id === selectedBlockingTask);
+    if (taskToUpdate) {
+      // Add current task to that task's blockedBy
+      const updatedBlockedBy = [...taskToUpdate.blockedBy, editedTask.id];
+      onUpdate({ ...taskToUpdate, blockedBy: updatedBlockedBy });
+    }
     setSelectedBlockingTask('');
   };
 
@@ -382,16 +395,23 @@ export function TaskDetailModal({
     }
   };
 
+  // Removing from "Blocking To" - remove current task from the OTHER task's blockedBy
   const handleRemoveBlockingTask = (taskId: string) => {
-    handleFieldChange('dependencies', editedTask.dependencies.filter(id => id !== taskId));
+    const taskToUpdate = allTasks.find(t => t.id === taskId);
+    if (taskToUpdate) {
+      const updatedBlockedBy = taskToUpdate.blockedBy.filter(id => id !== editedTask.id);
+      onUpdate({ ...taskToUpdate, blockedBy: updatedBlockedBy });
+    }
   };
 
+  // Adding to "Blocked By" - update THIS task's blockedBy
   const handleAddBlockedByTask = () => {
     if (!selectedBlockedByTask) return;
     handleFieldChange('blockedBy', [...editedTask.blockedBy, selectedBlockedByTask]);
     setSelectedBlockedByTask('');
   };
 
+  // Removing from "Blocked By" - update THIS task's blockedBy
   const handleRemoveBlockedByTask = (taskId: string) => {
     handleFieldChange('blockedBy', editedTask.blockedBy.filter(id => id !== taskId));
   };
@@ -974,7 +994,7 @@ export function TaskDetailModal({
                   <p className="text-xs text-muted-foreground">Tasks that depend on this task</p>
 
                   <div className="space-y-2">
-                    {editedTask.dependencies.map((taskId) => {
+                    {blockingToTaskIds.map((taskId) => {
                       const depTask = getTaskById(taskId);
                       if (!depTask) return null;
                       return (
