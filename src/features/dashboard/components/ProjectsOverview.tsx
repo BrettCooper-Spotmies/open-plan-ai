@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, Users } from 'lucide-react';
+import { ArrowRight, Users, FolderOpen } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -41,62 +41,79 @@ export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        {projects.map((project) => (
-          <Link
-            key={project.id}
-            to={`/projects/${project.id}`}
-            className="block"
-          >
-            <div className="p-4 rounded-lg border border-border hover:border-border/80 hover:shadow-subtle transition-all cursor-pointer group">
-              <div className="flex items-start justify-between gap-4 mb-3">
-                <div className="min-w-0">
-                  <h3 className="font-medium text-sm group-hover:text-primary transition-colors truncate">
-                    {project.name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                    {project.description}
-                  </p>
-                </div>
-                <Badge variant="secondary" className={cn('shrink-0', stageColors[project.stage])}>
-                  {stageLabels[project.stage]}
-                </Badge>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Progress</span>
-                  <span className="font-medium">{project.progress}%</span>
-                </div>
-                <Progress value={project.progress} className="h-1.5" />
-              </div>
-
-              <div className="flex items-center justify-between mt-3">
-                <div className="flex items-center gap-1">
-                  <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                  <div className="flex -space-x-1.5 ml-1">
-                    {project.team.slice(0, 3).map((member) => (
-                      <Avatar key={member.id} className="h-5 w-5 border-2 border-background">
-                        <AvatarFallback className="text-[8px] bg-muted">
-                          {member.initials}
-                        </AvatarFallback>
-                      </Avatar>
-                    ))}
-                    {project.team.length > 3 && (
-                      <div className="h-5 w-5 rounded-full bg-muted border-2 border-background flex items-center justify-center">
-                        <span className="text-[8px] text-muted-foreground">
-                          +{project.team.length - 3}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <span className="text-xs text-muted-foreground">
-                  Due {new Date(project.targetDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </span>
-              </div>
+        {projects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center animate-fade-in">
+            <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+              <FolderOpen className="h-6 w-6 text-muted-foreground/50" />
             </div>
-          </Link>
-        ))}
+            <h3 className="text-sm font-medium text-foreground">No active projects</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+              You don't have any active projects at the moment.
+            </p>
+            <Button variant="outline" size="sm" className="mt-4 gap-2" asChild>
+              <Link to="/projects">
+                Create Project
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          projects.map((project) => (
+            <Link
+              key={project.id}
+              to={`/projects/${project.id}`}
+              className="block"
+            >
+              <div className="p-4 rounded-lg border border-border hover:border-border/80 hover:shadow-subtle transition-all cursor-pointer group">
+                <div className="flex items-start justify-between gap-4 mb-3">
+                  <div className="min-w-0">
+                    <h3 className="font-medium text-sm group-hover:text-primary transition-colors truncate">
+                      {project.name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                      {project.description}
+                    </p>
+                  </div>
+                  <Badge variant="secondary" className={cn('shrink-0', stageColors[project.stage])}>
+                    {stageLabels[project.stage]}
+                  </Badge>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">Progress</span>
+                    <span className="font-medium">{project.progress}%</span>
+                  </div>
+                  <Progress value={project.progress} className="h-1.5" />
+                </div>
+
+                <div className="flex items-center justify-between mt-3">
+                  <div className="flex items-center gap-1">
+                    <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                    <div className="flex -space-x-1.5 ml-1">
+                      {project.team.slice(0, 3).map((member) => (
+                        <Avatar key={member.id} className="h-5 w-5 border-2 border-background">
+                          <AvatarFallback className="text-[8px] bg-muted">
+                            {member.initials}
+                          </AvatarFallback>
+                        </Avatar>
+                      ))}
+                      {project.team.length > 3 && (
+                        <div className="h-5 w-5 rounded-full bg-muted border-2 border-background flex items-center justify-center">
+                          <span className="text-[8px] text-muted-foreground">
+                            +{project.team.length - 3}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    Due {new Date(project.targetDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
+              </div>
+            </Link>
+          ))
+        )}
       </CardContent>
     </Card>
   );
