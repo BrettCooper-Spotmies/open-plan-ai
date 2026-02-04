@@ -6,22 +6,22 @@ import { queryKeys } from '@/lib/queryClient';
 /**
  * Fetch a single project with all related data (tasks, milestones, issues)
  */
-export function useProjectDetail(projectId: string | undefined) {
+export function useProjectDetail(projectId: string | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.projects.detail(projectId || ''),
     queryFn: () => projectsService.getById(projectId!),
-    enabled: !!projectId,
+    enabled: !!projectId && (options?.enabled ?? true),
   });
 }
 
 /**
  * Fetch modules for a specific project
  */
-export function useProjectModules(projectId: string | undefined) {
+export function useProjectModules(projectId: string | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.modules.list(projectId),
     queryFn: () => modulesService.getByProjectId(projectId!),
-    enabled: !!projectId,
+    enabled: !!projectId && (options?.enabled ?? true),
   });
 }
 

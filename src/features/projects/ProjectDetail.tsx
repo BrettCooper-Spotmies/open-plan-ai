@@ -27,6 +27,7 @@ import { IssuesView } from './components/IssuesView';
 import { ProjectDetailSkeleton } from './components/ProjectDetailSkeleton';
 import { ProjectProgressPopover } from './components/ProjectProgressPopover';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
+import { useUpdateProject } from '@/hooks/useProjects';
 import { useTeamMembers } from '@/hooks/useProjectTeam';
 import {
   useCreateTask,
@@ -338,6 +339,7 @@ export default function ProjectDetail() {
   const createMilestoneMutation = useCreateMilestone(id || '');
   const updateMilestoneMutation = useUpdateMilestone(id || '');
   const createModuleMutation = useCreateModule(id || '');
+  const updateProjectMutation = useUpdateProject();
 
   // Update section from URL params
   useEffect(() => {
@@ -409,6 +411,20 @@ export default function ProjectDetail() {
       project?.issues || []
     );
   }, [project?.tasks, project?.milestones, modules, project?.issues]);
+
+  // Sync calculated progress with project progress
+  useEffect(() => {
+    if (
+      project &&
+      progressBreakdown.overallProgress !== project.progress &&
+      !updateProjectMutation.isPending
+    ) {
+      updateProjectMutation.mutate({
+        id: project.id,
+        updates: { progress: progressBreakdown.overallProgress }
+      });
+    }
+  }, [project, progressBreakdown.overallProgress, updateProjectMutation]);
 
   // Filter tasks by search query
   const filteredTasks = useMemo(() => {

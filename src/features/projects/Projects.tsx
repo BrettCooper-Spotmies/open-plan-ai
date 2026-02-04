@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { ProjectListProgress } from './components/ProjectListProgress';
 import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, Trash2 } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -254,13 +255,7 @@ export default function Projects() {
                     </div>
                   </div>
 
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">Progress</span>
-                      <span className="font-medium">{project.progress || 0}%</span>
-                    </div>
-                    <Progress value={project.progress || 0} className="h-2" />
-                  </div>
+                  <ProjectListProgress projectId={project.id} progress={project.progress || 0} />
 
                   <div className="flex items-center justify-between pt-3 border-t">
                     <div className="flex items-center gap-2">

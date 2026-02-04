@@ -220,6 +220,15 @@ export function TaskDetailModal({
     setEditedTask(task);
   }
 
+  // Dependencies handlers
+  // Compute "Blocking To" client-side - tasks that have THIS task in their blockedBy
+  const blockingToTaskIds = useMemo(() => {
+    if (!editedTask) return [];
+    return allTasks
+      .filter(task => task.blockedBy.includes(editedTask.id))
+      .map(task => task.id);
+  }, [allTasks, editedTask?.id]);
+
   if (!editedTask) return null;
 
   const handleFieldChange = <K extends keyof Task>(field: K, value: Task[K]) => {
@@ -356,13 +365,7 @@ export function TaskDetailModal({
     setNewComment('');
   };
 
-  // Dependencies handlers
-  // Compute "Blocking To" client-side - tasks that have THIS task in their blockedBy
-  const blockingToTaskIds = useMemo(() => {
-    return allTasks
-      .filter(task => task.blockedBy.includes(editedTask.id))
-      .map(task => task.id);
-  }, [allTasks, editedTask.id]);
+
 
   const availableTasksForBlocking = allTasks.filter(
     t => t.id !== editedTask.id && !blockingToTaskIds.includes(t.id)
