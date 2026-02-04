@@ -45,6 +45,7 @@ interface KanbanViewProps {
   issues?: Issue[]; // Issues for blocking indicator
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onTaskUpdate?: (task: Task) => void;
+  onTaskDelete?: (taskId: string) => void;
   modules?: { id: string; name: string; type: ModuleType }[];
   projectId?: string;
   onAddModule?: () => void;
@@ -91,6 +92,7 @@ const columnColorOptions = [
 
 export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskCreate,
   onTaskUpdate,
+  onTaskDelete,
   modules = [],
   projectId,
   onAddModule,
@@ -948,6 +950,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
           setSelectedTask(null);
         }}
         onUpdate={handleTaskUpdate}
+        onDelete={onTaskDelete}
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}

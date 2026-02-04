@@ -32,6 +32,7 @@ import {
   Plus,
   X,
   User,
+  Trash2,
 } from 'lucide-react';
 import { Milestone, Task, Issue, Module } from '@/types';
 import { getMilestoneProgress, getMilestoneTasks, getMilestoneIssues, getMilestoneStatus, getModuleProgress } from '../utils/projectUtils';
@@ -44,6 +45,7 @@ interface MilestoneDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (milestone: Milestone) => void;
+  onDelete?: (milestoneId: string) => void;
   onIssueUpdate?: (issue: Issue) => void;
 }
 
@@ -62,6 +64,7 @@ export function MilestoneDetailModal({
   isOpen,
   onClose,
   onUpdate,
+  onDelete,
   onIssueUpdate,
 }: MilestoneDetailModalProps) {
   const [editedMilestone, setEditedMilestone] = useState<Milestone | null>(null);
@@ -159,14 +162,33 @@ export function MilestoneDetailModal({
     onIssueUpdate(updatedIssue);
   };
 
+  const handleDelete = () => {
+    if (onDelete && editedMilestone && window.confirm('Are you sure you want to delete this milestone?')) {
+      onDelete(editedMilestone.id);
+      onClose();
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b">
-          <DialogTitle>Milestone Details</DialogTitle>
-          <DialogDescription className="sr-only">
-            View and edit milestone information, linked tasks, modules, and issues.
-          </DialogDescription>
+        <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between">
+          <div>
+            <DialogTitle>Milestone Details</DialogTitle>
+            <DialogDescription className="sr-only">
+              View and edit milestone information, linked tasks, modules, and issues.
+            </DialogDescription>
+          </div>
+          {onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleDelete}
+              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </DialogHeader>
 
         <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">

@@ -68,10 +68,7 @@ export const milestonesService = {
   },
 
   async delete(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('milestones')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id);
+    const { error } = await supabase.rpc('soft_delete_milestone', { milestone_id: id });
 
     if (error) throw error;
   },

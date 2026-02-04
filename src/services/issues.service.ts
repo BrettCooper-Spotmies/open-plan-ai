@@ -394,10 +394,7 @@ export const issuesService = {
       return;
     }
 
-    const { error } = await supabase
-      .from('issues')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', issueId);
+    const { error } = await supabase.rpc('soft_delete_issue', { issue_id: issueId });
 
     if (error) throw error;
   },

@@ -18,6 +18,7 @@ interface ListViewProps {
   onTaskClick?: (task: Task) => void;
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onTaskUpdate?: (task: Task) => void;
+  onTaskDelete?: (taskId: string) => void;
   onAddModule?: () => void;
 }
 
@@ -39,7 +40,7 @@ const priorityColors = {
 type SortField = 'title' | 'status' | 'priority' | 'module' | 'dueDate' | 'assignee';
 type SortDirection = 'asc' | 'desc';
 
-export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modules = [], onTaskClick, onTaskCreate, onTaskUpdate, projectId, onAddModule }: ListViewProps) {
+export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modules = [], onTaskClick, onTaskCreate, onTaskUpdate, onTaskDelete, projectId, onAddModule }: ListViewProps) {
   // Use allTasks prop if provided, otherwise fallback to tasks
   const allTasksForDependencies = allTasksProp || tasks;
   const [sortField, setSortField] = useState<SortField>('priority');
@@ -331,6 +332,7 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
           setSelectedTask(null);
         }}
         onUpdate={handleTaskUpdate}
+        onDelete={onTaskDelete}
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}

@@ -20,6 +20,7 @@ interface IssueDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (issue: Issue) => void;
+  onDelete?: (issueId: string) => void;
   mode?: 'view' | 'create';
   onCreate?: (issue: Issue) => void;
 }
@@ -38,6 +39,7 @@ export function IssueDetailModal({
   isOpen,
   onClose,
   onUpdate,
+  onDelete,
   mode = 'view',
   onCreate,
 }: IssueDetailModalProps) {
@@ -91,6 +93,7 @@ export function IssueDetailModal({
               tasks={tasks}
               teamMembers={teamMembers}
               onUpdate={onUpdate}
+              onDelete={mode === 'create' ? undefined : onDelete}
               onExpand={mode === 'create' ? undefined : () => {
                 const pathParts = window.location.pathname.split('/');
                 const projectIndex = pathParts.indexOf('projects');

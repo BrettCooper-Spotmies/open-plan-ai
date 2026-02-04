@@ -966,9 +966,33 @@ export type Database = {
         }
         Returns: boolean
       }
+      soft_delete_issue: {
+        Args: {
+          issue_id: string
+        }
+        Returns: undefined
+      }
+      soft_delete_milestone: {
+        Args: {
+          milestone_id: string
+        }
+        Returns: undefined
+      }
+      soft_delete_module: {
+        Args: {
+          module_id: string
+        }
+        Returns: undefined
+      }
       soft_delete_project: {
         Args: {
           project_id: string
+        }
+        Returns: undefined
+      }
+      soft_delete_task: {
+        Args: {
+          task_id: string
         }
         Returns: undefined
       }

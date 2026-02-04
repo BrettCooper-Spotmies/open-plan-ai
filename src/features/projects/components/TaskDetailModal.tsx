@@ -79,6 +79,7 @@ interface TaskDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (task: Task) => void;
+  onDelete?: (taskId: string) => void;
   mode?: 'view' | 'create';
   onCreate?: (task: Task) => void;
   modules?: { id: string; name: string; type: ModuleType }[];
@@ -193,6 +194,7 @@ export function TaskDetailModal({
   isOpen,
   onClose,
   onUpdate,
+  onDelete,
   mode = 'view',
   onCreate,
   modules = [],
@@ -421,11 +423,28 @@ export function TaskDetailModal({
 
   const getTaskById = (id: string) => allTasks.find(t => t.id === id);
 
+  const handleDelete = () => {
+    if (onDelete && editedTask && editedTask.id && window.confirm('Are you sure you want to delete this task?')) {
+      onDelete(editedTask.id);
+      onClose();
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0">
         <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between">
           <DialogTitle>{mode === 'create' ? 'Add New Task' : 'Task Details'}</DialogTitle>
+          {mode !== 'create' && onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleDelete}
+              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </DialogHeader>
 
         <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">

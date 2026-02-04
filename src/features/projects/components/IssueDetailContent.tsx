@@ -89,6 +89,7 @@ interface IssueDetailContentProps {
     tasks?: Task[];
     teamMembers?: TeamMember[];
     onUpdate: (issue: Issue) => void;
+    onDelete?: (issueId: string) => void;
     onExpand?: () => void; // Optional expanded view action
     isExpanded?: boolean;
 }
@@ -195,6 +196,7 @@ export function IssueDetailContent({
     tasks = [],
     teamMembers = [],
     onUpdate,
+    onDelete,
     onExpand,
     isExpanded = false,
 }: IssueDetailContentProps) {
@@ -393,7 +395,7 @@ export function IssueDetailContent({
                             placeholder="Issue title..."
                         />
                     </div>
-                    {/* Severity Badge on the right */}
+                    {/* Severity Badge and Actions on the right */}
                     <div className="flex-shrink-0 pt-1">
                         <div className="flex items-center gap-2">
                             <Badge className={cn(severityOptions.find(s => s.value === editedIssue.severity)?.color)}>
@@ -404,6 +406,28 @@ export function IssueDetailContent({
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" onClick={onExpand}>
                                     <Maximize2 className="h-4 w-4" />
                                 </Button>
+                            )}
+                            {onDelete && (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground">
+                                            <MoreVertical className="h-4 w-4" />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive"
+                                            onClick={() => {
+                                                if (window.confirm('Are you sure you want to delete this issue?')) {
+                                                    onDelete(editedIssue.id);
+                                                }
+                                            }}
+                                        >
+                                            <Trash2 className="h-4 w-4 mr-2" />
+                                            Delete Issue
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             )}
                         </div>
                     </div>
