@@ -172,3 +172,60 @@ export function sortIssuesBySeverity(issues: Issue[]): Issue[] {
 export function sortMilestonesByDate(milestones: Milestone[]): Milestone[] {
   return [...milestones].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
+
+/**
+ * Progress breakdown interface
+ */
+export interface ProgressBreakdown {
+  moduleProgress: number;
+  milestoneProgress: number;
+  taskProgress: number;
+  issueProgress: number;
+  overallProgress: number;
+}
+
+/**
+ * Calculate project progress as an average of modules, milestones, tasks, and issues
+ */
+export function calculateProjectProgress(
+  tasks: Task[],
+  milestones: Milestone[],
+  modules: { id: string; name: string; progress?: number }[],
+  issues: Issue[]
+): ProgressBreakdown {
+  // Task progress: % of tasks completed
+  const taskProgress = tasks.length > 0 
+    ? Math.round((tasks.filter(t => t.status === 'done').length / tasks.length) * 100)
+    : 0;
+
+  // Milestone progress: % of milestones completed
+  const milestoneProgress = milestones.length > 0
+    ? Math.round((milestones.filter(m => m.completed).length / milestones.length) * 100)
+    : 0;
+
+  // Module progress: average of all module progresses
+  const moduleProgress = modules.length > 0
+    ? Math.round(modules.reduce((sum, m) => sum + (m.progress || 0), 0) / modules.length)
+    : 0;
+
+  // Issue progress: % of issues resolved/closed
+  const resolvedIssues = issues.filter(i => 
+    i.status === 'resolved' || i.status === 'closed'
+  ).length;
+  const issueProgress = issues.length > 0
+    ? Math.round((resolvedIssues / issues.length) * 100)
+    : 100; // 100% if no issues (no blockers)
+
+  // Overall: average of all four
+  const overallProgress = Math.round(
+    (taskProgress + milestoneProgress + moduleProgress + issueProgress) / 4
+  );
+
+  return {
+    moduleProgress,
+    milestoneProgress,
+    taskProgress,
+    issueProgress,
+    overallProgress,
+  };
+}

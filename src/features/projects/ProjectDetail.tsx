@@ -4,7 +4,6 @@ import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus,
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -26,6 +25,7 @@ import { ModulesSection, ModuleViewControls } from './components/ModulesSection'
 import { MilestonesView } from './components/MilestonesView';
 import { IssuesView } from './components/IssuesView';
 import { ProjectDetailSkeleton } from './components/ProjectDetailSkeleton';
+import { ProjectProgressPopover } from './components/ProjectProgressPopover';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
 import { useTeamMembers } from '@/hooks/useProjectTeam';
 import {
@@ -38,6 +38,7 @@ import {
   useCreateModule,
 } from '@/hooks/useProjectMutations';
 import { cn } from '@/lib/utils';
+import { calculateProjectProgress } from './utils/projectUtils';
 import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember } from '@/types';
 
 // Issue Filter interface
@@ -399,6 +400,16 @@ export default function ProjectDetail() {
     }));
   }, [projectModules]);
 
+  // Calculate project progress breakdown
+  const progressBreakdown = useMemo(() => {
+    return calculateProjectProgress(
+      project?.tasks || [],
+      project?.milestones || [],
+      modules,
+      project?.issues || []
+    );
+  }, [project?.tasks, project?.milestones, modules, project?.issues]);
+
   // Filter tasks by search query
   const filteredTasks = useMemo(() => {
     if (!project?.tasks || !searchQuery.trim()) return project?.tasks || [];
@@ -551,10 +562,7 @@ export default function ProjectDetail() {
 
           {/* Right: Stats */}
           <div className="flex flex-wrap items-center gap-6">
-            <div className="flex items-center gap-2">
-              <Progress value={project.progress} className="w-24 h-2" />
-              <span className="text-sm font-medium">{project.progress}%</span>
-            </div>
+            <ProjectProgressPopover breakdown={progressBreakdown} />
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="h-4 w-4" />
               <span>Due {project.targetDate ? new Date(project.targetDate).toLocaleDateString() : 'Not set'}</span>

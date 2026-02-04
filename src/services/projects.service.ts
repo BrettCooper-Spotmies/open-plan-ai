@@ -53,8 +53,10 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
       text: c.text,
       completed: c.completed
     })),
-    dependencies: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id),
-    blockedBy: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id), // Same as dependencies - tasks I depend on = tasks that block me
+    // blockedBy = tasks this task depends on (from task_dependencies where task_id = this task)
+    blockedBy: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id),
+    // dependencies (Blocking To) is computed client-side from allTasks
+    dependencies: [],
     attachments,
     createdAt: dbTask.created_at,
     updatedAt: dbTask.updated_at,

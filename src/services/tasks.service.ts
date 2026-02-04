@@ -54,8 +54,10 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
       text: c.text,
       completed: c.completed
     })),
-    dependencies: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id),
-    blockedBy: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id), // Same as dependencies - tasks I depend on = tasks that block me
+    // blockedBy = tasks this task depends on (from task_dependencies where task_id = this task)
+    blockedBy: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id),
+    // dependencies (Blocking To) is computed client-side from allTasks
+    dependencies: [],
     attachments,
     createdAt: dbTask.created_at,
     updatedAt: dbTask.updated_at,
@@ -342,18 +344,12 @@ export const tasksService = {
       }
     }
 
-    // Update dependencies if provided (blockedBy represents the same relationship)
-    if (updates.dependencies !== undefined || updates.blockedBy !== undefined) {
-      // Merge dependencies and blockedBy - they represent the same DB relationship
-      const allDependencies = [
-        ...(updates.dependencies || []),
-        ...(updates.blockedBy || [])
-      ];
-      const uniqueDependencies = [...new Set(allDependencies)];
-
+    // Update blockedBy (task dependencies where this task depends on others)
+    // Note: "dependencies" (Blocking To) is computed client-side and updates the OTHER task's blockedBy
+    if (updates.blockedBy !== undefined) {
       await supabase.from('task_dependencies').delete().eq('task_id', taskId);
-      if (uniqueDependencies.length > 0) {
-        const dependencyInserts = uniqueDependencies.map(depId => ({
+      if (updates.blockedBy.length > 0) {
+        const dependencyInserts = updates.blockedBy.map(depId => ({
           task_id: taskId,
           depends_on_id: depId
         }));
