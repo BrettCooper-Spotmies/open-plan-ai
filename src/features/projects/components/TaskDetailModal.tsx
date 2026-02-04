@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import {
   Dialog,
@@ -217,10 +217,12 @@ export function TaskDetailModal({
   const [newModuleName, setNewModuleName] = useState('');
   const [newModuleType, setNewModuleType] = useState<ModuleType>('software');
 
-  // Sync editedTask when task prop changes
-  if (task && editedTask?.id !== task.id) {
-    setEditedTask(task);
-  }
+  // Sync editedTask when task prop changes or when switching between modes
+  useEffect(() => {
+    if (task) {
+      setEditedTask(task);
+    }
+  }, [task, isOpen, mode]); // Re-sync when modal opens, mode changes, or task changes
 
   // Dependencies handlers
   // Compute "Blocking To" client-side - tasks that have THIS task in their blockedBy
