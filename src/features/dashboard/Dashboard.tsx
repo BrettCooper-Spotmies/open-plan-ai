@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { DashboardStats } from './components/DashboardStats';
 import { ActivityFeed } from './components/ActivityFeed';
@@ -6,14 +7,48 @@ import { UpcomingMilestones } from './components/UpcomingMilestones';
 import { useDashboardStats, useRecentActivity, useUpcomingDashboardMilestones, useProjectSummaries } from '@/hooks/useDashboard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Activity, Milestone, Project } from '@/types';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent } from '@/components/ui/card';
+import { Building2, Loader2, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
+  const { currentOrganization, isLoading: orgLoading, createOrganization } = useOrganization();
+
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newOrgForm, setNewOrgForm] = useState({ name: '', description: '' });
+
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: activities, isLoading: activitiesLoading } = useRecentActivity(4);
   const { data: milestones, isLoading: milestonesLoading } = useUpcomingDashboardMilestones(4);
   const { data: projectSummaries, isLoading: projectsLoading } = useProjectSummaries();
 
   const isLoading = statsLoading || activitiesLoading || milestonesLoading || projectsLoading;
+
+  const handleCreateOrg = async () => {
+    if (!newOrgForm.name.trim()) {
+      toast.error('Organization name is required');
+      return;
+    }
+    setIsCreating(true);
+    try {
+      await createOrganization(newOrgForm.name, newOrgForm.description);
+      toast.success('Organization created successfully');
+      setNewOrgForm({ name: '', description: '' });
+      setCreateDialogOpen(false);
+    } catch (error) {
+      console.error('Error creating organization:', error);
+      toast.error('Failed to create organization');
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
   // Transform data for DashboardStats component
   const dashboardStats = stats ? {
@@ -79,6 +114,9 @@ export default function Dashboard() {
     updatedAt: new Date().toISOString(),
   }));
 
+  // Show "Create Organization" card when no org exists
+  const showNoOrgState = !orgLoading && !currentOrganization;
+
   return (
     <AppLayout>
       <div className="space-y-6 animate-fade-in">
@@ -88,6 +126,27 @@ export default function Dashboard() {
             Welcome back! Here's an overview of your projects.
           </p>
         </div>
+
+        {/* Compact Create Organization Banner */}
+        {showNoOrgState && (
+          <Card className="border-dashed border border-primary/25 bg-primary/[0.03]">
+            <CardContent className="flex items-center gap-4 py-4 px-5">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Building2 className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-foreground">Create Your Organization</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Set up an organization to manage projects and collaborate with your team.
+                </p>
+              </div>
+              <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5 shrink-0">
+                <Plus className="h-3.5 w-3.5" />
+                Create
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {isLoading ? (
           <div className="space-y-6">
@@ -120,6 +179,53 @@ export default function Dashboard() {
           </>
         )}
       </div>
+
+      {/* Create Organization Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create New Organization</DialogTitle>
+            <DialogDescription>
+              Set up a new organization to manage your projects and team.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="dashboard-org-name">Organization Name *</Label>
+              <Input
+                id="dashboard-org-name"
+                value={newOrgForm.name}
+                onChange={(e) => setNewOrgForm({ ...newOrgForm, name: e.target.value })}
+                placeholder="e.g. My Company"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dashboard-org-desc">Description (optional)</Label>
+              <Textarea
+                id="dashboard-org-desc"
+                value={newOrgForm.description}
+                onChange={(e) => setNewOrgForm({ ...newOrgForm, description: e.target.value })}
+                placeholder="Brief description of your organization"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={isCreating}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateOrg} disabled={isCreating || !newOrgForm.name.trim()}>
+              {isCreating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Building2 className="h-4 w-4 mr-2" />
+              )}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

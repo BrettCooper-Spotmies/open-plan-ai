@@ -334,7 +334,7 @@ const Settings = () => {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Settings</h1>
           <p className="text-muted-foreground">
-            Manage your workspace and personal preferences
+            Manage your organization & personal preferences
           </p>
         </div>
 
@@ -393,9 +393,9 @@ const Settings = () => {
           <TabsContent value="general">
             <Card>
               <CardHeader>
-                <CardTitle>Workspace Settings</CardTitle>
+                <CardTitle>Organization Settings</CardTitle>
                 <CardDescription>
-                  Configure your workspace preferences and defaults
+                  Configure your organization preferences and defaults
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -448,7 +448,7 @@ const Settings = () => {
 
                     <div className="space-y-4 max-w-md mx-auto">
                       <div className="space-y-2">
-                        <Label htmlFor="new-workspace-name">Workspace Name *</Label>
+                        <Label htmlFor="new-workspace-name">Organization Name *</Label>
                         <Input
                           id="new-workspace-name"
                           value={newOrgForm.name}
@@ -533,7 +533,7 @@ const Settings = () => {
                     <Separator />
 
                     <div className="space-y-2">
-                      <Label htmlFor="workspace-name">Workspace Name</Label>
+                      <Label htmlFor="workspace-name">Organization Name</Label>
                       <Input
                         id="workspace-name"
                         value={orgForm.name}
@@ -852,16 +852,16 @@ const Settings = () => {
                         key={theme}
                         disabled
                         className={`p-4 rounded-lg border-2 transition-colors ${userSettings.theme === theme
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border'
+                          ? 'border-primary bg-primary/5'
+                          : 'border-border'
                           }`}
                       >
                         <div
                           className={`h-12 rounded mb-2 ${theme === 'light'
-                              ? 'bg-white border'
-                              : theme === 'dark'
-                                ? 'bg-zinc-900'
-                                : 'bg-gradient-to-r from-white to-zinc-900'
+                            ? 'bg-white border'
+                            : theme === 'dark'
+                              ? 'bg-zinc-900'
+                              : 'bg-gradient-to-r from-white to-zinc-900'
                             }`}
                         />
                         <span className="text-sm font-medium capitalize">
