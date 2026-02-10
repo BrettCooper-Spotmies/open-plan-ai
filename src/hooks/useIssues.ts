@@ -20,7 +20,7 @@ export function useAllIssues() {
 export function useProjectIssues(projectId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.issues.list(projectId),
-    queryFn: () => issuesService.getAll().then(issues => 
+    queryFn: () => issuesService.getAll().then(issues =>
       issues.filter(i => i.projectId === projectId)
     ),
     enabled: !!projectId,
@@ -64,6 +64,8 @@ export function useCreateIssue() {
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.openCount() });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });
 }
@@ -81,10 +83,10 @@ export function useUpdateIssue() {
     onMutate: async ({ projectId, issueId, updates }) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.issues.detail(issueId) });
-      
+
       // Snapshot the previous value
       const previousIssue = queryClient.getQueryData(queryKeys.issues.detail(issueId));
-      
+
       // Optimistically update the store
       updateIssue(projectId, issueId, updates);
 
@@ -99,6 +101,8 @@ export function useUpdateIssue() {
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.detail(updatedIssue.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.openCount() });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });
 }
@@ -120,6 +124,8 @@ export function useDeleteIssue() {
       queryClient.removeQueries({ queryKey: queryKeys.issues.detail(issueId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.openCount() });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });
 }

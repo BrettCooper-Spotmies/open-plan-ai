@@ -6,12 +6,12 @@ import { Task, Milestone, Issue, Module, ModuleType } from '@/types';
  * Calculate milestone progress from linked tasks
  */
 export function getMilestoneProgress(milestone: Milestone, tasks: Task[]): number {
-  const linkedTasks = tasks.filter(t => 
+  const linkedTasks = tasks.filter(t =>
     milestone.linkedTaskIds?.includes(t.id) || t.milestoneId === milestone.id
   );
-  
+
   if (linkedTasks.length === 0) return milestone.completed ? 100 : 0;
-  
+
   const completedTasks = linkedTasks.filter(t => t.status === 'done').length;
   return Math.round((completedTasks / linkedTasks.length) * 100);
 }
@@ -20,7 +20,7 @@ export function getMilestoneProgress(milestone: Milestone, tasks: Task[]): numbe
  * Get tasks linked to a milestone
  */
 export function getMilestoneTasks(milestone: Milestone, tasks: Task[]): Task[] {
-  return tasks.filter(t => 
+  return tasks.filter(t =>
     milestone.linkedTaskIds?.includes(t.id) || t.milestoneId === milestone.id
   );
 }
@@ -29,9 +29,9 @@ export function getMilestoneTasks(milestone: Milestone, tasks: Task[]): Task[] {
  * Get issues blocking a task
  */
 export function getBlockingIssues(taskId: string, issues: Issue[]): Issue[] {
-  return issues.filter(issue => 
-    issue.blocksTaskIds?.includes(taskId) && 
-    issue.status !== 'resolved' && 
+  return issues.filter(issue =>
+    issue.blocksTaskIds?.includes(taskId) &&
+    issue.status !== 'resolved' &&
     issue.status !== 'closed'
   );
 }
@@ -40,9 +40,9 @@ export function getBlockingIssues(taskId: string, issues: Issue[]): Issue[] {
  * Get issues affecting a milestone
  */
 export function getMilestoneIssues(milestoneId: string, issues: Issue[]): Issue[] {
-  return issues.filter(issue => 
+  return issues.filter(issue =>
     issue.blocksMilestoneIds?.includes(milestoneId) &&
-    issue.status !== 'resolved' && 
+    issue.status !== 'resolved' &&
     issue.status !== 'closed'
   );
 }
@@ -51,7 +51,7 @@ export function getMilestoneIssues(milestoneId: string, issues: Issue[]): Issue[
  * Get all tasks for a module (by moduleId or module type)
  */
 export function getModuleTasks(moduleIdOrType: string, tasks: Task[]): Task[] {
-  return tasks.filter(t => 
+  return tasks.filter(t =>
     t.moduleId === moduleIdOrType || t.module === moduleIdOrType
   );
 }
@@ -61,9 +61,9 @@ export function getModuleTasks(moduleIdOrType: string, tasks: Task[]): Task[] {
  */
 export function getModuleProgress(moduleIdOrType: string, tasks: Task[]): number {
   const moduleTasks = getModuleTasks(moduleIdOrType, tasks);
-  
+
   if (moduleTasks.length === 0) return 0;
-  
+
   const completedTasks = moduleTasks.filter(t => t.status === 'done').length;
   return Math.round((completedTasks / moduleTasks.length) * 100);
 }
@@ -87,7 +87,7 @@ export function isMilestoneBlockedByIssues(milestoneId: string, issues: Issue[])
  */
 export function getIssueCounts(issues: Issue[]): Record<string, number> {
   const openIssues = issues.filter(i => i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix');
-  
+
   return {
     total: openIssues.length,
     critical: openIssues.filter(i => i.severity === 'critical').length,
@@ -102,15 +102,15 @@ export function getIssueCounts(issues: Issue[]): Record<string, number> {
  */
 export function getMilestoneStatus(milestone: Milestone, tasks: Task[], issues: Issue[]): 'completed' | 'blocked' | 'at-risk' | 'on-track' {
   if (milestone.completed) return 'completed';
-  
+
   if (isMilestoneBlockedByIssues(milestone.id, issues)) return 'blocked';
-  
+
   const progress = getMilestoneProgress(milestone, tasks);
   const daysUntilDue = Math.ceil((new Date(milestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  
+
   // At risk if less than 7 days remaining and less than 80% complete
   if (daysUntilDue < 7 && progress < 80) return 'at-risk';
-  
+
   return 'on-track';
 }
 
@@ -132,7 +132,7 @@ export function getModuleColor(type: ModuleType): string {
     pcb: '#0EA5E9',          // Sky
     power: '#A855F7',        // Violet
   };
-  
+
   return colors[type] || '#6B7280';
 }
 
@@ -154,7 +154,7 @@ export function formatModuleType(type: ModuleType): string {
     pcb: 'PCB',
     power: 'Power',
   };
-  
+
   return labels[type] || type;
 }
 
@@ -194,7 +194,7 @@ export function calculateProjectProgress(
   issues: Issue[]
 ): ProgressBreakdown {
   // Task progress: % of tasks completed
-  const taskProgress = tasks.length > 0 
+  const taskProgress = tasks.length > 0
     ? Math.round((tasks.filter(t => t.status === 'done').length / tasks.length) * 100)
     : 0;
 
@@ -209,17 +209,24 @@ export function calculateProjectProgress(
     : 0;
 
   // Issue progress: % of issues resolved/closed
-  const resolvedIssues = issues.filter(i => 
+  const resolvedIssues = issues.filter(i =>
     i.status === 'resolved' || i.status === 'closed'
   ).length;
   const issueProgress = issues.length > 0
     ? Math.round((resolvedIssues / issues.length) * 100)
-    : 100; // 100% if no issues (no blockers)
+    : 0; // 0% if no issues
 
-  // Overall: average of all four
-  const overallProgress = Math.round(
-    (taskProgress + milestoneProgress + moduleProgress + issueProgress) / 4
-  );
+  // Overall: average only the metrics that have data
+  // If project is completely empty, return 0
+  const metrics = [];
+  if (tasks.length > 0) metrics.push(taskProgress);
+  if (milestones.length > 0) metrics.push(milestoneProgress);
+  if (modules.length > 0) metrics.push(moduleProgress);
+  if (issues.length > 0) metrics.push(issueProgress);
+
+  const overallProgress = metrics.length > 0
+    ? Math.round(metrics.reduce((sum, val) => sum + val, 0) / metrics.length)
+    : 0;
 
   return {
     moduleProgress,

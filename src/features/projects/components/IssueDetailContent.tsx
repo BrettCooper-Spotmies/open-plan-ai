@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -92,6 +92,7 @@ interface IssueDetailContentProps {
     onDelete?: (issueId: string) => void;
     onExpand?: () => void; // Optional expanded view action
     isExpanded?: boolean;
+    isDraft?: boolean;
 }
 
 const severityOptions: { value: IssueSeverity; label: string; color: string }[] = [
@@ -199,6 +200,7 @@ export function IssueDetailContent({
     onDelete,
     onExpand,
     isExpanded = false,
+    isDraft = false,
 }: IssueDetailContentProps) {
     const [editedIssue, setEditedIssue] = useState<Issue | null>(issue);
     const [newComment, setNewComment] = useState('');
@@ -230,6 +232,9 @@ export function IssueDetailContent({
         const updated = { ...editedIssue, [field]: value };
         setEditedIssue(updated);
         // We now rely on the explicit "Save Changes" button
+        if (isDraft) {
+            onUpdate(updated);
+        }
     };
 
     const checklist = editedIssue.checklist || [];
@@ -560,8 +565,17 @@ export function IssueDetailContent({
                                 <PopoverContent className="w-auto p-0" align="start">
                                     <Calendar
                                         mode="single"
-                                        selected={editedIssue.dueDate ? new Date(editedIssue.dueDate) : undefined}
-                                        onSelect={(date) => handleFieldChange('dueDate', date?.toISOString())}
+                                        selected={editedIssue.dueDate ? parseISO(editedIssue.dueDate) : undefined}
+                                        onSelect={(date) => {
+                                            if (date) {
+                                                // Use local date string YYYY-MM-DD to avoid timezone shifts
+                                                // Adjust for timezone offset to ensure we get the correct local YYYY-MM-DD 
+                                                // or just use format from date-fns which uses local time
+                                                handleFieldChange('dueDate', format(date, 'yyyy-MM-dd'));
+                                            } else {
+                                                handleFieldChange('dueDate', undefined);
+                                            }
+                                        }}
                                         initialFocus
                                         className="p-3 pointer-events-auto"
                                     />
@@ -1068,37 +1082,39 @@ export function IssueDetailContent({
                     </section>
 
                     {/* Action Bar */}
-                    <div className="pt-6 border-t flex items-center justify-between">
-                        <div className="text-xs text-muted-foreground italic">
-                            {isSaving ? 'Saving changes...' : 'Last updated ' + format(new Date(), 'h:mm a')}
-                        </div>
-                        <div className="flex gap-3">
-                            {onExpand && !isExpanded && (
-                                <Button variant="outline" onClick={onExpand}>
-                                    <Maximize2 className="h-4 w-4 mr-2" />
-                                    Full Page
+                    {!isDraft && (
+                        <div className="pt-6 border-t flex items-center justify-between">
+                            <div className="text-xs text-muted-foreground italic">
+                                {isSaving ? 'Saving changes...' : 'Last updated ' + format(new Date(), 'h:mm a')}
+                            </div>
+                            <div className="flex gap-3">
+                                {onExpand && !isExpanded && (
+                                    <Button variant="outline" onClick={onExpand}>
+                                        <Maximize2 className="h-4 w-4 mr-2" />
+                                        Full Page
+                                    </Button>
+                                )}
+                                <Button
+                                    onClick={async () => {
+                                        setIsSaving(true);
+                                        try {
+                                            await onUpdate(editedIssue);
+                                            toast.success('Issue updated successfully');
+                                        } catch (err) {
+                                            toast.error('Failed to update issue');
+                                        } finally {
+                                            setIsSaving(false);
+                                        }
+                                    }}
+                                    disabled={isSaving || isUploading}
+                                    className="min-w-[120px]"
+                                >
+                                    {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                                    Save Changes
                                 </Button>
-                            )}
-                            <Button
-                                onClick={async () => {
-                                    setIsSaving(true);
-                                    try {
-                                        await onUpdate(editedIssue);
-                                        toast.success('Issue updated successfully');
-                                    } catch (err) {
-                                        toast.error('Failed to update issue');
-                                    } finally {
-                                        setIsSaving(false);
-                                    }
-                                }}
-                                disabled={isSaving || isUploading}
-                                className="min-w-[120px]"
-                            >
-                                {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                                Save Changes
-                            </Button>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
 
 

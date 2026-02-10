@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
@@ -78,6 +78,14 @@ const projectTypes = [
   "Proof of Concept",
   "Prototype",
   "Production",
+];
+
+const projectStages = [
+  { value: "concept", label: "Concept" },
+  { value: "design", label: "Design" },
+  { value: "development", label: "Development" },
+  { value: "testing", label: "Testing" },
+  { value: "production", label: "Production" },
 ];
 
 const departments = [
@@ -165,6 +173,7 @@ const NewProject = () => {
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [projectType, setProjectType] = useState("");
+  const [projectStage, setProjectStage] = useState<string>("concept");
   const [projectEmoji, setProjectEmoji] = useState<string>("📁");
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [startDate, setStartDate] = useState<Date>();
@@ -177,6 +186,20 @@ const NewProject = () => {
     "📊", "📈", "📉", "🎨", "🎬", "🎮", "🏗️", "🏭", "🌐", "🔐",
     "✨", "🌟", "⭐", "💎", "🏆", "🎖️", "🥇", "🎁", "📦", "🗃️"
   ];
+
+  // Auto-set stage based on type
+  useEffect(() => {
+    if (!projectType) return;
+
+    let stage = 'concept';
+    const typeLower = projectType.toLowerCase();
+    if (typeLower.includes('production')) stage = 'production';
+    else if (typeLower.includes('prototype')) stage = 'development';
+    else if (typeLower.includes('testing')) stage = 'testing';
+    else if (typeLower.includes('design')) stage = 'design';
+
+    setProjectStage(stage);
+  }, [projectType]);
 
   // Optional Details
   const [showOptionalDetails, setShowOptionalDetails] = useState(false);
@@ -475,20 +498,15 @@ const NewProject = () => {
     setIsCreating(true);
 
     try {
-      // Determine project stage from type
-      let stage: Database['public']['Enums']['project_stage'] = 'concept';
-      const typeLower = projectType.toLowerCase();
-      if (typeLower.includes('production')) stage = 'production';
-      else if (typeLower.includes('prototype')) stage = 'development';
-      else if (typeLower.includes('testing')) stage = 'testing';
-      else if (typeLower.includes('design')) stage = 'design';
+      // Create the project
 
       // Create the project
       const project = await createProjectMutation.mutateAsync({
         project: {
           name: projectName,
           description: projectDescription || undefined,
-          stage,
+          stage: projectStage,
+          type: projectType,
           startDate: startDate?.toISOString().split('T')[0],
           targetDate: expectedEndDate?.toISOString().split('T')[0],
           icon: projectEmoji,
@@ -526,7 +544,7 @@ const NewProject = () => {
             const uploadResults = await Promise.all(
               filesToUpload.map(att => projectStorageService.uploadFile(att.file!, project.id))
             );
-            
+
             // Create attachment records in the database
             const attachmentRecords = uploadResults.map(result => ({
               entity_id: project.id,
@@ -537,7 +555,7 @@ const NewProject = () => {
               mime_type: result.type,
               project_id: project.id,
             }));
-            
+
             await attachmentsService.createMany(attachmentRecords);
             toast.success(`${filesToUpload.length} file(s) uploaded successfully`);
           } catch (uploadError) {
@@ -685,6 +703,19 @@ const NewProject = () => {
                   <SelectContent>
                     {projectTypes.map((type) => (
                       <SelectItem key={type} value={type}>{type}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="projectStage">Project Stage *</Label>
+                <Select value={projectStage} onValueChange={setProjectStage}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select project stage" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projectStages.map((stage) => (
+                      <SelectItem key={stage.value} value={stage.value}>{stage.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

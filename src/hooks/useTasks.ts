@@ -20,7 +20,7 @@ export function useAllTasks() {
 export function useProjectTasks(projectId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.tasks.list(projectId || ''),
-    queryFn: () => tasksService.getAll().then(tasks => 
+    queryFn: () => tasksService.getAll().then(tasks =>
       tasks.filter(t => {
         // Find which project this task belongs to
         const store = useProjectStore.getState();
@@ -57,6 +57,7 @@ export function useCreateTask() {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });
 }
@@ -74,10 +75,10 @@ export function useUpdateTask() {
     onMutate: async ({ projectId, taskId, updates }) => {
       // Cancel any outgoing refetches
       await queryClient.cancelQueries({ queryKey: queryKeys.tasks.detail(taskId) });
-      
+
       // Snapshot the previous value
       const previousTask = queryClient.getQueryData(queryKeys.tasks.detail(taskId));
-      
+
       // Optimistically update the store
       updateTask(projectId, taskId, updates);
 
@@ -92,6 +93,8 @@ export function useUpdateTask() {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(updatedTask.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      // Invalidate My Day queries to refresh the My Day page
+      queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });
 }
@@ -112,6 +115,7 @@ export function useDeleteTask() {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
       queryClient.removeQueries({ queryKey: queryKeys.tasks.detail(taskId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });
 }
@@ -135,6 +139,7 @@ export function useBatchUpdateTasks() {
     onSuccess: (_, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });
 }

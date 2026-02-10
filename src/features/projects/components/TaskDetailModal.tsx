@@ -5,6 +5,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,7 +72,18 @@ import {
   Attachment,
   Comment,
 } from '@/types';
-import { teamMembers } from '@/data/mockData';
+import { useTeamMembers } from '@/hooks/useProjects';
+import { useAuth } from '@/contexts/AuthContext';
+
+// Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
+const toDateOnly = (date: Date | undefined | null): string | undefined => {
+  if (!date) return undefined;
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 interface TaskDetailModalProps {
   task: Task | null;
@@ -217,6 +229,10 @@ export function TaskDetailModal({
   const [newModuleName, setNewModuleName] = useState('');
   const [newModuleType, setNewModuleType] = useState<ModuleType>('software');
 
+  // Fetch real team members
+  const { data: teamMembers = [] } = useTeamMembers();
+  const { profile } = useAuth();
+
   // Sync editedTask when task prop changes or when switching between modes
   useEffect(() => {
     if (task) {
@@ -308,7 +324,14 @@ export function TaskDetailModal({
 
         // Create attachment record in the database if task exists
         let attachmentId = `attachment-${Date.now()}-${Math.random()}`;
-        let uploadedBy = teamMembers[0]; // Mock current user for fallback
+        let uploadedBy: TeamMember = profile ? {
+          id: profile.id,
+          name: profile.name || profile.email,
+          email: profile.email,
+          initials: profile.initials,
+          avatar: profile.avatar_url || undefined,
+          role: profile.role || 'member'
+        } : teamMembers[0]; // Fallback to first team member
 
         if (mode !== 'create' && editedTask.id) {
           try {
@@ -362,7 +385,14 @@ export function TaskDetailModal({
     const newCommentObj: Comment = {
       id: `comment-${Date.now()}`,
       content: newComment,
-      author: teamMembers[0], // Mock current user
+      author: profile ? {
+        id: profile.id,
+        name: profile.name || profile.email,
+        email: profile.email,
+        initials: profile.initials,
+        avatar: profile.avatar_url || undefined,
+        role: profile.role || 'member'
+      } : teamMembers[0], // Fallback to first team member
       createdAt: new Date().toISOString(),
     };
     handleFieldChange('comments', [...comments, newCommentObj]);
@@ -448,6 +478,9 @@ export function TaskDetailModal({
             </Button>
           )}
         </DialogHeader>
+        <DialogDescription className="sr-only">
+          View and edit details for task {task?.title || 'New Task'}
+        </DialogDescription>
 
         <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
           <div className="p-6 space-y-6">
@@ -659,7 +692,7 @@ export function TaskDetailModal({
                       <Calendar
                         mode="single"
                         selected={editedTask.startDate ? new Date(editedTask.startDate) : undefined}
-                        onSelect={(date) => handleFieldChange('startDate', date?.toISOString())}
+                        onSelect={(date) => handleFieldChange('startDate', toDateOnly(date || undefined))}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
@@ -692,7 +725,7 @@ export function TaskDetailModal({
                       <Calendar
                         mode="single"
                         selected={editedTask.dueDate ? new Date(editedTask.dueDate) : undefined}
-                        onSelect={(date) => handleFieldChange('dueDate', date?.toISOString())}
+                        onSelect={(date) => handleFieldChange('dueDate', toDateOnly(date || undefined))}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />

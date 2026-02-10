@@ -32,6 +32,7 @@ function mapDbIssueToIssue(dbIssue: any, assignees: TeamMember[] = [], reportedB
     reportedBy: reportedBy || defaultReporter,
     reportedAt: dbIssue.reported_at || dbIssue.created_at,
     resolvedAt: dbIssue.resolved_at || undefined,
+    dueDate: dbIssue.due_date || undefined,
     assignees,
     attachments: dbIssue.attachments || [],
   };
@@ -236,6 +237,7 @@ export const issuesService = {
         status: issue.status,
         category: issue.category || 'other',
         reported_by: user?.id || null,
+        due_date: issue.dueDate || null,
       })
       .select()
       .single();
@@ -317,6 +319,7 @@ export const issuesService = {
     if (updates.status !== undefined) updateData.status = updates.status;
     if (updates.category !== undefined) updateData.category = updates.category;
     if (updates.resolvedAt !== undefined) updateData.resolved_at = updates.resolvedAt;
+    if (updates.dueDate !== undefined) updateData.due_date = updates.dueDate;
 
     const { data, error } = await supabase
       .from('issues')

@@ -27,7 +27,7 @@ export const queryKeys = {
     details: () => [...queryKeys.projects.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.projects.details(), id] as const,
   },
-  
+
   // Tasks
   tasks: {
     all: ['tasks'] as const,
@@ -37,7 +37,7 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.tasks.details(), id] as const,
     userTasks: (userId: string) => [...queryKeys.tasks.all, 'user', userId] as const,
   },
-  
+
   // Issues
   issues: {
     all: ['issues'] as const,
@@ -47,34 +47,34 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.issues.details(), id] as const,
     openCount: () => [...queryKeys.issues.all, 'openCount'] as const,
   },
-  
+
   // Milestones
   milestones: {
     all: ['milestones'] as const,
     list: (projectId: string) => [...queryKeys.milestones.all, 'list', projectId] as const,
     detail: (id: string) => [...queryKeys.milestones.all, 'detail', id] as const,
   },
-  
+
   // Team
   team: {
     all: ['team'] as const,
     members: () => [...queryKeys.team.all, 'members'] as const,
     workload: () => [...queryKeys.team.all, 'workload'] as const,
   },
-  
+
   // Modules
   modules: {
     all: ['modules'] as const,
     list: (projectId?: string) => [...queryKeys.modules.all, 'list', projectId] as const,
     detail: (id: string) => [...queryKeys.modules.all, 'detail', id] as const,
   },
-  
+
   // Activities
   activities: {
     all: ['activities'] as const,
     byProject: (projectId: string) => [...queryKeys.activities.all, 'project', projectId] as const,
   },
-  
+
   // Dashboard
   dashboard: {
     all: ['dashboard'] as const,
@@ -83,18 +83,25 @@ export const queryKeys = {
     milestones: (limit?: number) => [...queryKeys.dashboard.all, 'milestones', limit] as const,
     projects: () => [...queryKeys.dashboard.all, 'projects'] as const,
   },
-  
+
   // Organizations
   organizations: {
     all: ['organizations'] as const,
     current: () => [...queryKeys.organizations.all, 'current'] as const,
     members: (orgId: string) => [...queryKeys.organizations.all, 'members', orgId] as const,
   },
-  
+
   // Reports
   reports: {
     all: ['reports'] as const,
     kpi: (filters?: Record<string, unknown>) => [...queryKeys.reports.all, 'kpi', filters] as const,
     trends: (filters?: Record<string, unknown>) => [...queryKeys.reports.all, 'trends', filters] as const,
+  },
+
+  // My Day
+  myDay: {
+    all: ['myDay'] as const,
+    tasks: (userId: string) => [...queryKeys.myDay.all, 'tasks', userId] as const,
+    completedToday: (userId: string) => [...queryKeys.myDay.all, 'completedToday', userId] as const,
   },
 };

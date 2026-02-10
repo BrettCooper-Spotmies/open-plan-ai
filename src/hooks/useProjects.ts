@@ -40,7 +40,7 @@ export function useCreateProject() {
 
   return useMutation({
     mutationFn: ({ project, organizationId }: {
-      project: { name: string; description?: string; stage?: string; progress?: number; startDate?: string; targetDate?: string; icon?: string };
+      project: { name: string; description?: string; stage?: string; type?: string; progress?: number; startDate?: string; targetDate?: string; icon?: string };
       organizationId: string;
     }) => projectsService.create(project, organizationId),
     onSuccess: (newProject) => {

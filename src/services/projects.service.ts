@@ -77,6 +77,7 @@ function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: M
     progress: dbProject.progress || 0,
     startDate: dbProject.start_date || '',
     targetDate: dbProject.target_date || '',
+    type: dbProject.type, // Map from DB
     icon: dbProject.icon || '📁',
     tasks,
     milestones,
@@ -122,6 +123,7 @@ function mapDbIssueToIssue(dbIssue: any, assignees: TeamMember[] = [], reportedB
     reportedBy: reportedBy || defaultReporter,
     reportedAt: dbIssue.reported_at || dbIssue.created_at,
     resolvedAt: dbIssue.resolved_at || undefined,
+    dueDate: dbIssue.due_date || undefined,
     assignees,
     attachments: dbIssue.attachments || [],
   };
@@ -144,7 +146,21 @@ export const projectsService = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return (data || []).map(p => mapDbProjectToProject(p));
+
+    // Fetch tasks, milestones, and issues for each project
+    const projectsWithDetails = await Promise.all(
+      (data || []).map(async (project) => {
+        const [tasksResult, milestonesResult, issuesResult] = await Promise.all([
+          this.getTasks(project.id),
+          this.getMilestones(project.id),
+          this.getIssues(project.id),
+        ]);
+
+        return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult);
+      })
+    );
+
+    return projectsWithDetails;
   },
 
   /**
@@ -181,7 +197,7 @@ export const projectsService = {
    * Create new project
    */
   async create(
-    project: { name: string; description?: string; stage?: string; progress?: number; startDate?: string; targetDate?: string; icon?: string },
+    project: { name: string; description?: string; stage?: string; type?: string; progress?: number; startDate?: string; targetDate?: string; icon?: string },
     organizationId: string
   ): Promise<Project> {
     if (USE_MOCK_DATA && !USE_SUPABASE) {
@@ -194,6 +210,7 @@ export const projectsService = {
         progress: project.progress || 0,
         startDate: project.startDate || '',
         targetDate: project.targetDate || '',
+        type: project.type,
         icon: project.icon || '📁',
         tasks: [],
         milestones: [],
@@ -224,6 +241,7 @@ export const projectsService = {
         // Note: icon column requires DB migration - uncomment when applied:
         // icon: project.icon || '📁',
         created_by: user?.id || null,
+        type: project.type, // Add type
       }])
       .select()
       .single();
@@ -260,6 +278,7 @@ export const projectsService = {
         target_date: updates.targetDate,
         // Note: icon column requires DB migration - uncomment when applied:
         // icon: updates.icon,
+        type: updates.type, // Add type update
       })
       .eq('id', id)
       .select()
