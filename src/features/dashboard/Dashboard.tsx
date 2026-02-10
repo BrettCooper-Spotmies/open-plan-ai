@@ -38,12 +38,12 @@ export default function Dashboard() {
     type: activity.activity_type,
     title: activity.description.split(' ').slice(0, 3).join(' '),
     description: activity.description,
-    user: { 
+    user: {
       id: activity.user_id || 'unknown',
-      name: 'Team Member', 
+      name: 'Team Member',
       email: '',
       role: '',
-      initials: 'TM' 
+      initials: 'TM'
     },
     projectId: activity.project_id,
     projectName: '', // Would need to join with projects
@@ -109,7 +109,7 @@ export default function Dashboard() {
             <DashboardStats stats={dashboardStats} />
 
             <div className="grid gap-6 lg:grid-cols-3">
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-2 h-full">
                 <ProjectsOverview projects={projectItems} />
               </div>
               <div className="space-y-6">

@@ -30,7 +30,7 @@ const stageLabels = {
 
 export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
   return (
-    <Card>
+    <Card className="h-full flex flex-col">
       <CardHeader className="pb-3 flex flex-row items-center justify-between">
         <CardTitle className="text-base font-medium">Active Projects</CardTitle>
         <Button variant="ghost" size="sm" asChild>
@@ -40,9 +40,9 @@ export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
           </Link>
         </Button>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 flex-1">
         {projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 text-center animate-fade-in">
+          <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in">
             <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
               <FolderOpen className="h-6 w-6 text-muted-foreground/50" />
             </div>
