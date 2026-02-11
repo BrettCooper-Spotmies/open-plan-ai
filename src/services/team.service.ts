@@ -33,33 +33,80 @@ export const teamService = {
   },
 
   async getByOrganization(orgId: string): Promise<TeamMember[]> {
-    // Get organization members with their profiles
-    const { data: members, error } = await supabase
+    // Step 1: Get organization members
+    const { data: members, error: membersError } = await supabase
       .from('organization_members')
-      .select(`
-        user_id,
-        role,
-        joined_at,
-        profiles!organization_members_user_id_fkey (
-          id,
-          name,
-          email,
-          initials,
-          avatar_url,
-          created_at,
-          updated_at,
-          deleted_at
-        )
-      `)
+      .select('user_id, role, joined_at')
       .eq('organization_id', orgId);
 
-    if (error) throw error;
+    if (membersError) throw membersError;
+    if (!members?.length) return [];
 
-    // Get project counts for each member
+    // Step 2: Get profiles for all member user_ids
+    const userIds = members.map(m => m.user_id);
+
+    // Query profiles - try by 'id' first (migration design: profiles.id = auth.users.id)
+    const { data: profilesData, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, name, email, initials, avatar_url, created_at, updated_at, deleted_at')
+      .in('id', userIds);
+
+    if (profilesError) throw profilesError;
+
+    let resolvedProfiles = profilesData || [];
+
+    // If no profiles found by id, try by user_id column (actual DB may differ)
+    if (resolvedProfiles.length === 0) {
+      const { data: profilesByUserId, error: profilesByUserIdError } = await (supabase
+        .from('profiles') as any)
+        .select('id, user_id, name, email, initials, avatar_url, created_at, updated_at, deleted_at')
+        .in('user_id', userIds);
+
+      if (!profilesByUserIdError && profilesByUserId?.length) {
+        // For user_id-based profiles, we need to map user_id -> profile
+        const userIdProfileMap = new Map<string, any>();
+        for (const p of profilesByUserId) {
+          if (!p.deleted_at) {
+            userIdProfileMap.set(p.user_id, p);
+          }
+        }
+
+        // Build team members using user_id-based map
+        const teamMembers: TeamMember[] = [];
+        for (const member of members) {
+          const profile = userIdProfileMap.get(member.user_id);
+          if (!profile) continue;
+
+          const { count } = await supabase
+            .from('project_members')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', member.user_id);
+
+          teamMembers.push({
+            ...profile,
+            role: member.role,
+            status: 'active' as const,
+            projectCount: count || 0,
+            joinedAt: member.joined_at,
+          });
+        }
+        return teamMembers;
+      }
+    }
+
+    // Build a lookup map: id -> profile (for id-based matching)
+    const profileMap = new Map<string, any>();
+    for (const p of resolvedProfiles) {
+      if (!p.deleted_at) {
+        profileMap.set(p.id, p);
+      }
+    }
+
+    // Step 3: Combine members with profiles and get project counts
     const teamMembers: TeamMember[] = [];
-    
-    for (const member of members || []) {
-      const profile = member.profiles as unknown as Profile;
+
+    for (const member of members) {
+      const profile = profileMap.get(member.user_id);
       if (!profile) continue;
 
       // Count projects the member is part of
@@ -71,7 +118,7 @@ export const teamService = {
       teamMembers.push({
         ...profile,
         role: member.role,
-        status: 'active',
+        status: 'active' as const,
         projectCount: count || 0,
         joinedAt: member.joined_at,
       });

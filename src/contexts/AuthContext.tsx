@@ -9,8 +9,6 @@ interface Profile {
   name: string;
   avatar_url: string | null;
   initials: string;
-  role?: string;
-  bio?: string;
 }
 
 interface AuthContextValue {
@@ -39,19 +37,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch user profile from database
-  const fetchProfile = useCallback(async (userId: string) => {
+  const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
     try {
+      // Try by id first (migration design: profiles.id = auth.users.id)
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, name, avatar_url, initials, role, bio')
+        .select('id, email, name, avatar_url, initials')
         .eq('id', userId)
         .maybeSingle();
 
-      if (error) {
-        console.error('Error fetching profile:', error);
+      if (!error && data) return data as Profile;
+
+      // Fallback: try by user_id column (if DB was set up with a separate user_id)
+      // user_id column exists in the actual DB but not in generated types
+      const { data: data2, error: error2 } = await (supabase
+        .from('profiles') as any)
+        .select('id, email, name, avatar_url, initials')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error2) {
+        console.error('Error fetching profile:', error2);
         return null;
       }
-      return data;
+      return data2 as Profile | null;
     } catch (err) {
       console.error('Error fetching profile:', err);
       return null;
