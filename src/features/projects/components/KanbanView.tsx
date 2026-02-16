@@ -437,12 +437,13 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                           ref={provided.innerRef}
                           {...provided.draggableProps}
                           className={cn(
-                            'w-[280px] flex-shrink-0 space-y-3 transition-shadow',
+                            'w-[280px] flex-shrink-0 flex flex-col transition-shadow',
+                            'max-h-[calc(100vh-220px)]',
                             snapshot.isDragging && 'shadow-lg'
                           )}
                         >
-                          {/* Column Header - Sticky */}
-                          <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
+                          {/* Column Header - stays at top */}
+                          <div className="flex-shrink-0 bg-background pb-3 space-y-3">
                             <div className="flex items-center gap-2 px-1">
                               {!column.isSpecial && (
                                 <div
@@ -494,7 +495,8 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                             )}
                           </div>
 
-                          {/* Tasks Droppable */}
+                          {/* Tasks Droppable - scrollable area */}
+                          <div className="flex-1 overflow-y-auto min-h-0">
                           <Droppable
                             droppableId={column.id}
                             type="TASK"
@@ -638,6 +640,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                               </div>
                             )}
                           </Droppable>
+                          </div>
                         </div>
                       )}
                     </Draggable>
