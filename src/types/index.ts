@@ -153,6 +153,35 @@ export interface Issue {
   blockedBy?: string[];
 }
 
+// My Day unified item type
+export type MyDayItemType = 'task' | 'issue';
+
+export interface MyDayItem {
+  // Common fields
+  id: string;
+  itemType: MyDayItemType;
+  title: string;
+  description?: string;
+  status: TaskStatus | IssueStatus;
+  priority?: Priority | IssueSeverity;
+  assignees: TeamMember[];
+  dueDate?: string;
+  projectId: string;
+  projectName: string;
+
+  // Flags for categorization
+  isOverdue: boolean;
+  isDueToday: boolean;
+  isBlocked: boolean;
+  isBlockingOthers?: boolean;
+  hasUnresolvedDependencies?: boolean;
+
+  // Original item reference (for opening detail modals)
+  originalTask?: Task;
+  originalIssue?: Issue;
+}
+
+
 // Legacy module summary (for backward compatibility)
 export interface ModuleSummary {
   type: ModuleType;
@@ -169,6 +198,7 @@ export interface Project {
   progress: number; // 0-100
   startDate: string;
   targetDate: string;
+  type?: string; // Project Type (e.g., "Hardware Development")
   icon?: string; // Emoji icon for the project
   team: TeamMember[];
   tasks: Task[];

@@ -7,42 +7,89 @@ import { MyDayKanbanView } from './components/MyDayKanbanView';
 import { MyDayListView } from './components/MyDayListView';
 import { MyDayGroupBySelector } from './components/MyDayGroupBySelector';
 import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
+import { IssueDetailModal } from '@/features/projects/components/IssueDetailModal';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { projects, currentUser } from '@/data/mockData';
-import { getUserTasks, categorizeMyDayTasks, MyDayTask } from './utils/myDayUtils';
-import { Task, TaskStatus, MyDayView, MyDayGroupBy } from '@/types';
+import { Skeleton } from '@/components/ui/skeleton';
+import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
+import { Task, Issue, TaskStatus, MyDayView, MyDayGroupBy } from '@/types';
+import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
+import { useUpdateTask } from '@/hooks/useTasks';
+import { useUpdateIssue } from '@/hooks/useIssues';
+import { useProjects } from '@/hooks/useProjects';
+import { toast } from 'sonner';
 
 export default function MyDay() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+  const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
   const [view, setView] = useState<MyDayView>('kanban');
   const [groupBy, setGroupBy] = useState<MyDayGroupBy>('progress');
 
+  // Fetch dynamic data
+  const { data: userTasks = [], isLoading: tasksLoading } = useMyDayTasks();
+  const { data: completedTodayCount = 0 } = useCompletedTodayCount();
+  const { data: projects = [] } = useProjects();
+  const updateTaskMutation = useUpdateTask();
+  const updateIssueMutation = useUpdateIssue();
+
   const allTasks = useMemo(() => {
     return projects.flatMap(p => p.tasks);
-  }, []);
-
-  const userTasks = useMemo(() => {
-    return getUserTasks(projects, currentUser.id);
-  }, []);
+  }, [projects]);
 
   const { needsAttention, readyToWork, waitingBlocked } = useMemo(() => {
-    return categorizeMyDayTasks(userTasks);
+    return categorizeMyDayItems(userTasks);
   }, [userTasks]);
 
-  const completedTodayCount = 0;
-
-  const handleTaskClick = (task: MyDayTask) => {
-    setSelectedTask(task);
-    setIsModalOpen(true);
+  const handleTaskClick = (item: MyDayItem) => {
+    // Only open modal for tasks (issues have their own modal)
+    if (item.itemType === 'task' && item.originalTask) {
+      setSelectedTask(item.originalTask);
+      setIsModalOpen(true);
+    } else if (item.itemType === 'issue' && item.originalIssue) {
+      setSelectedIssue(item.originalIssue);
+      setIsIssueModalOpen(true);
+    }
   };
 
-  const handleStatusUpdate = (_taskId: string, _status: TaskStatus) => {
-    // TODO: Implement status update via store or event
+  const handleStatusUpdate = async (taskId: string, status: TaskStatus) => {
+    // Find the task to get its projectId
+    const task = userTasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    try {
+      await updateTaskMutation.mutateAsync({
+        projectId: task.projectId,
+        taskId,
+        updates: { status },
+      });
+      toast.success('Task status updated');
+    } catch (error) {
+      console.error('Failed to update task status:', error);
+      toast.error('Failed to update task status');
+    }
   };
 
-  const handleChecklistToggle = (_taskId: string, _itemId: string) => {
-    // TODO: Implement checklist toggle via store or event
+  const handleChecklistToggle = async (taskId: string, itemId: string) => {
+    // Find the task to get its projectId and current checklist
+    const item = userTasks.find(t => t.id === taskId);
+    if (!item || item.itemType !== 'task' || !item.originalTask) return;
+
+    const task = item.originalTask;
+    try {
+      const updatedChecklist = (task.checklist || []).map(checklistItem =>
+        checklistItem.id === itemId ? { ...checklistItem, completed: !checklistItem.completed } : checklistItem
+      );
+
+      await updateTaskMutation.mutateAsync({
+        projectId: item.projectId,
+        taskId,
+        updates: { checklist: updatedChecklist },
+      });
+    } catch (error) {
+      console.error('Failed to toggle checklist item:', error);
+      toast.error('Failed to update checklist');
+    }
   };
 
   const handleCloseModal = () => {
@@ -50,7 +97,59 @@ export default function MyDay() {
     setSelectedTask(null);
   };
 
+  const handleCloseIssueModal = () => {
+    setIsIssueModalOpen(false);
+    setSelectedIssue(null);
+  };
+
+  const handleIssueUpdate = async (updatedIssue: Issue) => {
+    try {
+      await updateIssueMutation.mutateAsync({
+        projectId: updatedIssue.projectId,
+        issueId: updatedIssue.id,
+        updates: updatedIssue,
+      });
+      toast.success('Issue updated');
+      // No need to close modal here as IssueDetailModal handles its own state or we might want to keep it open? 
+      // Usually IssueDetailModal calls onUpdate. 
+      // If we want to behave like TaskDetailModal, we just update.
+    } catch (error) {
+      console.error('Failed to update issue:', error);
+      toast.error('Failed to update issue');
+    }
+  };
+
+  // derived data for issue modal
+  const selectedIssueProject = selectedIssue ? projects.find(p => p.id === selectedIssue.projectId) : null;
+  const issueTeamMembers = selectedIssueProject?.team || [];
+  const issueTasks = selectedIssueProject?.tasks || [];
+
   const today = format(new Date(), 'EEEE, MMMM d');
+
+  // Loading state
+  if (tasksLoading) {
+    return (
+      <AppLayout>
+        <div className="grid grid-cols-1 gap-6 w-full min-w-0">
+          <div className="mb-6">
+            <div className="flex items-center gap-3 mb-2">
+              <Skeleton className="h-10 w-10 rounded-lg" />
+              <div>
+                <Skeleton className="h-8 w-32 mb-2" />
+                <Skeleton className="h-4 w-48" />
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => (
+              <Skeleton key={i} className="h-24 rounded-lg" />
+            ))}
+          </div>
+          <Skeleton className="h-96 rounded-lg" />
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -140,6 +239,17 @@ export default function MyDay() {
           onUpdate={(updatedTask) => {
             console.log('Task updated:', updatedTask);
           }}
+        />
+      )}
+
+      {selectedIssue && (
+        <IssueDetailModal
+          issue={selectedIssue}
+          tasks={issueTasks}
+          teamMembers={issueTeamMembers}
+          isOpen={isIssueModalOpen}
+          onClose={handleCloseIssueModal}
+          onUpdate={handleIssueUpdate}
         />
       )}
     </AppLayout>

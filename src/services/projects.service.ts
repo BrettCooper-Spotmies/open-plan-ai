@@ -77,6 +77,7 @@ function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: M
     progress: dbProject.progress || 0,
     startDate: dbProject.start_date || '',
     targetDate: dbProject.target_date || '',
+    type: dbProject.type, // Map from DB
     icon: dbProject.icon || '📁',
     tasks,
     milestones,
@@ -122,6 +123,7 @@ function mapDbIssueToIssue(dbIssue: any, assignees: TeamMember[] = [], reportedB
     reportedBy: reportedBy || defaultReporter,
     reportedAt: dbIssue.reported_at || dbIssue.created_at,
     resolvedAt: dbIssue.resolved_at || undefined,
+    dueDate: dbIssue.due_date || undefined,
     assignees,
     attachments: dbIssue.attachments || [],
   };
@@ -144,7 +146,39 @@ export const projectsService = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return (data || []).map(p => mapDbProjectToProject(p));
+
+    // Fetch tasks, milestones, and issues for each project
+    // Use resilient fetching - if sub-queries fail, still show projects with empty data
+    const projectsWithDetails = await Promise.all(
+      (data || []).map(async (project) => {
+        let tasksResult: Task[] = [];
+        let milestonesResult: Milestone[] = [];
+        let issuesResult: Issue[] = [];
+
+        try {
+          [tasksResult, milestonesResult, issuesResult] = await Promise.all([
+            this.getTasks(project.id).catch(err => {
+              console.error(`Failed to load tasks for project ${project.id}:`, err);
+              return [] as Task[];
+            }),
+            this.getMilestones(project.id).catch(err => {
+              console.error(`Failed to load milestones for project ${project.id}:`, err);
+              return [] as Milestone[];
+            }),
+            this.getIssues(project.id).catch(err => {
+              console.error(`Failed to load issues for project ${project.id}:`, err);
+              return [] as Issue[];
+            }),
+          ]);
+        } catch (err) {
+          console.error(`Failed to load details for project ${project.id}:`, err);
+        }
+
+        return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult);
+      })
+    );
+
+    return projectsWithDetails;
   },
 
   /**
@@ -167,12 +201,29 @@ export const projectsService = {
     if (error) throw error;
     if (!project) return null;
 
-    // Fetch related data in parallel
-    const [tasksResult, milestonesResult, issuesResult] = await Promise.all([
-      this.getTasks(id),
-      this.getMilestones(id),
-      this.getIssues(id),
-    ]);
+    // Fetch related data in parallel with resilient error handling
+    let tasksResult: Task[] = [];
+    let milestonesResult: Milestone[] = [];
+    let issuesResult: Issue[] = [];
+
+    try {
+      [tasksResult, milestonesResult, issuesResult] = await Promise.all([
+        this.getTasks(id).catch(err => {
+          console.error(`Failed to load tasks for project ${id}:`, err);
+          return [] as Task[];
+        }),
+        this.getMilestones(id).catch(err => {
+          console.error(`Failed to load milestones for project ${id}:`, err);
+          return [] as Milestone[];
+        }),
+        this.getIssues(id).catch(err => {
+          console.error(`Failed to load issues for project ${id}:`, err);
+          return [] as Issue[];
+        }),
+      ]);
+    } catch (err) {
+      console.error(`Failed to load details for project ${id}:`, err);
+    }
 
     return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult);
   },
@@ -181,7 +232,7 @@ export const projectsService = {
    * Create new project
    */
   async create(
-    project: { name: string; description?: string; stage?: string; progress?: number; startDate?: string; targetDate?: string; icon?: string },
+    project: { name: string; description?: string; stage?: string; type?: string; progress?: number; startDate?: string; targetDate?: string; icon?: string },
     organizationId: string
   ): Promise<Project> {
     if (USE_MOCK_DATA && !USE_SUPABASE) {
@@ -194,6 +245,7 @@ export const projectsService = {
         progress: project.progress || 0,
         startDate: project.startDate || '',
         targetDate: project.targetDate || '',
+        type: project.type,
         icon: project.icon || '📁',
         tasks: [],
         milestones: [],
@@ -224,6 +276,7 @@ export const projectsService = {
         // Note: icon column requires DB migration - uncomment when applied:
         // icon: project.icon || '📁',
         created_by: user?.id || null,
+        type: project.type, // Add type
       }])
       .select()
       .single();
@@ -260,6 +313,7 @@ export const projectsService = {
         target_date: updates.targetDate,
         // Note: icon column requires DB migration - uncomment when applied:
         // icon: updates.icon,
+        type: updates.type, // Add type update
       })
       .eq('id', id)
       .select()
@@ -282,10 +336,9 @@ export const projectsService = {
       return;
     }
 
-    const { error } = await supabase
-      .from('projects')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id);
+    const { error } = await supabase.rpc('soft_delete_project', {
+      project_id: id
+    });
 
     if (error) throw error;
   },
@@ -300,45 +353,71 @@ export const projectsService = {
       return project?.tasks ? [...project.tasks] : [];
     }
 
+    // Step 1: Fetch tasks with checklists (no FK hints needed - checklists has single FK to tasks)
     const { data, error } = await supabase
       .from('tasks')
-      .select(`
-        *,
-        task_assignees(
-          user_id,
-          profile:profiles!task_assignees_user_id_fkey(id, name, email, avatar_url, initials)
-        ),
-        checklists(*),
-        task_dependencies!task_dependencies_task_id_fkey(depends_on_id),
-        blocked_by:task_dependencies!task_dependencies_depends_on_id_fkey(task_id)
-      `)
+      .select('*, checklists(*)')
       .eq('project_id', projectId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    if (!data || data.length === 0) return [];
 
-    // Fetch attachments for these tasks
-    const taskIds = (data || []).map(t => t.id);
-    const { data: attachmentsData } = await supabase
-      .from('attachments')
-      .select('*, profiles:profiles(id, name, email, initials)')
-      .in('entity_id', taskIds)
-      .eq('entity_type', 'task');
+    const taskIds = data.map(t => t.id);
 
-    return (data || []).map(task => {
-      const taskAttachments = (attachmentsData || []).filter(a => a.entity_id === task.id);
-      const taskWithAttachments = { ...task, attachments: taskAttachments };
+    // Step 2: Fetch assignees, dependencies, and attachments separately (no FK hints)
+    const [assigneesResult, depsResult, attachmentsResult] = await Promise.all([
+      supabase.from('task_assignees').select('task_id, user_id').in('task_id', taskIds),
+      supabase.from('task_dependencies').select('task_id, depends_on_id').in('task_id', taskIds),
+      supabase.from('attachments').select('*').in('entity_id', taskIds).eq('entity_type', 'task'),
+    ]);
 
-      const assignees: TeamMember[] = (task.task_assignees || []).map((ta: any) => ({
-        id: ta.profile?.id || ta.user_id,
-        name: ta.profile?.name || 'Unknown',
-        role: 'member',
-        avatar: ta.profile?.avatar_url || undefined,
-        initials: ta.profile?.initials || 'UN',
-        email: ta.profile?.email || '',
+    // Step 3: Fetch profiles for all referenced user IDs
+    const allUserIds = [...new Set([
+      ...(assigneesResult.data || []).map(a => a.user_id),
+      ...(attachmentsResult.data || []).filter(a => a.uploaded_by).map(a => a.uploaded_by!),
+    ])];
+    let profilesMap: Record<string, any> = {};
+    if (allUserIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials')
+        .in('id', allUserIds);
+      profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
+    }
+
+    // Step 4: Map everything together client-side
+    return data.map(task => {
+      const taskAssigneeRows = (assigneesResult.data || []).filter(a => a.task_id === task.id);
+      const taskDeps = (depsResult.data || []).filter(d => d.task_id === task.id);
+      const taskAttachments = (attachmentsResult.data || []).filter(a => a.entity_id === task.id);
+
+      // Enrich attachments with profile data
+      const enrichedAttachments = taskAttachments.map(a => ({
+        ...a,
+        profiles: a.uploaded_by ? profilesMap[a.uploaded_by] || null : null,
       }));
-      return mapDbTaskToTask(taskWithAttachments, assignees);
+
+      const assignees: TeamMember[] = taskAssigneeRows.map(ta => {
+        const profile = profilesMap[ta.user_id];
+        return {
+          id: profile?.id || ta.user_id,
+          name: profile?.name || 'Unknown',
+          role: 'member' as const,
+          avatar: profile?.avatar_url || undefined,
+          initials: profile?.initials || 'UN',
+          email: profile?.email || '',
+        };
+      });
+
+      const taskWithExtras = {
+        ...task,
+        task_dependencies: taskDeps,
+        attachments: enrichedAttachments,
+      };
+
+      return mapDbTaskToTask(taskWithExtras, assignees);
     });
   },
 
@@ -375,55 +454,73 @@ export const projectsService = {
       return [...projectIssues, ...standaloneIssues];
     }
 
+    // Step 1: Fetch issues without FK hints to profiles
     const { data, error } = await supabase
       .from('issues')
-      .select(`
-        *,
-        reporter:profiles!issues_reported_by_fkey(id, name, email, avatar_url, initials),
-        issue_assignees(
-          user_id,
-          profile:profiles!issue_assignees_user_id_fkey(id, name, email, avatar_url, initials)
-        )
-      `)
+      .select('*')
       .eq('project_id', projectId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    if (!data || data.length === 0) return [];
 
-    // Fetch attachments for these issues in one query
-    const issueIds = (data || []).map(i => i.id);
-    const { data: attachmentsData } = await supabase
-      .from('attachments')
-      .select('*, profiles:profiles(id, name, email, initials)')
-      .in('entity_id', issueIds)
-      .eq('entity_type', 'issue');
+    const issueIds = data.map(i => i.id);
 
-    return (data || []).map(issue => {
-      const issueAttachments = (attachmentsData || []).filter(a => a.entity_id === issue.id);
-      const reporter = issue.reporter ? {
-        id: issue.reporter.id,
-        name: issue.reporter.name,
-        email: issue.reporter.email,
+    // Step 2: Fetch assignees and attachments separately (no FK hints)
+    const [assigneesResult, attachmentsResult] = await Promise.all([
+      supabase.from('issue_assignees').select('issue_id, user_id').in('issue_id', issueIds),
+      supabase.from('attachments').select('*').in('entity_id', issueIds).eq('entity_type', 'issue'),
+    ]);
+
+    // Step 3: Fetch profiles for all referenced user IDs (reporters + assignees + attachment uploaders)
+    const allUserIds = [...new Set([
+      ...data.filter(i => i.reported_by).map(i => i.reported_by!),
+      ...(assigneesResult.data || []).map(a => a.user_id),
+      ...(attachmentsResult.data || []).filter(a => a.uploaded_by).map(a => a.uploaded_by!),
+    ])];
+    let profilesMap: Record<string, any> = {};
+    if (allUserIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials')
+        .in('id', allUserIds);
+      profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
+    }
+
+    // Step 4: Map everything together client-side
+    return data.map(issue => {
+      const issueAssigneeRows = (assigneesResult.data || []).filter(a => a.issue_id === issue.id);
+      const issueAttachments = (attachmentsResult.data || []).filter(a => a.entity_id === issue.id);
+
+      const reporterProfile = issue.reported_by ? profilesMap[issue.reported_by] : null;
+      const reporter = reporterProfile ? {
+        id: reporterProfile.id,
+        name: reporterProfile.name,
+        email: reporterProfile.email,
         role: 'member',
-        avatar: issue.reporter.avatar_url || undefined,
-        initials: issue.reporter.initials,
+        avatar: reporterProfile.avatar_url || undefined,
+        initials: reporterProfile.initials || 'UN',
       } : undefined;
 
-      const assignees: TeamMember[] = (issue.issue_assignees || []).map((ia: any) => ({
-        id: ia.profile?.id || ia.user_id,
-        name: ia.profile?.name || 'Unknown',
-        role: 'member',
-        avatar: ia.profile?.avatar_url || undefined,
-        initials: ia.profile?.initials || 'UN',
-        email: ia.profile?.email || '',
-      }));
+      const assignees: TeamMember[] = issueAssigneeRows.map(ia => {
+        const profile = profilesMap[ia.user_id];
+        return {
+          id: profile?.id || ia.user_id,
+          name: profile?.name || 'Unknown',
+          role: 'member' as const,
+          avatar: profile?.avatar_url || undefined,
+          initials: profile?.initials || 'UN',
+          email: profile?.email || '',
+        };
+      });
 
-      const attachments = (issueAttachments || []).map((a: any) => {
+      const attachments = issueAttachments.map((a: any) => {
         const { data: { publicUrl } } = supabase.storage
           .from('project-files')
           .getPublicUrl(a.file_path);
 
+        const uploaderProfile = a.uploaded_by ? profilesMap[a.uploaded_by] : null;
         return {
           id: a.id,
           filename: a.file_name,
@@ -431,11 +528,11 @@ export const projectsService = {
           fileSize: a.file_size || 0,
           url: publicUrl,
           uploadedAt: a.uploaded_at,
-          uploadedBy: a.profiles ? {
-            id: a.profiles.id,
-            name: a.profiles.name,
-            email: a.profiles.email,
-            initials: a.profiles.initials,
+          uploadedBy: uploaderProfile ? {
+            id: uploaderProfile.id,
+            name: uploaderProfile.name,
+            email: uploaderProfile.email,
+            initials: uploaderProfile.initials || 'UN',
             role: 'member',
           } : { id: a.uploaded_by, name: 'Unknown', email: '', initials: 'UN', role: 'member' }
         };

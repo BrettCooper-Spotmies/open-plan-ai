@@ -1,4 +1,5 @@
-import { Task, Project, TaskStatus } from '@/types';
+import { Task, Project, TaskStatus, Issue, IssueStatus, MyDayItem, MyDayItemType } from '@/types';
+import { parseISO, startOfDay, isSameDay, isBefore, isAfter, addDays, endOfDay } from 'date-fns';
 
 export interface MyDayTask extends Task {
   projectId: string;
@@ -10,6 +11,9 @@ export interface MyDayTask extends Task {
   hasUnresolvedDependencies: boolean;
 }
 
+// Re-export types for convenience
+export type { MyDayItem, MyDayItemType } from '@/types';
+
 export type DueDateStatus = 'overdue' | 'today' | 'upcoming' | 'none';
 
 /**
@@ -17,15 +21,12 @@ export type DueDateStatus = 'overdue' | 'today' | 'upcoming' | 'none';
  */
 export function getDueDateStatus(dueDate?: string): DueDateStatus {
   if (!dueDate) return 'none';
-  
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
-  
-  if (due < today) return 'overdue';
-  if (due.getTime() === today.getTime()) return 'today';
+
+  const today = startOfDay(new Date());
+  const due = startOfDay(parseISO(dueDate));
+
+  if (isBefore(due, today)) return 'overdue';
+  if (isSameDay(due, today)) return 'today';
   return 'upcoming';
 }
 
@@ -33,8 +34,8 @@ export function getDueDateStatus(dueDate?: string): DueDateStatus {
  * Check if a task is blocking other tasks
  */
 export function isBlockingOthers(task: Task, allTasks: Task[]): boolean {
-  return allTasks.some(t => 
-    t.id !== task.id && 
+  return allTasks.some(t =>
+    t.id !== task.id &&
     (t.dependencies.includes(task.id) || t.blockedBy.includes(task.id))
   );
 }
@@ -44,7 +45,7 @@ export function isBlockingOthers(task: Task, allTasks: Task[]): boolean {
  */
 export function hasUnresolvedDependencies(task: Task, allTasks: Task[]): boolean {
   if (task.dependencies.length === 0 && task.blockedBy.length === 0) return false;
-  
+
   const dependencyIds = [...task.dependencies, ...task.blockedBy];
   return dependencyIds.some(depId => {
     const depTask = allTasks.find(t => t.id === depId);
@@ -57,8 +58,8 @@ export function hasUnresolvedDependencies(task: Task, allTasks: Task[]): boolean
  */
 export function getUserTasks(projects: Project[], userId: string): MyDayTask[] {
   const allTasks: Task[] = projects.flatMap(p => p.tasks);
-  
-  return projects.flatMap(project => 
+
+  return projects.flatMap(project =>
     project.tasks
       .filter(task => task.assignees?.some(a => a.id === userId) && task.status !== 'done')
       .map(task => {
@@ -78,6 +79,101 @@ export function getUserTasks(projects: Project[], userId: string): MyDayTask[] {
 }
 
 /**
+ * Get all issues assigned to a user across all projects
+ */
+export function getUserIssues(projects: Project[], userId: string): Issue[] {
+  return projects.flatMap(project =>
+    (project.issues || []).filter(issue =>
+      issue.assignees?.some(a => a.id === userId) &&
+      issue.status !== 'resolved' &&
+      issue.status !== 'closed'
+    )
+  );
+}
+
+/**
+ * Map a Task to MyDayItem
+ */
+export function mapTaskToMyDayItem(task: Task, project: Project, allTasks: Task[]): MyDayItem {
+  const dueDateStatus = getDueDateStatus(task.dueDate);
+
+  return {
+    id: task.id,
+    itemType: 'task',
+    title: task.title,
+    description: task.description,
+    status: task.status,
+    priority: task.priority,
+    assignees: task.assignees || [],
+    dueDate: task.dueDate,
+    projectId: project.id,
+    projectName: project.name,
+    isOverdue: dueDateStatus === 'overdue',
+    isDueToday: dueDateStatus === 'today',
+    isBlocked: task.status === 'blocked' || task.blockedBy.length > 0,
+    isBlockingOthers: isBlockingOthers(task, allTasks),
+    hasUnresolvedDependencies: hasUnresolvedDependencies(task, allTasks),
+    originalTask: task,
+  };
+}
+
+/**
+ * Map an Issue to MyDayItem
+ */
+export function mapIssueToMyDayItem(issue: Issue, project: Project): MyDayItem {
+  const dueDateStatus = getDueDateStatus(issue.dueDate);
+
+  return {
+    id: issue.id,
+    itemType: 'issue',
+    title: issue.title,
+    description: issue.description,
+    status: issue.status,
+    priority: issue.severity,
+    assignees: issue.assignees || [],
+    dueDate: issue.dueDate,
+    projectId: project.id,
+    projectName: project.name,
+    isOverdue: dueDateStatus === 'overdue',
+    isDueToday: dueDateStatus === 'today',
+    isBlocked: issue.status === 'investigating',
+    originalIssue: issue,
+  };
+}
+
+/**
+ * Get all items (tasks and issues) assigned to a user across all projects
+ */
+export function getUserItems(projects: Project[], userId: string): MyDayItem[] {
+  const allTasks: Task[] = projects.flatMap(p => p.tasks);
+  const items: MyDayItem[] = [];
+
+  // Add tasks
+  projects.forEach(project => {
+    project.tasks
+      .filter(task => task.assignees?.some(a => a.id === userId) && task.status !== 'done')
+      .forEach(task => {
+        items.push(mapTaskToMyDayItem(task, project, allTasks));
+      });
+  });
+
+  // Add issues
+  projects.forEach(project => {
+    (project.issues || [])
+      .filter(issue =>
+        issue.assignees?.some(a => a.id === userId) &&
+        issue.status !== 'resolved' &&
+        issue.status !== 'closed'
+      )
+      .forEach(issue => {
+        items.push(mapIssueToMyDayItem(issue, project));
+      });
+  });
+
+  return items;
+}
+
+/**
  * Categorize tasks into My Day sections
  */
 export function categorizeMyDayTasks(tasks: MyDayTask[]): {
@@ -91,7 +187,7 @@ export function categorizeMyDayTasks(tasks: MyDayTask[]): {
 
   for (const task of tasks) {
     // Check if task needs attention
-    const needsAttentionCheck = 
+    const needsAttentionCheck =
       task.isOverdue ||
       task.isDueToday ||
       task.priority === 'critical' ||
@@ -115,9 +211,9 @@ export function categorizeMyDayTasks(tasks: MyDayTask[]): {
     const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
     const priorityDiff = priorityOrder[a.priority] - priorityOrder[b.priority];
     if (priorityDiff !== 0) return priorityDiff;
-    
+
     if (a.dueDate && b.dueDate) {
-      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      return parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime();
     }
     return a.dueDate ? -1 : 1;
   };
@@ -126,6 +222,69 @@ export function categorizeMyDayTasks(tasks: MyDayTask[]): {
     needsAttention: needsAttention.sort(sortTasks),
     readyToWork: readyToWork.sort(sortTasks),
     waitingBlocked: waitingBlocked.sort(sortTasks),
+  };
+}
+
+/**
+ * Categorize items (tasks and issues) into My Day sections
+ */
+export function categorizeMyDayItems(items: MyDayItem[]): {
+  needsAttention: MyDayItem[];
+  readyToWork: MyDayItem[];
+  waitingBlocked: MyDayItem[];
+} {
+  const needsAttention: MyDayItem[] = [];
+  const readyToWork: MyDayItem[] = [];
+  const waitingBlocked: MyDayItem[] = [];
+
+  for (const item of items) {
+    // Check if item needs attention
+    const needsAttentionCheck =
+      item.isOverdue ||
+      item.isDueToday ||
+      item.priority === 'critical' ||
+      item.priority === 'high' ||
+      item.priority === 'major' || // Issue severity
+      item.isBlockingOthers;
+
+    // Check if item is blocked
+    const isBlocked = item.isBlocked || item.hasUnresolvedDependencies;
+
+    if (isBlocked) {
+      waitingBlocked.push(item);
+    } else if (needsAttentionCheck) {
+      needsAttention.push(item);
+    } else {
+      readyToWork.push(item);
+    }
+  }
+
+  // Sort by priority and due date
+  const sortItems = (a: MyDayItem, b: MyDayItem) => {
+    const priorityOrder: Record<string, number> = {
+      critical: 0,
+      high: 1,
+      major: 1, // Issue severity
+      medium: 2,
+      minor: 2, // Issue severity
+      low: 3,
+      trivial: 3, // Issue severity
+    };
+    const aPriority = a.priority || 'low';
+    const bPriority = b.priority || 'low';
+    const priorityDiff = (priorityOrder[aPriority] || 3) - (priorityOrder[bPriority] || 3);
+    if (priorityDiff !== 0) return priorityDiff;
+
+    if (a.dueDate && b.dueDate) {
+      return parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime();
+    }
+    return a.dueDate ? -1 : 1;
+  };
+
+  return {
+    needsAttention: needsAttention.sort(sortItems),
+    readyToWork: readyToWork.sort(sortItems),
+    waitingBlocked: waitingBlocked.sort(sortItems),
   };
 }
 
@@ -165,11 +324,11 @@ export function getPriorityInfo(priority: string): { label: string; color: strin
  */
 export function formatDueDate(dueDate?: string): string {
   if (!dueDate) return 'No due date';
-  
+
   const status = getDueDateStatus(dueDate);
-  const date = new Date(dueDate);
+  const date = parseISO(dueDate);
   const formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  
+
   switch (status) {
     case 'overdue':
       return `Overdue: ${formatted}`;
@@ -180,53 +339,40 @@ export function formatDueDate(dueDate?: string): string {
   }
 }
 
-/**
- * Check if due date is tomorrow
- */
 export function isDueTomorrow(dueDate?: string): boolean {
   if (!dueDate) return false;
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
-  
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
-  
-  return due.getTime() === tomorrow.getTime();
+  const tomorrow = addDays(startOfDay(new Date()), 1);
+  const due = startOfDay(parseISO(dueDate));
+
+  return isSameDay(due, tomorrow);
 }
 
-/**
- * Check if due date is within this week
- */
 export function isDueThisWeek(dueDate?: string): boolean {
   if (!dueDate) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const weekEnd = new Date(today);
-  weekEnd.setDate(weekEnd.getDate() + 7);
-  
-  const due = new Date(dueDate);
-  due.setHours(0, 0, 0, 0);
-  
-  return due > today && due <= weekEnd;
+  const today = startOfDay(new Date());
+  const weekEnd = addDays(today, 7);
+  const due = startOfDay(parseISO(dueDate));
+
+  return isAfter(due, today) && (isBefore(due, weekEnd) || isSameDay(due, weekEnd));
 }
 
 /**
  * Group tasks by project
  */
-export function groupTasksByProject(tasks: MyDayTask[]): Map<string, { name: string; tasks: MyDayTask[] }> {
-  const groups = new Map<string, { name: string; tasks: MyDayTask[] }>();
-  
-  for (const task of tasks) {
-    const existing = groups.get(task.projectId);
+export function groupTasksByProject(tasks: MyDayTask[]): Map<string, { name: string; tasks: MyDayTask[] }>;
+export function groupTasksByProject(items: MyDayItem[]): Map<string, { name: string; tasks: MyDayItem[] }>;
+export function groupTasksByProject(items: MyDayTask[] | MyDayItem[]): Map<string, { name: string; tasks: any[] }> {
+  const groups = new Map<string, { name: string; tasks: any[] }>();
+
+  for (const item of items) {
+    const existing = groups.get(item.projectId);
     if (existing) {
-      existing.tasks.push(task);
+      existing.tasks.push(item);
     } else {
-      groups.set(task.projectId, { name: task.projectName, tasks: [task] });
+      groups.set(item.projectId, { name: item.projectName, tasks: [item] });
     }
   }
-  
+
   return groups;
 }
 
@@ -238,26 +384,38 @@ export function groupTasksByProgress(tasks: MyDayTask[]): {
   notStarted: MyDayTask[];
   inProgress: MyDayTask[];
   completed: MyDayTask[];
+};
+export function groupTasksByProgress(items: MyDayItem[]): {
+  dependency: MyDayItem[];
+  notStarted: MyDayItem[];
+  inProgress: MyDayItem[];
+  completed: MyDayItem[];
+};
+export function groupTasksByProgress(items: MyDayTask[] | MyDayItem[]): {
+  dependency: any[];
+  notStarted: any[];
+  inProgress: any[];
+  completed: any[];
 } {
   const groups = {
-    dependency: [] as MyDayTask[],
-    notStarted: [] as MyDayTask[],
-    inProgress: [] as MyDayTask[],
-    completed: [] as MyDayTask[],
+    dependency: [] as any[],
+    notStarted: [] as any[],
+    inProgress: [] as any[],
+    completed: [] as any[],
   };
-  
-  for (const task of tasks) {
-    if (task.status === 'blocked' || task.isBlocked || task.hasUnresolvedDependencies) {
-      groups.dependency.push(task);
-    } else if (task.status === 'done') {
-      groups.completed.push(task);
-    } else if (task.status === 'in-progress' || task.status === 'review') {
-      groups.inProgress.push(task);
+
+  for (const item of items) {
+    if (item.status === 'blocked' || item.isBlocked || item.hasUnresolvedDependencies) {
+      groups.dependency.push(item);
+    } else if (item.status === 'done' || item.status === 'resolved' || item.status === 'closed') {
+      groups.completed.push(item);
+    } else if (item.status === 'in-progress' || item.status === 'review' || item.status === 'investigating') {
+      groups.inProgress.push(item);
     } else {
-      groups.notStarted.push(task);
+      groups.notStarted.push(item);
     }
   }
-  
+
   return groups;
 }
 
@@ -270,29 +428,43 @@ export function groupTasksByDueDate(tasks: MyDayTask[]): {
   tomorrow: MyDayTask[];
   thisWeek: MyDayTask[];
   later: MyDayTask[];
+};
+export function groupTasksByDueDate(items: MyDayItem[]): {
+  late: MyDayItem[];
+  today: MyDayItem[];
+  tomorrow: MyDayItem[];
+  thisWeek: MyDayItem[];
+  later: MyDayItem[];
+};
+export function groupTasksByDueDate(items: MyDayTask[] | MyDayItem[]): {
+  late: any[];
+  today: any[];
+  tomorrow: any[];
+  thisWeek: any[];
+  later: any[];
 } {
   const groups = {
-    late: [] as MyDayTask[],
-    today: [] as MyDayTask[],
-    tomorrow: [] as MyDayTask[],
-    thisWeek: [] as MyDayTask[],
-    later: [] as MyDayTask[],
+    late: [] as any[],
+    today: [] as any[],
+    tomorrow: [] as any[],
+    thisWeek: [] as any[],
+    later: [] as any[],
   };
-  
-  for (const task of tasks) {
-    if (task.isOverdue) {
-      groups.late.push(task);
-    } else if (task.isDueToday) {
-      groups.today.push(task);
-    } else if (isDueTomorrow(task.dueDate)) {
-      groups.tomorrow.push(task);
-    } else if (isDueThisWeek(task.dueDate)) {
-      groups.thisWeek.push(task);
+
+  for (const item of items) {
+    if (item.isOverdue) {
+      groups.late.push(item);
+    } else if (item.isDueToday) {
+      groups.today.push(item);
+    } else if (isDueTomorrow(item.dueDate)) {
+      groups.tomorrow.push(item);
+    } else if (isDueThisWeek(item.dueDate)) {
+      groups.thisWeek.push(item);
     } else {
-      groups.later.push(task);
+      groups.later.push(item);
     }
   }
-  
+
   return groups;
 }
 
@@ -304,29 +476,44 @@ export function groupTasksByPriority(tasks: MyDayTask[]): {
   important: MyDayTask[];
   medium: MyDayTask[];
   low: MyDayTask[];
+};
+export function groupTasksByPriority(items: MyDayItem[]): {
+  urgent: MyDayItem[];
+  important: MyDayItem[];
+  medium: MyDayItem[];
+  low: MyDayItem[];
+};
+export function groupTasksByPriority(items: MyDayTask[] | MyDayItem[]): {
+  urgent: any[];
+  important: any[];
+  medium: any[];
+  low: any[];
 } {
   const groups = {
-    urgent: [] as MyDayTask[],
-    important: [] as MyDayTask[],
-    medium: [] as MyDayTask[],
-    low: [] as MyDayTask[],
+    urgent: [] as any[],
+    important: [] as any[],
+    medium: [] as any[],
+    low: [] as any[],
   };
-  
-  for (const task of tasks) {
-    switch (task.priority) {
+
+  for (const item of items) {
+    const priority = item.priority || 'low';
+    switch (priority) {
       case 'critical':
-        groups.urgent.push(task);
+        groups.urgent.push(item);
         break;
       case 'high':
-        groups.important.push(task);
+      case 'major': // Issue severity
+        groups.important.push(item);
         break;
       case 'medium':
-        groups.medium.push(task);
+      case 'minor': // Issue severity
+        groups.medium.push(item);
         break;
       default:
-        groups.low.push(task);
+        groups.low.push(item);
     }
   }
-  
+
   return groups;
 }

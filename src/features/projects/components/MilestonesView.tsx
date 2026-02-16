@@ -48,6 +48,7 @@ interface MilestonesViewProps {
   onAddDialogClose?: () => void;
   onMilestoneUpdate?: (milestone: Milestone) => void;
   onMilestoneCreate?: (milestone: Omit<Milestone, 'id'>) => void;
+  onMilestoneDelete?: (milestoneId: string) => void;
   onIssueUpdate?: (issue: Issue) => void;
 }
 
@@ -68,6 +69,7 @@ export function MilestonesView({
   onAddDialogClose,
   onMilestoneUpdate,
   onMilestoneCreate,
+  onMilestoneDelete,
   onIssueUpdate,
 }: MilestonesViewProps) {
   const [expandedMilestones, setExpandedMilestones] = useState<string[]>([]);
@@ -351,6 +353,7 @@ export function MilestonesView({
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
             onUpdate={handleMilestoneUpdateFromModal}
+            onDelete={onMilestoneDelete}
             onIssueUpdate={onIssueUpdate}
           />
         )

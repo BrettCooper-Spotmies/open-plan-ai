@@ -27,9 +27,19 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { teamMembers } from '@/data/mockData';
+import { useTeamMembers } from '@/hooks/useProjects';
 import { format } from 'date-fns';
 import { TaskDetailModal } from './TaskDetailModal';
+
+// Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
+const toDateOnly = (date: Date | undefined | null): string | undefined => {
+  if (!date) return undefined;
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 interface KanbanColumn {
   id: string;
@@ -45,6 +55,7 @@ interface KanbanViewProps {
   issues?: Issue[]; // Issues for blocking indicator
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onTaskUpdate?: (task: Task) => void;
+  onTaskDelete?: (taskId: string) => void;
   modules?: { id: string; name: string; type: ModuleType }[];
   projectId?: string;
   onAddModule?: () => void;
@@ -91,6 +102,7 @@ const columnColorOptions = [
 
 export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskCreate,
   onTaskUpdate,
+  onTaskDelete,
   modules = [],
   projectId,
   onAddModule,
@@ -118,7 +130,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     priority: 'medium' as Priority,
     module: 'software' as ModuleType,
     assignees: [],
-    startDate: new Date().toISOString(),
+    startDate: toDateOnly(new Date()),
     tags: [],
     status: 'todo',
     dependencies: [],
@@ -135,6 +147,9 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       }));
     }
   }, [modules, newTask.moduleId]);
+
+  // Fetch real team members
+  const { data: teamMembers = [] } = useTeamMembers();
 
   // Determine which tasks are blocked
   const blockedTaskIds = useMemo(() => {
@@ -354,7 +369,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       priority: 'medium',
       module: 'software',
       assignees: [],
-      startDate: new Date().toISOString(),
+      startDate: toDateOnly(new Date()),
       tags: [],
       status: 'todo',
       dependencies: [],
@@ -844,7 +859,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                     <Calendar
                       mode="single"
                       selected={newTask.startDate ? new Date(newTask.startDate) : undefined}
-                      onSelect={(date) => setNewTask({ ...newTask, startDate: date?.toISOString() })}
+                      onSelect={(date) => setNewTask({ ...newTask, startDate: toDateOnly(date || undefined) })}
                       initialFocus
                     />
                   </PopoverContent>
@@ -871,7 +886,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                     <Calendar
                       mode="single"
                       selected={newTask.dueDate ? new Date(newTask.dueDate) : undefined}
-                      onSelect={(date) => setNewTask({ ...newTask, dueDate: date?.toISOString() })}
+                      onSelect={(date) => setNewTask({ ...newTask, dueDate: toDateOnly(date || undefined) })}
                       initialFocus
                     />
                   </PopoverContent>
@@ -948,6 +963,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
           setSelectedTask(null);
         }}
         onUpdate={handleTaskUpdate}
+        onDelete={onTaskDelete}
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}

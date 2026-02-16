@@ -32,6 +32,7 @@ function mapDbIssueToIssue(dbIssue: any, assignees: TeamMember[] = [], reportedB
     reportedBy: reportedBy || defaultReporter,
     reportedAt: dbIssue.reported_at || dbIssue.created_at,
     resolvedAt: dbIssue.resolved_at || undefined,
+    dueDate: dbIssue.due_date || undefined,
     assignees,
     attachments: dbIssue.attachments || [],
   };
@@ -48,55 +49,72 @@ export const issuesService = {
       return [...projectIssues, ...mockIssues];
     }
 
+    // Step 1: Fetch issues without FK hints to profiles
     const { data, error } = await supabase
       .from('issues')
-      .select(`
-        *,
-        reporter:profiles!issues_reported_by_fkey(id, name, email, avatar_url, initials),
-        issue_assignees(
-          user_id,
-          profile:profiles!issue_assignees_user_id_fkey(id, name, email, avatar_url, initials)
-        )
-      `)
+      .select('*')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    if (!data || data.length === 0) return [];
 
-    // Fetch attachments for these issues
-    const issueIds = (data || []).map(i => i.id);
-    const { data: attachmentsData } = await supabase
-      .from('attachments')
-      .select('*, profiles:profiles(id, name, email, initials)')
-      .in('entity_id', issueIds)
-      .eq('entity_type', 'issue');
+    const issueIds = data.map(i => i.id);
 
-    return (data || []).map(issue => {
-      const issueAttachments = (attachmentsData || []).filter(a => a.entity_id === issue.id);
+    // Step 2: Fetch assignees and attachments separately (no FK hints)
+    const [assigneesResult, attachmentsResult] = await Promise.all([
+      supabase.from('issue_assignees').select('issue_id, user_id').in('issue_id', issueIds),
+      supabase.from('attachments').select('*').in('entity_id', issueIds).eq('entity_type', 'issue'),
+    ]);
 
-      const reporter = issue.reporter ? {
-        id: issue.reporter.id,
-        name: issue.reporter.name,
-        email: issue.reporter.email,
+    // Step 3: Fetch profiles for all referenced user IDs
+    const allUserIds = [...new Set([
+      ...data.filter(i => i.reported_by).map(i => i.reported_by!),
+      ...(assigneesResult.data || []).map(a => a.user_id),
+      ...(attachmentsResult.data || []).filter(a => a.uploaded_by).map(a => a.uploaded_by!),
+    ])];
+    let profilesMap: Record<string, any> = {};
+    if (allUserIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials')
+        .in('id', allUserIds);
+      profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
+    }
+
+    // Step 4: Map everything together client-side
+    return data.map(issue => {
+      const issueAssigneeRows = (assigneesResult.data || []).filter(a => a.issue_id === issue.id);
+      const issueAttachments = (attachmentsResult.data || []).filter(a => a.entity_id === issue.id);
+
+      const reporterProfile = issue.reported_by ? profilesMap[issue.reported_by] : null;
+      const reporter = reporterProfile ? {
+        id: reporterProfile.id,
+        name: reporterProfile.name,
+        email: reporterProfile.email,
         role: 'member',
-        avatar: issue.reporter.avatar_url || undefined,
-        initials: issue.reporter.initials,
+        avatar: reporterProfile.avatar_url || undefined,
+        initials: reporterProfile.initials || 'UN',
       } as TeamMember : undefined;
 
-      const assignees: TeamMember[] = (issue.issue_assignees || []).map((ia: any) => ({
-        id: ia.profile?.id || ia.user_id,
-        name: ia.profile?.name || 'Unknown',
-        role: 'member',
-        avatar: ia.profile?.avatar_url || undefined,
-        initials: ia.profile?.initials || 'UN',
-        email: ia.profile?.email || '',
-      }));
+      const assignees: TeamMember[] = issueAssigneeRows.map(ia => {
+        const profile = profilesMap[ia.user_id];
+        return {
+          id: profile?.id || ia.user_id,
+          name: profile?.name || 'Unknown',
+          role: 'member' as const,
+          avatar: profile?.avatar_url || undefined,
+          initials: profile?.initials || 'UN',
+          email: profile?.email || '',
+        };
+      });
 
-      const attachments = (issueAttachments || []).map((a: any) => {
+      const attachments = issueAttachments.map((a: any) => {
         const { data: { publicUrl } } = supabase.storage
           .from('project-files')
           .getPublicUrl(a.file_path);
 
+        const uploaderProfile = a.uploaded_by ? profilesMap[a.uploaded_by] : null;
         return {
           id: a.id,
           filename: a.file_name,
@@ -104,11 +122,11 @@ export const issuesService = {
           fileSize: a.file_size || 0,
           url: publicUrl,
           uploadedAt: a.uploaded_at,
-          uploadedBy: a.profiles ? {
-            id: a.profiles.id,
-            name: a.profiles.name,
-            email: a.profiles.email,
-            initials: a.profiles.initials,
+          uploadedBy: uploaderProfile ? {
+            id: uploaderProfile.id,
+            name: uploaderProfile.name,
+            email: uploaderProfile.email,
+            initials: uploaderProfile.initials || 'UN',
             role: 'member',
           } : { id: a.uploaded_by, name: 'Unknown', email: '', initials: 'UN', role: 'member' }
         };
@@ -134,16 +152,10 @@ export const issuesService = {
       return standaloneIssue ? { ...standaloneIssue } : null;
     }
 
+    // Step 1: Fetch issue without FK hints to profiles
     const { data, error } = await supabase
       .from('issues')
-      .select(`
-        *,
-        reporter:profiles!issues_reported_by_fkey(id, name, email, avatar_url, initials),
-        issue_assignees(
-          user_id,
-          profile:profiles!issue_assignees_user_id_fkey(id, name, email, avatar_url, initials)
-        )
-      `)
+      .select('*')
       .eq('id', issueId)
       .is('deleted_at', null)
       .maybeSingle();
@@ -151,36 +163,56 @@ export const issuesService = {
     if (error) throw error;
     if (!data) return null;
 
-    // Fetch attachments for this issue
-    const { data: attachmentsData } = await supabase
-      .from('attachments')
-      .select('*, profiles:profiles(id, name, email, initials)')
-      .eq('entity_id', issueId)
-      .eq('entity_type', 'issue');
+    // Step 2: Fetch assignees and attachments separately
+    const [assigneesResult, attachmentsResult] = await Promise.all([
+      supabase.from('issue_assignees').select('issue_id, user_id').eq('issue_id', issueId),
+      supabase.from('attachments').select('*').eq('entity_id', issueId).eq('entity_type', 'issue'),
+    ]);
 
-    const reporter = data.reporter ? {
-      id: data.reporter.id,
-      name: data.reporter.name,
-      email: data.reporter.email,
+    // Step 3: Fetch profiles for all referenced user IDs
+    const allUserIds = [...new Set([
+      ...(data.reported_by ? [data.reported_by] : []),
+      ...(assigneesResult.data || []).map(a => a.user_id),
+      ...(attachmentsResult.data || []).filter(a => a.uploaded_by).map(a => a.uploaded_by!),
+    ])];
+    let profilesMap: Record<string, any> = {};
+    if (allUserIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials')
+        .in('id', allUserIds);
+      profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
+    }
+
+    // Step 4: Map together
+    const reporterProfile = data.reported_by ? profilesMap[data.reported_by] : null;
+    const reporter = reporterProfile ? {
+      id: reporterProfile.id,
+      name: reporterProfile.name,
+      email: reporterProfile.email,
       role: 'member',
-      avatar: data.reporter.avatar_url || undefined,
-      initials: data.reporter.initials,
+      avatar: reporterProfile.avatar_url || undefined,
+      initials: reporterProfile.initials || 'UN',
     } as TeamMember : undefined;
 
-    const assignees: TeamMember[] = (data.issue_assignees || []).map((ia: any) => ({
-      id: ia.profile?.id || ia.user_id,
-      name: ia.profile?.name || 'Unknown',
-      role: 'member',
-      avatar: ia.profile?.avatar_url || undefined,
-      initials: ia.profile?.initials || 'UN',
-      email: ia.profile?.email || '',
-    }));
+    const assignees: TeamMember[] = (assigneesResult.data || []).map(ia => {
+      const profile = profilesMap[ia.user_id];
+      return {
+        id: profile?.id || ia.user_id,
+        name: profile?.name || 'Unknown',
+        role: 'member' as const,
+        avatar: profile?.avatar_url || undefined,
+        initials: profile?.initials || 'UN',
+        email: profile?.email || '',
+      };
+    });
 
-    const attachments = (attachmentsData || []).map((a: any) => {
+    const attachments = (attachmentsResult.data || []).map((a: any) => {
       const { data: { publicUrl } } = supabase.storage
         .from('project-files')
         .getPublicUrl(a.file_path);
 
+      const uploaderProfile = a.uploaded_by ? profilesMap[a.uploaded_by] : null;
       return {
         id: a.id,
         filename: a.file_name,
@@ -188,11 +220,11 @@ export const issuesService = {
         fileSize: a.file_size || 0,
         url: publicUrl,
         uploadedAt: a.uploaded_at,
-        uploadedBy: a.profiles ? {
-          id: a.profiles.id,
-          name: a.profiles.name,
-          email: a.profiles.email,
-          initials: a.profiles.initials,
+        uploadedBy: uploaderProfile ? {
+          id: uploaderProfile.id,
+          name: uploaderProfile.name,
+          email: uploaderProfile.email,
+          initials: uploaderProfile.initials || 'UN',
           role: 'member',
         } : { id: a.uploaded_by, name: 'Unknown', email: '', initials: 'UN', role: 'member' }
       };
@@ -236,6 +268,7 @@ export const issuesService = {
         status: issue.status,
         category: issue.category || 'other',
         reported_by: user?.id || null,
+        due_date: issue.dueDate || null,
       })
       .select()
       .single();
@@ -317,6 +350,7 @@ export const issuesService = {
     if (updates.status !== undefined) updateData.status = updates.status;
     if (updates.category !== undefined) updateData.category = updates.category;
     if (updates.resolvedAt !== undefined) updateData.resolved_at = updates.resolvedAt;
+    if (updates.dueDate !== undefined) updateData.due_date = updates.dueDate;
 
     const { data, error } = await supabase
       .from('issues')
@@ -394,10 +428,7 @@ export const issuesService = {
       return;
     }
 
-    const { error } = await supabase
-      .from('issues')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', issueId);
+    const { error } = await supabase.rpc('soft_delete_issue', { issue_id: issueId });
 
     if (error) throw error;
   },

@@ -19,9 +19,15 @@ export function UpcomingMilestones({ milestones }: UpcomingMilestonesProps) {
       </CardHeader>
       <CardContent className="space-y-3">
         {milestones.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No upcoming milestones
-          </p>
+          <div className="flex flex-col items-center justify-center py-6 text-center animate-fade-in">
+            <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+              <Calendar className="h-5 w-5 text-muted-foreground/50" />
+            </div>
+            <h3 className="text-sm font-medium text-foreground">No upcoming milestones</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+              You don't have any milestones coming up soon.
+            </p>
+          </div>
         ) : (
           milestones.map((milestone) => {
             const dueDate = new Date(milestone.date);
@@ -36,10 +42,10 @@ export function UpcomingMilestones({ milestones }: UpcomingMilestonesProps) {
                   milestone.completed
                     ? 'bg-muted/30 border-muted'
                     : isOverdue
-                    ? 'bg-destructive/5 border-destructive/20'
-                    : isUpcoming
-                    ? 'bg-chart-4/5 border-chart-4/20'
-                    : 'bg-card border-border'
+                      ? 'bg-destructive/5 border-destructive/20'
+                      : isUpcoming
+                        ? 'bg-chart-4/5 border-chart-4/20'
+                        : 'bg-card border-border'
                 )}
               >
                 <div className="flex items-start justify-between gap-2">

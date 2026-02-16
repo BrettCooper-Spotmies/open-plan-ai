@@ -82,6 +82,7 @@ const EditProject = () => {
     // Form state
     const [projectName, setProjectName] = useState("");
     const [projectDescription, setProjectDescription] = useState("");
+    const [projectType, setProjectType] = useState("");
     const [projectStage, setProjectStage] = useState("");
     const [projectEmoji, setProjectEmoji] = useState("📁");
     const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
@@ -103,6 +104,7 @@ const EditProject = () => {
         if (project) {
             setProjectName(project.name || "");
             setProjectDescription(project.description || "");
+            setProjectType(project.type || "");
             setProjectStage(project.stage || "concept");
             setProjectEmoji(project.icon || "📁");
             if (project.startDate) {
@@ -227,6 +229,7 @@ const EditProject = () => {
                 updates: {
                     name: projectName,
                     description: projectDescription,
+                    type: projectType,
                     stage: projectStage as any,
                     icon: projectEmoji,
                     startDate: startDate?.toISOString().split('T')[0],
@@ -378,6 +381,24 @@ const EditProject = () => {
                                         className="flex-1"
                                     />
                                 </div>
+                            </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="projectType">Project Type</Label>
+                                <Select value={projectType} onValueChange={setProjectType}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {projectTypes.map((type) => (
+                                            <SelectItem key={type} value={type}>
+                                                {type}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="projectStage">Project Stage</Label>
@@ -613,7 +634,7 @@ const EditProject = () => {
                     </CardContent>
                 </Card>
             </div>
-        </AppLayout>
+        </AppLayout >
     );
 };
 

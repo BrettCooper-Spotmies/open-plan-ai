@@ -7,7 +7,8 @@ import {
   ArrowRight,
   AlertCircle,
   AlertTriangle,
-  CheckCircle
+  CheckCircle,
+  Activity as ActivityIcon
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity } from '@/types';
@@ -46,51 +47,63 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
         <CardTitle className="text-base font-medium">Recent Activity</CardTitle>
       </CardHeader>
       <CardContent className="space-y-1">
-        {activities.map((activity) => {
-          const Icon = activityIcons[activity.type];
-          const colorClass = activityColors[activity.type];
+        {activities.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center animate-fade-in">
+            <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+              <ActivityIcon className="h-5 w-5 text-muted-foreground/50" />
+            </div>
+            <h3 className="text-sm font-medium text-foreground">No recent activity</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+              Recent project updates will appear here.
+            </p>
+          </div>
+        ) : (
+          activities.map((activity) => {
+            const Icon = activityIcons[activity.type];
+            const colorClass = activityColors[activity.type];
 
-          return (
-            <div
-              key={activity.id}
-              className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0"
-            >
-              {/* Left: Subtle status icon */}
-              <div className={cn(
-                'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
-                colorClass
-              )}>
-                <Icon className="h-4 w-4" />
-              </div>
+            return (
+              <div
+                key={activity.id}
+                className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0"
+              >
+                {/* Left: Subtle status icon */}
+                <div className={cn(
+                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
+                  colorClass
+                )}>
+                  <Icon className="h-4 w-4" />
+                </div>
 
-              {/* Center: Content */}
-              <div className="flex-1 min-w-0">
-                {/* Primary: Actor name (bold) + action text */}
-                <p className="text-sm leading-snug break-words">
-                  <span className="font-semibold">{activity.user.name}</span>
-                  {' '}
-                  <span className="text-muted-foreground text-foreground/80">{activity.description}</span>
-                </p>
+                {/* Center: Content */}
+                <div className="flex-1 min-w-0">
+                  {/* Primary: Actor name (bold) + action text */}
+                  <p className="text-sm leading-snug break-words">
+                    <span className="font-semibold">{activity.user.name}</span>
+                    {' '}
+                    <span className="text-muted-foreground text-foreground/80">{activity.description}</span>
+                  </p>
 
-                {/* Secondary: Project name & Timestamp row */}
-                <div className="flex items-center justify-between mt-1.5 gap-2">
-                  {activity.projectName ? (
-                    <p className="text-xs text-muted-foreground truncate">
-                      in{' '}
-                      <span className="text-primary hover:underline cursor-pointer font-medium">
-                        {activity.projectName}
-                      </span>
-                    </p>
-                  ) : <div></div>}
+                  {/* Secondary: Project name & Timestamp row */}
+                  <div className="flex items-center justify-between mt-1.5 gap-2">
+                    {activity.projectName ? (
+                      <p className="text-xs text-muted-foreground truncate">
+                        in{' '}
+                        <span className="text-primary hover:underline cursor-pointer font-medium">
+                          {activity.projectName}
+                        </span>
+                      </p>
+                    ) : <div></div>}
 
-                  <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
-                    {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
-                  </span>
+                    <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
+                      {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </CardContent>
     </Card>
   );

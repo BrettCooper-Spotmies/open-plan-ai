@@ -2,6 +2,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -20,6 +22,7 @@ interface IssueDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (issue: Issue) => void;
+  onDelete?: (issueId: string) => void;
   mode?: 'view' | 'create';
   onCreate?: (issue: Issue) => void;
 }
@@ -38,6 +41,7 @@ export function IssueDetailModal({
   isOpen,
   onClose,
   onUpdate,
+  onDelete,
   mode = 'view',
   onCreate,
 }: IssueDetailModalProps) {
@@ -84,6 +88,10 @@ export function IssueDetailModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden">
+        <DialogTitle className="sr-only">Issue Details</DialogTitle>
+        <DialogDescription className="sr-only">
+          View and edit details for issue {issue?.title || 'New Issue'}
+        </DialogDescription>
         <ScrollArea className="flex-1 overflow-y-auto">
           <div className="p-6">
             <IssueDetailContent
@@ -91,6 +99,8 @@ export function IssueDetailModal({
               tasks={tasks}
               teamMembers={teamMembers}
               onUpdate={onUpdate}
+              onDelete={mode === 'create' ? undefined : onDelete}
+              isDraft={mode === 'create'}
               onExpand={mode === 'create' ? undefined : () => {
                 const pathParts = window.location.pathname.split('/');
                 const projectIndex = pathParts.indexOf('projects');

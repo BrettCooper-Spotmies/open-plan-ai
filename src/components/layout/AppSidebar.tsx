@@ -1,7 +1,19 @@
-import { useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, Zap, Sun } from 'lucide-react';
+import { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, Zap, Sun, ChevronsUpDown, Check, Plus, Building2, Loader2 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { OrganizationSettings } from '@/services/organizations.service';
+import { toast } from 'sonner';
+
 const mainNavItems = [{
   title: 'My Day',
   url: '/my-day',
@@ -23,6 +35,7 @@ const mainNavItems = [{
   url: '/reports',
   icon: BarChart3
 }];
+
 const teamNavItems = [{
   title: 'Team',
   url: '/team',
@@ -32,69 +45,267 @@ const teamNavItems = [{
   url: '/settings',
   icon: Settings
 }];
+
 export function AppSidebar() {
-  const {
-    state
-  } = useSidebar();
+  const { state } = useSidebar();
   const collapsed = state === 'collapsed';
   const location = useLocation();
+  const navigate = useNavigate();
+  const { organizations, currentOrganization, setCurrentOrganization, createOrganization, isLoading: orgLoading } = useOrganization();
+
+  const [orgPopoverOpen, setOrgPopoverOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [newOrgForm, setNewOrgForm] = useState({ name: '', description: '' });
+
+  const orgSettings = (currentOrganization?.settings || {}) as OrganizationSettings;
+  const orgLogo = orgSettings.logoUrl;
+  const companyName = orgSettings.companyName;
+
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
   };
-  return <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-      <SidebarHeader className="p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Zap className="h-4 w-4" />
+
+  const handleSelectOrg = (org: typeof currentOrganization) => {
+    if (org) {
+      setCurrentOrganization(org);
+      setOrgPopoverOpen(false);
+      navigate('/');
+    }
+  };
+
+  const handleCreateOrg = async () => {
+    if (!newOrgForm.name.trim()) {
+      toast.error('Organization name is required');
+      return;
+    }
+    setIsCreating(true);
+    try {
+      await createOrganization(newOrgForm.name, newOrgForm.description);
+      toast.success('Organization created successfully');
+      setNewOrgForm({ name: '', description: '' });
+      setCreateDialogOpen(false);
+      setOrgPopoverOpen(false);
+      navigate('/');
+    } catch (error) {
+      console.error('Error creating organization:', error);
+      toast.error('Failed to create organization');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <>
+      <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+        {/* Organization Switcher at top */}
+        <SidebarHeader className="p-2">
+          <Popover open={orgPopoverOpen} onOpenChange={setOrgPopoverOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className={`flex items-center w-full rounded-lg border border-sidebar-border bg-sidebar-accent/30 hover:bg-sidebar-accent/60 transition-colors cursor-pointer ${collapsed ? 'justify-center p-1.5' : 'gap-2 p-2'}`}
+                aria-label="Switch organization"
+              >
+                {/* Org Logo / Fallback */}
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 border border-primary/20 overflow-hidden">
+                  {orgLogo ? (
+                    <img src={orgLogo} alt="Org logo" className="h-full w-full object-cover" />
+                  ) : (
+                    <Building2 className="h-3.5 w-3.5 text-primary" />
+                  )}
+                </div>
+
+                {!collapsed && (
+                  <>
+                    <div className="flex flex-col items-start min-w-0 flex-1">
+                      <span className="font-semibold text-sm text-sidebar-foreground truncate w-full text-left">
+                        {currentOrganization?.name || 'No Organization'}
+                      </span>
+                      {companyName && (
+                        <span className="text-[10px] text-muted-foreground truncate w-full text-left">
+                          {companyName}
+                        </span>
+                      )}
+                    </div>
+                    <ChevronsUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  </>
+                )}
+              </button>
+            </PopoverTrigger>
+
+            <PopoverContent
+              className="w-64 p-0"
+              side="right"
+              align="start"
+              sideOffset={8}
+            >
+              <div className="px-3 py-2.5">
+                <p className="text-sm font-medium text-foreground">Organizations</p>
+                <p className="text-xs text-muted-foreground">Switch or create an organization</p>
+              </div>
+              <Separator />
+              <div className="max-h-[240px] overflow-y-auto py-1">
+                {orgLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : organizations.length === 0 ? (
+                  <div className="px-3 py-4 text-center">
+                    <p className="text-sm text-muted-foreground">No organizations yet</p>
+                  </div>
+                ) : (
+                  organizations.map((org) => {
+                    const settings = (org.settings || {}) as OrganizationSettings;
+                    const isSelected = currentOrganization?.id === org.id;
+                    return (
+                      <button
+                        key={org.id}
+                        onClick={() => handleSelectOrg(org)}
+                        className={`flex items-center gap-3 w-full px-3 py-2 text-left transition-colors hover:bg-accent/50 ${isSelected ? 'bg-accent' : ''}`}
+                      >
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 border border-primary/20 overflow-hidden">
+                          {settings.logoUrl ? (
+                            <img src={settings.logoUrl} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <Building2 className="h-3.5 w-3.5 text-primary" />
+                          )}
+                        </div>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="text-sm font-medium truncate">{org.name}</span>
+                          {settings.companyName && (
+                            <span className="text-[11px] text-muted-foreground truncate">{settings.companyName}</span>
+                          )}
+                        </div>
+                        {isSelected && (
+                          <Check className="h-4 w-4 text-primary shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+              <Separator />
+              <div className="p-1.5">
+                <button
+                  onClick={() => {
+                    setOrgPopoverOpen(false);
+                    setCreateDialogOpen(true);
+                  }}
+                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create new organization
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </SidebarHeader>
+
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs font-medium text-muted-foreground px-4">
+              {!collapsed && 'Main'}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {mainNavItems.map(item => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={collapsed ? item.title : undefined}>
+                      <NavLink to={item.url} end={item.url === '/'} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        {!collapsed && <span>{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          <SidebarGroup className="mt-4">
+            <SidebarGroupLabel className="text-xs font-medium text-muted-foreground px-4">
+              {!collapsed && 'Organization'}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {teamNavItems.map(item => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={collapsed ? item.title : undefined}>
+                      <NavLink to={item.url} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        {!collapsed && <span>{item.title}</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+
+        {/* OpenPlan AI branding at bottom */}
+        <SidebarFooter className="p-3">
+          <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground shrink-0">
+              <Zap className="h-3.5 w-3.5" />
+            </div>
+            {!collapsed && (
+              <div className="flex flex-col">
+                <span className="font-semibold text-xs text-sidebar-foreground">OpenPlan AI</span>
+                <span className="text-[10px] text-muted-foreground">© 2026 OpenPlanAI</span>
+              </div>
+            )}
           </div>
-          {!collapsed && <div className="flex flex-col">
-              <span className="font-semibold text-sm text-sidebar-foreground">OpenPlan AI</span>
-              <span className="text-xs text-muted-foreground">Hardware Development</span>
-            </div>}
-        </div>
-      </SidebarHeader>
+        </SidebarFooter>
+      </Sidebar>
 
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-medium text-muted-foreground px-4">
-            {!collapsed && 'Main'}
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNavItems.map(item => <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={collapsed ? item.title : undefined}>
-                    <NavLink to={item.url} end={item.url === '/'} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>)}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        <SidebarGroup className="mt-4">
-          <SidebarGroupLabel className="text-xs font-medium text-muted-foreground px-4">
-            {!collapsed && 'Workspace'}
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {teamNavItems.map(item => <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={collapsed ? item.title : undefined}>
-                    <NavLink to={item.url} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      {!collapsed && <span>{item.title}</span>}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>)}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-
-      <SidebarFooter className="p-4">
-        {!collapsed && <div className="text-xs text-muted-foreground">© 2026 OpenPlanAI</div>}
-      </SidebarFooter>
-    </Sidebar>;
+      {/* Create Organization Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Create New Organization</DialogTitle>
+            <DialogDescription>
+              Set up a new organization to manage your projects and team.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="new-org-name">Organization Name *</Label>
+              <Input
+                id="new-org-name"
+                value={newOrgForm.name}
+                onChange={(e) => setNewOrgForm({ ...newOrgForm, name: e.target.value })}
+                placeholder="e.g. My Company"
+                autoFocus
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-org-desc">Description (optional)</Label>
+              <Textarea
+                id="new-org-desc"
+                value={newOrgForm.description}
+                onChange={(e) => setNewOrgForm({ ...newOrgForm, description: e.target.value })}
+                placeholder="Brief description of your organization"
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={isCreating}>
+              Cancel
+            </Button>
+            <Button onClick={handleCreateOrg} disabled={isCreating || !newOrgForm.name.trim()}>
+              {isCreating ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Building2 className="h-4 w-4 mr-2" />
+              )}
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }

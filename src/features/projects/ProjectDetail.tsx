@@ -27,15 +27,20 @@ import { IssuesView } from './components/IssuesView';
 import { ProjectDetailSkeleton } from './components/ProjectDetailSkeleton';
 import { ProjectProgressPopover } from './components/ProjectProgressPopover';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
+import { useUpdateProject } from '@/hooks/useProjects';
 import { useTeamMembers } from '@/hooks/useProjectTeam';
 import {
   useCreateTask,
   useUpdateTask,
+  useDeleteTask,
   useCreateIssue,
   useUpdateIssue,
+  useDeleteIssue,
   useCreateMilestone,
   useUpdateMilestone,
+  useDeleteMilestone,
   useCreateModule,
+  useDeleteModule,
 } from '@/hooks/useProjectMutations';
 import { cn } from '@/lib/utils';
 import { calculateProjectProgress } from './utils/projectUtils';
@@ -333,11 +338,16 @@ export default function ProjectDetail() {
   // Mutation hooks
   const createTaskMutation = useCreateTask(id || '');
   const updateTaskMutation = useUpdateTask(id || '');
+  const deleteTaskMutation = useDeleteTask(id || '');
   const createIssueMutation = useCreateIssue(id || '');
   const updateIssueMutation = useUpdateIssue(id || '');
+  const deleteIssueMutation = useDeleteIssue(id || '');
   const createMilestoneMutation = useCreateMilestone(id || '');
   const updateMilestoneMutation = useUpdateMilestone(id || '');
+  const deleteMilestoneMutation = useDeleteMilestone(id || '');
   const createModuleMutation = useCreateModule(id || '');
+  const deleteModuleMutation = useDeleteModule(id || '');
+  const updateProjectMutation = useUpdateProject();
 
   // Update section from URL params
   useEffect(() => {
@@ -409,6 +419,20 @@ export default function ProjectDetail() {
       project?.issues || []
     );
   }, [project?.tasks, project?.milestones, modules, project?.issues]);
+
+  // Sync calculated progress with project progress
+  useEffect(() => {
+    if (
+      project &&
+      progressBreakdown.overallProgress !== project.progress &&
+      !updateProjectMutation.isPending
+    ) {
+      updateProjectMutation.mutate({
+        id: project.id,
+        updates: { progress: progressBreakdown.overallProgress }
+      });
+    }
+  }, [project, progressBreakdown.overallProgress, updateProjectMutation]);
 
   // Filter tasks by search query
   const filteredTasks = useMemo(() => {
@@ -516,6 +540,22 @@ export default function ProjectDetail() {
       taskId: updatedTask.id,
       updates: updatedTask,
     });
+  };
+
+  const handleTaskDelete = (taskId: string) => {
+    deleteTaskMutation.mutate(taskId);
+  };
+
+  const handleModuleDelete = (moduleId: string) => {
+    deleteModuleMutation.mutate(moduleId);
+  };
+
+  const handleMilestoneDelete = (milestoneId: string) => {
+    deleteMilestoneMutation.mutate(milestoneId);
+  };
+
+  const handleIssueDelete = (issueId: string) => {
+    deleteIssueMutation.mutate(issueId);
   };
 
   // Loading state
@@ -687,6 +727,7 @@ export default function ProjectDetail() {
               onFiltersChange={setFilters}
               onTaskCreate={handleTaskCreate}
               onTaskUpdate={handleTaskUpdate}
+              onTaskDelete={handleTaskDelete}
               onAddModule={handleAddModule}
             />
           </TabsContent>
@@ -702,6 +743,7 @@ export default function ProjectDetail() {
               isAddDialogOpen={isAddModuleDialogOpen}
               onAddDialogClose={() => setIsAddModuleDialogOpen(false)}
               onModuleAdd={handleModuleAdd}
+              onModuleDelete={handleModuleDelete}
               onTaskUpdate={handleTaskUpdate}
               onIssueUpdate={handleIssueUpdate}
             />
@@ -717,6 +759,7 @@ export default function ProjectDetail() {
               onAddDialogClose={() => setIsAddMilestoneDialogOpen(false)}
               onMilestoneUpdate={handleMilestoneUpdate}
               onMilestoneCreate={handleMilestoneCreate}
+              onMilestoneDelete={handleMilestoneDelete}
               onIssueUpdate={handleIssueUpdate}
             />
           </TabsContent>
@@ -734,6 +777,7 @@ export default function ProjectDetail() {
               onAddDialogClose={() => setIsAddIssueDialogOpen(false)}
               onIssueCreate={handleIssueCreate}
               onIssueUpdate={handleIssueUpdate}
+              onIssueDelete={handleIssueDelete}
             />
           </TabsContent>
         </Tabs>

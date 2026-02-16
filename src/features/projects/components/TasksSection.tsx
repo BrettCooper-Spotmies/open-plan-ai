@@ -25,6 +25,7 @@ interface TasksSectionProps {
   onFiltersChange?: (filters: TaskFilter) => void;
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onTaskUpdate?: (task: Task) => void;
+  onTaskDelete?: (taskId: string) => void;
   onAddModule?: () => void;
 }
 
@@ -150,6 +151,7 @@ export function TasksSection({
   onFiltersChange: externalOnFiltersChange,
   onTaskCreate,
   onTaskUpdate,
+  onTaskDelete,
   onAddModule,
 }: TasksSectionProps) {
   const [internalViewMode, setInternalViewMode] = useState<TaskViewMode>('kanban');
@@ -311,6 +313,7 @@ export function TasksSection({
             issues={issues}
             onTaskCreate={onTaskCreate}
             onTaskUpdate={onTaskUpdate}
+            onTaskDelete={onTaskDelete}
             modules={modules}
             onAddModule={onAddModule}
           />
@@ -323,6 +326,7 @@ export function TasksSection({
             modules={modules}
             onTaskCreate={onTaskCreate}
             onTaskUpdate={onTaskUpdate}
+            onTaskDelete={onTaskDelete}
             onAddModule={onAddModule}
           />
         )}

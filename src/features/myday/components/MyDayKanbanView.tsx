@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
+import { format, parseISO } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { GripVertical, Check } from 'lucide-react';
+import { GripVertical, Check, CheckSquare, Bug } from 'lucide-react';
 import {
-  MyDayTask,
+  MyDayItem,
   groupTasksByProject,
   groupTasksByProgress,
   groupTasksByDueDate,
@@ -18,13 +19,13 @@ interface KanbanColumn {
   id: string;
   label: string;
   color: string;
-  tasks: MyDayTask[];
+  tasks: MyDayItem[];
 }
 
 interface MyDayKanbanViewProps {
-  tasks: MyDayTask[];
+  tasks: MyDayItem[];
   groupBy: MyDayGroupBy;
-  onTaskClick: (task: MyDayTask) => void;
+  onTaskClick: (item: MyDayItem) => void;
   onStatusUpdate: (taskId: string, status: TaskStatus) => void;
   onChecklistToggle: (taskId: string, itemId: string) => void;
 }
@@ -213,7 +214,9 @@ export function MyDayKanbanView({
                                       {...provided.dragHandleProps}
                                       className={cn(
                                         'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
-                                        moduleColors[task.module as keyof typeof moduleColors] || 'border-l-muted',
+                                        task.itemType === 'task' && task.originalTask?.module
+                                          ? moduleColors[task.originalTask.module as keyof typeof moduleColors] || 'border-l-muted'
+                                          : 'border-l-muted',
                                         snapshot.isDragging && 'shadow-lg rotate-2'
                                       )}
                                       onMouseEnter={() => setHoveredTask(task.id)}
@@ -223,7 +226,7 @@ export function MyDayKanbanView({
                                       <div className="space-y-2">
                                         <div className="flex items-start justify-between gap-2">
                                           <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
-                                            {task.status !== 'done' && (
+                                            {task.status !== 'done' && task.status !== 'resolved' && task.status !== 'closed' && (
                                               <div
                                                 className={cn(
                                                   "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
@@ -241,21 +244,44 @@ export function MyDayKanbanView({
                                             <h4
                                               className={cn(
                                                 "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
-                                                task.status !== 'done' && hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
+                                                task.status !== 'done' && task.status !== 'resolved' && task.status !== 'closed' && hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
                                               )}
                                             >
                                               {task.title}
                                             </h4>
                                           </div>
-                                          <Badge
-                                            variant="secondary"
-                                            className={cn(
-                                              'text-[10px] px-1.5 py-0 shrink-0',
-                                              priorityColors[task.priority]
-                                            )}
-                                          >
-                                            {task.priority}
-                                          </Badge>
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            {/* Item Type Badge */}
+                                            <Badge
+                                              variant="outline"
+                                              className={cn(
+                                                'text-[9px] px-1 py-0 h-4 flex items-center gap-0.5',
+                                                task.itemType === 'task' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'
+                                              )}
+                                            >
+                                              {task.itemType === 'task' ? (
+                                                <>
+                                                  <CheckSquare className="h-2.5 w-2.5" />
+                                                  <span>Task</span>
+                                                </>
+                                              ) : (
+                                                <>
+                                                  <Bug className="h-2.5 w-2.5" />
+                                                  <span>Issue</span>
+                                                </>
+                                              )}
+                                            </Badge>
+                                            {/* Priority Badge */}
+                                            <Badge
+                                              variant="secondary"
+                                              className={cn(
+                                                'text-[10px] px-1.5 py-0',
+                                                priorityColors[task.priority as keyof typeof priorityColors]
+                                              )}
+                                            >
+                                              {task.priority}
+                                            </Badge>
+                                          </div>
                                         </div>
 
                                         {task.description && (
@@ -274,10 +300,7 @@ export function MyDayKanbanView({
                                           )}
                                           {task.dueDate && (
                                             <span className="text-[10px] text-muted-foreground">
-                                              {new Date(task.dueDate).toLocaleDateString('en-US', {
-                                                month: 'short',
-                                                day: 'numeric',
-                                              })}
+                                              {format(parseISO(task.dueDate), 'MMM d')}
                                             </span>
                                           )}
                                         </div>

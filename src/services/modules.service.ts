@@ -68,10 +68,7 @@ export const modulesService = {
   },
 
   async delete(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('modules')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id);
+    const { error } = await supabase.rpc('soft_delete_module', { module_id: id });
 
     if (error) throw error;
   },

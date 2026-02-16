@@ -49,6 +49,7 @@ interface IssuesViewProps {
   onAddDialogClose?: () => void;
   onIssueUpdate?: (issue: Issue) => void;
   onIssueCreate?: (issue: Partial<Issue>) => void;
+  onIssueDelete?: (issueId: string) => void;
 }
 
 const severityConfig: Record<IssueSeverity, { color: string; icon: typeof AlertTriangle; label: string }> = {
@@ -89,6 +90,7 @@ export function IssuesView({
   onAddDialogClose,
   onIssueUpdate,
   onIssueCreate,
+  onIssueDelete,
 }: IssuesViewProps) {
   const navigate = useNavigate();
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
@@ -300,6 +302,7 @@ export function IssuesView({
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onUpdate={handleIssueUpdateFromModal}
+        onDelete={onIssueDelete}
         mode={modalMode}
         onCreate={handleCreateSubmit}
       />

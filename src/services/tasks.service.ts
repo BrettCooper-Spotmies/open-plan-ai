@@ -78,44 +78,69 @@ export const tasksService = {
       return mockProjects.flatMap(p => p.tasks);
     }
 
+    // Step 1: Fetch tasks with checklists (no FK hints needed)
     const { data, error } = await supabase
       .from('tasks')
-      .select(`
-        *,
-        task_assignees(
-          user_id,
-          profile:profiles!task_assignees_user_id_fkey(id, name, email, avatar_url, initials)
-        ),
-        checklists(*),
-        task_dependencies!task_dependencies_task_id_fkey(depends_on_id),
-        blocked_by:task_dependencies!task_dependencies_depends_on_id_fkey(task_id)
-      `)
+      .select('*, checklists(*)')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    if (!data || data.length === 0) return [];
 
-    // Fetch attachments for these tasks
-    const taskIds = data?.map(t => t.id) || [];
-    const { data: attachmentsData } = await supabase
-      .from('attachments')
-      .select('*, profiles:profiles(id, name, email, initials)')
-      .in('entity_id', taskIds)
-      .eq('entity_type', 'task');
+    const taskIds = data.map(t => t.id);
 
-    return (data || []).map(task => {
-      const taskAttachments = attachmentsData?.filter(a => a.entity_id === task.id) || [];
-      const taskWithAttachments = { ...task, attachments: taskAttachments };
+    // Step 2: Fetch assignees, dependencies, and attachments separately (no FK hints)
+    const [assigneesResult, depsResult, attachmentsResult] = await Promise.all([
+      supabase.from('task_assignees').select('task_id, user_id').in('task_id', taskIds),
+      supabase.from('task_dependencies').select('task_id, depends_on_id').in('task_id', taskIds),
+      supabase.from('attachments').select('*').in('entity_id', taskIds).eq('entity_type', 'task'),
+    ]);
 
-      const assignees: TeamMember[] = (task.task_assignees || []).map((ta: any) => ({
-        id: ta.profile?.id || ta.user_id,
-        name: ta.profile?.name || 'Unknown',
-        role: 'member',
-        avatar: ta.profile?.avatar_url || undefined,
-        initials: ta.profile?.initials || 'UN',
-        email: ta.profile?.email || '',
+    // Step 3: Fetch profiles for all referenced user IDs
+    const allUserIds = [...new Set([
+      ...(assigneesResult.data || []).map(a => a.user_id),
+      ...(attachmentsResult.data || []).filter(a => a.uploaded_by).map(a => a.uploaded_by!),
+    ])];
+    let profilesMap: Record<string, any> = {};
+    if (allUserIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials')
+        .in('id', allUserIds);
+      profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
+    }
+
+    // Step 4: Map everything together client-side
+    return data.map(task => {
+      const taskAssigneeRows = (assigneesResult.data || []).filter(a => a.task_id === task.id);
+      const taskDeps = (depsResult.data || []).filter(d => d.task_id === task.id);
+      const taskAttachments = (attachmentsResult.data || []).filter(a => a.entity_id === task.id);
+
+      const enrichedAttachments = taskAttachments.map(a => ({
+        ...a,
+        profiles: a.uploaded_by ? profilesMap[a.uploaded_by] || null : null,
       }));
-      return mapDbTaskToTask(taskWithAttachments, assignees);
+
+      const assignees: TeamMember[] = taskAssigneeRows.map(ta => {
+        const profile = profilesMap[ta.user_id];
+        return {
+          id: profile?.id || ta.user_id,
+          name: profile?.name || 'Unknown',
+          role: 'member' as const,
+          avatar: profile?.avatar_url || undefined,
+          initials: profile?.initials || 'UN',
+          email: profile?.email || '',
+        };
+      });
+
+      const taskWithExtras = {
+        ...task,
+        task_dependencies: taskDeps,
+        attachments: enrichedAttachments,
+      };
+
+      return mapDbTaskToTask(taskWithExtras, assignees);
     });
   },
 
@@ -132,18 +157,10 @@ export const tasksService = {
       return null;
     }
 
+    // Step 1: Fetch task with checklists (no FK hints)
     const { data, error } = await supabase
       .from('tasks')
-      .select(`
-        *,
-        task_assignees(
-          user_id,
-          profile:profiles!task_assignees_user_id_fkey(id, name, email, avatar_url, initials)
-        ),
-        checklists(*),
-        task_dependencies!task_dependencies_task_id_fkey(depends_on_id),
-        blocked_by:task_dependencies!task_dependencies_depends_on_id_fkey(task_id)
-      `)
+      .select('*, checklists(*)')
       .eq('id', taskId)
       .is('deleted_at', null)
       .maybeSingle();
@@ -151,25 +168,52 @@ export const tasksService = {
     if (error) throw error;
     if (!data) return null;
 
-    // Fetch attachments for this task
-    const { data: attachmentsData } = await supabase
-      .from('attachments')
-      .select('*, profiles:profiles(id, name, email, initials)')
-      .eq('entity_id', taskId)
-      .eq('entity_type', 'task');
+    // Step 2: Fetch assignees, dependencies, and attachments separately
+    const [assigneesResult, depsResult, attachmentsResult] = await Promise.all([
+      supabase.from('task_assignees').select('task_id, user_id').eq('task_id', taskId),
+      supabase.from('task_dependencies').select('task_id, depends_on_id').eq('task_id', taskId),
+      supabase.from('attachments').select('*').eq('entity_id', taskId).eq('entity_type', 'task'),
+    ]);
 
-    const taskWithAttachments = { ...data, attachments: attachmentsData || [] };
+    // Step 3: Fetch profiles for all referenced user IDs
+    const allUserIds = [...new Set([
+      ...(assigneesResult.data || []).map(a => a.user_id),
+      ...(attachmentsResult.data || []).filter(a => a.uploaded_by).map(a => a.uploaded_by!),
+    ])];
+    let profilesMap: Record<string, any> = {};
+    if (allUserIds.length > 0) {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials')
+        .in('id', allUserIds);
+      profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
+    }
 
-    const assignees: TeamMember[] = (data.task_assignees || []).map((ta: any) => ({
-      id: ta.profile?.id || ta.user_id,
-      name: ta.profile?.name || 'Unknown',
-      role: 'member',
-      avatar: ta.profile?.avatar_url || undefined,
-      initials: ta.profile?.initials || 'UN',
-      email: ta.profile?.email || '',
+    // Step 4: Map together
+    const enrichedAttachments = (attachmentsResult.data || []).map(a => ({
+      ...a,
+      profiles: a.uploaded_by ? profilesMap[a.uploaded_by] || null : null,
     }));
 
-    return mapDbTaskToTask(taskWithAttachments, assignees);
+    const assignees: TeamMember[] = (assigneesResult.data || []).map(ta => {
+      const profile = profilesMap[ta.user_id];
+      return {
+        id: profile?.id || ta.user_id,
+        name: profile?.name || 'Unknown',
+        role: 'member' as const,
+        avatar: profile?.avatar_url || undefined,
+        initials: profile?.initials || 'UN',
+        email: profile?.email || '',
+      };
+    });
+
+    const taskWithExtras = {
+      ...data,
+      task_dependencies: depsResult.data || [],
+      attachments: enrichedAttachments,
+    };
+
+    return mapDbTaskToTask(taskWithExtras, assignees);
   },
 
   /**
@@ -399,10 +443,7 @@ export const tasksService = {
       return;
     }
 
-    const { error } = await supabase
-      .from('tasks')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', taskId);
+    const { error } = await supabase.rpc('soft_delete_task', { task_id: taskId });
 
     if (error) throw error;
   },

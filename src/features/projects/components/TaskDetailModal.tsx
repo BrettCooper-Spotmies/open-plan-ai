@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format } from 'date-fns';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,7 +72,18 @@ import {
   Attachment,
   Comment,
 } from '@/types';
-import { teamMembers } from '@/data/mockData';
+import { useTeamMembers } from '@/hooks/useProjects';
+import { useAuth } from '@/contexts/AuthContext';
+
+// Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
+const toDateOnly = (date: Date | undefined | null): string | undefined => {
+  if (!date) return undefined;
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 interface TaskDetailModalProps {
   task: Task | null;
@@ -79,6 +91,7 @@ interface TaskDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (task: Task) => void;
+  onDelete?: (taskId: string) => void;
   mode?: 'view' | 'create';
   onCreate?: (task: Task) => void;
   modules?: { id: string; name: string; type: ModuleType }[];
@@ -193,6 +206,7 @@ export function TaskDetailModal({
   isOpen,
   onClose,
   onUpdate,
+  onDelete,
   mode = 'view',
   onCreate,
   modules = [],
@@ -215,10 +229,25 @@ export function TaskDetailModal({
   const [newModuleName, setNewModuleName] = useState('');
   const [newModuleType, setNewModuleType] = useState<ModuleType>('software');
 
-  // Sync editedTask when task prop changes
-  if (task && editedTask?.id !== task.id) {
-    setEditedTask(task);
-  }
+  // Fetch real team members
+  const { data: teamMembers = [] } = useTeamMembers();
+  const { profile } = useAuth();
+
+  // Sync editedTask when task prop changes or when switching between modes
+  useEffect(() => {
+    if (task) {
+      setEditedTask(task);
+    }
+  }, [task, isOpen, mode]); // Re-sync when modal opens, mode changes, or task changes
+
+  // Dependencies handlers
+  // Compute "Blocking To" client-side - tasks that have THIS task in their blockedBy
+  const blockingToTaskIds = useMemo(() => {
+    if (!editedTask) return [];
+    return allTasks
+      .filter(task => task.blockedBy.includes(editedTask.id))
+      .map(task => task.id);
+  }, [allTasks, editedTask?.id]);
 
   if (!editedTask) return null;
 
@@ -295,7 +324,14 @@ export function TaskDetailModal({
 
         // Create attachment record in the database if task exists
         let attachmentId = `attachment-${Date.now()}-${Math.random()}`;
-        let uploadedBy = teamMembers[0]; // Mock current user for fallback
+        let uploadedBy: TeamMember = profile ? {
+          id: profile.id,
+          name: profile.name || profile.email,
+          email: profile.email,
+          initials: profile.initials,
+          avatar: profile.avatar_url || undefined,
+          role: profile.role || 'member'
+        } : teamMembers[0]; // Fallback to first team member
 
         if (mode !== 'create' && editedTask.id) {
           try {
@@ -349,20 +385,21 @@ export function TaskDetailModal({
     const newCommentObj: Comment = {
       id: `comment-${Date.now()}`,
       content: newComment,
-      author: teamMembers[0], // Mock current user
+      author: profile ? {
+        id: profile.id,
+        name: profile.name || profile.email,
+        email: profile.email,
+        initials: profile.initials,
+        avatar: profile.avatar_url || undefined,
+        role: profile.role || 'member'
+      } : teamMembers[0], // Fallback to first team member
       createdAt: new Date().toISOString(),
     };
     handleFieldChange('comments', [...comments, newCommentObj]);
     setNewComment('');
   };
 
-  // Dependencies handlers
-  // Compute "Blocking To" client-side - tasks that have THIS task in their blockedBy
-  const blockingToTaskIds = useMemo(() => {
-    return allTasks
-      .filter(task => task.blockedBy.includes(editedTask.id))
-      .map(task => task.id);
-  }, [allTasks, editedTask.id]);
+
 
   const availableTasksForBlocking = allTasks.filter(
     t => t.id !== editedTask.id && !blockingToTaskIds.includes(t.id)
@@ -418,12 +455,32 @@ export function TaskDetailModal({
 
   const getTaskById = (id: string) => allTasks.find(t => t.id === id);
 
+  const handleDelete = () => {
+    if (onDelete && editedTask && editedTask.id && window.confirm('Are you sure you want to delete this task?')) {
+      onDelete(editedTask.id);
+      onClose();
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0">
         <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between">
           <DialogTitle>{mode === 'create' ? 'Add New Task' : 'Task Details'}</DialogTitle>
+          {mode !== 'create' && onDelete && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleDelete}
+              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </DialogHeader>
+        <DialogDescription className="sr-only">
+          View and edit details for task {task?.title || 'New Task'}
+        </DialogDescription>
 
         <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
           <div className="p-6 space-y-6">
@@ -635,7 +692,7 @@ export function TaskDetailModal({
                       <Calendar
                         mode="single"
                         selected={editedTask.startDate ? new Date(editedTask.startDate) : undefined}
-                        onSelect={(date) => handleFieldChange('startDate', date?.toISOString())}
+                        onSelect={(date) => handleFieldChange('startDate', toDateOnly(date || undefined))}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
@@ -668,7 +725,7 @@ export function TaskDetailModal({
                       <Calendar
                         mode="single"
                         selected={editedTask.dueDate ? new Date(editedTask.dueDate) : undefined}
-                        onSelect={(date) => handleFieldChange('dueDate', date?.toISOString())}
+                        onSelect={(date) => handleFieldChange('dueDate', toDateOnly(date || undefined))}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
