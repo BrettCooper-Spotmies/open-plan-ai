@@ -12,13 +12,24 @@ export interface TeamMember extends Profile {
   joinedAt: string | null;
 }
 
+export interface TeamInvitation {
+  id: string;
+  organization_id: string;
+  email: string;
+  role: string;
+  token: string;
+  invited_by: string | null;
+  status: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+}
+
 export const teamService = {
   async getAll(): Promise<TeamMember[]> {
-    // Get current user's organization
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    // Get the user's organization membership
     const { data: memberships, error: membershipError } = await supabase
       .from('organization_members')
       .select('organization_id')
@@ -33,7 +44,6 @@ export const teamService = {
   },
 
   async getByOrganization(orgId: string): Promise<TeamMember[]> {
-    // Step 1: Get organization members
     const { data: members, error: membersError } = await supabase
       .from('organization_members')
       .select('user_id, role, joined_at')
@@ -42,10 +52,8 @@ export const teamService = {
     if (membersError) throw membersError;
     if (!members?.length) return [];
 
-    // Step 2: Get profiles for all member user_ids
     const userIds = members.map(m => m.user_id);
 
-    // Query profiles - try by 'id' first (migration design: profiles.id = auth.users.id)
     const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
       .select('id, name, email, initials, avatar_url, created_at, updated_at, deleted_at')
@@ -53,63 +61,19 @@ export const teamService = {
 
     if (profilesError) throw profilesError;
 
-    let resolvedProfiles = profilesData || [];
-
-    // If no profiles found by id, try by user_id column (actual DB may differ)
-    if (resolvedProfiles.length === 0) {
-      const { data: profilesByUserId, error: profilesByUserIdError } = await (supabase
-        .from('profiles') as any)
-        .select('id, user_id, name, email, initials, avatar_url, created_at, updated_at, deleted_at')
-        .in('user_id', userIds);
-
-      if (!profilesByUserIdError && profilesByUserId?.length) {
-        // For user_id-based profiles, we need to map user_id -> profile
-        const userIdProfileMap = new Map<string, any>();
-        for (const p of profilesByUserId) {
-          if (!p.deleted_at) {
-            userIdProfileMap.set(p.user_id, p);
-          }
-        }
-
-        // Build team members using user_id-based map
-        const teamMembers: TeamMember[] = [];
-        for (const member of members) {
-          const profile = userIdProfileMap.get(member.user_id);
-          if (!profile) continue;
-
-          const { count } = await supabase
-            .from('project_members')
-            .select('*', { count: 'exact', head: true })
-            .eq('user_id', member.user_id);
-
-          teamMembers.push({
-            ...profile,
-            role: member.role,
-            status: 'active' as const,
-            projectCount: count || 0,
-            joinedAt: member.joined_at,
-          });
-        }
-        return teamMembers;
-      }
-    }
-
-    // Build a lookup map: id -> profile (for id-based matching)
     const profileMap = new Map<string, any>();
-    for (const p of resolvedProfiles) {
+    for (const p of (profilesData || [])) {
       if (!p.deleted_at) {
         profileMap.set(p.id, p);
       }
     }
 
-    // Step 3: Combine members with profiles and get project counts
     const teamMembers: TeamMember[] = [];
 
     for (const member of members) {
       const profile = profileMap.get(member.user_id);
       if (!profile) continue;
 
-      // Count projects the member is part of
       const { count } = await supabase
         .from('project_members')
         .select('*', { count: 'exact', head: true })
@@ -140,14 +104,12 @@ export const teamService = {
       throw error;
     }
 
-    // Get membership info
     const { data: membership } = await supabase
       .from('organization_members')
       .select('role, joined_at')
       .eq('user_id', id)
       .single();
 
-    // Get project count
     const { count } = await supabase
       .from('project_members')
       .select('*', { count: 'exact', head: true })
@@ -163,10 +125,54 @@ export const teamService = {
   },
 
   async invite(email: string, role: string, orgId: string): Promise<void> {
-    // This would typically send an invitation email
-    // For now, we'll just log the intent
-    console.log('Inviting user:', { email, role, orgId });
-    // In production, this would call an edge function to send the invite
+    const { data, error } = await supabase.functions.invoke('send-team-invite', {
+      body: { email, role, orgId },
+    });
+
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    if (data?.warning) {
+      console.warn('Invite warning:', data.warning);
+    }
+  },
+
+  async getPendingInvitations(orgId: string): Promise<TeamInvitation[]> {
+    const { data, error } = await supabase
+      .from('team_invitations' as any)
+      .select('*')
+      .eq('organization_id', orgId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return (data || []) as unknown as TeamInvitation[];
+  },
+
+  async cancelInvitation(invitationId: string): Promise<void> {
+    const { error } = await supabase
+      .from('team_invitations' as any)
+      .update({ status: 'cancelled' })
+      .eq('id', invitationId);
+
+    if (error) throw error;
+  },
+
+  async getInvitationByToken(token: string): Promise<TeamInvitation | null> {
+    const { data, error } = await supabase.functions.invoke('accept-invite', {
+      body: { token, action: 'get' },
+    });
+    // We won't use this — the signup page will just store the token
+    // and call accept-invite after signup
+    return null;
+  },
+
+  async acceptInvitation(token: string): Promise<void> {
+    const { data, error } = await supabase.functions.invoke('accept-invite', {
+      body: { token },
+    });
+
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
   },
 
   async updateRole(memberId: string, role: string, orgId: string): Promise<void> {

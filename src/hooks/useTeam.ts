@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { teamService, type TeamMember } from '@/services/team.service';
+import { teamService, type TeamMember, type TeamInvitation } from '@/services/team.service';
 import { queryKeys } from '@/lib/queryClient';
 
 export function useTeamMembers() {
@@ -25,12 +25,42 @@ export function useTeamMember(memberId: string) {
   });
 }
 
+export function usePendingInvitations(orgId: string) {
+  return useQuery({
+    queryKey: [...queryKeys.team.all, 'invitations', orgId] as const,
+    queryFn: () => teamService.getPendingInvitations(orgId),
+    enabled: !!orgId,
+  });
+}
+
 export function useInviteTeamMember() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ email, role, orgId }: { email: string; role: string; orgId: string }) =>
       teamService.invite(email, role, orgId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.team.all });
+    },
+  });
+}
+
+export function useCancelInvitation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (invitationId: string) => teamService.cancelInvitation(invitationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.team.all });
+    },
+  });
+}
+
+export function useAcceptInvitation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (token: string) => teamService.acceptInvitation(token),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.team.all });
     },
@@ -61,4 +91,4 @@ export function useRemoveTeamMember() {
   });
 }
 
-export type { TeamMember };
+export type { TeamMember, TeamInvitation };
