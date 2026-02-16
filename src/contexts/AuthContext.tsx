@@ -9,6 +9,8 @@ interface Profile {
   name: string;
   avatar_url: string | null;
   initials: string;
+  role: string | null;
+  bio: string | null;
 }
 
 interface AuthContextValue {
@@ -42,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Try by id first (migration design: profiles.id = auth.users.id)
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, name, avatar_url, initials')
+        .select('id, email, name, avatar_url, initials, role, bio')
         .eq('id', userId)
         .maybeSingle();
 
@@ -52,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // user_id column exists in the actual DB but not in generated types
       const { data: data2, error: error2 } = await (supabase
         .from('profiles') as any)
-        .select('id, email, name, avatar_url, initials')
+        .select('id, email, name, avatar_url, initials, role, bio')
         .eq('user_id', userId)
         .maybeSingle();
 
