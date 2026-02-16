@@ -443,7 +443,10 @@ export const tasksService = {
       return;
     }
 
-    const { error } = await supabase.rpc('soft_delete_task', { task_id: taskId });
+    const { error } = await supabase
+      .from('tasks')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', taskId);
 
     if (error) throw error;
   },
