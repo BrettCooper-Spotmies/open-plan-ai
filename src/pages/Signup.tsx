@@ -246,6 +246,7 @@ const Signup = () => {
                     required
                     readOnly={isInviteSignup}
                     disabled={isLoading}
+                    autoComplete={isInviteSignup ? "off" : "email"}
                   />
                 </div>
               </div>
