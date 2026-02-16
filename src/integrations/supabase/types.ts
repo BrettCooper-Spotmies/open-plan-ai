@@ -687,6 +687,7 @@ export type Database = {
           stage: Database["public"]["Enums"]["project_stage"]
           start_date: string | null
           target_date: string | null
+          type: string | null
           updated_at: string | null
         }
         Insert: {
@@ -701,6 +702,7 @@ export type Database = {
           stage?: Database["public"]["Enums"]["project_stage"]
           start_date?: string | null
           target_date?: string | null
+          type?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -715,6 +717,7 @@ export type Database = {
           stage?: Database["public"]["Enums"]["project_stage"]
           start_date?: string | null
           target_date?: string | null
+          type?: string | null
           updated_at?: string | null
         }
         Relationships: [
