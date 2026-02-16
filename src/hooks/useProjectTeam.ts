@@ -23,25 +23,38 @@ export function useOrganizationMembers(orgId: string | undefined) {
     queryFn: async (): Promise<TeamMember[]> => {
       if (!orgId) return [];
       
-      const { data, error } = await supabase
+      // Fetch members first
+      const { data: members, error: membersError } = await supabase
         .from('organization_members')
-        .select(`
-          user_id,
-          role,
-          profile:profiles(id, name, email, avatar_url, initials)
-        `)
+        .select('user_id, role')
         .eq('organization_id', orgId);
 
-      if (error) throw error;
+      if (membersError) throw membersError;
+      if (!members?.length) return [];
 
-      return (data || []).map((m: any) => ({
-        id: m.profile?.id || m.user_id,
-        name: m.profile?.name || 'Unknown',
-        email: m.profile?.email || '',
-        role: m.role || 'member',
-        avatar: m.profile?.avatar_url || undefined,
-        initials: m.profile?.initials || 'UN',
-      }));
+      const userIds = members.map(m => m.user_id);
+
+      // Fetch profiles separately to avoid ambiguous FK join
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials')
+        .in('id', userIds);
+
+      if (profilesError) throw profilesError;
+
+      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+
+      return members.map((m) => {
+        const profile = profileMap.get(m.user_id);
+        return {
+          id: profile?.id || m.user_id,
+          name: profile?.name || 'Unknown',
+          email: profile?.email || '',
+          role: m.role || 'member',
+          avatar: profile?.avatar_url || undefined,
+          initials: profile?.initials || 'UN',
+        };
+      });
     },
     enabled: !!orgId,
   });
