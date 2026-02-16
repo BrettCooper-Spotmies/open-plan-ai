@@ -1,85 +1,73 @@
-# Two-Part Fix: Org-Scoped Data + Manage Member Organization Access
 
-## Part 1: Scope Dashboard and My Day Data to Current Organization
 
-### Problem
+# Fix: Team Page Issues (5 Modifications)
 
-The Dashboard service (`dashboard.service.ts`) picks the **first** organization membership instead of using the currently selected organization. Tasks, issues, activities, and milestones are fetched without filtering by the active org's projects, causing cross-org data leakage. My Day relies on `useProjects()` which was already fixed, but the dashboard queries are independent and still broken.
+## Issues Identified
 
-### Changes
+1. **Team members not loading in project creation** - The `useOrganizationMembers` hook works but may return empty if the `profiles` join fails due to RLS. The `teamMembers` data from this hook is used in the Select dropdown.
 
-`**src/services/dashboard.service.ts**` — Accept `orgId` parameter instead of auto-detecting it:
+2. **"Create new organization" visible to members** - The sidebar org switcher shows the "Create new organization" button to all users regardless of role. Need to check the user's role in the current org and hide it for `member` role.
 
-- `getStats(orgId)` — use provided orgId; scope tasks/issues/milestones queries to projects within that org using `project_id IN (select id from projects where organization_id = orgId)`
-- `getRecentActivity(limit, orgId)` — filter activities by project_id belonging to the org
-- `getUpcomingMilestones(limit, orgId)` — filter milestones by project_id belonging to the org
-- `getProjectSummaries(orgId)` — use provided orgId instead of auto-detecting
+3. **Projects showing 0, Department blank** - The `teamService.getByOrganization()` fetches `projectCount` per member but the `profiles` table has no `department` column. The `department` field on `TeamMember` is always `undefined`. The "Active" count shows 0 because the status is hardcoded as `'active'` but the stats filter compares against it — this is actually a display issue since status is always `'active'`, so "Active" should match "Total". Looking at the screenshot: Active shows 0 which means members are returned but the `status` field comparison might be off. Actually, looking at the code, `status` is hardcoded to `'active' as const` in the service, so `stats.active` should work. The issue is likely that the `teamService.getAll()` is fetching members from the first org membership rather than the current org. The `useTeamMembers()` hook from `useTeam.ts` calls `teamService.getAll()` which auto-detects org instead of using the current org from context.
 
-`**src/hooks/useDashboard.ts**` — Read `currentOrganization` from context and pass `orgId` to each service call. Include `orgId` in query keys so cache invalidates on org switch.
+4. **Remove "Send Mail" option** - Remove the "Send Email" dropdown menu item from both grid and list views.
 
-`**src/lib/queryClient.ts**` — Update dashboard query key factories to include orgId:
+5. **Edit team member popup** - Currently the "Edit" dropdown item does nothing. Need to add an edit dialog with editable Department and Role fields, and a read-only Email field.
 
+## Plan
+
+### 1. Fix team members loading in project creation
+
+The `useOrganizationMembers` hook in `useProjectTeam.ts` uses a joined query. If there's an RLS issue with the join, it could return empty. Will verify the hook works correctly and add error handling/logging.
+
+### 2. Hide "Create new organization" for members
+
+In `AppSidebar.tsx`, check the current user's role in the current organization. If the role is `member`, hide the "Create new organization" button. This requires fetching the user's membership role from the `organization_members` table or from the already-loaded team members data.
+
+**Approach**: Use the `organizationsService.getMembers()` or query the current user's role from `organization_members` table. Since the sidebar already has `useOrganization()` context, we'll add a check using the current user's org membership role.
+
+### 3. Fix Projects count and Department
+
+**Projects count**: The `useTeamMembers()` hook calls `teamService.getAll()` which auto-detects the org. Need to update it to use the current organization from context, similar to how we fixed projects scoping.
+
+**Department**: The `profiles` table does not have a `department` column. We need to add a `department` column to either:
+- The `profiles` table (user-level department), OR
+- The `organization_members` table (per-org department assignment)
+
+Best approach: Add `department` to `organization_members` so a user can have different departments in different orgs. Then update `teamService.getByOrganization()` to read the department from the membership record.
+
+**Active count**: Will also fix the `useTeamMembers` hook in Team.tsx to pass the current org ID so members are scoped correctly.
+
+### 4. Remove "Send Email" option
+
+Remove the `<DropdownMenuItem>` for "Send Email" from both the `MemberCard` component (grid view, line ~197-200) and the list view (line ~533-536) in `Team.tsx`.
+
+### 5. Add Edit Team Member Dialog
+
+Create an edit dialog that opens when clicking "Edit" on a team member. The dialog will have:
+- **Email** field (read-only/disabled)
+- **Department** field (editable, dropdown with predefined departments)
+- **Role** field (editable, dropdown: member/admin)
+- Save button that updates `organization_members` (role, department)
+
+## Technical Details
+
+### Database Migration
+```sql
+ALTER TABLE public.organization_members 
+  ADD COLUMN IF NOT EXISTS department text;
+
+NOTIFY pgrst, 'reload schema';
 ```
-dashboard: {
-  all: ['dashboard'] as const,
-  stats: (orgId?: string) => [..., 'stats', orgId],
-  activity: (orgId?: string, limit?: number) => [..., 'activity', orgId, limit],
-  milestones: (orgId?: string, limit?: number) => [..., 'milestones', orgId, limit],
-  projects: (orgId?: string) => [..., 'projects', orgId],
-}
-```
 
-**My Day** — Already works correctly since it depends on `useProjects()` which is now org-scoped. No changes needed.
+### Files to Change
 
----
+| File | Change |
+|------|--------|
+| `supabase/migrations/...` | Add `department` column to `organization_members` |
+| `src/features/team/Team.tsx` | Remove "Send Email" items, add edit dialog with department/role fields and read-only email, wire up "Edit" button |
+| `src/hooks/useTeam.ts` | Update `useTeamMembers` to accept orgId param; add `useUpdateTeamMember` for editing |
+| `src/services/team.service.ts` | Update `getByOrganization()` to include `department` from `organization_members`; add `updateMember()` for department+role |
+| `src/components/layout/AppSidebar.tsx` | Hide "Create new organization" for members by checking current user's org role |
+| `src/hooks/useProjectTeam.ts` | Verify `useOrganizationMembers` works correctly, add fallback/error logging |
 
-## Part 2: Manage Team Member Organization Access
-
-### Problem
-
-Owners who have multiple organizations can have grant or revoke organization access for their team members. Currently, when a member is invited, they join only the current org with no way to add them to other orgs or remove them from one.
-
-### Changes
-
-`**src/features/team/Team.tsx**` — Add a "Manage Organizations" option in the member dropdown menu (visible to owners/admins). Clicking it opens a dialog showing:
-
-- All organizations the owner belongs to (fetched from `OrganizationContext`)
-- Checkboxes showing which orgs the selected member currently belongs to
-- Owner can toggle access on/off per organization
-
-`**src/services/organizations.service.ts**` — Add a new method:
-
-- `getMemberOrganizations(userId)` — fetches all `organization_members` rows for a given user, returning which orgs they belong to
-
-`**src/hooks/useTeam.ts**` — Add new mutations:
-
-- `useAddMemberToOrg()` — calls `organizationsService.addMember(orgId, userId, role)`
-- `useRemoveMemberFromOrg()` — calls `organizationsService.removeMember(orgId, userId)`
-- `useMemberOrganizations(userId)` — query to fetch which orgs a member belongs to
-
-**New component: `src/features/team/components/ManageOrgAccessDialog.tsx**`
-
-- Shows list of all owner's organizations
-- Each org has a toggle/checkbox showing if the member has access
-- Toggling on adds the member; toggling off removes them
-- Cannot remove from the last remaining org (safety check)
-- Cannot remove self (owner) from any org through this dialog
-
-### Database
-
-No schema changes needed — `organization_members` table already supports multiple org memberships per user. The existing `addMember` and `removeMember` methods in `organizationsService` handle the inserts/deletes. RLS policies already allow org admins/owners to manage membership.
-
----
-
-## Summary of Files Changed
-
-
-| File                                                     | Change                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------- |
-| `src/services/dashboard.service.ts`                      | Accept orgId param, scope all queries to org's projects |
-| `src/hooks/useDashboard.ts`                              | Pass currentOrganization.id to service and query keys   |
-| `src/lib/queryClient.ts`                                 | Add orgId to dashboard query key factories              |
-| `src/services/organizations.service.ts`                  | Add `getMemberOrganizations(userId)` method             |
-| `src/hooks/useTeam.ts`                                   | Add org access mutations and query                      |
-| `src/features/team/Team.tsx`                             | Add "Manage Organizations" menu item in member dropdown |
-| `src/features/team/components/ManageOrgAccessDialog.tsx` | New dialog for toggling org access per member           |
