@@ -64,7 +64,7 @@ export function useCreateIssue() {
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.openCount() });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });
@@ -101,7 +101,7 @@ export function useUpdateIssue() {
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.detail(updatedIssue.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.openCount() });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });
@@ -124,7 +124,7 @@ export function useDeleteIssue() {
       queryClient.removeQueries({ queryKey: queryKeys.issues.detail(issueId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.openCount() });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });

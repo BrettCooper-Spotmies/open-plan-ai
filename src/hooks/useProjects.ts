@@ -1,22 +1,26 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { projectsService } from '@/services/projects.service';
 import { useProjectStore } from '@/stores/useProjectStore';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { queryKeys } from '@/lib/queryClient';
 import { Project } from '@/types';
 
 /**
- * Fetch all projects
+ * Fetch all projects scoped to the current organization
  */
 export function useProjects() {
+  const { currentOrganization } = useOrganization();
   const setProjects = useProjectStore((state) => state.setProjects);
+  const orgId = currentOrganization?.id;
 
   return useQuery({
-    queryKey: queryKeys.projects.all,
+    queryKey: queryKeys.projects.all(orgId),
     queryFn: async () => {
-      const projects = await projectsService.getAll();
+      const projects = await projectsService.getAll(orgId);
       setProjects(projects);
       return projects;
     },
+    enabled: !!orgId,
   });
 }
 
@@ -45,7 +49,7 @@ export function useCreateProject() {
     }) => projectsService.create(project, organizationId),
     onSuccess: (newProject) => {
       addProject(newProject);
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
     },
   });
 }
@@ -82,7 +86,7 @@ export function useUpdateProject() {
     },
     onSuccess: (updatedProject) => {
       updateProject(updatedProject.id, updatedProject);
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(updatedProject.id) });
     },
   });
@@ -99,7 +103,7 @@ export function useDeleteProject() {
     mutationFn: (projectId: string) => projectsService.delete(projectId),
     onSuccess: (_, projectId) => {
       deleteProject(projectId);
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.removeQueries({ queryKey: queryKeys.projects.detail(projectId) });
     },
   });

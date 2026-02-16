@@ -133,17 +133,23 @@ export const projectsService = {
   /**
    * Get all projects
    */
-  async getAll(): Promise<Project[]> {
+  async getAll(organizationId?: string): Promise<Project[]> {
     if (USE_MOCK_DATA && !USE_SUPABASE) {
       await mockDelay();
       return [...mockProjects];
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('projects')
       .select('*')
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
+
+    if (organizationId) {
+      query = query.eq('organization_id', organizationId);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
