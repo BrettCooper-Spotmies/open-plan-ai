@@ -21,10 +21,11 @@ export const queryClient = new QueryClient({
 export const queryKeys = {
   // Projects
   projects: {
-    all: ['projects'] as const,
-    lists: () => [...queryKeys.projects.all, 'list'] as const,
+    root: ['projects'] as const,
+    all: (orgId?: string) => [...queryKeys.projects.root, orgId] as const,
+    lists: () => [...queryKeys.projects.root, 'list'] as const,
     list: (filters?: Record<string, unknown>) => [...queryKeys.projects.lists(), filters] as const,
-    details: () => [...queryKeys.projects.all, 'detail'] as const,
+    details: () => [...queryKeys.projects.root, 'detail'] as const,
     detail: (id: string) => [...queryKeys.projects.details(), id] as const,
   },
 
