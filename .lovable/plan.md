@@ -1,78 +1,85 @@
+# Two-Part Fix: Org-Scoped Data + Manage Member Organization Access
 
+## Part 1: Scope Dashboard and My Day Data to Current Organization
 
-# Fix: Scope Projects to Current Organization
+### Problem
 
-## Problem
+The Dashboard service (`dashboard.service.ts`) picks the **first** organization membership instead of using the currently selected organization. Tasks, issues, activities, and milestones are fetched without filtering by the active org's projects, causing cross-org data leakage. My Day relies on `useProjects()` which was already fixed, but the dashboard queries are independent and still broken.
 
-When switching organizations, the projects list still shows projects from all organizations the user belongs to. The `projectsService.getAll()` query has no `organization_id` filter, and the query cache key `['projects']` doesn't include the org ID, so switching orgs doesn't trigger a new fetch.
+### Changes
 
-## Solution
+`**src/services/dashboard.service.ts**` — Accept `orgId` parameter instead of auto-detecting it:
 
-Three changes are needed:
+- `getStats(orgId)` — use provided orgId; scope tasks/issues/milestones queries to projects within that org using `project_id IN (select id from projects where organization_id = orgId)`
+- `getRecentActivity(limit, orgId)` — filter activities by project_id belonging to the org
+- `getUpcomingMilestones(limit, orgId)` — filter milestones by project_id belonging to the org
+- `getProjectSummaries(orgId)` — use provided orgId instead of auto-detecting
 
-### 1. `src/services/projects.service.ts` — Filter by organization ID
+`**src/hooks/useDashboard.ts**` — Read `currentOrganization` from context and pass `orgId` to each service call. Include `orgId` in query keys so cache invalidates on org switch.
 
-Update `getAll()` to accept an `organizationId` parameter and add `.eq('organization_id', organizationId)` to the query.
+`**src/lib/queryClient.ts**` — Update dashboard query key factories to include orgId:
 
-```typescript
-async getAll(organizationId?: string): Promise<Project[]> {
-  // ... mock data handling ...
-
-  let query = supabase
-    .from('projects')
-    .select('*')
-    .is('deleted_at', null)
-    .order('created_at', { ascending: false });
-
-  if (organizationId) {
-    query = query.eq('organization_id', organizationId);
-  }
-
-  const { data, error } = await query;
-  // ... rest unchanged
+```
+dashboard: {
+  all: ['dashboard'] as const,
+  stats: (orgId?: string) => [..., 'stats', orgId],
+  activity: (orgId?: string, limit?: number) => [..., 'activity', orgId, limit],
+  milestones: (orgId?: string, limit?: number) => [..., 'milestones', orgId, limit],
+  projects: (orgId?: string) => [..., 'projects', orgId],
 }
 ```
 
-### 2. `src/lib/queryClient.ts` — Include org ID in query key
+**My Day** — Already works correctly since it depends on `useProjects()` which is now org-scoped. No changes needed.
 
-Update the projects query key factory so that `all` becomes a function accepting an org ID:
+---
 
-```typescript
-projects: {
-  all: (orgId?: string) => ['projects', orgId] as const,
-  // ... derived keys updated accordingly
-},
-```
+## Part 2: Manage Team Member Organization Access
 
-### 3. `src/hooks/useProjects.ts` — Pass current org ID
+### Problem
 
-Update `useProjects()` to read the current organization from context and pass it through:
+Owners who have multiple organizations can have grant or revoke organization access for their team members. Currently, when a member is invited, they join only the current org with no way to add them to other orgs or remove them from one.
 
-```typescript
-export function useProjects() {
-  const { currentOrganization } = useOrganization();
-  const setProjects = useProjectStore((state) => state.setProjects);
-  const orgId = currentOrganization?.id;
+### Changes
 
-  return useQuery({
-    queryKey: queryKeys.projects.all(orgId),
-    queryFn: async () => {
-      const projects = await projectsService.getAll(orgId);
-      setProjects(projects);
-      return projects;
-    },
-    enabled: !!orgId,
-  });
-}
-```
+`**src/features/team/Team.tsx**` — Add a "Manage Organizations" option in the member dropdown menu (visible to owners/admins). Clicking it opens a dialog showing:
 
-All other references to `queryKeys.projects.all` in invalidation calls across hooks (useProjects, useTasks, useProjectMutations) will also be updated to pass the org ID consistently.
+- All organizations the owner belongs to (fetched from `OrganizationContext`)
+- Checkboxes showing which orgs the selected member currently belongs to
+- Owner can toggle access on/off per organization
 
-## Files Changed
+`**src/services/organizations.service.ts**` — Add a new method:
 
-| File | Change |
-|------|--------|
-| `src/services/projects.service.ts` | Add optional `organizationId` param to `getAll()`, filter query |
-| `src/lib/queryClient.ts` | Make `projects.all` a function that accepts `orgId` |
-| `src/hooks/useProjects.ts` | Pass current org ID to service and query key |
-| Other hooks with `queryKeys.projects.all` | Update invalidation calls to include org ID |
+- `getMemberOrganizations(userId)` — fetches all `organization_members` rows for a given user, returning which orgs they belong to
+
+`**src/hooks/useTeam.ts**` — Add new mutations:
+
+- `useAddMemberToOrg()` — calls `organizationsService.addMember(orgId, userId, role)`
+- `useRemoveMemberFromOrg()` — calls `organizationsService.removeMember(orgId, userId)`
+- `useMemberOrganizations(userId)` — query to fetch which orgs a member belongs to
+
+**New component: `src/features/team/components/ManageOrgAccessDialog.tsx**`
+
+- Shows list of all owner's organizations
+- Each org has a toggle/checkbox showing if the member has access
+- Toggling on adds the member; toggling off removes them
+- Cannot remove from the last remaining org (safety check)
+- Cannot remove self (owner) from any org through this dialog
+
+### Database
+
+No schema changes needed — `organization_members` table already supports multiple org memberships per user. The existing `addMember` and `removeMember` methods in `organizationsService` handle the inserts/deletes. RLS policies already allow org admins/owners to manage membership.
+
+---
+
+## Summary of Files Changed
+
+
+| File                                                     | Change                                                  |
+| -------------------------------------------------------- | ------------------------------------------------------- |
+| `src/services/dashboard.service.ts`                      | Accept orgId param, scope all queries to org's projects |
+| `src/hooks/useDashboard.ts`                              | Pass currentOrganization.id to service and query keys   |
+| `src/lib/queryClient.ts`                                 | Add orgId to dashboard query key factories              |
+| `src/services/organizations.service.ts`                  | Add `getMemberOrganizations(userId)` method             |
+| `src/hooks/useTeam.ts`                                   | Add org access mutations and query                      |
+| `src/features/team/Team.tsx`                             | Add "Manage Organizations" menu item in member dropdown |
+| `src/features/team/components/ManageOrgAccessDialog.tsx` | New dialog for toggling org access per member           |
