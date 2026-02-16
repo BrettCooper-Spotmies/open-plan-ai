@@ -1,102 +1,136 @@
-# Fix Build Errors and Add Sticky Kanban Column Headers
 
-## Summary
+# Team Invitation System Integration
 
-This plan addresses:
+## Overview
+Implement a complete team invitation flow where admins can invite new members via email. The system will send a unique registration link using Resend, and invitees can join the organization through that link.
 
-1. **Build errors**: The `Profile` interface in `AuthContext.tsx` is missing `role` and `bio` fields that exist in the database and are used in `TaskDetailModal.tsx` and `Settings.tsx`
-2. **Sticky column headers with scrollable task cards**: Make the Kanban board columns have sticky headers that pin to the top when scrolling, while task cards within each column scroll vertically
+## Flow
 
----
+1. Admin clicks "Invite Member" on `/team` page, enters email and role
+2. Backend function creates an invitation record with a unique token
+3. An email is sent via Resend with a registration link containing the token
+4. Invitee clicks the link, lands on a signup page pre-filled with their email
+5. After registration + email verification, they are automatically added to the organization
 
-## Changes
+## Implementation
 
-### 1. Fix Build Errors - Add missing fields to Profile interface
+### 1. Database: Create `team_invitations` table
 
-**File: `src/contexts/AuthContext.tsx**` (lines 6-12)
+A new migration to create the invitations table:
 
-Add `role` and `bio` to the `Profile` interface and update the profile fetch query to include them:
+```sql
+CREATE TABLE public.team_invitations (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  email text NOT NULL,
+  role org_role NOT NULL DEFAULT 'member',
+  token text NOT NULL UNIQUE,
+  invited_by uuid REFERENCES profiles(id),
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'expired', 'cancelled')),
+  expires_at timestamptz NOT NULL,
+  accepted_at timestamptz,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(organization_id, email, status)
+);
 
-```typescript
-interface Profile {
-  id: string;
-  email: string;
-  name: string;
-  avatar_url: string | null;
-  initials: string;
-  role: string | null;
-  bio: string | null;
-}
+ALTER TABLE public.team_invitations ENABLE ROW LEVEL SECURITY;
+
+-- Admins/owners can manage invitations for their org
+CREATE POLICY "Org admins can manage invitations"
+  ON public.team_invitations
+  FOR ALL
+  TO authenticated
+  USING (has_org_access(organization_id))
+  WITH CHECK (
+    has_org_role(organization_id, 'admin') OR has_org_role(organization_id, 'owner')
+  );
+
+-- Anyone can read their own invitation by token (for accepting)
+CREATE POLICY "Users can read invitations by token"
+  ON public.team_invitations
+  FOR SELECT
+  TO authenticated
+  USING (true);
 ```
 
-Also update the profile fetching query in the same file to select `role` and `bio` columns.
+### 2. Edge Function: `send-team-invite`
 
-### 2. Sticky Column Headers with Scrollable Tasks
+A new edge function at `supabase/functions/send-team-invite/index.ts` that:
 
-The current layout chain is:
+- Accepts `{ email, role, orgId }` from an authenticated admin
+- Validates the caller is an admin/owner of the organization (using service role to check `organization_members`)
+- Checks for existing pending invitations for the same email+org
+- Generates a unique invitation token (crypto.randomUUID)
+- Stores the invitation in `team_invitations` with a 7-day expiry
+- Sends an email via Resend with a link like: `https://openplanai.lovable.app/signup?invite=TOKEN`
+- Returns success/error
 
-- `AppLayout` > `main` (`flex-1 overflow-y-auto`) -- this is the page scroll container
-- `ProjectDetail` > `Tabs` > `TasksSection` > `KanbanView`
-- `KanbanView` columns: each column is a `div` with a sticky header (already has `sticky top-0`) and a task list below
+The function will:
+- Use `RESEND_API_KEY` (already configured)
+- Use `SUPABASE_SERVICE_ROLE_KEY` for DB operations
+- Validate the JWT from the Authorization header to identify the caller
+- Check that the caller has admin/owner role in the org
 
-**Problem**: The `sticky top-0` on column headers currently sticks relative to the nearest scroll container, which is the `main` tag in `AppLayout`. But the columns don't have a fixed height with overflow, so there's nothing to scroll within -- the entire page scrolls instead.
+### 3. Edge Function: `accept-invite`
 
-**Solution**: Give each Kanban column a fixed height (using `calc(100vh - offset)`) with `overflow-y-auto` on the task list area, and keep the column header sticky at the top. This way:
+A new edge function at `supabase/functions/accept-invite/index.ts` that:
 
-- Column headers remain visible at the top of each column
-- Task cards scroll vertically within each column
-- The overall page doesn't need to scroll for the Kanban content
+- Called after a user completes signup + email verification
+- Accepts `{ token }` from an authenticated user
+- Validates the token exists and is not expired
+- Adds the user to `organization_members` with the invited role
+- Updates the invitation status to `accepted`
 
-**File: `src/features/projects/components/KanbanView.tsx**`
+### 4. Frontend: Update Signup page
 
-Change the column container (around line 438-443) to use a flex column layout with constrained height:
+Modify `src/pages/Signup.tsx` to:
+- Read `?invite=TOKEN` from URL query params
+- If present, fetch the invitation details (email, org name) to pre-fill and lock the email field
+- After successful signup + verification, call the `accept-invite` edge function
 
-```typescript
-// Column wrapper - use flex column with max height
-<div
-  ref={provided.innerRef}
-  {...provided.draggableProps}
-  className={cn(
-    'w-[280px] flex-shrink-0 flex flex-col transition-shadow',
-    'max-h-[calc(100vh-220px)]', // Constrain height to viewport minus header/tabs
-    snapshot.isDragging && 'shadow-lg'
-  )}
->
-  {/* Column Header - stays at top (no longer needs sticky, it's naturally at top of flex column) */}
-  <div className="flex-shrink-0 bg-background pb-3 space-y-3">
-    ...header content unchanged...
-  </div>
+### 5. Frontend: Update Team service
 
-  {/* Tasks Droppable - scrollable area */}
-  <div className="flex-1 overflow-y-auto min-h-0">
-    <Droppable ...>
-      ...task cards unchanged...
-    </Droppable>
-  </div>
-</div>
-```
+Modify `src/services/team.service.ts`:
+- Replace the stub `invite()` method with a call to the `send-team-invite` edge function
+- Add `getPendingInvitations()` method to fetch pending invitations for the current org
+- Add `cancelInvitation()` method
 
-Key changes:
+### 6. Frontend: Update Team page
 
-- Column wrapper: add `flex flex-col` and `max-h-[calc(100vh-220px)]` to constrain height
-- Column header: change from `sticky top-0` to `flex-shrink-0` (it stays at top naturally as part of flex layout)
-- Task list: wrap in `flex-1 overflow-y-auto min-h-0` to make it the scrollable region
+Modify `src/features/team/Team.tsx`:
+- Only show the "Invite Member" button for admins/owners (check current user's org role)
+- Display pending invitations in the team list with "pending" status
+- Add ability to cancel/resend invitations
 
-The `220px` offset accounts for the app header (56px), project stats bar (60px), tabs bar (48px), and some padding (56px). This can be fine-tuned.
+### 7. Frontend: Post-signup invitation acceptance
 
----
+Modify the auth flow:
+- In `src/pages/Signup.tsx`, store the invite token in localStorage before signup
+- After email verification completes and user is redirected to the app, check for stored invite token
+- If found, call `accept-invite` edge function and clear the token
 
-Note: 
+## Files to Create/Modify
 
-- Don't make the multiple vertical scroll bars 
-- make the user experience smooth and good. 
+| File | Action | Description |
+|------|--------|-------------|
+| Migration SQL | Create | `team_invitations` table with RLS |
+| `supabase/functions/send-team-invite/index.ts` | Create | Edge function to create invitation and send email |
+| `supabase/functions/accept-invite/index.ts` | Create | Edge function to accept invitation after signup |
+| `src/services/team.service.ts` | Modify | Wire up invite/cancel/list invitations via edge functions |
+| `src/hooks/useTeam.ts` | Modify | Add hooks for invitations |
+| `src/features/team/Team.tsx` | Modify | Admin-only invite button, show pending invitations |
+| `src/pages/Signup.tsx` | Modify | Handle `?invite=TOKEN` query param, pre-fill email |
+| `src/contexts/AuthContext.tsx` | Modify | After login, check for pending invite token and accept |
 
-&nbsp;
+## Security Considerations
 
-## Technical Summary
+- Only admins/owners can send invitations (enforced at both edge function and RLS level)
+- Invitation tokens are cryptographically random UUIDs
+- Tokens expire after 7 days
+- Rate limiting on the edge function (reuse existing IP rate limiting pattern)
+- RLS ensures users can only see invitations within their organization
+- The `accept-invite` function validates the token server-side with service role
 
+## Important Note on Email Delivery
 
-| File                                              | Change                                                                  |
-| ------------------------------------------------- | ----------------------------------------------------------------------- |
-| `src/contexts/AuthContext.tsx`                    | Add `role` and `bio` to Profile interface; update fetch query           |
-| `src/features/projects/components/KanbanView.tsx` | Constrain column height, make task area scrollable, keep headers pinned |
+Due to the current Resend configuration (testing mode), invitation emails can only be delivered to `protrace.ai@gmail.com` until a sending domain is verified at resend.com. This limitation applies to all Resend-sent emails in this project.
