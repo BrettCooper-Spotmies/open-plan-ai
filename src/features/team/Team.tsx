@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ManageOrgAccessDialog } from './components/ManageOrgAccessDialog';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useTeamMembers, useInviteTeamMember, useRemoveTeamMember, usePendingInvitations, useCancelInvitation, type TeamMember, type TeamInvitation } from '@/hooks/useTeam';
+import { useTeamMembers, useInviteTeamMember, useRemoveTeamMember, usePendingInvitations, useCancelInvitation, useUpdateTeamMemberDetails, type TeamMember, type TeamInvitation } from '@/hooks/useTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -58,13 +58,16 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+const DEPARTMENTS = ['Engineering', 'Design', 'Management', 'Quality Assurance', 'Operations', 'Sales', 'Marketing', 'Support'];
+
 const Team = () => {
-  const { data: teamMembers, isLoading, error } = useTeamMembers();
   const { currentOrganization } = useOrganization();
+  const { data: teamMembers, isLoading, error } = useTeamMembers(currentOrganization?.id);
   const { user } = useAuth();
   const inviteMutation = useInviteTeamMember();
   const removeMutation = useRemoveTeamMember();
   const cancelInviteMutation = useCancelInvitation();
+  const updateMemberMutation = useUpdateTeamMemberDetails();
 
   const { data: pendingInvitations } = usePendingInvitations(currentOrganization?.id || '');
 
@@ -79,6 +82,9 @@ const Team = () => {
   const [inviteRole, setInviteRole] = useState('');
   const [inviteDepartment, setInviteDepartment] = useState('');
   const [manageOrgMember, setManageOrgMember] = useState<TeamMember | null>(null);
+  const [editMember, setEditMember] = useState<TeamMember | null>(null);
+  const [editRole, setEditRole] = useState('');
+  const [editDepartment, setEditDepartment] = useState('');
 
   const members = teamMembers || [];
   const invitations = pendingInvitations || [];
@@ -148,6 +154,27 @@ const Team = () => {
     }
   };
 
+  const handleOpenEdit = (member: TeamMember) => {
+    setEditMember(member);
+    setEditRole(member.role);
+    setEditDepartment(member.department || '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editMember || !currentOrganization) return;
+    try {
+      await updateMemberMutation.mutateAsync({
+        memberId: editMember.id,
+        orgId: currentOrganization.id,
+        updates: { role: editRole, department: editDepartment || undefined },
+      });
+      toast.success('Member updated');
+      setEditMember(null);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update member');
+    }
+  };
+
   const getStatusColor = (status: TeamMember['status']) => {
     switch (status) {
       case 'active':
@@ -186,17 +213,13 @@ const Team = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleOpenEdit(member)}>
                   <Edit className="h-4 w-4 mr-2" />
                   Edit
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setManageOrgMember(member)}>
                   <Building className="h-4 w-4 mr-2" />
                   Manage Organizations
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Mail className="h-4 w-4 mr-2" />
-                  Send Email
                 </DropdownMenuItem>
                 <DropdownMenuItem 
                   className="text-destructive"
@@ -522,17 +545,13 @@ const Team = () => {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleOpenEdit(member)}>
                               <Edit className="h-4 w-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => setManageOrgMember(member)}>
                               <Building className="h-4 w-4 mr-2" />
                               Manage Organizations
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                              <Mail className="h-4 w-4 mr-2" />
-                              Send Email
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               className="text-destructive"
@@ -564,6 +583,53 @@ const Team = () => {
           </div>
         )}
       </div>
+
+      {/* Edit Member Dialog */}
+      <Dialog open={!!editMember} onOpenChange={(open) => !open && setEditMember(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Team Member</DialogTitle>
+            <DialogDescription>Update member details</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input value={editMember?.email || ''} disabled className="bg-muted" />
+            </div>
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Select value={editDepartment} onValueChange={setEditDepartment}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEPARTMENTS.map(d => (
+                    <SelectItem key={d} value={d.toLowerCase()}>{d}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select value={editRole} onValueChange={setEditRole}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditMember(null)}>Cancel</Button>
+            <Button onClick={handleSaveEdit} disabled={updateMemberMutation.isPending}>
+              {updateMemberMutation.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ManageOrgAccessDialog
         open={!!manageOrgMember}

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, Zap, Sun, ChevronsUpDown, Check, Plus, Building2, Loader2 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
@@ -11,6 +11,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { OrganizationSettings } from '@/services/organizations.service';
 import { toast } from 'sonner';
 
@@ -52,11 +54,32 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { organizations, currentOrganization, setCurrentOrganization, createOrganization, isLoading: orgLoading } = useOrganization();
+  const { user } = useAuth();
 
   const [orgPopoverOpen, setOrgPopoverOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newOrgForm, setNewOrgForm] = useState({ name: '', description: '' });
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+
+  // Fetch current user's role in the current org
+  useEffect(() => {
+    if (!user?.id || !currentOrganization?.id) {
+      setCurrentUserRole(null);
+      return;
+    }
+    supabase
+      .from('organization_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('organization_id', currentOrganization.id)
+      .single()
+      .then(({ data }) => {
+        setCurrentUserRole(data?.role || null);
+      });
+  }, [user?.id, currentOrganization?.id]);
+
+  const canCreateOrg = currentUserRole === 'owner' || currentUserRole === 'admin';
 
   const orgSettings = (currentOrganization?.settings || {}) as OrganizationSettings;
   const orgLogo = orgSettings.logoUrl;
@@ -185,19 +208,23 @@ export function AppSidebar() {
                   })
                 )}
               </div>
-              <Separator />
-              <div className="p-1.5">
-                <button
-                  onClick={() => {
-                    setOrgPopoverOpen(false);
-                    setCreateDialogOpen(true);
-                  }}
-                  className="flex items-center gap-2 w-full px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
-                >
-                  <Plus className="h-4 w-4" />
-                  Create new organization
-                </button>
-              </div>
+              {canCreateOrg && (
+                <>
+                  <Separator />
+                  <div className="p-1.5">
+                    <button
+                      onClick={() => {
+                        setOrgPopoverOpen(false);
+                        setCreateDialogOpen(true);
+                      }}
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-accent/50 rounded-md transition-colors"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Create new organization
+                    </button>
+                  </div>
+                </>
+              )}
             </PopoverContent>
           </Popover>
         </SidebarHeader>

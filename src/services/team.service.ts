@@ -46,7 +46,7 @@ export const teamService = {
   async getByOrganization(orgId: string): Promise<TeamMember[]> {
     const { data: members, error: membersError } = await supabase
       .from('organization_members')
-      .select('user_id, role, joined_at')
+      .select('user_id, role, joined_at, department')
       .eq('organization_id', orgId);
 
     if (membersError) throw membersError;
@@ -83,6 +83,7 @@ export const teamService = {
         ...profile,
         role: member.role,
         status: 'active' as const,
+        department: (member as any).department || undefined,
         projectCount: count || 0,
         joinedAt: member.joined_at,
       });
@@ -179,6 +180,20 @@ export const teamService = {
     const { error } = await supabase
       .from('organization_members')
       .update({ role: role as 'owner' | 'admin' | 'member' })
+      .eq('user_id', memberId)
+      .eq('organization_id', orgId);
+
+    if (error) throw error;
+  },
+
+  async updateMember(memberId: string, orgId: string, updates: { role?: string; department?: string }): Promise<void> {
+    const updateData: any = {};
+    if (updates.role) updateData.role = updates.role as 'owner' | 'admin' | 'member';
+    if (updates.department !== undefined) updateData.department = updates.department;
+
+    const { error } = await supabase
+      .from('organization_members')
+      .update(updateData)
       .eq('user_id', memberId)
       .eq('organization_id', orgId);
 
