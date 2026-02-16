@@ -1,32 +1,49 @@
 import { useQuery } from '@tanstack/react-query';
 import { dashboardService, type DashboardStats, type ProjectSummary } from '@/services/dashboard.service';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { queryKeys } from '@/lib/queryClient';
 
 export function useDashboardStats() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: queryKeys.dashboard.stats(),
-    queryFn: () => dashboardService.getStats(),
+    queryKey: queryKeys.dashboard.stats(orgId),
+    queryFn: () => dashboardService.getStats(orgId!),
+    enabled: !!orgId,
   });
 }
 
 export function useRecentActivity(limit?: number) {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: queryKeys.dashboard.activity(limit),
-    queryFn: () => dashboardService.getRecentActivity(limit),
+    queryKey: queryKeys.dashboard.activity(orgId, limit),
+    queryFn: () => dashboardService.getRecentActivity(orgId!, limit),
+    enabled: !!orgId,
   });
 }
 
 export function useUpcomingDashboardMilestones(limit?: number) {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: queryKeys.dashboard.milestones(limit),
-    queryFn: () => dashboardService.getUpcomingMilestones(limit),
+    queryKey: queryKeys.dashboard.milestones(orgId, limit),
+    queryFn: () => dashboardService.getUpcomingMilestones(orgId!, limit),
+    enabled: !!orgId,
   });
 }
 
 export function useProjectSummaries() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: queryKeys.dashboard.projects(),
-    queryFn: () => dashboardService.getProjectSummaries(),
+    queryKey: queryKeys.dashboard.projects(orgId),
+    queryFn: () => dashboardService.getProjectSummaries(orgId!),
+    enabled: !!orgId,
   });
 }
 

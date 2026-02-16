@@ -79,10 +79,10 @@ export const queryKeys = {
   // Dashboard
   dashboard: {
     all: ['dashboard'] as const,
-    stats: () => [...queryKeys.dashboard.all, 'stats'] as const,
-    activity: (limit?: number) => [...queryKeys.dashboard.all, 'activity', limit] as const,
-    milestones: (limit?: number) => [...queryKeys.dashboard.all, 'milestones', limit] as const,
-    projects: () => [...queryKeys.dashboard.all, 'projects'] as const,
+    stats: (orgId?: string) => [...queryKeys.dashboard.all, 'stats', orgId] as const,
+    activity: (orgId?: string, limit?: number) => [...queryKeys.dashboard.all, 'activity', orgId, limit] as const,
+    milestones: (orgId?: string, limit?: number) => [...queryKeys.dashboard.all, 'milestones', orgId, limit] as const,
+    projects: (orgId?: string) => [...queryKeys.dashboard.all, 'projects', orgId] as const,
   },
 
   // Organizations
