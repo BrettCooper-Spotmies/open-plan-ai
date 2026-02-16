@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +26,8 @@ const industries = [
 
 const Signup = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const inviteToken = searchParams.get("invite");
   const { signUp, isLoading: authLoading } = useAuth();
   const { createOrganization } = useOrganization();
   const [isLoading, setIsLoading] = useState(false);
@@ -39,7 +41,16 @@ const Signup = () => {
     industry: "",
   });
 
+  // If there's an invite token, store it for post-signup acceptance
+  useEffect(() => {
+    if (inviteToken) {
+      localStorage.setItem("pending_invite_token", inviteToken);
+    }
+  }, [inviteToken]);
+
   const handleChange = (field: string, value: string) => {
+    // Don't allow email changes if invite token locked it
+    if (field === "email" && inviteToken && formData.email) return;
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -59,7 +70,6 @@ const Signup = () => {
 
     setIsLoading(true);
     
-    // Sign up the user
     const result = await signUp(formData.email, formData.password, {
       name: formData.fullName,
       company: formData.companyName,
@@ -80,26 +90,26 @@ const Signup = () => {
       
       if (otpError || data?.error) {
         console.error('Error sending OTP:', otpError || data?.error);
-        // Still allow navigation to verify page
       }
     } catch (err) {
       console.error('Error sending OTP:', err);
     }
 
-    // Create their organization after successful signup
-    try {
-      await createOrganization(formData.companyName, `${formData.industry} company`);
-    } catch (err) {
-      console.error('Error creating organization:', err);
-      // Don't block signup if org creation fails
+    // Only create organization if NOT an invite signup
+    if (!inviteToken) {
+      try {
+        await createOrganization(formData.companyName, `${formData.industry} company`);
+      } catch (err) {
+        console.error('Error creating organization:', err);
+      }
     }
 
     setIsLoading(false);
-    // Navigate to verify email page
     navigate("/verify-email", { state: { email: formData.email } });
   };
 
   const passwordsMatch = formData.password === formData.confirmPassword && formData.confirmPassword.length > 0;
+  const isInviteSignup = !!inviteToken;
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -113,7 +123,9 @@ const Signup = () => {
             <span className="text-3xl font-bold text-foreground">OpenPlan AI</span>
           </div>
           <h1 className="text-4xl font-bold text-foreground leading-tight">
-            Start managing your hardware projects today
+            {isInviteSignup
+              ? "You've been invited to join a team"
+              : "Start managing your hardware projects today"}
           </h1>
           <div className="space-y-4">
             <div className="flex items-start gap-3">
@@ -166,9 +178,13 @@ const Signup = () => {
               </div>
               <span className="text-xl font-bold">OpenPlan AI</span>
             </div>
-            <CardTitle className="text-2xl font-bold">Create your account</CardTitle>
+            <CardTitle className="text-2xl font-bold">
+              {isInviteSignup ? "Join your team" : "Create your account"}
+            </CardTitle>
             <CardDescription>
-              Get started with a 14-day free trial
+              {isInviteSignup
+                ? "Create an account to accept your team invitation"
+                : "Get started with a 14-day free trial"}
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
@@ -179,6 +195,16 @@ const Signup = () => {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
+
+              {isInviteSignup && (
+                <Alert>
+                  <Mail className="h-4 w-4" />
+                  <AlertDescription>
+                    You've been invited to join a team. Create your account to get started.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="fullName">Full Name</Label>
                 <div className="relative">
@@ -248,46 +274,50 @@ const Signup = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="companyName">Company Name</Label>
-                <div className="relative">
-                  <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="companyName"
-                    type="text"
-                    placeholder="Acme Inc."
-                    value={formData.companyName}
-                    onChange={(e) => handleChange("companyName", e.target.value)}
-                    className="pl-10"
-                    required
-                    disabled={isLoading}
-                  />
-                </div>
-              </div>
+              {!isInviteSignup && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName">Company Name</Label>
+                    <div className="relative">
+                      <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="companyName"
+                        type="text"
+                        placeholder="Acme Inc."
+                        value={formData.companyName}
+                        onChange={(e) => handleChange("companyName", e.target.value)}
+                        className="pl-10"
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="industry">Industry</Label>
-                <div className="relative">
-                  <Factory className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
-                  <Select
-                    value={formData.industry}
-                    onValueChange={(value) => handleChange("industry", value)}
-                    required
-                    disabled={isLoading}
-                  >
-                    <SelectTrigger className="pl-10">
-                      <SelectValue placeholder="Select your industry" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-popover border shadow-lg z-50">
-                      {industries.map((industry) => (
-                        <SelectItem key={industry} value={industry}>
-                          {industry}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="industry">Industry</Label>
+                    <div className="relative">
+                      <Factory className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+                      <Select
+                        value={formData.industry}
+                        onValueChange={(value) => handleChange("industry", value)}
+                        required
+                        disabled={isLoading}
+                      >
+                        <SelectTrigger className="pl-10">
+                          <SelectValue placeholder="Select your industry" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-popover border shadow-lg z-50">
+                          {industries.map((industry) => (
+                            <SelectItem key={industry} value={industry}>
+                              {industry}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </>
+              )}
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
               <Button type="submit" className="w-full" disabled={isLoading || authLoading}>
@@ -295,7 +325,7 @@ const Signup = () => {
                   "Creating account..."
                 ) : (
                   <>
-                    Create account
+                    {isInviteSignup ? "Create account & join team" : "Create account"}
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </>
                 )}

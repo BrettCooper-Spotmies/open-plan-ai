@@ -119,6 +119,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const profileData = await fetchProfile(newSession.user.id);
             setProfile(profileData);
           }, 0);
+
+          // Check for pending invite token after successful auth
+          const pendingToken = localStorage.getItem('pending_invite_token');
+          if (pendingToken) {
+            localStorage.removeItem('pending_invite_token');
+            // Accept the invitation in the background
+            supabase.functions.invoke('accept-invite', {
+              body: { token: pendingToken },
+            }).then(({ data, error }) => {
+              if (error) console.error('Error accepting invite:', error);
+              else if (data?.error) console.error('Invite error:', data.error);
+              else console.log('Invitation accepted successfully');
+            });
+          }
         } else {
           setProfile(null);
         }
