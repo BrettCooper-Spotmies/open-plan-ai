@@ -2,10 +2,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { teamService, type TeamMember, type TeamInvitation } from '@/services/team.service';
 import { queryKeys } from '@/lib/queryClient';
 
-export function useTeamMembers() {
+export function useTeamMembers(orgId?: string) {
   return useQuery({
-    queryKey: queryKeys.team.members(),
-    queryFn: () => teamService.getAll(),
+    queryKey: orgId ? [...queryKeys.team.members(), orgId] : queryKeys.team.members(),
+    queryFn: () => orgId ? teamService.getByOrganization(orgId) : teamService.getAll(),
+    enabled: orgId ? !!orgId : true,
   });
 }
 
@@ -73,6 +74,18 @@ export function useUpdateTeamMember() {
   return useMutation({
     mutationFn: ({ memberId, role, orgId }: { memberId: string; role: string; orgId: string }) =>
       teamService.updateRole(memberId, role, orgId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.team.all });
+    },
+  });
+}
+
+export function useUpdateTeamMemberDetails() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ memberId, orgId, updates }: { memberId: string; orgId: string; updates: { role?: string; department?: string } }) =>
+      teamService.updateMember(memberId, orgId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.team.all });
     },

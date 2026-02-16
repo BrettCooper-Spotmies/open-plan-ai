@@ -461,6 +461,7 @@ export type Database = {
       }
       organization_members: {
         Row: {
+          department: string | null
           id: string
           invited_by: string | null
           joined_at: string | null
@@ -469,6 +470,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          department?: string | null
           id?: string
           invited_by?: string | null
           joined_at?: string | null
@@ -477,6 +479,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          department?: string | null
           id?: string
           invited_by?: string | null
           joined_at?: string | null
