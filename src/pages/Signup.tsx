@@ -41,16 +41,26 @@ const Signup = () => {
     industry: "",
   });
 
-  // If there's an invite token, store it for post-signup acceptance
+  // If there's an invite token, store it and fetch the invited email
   useEffect(() => {
     if (inviteToken) {
       localStorage.setItem("pending_invite_token", inviteToken);
+      const fetchInvitation = async () => {
+        const { data } = await supabase
+          .from('team_invitations')
+          .select('email')
+          .eq('token', inviteToken)
+          .eq('status', 'pending')
+          .maybeSingle();
+        if (data?.email) {
+          setFormData(prev => ({ ...prev, email: data.email }));
+        }
+      };
+      fetchInvitation();
     }
   }, [inviteToken]);
 
   const handleChange = (field: string, value: string) => {
-    // Don't allow email changes if invite token locked it
-    if (field === "email" && inviteToken && formData.email) return;
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -232,8 +242,9 @@ const Signup = () => {
                     placeholder="you@company.com"
                     value={formData.email}
                     onChange={(e) => handleChange("email", e.target.value)}
-                    className="pl-10"
+                    className={`pl-10 ${isInviteSignup ? "bg-muted cursor-not-allowed" : ""}`}
                     required
+                    readOnly={isInviteSignup}
                     disabled={isLoading}
                   />
                 </div>
