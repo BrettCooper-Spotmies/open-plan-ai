@@ -278,6 +278,19 @@ export const organizationsService = {
   },
 
   /**
+   * Get all organizations a specific user belongs to
+   */
+  async getMemberOrganizations(userId: string): Promise<{ organization_id: string; role: string }[]> {
+    const { data, error } = await supabase
+      .from('organization_members')
+      .select('organization_id, role')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  /**
    * Generate a unique slug from name
    */
   generateSlug(name: string): string {

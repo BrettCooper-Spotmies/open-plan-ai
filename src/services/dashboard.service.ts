@@ -25,18 +25,17 @@ export interface ProjectSummary {
 }
 
 export const dashboardService = {
-  async getStats(): Promise<DashboardStats> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
+  async getStats(orgId: string): Promise<DashboardStats> {
+    // Get project IDs for this org
+    const { data: orgProjects } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('organization_id', orgId)
+      .is('deleted_at', null);
 
-    // Get organization ID
-    const { data: memberships } = await supabase
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .limit(1);
+    const projectIds = (orgProjects || []).map(p => p.id);
 
-    if (!memberships?.length) {
+    if (projectIds.length === 0) {
       return {
         activeProjects: 0,
         totalTasks: 0,
@@ -47,11 +46,8 @@ export const dashboardService = {
       };
     }
 
-    const orgId = memberships[0].organization_id;
-
     // Run all queries in parallel
     const [
-      projectsResult,
       tasksResult,
       completedTasksResult,
       issuesResult,
@@ -59,22 +55,20 @@ export const dashboardService = {
       overdueResult,
     ] = await Promise.all([
       supabase
-        .from('projects')
+        .from('tasks')
         .select('*', { count: 'exact', head: true })
-        .eq('organization_id', orgId)
+        .in('project_id', projectIds)
         .is('deleted_at', null),
       supabase
         .from('tasks')
         .select('*', { count: 'exact', head: true })
-        .is('deleted_at', null),
-      supabase
-        .from('tasks')
-        .select('*', { count: 'exact', head: true })
+        .in('project_id', projectIds)
         .eq('status', 'done')
         .is('deleted_at', null),
       supabase
         .from('issues')
         .select('*', { count: 'exact', head: true })
+        .in('project_id', projectIds)
         .in('status', ['open', 'investigating'])
         .is('deleted_at', null),
       supabase
@@ -84,13 +78,14 @@ export const dashboardService = {
       supabase
         .from('tasks')
         .select('*', { count: 'exact', head: true })
+        .in('project_id', projectIds)
         .lt('due_date', new Date().toISOString().split('T')[0])
         .neq('status', 'done')
         .is('deleted_at', null),
     ]);
 
     return {
-      activeProjects: projectsResult.count || 0,
+      activeProjects: projectIds.length,
       totalTasks: tasksResult.count || 0,
       completedTasks: completedTasksResult.count || 0,
       openIssues: issuesResult.count || 0,
@@ -99,10 +94,21 @@ export const dashboardService = {
     };
   },
 
-  async getRecentActivity(limit: number = 10): Promise<Activity[]> {
+  async getRecentActivity(orgId: string, limit: number = 10): Promise<Activity[]> {
+    // Get project IDs for this org
+    const { data: orgProjects } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('organization_id', orgId)
+      .is('deleted_at', null);
+
+    const projectIds = (orgProjects || []).map(p => p.id);
+    if (projectIds.length === 0) return [];
+
     const { data, error } = await supabase
       .from('activities')
       .select('*')
+      .in('project_id', projectIds)
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -110,12 +116,23 @@ export const dashboardService = {
     return data || [];
   },
 
-  async getUpcomingMilestones(limit: number = 5): Promise<Milestone[]> {
+  async getUpcomingMilestones(orgId: string, limit: number = 5): Promise<Milestone[]> {
     const today = new Date().toISOString().split('T')[0];
-    
+
+    // Get project IDs for this org
+    const { data: orgProjects } = await supabase
+      .from('projects')
+      .select('id')
+      .eq('organization_id', orgId)
+      .is('deleted_at', null);
+
+    const projectIds = (orgProjects || []).map(p => p.id);
+    if (projectIds.length === 0) return [];
+
     const { data, error } = await supabase
       .from('milestones')
       .select('*')
+      .in('project_id', projectIds)
       .is('deleted_at', null)
       .gte('due_date', today)
       .order('due_date', { ascending: true })
@@ -125,22 +142,8 @@ export const dashboardService = {
     return data || [];
   },
 
-  async getProjectSummaries(): Promise<ProjectSummary[]> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Not authenticated');
-
-    // Get organization ID
-    const { data: memberships } = await supabase
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .limit(1);
-
-    if (!memberships?.length) return [];
-
-    const orgId = memberships[0].organization_id;
-
-    // Get projects
+  async getProjectSummaries(orgId: string): Promise<ProjectSummary[]> {
+    // Get projects for this org
     const { data: projects, error } = await supabase
       .from('projects')
       .select('id, name, description, progress, stage')

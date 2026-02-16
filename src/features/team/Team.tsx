@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ManageOrgAccessDialog } from './components/ManageOrgAccessDialog';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useTeamMembers, useInviteTeamMember, useRemoveTeamMember, usePendingInvitations, useCancelInvitation, type TeamMember, type TeamInvitation } from '@/hooks/useTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -77,6 +78,7 @@ const Team = () => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('');
   const [inviteDepartment, setInviteDepartment] = useState('');
+  const [manageOrgMember, setManageOrgMember] = useState<TeamMember | null>(null);
 
   const members = teamMembers || [];
   const invitations = pendingInvitations || [];
@@ -187,6 +189,10 @@ const Team = () => {
                 <DropdownMenuItem>
                   <Edit className="h-4 w-4 mr-2" />
                   Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setManageOrgMember(member)}>
+                  <Building className="h-4 w-4 mr-2" />
+                  Manage Organizations
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <Mail className="h-4 w-4 mr-2" />
@@ -520,6 +526,10 @@ const Team = () => {
                               <Edit className="h-4 w-4 mr-2" />
                               Edit
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setManageOrgMember(member)}>
+                              <Building className="h-4 w-4 mr-2" />
+                              Manage Organizations
+                            </DropdownMenuItem>
                             <DropdownMenuItem>
                               <Mail className="h-4 w-4 mr-2" />
                               Send Email
@@ -554,6 +564,13 @@ const Team = () => {
           </div>
         )}
       </div>
+
+      <ManageOrgAccessDialog
+        open={!!manageOrgMember}
+        onOpenChange={(open) => !open && setManageOrgMember(null)}
+        member={manageOrgMember}
+        currentUserId={user?.id}
+      />
     </AppLayout>
   );
 };
