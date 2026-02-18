@@ -611,15 +611,23 @@ const Team = () => {
             </div>
             <div className="space-y-2">
               <Label>Role</Label>
-              <Select value={editRole} onValueChange={setEditRole}>
+              <Select
+                value={editRole}
+                onValueChange={setEditRole}
+                disabled={editMember?.id === user?.id}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="member">Member</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="owner">Owner</SelectItem>
                 </SelectContent>
               </Select>
+              {editMember?.id === user?.id && (
+                <p className="text-xs text-muted-foreground">You cannot change your own role.</p>
+              )}
             </div>
           </div>
           <DialogFooter>
