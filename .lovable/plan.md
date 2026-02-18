@@ -1,122 +1,185 @@
 
-# Fix: 4 Issues — Issue Creation, Calendar Day View Padding, Calendar Showing All Events, Owner Role Lock
+# Make Reports Page Fully Dynamic (Remove All Mock Data)
 
-## Issue 1: "Failed to Create Issue" Error
+## Current State Analysis
 
-### Root Cause
-Looking at the `handleIssueCreate` function in `ProjectDetail.tsx` (line 466–487), it builds the issue object and calls `createIssueMutation.mutate(...)`. The mutation calls `issuesService.create(projectId, issue)`.
+The Reports page (`src/features/reports/Reports.tsx`) imports from `@/data/mockData`:
+- `projects` — used as the source of tasks, issues, milestones, and for the project filter dropdown
+- `teamMembers` — used for the Team Workload chart
+- `projectModules` — used for Module Progress chart
+- `projectIssues` — standalone issues added on top of project issues
 
-The problem is in `IssuesView.tsx` — the `handleCreateSubmit` function calls `onIssueCreate?.(issueToCreate)` passing the full draft `Issue` object (which includes `id`, `reportedAt` — fields that `useCreateIssue`'s `mutationFn` signature says are omitted). However, the real failure is in the issue draft: it has `id: newId` (a client-generated UUID-like string) and `reportedAt` set, but those are stripped by the type signature.
+All 6 child components receive data derived from mock objects. The filters (project selector, assignee filter, module filter) all display mock entries.
 
-The **actual** bug: The `createIssueMutation.mutate(...)` call in `ProjectDetail.tsx` receives a partial issue object where `title` may be an empty string (the modal allows creating without filling the title). But more critically, the issue title is required (`NOT NULL`) in the database.
+## Data Type Mismatch Issues to Resolve
 
-However, looking at the `IssuesView` draft creation and the `IssueDetailContent` — the user fills in title before submitting. The real problem is the **RLS policy** `WITH CHECK (has_project_access(project_id))`. The issue INSERT requires `project_id` to pass `has_project_access`, which checks `organization_members` for the current user. If the project belongs to an org the user is a member of, this works. But the issue might be that `IssuesView.handleCreateIssue()` builds a stub with `projectId: routeProjectId || issues[0].projectId || 'p-1'` — using `routeProjectId` from `useParams()`. However, `routeProjectId` uses the param key `id` from `useParams()` via `const { id: routeProjectId } = useParams()`. This is correct for the `/projects/:id` route.
+Several adapters are needed because the DB types differ from the frontend types used in `reportsUtils.ts`:
 
-**The actual root issue**: The `handleIssueCreate` in `ProjectDetail.tsx` wraps the partial issue as `Omit<Issue, 'id' | 'reportedAt'>` and passes it to the mutation. Inside `issuesService.create`, it calls `.insert({project_id: projectId, title: issue.title, ...})`. If `issue.title` is empty, Supabase will reject with NOT NULL violation. But users see "Failed to create issue" — this is the generic error from `onError` in `useCreateIssue`.
+| Frontend Type | DB Type | Key differences |
+|---|---|---|
+| `Milestone` (from types/index.ts) | `Milestone` (from milestones.service.ts = DB row) | DB has `name`, `due_date`, `status`, `progress`; Frontend has `title`, `date`, `completed` |
+| `Module` (from types/index.ts) | `Module` (from modules.service.ts = DB row) | DB has `module_type`, `name`; Frontend has `type`, `color`, `owner` |
+| `TeamMember` (from types/index.ts) | `TeamMember` (from team.service.ts) | team.service.ts version extends Profile and adds role/department/status |
 
-**More likely root cause**: The `handleIssueCreate` function passes the full `Issue` object (with `id` field = `'p-1'` for `projectId`) but the mutation expects `projectId` to come from the closure (the `id` URL param). The `handleIssueCreate` in `ProjectDetail.tsx` builds:
-```
-createIssueMutation.mutate({
-  projectId: project.id,   // ← this field doesn't exist on Omit<Issue, 'id'|'reportedAt'>
-  title: ...,
-  ...newIssuePartial,
-})
-```
+The `reportsUtils.ts` functions use the **frontend** types. The hooks (`useAllMilestones`, `useAllModules`, `useTeamMembers`) return **DB** types. We need adapter/mapper functions to bridge the gap.
 
-Wait — actually `Issue` type includes `projectId`. And `Omit<Issue, 'id' | 'reportedAt'>` still includes `projectId`. The service ignores the `projectId` field from the issue object and uses the closure `projectId` from `useCreateIssue(id || '')`. So the DB gets `project_id: id` (the URL param).
+## Plan
 
-**The real bug**: The `IssuesView` component creates a stub issue with `id: newId` and calls `onIssueCreate(issueToCreate)` which flows into `handleIssueCreate(newIssuePartial)`. Inside `handleIssueCreate`, it does `createIssueMutation.mutate({ ... } as Omit<Issue, 'id' | 'reportedAt'>)`. But calling `.mutate()` on this — the actual Supabase insert at `issuesService.create` does `supabase.from('issues').insert({...})`. **This should work if the title is non-empty**.
+### Step 1 — Add `useAllTasks` with org scope and `useAllIssues` with project filter
 
-Let me reconsider: The issue is that `IssuesView` calls `onIssueCreate?.(issueToCreate)` where `issueToCreate` is the full `Issue` type including `id`. `handleIssueCreate` receives it as `Partial<Issue>` and spreads it: `...newIssuePartial`. This means `id: 'issue-1234567'` gets passed to the mutation. The mutation signature says `Omit<Issue, 'id' | 'reportedAt'>` but TypeScript doesn't enforce this at runtime — the extra `id` field gets included in the insert object. **Supabase will try to insert with a custom `id` that's a non-UUID string** like `'issue-1234567'`, which fails because the `id` column expects a UUID.
+The existing `useAllTasks()` in `useTasks.ts` calls `tasksService.getAll()` which fetches ALL tasks across all organizations (limited by RLS). When a project filter is active, we need to filter by `projectId`. This is fine — we'll filter client-side in Reports.tsx.
 
-**Fix**: In `handleIssueCreate` in `ProjectDetail.tsx`, destructure out `id` and `reportedAt` before passing to the mutation so a clean UUID is generated by the DB default.
+The existing `useAllIssues()` similarly fetches all org-accessible issues. Both already work with RLS so they only return data for the current user's organizations.
+
+### Step 2 — Add org-scoped `useAllModules` hook
+
+The existing `useAllModules()` in `useModules.ts` fetches all modules accessible by the user (scoped via RLS on `project_id → projects.organization_id`). We need an org-scoped version to add to the query key so it re-fetches on org change.
+
+Add `useOrgAllModules(orgId)` to `src/hooks/useModules.ts` that queries modules filtered to the org's project IDs (similar to `useAllMilestones`).
+
+### Step 3 — Adapter Functions for Type Conversion
+
+The `reportsUtils.ts` functions expect **frontend types** (`Milestone`, `Module`), but DB hooks return raw DB rows. We'll add adapter functions directly in `Reports.tsx` (or a new `src/features/reports/utils/adapters.ts`) to convert:
 
 ```typescript
-const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
-  if (!project) return;
-  const { id: _id, reportedAt: _reportedAt, projectId: _pid, ...rest } = newIssuePartial;
-  createIssueMutation.mutate({
-    ...rest,
-    title: rest.title || 'New Issue',
-    description: rest.description || '',
-    status: 'open',
-    severity: rest.severity || 'minor',
-    category: rest.category || 'other',
-    assignees: rest.assignees || [],
-    reportedBy: { id: 'current-user', name: 'Current User', email: '', role: 'member', initials: 'CU' },
-    descriptionBlocks: rest.descriptionBlocks || [],
-  } as Omit<Issue, 'id' | 'reportedAt'>);
-};
-```
+// DB milestone row → frontend Milestone for reportsUtils
+function dbMilestoneToFrontend(dbM: DbMilestone): Milestone {
+  return {
+    id: dbM.id,
+    title: dbM.name,
+    date: dbM.due_date || '',
+    completed: dbM.status === 'completed',
+    description: dbM.description || undefined,
+  };
+}
 
----
+// DB module row → frontend Module for reportsUtils  
+function dbModuleToFrontend(dbM: DbModule): Module {
+  return {
+    id: dbM.id,
+    name: dbM.name,
+    type: (dbM.module_type as ModuleType) || 'software',
+    description: dbM.description || undefined,
+    createdAt: dbM.created_at || '',
+  };
+}
 
-## Issue 2: Calendar Day View — Missing Padding
-
-### Root Cause
-In `CalendarDayView.tsx`:
-- The day header `<div className="py-4 border-b border-border">` has vertical padding but no horizontal padding — content is flush with the left edge.
-- The events area `<div className="space-y-6 max-w-2xl">` also has no horizontal padding.
-
-### Fix
-Add `px-6` to:
-1. The day header div: `"py-4 px-6 border-b border-border"`
-2. The events container: wrap inside `<div className="px-6">` or add `px-6` to the `space-y-6 max-w-2xl` container and the empty state div
-
----
-
-## Issue 3: Calendar Showing Only Milestones (Missing Tasks & Issues)
-
-### Root Cause
-In `Calendar.tsx`, the `issueToCalendarEvent` function has a severity filter:
-```typescript
-if (issue.severity !== 'critical' && issue.severity !== 'major') return null;
-```
-This silently drops minor/trivial issues.
-
-More importantly — tasks may have `dueDate` populated (since we now map `projectId` from DB), but the calendar filter for issues only shows critical/major. All `minor` and `trivial` issues are filtered out.
-
-Additionally, the day view only shows events that exist for that specific date. If no tasks have `dueDate` matching the current day, they won't appear. The screenshot shows Feb 18, 2026 with only milestones — this suggests either tasks don't have due dates set, or the issue is the severity filter.
-
-### Fix in `Calendar.tsx`
-Remove the severity restriction in `issueToCalendarEvent` so ALL issues with a `dueDate` appear on the calendar, regardless of severity:
-```typescript
-function issueToCalendarEvent(issue: Issue, projectName: string): CalendarEvent | null {
-  if (!issue.dueDate) return null;
-  // Remove the severity filter — show all issues with due dates
-  ...
+// team.service TeamMember → types/index.ts TeamMember for reportsUtils
+function serviceTeamMemberToFrontend(m: ServiceTeamMember): FrontendTeamMember {
+  return {
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    role: m.role,
+    initials: m.initials,
+    avatar: m.avatar_url || undefined,
+  };
 }
 ```
 
----
+### Step 4 — Rewrite `Reports.tsx`
 
-## Issue 4: Owner Cannot Change Their Own Role While Editing
+Replace all mock data imports with real hooks:
 
-### Root Cause
-In `Team.tsx`, the edit dialog's Role select has no restriction when the current user is editing themselves. The `editMember` state holds the member being edited; if `editMember.id === user?.id` and they are an owner, they can change their own role to `member`.
+```typescript
+// REMOVE:
+import { projects, teamMembers, projectModules, projectIssues } from '@/data/mockData';
 
-### Fix
-In the Edit dialog, disable the Role `<Select>` when `editMember?.id === user?.id`:
-
-```tsx
-<Select 
-  value={editRole} 
-  onValueChange={setEditRole}
-  disabled={editMember?.id === user?.id}
->
+// ADD:
+import { useProjects } from '@/hooks/useProjects';
+import { useAllTasks } from '@/hooks/useTasks';
+import { useAllIssues } from '@/hooks/useIssues';
+import { useAllMilestones } from '@/hooks/useMilestones';
+import { useOrgAllModules } from '@/hooks/useModules';
+import { useTeamMembers } from '@/hooks/useTeam';
+import { useOrganization } from '@/contexts/OrganizationContext';
 ```
 
-Also add a helper note: "You cannot change your own role."
+**Data flow in the component:**
 
----
+```
+useProjects()        → projects[]           → filter dropdown, project name lookup
+useAllTasks()        → tasks[]              → filter by projectId if selected → filteredTasks
+useAllIssues()       → issues[]             → filter by projectId if selected
+useAllMilestones()   → dbMilestones[]       → adapt → milestones[] for charts
+useOrgAllModules()   → dbModules[]          → adapt → modules[] for filter + chart
+useTeamMembers(orgId)→ serviceMembers[]     → adapt → teamMembers[] for workload + filter
+```
 
-## Summary of File Changes
+**Filtering tasks/issues by selected project:**
+```typescript
+const tasks = useMemo(() => {
+  if (!filter.projectId) return allTasks;
+  return allTasks.filter(t => t.projectId === filter.projectId);
+}, [allTasks, filter.projectId]);
+
+const issues = useMemo(() => {
+  if (!filter.projectId) return allIssues;
+  return allIssues.filter(i => i.projectId === filter.projectId);
+}, [allIssues, filter.projectId]);
+
+const milestones = useMemo(() => {
+  if (!filter.projectId) return adaptedMilestones;
+  return adaptedMilestones.filter(m => /* need projectId on milestone */ ...);
+}, [adaptedMilestones, filter.projectId]);
+```
+
+**Note on milestone projectId:** The DB milestone has `project_id` but the `useAllMilestones` hook returns raw DB rows. We need to keep the `project_id` field through the adapter for filtering. We'll use a slightly different approach — keep DB milestones as-is and filter them before adapting.
+
+**Issue navigation fix:** The `handleIssueClick` currently searches `projects` (mock) for which project contains the issue. Since issues have `projectId` on them, we can use that directly:
+```typescript
+const handleIssueClick = useCallback((issueId: string) => {
+  const issue = allIssues.find(i => i.id === issueId);
+  if (issue?.projectId) {
+    navigate(`/projects/${issue.projectId}/issues/${issueId}`);
+  }
+}, [allIssues, navigate]);
+```
+
+**Milestone navigation fix:** The `handleMilestoneClick` needs to find which project a milestone belongs to. We'll look up via `dbMilestones` (which have `project_id`).
+
+### Step 5 — Fix `ReportMilestoneHealth` usage
+
+The `getMilestoneHealth` function in `reportsUtils.ts` references `milestone.date` and `milestone.title` (frontend types). The adapter ensures the DB milestone is converted to have these fields before being passed to `getMilestoneHealth`.
+
+Also, `getMilestoneHealth` checks `milestone.completed` — our adapter maps `status === 'completed'` to `true`.
+
+### Step 6 — Fix `ReportsFilters` to receive dynamic data
+
+The `ReportsFilters` component already accepts `projects`, `teamMembers`, `modules`, `milestones` as props — we just need to pass the real data instead of mock data. The filter will also need the milestones from the selected project (or all if no project selected).
+
+### Step 7 — Add loading state for the entire page
+
+```tsx
+const isLoading = projectsLoading || tasksLoading || issuesLoading || milestonesLoading || modulesLoading;
+
+{isLoading ? (
+  <div className="space-y-6">
+    <Skeleton className="h-32" /> {/* KPI row skeleton */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-64" />)}
+    </div>
+  </div>
+) : (
+  // actual charts
+)}
+```
+
+## Files to Modify
 
 | File | Change |
-|------|--------|
-| `src/features/projects/ProjectDetail.tsx` | Fix `handleIssueCreate` to strip `id`/`reportedAt`/`projectId` before passing to mutation |
-| `src/features/calendar/components/CalendarDayView.tsx` | Add `px-6` horizontal padding to day header and events container |
-| `src/features/calendar/Calendar.tsx` | Remove severity filter restriction in `issueToCalendarEvent` so all issues with due dates appear |
-| `src/features/team/Team.tsx` | Disable role select in edit dialog when editing self (`editMember?.id === user?.id`) |
+|---|---|
+| `src/hooks/useModules.ts` | Add `useOrgAllModules(orgId)` hook scoped to current org's project IDs |
+| `src/features/reports/Reports.tsx` | Remove all mock imports, wire up real hooks, add adapters, fix navigation handlers, add loading state |
+| `src/features/reports/utils/reportsUtils.ts` | Minor update: `getMilestoneHealth` checks `milestone.completed` — ensure the adapter maps correctly; no functional change needed |
 
-No database migrations needed for any of these fixes.
+**No database migrations needed.** All data is already in the backend with RLS scoping.
+
+## Edge Cases Handled
+
+- **Empty org (no projects):** All hooks return `[]`, charts show empty states
+- **Project filter:** Tasks and issues are filtered by `task.projectId`/`issue.projectId` client-side (already populated since we fixed `mapDbTaskToTask`)
+- **Milestone project filter:** Filter DB milestones by `project_id` before adapting to frontend type
+- **Module project filter:** Filter DB modules by `project_id` before adapting
+- **Team workload with empty tasks:** `getTeamWorkload` already handles `filter(item => item.totalTasks > 0)`
+- **Issue click navigation:** Use `issue.projectId` directly instead of searching mock array
