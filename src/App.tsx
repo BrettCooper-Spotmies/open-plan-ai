@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,6 +12,7 @@ import { AppLayoutSkeleton } from "@/components/layout/AppLayoutSkeleton";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { useUserStore } from "@/stores/useUserStore";
 
 // Eagerly loaded routes (initial page load)
 import Login from "./pages/Login";
@@ -33,7 +35,11 @@ const Settings = lazy(() => import("./features/settings"));
 const Reports = lazy(() => import("./features/reports"));
 const Notifications = lazy(() => import("./features/notifications"));
 
-const App = () => (
+const App = () => {
+  const storedTheme = useUserStore.getState().preferences.theme;
+
+  return (
+  <ThemeProvider attribute="class" defaultTheme={storedTheme} enableSystem disableTransitionOnChange>
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -159,6 +165,9 @@ const App = () => (
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   </ErrorBoundary>
-);
+  </ThemeProvider>
+  );
+};
 
 export default App;
+
