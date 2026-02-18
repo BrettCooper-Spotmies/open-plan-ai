@@ -116,6 +116,7 @@ export interface Task {
   milestoneId?: string;      // Link to parent milestone
   moduleId?: string;         // Link to Module entity (in addition to module type)
   linkedIssueIds?: string[]; // Issues affecting this task
+  projectId?: string;        // Project this task belongs to (for cross-project views)
 }
 
 // Issue entity (New)

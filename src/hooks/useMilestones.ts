@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { milestonesService, type Milestone, type MilestoneInsert, type MilestoneUpdate } from '@/services/milestones.service';
 import { queryKeys } from '@/lib/queryClient';
+import { supabase } from '@/integrations/supabase/client';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 export function useProjectMilestones(projectId: string) {
   return useQuery({
@@ -59,6 +61,36 @@ export function useDeleteMilestone() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.milestones.all });
     },
+  });
+}
+
+export function useAllMilestones() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
+  return useQuery({
+    queryKey: [...queryKeys.milestones.all, 'org', orgId],
+    queryFn: async () => {
+      const { data: projectRows } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('organization_id', orgId!)
+        .is('deleted_at', null);
+
+      const projectIds = (projectRows || []).map(p => p.id);
+      if (!projectIds.length) return [];
+
+      const { data, error } = await supabase
+        .from('milestones')
+        .select('*')
+        .in('project_id', projectIds)
+        .is('deleted_at', null)
+        .order('due_date', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!orgId,
   });
 }
 
