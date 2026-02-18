@@ -1,17 +1,19 @@
-import { BarChart3, Download, Save } from 'lucide-react';
+import { BarChart3, Download, FileText, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 interface ReportsHeaderProps {
   projectName?: string;
   timeRangeLabel?: string;
+  onExport?: (format: 'csv' | 'pdf') => void;
 }
 
-export function ReportsHeader({ projectName, timeRangeLabel }: ReportsHeaderProps) {
+export function ReportsHeader({ projectName, timeRangeLabel, onExport }: ReportsHeaderProps) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-3">
@@ -28,32 +30,35 @@ export function ReportsHeader({ projectName, timeRangeLabel }: ReportsHeaderProp
           )}
         </div>
       </div>
-      
+
       <div className="flex items-center gap-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" size="sm" disabled>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
               <Download className="h-4 w-4 mr-2" />
               Export
+              <ChevronDown className="h-3 w-3 ml-1 opacity-60" />
             </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Export coming soon</p>
-          </TooltipContent>
-        </Tooltip>
-        
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="outline" size="sm" disabled>
-              <Save className="h-4 w-4 mr-2" />
-              Save Report
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>Save report templates coming soon</p>
-          </TooltipContent>
-        </Tooltip>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44 bg-popover border border-border shadow-md z-50">
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => onExport?.('csv')}
+            >
+              <Download className="h-4 w-4 mr-2 text-muted-foreground" />
+              Export as CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="cursor-pointer"
+              onClick={() => onExport?.('pdf')}
+            >
+              <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
+              Export as PDF
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
 }
+
