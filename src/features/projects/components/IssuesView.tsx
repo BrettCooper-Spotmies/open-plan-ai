@@ -100,7 +100,6 @@ export function IssuesView({
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'view' | 'create'>('view');
   const [newIssueDraft, setNewIssueDraft] = useState<Issue | null>(null);
-  const [internalIsAddDialogOpen, setInternalIsAddDialogOpen] = useState(false);
 
   // Use external props if provided
   const searchQuery = externalSearchQuery ?? internalSearchQuery;
@@ -108,7 +107,6 @@ export function IssuesView({
   const statusFilter = externalStatusFilter ?? internalStatusFilter;
   const assigneeFilter = externalAssigneeFilter;
   const dueDateFilter = externalDueDateFilter;
-  const isAddDialogOpen = externalIsAddDialogOpen ?? internalIsAddDialogOpen;
 
 
   const filteredIssues = issues.filter(issue => {
@@ -174,8 +172,10 @@ export function IssuesView({
   };
 
   // Handle external add dialog trigger
+  // We use a ref to track previous value so we can detect rising edge (false->true)
+  // This ensures re-clicking "Report Issue" always opens the modal even if the prop was already true
   useEffect(() => {
-    if (externalIsAddDialogOpen && !isModalOpen) {
+    if (externalIsAddDialogOpen) {
       handleCreateIssue();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,10 +189,14 @@ export function IssuesView({
     }
   };
 
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    onAddDialogClose?.();
+  };
+
   const handleCreateSubmit = (issueToCreate: Issue) => {
     onIssueCreate?.(issueToCreate);
     setIsModalOpen(false);
-    setInternalIsAddDialogOpen(false);
     onAddDialogClose?.();
   };
 
@@ -300,7 +304,7 @@ export function IssuesView({
         tasks={tasks}
         teamMembers={teamMembers}
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleModalClose}
         onUpdate={handleIssueUpdateFromModal}
         onDelete={onIssueDelete}
         mode={modalMode}

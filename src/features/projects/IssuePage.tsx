@@ -5,7 +5,7 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { IssueDetailContent } from './components/IssueDetailContent';
 import { Issue } from '@/types';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
-import { useIssue, useUpdateIssue } from '@/hooks/useIssues';
+import { useIssue, useUpdateIssue, useDeleteIssue } from '@/hooks/useIssues';
 import { useTeamMembers } from '@/hooks/useProjectTeam';
 
 export default function IssuePage() {
@@ -26,6 +26,7 @@ export default function IssuePage() {
 
   const { data: teamMembers = [], isLoading: isTeamLoading } = useTeamMembers();
   const updateIssueMutation = useUpdateIssue();
+  const deleteIssueMutation = useDeleteIssue();
 
   // Find issue in project data as a fallback
   const projectIssue = project?.issues?.find(i => i.id === issueId);
@@ -88,6 +89,18 @@ export default function IssuePage() {
     }
   };
 
+  const handleDelete = async (issueId: string) => {
+    try {
+      await deleteIssueMutation.mutateAsync({
+        projectId: project.id,
+        issueId,
+      });
+      navigate(`/projects/${projectId}?tab=issues`);
+    } catch (error) {
+      console.error('Failed to delete issue:', error);
+    }
+  };
+
   return (
     <AppLayout>
       <div className="container max-w-5xl mx-auto py-8 px-4 space-y-8 animate-in fade-in duration-500">
@@ -118,6 +131,7 @@ export default function IssuePage() {
             tasks={project.tasks}
             teamMembers={teamMembers}
             onUpdate={handleUpdate}
+            onDelete={handleDelete}
             isExpanded={true}
           />
         </div>

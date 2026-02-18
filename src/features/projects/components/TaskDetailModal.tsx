@@ -465,18 +465,8 @@ export function TaskDetailModal({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between">
+        <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>{mode === 'create' ? 'Add New Task' : 'Task Details'}</DialogTitle>
-          {mode !== 'create' && onDelete && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleDelete}
-              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
         </DialogHeader>
         <DialogDescription className="sr-only">
           View and edit details for task {task?.title || 'New Task'}
@@ -1222,14 +1212,30 @@ export function TaskDetailModal({
           </div>
         )}
         {mode === 'view' && (
-          <div className="px-6 py-4 border-t flex justify-end gap-2 bg-background">
-            <Button variant="outline" onClick={onClose} disabled={isSaving}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpdateTask} disabled={isSaving}>
-              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Update Task
-            </Button>
+          <div className="px-6 py-4 border-t flex items-center justify-between gap-2 bg-background">
+            {/* Delete button on the bottom left */}
+            {onDelete ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDelete}
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Task
+              </Button>
+            ) : (
+              <div />
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={onClose} disabled={isSaving}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateTask} disabled={isSaving}>
+                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Update Task
+              </Button>
+            </div>
           </div>
         )}
       </DialogContent>

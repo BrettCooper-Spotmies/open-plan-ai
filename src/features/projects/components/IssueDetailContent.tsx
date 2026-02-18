@@ -1084,8 +1084,28 @@ export function IssueDetailContent({
                     {/* Action Bar */}
                     {!isDraft && (
                         <div className="pt-6 border-t flex items-center justify-between">
-                            <div className="text-xs text-muted-foreground italic">
-                                {isSaving ? 'Saving changes...' : 'Last updated ' + format(new Date(), 'h:mm a')}
+                            {/* Left side: delete button */}
+                            <div className="flex items-center gap-4">
+                                {onDelete && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            if (window.confirm('Are you sure you want to delete this issue?')) {
+                                                onDelete(editedIssue.id);
+                                            }
+                                        }}
+                                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                        Delete Issue
+                                    </Button>
+                                )}
+                                {!onDelete && (
+                                    <div className="text-xs text-muted-foreground italic">
+                                        {isSaving ? 'Saving changes...' : 'Last updated ' + format(new Date(), 'h:mm a')}
+                                    </div>
+                                )}
                             </div>
                             <div className="flex gap-3">
                                 {onExpand && !isExpanded && (
