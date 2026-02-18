@@ -65,6 +65,7 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
     actualHours: dbTask.actual_hours ? parseFloat(dbTask.actual_hours) : undefined,
     milestoneId: dbTask.milestone_id || undefined,
     moduleId: dbTask.module_id || undefined,
+    projectId: dbTask.project_id || undefined,
   };
 }
 
