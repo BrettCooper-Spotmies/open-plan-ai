@@ -206,7 +206,7 @@ export function getMilestoneHealth(
     
     const totalTasks = linkedTasks.length;
     const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-    const daysRemaining = milestone.date 
+    const daysRemaining = (milestone.date && milestone.date.length > 0)
       ? differenceInDays(parseISO(milestone.date), today)
       : 0;
     
@@ -340,10 +340,10 @@ export function applyFilters(
   filter: ReportFilter
 ): Task[] {
   return tasks.filter(task => {
-    if (filter.moduleIds?.length && task.moduleId && !filter.moduleIds.includes(task.moduleId)) {
+    if (filter.moduleIds?.length && !filter.moduleIds.includes(task.moduleId || '')) {
       return false;
     }
-    if (filter.milestoneIds?.length && task.milestoneId && !filter.milestoneIds.includes(task.milestoneId)) {
+    if (filter.milestoneIds?.length && !filter.milestoneIds.includes(task.milestoneId || '')) {
       return false;
     }
     if (filter.assigneeIds?.length) {

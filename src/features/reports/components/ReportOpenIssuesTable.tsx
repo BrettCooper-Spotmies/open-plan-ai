@@ -150,7 +150,7 @@ export const ReportOpenIssuesTable = memo(function ReportOpenIssuesTable({ issue
                         <div>
                           <p className="font-medium">{issue.title}</p>
                           <p className="text-xs text-muted-foreground capitalize">
-                            {issue.category.replace('-', ' ')}
+                            {(issue.category || 'other').replace('-', ' ')}
                           </p>
                         </div>
                       </td>
@@ -184,7 +184,7 @@ export const ReportOpenIssuesTable = memo(function ReportOpenIssuesTable({ issue
                         )}
                       </td>
                       <td className="py-3 px-2 text-muted-foreground">
-                        {format(parseISO(issue.reportedAt), 'MMM dd')}
+                        {issue.reportedAt ? format(parseISO(issue.reportedAt), 'MMM dd') : '—'}
                       </td>
                       <td className="py-3 px-2 text-right">
                         <Button variant="ghost" size="icon" className="h-8 w-8">
