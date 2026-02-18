@@ -161,3 +161,52 @@
     @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2;
   }
 }
+
+@media print {
+  /* Hide layout chrome: sidebar, header, filters */
+  [data-sidebar],
+  aside,
+  nav,
+  header,
+  [data-reports-filters] {
+    display: none !important;
+  }
+
+  /* Remove scroll constraints */
+  body,
+  main,
+  .overflow-hidden,
+  .overflow-auto,
+  .overflow-y-auto {
+    overflow: visible !important;
+    height: auto !important;
+  }
+
+  /* Reset layout for print */
+  .flex.h-screen,
+  .flex.min-h-screen {
+    display: block !important;
+    height: auto !important;
+  }
+
+  /* Page breaks between chart grid items */
+  .grid > * {
+    break-inside: avoid;
+  }
+
+  /* Ensure cards print with visible borders */
+  [class*="rounded"] {
+    border: 1px solid #e2e8f0 !important;
+  }
+
+  /* Make charts visible */
+  svg {
+    overflow: visible !important;
+  }
+
+  /* Full-width content area */
+  main > * {
+    max-width: 100% !important;
+    padding: 0 !important;
+  }
+}

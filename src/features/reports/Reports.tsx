@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { downloadCSVReport, triggerPDFExport } from './utils/exportUtils';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ReportsHeader } from './components/ReportsHeader';
 import { ReportsFilters } from './components/ReportsFilters';
@@ -207,6 +208,24 @@ export default function Reports() {
     if (issue?.projectId) navigate(`/projects/${issue.projectId}/issues/${issueId}`);
   }, [allIssues, navigate]);
 
+  const handleExport = useCallback((format: 'csv' | 'pdf') => {
+    if (format === 'csv') {
+      downloadCSVReport({
+        kpis,
+        statusBreakdown,
+        milestoneHealth,
+        teamWorkload,
+        moduleProgress,
+        trendData,
+        issues,
+        projectName,
+        timeRangeLabel,
+      });
+    } else {
+      triggerPDFExport();
+    }
+  }, [kpis, statusBreakdown, milestoneHealth, teamWorkload, moduleProgress, trendData, issues, projectName, timeRangeLabel]);
+
   // ─── Loading skeleton ─────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -233,6 +252,7 @@ export default function Reports() {
         <ReportsHeader
           projectName={projectName}
           timeRangeLabel={timeRangeLabel}
+          onExport={handleExport}
         />
 
         <ReportsFilters
