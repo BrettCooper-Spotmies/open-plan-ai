@@ -49,6 +49,10 @@ import {
   Lock,
   Loader2,
   Building2,
+  Check,
+  Monitor,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -56,14 +60,21 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { profileService } from '@/services/profile.service';
 import { organizationsService, OrganizationSettings } from '@/services/organizations.service';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAppTheme } from '@/hooks/useAppTheme';
+import { useUserStore } from '@/stores/useUserStore';
+
 
 const Settings = () => {
   const navigate = useNavigate();
   const { profile, refreshProfile, updatePassword, deleteAccount } = useAuth();
   const { currentOrganization, refreshOrganizations, createOrganization, isLoading: orgContextLoading } = useOrganization();
+  const { theme, changeTheme } = useAppTheme();
+  const preferences = useUserStore((s) => s.preferences);
+  const updatePreferences = useUserStore((s) => s.updatePreferences);
 
   // User settings for notifications/appearance (still local - coming soon)
   const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings);
+
 
   // Profile form state
   const [profileForm, setProfileForm] = useState({
@@ -366,23 +377,11 @@ const Settings = () => {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <TabsTrigger value="appearance" className="gap-2">
-                    <Palette className="h-4 w-4 hidden sm:block" />
-                    <span className="hidden sm:inline">Appearance</span>
-                    <span className="sm:hidden">Theme</span>
-                    <Badge variant="outline" className="ml-1 bg-amber-100 text-amber-800 border-amber-300 text-xs">
-                      Soon
-                    </Badge>
-                  </TabsTrigger>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>This feature is coming soon</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <TabsTrigger value="appearance" className="gap-2">
+              <Palette className="h-4 w-4 hidden sm:block" />
+              <span className="hidden sm:inline">Appearance</span>
+              <span className="sm:hidden">Theme</span>
+            </TabsTrigger>
             <TabsTrigger value="danger" className="gap-2 text-destructive data-[state=active]:text-destructive">
               <ShieldAlert className="h-4 w-4 hidden sm:block" />
               Danger
@@ -829,49 +828,62 @@ const Settings = () => {
             </Card>
           </TabsContent>
 
-          {/* Appearance Tab - Coming Soon */}
+          {/* Appearance Tab */}
           <TabsContent value="appearance">
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2">
-                  <CardTitle>Appearance Settings</CardTitle>
-                  <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
-                    Coming Soon
-                  </Badge>
-                </div>
+                <CardTitle>Appearance Settings</CardTitle>
                 <CardDescription>
                   Customize how OpenPlan looks for you
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6 opacity-50 pointer-events-none">
-                <div className="space-y-2">
+              <CardContent className="space-y-6">
+                {/* Theme Picker */}
+                <div className="space-y-3">
                   <Label>Theme</Label>
                   <div className="grid grid-cols-3 gap-4">
-                    {(['light', 'dark', 'system'] as const).map((theme) => (
-                      <button
-                        key={theme}
-                        disabled
-                        className={`p-4 rounded-lg border-2 transition-colors ${userSettings.theme === theme
-                          ? 'border-primary bg-primary/5'
-                          : 'border-border'
+                    {([
+                      { id: 'light' as const, label: 'Light', icon: Sun },
+                      { id: 'dark' as const, label: 'Dark', icon: Moon },
+                      { id: 'system' as const, label: 'System', icon: Monitor },
+                    ]).map(({ id, label, icon: Icon }) => {
+                      const isActive = theme === id;
+                      return (
+                        <button
+                          key={id}
+                          onClick={() => changeTheme(id)}
+                          className={`relative p-4 rounded-lg border-2 transition-all text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                            isActive
+                              ? 'border-primary bg-primary/5'
+                              : 'border-border hover:border-primary/50 hover:bg-accent'
                           }`}
-                      >
-                        <div
-                          className={`h-12 rounded mb-2 ${theme === 'light'
-                            ? 'bg-white border'
-                            : theme === 'dark'
-                              ? 'bg-zinc-900'
-                              : 'bg-gradient-to-r from-white to-zinc-900'
-                            }`}
-                        />
-                        <span className="text-sm font-medium capitalize">
-                          {theme}
-                        </span>
-                      </button>
-                    ))}
+                        >
+                          {isActive && (
+                            <span className="absolute top-2 right-2 flex items-center justify-center h-4 w-4 rounded-full bg-primary text-primary-foreground">
+                              <Check className="h-2.5 w-2.5" />
+                            </span>
+                          )}
+                          <div className={`h-12 rounded mb-3 flex items-center justify-center ${
+                            id === 'light'
+                              ? 'bg-background border border-border'
+                              : id === 'dark'
+                                ? 'bg-foreground'
+                                : 'bg-gradient-to-r from-background to-foreground border border-border'
+                          }`}>
+                            <Icon className={`h-5 w-5 ${id === 'dark' ? 'text-background' : 'text-foreground'}`} />
+                          </div>
+                          <span className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
+                            {label}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
+
                 <Separator />
+
+                {/* Layout Preferences */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
@@ -880,7 +892,10 @@ const Settings = () => {
                         Start with a collapsed sidebar for more workspace
                       </p>
                     </div>
-                    <Switch checked={userSettings.sidebarCollapsed} disabled />
+                    <Switch
+                      checked={preferences.sidebarCollapsed}
+                      onCheckedChange={(checked) => updatePreferences({ sidebarCollapsed: checked })}
+                    />
                   </div>
                   <Separator />
                   <div className="flex items-center justify-between">
@@ -890,10 +905,14 @@ const Settings = () => {
                         Reduce spacing to show more content
                       </p>
                     </div>
-                    <Switch checked={userSettings.compactMode} disabled />
+                    <Switch
+                      checked={preferences.compactMode}
+                      onCheckedChange={(checked) => updatePreferences({ compactMode: checked })}
+                    />
                   </div>
                 </div>
-                <Button disabled>
+
+                <Button onClick={() => toast.success('Appearance preferences saved')}>
                   <Save className="h-4 w-4 mr-2" />
                   Save Appearance
                 </Button>
@@ -901,7 +920,7 @@ const Settings = () => {
             </Card>
           </TabsContent>
 
-          {/* Danger Tab */}
+
           <TabsContent value="danger">
             <div className="space-y-6">
               <Card>
