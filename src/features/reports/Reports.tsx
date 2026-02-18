@@ -33,6 +33,7 @@ import {
   getModuleProgress,
   getCompletedTasksTrend,
   applyFilters,
+  filterTasksByTimeRange,
 } from './utils/reportsUtils';
 import { TeamMember, Module, Milestone, ModuleType } from '@/types';
 
@@ -148,14 +149,17 @@ export default function Reports() {
     return allProjects.find(p => p.id === filter.projectId)?.name;
   }, [allProjects, filter.projectId]);
 
-  // ─── Apply task filters ───────────────────────────────────────────────────
-  const filteredTasks = useMemo(() => applyFilters(tasks, filter), [tasks, filter]);
-
   // ─── Date range ───────────────────────────────────────────────────────────
   const dateRange = useMemo(
     () => getDateRangeFromTimeRange(filter.timeRange, filter.customDateRange),
     [filter.timeRange, filter.customDateRange]
   );
+
+  // ─── Apply task filters (time range first, then other filters) ───────────
+  const filteredTasks = useMemo(() => {
+    const timeFiltered = filterTasksByTimeRange(tasks, dateRange);
+    return applyFilters(timeFiltered, filter);
+  }, [tasks, filter, dateRange]);
 
   // ─── KPIs via worker ─────────────────────────────────────────────────────
   useEffect(() => {

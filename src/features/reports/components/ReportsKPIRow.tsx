@@ -136,7 +136,7 @@ export const ReportsKPIRow = memo(function ReportsKPIRow({ kpis, onKPIClick }: R
 
       <KPICard
         title="Avg Cycle Time"
-        value={`${kpis.avgCycleTime}`}
+        value={kpis.avgCycleTime === 0 ? 'N/A' : `${kpis.avgCycleTime}d`}
         subtitle="days per task"
         icon={<Timer className="h-4 w-4" />}
         tooltip="Average days from task start date to completion for all completed tasks"
