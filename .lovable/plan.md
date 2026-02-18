@@ -1,131 +1,90 @@
 
-# Add PDF & CSV Export to Reports Page
+# End-to-End Test & Fix: Reports Page
 
-## Overview
+## Bugs Found Through Code Audit + Database Inspection
 
-The Export button already exists in `ReportsHeader` but is disabled with a "coming soon" tooltip. This plan enables it with a functional dropdown offering both CSV and PDF export, all client-side with no new dependencies (jsPDF/html2canvas are heavy — we'll use the browser's native `print` for PDF and manual CSV string construction for CSV, both requiring zero new packages).
+After thoroughly reading every component, hook, utility, and checking the live database, here are the real bugs causing incorrect or broken behavior.
 
-## Approach: No New Dependencies
+---
 
-- **CSV**: Build a comma-separated string from all report data sections and trigger a file download via a hidden `<a>` link — pure JavaScript, no library needed.
-- **PDF**: Use `window.print()` with a dedicated print stylesheet (`@media print`) that hides the sidebar/header/filters and renders only the report content cleanly. This gives a native OS print-to-PDF experience with zero bundle size cost.
+### Bug 1 — Time Range Filter Does Nothing (Critical)
 
-## Data to Export
+The "7d / 30d / 90d / Custom" buttons update `filter.timeRange` but `applyFilters()` in `reportsUtils.ts` never filters by date. The `dateRange` is computed but only passed to `getCompletedTasksTrend`. All 4 KPI cards, pie chart, team workload, and milestone health completely ignore the time range and always show ALL tasks.
 
-Both formats will include:
+**Fix**: In `Reports.tsx`, apply `filterTasksByTimeRange(tasks, dateRange)` before passing to `applyFilters`, so the time range genuinely scopes all data.
 
-| Section | CSV Sheet / PDF Section |
-|---|---|
-| KPIs | Summary table (Progress, Open Issues, Overdue Tasks, Avg Cycle Time) |
-| Task Status Breakdown | Rows: status, count, percentage |
-| Milestone Health | Rows: name, status, progress%, tasks, due date |
-| Team Workload | Rows: member name, total, completed, in-progress, overdue |
-| Module Progress | Rows: module name, progress%, completed, total |
-| Trend Data | Rows: date, completed, cumulative, remaining |
-| Open Issues | Rows: title, severity, category, status, blocking count, reported date |
+---
 
-## File Changes
+### Bug 2 — `ReportOpenIssuesTable` Crashes on Real Data
 
-### 1. `src/features/reports/components/ReportsHeader.tsx`
-- Accept an `onExport: (format: 'csv' | 'pdf') => void` prop
-- Replace the disabled single Export button with a `DropdownMenu` containing:
-  - **Export as CSV** (Download icon)
-  - **Export as PDF** (FileText icon)
-- Remove the disabled `Save Report` button (or keep as-is)
+The component does two unsafe operations:
+1. `issue.category.replace('-', ' ')` — `category` can be `null` / `undefined` from the DB, causing a runtime TypeError
+2. `format(parseISO(issue.reportedAt), 'MMM dd')` — `reportedAt` can be `null` when `reported_at` is null in the DB, causing `parseISO` to throw
 
-### 2. `src/features/reports/utils/exportUtils.ts` (new file)
-Create a dedicated export utilities module:
+**Fix in `ReportOpenIssuesTable.tsx`**: Add null guards:
+- `(issue.category || 'other').replace('-', ' ')`
+- Check `issue.reportedAt` before formatting: `issue.reportedAt ? format(parseISO(issue.reportedAt), 'MMM dd') : '—'`
 
+---
+
+### Bug 3 — `ReportMilestoneHealth` Crashes When Milestone Has No Date
+
+`getMilestoneHealth` in `reportsUtils.ts` calls `differenceInDays(parseISO(milestone.date), today)` when `milestone.date` exists. But then `ReportMilestoneHealth.tsx` renders `format(parseISO(item.milestone.date), 'MMM dd, yyyy')` — if the date string is empty `''` (which `dbMilestoneToFrontend` returns when `due_date` is null), `parseISO('')` throws an Invalid Date error.
+
+**Fix in `ReportMilestoneHealth.tsx`**: Already has `{item.milestone.date && ...}` guard around the date display — but `parseISO('')` is also called in `getMilestoneHealth`. Fix in `reportsUtils.ts` to guard `differenceInDays` call: only compute when `milestone.date` is a non-empty string.
+
+---
+
+### Bug 4 — `applyFilters` Milestone Filter Logic Bug
+
+Current code:
 ```typescript
-// buildCSV(reportData): string
-// Assembles a multi-section CSV string with blank lines between sections
-// Each section has a header row, then data rows
-
-// downloadCSV(filename, content): void
-// Creates a Blob, triggers <a> click for download
-
-// triggerPDFExport(): void
-// Calls window.print() — CSS handles layout
-```
-
-The CSV will have this structure:
-```
-OPENPLAN REPORT
-Generated: Feb 18, 2026
-Project: All Projects
-Time Range: Last 30 days
-
-=== KEY PERFORMANCE INDICATORS ===
-Metric,Value,Details
-Project Progress,72%,18 of 25 tasks
-Open Issues,3,1 critical
-Overdue Tasks,2,Needs attention
-Avg Cycle Time,4.5,days per task
-
-=== TASK STATUS BREAKDOWN ===
-Status,Count,Percentage
-To Do,5,20%
-In Progress,8,32%
-...
-
-=== MILESTONE HEALTH ===
-Milestone,Status,Progress,Completed Tasks,Total Tasks,Due Date
-...
-
-(etc for all sections)
-```
-
-### 3. `src/features/reports/Reports.tsx`
-- Import `downloadCSVReport` and `triggerPDFExport` from new `exportUtils.ts`
-- Create `handleExport(format: 'csv' | 'pdf')` callback that:
-  - For CSV: calls `downloadCSVReport({ kpis, statusBreakdown, milestoneHealth, teamWorkload, moduleProgress, trendData, issues, projectName, timeRangeLabel })`
-  - For PDF: calls `triggerPDFExport()`
-- Pass `onExport={handleExport}` to `<ReportsHeader />`
-
-### 4. `src/index.css` (print styles)
-Add `@media print` rules to hide nav/sidebar and show only report content cleanly:
-
-```css
-@media print {
-  /* Hide layout chrome */
-  [data-sidebar], nav, aside, header { display: none !important; }
-  
-  /* Remove scroll constraints */
-  body, main, .overflow-hidden { overflow: visible !important; }
-  
-  /* Page breaks between chart sections */
-  .grid > * { break-inside: avoid; }
-  
-  /* Ensure cards print with borders */
-  .card { border: 1px solid #e2e8f0 !important; }
+if (filter.milestoneIds?.length && task.milestoneId && !filter.milestoneIds.includes(task.milestoneId)) {
+  return false;
 }
 ```
+The `&& task.milestoneId` guard means tasks with NO milestone are NOT filtered out even when a milestone filter is active. This means filtering by "Milestone A" also shows all tasks that have no milestone assigned — wrong behavior.
 
-## User Experience Flow
-
+**Fix**: Remove the `&& task.milestoneId` guard so tasks without a `milestoneId` are properly excluded when the filter is active:
+```typescript
+if (filter.milestoneIds?.length && !filter.milestoneIds.includes(task.milestoneId || '')) {
+  return false;
+}
 ```
-User clicks "Export" button
-         ↓
-Dropdown appears with two options:
-  [↓ Export as CSV]   ← triggers immediate download
-  [⎙ Export as PDF]   ← opens browser print dialog
-```
+Same fix for `moduleIds` filter.
 
-The CSV downloads instantly (filename: `report-YYYY-MM-DD.csv`).
-The PDF opens the system print dialog where users can choose "Save as PDF", select orientation, etc.
+---
 
-## Technical Notes
+### Bug 5 — KPI Worker Fallback Gives Wrong Data
 
-- All data is already computed in `Reports.tsx` via `useMemo` — no re-fetching needed for export
-- The `handleExport` callback receives the already-filtered, already-computed data — exporting exactly what the user is currently viewing
-- The export respects active filters (project scope, time range, assignee filters, etc.)
-- No new `npm` packages required — zero bundle size impact
+`useReportWorker` `calculateKPIs` sends tasks/issues to a web worker, but the actual `calculateKPIs` function in `reportsUtils.ts` requires a `dateRange` parameter that the worker call never passes. Looking at `reportCalculations.worker.ts` — it likely implements KPI calculation independently. This needs to be verified and aligned.
 
-## Files Modified
+**Fix**: In `Reports.tsx`, add a synchronous fallback `calculateKPIs` from `reportsUtils.ts` when the worker isn't needed, or ensure the worker also receives the date range. Also, the `kpis` state is updated asynchronously via `useEffect` — but `isCalculating` is only shown for the KPI row while ALL other charts are re-computed synchronously via `useMemo`. This is fine, but the worker `calculateKPIs` fallback returns wrong values (e.g., `openIssues: issues.length` instead of counting only open/investigating ones).
 
-| File | Type | Change |
-|---|---|---|
-| `src/features/reports/components/ReportsHeader.tsx` | Edit | Enable Export dropdown with CSV + PDF options |
-| `src/features/reports/utils/exportUtils.ts` | New | CSV builder + download trigger + PDF print trigger |
-| `src/features/reports/Reports.tsx` | Edit | Wire up export handler, pass to header |
-| `src/index.css` | Edit | Add `@media print` styles for clean PDF output |
+---
+
+### Bug 6 — `Avg Cycle Time` Shows `0` Always
+
+`calculateAvgCycleTime` requires tasks to have both `startDate` AND `updatedAt`. In the DB, `start_date` is often null (7 of 10 tasks queried had no `start_date`). With no tasks matching, it returns `0`. The display shows `"0"` days — which is misleading. Should show `"N/A"`.
+
+**Fix in `ReportsKPIRow.tsx`**: Change the value display to show `"N/A"` when `kpis.avgCycleTime === 0`.
+
+---
+
+### Bug 7 — Filters Panel Shows Empty "Module" List Until Project Selected
+
+`modules` passed to `ReportsFilters` is `allAdaptedModules` when no project is selected — which is all org-wide modules. This IS correct. But the filter panel lists modules even without tasks assigned to them. This is cosmetic but correct.
+
+---
+
+## Summary of Files to Fix
+
+| File | Fix |
+|---|---|
+| `src/features/reports/Reports.tsx` | Apply time-range filter before passing to `applyFilters` |
+| `src/features/reports/utils/reportsUtils.ts` | Fix `applyFilters` milestone/module guard; fix `getMilestoneHealth` empty date guard |
+| `src/features/reports/components/ReportOpenIssuesTable.tsx` | Null-guard `category` and `reportedAt` |
+| `src/features/reports/components/ReportsKPIRow.tsx` | Show `"N/A"` for avg cycle time when 0 |
+| `src/workers/reportCalculations.worker.ts` | Verify worker KPI calculation is correct |
+
+No database migrations needed.
