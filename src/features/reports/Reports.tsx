@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { downloadCSVReport, triggerPDFExport } from './utils/exportUtils';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -11,7 +11,6 @@ import { ReportTeamWorkload } from './components/ReportTeamWorkload';
 import { ReportModuleProgress } from './components/ReportModuleProgress';
 import { ReportOpenIssuesTable } from './components/ReportOpenIssuesTable';
 import { ReportTrendChart } from './components/ReportTrendChart';
-import { useReportWorker } from '@/hooks/useReportWorker';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProjects } from '@/hooks/useProjects';
 import { useAllTasks } from '@/hooks/useTasks';
@@ -25,7 +24,6 @@ import { Module as DbModule } from '@/services/modules.service';
 import { Milestone as DbMilestone } from '@/services/milestones.service';
 import {
   ReportFilter,
-  ReportKPI,
   getDateRangeFromTimeRange,
   getTaskStatusBreakdown,
   getMilestoneHealth,
@@ -34,20 +32,9 @@ import {
   getCompletedTasksTrend,
   applyFilters,
   filterTasksByTimeRange,
+  calculateKPIs,
 } from './utils/reportsUtils';
 import { TeamMember, Module, Milestone, ModuleType } from '@/types';
-
-// Default KPIs for loading state
-const defaultKPIs: ReportKPI = {
-  projectProgress: 0,
-  completedTasks: 0,
-  totalTasks: 0,
-  openIssues: 0,
-  criticalIssues: 0,
-  overdueTasks: 0,
-  avgCycleTime: 0,
-  trendData: [],
-};
 
 // ─── Type Adapters ────────────────────────────────────────────────────────────
 
@@ -89,10 +76,7 @@ export default function Reports() {
   const { currentOrganization } = useOrganization();
   const orgId = currentOrganization?.id;
 
-  const { calculateKPIs, isCalculating } = useReportWorker();
-
   const [filter, setFilter] = useState<ReportFilter>({ timeRange: '30d' });
-  const [kpis, setKpis] = useState<ReportKPI>(defaultKPIs);
 
   // ─── Real data hooks ─────────────────────────────────────────────────────
   const { data: allProjects = [], isLoading: projectsLoading } = useProjects();
@@ -161,10 +145,8 @@ export default function Reports() {
     return applyFilters(timeFiltered, filter);
   }, [tasks, filter, dateRange]);
 
-  // ─── KPIs via worker ─────────────────────────────────────────────────────
-  useEffect(() => {
-    calculateKPIs(filteredTasks, issues).then(setKpis);
-  }, [filteredTasks, issues, calculateKPIs]);
+  // ─── KPIs (synchronous) ───────────────────────────────────────────────────
+  const kpis = useMemo(() => calculateKPIs(filteredTasks, issues, dateRange), [filteredTasks, issues, dateRange]);
 
   // ─── Chart data ───────────────────────────────────────────────────────────
   const statusBreakdown = useMemo(() => getTaskStatusBreakdown(filteredTasks), [filteredTasks]);
@@ -268,13 +250,7 @@ export default function Reports() {
           onFilterChange={setFilter}
         />
 
-        {isCalculating ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32" />)}
-          </div>
-        ) : (
           <ReportsKPIRow kpis={kpis} onKPIClick={handleKPIClick} />
-        )}
 
         {/* 2-Column Grid for Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
