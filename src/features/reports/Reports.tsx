@@ -12,11 +12,20 @@ import { ReportOpenIssuesTable } from './components/ReportOpenIssuesTable';
 import { ReportTrendChart } from './components/ReportTrendChart';
 import { useReportWorker } from '@/hooks/useReportWorker';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useProjects } from '@/hooks/useProjects';
+import { useAllTasks } from '@/hooks/useTasks';
+import { useAllIssues } from '@/hooks/useIssues';
+import { useAllMilestones } from '@/hooks/useMilestones';
+import { useOrgAllModules } from '@/hooks/useModules';
+import { useTeamMembers } from '@/hooks/useTeam';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { TeamMember as ServiceTeamMember } from '@/services/team.service';
+import { Module as DbModule } from '@/services/modules.service';
+import { Milestone as DbMilestone } from '@/services/milestones.service';
 import {
   ReportFilter,
   ReportKPI,
   getDateRangeFromTimeRange,
-  calculateKPIs as calculateKPIsSync,
   getTaskStatusBreakdown,
   getMilestoneHealth,
   getTeamWorkload,
@@ -24,8 +33,7 @@ import {
   getCompletedTasksTrend,
   applyFilters,
 } from './utils/reportsUtils';
-import { projects, teamMembers, projectModules, projectIssues } from '@/data/mockData';
-import { Task, Issue, Milestone } from '@/types';
+import { TeamMember, Module, Milestone, ModuleType } from '@/types';
 
 // Default KPIs for loading state
 const defaultKPIs: ReportKPI = {
@@ -39,88 +47,128 @@ const defaultKPIs: ReportKPI = {
   trendData: [],
 };
 
+// ─── Type Adapters ────────────────────────────────────────────────────────────
+
+function dbMilestoneToFrontend(dbM: DbMilestone): Milestone {
+  return {
+    id: dbM.id,
+    title: dbM.name,
+    date: dbM.due_date || '',
+    completed: dbM.status === 'completed',
+    description: dbM.description || undefined,
+  };
+}
+
+function dbModuleToFrontend(dbM: DbModule): Module {
+  return {
+    id: dbM.id,
+    name: dbM.name,
+    type: (dbM.module_type as ModuleType) || 'software',
+    description: dbM.description || undefined,
+    createdAt: dbM.created_at || '',
+  };
+}
+
+function serviceTeamMemberToFrontend(m: ServiceTeamMember): TeamMember {
+  return {
+    id: m.id,
+    name: m.name,
+    email: m.email,
+    role: m.role,
+    initials: m.initials,
+    avatar: m.avatar_url || undefined,
+  };
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
+
 export default function Reports() {
   const navigate = useNavigate();
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   const { calculateKPIs, isCalculating } = useReportWorker();
 
-  const [filter, setFilter] = useState<ReportFilter>({
-    timeRange: '30d',
-  });
-  
+  const [filter, setFilter] = useState<ReportFilter>({ timeRange: '30d' });
   const [kpis, setKpis] = useState<ReportKPI>(defaultKPIs);
 
-  // Aggregate data from all projects or selected project
-  const { tasks, issues, milestones, projectName } = useMemo(() => {
-    let allTasks: Task[] = [];
-    let allIssues: Issue[] = [];
-    let allMilestones: Milestone[] = [];
-    let name: string | undefined;
+  // ─── Real data hooks ─────────────────────────────────────────────────────
+  const { data: allProjects = [], isLoading: projectsLoading } = useProjects();
+  const { data: allTasks = [], isLoading: tasksLoading } = useAllTasks();
+  const { data: allIssues = [], isLoading: issuesLoading } = useAllIssues();
+  const { data: dbMilestones = [], isLoading: milestonesLoading } = useAllMilestones();
+  const { data: dbModules = [], isLoading: modulesLoading } = useOrgAllModules();
+  const { data: serviceTeamMembers = [], isLoading: teamLoading } = useTeamMembers(orgId);
 
-    if (filter.projectId) {
-      const project = projects.find(p => p.id === filter.projectId);
-      if (project) {
-        allTasks = project.tasks;
-        allIssues = project.issues || [];
-        allMilestones = project.milestones;
-        name = project.name;
-      }
-    } else {
-      projects.forEach(project => {
-        allTasks = [...allTasks, ...project.tasks];
-        allIssues = [...allIssues, ...(project.issues || [])];
-        allMilestones = [...allMilestones, ...project.milestones];
-      });
-      // Add standalone issues
-      allIssues = [...allIssues, ...projectIssues];
-    }
+  const isLoading = projectsLoading || tasksLoading || issuesLoading || milestonesLoading || modulesLoading || teamLoading;
 
-    return {
-      tasks: allTasks,
-      issues: allIssues,
-      milestones: allMilestones,
-      projectName: name
-    };
-  }, [filter.projectId]);
+  // ─── Adapted frontend types ───────────────────────────────────────────────
+  const allAdaptedMilestones = useMemo(
+    () => dbMilestones.map(dbMilestoneToFrontend),
+    [dbMilestones]
+  );
 
-  // Apply filters to tasks
-  const filteredTasks = useMemo(() => {
-    return applyFilters(tasks, filter);
-  }, [tasks, filter]);
+  const allAdaptedModules = useMemo(
+    () => dbModules.map(dbModuleToFrontend),
+    [dbModules]
+  );
 
-  // Calculate date range
-  const dateRange = useMemo(() => {
-    return getDateRangeFromTimeRange(filter.timeRange, filter.customDateRange);
-  }, [filter.timeRange, filter.customDateRange]);
+  const allAdaptedTeamMembers = useMemo(
+    () => serviceTeamMembers.map(serviceTeamMemberToFrontend),
+    [serviceTeamMembers]
+  );
 
-  // Calculate KPIs using Web Worker for heavy calculations
+  // ─── Project-scoped data ─────────────────────────────────────────────────
+  const tasks = useMemo(() => {
+    if (!filter.projectId) return allTasks;
+    return allTasks.filter(t => t.projectId === filter.projectId);
+  }, [allTasks, filter.projectId]);
+
+  const issues = useMemo(() => {
+    if (!filter.projectId) return allIssues;
+    return allIssues.filter(i => i.projectId === filter.projectId);
+  }, [allIssues, filter.projectId]);
+
+  const milestones = useMemo(() => {
+    if (!filter.projectId) return allAdaptedMilestones;
+    const filtered = dbMilestones.filter(m => m.project_id === filter.projectId);
+    return filtered.map(dbMilestoneToFrontend);
+  }, [dbMilestones, allAdaptedMilestones, filter.projectId]);
+
+  const modules = useMemo(() => {
+    if (!filter.projectId) return allAdaptedModules;
+    const filtered = dbModules.filter(m => m.project_id === filter.projectId);
+    return filtered.map(dbModuleToFrontend);
+  }, [dbModules, allAdaptedModules, filter.projectId]);
+
+  // ─── Project name for header ──────────────────────────────────────────────
+  const projectName = useMemo(() => {
+    if (!filter.projectId) return undefined;
+    return allProjects.find(p => p.id === filter.projectId)?.name;
+  }, [allProjects, filter.projectId]);
+
+  // ─── Apply task filters ───────────────────────────────────────────────────
+  const filteredTasks = useMemo(() => applyFilters(tasks, filter), [tasks, filter]);
+
+  // ─── Date range ───────────────────────────────────────────────────────────
+  const dateRange = useMemo(
+    () => getDateRangeFromTimeRange(filter.timeRange, filter.customDateRange),
+    [filter.timeRange, filter.customDateRange]
+  );
+
+  // ─── KPIs via worker ─────────────────────────────────────────────────────
   useEffect(() => {
-    calculateKPIs(filteredTasks, issues).then((result) => {
-      setKpis(result);
-    });
+    calculateKPIs(filteredTasks, issues).then(setKpis);
   }, [filteredTasks, issues, calculateKPIs]);
 
-  // Get chart data
-  const statusBreakdown = useMemo(() => {
-    return getTaskStatusBreakdown(filteredTasks);
-  }, [filteredTasks]);
+  // ─── Chart data ───────────────────────────────────────────────────────────
+  const statusBreakdown = useMemo(() => getTaskStatusBreakdown(filteredTasks), [filteredTasks]);
+  const milestoneHealth = useMemo(() => getMilestoneHealth(milestones, filteredTasks), [milestones, filteredTasks]);
+  const teamWorkload = useMemo(() => getTeamWorkload(filteredTasks, allAdaptedTeamMembers), [filteredTasks, allAdaptedTeamMembers]);
+  const moduleProgress = useMemo(() => getModuleProgress(filteredTasks, modules), [filteredTasks, modules]);
+  const trendData = useMemo(() => getCompletedTasksTrend(filteredTasks, dateRange), [filteredTasks, dateRange]);
 
-  const milestoneHealth = useMemo(() => {
-    return getMilestoneHealth(milestones, filteredTasks);
-  }, [milestones, filteredTasks]);
-
-  const teamWorkload = useMemo(() => {
-    return getTeamWorkload(filteredTasks, teamMembers);
-  }, [filteredTasks]);
-
-  const moduleProgress = useMemo(() => {
-    return getModuleProgress(filteredTasks, projectModules);
-  }, [filteredTasks]);
-
-  const trendData = useMemo(() => {
-    return getCompletedTasksTrend(filteredTasks, dateRange);
-  }, [filteredTasks, dateRange]);
-
-  // Get time range label
+  // ─── Time range label ─────────────────────────────────────────────────────
   const timeRangeLabel = useMemo(() => {
     switch (filter.timeRange) {
       case '7d': return 'Last 7 days';
@@ -131,22 +179,20 @@ export default function Reports() {
     }
   }, [filter.timeRange]);
 
-  // Handlers with useCallback to prevent unnecessary re-renders
-  const handleKPIClick = useCallback((type: 'progress' | 'issues' | 'overdue' | 'cycle') => {
-    if (filter.projectId) {
-      navigate(`/projects/${filter.projectId}`);
-    }
+  // ─── Handlers ────────────────────────────────────────────────────────────
+  const handleKPIClick = useCallback((_type: 'progress' | 'issues' | 'overdue' | 'cycle') => {
+    if (filter.projectId) navigate(`/projects/${filter.projectId}`);
   }, [filter.projectId, navigate]);
 
   const handleStatusClick = useCallback((status: string) => {
-    setFilter(prev => ({ ...prev, status: [status as 'todo' | 'in-progress' | 'review' | 'done' | 'blocked'] }));
+    setFilter(prev => ({ ...prev, status: [status as any] }));
   }, []);
 
   const handleMilestoneClick = useCallback((milestoneId: string) => {
-    if (filter.projectId) {
-      navigate(`/projects/${filter.projectId}`);
-    }
-  }, [filter.projectId, navigate]);
+    const dbM = dbMilestones.find(m => m.id === milestoneId);
+    if (dbM?.project_id) navigate(`/projects/${dbM.project_id}`);
+    else if (filter.projectId) navigate(`/projects/${filter.projectId}`);
+  }, [dbMilestones, filter.projectId, navigate]);
 
   const handleMemberClick = useCallback((memberId: string) => {
     setFilter(prev => ({ ...prev, assigneeIds: [memberId] }));
@@ -157,13 +203,29 @@ export default function Reports() {
   }, []);
 
   const handleIssueClick = useCallback((issueId: string) => {
-    const projectWithIssue = projects.find(p =>
-      p.issues?.some(i => i.id === issueId)
+    const issue = allIssues.find(i => i.id === issueId);
+    if (issue?.projectId) navigate(`/projects/${issue.projectId}/issues/${issueId}`);
+  }, [allIssues, navigate]);
+
+  // ─── Loading skeleton ─────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="space-y-6">
+          <Skeleton className="h-16" />
+          <Skeleton className="h-12" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32" />)}
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-64" />)}
+          </div>
+          <Skeleton className="h-64" />
+          <Skeleton className="h-48" />
+        </div>
+      </AppLayout>
     );
-    if (projectWithIssue) {
-      navigate(`/projects/${projectWithIssue.id}/issues/${issueId}`);
-    }
-  }, [navigate]);
+  }
 
   return (
     <AppLayout>
@@ -174,9 +236,9 @@ export default function Reports() {
         />
 
         <ReportsFilters
-          projects={projects}
-          teamMembers={teamMembers}
-          modules={projectModules}
+          projects={allProjects}
+          teamMembers={allAdaptedTeamMembers}
+          modules={modules}
           milestones={milestones}
           filter={filter}
           onFilterChange={setFilter}
@@ -184,15 +246,10 @@ export default function Reports() {
 
         {isCalculating ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-32" />
-            ))}
+            {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32" />)}
           </div>
         ) : (
-          <ReportsKPIRow
-            kpis={kpis}
-            onKPIClick={handleKPIClick}
-          />
+          <ReportsKPIRow kpis={kpis} onKPIClick={handleKPIClick} />
         )}
 
         {/* 2-Column Grid for Charts */}
@@ -209,7 +266,6 @@ export default function Reports() {
             data={teamWorkload}
             onMemberClick={handleMemberClick}
           />
-          {/* Module Progress Chart - Always rendered to show empty state when needed */}
           <ReportModuleProgress
             data={moduleProgress}
             onModuleClick={handleModuleClick}
