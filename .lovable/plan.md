@@ -1,73 +1,167 @@
 
+# Make Calendar Dynamic (Replace Mock Data with Real Backend Data)
 
-# Fix: Team Page Issues (5 Modifications)
+## Problem
 
-## Issues Identified
+The Calendar page (`src/features/calendar/Calendar.tsx`) imports and uses `projects` and `teamMembers` from the static mock data file. All calendar events (tasks, milestones, issues) are derived from mock project objects, meaning the calendar shows hardcoded data instead of real database records.
 
-1. **Team members not loading in project creation** - The `useOrganizationMembers` hook works but may return empty if the `profiles` join fails due to RLS. The `teamMembers` data from this hook is used in the Select dropdown.
+## Root Cause
 
-2. **"Create new organization" visible to members** - The sidebar org switcher shows the "Create new organization" button to all users regardless of role. Need to check the user's role in the current org and hide it for `member` role.
+Three data dependencies are mocked:
+1. **Projects list** — used both for event conversion and for the filter UI's project dropdown
+2. **Team members** — used only for the filter UI's assignee dropdown
+3. **Events** — tasks/milestones/issues are read off mock `project.tasks`, `project.milestones`, `project.issues`
 
-3. **Projects showing 0, Department blank** - The `teamService.getByOrganization()` fetches `projectCount` per member but the `profiles` table has no `department` column. The `department` field on `TeamMember` is always `undefined`. The "Active" count shows 0 because the status is hardcoded as `'active'` but the stats filter compares against it — this is actually a display issue since status is always `'active'`, so "Active" should match "Total". Looking at the screenshot: Active shows 0 which means members are returned but the `status` field comparison might be off. Actually, looking at the code, `status` is hardcoded to `'active' as const` in the service, so `stats.active` should work. The issue is likely that the `teamService.getAll()` is fetching members from the first org membership rather than the current org. The `useTeamMembers()` hook from `useTeam.ts` calls `teamService.getAll()` which auto-detects org instead of using the current org from context.
+## Solution
 
-4. **Remove "Send Mail" option** - Remove the "Send Email" dropdown menu item from both grid and list views.
+Replace all mock imports with real hooks. The existing service layer already supports everything needed — only a missing `useAllMilestones` hook needs to be added.
 
-5. **Edit team member popup** - Currently the "Edit" dropdown item does nothing. Need to add an edit dialog with editable Department and Role fields, and a read-only Email field.
+### Data Flow After Fix
 
-## Plan
-
-### 1. Fix team members loading in project creation
-
-The `useOrganizationMembers` hook in `useProjectTeam.ts` uses a joined query. If there's an RLS issue with the join, it could return empty. Will verify the hook works correctly and add error handling/logging.
-
-### 2. Hide "Create new organization" for members
-
-In `AppSidebar.tsx`, check the current user's role in the current organization. If the role is `member`, hide the "Create new organization" button. This requires fetching the user's membership role from the `organization_members` table or from the already-loaded team members data.
-
-**Approach**: Use the `organizationsService.getMembers()` or query the current user's role from `organization_members` table. Since the sidebar already has `useOrganization()` context, we'll add a check using the current user's org membership role.
-
-### 3. Fix Projects count and Department
-
-**Projects count**: The `useTeamMembers()` hook calls `teamService.getAll()` which auto-detects the org. Need to update it to use the current organization from context, similar to how we fixed projects scoping.
-
-**Department**: The `profiles` table does not have a `department` column. We need to add a `department` column to either:
-- The `profiles` table (user-level department), OR
-- The `organization_members` table (per-org department assignment)
-
-Best approach: Add `department` to `organization_members` so a user can have different departments in different orgs. Then update `teamService.getByOrganization()` to read the department from the membership record.
-
-**Active count**: Will also fix the `useTeamMembers` hook in Team.tsx to pass the current org ID so members are scoped correctly.
-
-### 4. Remove "Send Email" option
-
-Remove the `<DropdownMenuItem>` for "Send Email" from both the `MemberCard` component (grid view, line ~197-200) and the list view (line ~533-536) in `Team.tsx`.
-
-### 5. Add Edit Team Member Dialog
-
-Create an edit dialog that opens when clicking "Edit" on a team member. The dialog will have:
-- **Email** field (read-only/disabled)
-- **Department** field (editable, dropdown with predefined departments)
-- **Role** field (editable, dropdown: member/admin)
-- Save button that updates `organization_members` (role, department)
-
-## Technical Details
-
-### Database Migration
-```sql
-ALTER TABLE public.organization_members 
-  ADD COLUMN IF NOT EXISTS department text;
-
-NOTIFY pgrst, 'reload schema';
+```text
+useProjects()           → Project[] scoped to current org  → filter dropdown + event conversion context
+useAllTasks()           → Task[]   (all org tasks)          → calendar task events
+useAllMilestones()      → Milestone[] (all org milestones)  → calendar milestone events
+useAllIssues()          → Issue[]   (all org issues)        → calendar issue events
+useOrganizationMembers  → TeamMember[] (org members)        → filter assignee dropdown
 ```
 
-### Files to Change
+### How event conversion works
+
+The existing `convertToCalendarEvents()` utility already accepts typed arrays and a projectId/name. After fetching tasks/milestones/issues, we need to group them by `project_id` so each event gets the correct `projectName`. We use the `useProjects()` data to build a `projectId -> projectName` map.
+
+## Files Changed
 
 | File | Change |
 |------|--------|
-| `supabase/migrations/...` | Add `department` column to `organization_members` |
-| `src/features/team/Team.tsx` | Remove "Send Email" items, add edit dialog with department/role fields and read-only email, wire up "Edit" button |
-| `src/hooks/useTeam.ts` | Update `useTeamMembers` to accept orgId param; add `useUpdateTeamMember` for editing |
-| `src/services/team.service.ts` | Update `getByOrganization()` to include `department` from `organization_members`; add `updateMember()` for department+role |
-| `src/components/layout/AppSidebar.tsx` | Hide "Create new organization" for members by checking current user's org role |
-| `src/hooks/useProjectTeam.ts` | Verify `useOrganizationMembers` works correctly, add fallback/error logging |
+| `src/hooks/useMilestones.ts` | Add `useAllMilestones(orgId?)` hook that fetches milestones scoped to the current org's projects |
+| `src/features/calendar/Calendar.tsx` | Replace mock imports with real hooks; add loading state; use live data for events, filters, and modals |
 
+## Detailed Changes
+
+### 1. `src/hooks/useMilestones.ts` — Add `useAllMilestones`
+
+Add a new hook that:
+1. Reads `currentOrganization.id` from `useOrganization()`
+2. First fetches the org's project IDs from the projects query cache (or re-fetches)
+3. Queries `milestones` filtered by those project IDs
+4. Returns `Milestone[]` (the DB type from `milestonesService`)
+
+```typescript
+export function useAllMilestones() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
+  return useQuery({
+    queryKey: [...queryKeys.milestones.all, 'org', orgId],
+    queryFn: async () => {
+      // Get project IDs for this org first
+      const { data: projectRows } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('organization_id', orgId!)
+        .is('deleted_at', null);
+
+      const projectIds = (projectRows || []).map(p => p.id);
+      if (!projectIds.length) return [];
+
+      const { data, error } = await supabase
+        .from('milestones')
+        .select('*')
+        .in('project_id', projectIds)
+        .is('deleted_at', null)
+        .order('due_date', { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!orgId,
+  });
+}
+```
+
+### 2. `src/features/calendar/Calendar.tsx` — Replace mock data
+
+**Remove:**
+```typescript
+import { projects, teamMembers } from '@/data/mockData';
+```
+
+**Add hooks:**
+```typescript
+import { useProjects } from '@/hooks/useProjects';
+import { useAllTasks } from '@/hooks/useTasks';
+import { useAllIssues } from '@/hooks/useIssues';
+import { useAllMilestones } from '@/hooks/useMilestones';
+import { useOrganizationMembers } from '@/hooks/useProjectTeam';
+import { useOrganization } from '@/contexts/OrganizationContext';
+```
+
+**Inside the component:**
+```typescript
+const { currentOrganization } = useOrganization();
+const { data: projects = [] } = useProjects();
+const { data: allTasks = [], isLoading: tasksLoading } = useAllTasks();
+const { data: allMilestones = [], isLoading: milestonesLoading } = useAllMilestones();
+const { data: allIssues = [], isLoading: issuesLoading } = useAllIssues();
+const { data: teamMembers = [] } = useOrganizationMembers(currentOrganization?.id);
+
+const isLoading = tasksLoading || milestonesLoading || issuesLoading;
+```
+
+**Event conversion** — group tasks/milestones/issues by project, then convert:
+```typescript
+const allEvents = useMemo(() => {
+  const projectMap = new Map(projects.map(p => [p.id, p.name]));
+  const events: CalendarEvent[] = [];
+
+  // Group tasks by project
+  const tasksByProject = new Map<string, Task[]>();
+  allTasks.forEach(task => {
+    // Tasks have a project_id in the DB, but the frontend Task type gets it
+    // from context. We need to look it up differently.
+    // We iterate tasks and match via task.projectId if available, else we skip
+  });
+  // ...
+}, [projects, allTasks, allMilestones, allIssues]);
+```
+
+**Important note on task projectId:** The frontend `Task` type doesn't carry `projectId` — the DB task has `project_id`. The `tasksService.getAll()` method fetches from Supabase but the `mapDbTaskToTask` function doesn't include `project_id` in the returned object.
+
+**Fix needed:** The `tasksService` needs to include `projectId` in the mapped `Task` so we can group by project for calendar events. We'll check the types and add `projectId` to the `Task` type and the mapping function.
+
+Looking at `src/types/index.ts`: The `Task` interface likely doesn't have `projectId`. We need to add it.
+
+Actually — looking more carefully: `convertToCalendarEvents` takes `(tasks, milestones, issues, projectId, projectName)` and processes arrays per-project. Since our hooks return a flat list of all tasks, we need the `project_id` on each task.
+
+**The clean approach:** Extend `mapDbTaskToTask` to include `projectId` from the DB row, and add `projectId?: string` to the `Task` type. Then group tasks/milestones/issues by projectId in the calendar's `useMemo`.
+
+Alternatively, since issues already have `projectId` on the mapped type (see `mapDbIssueToIssue`: `projectId: dbIssue.project_id`), we just need the same for tasks.
+
+**For milestones**, the DB row returned by `useAllMilestones` already has `project_id` as a raw DB column since it returns the DB type directly.
+
+### Summary of all changes:
+
+1. **`src/types/index.ts`** — Add `projectId?: string` to the `Task` interface
+2. **`src/services/tasks.service.ts`** — Include `projectId: dbTask.project_id` in `mapDbTaskToTask`
+3. **`src/hooks/useMilestones.ts`** — Add `useAllMilestones()` hook
+4. **`src/features/calendar/Calendar.tsx`** — Replace all mock data with real hooks, add loading skeleton, update event conversion and modal lookups to use live data
+
+### Modal handling after migration
+
+Currently, clicking an event searches through `projects.tasks/milestones/issues` to find the entity. After the fix:
+- **Task modal**: find task directly from `allTasks` array by `event.id`
+- **Milestone modal**: find milestone from `allMilestones` by `event.id`
+- **Issue modal**: find issue from `allIssues` by `event.id`
+- For the modal's `allTasks` prop (needed for dependency view), filter `allTasks` by the same `projectId`
+
+### Loading state
+
+Add a simple loading indicator while data is being fetched:
+```tsx
+{isLoading && (
+  <div className="flex-1 flex items-center justify-center text-muted-foreground">
+    Loading calendar data...
+  </div>
+)}
+```
