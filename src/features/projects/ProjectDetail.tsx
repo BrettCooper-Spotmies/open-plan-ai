@@ -466,14 +466,16 @@ export default function ProjectDetail() {
   const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
     if (!project) return;
 
+    // Strip id/reportedAt/projectId so Supabase generates a proper UUID
+    const { id: _id, reportedAt: _reportedAt, projectId: _pid, ...rest } = newIssuePartial;
+
     createIssueMutation.mutate({
-      projectId: project.id,
-      title: newIssuePartial.title || 'New Issue',
-      description: newIssuePartial.description || '',
+      title: rest.title || 'New Issue',
+      description: rest.description || '',
       status: 'open',
-      severity: newIssuePartial.severity || 'minor',
-      category: newIssuePartial.category || 'other',
-      assignees: newIssuePartial.assignees || [],
+      severity: rest.severity || 'minor',
+      category: rest.category || 'other',
+      assignees: rest.assignees || [],
       reportedBy: {
         id: 'current-user',
         name: 'Current User',
@@ -481,8 +483,8 @@ export default function ProjectDetail() {
         role: 'member',
         initials: 'CU',
       },
-      descriptionBlocks: newIssuePartial.descriptionBlocks || [],
-      ...newIssuePartial,
+      descriptionBlocks: rest.descriptionBlocks || [],
+      ...rest,
     } as Omit<Issue, 'id' | 'reportedAt'>);
   };
 

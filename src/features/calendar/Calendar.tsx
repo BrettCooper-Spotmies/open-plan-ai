@@ -77,7 +77,6 @@ function taskToCalendarEvent(task: Task, projectName: string): CalendarEvent | n
 // Convert a frontend Issue to a calendar event
 function issueToCalendarEvent(issue: Issue, projectName: string): CalendarEvent | null {
   if (!issue.dueDate) return null;
-  if (issue.severity !== 'critical' && issue.severity !== 'major') return null;
   let date: Date;
   try {
     date = parseISO(issue.dueDate);
