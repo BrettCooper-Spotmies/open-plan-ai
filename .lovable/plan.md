@@ -1,167 +1,122 @@
 
-# Make Calendar Dynamic (Replace Mock Data with Real Backend Data)
+# Fix: 4 Issues — Issue Creation, Calendar Day View Padding, Calendar Showing All Events, Owner Role Lock
 
-## Problem
+## Issue 1: "Failed to Create Issue" Error
 
-The Calendar page (`src/features/calendar/Calendar.tsx`) imports and uses `projects` and `teamMembers` from the static mock data file. All calendar events (tasks, milestones, issues) are derived from mock project objects, meaning the calendar shows hardcoded data instead of real database records.
+### Root Cause
+Looking at the `handleIssueCreate` function in `ProjectDetail.tsx` (line 466–487), it builds the issue object and calls `createIssueMutation.mutate(...)`. The mutation calls `issuesService.create(projectId, issue)`.
 
-## Root Cause
+The problem is in `IssuesView.tsx` — the `handleCreateSubmit` function calls `onIssueCreate?.(issueToCreate)` passing the full draft `Issue` object (which includes `id`, `reportedAt` — fields that `useCreateIssue`'s `mutationFn` signature says are omitted). However, the real failure is in the issue draft: it has `id: newId` (a client-generated UUID-like string) and `reportedAt` set, but those are stripped by the type signature.
 
-Three data dependencies are mocked:
-1. **Projects list** — used both for event conversion and for the filter UI's project dropdown
-2. **Team members** — used only for the filter UI's assignee dropdown
-3. **Events** — tasks/milestones/issues are read off mock `project.tasks`, `project.milestones`, `project.issues`
+The **actual** bug: The `createIssueMutation.mutate(...)` call in `ProjectDetail.tsx` receives a partial issue object where `title` may be an empty string (the modal allows creating without filling the title). But more critically, the issue title is required (`NOT NULL`) in the database.
 
-## Solution
+However, looking at the `IssuesView` draft creation and the `IssueDetailContent` — the user fills in title before submitting. The real problem is the **RLS policy** `WITH CHECK (has_project_access(project_id))`. The issue INSERT requires `project_id` to pass `has_project_access`, which checks `organization_members` for the current user. If the project belongs to an org the user is a member of, this works. But the issue might be that `IssuesView.handleCreateIssue()` builds a stub with `projectId: routeProjectId || issues[0].projectId || 'p-1'` — using `routeProjectId` from `useParams()`. However, `routeProjectId` uses the param key `id` from `useParams()` via `const { id: routeProjectId } = useParams()`. This is correct for the `/projects/:id` route.
 
-Replace all mock imports with real hooks. The existing service layer already supports everything needed — only a missing `useAllMilestones` hook needs to be added.
+**The actual root issue**: The `handleIssueCreate` in `ProjectDetail.tsx` wraps the partial issue as `Omit<Issue, 'id' | 'reportedAt'>` and passes it to the mutation. Inside `issuesService.create`, it calls `.insert({project_id: projectId, title: issue.title, ...})`. If `issue.title` is empty, Supabase will reject with NOT NULL violation. But users see "Failed to create issue" — this is the generic error from `onError` in `useCreateIssue`.
 
-### Data Flow After Fix
-
-```text
-useProjects()           → Project[] scoped to current org  → filter dropdown + event conversion context
-useAllTasks()           → Task[]   (all org tasks)          → calendar task events
-useAllMilestones()      → Milestone[] (all org milestones)  → calendar milestone events
-useAllIssues()          → Issue[]   (all org issues)        → calendar issue events
-useOrganizationMembers  → TeamMember[] (org members)        → filter assignee dropdown
+**More likely root cause**: The `handleIssueCreate` function passes the full `Issue` object (with `id` field = `'p-1'` for `projectId`) but the mutation expects `projectId` to come from the closure (the `id` URL param). The `handleIssueCreate` in `ProjectDetail.tsx` builds:
+```
+createIssueMutation.mutate({
+  projectId: project.id,   // ← this field doesn't exist on Omit<Issue, 'id'|'reportedAt'>
+  title: ...,
+  ...newIssuePartial,
+})
 ```
 
-### How event conversion works
+Wait — actually `Issue` type includes `projectId`. And `Omit<Issue, 'id' | 'reportedAt'>` still includes `projectId`. The service ignores the `projectId` field from the issue object and uses the closure `projectId` from `useCreateIssue(id || '')`. So the DB gets `project_id: id` (the URL param).
 
-The existing `convertToCalendarEvents()` utility already accepts typed arrays and a projectId/name. After fetching tasks/milestones/issues, we need to group them by `project_id` so each event gets the correct `projectName`. We use the `useProjects()` data to build a `projectId -> projectName` map.
+**The real bug**: The `IssuesView` component creates a stub issue with `id: newId` and calls `onIssueCreate(issueToCreate)` which flows into `handleIssueCreate(newIssuePartial)`. Inside `handleIssueCreate`, it does `createIssueMutation.mutate({ ... } as Omit<Issue, 'id' | 'reportedAt'>)`. But calling `.mutate()` on this — the actual Supabase insert at `issuesService.create` does `supabase.from('issues').insert({...})`. **This should work if the title is non-empty**.
 
-## Files Changed
+Let me reconsider: The issue is that `IssuesView` calls `onIssueCreate?.(issueToCreate)` where `issueToCreate` is the full `Issue` type including `id`. `handleIssueCreate` receives it as `Partial<Issue>` and spreads it: `...newIssuePartial`. This means `id: 'issue-1234567'` gets passed to the mutation. The mutation signature says `Omit<Issue, 'id' | 'reportedAt'>` but TypeScript doesn't enforce this at runtime — the extra `id` field gets included in the insert object. **Supabase will try to insert with a custom `id` that's a non-UUID string** like `'issue-1234567'`, which fails because the `id` column expects a UUID.
 
-| File | Change |
-|------|--------|
-| `src/hooks/useMilestones.ts` | Add `useAllMilestones(orgId?)` hook that fetches milestones scoped to the current org's projects |
-| `src/features/calendar/Calendar.tsx` | Replace mock imports with real hooks; add loading state; use live data for events, filters, and modals |
-
-## Detailed Changes
-
-### 1. `src/hooks/useMilestones.ts` — Add `useAllMilestones`
-
-Add a new hook that:
-1. Reads `currentOrganization.id` from `useOrganization()`
-2. First fetches the org's project IDs from the projects query cache (or re-fetches)
-3. Queries `milestones` filtered by those project IDs
-4. Returns `Milestone[]` (the DB type from `milestonesService`)
+**Fix**: In `handleIssueCreate` in `ProjectDetail.tsx`, destructure out `id` and `reportedAt` before passing to the mutation so a clean UUID is generated by the DB default.
 
 ```typescript
-export function useAllMilestones() {
-  const { currentOrganization } = useOrganization();
-  const orgId = currentOrganization?.id;
+const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
+  if (!project) return;
+  const { id: _id, reportedAt: _reportedAt, projectId: _pid, ...rest } = newIssuePartial;
+  createIssueMutation.mutate({
+    ...rest,
+    title: rest.title || 'New Issue',
+    description: rest.description || '',
+    status: 'open',
+    severity: rest.severity || 'minor',
+    category: rest.category || 'other',
+    assignees: rest.assignees || [],
+    reportedBy: { id: 'current-user', name: 'Current User', email: '', role: 'member', initials: 'CU' },
+    descriptionBlocks: rest.descriptionBlocks || [],
+  } as Omit<Issue, 'id' | 'reportedAt'>);
+};
+```
 
-  return useQuery({
-    queryKey: [...queryKeys.milestones.all, 'org', orgId],
-    queryFn: async () => {
-      // Get project IDs for this org first
-      const { data: projectRows } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('organization_id', orgId!)
-        .is('deleted_at', null);
+---
 
-      const projectIds = (projectRows || []).map(p => p.id);
-      if (!projectIds.length) return [];
+## Issue 2: Calendar Day View — Missing Padding
 
-      const { data, error } = await supabase
-        .from('milestones')
-        .select('*')
-        .in('project_id', projectIds)
-        .is('deleted_at', null)
-        .order('due_date', { ascending: true });
+### Root Cause
+In `CalendarDayView.tsx`:
+- The day header `<div className="py-4 border-b border-border">` has vertical padding but no horizontal padding — content is flush with the left edge.
+- The events area `<div className="space-y-6 max-w-2xl">` also has no horizontal padding.
 
-      if (error) throw error;
-      return data || [];
-    },
-    enabled: !!orgId,
-  });
+### Fix
+Add `px-6` to:
+1. The day header div: `"py-4 px-6 border-b border-border"`
+2. The events container: wrap inside `<div className="px-6">` or add `px-6` to the `space-y-6 max-w-2xl` container and the empty state div
+
+---
+
+## Issue 3: Calendar Showing Only Milestones (Missing Tasks & Issues)
+
+### Root Cause
+In `Calendar.tsx`, the `issueToCalendarEvent` function has a severity filter:
+```typescript
+if (issue.severity !== 'critical' && issue.severity !== 'major') return null;
+```
+This silently drops minor/trivial issues.
+
+More importantly — tasks may have `dueDate` populated (since we now map `projectId` from DB), but the calendar filter for issues only shows critical/major. All `minor` and `trivial` issues are filtered out.
+
+Additionally, the day view only shows events that exist for that specific date. If no tasks have `dueDate` matching the current day, they won't appear. The screenshot shows Feb 18, 2026 with only milestones — this suggests either tasks don't have due dates set, or the issue is the severity filter.
+
+### Fix in `Calendar.tsx`
+Remove the severity restriction in `issueToCalendarEvent` so ALL issues with a `dueDate` appear on the calendar, regardless of severity:
+```typescript
+function issueToCalendarEvent(issue: Issue, projectName: string): CalendarEvent | null {
+  if (!issue.dueDate) return null;
+  // Remove the severity filter — show all issues with due dates
+  ...
 }
 ```
 
-### 2. `src/features/calendar/Calendar.tsx` — Replace mock data
+---
 
-**Remove:**
-```typescript
-import { projects, teamMembers } from '@/data/mockData';
-```
+## Issue 4: Owner Cannot Change Their Own Role While Editing
 
-**Add hooks:**
-```typescript
-import { useProjects } from '@/hooks/useProjects';
-import { useAllTasks } from '@/hooks/useTasks';
-import { useAllIssues } from '@/hooks/useIssues';
-import { useAllMilestones } from '@/hooks/useMilestones';
-import { useOrganizationMembers } from '@/hooks/useProjectTeam';
-import { useOrganization } from '@/contexts/OrganizationContext';
-```
+### Root Cause
+In `Team.tsx`, the edit dialog's Role select has no restriction when the current user is editing themselves. The `editMember` state holds the member being edited; if `editMember.id === user?.id` and they are an owner, they can change their own role to `member`.
 
-**Inside the component:**
-```typescript
-const { currentOrganization } = useOrganization();
-const { data: projects = [] } = useProjects();
-const { data: allTasks = [], isLoading: tasksLoading } = useAllTasks();
-const { data: allMilestones = [], isLoading: milestonesLoading } = useAllMilestones();
-const { data: allIssues = [], isLoading: issuesLoading } = useAllIssues();
-const { data: teamMembers = [] } = useOrganizationMembers(currentOrganization?.id);
+### Fix
+In the Edit dialog, disable the Role `<Select>` when `editMember?.id === user?.id`:
 
-const isLoading = tasksLoading || milestonesLoading || issuesLoading;
-```
-
-**Event conversion** — group tasks/milestones/issues by project, then convert:
-```typescript
-const allEvents = useMemo(() => {
-  const projectMap = new Map(projects.map(p => [p.id, p.name]));
-  const events: CalendarEvent[] = [];
-
-  // Group tasks by project
-  const tasksByProject = new Map<string, Task[]>();
-  allTasks.forEach(task => {
-    // Tasks have a project_id in the DB, but the frontend Task type gets it
-    // from context. We need to look it up differently.
-    // We iterate tasks and match via task.projectId if available, else we skip
-  });
-  // ...
-}, [projects, allTasks, allMilestones, allIssues]);
-```
-
-**Important note on task projectId:** The frontend `Task` type doesn't carry `projectId` — the DB task has `project_id`. The `tasksService.getAll()` method fetches from Supabase but the `mapDbTaskToTask` function doesn't include `project_id` in the returned object.
-
-**Fix needed:** The `tasksService` needs to include `projectId` in the mapped `Task` so we can group by project for calendar events. We'll check the types and add `projectId` to the `Task` type and the mapping function.
-
-Looking at `src/types/index.ts`: The `Task` interface likely doesn't have `projectId`. We need to add it.
-
-Actually — looking more carefully: `convertToCalendarEvents` takes `(tasks, milestones, issues, projectId, projectName)` and processes arrays per-project. Since our hooks return a flat list of all tasks, we need the `project_id` on each task.
-
-**The clean approach:** Extend `mapDbTaskToTask` to include `projectId` from the DB row, and add `projectId?: string` to the `Task` type. Then group tasks/milestones/issues by projectId in the calendar's `useMemo`.
-
-Alternatively, since issues already have `projectId` on the mapped type (see `mapDbIssueToIssue`: `projectId: dbIssue.project_id`), we just need the same for tasks.
-
-**For milestones**, the DB row returned by `useAllMilestones` already has `project_id` as a raw DB column since it returns the DB type directly.
-
-### Summary of all changes:
-
-1. **`src/types/index.ts`** — Add `projectId?: string` to the `Task` interface
-2. **`src/services/tasks.service.ts`** — Include `projectId: dbTask.project_id` in `mapDbTaskToTask`
-3. **`src/hooks/useMilestones.ts`** — Add `useAllMilestones()` hook
-4. **`src/features/calendar/Calendar.tsx`** — Replace all mock data with real hooks, add loading skeleton, update event conversion and modal lookups to use live data
-
-### Modal handling after migration
-
-Currently, clicking an event searches through `projects.tasks/milestones/issues` to find the entity. After the fix:
-- **Task modal**: find task directly from `allTasks` array by `event.id`
-- **Milestone modal**: find milestone from `allMilestones` by `event.id`
-- **Issue modal**: find issue from `allIssues` by `event.id`
-- For the modal's `allTasks` prop (needed for dependency view), filter `allTasks` by the same `projectId`
-
-### Loading state
-
-Add a simple loading indicator while data is being fetched:
 ```tsx
-{isLoading && (
-  <div className="flex-1 flex items-center justify-center text-muted-foreground">
-    Loading calendar data...
-  </div>
-)}
+<Select 
+  value={editRole} 
+  onValueChange={setEditRole}
+  disabled={editMember?.id === user?.id}
+>
 ```
+
+Also add a helper note: "You cannot change your own role."
+
+---
+
+## Summary of File Changes
+
+| File | Change |
+|------|--------|
+| `src/features/projects/ProjectDetail.tsx` | Fix `handleIssueCreate` to strip `id`/`reportedAt`/`projectId` before passing to mutation |
+| `src/features/calendar/components/CalendarDayView.tsx` | Add `px-6` horizontal padding to day header and events container |
+| `src/features/calendar/Calendar.tsx` | Remove severity filter restriction in `issueToCalendarEvent` so all issues with due dates appear |
+| `src/features/team/Team.tsx` | Disable role select in edit dialog when editing self (`editMember?.id === user?.id`) |
+
+No database migrations needed for any of these fixes.
