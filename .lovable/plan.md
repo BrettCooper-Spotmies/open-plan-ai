@@ -1,90 +1,124 @@
 
-# End-to-End Test & Fix: Reports Page
+# Implement Dark / Light / System Theme
 
-## Bugs Found Through Code Audit + Database Inspection
+## What's Already in Place
 
-After thoroughly reading every component, hook, utility, and checking the live database, here are the real bugs causing incorrect or broken behavior.
+- `next-themes` package is installed
+- `tailwind.config.ts` already uses `darkMode: ["class"]` — correct mode for next-themes
+- `src/components/ui/sonner.tsx` already calls `useTheme()` from next-themes (but crashes silently because `ThemeProvider` is missing from the tree)
+- `UserSettings.theme` type is `'light' | 'dark' | 'system'` in `types/index.ts`
+- `useUserStore` persists `preferences.theme` to localStorage via Zustand `persist`
+- The Appearance tab UI already exists in Settings — just fully disabled with `opacity-50 pointer-events-none`
 
----
+## What's Missing
 
-### Bug 1 — Time Range Filter Does Nothing (Critical)
+1. `ThemeProvider` from `next-themes` is **never mounted** anywhere in the app — nothing applies dark mode
+2. The Appearance tab is disabled and its buttons do nothing
+3. There's no bridge between `next-themes` `setTheme` and the Zustand `useUserStore` preferences
 
-The "7d / 30d / 90d / Custom" buttons update `filter.timeRange` but `applyFilters()` in `reportsUtils.ts` never filters by date. The `dateRange` is computed but only passed to `getCompletedTasksTrend`. All 4 KPI cards, pie chart, team workload, and milestone health completely ignore the time range and always show ALL tasks.
+## Implementation Plan
 
-**Fix**: In `Reports.tsx`, apply `filterTasksByTimeRange(tasks, dateRange)` before passing to `applyFilters`, so the time range genuinely scopes all data.
+### Step 1 — Wrap App with `ThemeProvider` (`src/App.tsx`)
 
----
+Add `ThemeProvider` from `next-themes` around the existing tree. The `attribute="class"` prop makes next-themes toggle the `dark` class on `<html>`, which is exactly what Tailwind's `darkMode: ["class"]` needs.
 
-### Bug 2 — `ReportOpenIssuesTable` Crashes on Real Data
+```tsx
+import { ThemeProvider } from "next-themes";
 
-The component does two unsafe operations:
-1. `issue.category.replace('-', ' ')` — `category` can be `null` / `undefined` from the DB, causing a runtime TypeError
-2. `format(parseISO(issue.reportedAt), 'MMM dd')` — `reportedAt` can be `null` when `reported_at` is null in the DB, causing `parseISO` to throw
+// Wrap everything:
+<ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+  {/* existing providers */}
+</ThemeProvider>
+```
 
-**Fix in `ReportOpenIssuesTable.tsx`**: Add null guards:
-- `(issue.category || 'other').replace('-', ' ')`
-- Check `issue.reportedAt` before formatting: `issue.reportedAt ? format(parseISO(issue.reportedAt), 'MMM dd') : '—'`
+`enableSystem` means when the user picks "System" it follows the OS preference. `disableTransitionOnChange` prevents a white flash on load.
 
----
+### Step 2 — Create a `useAppTheme` hook (`src/hooks/useAppTheme.ts`)
 
-### Bug 3 — `ReportMilestoneHealth` Crashes When Milestone Has No Date
+This thin hook bridges next-themes and the Zustand store so both stay in sync:
 
-`getMilestoneHealth` in `reportsUtils.ts` calls `differenceInDays(parseISO(milestone.date), today)` when `milestone.date` exists. But then `ReportMilestoneHealth.tsx` renders `format(parseISO(item.milestone.date), 'MMM dd, yyyy')` — if the date string is empty `''` (which `dbMilestoneToFrontend` returns when `due_date` is null), `parseISO('')` throws an Invalid Date error.
+```ts
+import { useTheme } from "next-themes";
+import { useUserStore } from "@/stores/useUserStore";
 
-**Fix in `ReportMilestoneHealth.tsx`**: Already has `{item.milestone.date && ...}` guard around the date display — but `parseISO('')` is also called in `getMilestoneHealth`. Fix in `reportsUtils.ts` to guard `differenceInDays` call: only compute when `milestone.date` is a non-empty string.
+export function useAppTheme() {
+  const { theme, setTheme, resolvedTheme } = useTheme();
+  const updatePreferences = useUserStore(s => s.updatePreferences);
 
----
+  const changeTheme = (t: 'light' | 'dark' | 'system') => {
+    setTheme(t);                        // next-themes applies the class
+    updatePreferences({ theme: t });    // Zustand persists the preference
+  };
 
-### Bug 4 — `applyFilters` Milestone Filter Logic Bug
-
-Current code:
-```typescript
-if (filter.milestoneIds?.length && task.milestoneId && !filter.milestoneIds.includes(task.milestoneId)) {
-  return false;
+  return { theme, resolvedTheme, changeTheme };
 }
 ```
-The `&& task.milestoneId` guard means tasks with NO milestone are NOT filtered out even when a milestone filter is active. This means filtering by "Milestone A" also shows all tasks that have no milestone assigned — wrong behavior.
 
-**Fix**: Remove the `&& task.milestoneId` guard so tasks without a `milestoneId` are properly excluded when the filter is active:
-```typescript
-if (filter.milestoneIds?.length && !filter.milestoneIds.includes(task.milestoneId || '')) {
-  return false;
-}
+On mount, next-themes already reads from its own localStorage key (`theme`). We keep Zustand in sync so the Settings UI shows the correct active selection.
+
+### Step 3 — Initialize theme from Zustand on first load (`src/App.tsx`)
+
+Because `useUserStore` persists to a different localStorage key (`user-store`), and next-themes uses its own key (`theme`), we need a tiny initialization step: read the stored Zustand preference on app start and hand it to `ThemeProvider` via its `defaultTheme` prop, OR simply use the next-themes `storageKey` to read the persisted value.
+
+The cleanest approach: pass `defaultTheme` to `ThemeProvider` from the Zustand store's hydrated value. Because Zustand's `persist` middleware runs synchronously on import, we can read it before render:
+
+```tsx
+const storedTheme = useUserStore.getState().preferences.theme;
+// then: <ThemeProvider defaultTheme={storedTheme} ...>
 ```
-Same fix for `moduleIds` filter.
 
----
+This is safe because `getState()` is synchronous and doesn't cause re-renders.
 
-### Bug 5 — KPI Worker Fallback Gives Wrong Data
+### Step 4 — Enable the Appearance Tab (`src/features/settings/Settings.tsx`)
 
-`useReportWorker` `calculateKPIs` sends tasks/issues to a web worker, but the actual `calculateKPIs` function in `reportsUtils.ts` requires a `dateRange` parameter that the worker call never passes. Looking at `reportCalculations.worker.ts` — it likely implements KPI calculation independently. This needs to be verified and aligned.
+- Remove the `"Coming Soon"` badge from the Appearance tab trigger
+- Remove `opacity-50 pointer-events-none` from the Appearance tab content
+- Remove `disabled` from the theme buttons and the sidebar/compact switches
+- Wire theme buttons to `useAppTheme().changeTheme(theme)`
+- Show the active theme with a check mark / border highlight based on `useAppTheme().theme`
+- Wire Sidebar Collapsed toggle to `updatePreferences({ sidebarCollapsed: ... })` from Zustand
+- Wire Compact Mode toggle to `updatePreferences({ compactMode: ... })` from Zustand
+- Add a "Save Appearance" button that shows a toast confirmation (preferences are already saved on change, so the button is instant)
+- Remove the tooltip wrapper around the Appearance tab trigger
 
-**Fix**: In `Reports.tsx`, add a synchronous fallback `calculateKPIs` from `reportsUtils.ts` when the worker isn't needed, or ensure the worker also receives the date range. Also, the `kpis` state is updated asynchronously via `useEffect` — but `isCalculating` is only shown for the KPI row while ALL other charts are re-computed synchronously via `useMemo`. This is fine, but the worker `calculateKPIs` fallback returns wrong values (e.g., `openIssues: issues.length` instead of counting only open/investigating ones).
+### Step 5 — Apply `compact` mode class when enabled
 
----
+When `preferences.compactMode` is true, add a `compact` class to the `<html>` element (or a root div) and add Tailwind overrides in `index.css`:
 
-### Bug 6 — `Avg Cycle Time` Shows `0` Always
+```css
+.compact .card { @apply p-3; }
+.compact header { @apply h-12; }
+/* etc. */
+```
 
-`calculateAvgCycleTime` requires tasks to have both `startDate` AND `updatedAt`. In the DB, `start_date` is often null (7 of 10 tasks queried had no `start_date`). With no tasks matching, it returns `0`. The display shows `"0"` days — which is misleading. Should show `"N/A"`.
+This is non-breaking — the class is simply not applied when compact mode is off.
 
-**Fix in `ReportsKPIRow.tsx`**: Change the value display to show `"N/A"` when `kpis.avgCycleTime === 0`.
+### Step 6 — Apply `sidebarCollapsed` preference on load
 
----
+In `AppLayout.tsx`, the `SidebarProvider` accepts a `defaultOpen` prop. Read from `useUserStore`:
 
-### Bug 7 — Filters Panel Shows Empty "Module" List Until Project Selected
+```tsx
+const sidebarCollapsed = useUserStore(s => s.preferences.sidebarCollapsed);
+<SidebarProvider defaultOpen={!sidebarCollapsed}>
+```
 
-`modules` passed to `ReportsFilters` is `allAdaptedModules` when no project is selected — which is all org-wide modules. This IS correct. But the filter panel lists modules even without tasks assigned to them. This is cosmetic but correct.
+## Files to Change
 
----
-
-## Summary of Files to Fix
-
-| File | Fix |
+| File | Change |
 |---|---|
-| `src/features/reports/Reports.tsx` | Apply time-range filter before passing to `applyFilters` |
-| `src/features/reports/utils/reportsUtils.ts` | Fix `applyFilters` milestone/module guard; fix `getMilestoneHealth` empty date guard |
-| `src/features/reports/components/ReportOpenIssuesTable.tsx` | Null-guard `category` and `reportedAt` |
-| `src/features/reports/components/ReportsKPIRow.tsx` | Show `"N/A"` for avg cycle time when 0 |
-| `src/workers/reportCalculations.worker.ts` | Verify worker KPI calculation is correct |
+| `src/App.tsx` | Wrap tree with `ThemeProvider`, read `defaultTheme` from Zustand store |
+| `src/hooks/useAppTheme.ts` | New hook bridging next-themes + Zustand |
+| `src/features/settings/Settings.tsx` | Enable Appearance tab, wire theme buttons + switches to real state |
+| `src/components/layout/AppLayout.tsx` | Pass `defaultOpen={!sidebarCollapsed}` to `SidebarProvider` |
+| `src/index.css` | Add `.compact` mode utility overrides |
 
-No database migrations needed.
+## No Database Changes Needed
+
+Theme preference is stored in the browser's localStorage via Zustand `persist`. No backend storage is needed — themes are inherently per-device preferences.
+
+## How It Works End-to-End
+
+1. User opens the app → `ThemeProvider` reads the stored theme from `next-themes` localStorage key → applies `dark`/`light` class to `<html>` → Tailwind's dark mode variants kick in
+2. User goes to Settings → Appearance → clicks "Dark" → `changeTheme('dark')` is called → next-themes immediately toggles the class on `<html>` → the whole app switches themes instantly → Zustand also saves it for the Settings UI indicator
+3. User picks "System" → next-themes watches the OS `prefers-color-scheme` media query and automatically switches as the OS changes
+4. User refreshes → same theme is restored from localStorage
