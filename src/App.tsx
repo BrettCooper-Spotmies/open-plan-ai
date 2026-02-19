@@ -34,6 +34,7 @@ const Team = lazy(() => import("./features/team"));
 const Settings = lazy(() => import("./features/settings"));
 const Reports = lazy(() => import("./features/reports"));
 const Notifications = lazy(() => import("./features/notifications"));
+const Chat = lazy(() => import("./features/chat"));
 
 const App = () => {
   const storedTheme = useUserStore.getState().preferences.theme;
@@ -150,6 +151,22 @@ const App = () => {
                     element={
                       <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
                         <Notifications />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/chat"
+                    element={
+                      <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                        <Chat />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/chat/:conversationId"
+                    element={
+                      <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                        <Chat />
                       </Suspense>
                     }
                   />

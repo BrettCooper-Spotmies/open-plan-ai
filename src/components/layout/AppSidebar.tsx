@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, Zap, Sun, ChevronsUpDown, Check, Plus, Building2, Loader2 } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, Zap, Sun, ChevronsUpDown, Check, Plus, Building2, Loader2, MessageSquare } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -36,6 +36,10 @@ const mainNavItems = [{
   title: 'Reports',
   url: '/reports',
   icon: BarChart3
+}, {
+  title: 'Chat',
+  url: '/chat',
+  icon: MessageSquare
 }];
 
 const teamNavItems = [{
