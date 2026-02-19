@@ -789,7 +789,7 @@ export const extendedTeamMembers: ExtendedTeamMember[] = [
 // Default user settings
 export const defaultUserSettings: UserSettings = {
   theme: 'system',
-  sidebarCollapsed: false,
+  sidebarCollapsed: true,
   compactMode: false,
   notifications: {
     taskAssignments: true,

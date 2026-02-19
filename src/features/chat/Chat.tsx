@@ -42,18 +42,18 @@ export default function Chat() {
   const showMessageArea = isMobile ? !!activeConv : true;
 
   return (
-    <AppLayout>
-      <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+    <AppLayout noPadding>
+      <div className="flex h-full overflow-hidden">
         {/* Left panel */}
         {showConversationList && (
-          <div className="w-full md:w-[280px] shrink-0">
+          <div className="w-full md:w-[280px] shrink-0 overflow-hidden">
             <ConversationList onSelect={handleSelectConversation} />
           </div>
         )}
 
         {/* Center panel */}
         {showMessageArea && (
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             {activeConv ? (
               <>
                 <ChatHeader conversation={activeConv} onBack={isMobile ? handleBack : undefined} />

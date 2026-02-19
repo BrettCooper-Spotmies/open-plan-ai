@@ -6,9 +6,10 @@ import { useUserStore } from '@/stores/useUserStore';
 
 interface AppLayoutProps {
   children: ReactNode;
+  noPadding?: boolean;
 }
 
-export function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout({ children, noPadding }: AppLayoutProps) {
   const preferences = useUserStore((s) => s.preferences);
 
   // Apply compact mode class to <html>
@@ -25,9 +26,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     <SidebarProvider defaultOpen={!preferences.sidebarCollapsed}>
       <div className="h-screen flex w-full bg-background overflow-hidden">
         <AppSidebar />
-        <div className="flex-1 flex flex-col h-full">
+        <div className="flex-1 flex flex-col h-full min-w-0">
           <AppHeader />
-          <main className="flex-1 p-6 overflow-y-auto">
+          <main className={noPadding ? 'flex-1 overflow-hidden' : 'flex-1 p-6 overflow-y-auto'}>
             {children}
           </main>
         </div>

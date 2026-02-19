@@ -44,13 +44,13 @@ export function MessageInput({ conversationId }: MessageInputProps) {
   const showCharCount = value.length > MAX_CHARS * 0.9;
 
   return (
-    <div className="border-t border-border px-4 py-3">
-      <div className="flex items-end gap-2">
-        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground" title="Attach file">
+    <div className="border-t border-border px-4 py-2">
+      <div className="flex items-center gap-1.5 rounded-lg border border-input bg-background px-2 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ring-offset-background">
+        <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground" title="Attach file">
           <Paperclip className="h-4 w-4" />
         </Button>
 
-        <div className="flex-1 relative">
+        <div className="flex-1 min-w-0 relative">
           <textarea
             ref={textareaRef}
             value={value}
@@ -62,10 +62,10 @@ export function MessageInput({ conversationId }: MessageInputProps) {
             onKeyDown={handleKeyDown}
             placeholder="Type a message..."
             rows={1}
-            className="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="w-full resize-none bg-transparent py-1.5 text-sm leading-5 placeholder:text-muted-foreground focus-visible:outline-none"
           />
           {showCharCount && (
-            <span className="absolute bottom-1 right-2 text-[10px] text-muted-foreground">
+            <span className="absolute bottom-0.5 right-1 text-[10px] text-muted-foreground">
               {value.length}/{MAX_CHARS}
             </span>
           )}
@@ -73,7 +73,7 @@ export function MessageInput({ conversationId }: MessageInputProps) {
 
         <Button
           size="icon"
-          className="h-8 w-8 shrink-0"
+          className="h-8 w-8 shrink-0 rounded-md"
           disabled={!value.trim()}
           onClick={handleSend}
         >

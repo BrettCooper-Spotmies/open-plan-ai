@@ -27,7 +27,7 @@ export function MessageArea({ messages, conversation }: MessageAreaProps) {
 
   return (
     <ScrollArea className="flex-1">
-      <div className="flex flex-col gap-0.5 py-4">
+      <div className="flex flex-col gap-0.5 pt-4 pb-2">
         {messages.map((msg, i) => {
           const prev = i > 0 ? messages[i - 1] : null;
           const next = i < messages.length - 1 ? messages[i + 1] : null;

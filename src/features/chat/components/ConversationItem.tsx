@@ -35,7 +35,7 @@ export function ConversationItem({ conversation, isActive, unreadCount, onClick 
     <button
       onClick={onClick}
       className={cn(
-        'flex items-center gap-3 w-full px-3 py-2.5 text-left rounded-md transition-colors',
+        'flex items-center gap-3 w-full px-3 py-2.5 text-left rounded-md transition-colors overflow-hidden',
         isActive ? 'bg-accent' : 'hover:bg-accent/50'
       )}
     >

@@ -19,14 +19,16 @@ export function MessageBubble({ message, showSenderInfo, showTimestamp, isGroupC
 
   return (
     <div className={cn('flex gap-2 px-4 group', isOwn ? 'flex-row-reverse' : 'flex-row')}>
-      {/* Avatar */}
-      <div className="w-8 shrink-0">
-        {showSenderInfo && !isOwn && isGroupChat && (
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="text-[10px]">{message.senderInitials}</AvatarFallback>
-          </Avatar>
-        )}
-      </div>
+      {/* Avatar – only show spacer in group chats */}
+      {isGroupChat && (
+        <div className="w-8 shrink-0">
+          {showSenderInfo && !isOwn && (
+            <Avatar className="h-8 w-8">
+              <AvatarFallback className="text-[10px]">{message.senderInitials}</AvatarFallback>
+            </Avatar>
+          )}
+        </div>
+      )}
 
       <div className={cn('flex flex-col max-w-[70%]', isOwn ? 'items-end' : 'items-start')}>
         {showSenderInfo && !isOwn && isGroupChat && (

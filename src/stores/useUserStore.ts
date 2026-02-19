@@ -23,7 +23,7 @@ interface UserState {
 
 const defaultPreferences: UserSettings = {
   theme: 'system',
-  sidebarCollapsed: false,
+  sidebarCollapsed: true,
   compactMode: false,
   notifications: {
     taskAssignments: true,
@@ -42,7 +42,7 @@ export const useUserStore = create<UserState>()(
       user: null,
       isAuthenticated: false,
       preferences: defaultPreferences,
-      sidebarOpen: true,
+      sidebarOpen: false,
       
       // Actions
       setUser: (user) => set({ 

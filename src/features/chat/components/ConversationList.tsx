@@ -58,8 +58,8 @@ export function ConversationList({ onSelect }: ConversationListProps) {
         </Tabs>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="px-1.5 pb-2">
+      <ScrollArea className="flex-1 min-w-0">
+        <div className="px-1.5 pb-2 overflow-hidden">
           {filtered.length === 0 ? (
             <EmptyState type="no-conversations" />
           ) : (
