@@ -13,9 +13,10 @@ interface NewDMDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (conversationId: string) => void;
+  onConversationCreated?: () => Promise<void>;
 }
 
-export function NewDMDialog({ open, onOpenChange, onSelect }: NewDMDialogProps) {
+export function NewDMDialog({ open, onOpenChange, onSelect, onConversationCreated }: NewDMDialogProps) {
   const [search, setSearch] = useState('');
   const [users, setUsers] = useState<ReachableUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -41,6 +42,7 @@ export function NewDMDialog({ open, onOpenChange, onSelect }: NewDMDialogProps) 
   const handleSelect = async (userId: string) => {
     try {
       const convId = await chatService.getOrCreateDM(userId);
+      if (onConversationCreated) await onConversationCreated();
       onSelect(convId);
       onOpenChange(false);
       setSearch('');

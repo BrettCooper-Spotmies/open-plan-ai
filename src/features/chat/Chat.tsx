@@ -55,6 +55,7 @@ export default function Chat() {
               conversations={conversations}
               loading={convsLoading}
               onSelect={handleSelectConversation}
+              onConversationCreated={refetch}
             />
           </div>
         )}

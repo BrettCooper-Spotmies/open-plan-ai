@@ -16,9 +16,10 @@ interface ConversationListProps {
   conversations: Conversation[];
   loading: boolean;
   onSelect: (id: string) => void;
+  onConversationCreated?: () => Promise<void>;
 }
 
-export function ConversationList({ conversations, loading, onSelect }: ConversationListProps) {
+export function ConversationList({ conversations, loading, onSelect, onConversationCreated }: ConversationListProps) {
   const { activeConversationId, conversationFilter, setConversationFilter, searchQuery, unreadCounts } = useChatStore();
   const [dmDialogOpen, setDmDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
@@ -88,8 +89,8 @@ export function ConversationList({ conversations, loading, onSelect }: Conversat
         </div>
       </ScrollArea>
 
-      <NewDMDialog open={dmDialogOpen} onOpenChange={setDmDialogOpen} onSelect={onSelect} />
-      <NewGroupDialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen} onSelect={onSelect} />
+      <NewDMDialog open={dmDialogOpen} onOpenChange={setDmDialogOpen} onSelect={onSelect} onConversationCreated={onConversationCreated} />
+      <NewGroupDialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen} onSelect={onSelect} onConversationCreated={onConversationCreated} />
     </div>
   );
 }
