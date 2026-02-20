@@ -41,7 +41,7 @@ export const chatService = {
     const memberUserIds = [...new Set((allMembers || []).map((m: any) => m.user_id))];
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, name, email, avatar_url, initials, role')
+      .select('id, name, email, avatar_url, initials, role, last_seen_at')
       .in('id', memberUserIds);
 
     const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));

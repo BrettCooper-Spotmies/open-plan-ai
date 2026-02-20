@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ConversationList } from './components/ConversationList';
 import { MessageArea } from './components/MessageArea';
@@ -8,20 +9,34 @@ import { MessageInput } from './components/MessageInput';
 import { ChatHeader } from './components/ChatHeader';
 import { DetailPanel } from './components/DetailPanel';
 import { EmptyState } from './components/EmptyState';
+import { TypingIndicator } from './components/TypingIndicator';
+import { MessageAreaSkeleton } from './components/MessageAreaSkeleton';
 import { useChatStore } from './stores/useChatStore';
 import { useConversations, useMessages } from './hooks/useChatData';
+import { useTypingIndicator } from './hooks/useTypingIndicator';
+import { usePresence } from './hooks/usePresence';
 import { useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
 
 export default function Chat() {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   const { activeConversationId, setActiveConversation, isDetailPanelOpen } = useChatStore();
 
   const { conversations, loading: convsLoading, refetch } = useConversations();
   const activeId = conversationId || activeConversationId;
   const { messages, loading: msgsLoading, hasMore, loadMore } = useMessages(activeId ?? null);
+
+  const onlineUserIds = usePresence(user?.id);
+
+  const activeConv = conversations.find((c) => c.id === activeId);
+
+  const { typingNames, broadcastTyping } = useTypingIndicator(
+    activeId,
+    activeConv?.members,
+    user?.id
+  );
 
   // Sync URL param with store
   useEffect(() => {
@@ -29,8 +44,6 @@ export default function Chat() {
       setActiveConversation(conversationId);
     }
   }, [conversationId, activeConversationId, setActiveConversation]);
-
-  const activeConv = conversations.find((c) => c.id === activeId);
 
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConversation(id);
@@ -45,10 +58,15 @@ export default function Chat() {
   const showConversationList = isMobile ? !activeConv : true;
   const showMessageArea = isMobile ? !!activeConv : true;
 
+  const typingText = typingNames.length > 0
+    ? typingNames.length === 1
+      ? `${typingNames[0]} is typing...`
+      : `${typingNames.length} people typing...`
+    : undefined;
+
   return (
     <AppLayout noPadding>
       <div className="flex h-full overflow-hidden">
-        {/* Left panel */}
         {showConversationList && (
           <div className="w-full md:w-[280px] shrink-0 overflow-hidden">
             <ConversationList
@@ -56,20 +74,23 @@ export default function Chat() {
               loading={convsLoading}
               onSelect={handleSelectConversation}
               onConversationCreated={refetch}
+              onlineUserIds={onlineUserIds}
             />
           </div>
         )}
 
-        {/* Center panel */}
         {showMessageArea && (
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             {activeConv ? (
               <>
-                <ChatHeader conversation={activeConv} onBack={isMobile ? handleBack : undefined} />
+                <ChatHeader
+                  conversation={activeConv}
+                  onBack={isMobile ? handleBack : undefined}
+                  onlineUserIds={onlineUserIds}
+                  typingText={typingText}
+                />
                 {msgsLoading ? (
-                  <div className="flex-1 flex items-center justify-center">
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  </div>
+                  <MessageAreaSkeleton />
                 ) : (
                   <MessageArea
                     messages={messages}
@@ -78,7 +99,12 @@ export default function Chat() {
                     onLoadMore={loadMore}
                   />
                 )}
-                <MessageInput conversationId={activeConv.id} onMessageSent={refetch} />
+                <TypingIndicator typingNames={typingNames} />
+                <MessageInput
+                  conversationId={activeConv.id}
+                  onMessageSent={refetch}
+                  onTyping={broadcastTyping}
+                />
               </>
             ) : (
               <EmptyState type="no-selection" />
@@ -86,7 +112,6 @@ export default function Chat() {
           </div>
         )}
 
-        {/* Right panel */}
         {!isMobile && isDetailPanelOpen && activeConv && (
           <DetailPanel conversation={activeConv} />
         )}

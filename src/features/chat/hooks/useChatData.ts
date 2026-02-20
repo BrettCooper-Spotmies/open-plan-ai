@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { chatService } from '@/services/chat.service';
 import { chatTransport } from '../transport';
 import { mapMessage } from '../chat.mappers';
+import { useChatStore } from '../stores/useChatStore';
 import type { Conversation, ChatMessage } from '../types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -26,15 +27,32 @@ export function useConversations() {
     fetchConversations();
   }, [fetchConversations]);
 
-  // Subscribe to realtime updates on conversations
+  // Subscribe to realtime updates — also track unread
   useEffect(() => {
     if (!conversations.length) return;
 
     const convIds = conversations.map((c) => c.id);
+
+    // Listen for new messages across all conversations for unread tracking
+    const msgChannel = supabase
+      .channel('global-new-messages')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        (payload) => {
+          const newMsg = payload.new as any;
+          const activeId = useChatStore.getState().activeConversationId;
+          if (convIds.includes(newMsg.conversation_id) && newMsg.conversation_id !== activeId) {
+            useChatStore.getState().incrementUnread(newMsg.conversation_id);
+          }
+          fetchConversations();
+        }
+      )
+      .subscribe();
+
     channelRef.current = chatTransport.subscribeToConversationUpdates(
       convIds,
       () => {
-        // Refetch on any change
         fetchConversations();
       }
     );
@@ -43,6 +61,7 @@ export function useConversations() {
       if (channelRef.current) {
         chatTransport.unsubscribe(channelRef.current);
       }
+      supabase.removeChannel(msgChannel);
     };
   }, [conversations.length, fetchConversations]);
 
