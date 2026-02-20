@@ -17,9 +17,10 @@ interface NewGroupDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (conversationId: string) => void;
+  onConversationCreated?: () => Promise<void>;
 }
 
-export function NewGroupDialog({ open, onOpenChange, onSelect }: NewGroupDialogProps) {
+export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCreated }: NewGroupDialogProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -62,6 +63,7 @@ export function NewGroupDialog({ open, onOpenChange, onSelect }: NewGroupDialogP
         description || undefined,
         Array.from(selectedIds)
       );
+      if (onConversationCreated) await onConversationCreated();
       toast.success(`Group "${name}" created`);
       reset();
       onOpenChange(false);
