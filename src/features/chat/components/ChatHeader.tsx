@@ -68,7 +68,7 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText }: 
       </div>
 
       <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" className="h-8 w-8" title="Search"><Search className="h-4 w-4" /></Button>
+        <Button variant="ghost" size="icon" className="h-8 w-8" title="Search" onClick={() => useChatStore.getState().toggleMessageSearch()}><Search className="h-4 w-4" /></Button>
         <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Voice call"><Phone className="h-4 w-4" /></Button>
         <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Video call"><Video className="h-4 w-4" /></Button>
         <Button

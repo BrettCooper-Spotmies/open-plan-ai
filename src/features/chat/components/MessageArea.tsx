@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from './MessageBubble';
@@ -8,23 +8,32 @@ import { EmptyState } from './EmptyState';
 import { ChatMessage, Conversation } from '../types';
 import { isSameDay, differenceInMinutes } from 'date-fns';
 import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import { useChatStore } from '../stores/useChatStore';
 
 interface MessageAreaProps {
   messages: ChatMessage[];
   conversation: Conversation;
   hasMore?: boolean;
   onLoadMore?: () => void;
+  onEditMessage?: (messageId: string, newContent: string) => void;
+  onDeleteMessage?: (messageId: string, senderName: string) => void;
 }
 
-export function MessageArea({ messages, conversation, hasMore, onLoadMore }: MessageAreaProps) {
+export function MessageArea({ messages, conversation, hasMore, onLoadMore, onEditMessage, onDeleteMessage }: MessageAreaProps) {
   const { user } = useAuth();
   const bottomRef = useRef<HTMLDivElement>(null);
   const isGroup = conversation.type === 'group';
+  const searchQuery = useChatStore((s) => s.messageSearchQuery);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages.length]);
+
+  const filteredMessages = useMemo(() => {
+    if (!searchQuery.trim()) return messages;
+    const q = searchQuery.toLowerCase();
+    return messages.filter((m) => m.content.toLowerCase().includes(q));
+  }, [messages, searchQuery]);
 
   if (messages.length === 0) {
     return <EmptyState type="no-messages" />;
@@ -40,15 +49,13 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore }: Mes
             </Button>
           </div>
         )}
-        {messages.map((msg, i) => {
-          const prev = i > 0 ? messages[i - 1] : null;
-          const next = i < messages.length - 1 ? messages[i + 1] : null;
+        {filteredMessages.map((msg, i) => {
+          const prev = i > 0 ? filteredMessages[i - 1] : null;
+          const next = i < filteredMessages.length - 1 ? filteredMessages[i + 1] : null;
           const msgDate = new Date(msg.createdAt);
 
-          // Date divider
           const showDateDivider = !prev || !isSameDay(new Date(prev.createdAt), msgDate);
 
-          // System message
           if (msg.contentType === 'system') {
             return (
               <div key={msg.id}>
@@ -58,7 +65,6 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore }: Mes
             );
           }
 
-          // Grouping: same sender within 2 min
           const isSameSenderAsPrev = prev && prev.senderId === msg.senderId && prev.contentType !== 'system' &&
             differenceInMinutes(msgDate, new Date(prev.createdAt)) < 2 && !showDateDivider;
 
@@ -79,11 +85,17 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore }: Mes
                   showTimestamp={showTimestamp}
                   isGroupChat={isGroup}
                   currentUserId={user?.id}
+                  searchQuery={searchQuery}
+                  onEdit={onEditMessage}
+                  onDelete={onDeleteMessage}
                 />
               </div>
             </div>
           );
         })}
+        {searchQuery.trim() && filteredMessages.length === 0 && (
+          <div className="text-center text-sm text-muted-foreground py-8">No messages match your search</div>
+        )}
         <div ref={bottomRef} />
       </div>
     </ScrollArea>
