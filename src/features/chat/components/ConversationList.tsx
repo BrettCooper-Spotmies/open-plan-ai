@@ -17,9 +17,10 @@ interface ConversationListProps {
   loading: boolean;
   onSelect: (id: string) => void;
   onConversationCreated?: () => Promise<void>;
+  onlineUserIds?: Set<string>;
 }
 
-export function ConversationList({ conversations, loading, onSelect, onConversationCreated }: ConversationListProps) {
+export function ConversationList({ conversations, loading, onSelect, onConversationCreated, onlineUserIds }: ConversationListProps) {
   const { activeConversationId, conversationFilter, setConversationFilter, searchQuery, unreadCounts } = useChatStore();
   const [dmDialogOpen, setDmDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
@@ -30,7 +31,10 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
     if (conversationFilter === 'groups') list = list.filter((c) => c.type === 'group');
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      list = list.filter((c) => c.name.toLowerCase().includes(q));
+      list = list.filter((c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.members.some(m => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
+      );
     }
     return list.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
   }, [conversations, conversationFilter, searchQuery]);
@@ -83,6 +87,7 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
                 isActive={activeConversationId === conv.id}
                 unreadCount={unreadCounts[conv.id] || 0}
                 onClick={() => onSelect(conv.id)}
+                onlineUserIds={onlineUserIds}
               />
             ))
           )}

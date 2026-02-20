@@ -11,14 +11,16 @@ interface ConversationItemProps {
   isActive: boolean;
   unreadCount: number;
   onClick: () => void;
+  onlineUserIds?: Set<string>;
 }
 
-export function ConversationItem({ conversation, isActive, unreadCount, onClick }: ConversationItemProps) {
+export function ConversationItem({ conversation, isActive, unreadCount, onClick, onlineUserIds }: ConversationItemProps) {
   const { user } = useAuth();
   const currentUserId = user?.id;
   const otherMember = conversation.type === 'dm'
     ? conversation.members.find((m) => m.id !== currentUserId)
     : null;
+  const isOtherOnline = otherMember ? onlineUserIds?.has(otherMember.id) ?? false : false;
 
   const displayName = conversation.type === 'dm' ? otherMember?.name || conversation.name : conversation.name;
   const initials = conversation.type === 'dm'
@@ -48,7 +50,7 @@ export function ConversationItem({ conversation, isActive, unreadCount, onClick 
           </AvatarFallback>
         </Avatar>
         {conversation.type === 'dm' && otherMember && (
-          <OnlineStatus isOnline={otherMember.isOnline} className="absolute -bottom-0.5 -right-0.5" />
+          <OnlineStatus isOnline={isOtherOnline} className="absolute -bottom-0.5 -right-0.5" />
         )}
       </div>
 

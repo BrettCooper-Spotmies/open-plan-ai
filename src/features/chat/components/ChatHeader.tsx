@@ -6,13 +6,16 @@ import { Conversation } from '../types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChatStore } from '../stores/useChatStore';
 import { cn } from '@/lib/utils';
+import { formatDistanceToNowStrict } from 'date-fns';
 
 interface ChatHeaderProps {
   conversation: Conversation;
   onBack?: () => void;
+  onlineUserIds?: Set<string>;
+  typingText?: string;
 }
 
-export function ChatHeader({ conversation, onBack }: ChatHeaderProps) {
+export function ChatHeader({ conversation, onBack, onlineUserIds, typingText }: ChatHeaderProps) {
   const { user } = useAuth();
   const currentUserId = user?.id;
   const toggleDetailPanel = useChatStore((s) => s.toggleDetailPanel);
@@ -21,6 +24,8 @@ export function ChatHeader({ conversation, onBack }: ChatHeaderProps) {
   const otherMember = conversation.type === 'dm'
     ? conversation.members.find((m) => m.id !== currentUserId)
     : null;
+
+  const isOtherOnline = otherMember ? onlineUserIds?.has(otherMember.id) ?? false : false;
 
   const displayName = conversation.type === 'dm' ? otherMember?.name || conversation.name : conversation.name;
   const initials = conversation.type === 'dm'
@@ -42,16 +47,22 @@ export function ChatHeader({ conversation, onBack }: ChatHeaderProps) {
           </AvatarFallback>
         </Avatar>
         {conversation.type === 'dm' && otherMember && (
-          <OnlineStatus isOnline={otherMember.isOnline} className="absolute -bottom-0.5 -right-0.5" />
+          <OnlineStatus isOnline={isOtherOnline} className="absolute -bottom-0.5 -right-0.5" />
         )}
       </div>
 
       <div className="flex-1 min-w-0">
         <h3 className="text-sm font-semibold truncate">{displayName}</h3>
         <p className="text-xs text-muted-foreground">
-          {conversation.type === 'dm'
-            ? otherMember?.isOnline ? 'Online' : 'Offline'
-            : `${conversation.members.length} members`
+          {typingText
+            ? typingText
+            : conversation.type === 'dm'
+              ? isOtherOnline
+                ? 'Online'
+                : otherMember?.lastSeenAt
+                  ? `Last seen ${formatDistanceToNowStrict(new Date(otherMember.lastSeenAt), { addSuffix: true })}`
+                  : 'Offline'
+              : `${conversation.members.length} members`
           }
         </p>
       </div>

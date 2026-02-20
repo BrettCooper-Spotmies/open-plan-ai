@@ -14,6 +14,7 @@ interface DbProfile {
   avatar_url: string | null;
   initials: string;
   role: string | null;
+  last_seen_at?: string | null;
 }
 
 interface DbConversationMember {
@@ -57,7 +58,8 @@ export function mapMember(
     avatarUrl: profile?.avatar_url ?? undefined,
     initials: profile?.initials ?? '??',
     role: dbMember.role as ConversationMemberRole,
-    isOnline: false, // will be enhanced with presence later
+    isOnline: false,
+    lastSeenAt: profile?.last_seen_at ?? undefined,
   };
 }
 

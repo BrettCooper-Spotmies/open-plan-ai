@@ -1,5 +1,5 @@
 export type ConversationType = 'dm' | 'group';
-export type MessageContentType = 'text' | 'system';
+export type MessageContentType = 'text' | 'system' | 'file';
 export type ConversationMemberRole = 'owner' | 'admin' | 'member';
 
 export interface ConversationMember {
@@ -10,6 +10,7 @@ export interface ConversationMember {
   initials: string;
   role: ConversationMemberRole;
   isOnline: boolean;
+  lastSeenAt?: string;
 }
 
 export interface MessageAttachment {

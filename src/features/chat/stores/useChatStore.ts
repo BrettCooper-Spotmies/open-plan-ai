@@ -19,6 +19,7 @@ interface ChatState {
   setDraft: (conversationId: string, draft: string) => void;
   getDraft: (conversationId: string) => string;
   markAsRead: (conversationId: string) => void;
+  incrementUnread: (conversationId: string) => void;
   getTotalUnread: () => number;
 }
 
@@ -52,6 +53,13 @@ export const useChatStore = create<ChatState>()(
       markAsRead: (conversationId) =>
         set((state) => ({
           unreadCounts: { ...state.unreadCounts, [conversationId]: 0 },
+        })),
+      incrementUnread: (conversationId) =>
+        set((state) => ({
+          unreadCounts: {
+            ...state.unreadCounts,
+            [conversationId]: (state.unreadCounts[conversationId] || 0) + 1,
+          },
         })),
       getTotalUnread: () => {
         const counts = get().unreadCounts;
