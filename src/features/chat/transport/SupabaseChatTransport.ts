@@ -22,6 +22,25 @@ export class SupabaseChatTransport implements IChatTransport {
       .subscribe();
   }
 
+  subscribeToMessageUpdates(
+    conversationId: string,
+    onUpdate: (payload: any) => void
+  ): RealtimeChannel {
+    return supabase
+      .channel(`message-updates:${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_messages',
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        onUpdate
+      )
+      .subscribe();
+  }
+
   subscribeToConversationUpdates(
     conversationIds: string[],
     onUpdate: (payload: any) => void

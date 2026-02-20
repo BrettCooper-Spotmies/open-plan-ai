@@ -73,6 +73,7 @@ export function useMessages(conversationId: string | null) {
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const updateChannelRef = useRef<RealtimeChannel | null>(null);
   const PAGE_SIZE = 50;
 
   // Initial fetch
@@ -105,7 +106,7 @@ export function useMessages(conversationId: string | null) {
     };
   }, [conversationId]);
 
-  // Realtime subscription for new messages
+  // Realtime subscription for new messages (INSERT)
   useEffect(() => {
     if (!conversationId) return;
 
@@ -137,6 +138,47 @@ export function useMessages(conversationId: string | null) {
     };
   }, [conversationId]);
 
+  // Realtime subscription for message edits & soft-deletes (UPDATE)
+  useEffect(() => {
+    if (!conversationId) return;
+
+    updateChannelRef.current = chatTransport.subscribeToMessageUpdates(
+      conversationId,
+      (payload) => {
+        const updatedRow = payload.new as any;
+        setMessages((prev) =>
+          prev.map((m) => {
+            if (m.id !== updatedRow.id) return m;
+            // Re-map the updated DB row, preserving sender info from existing state
+            return mapMessage(updatedRow, {
+              id: m.senderId,
+              name: m.senderName,
+              initials: m.senderInitials,
+            } as any);
+          })
+        );
+      }
+    );
+
+    return () => {
+      if (updateChannelRef.current) {
+        chatTransport.unsubscribe(updateChannelRef.current);
+      }
+    };
+  }, [conversationId]);
+
+  // Explicit refetch used as a fallback after edit/delete actions complete
+  const refetchMessages = useCallback(async () => {
+    if (!conversationId) return;
+    try {
+      const data = await chatService.getMessages(conversationId, { limit: PAGE_SIZE });
+      setMessages(data);
+      setHasMore(data.length === PAGE_SIZE);
+    } catch (err) {
+      console.error('Failed to refetch messages:', err);
+    }
+  }, [conversationId]);
+
   const loadMore = useCallback(async () => {
     if (!conversationId || !messages.length || !hasMore) return;
 
@@ -150,5 +192,5 @@ export function useMessages(conversationId: string | null) {
     setMessages((prev) => [...older, ...prev]);
   }, [conversationId, messages, hasMore]);
 
-  return { messages, loading, hasMore, loadMore };
+  return { messages, loading, hasMore, loadMore, refetchMessages };
 }

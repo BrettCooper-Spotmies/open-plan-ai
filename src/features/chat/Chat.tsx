@@ -29,7 +29,7 @@ export default function Chat() {
 
   const { conversations, loading: convsLoading, refetch } = useConversations();
   const activeId = conversationId || activeConversationId;
-  const { messages, loading: msgsLoading, hasMore, loadMore } = useMessages(activeId ?? null);
+  const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages } = useMessages(activeId ?? null);
 
   const onlineUserIds = usePresence(user?.id);
 
@@ -60,22 +60,22 @@ export default function Chat() {
   const handleEditMessage = useCallback(async (messageId: string, newContent: string) => {
     try {
       await chatService.editMessage(messageId, newContent);
-      await refetch();
+      await refetchMessages();
     } catch (err) {
       console.error('Failed to edit message:', err);
       toast.error('Failed to edit message');
     }
-  }, [refetch]);
+  }, [refetchMessages]);
 
   const handleDeleteMessage = useCallback(async (messageId: string, senderName: string) => {
     try {
       await chatService.deleteMessage(messageId, senderName);
-      await refetch();
+      await refetchMessages();
     } catch (err) {
       console.error('Failed to delete message:', err);
       toast.error('Failed to delete message');
     }
-  }, [refetch]);
+  }, [refetchMessages]);
 
   const showConversationList = isMobile ? !activeConv : true;
   const showMessageArea = isMobile ? !!activeConv : true;

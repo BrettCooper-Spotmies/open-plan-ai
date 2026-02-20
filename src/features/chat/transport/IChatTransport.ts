@@ -6,6 +6,11 @@ export interface IChatTransport {
     onInsert: (payload: any) => void
   ): RealtimeChannel;
 
+  subscribeToMessageUpdates(
+    conversationId: string,
+    onUpdate: (payload: any) => void
+  ): RealtimeChannel;
+
   subscribeToConversationUpdates(
     conversationIds: string[],
     onUpdate: (payload: any) => void
