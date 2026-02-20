@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { format, differenceInHours } from 'date-fns';
-import { ChatMessage } from '../types';
+import { ChatMessage, ReadReceipt } from '../types';
 import { toast } from 'sonner';
 
 interface MessageBubbleProps {
@@ -15,6 +15,7 @@ interface MessageBubbleProps {
   isGroupChat: boolean;
   currentUserId?: string;
   searchQuery?: string;
+  readReceipts?: ReadReceipt[];
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string, senderName: string) => void;
 }
@@ -103,7 +104,7 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
 
 export function MessageBubble({
   message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
-  searchQuery, onEdit, onDelete,
+  searchQuery, readReceipts, onEdit, onDelete,
 }: MessageBubbleProps) {
   const isOwn = message.senderId === currentUserId;
   const isFile = message.contentType === 'file';
@@ -111,6 +112,7 @@ export function MessageBubble({
   const isDeleted = !!message.deletedAt;
   const isWithin24h = differenceInHours(new Date(), new Date(message.createdAt)) < 24;
   const canModify = isOwn && isWithin24h && !isDeleted;
+
 
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
@@ -241,9 +243,34 @@ export function MessageBubble({
         </div>
 
         {showTimestamp && (
-          <span className="text-[10px] text-muted-foreground mt-0.5 px-1">
+          <span className="text-[10px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1">
             {format(new Date(message.createdAt), 'h:mm a')}
             {message.isEdited && ' (edited)'}
+            {isOwn && (() => {
+              // Filter out the sender's own receipt so only other readers count
+              const otherReads = (readReceipts ?? []).filter(
+                (r) => r.userId !== currentUserId
+              );
+              return otherReads.length > 0 ? (
+                <CheckCheck className="h-3 w-3 text-primary" aria-label="Read" />
+              ) : (
+                <Check className="h-3 w-3 text-muted-foreground" aria-label="Sent" />
+              );
+            })()}
+          </span>
+        )}
+        {!showTimestamp && isOwn && (
+          <span className="text-[10px] mt-0.5 px-1 flex items-center justify-end">
+            {(() => {
+              const otherReads = (readReceipts ?? []).filter(
+                (r) => r.userId !== currentUserId
+              );
+              return otherReads.length > 0 ? (
+                <CheckCheck className="h-3 w-3 text-primary" aria-label="Read" />
+              ) : (
+                <Check className="h-3 w-3 text-muted-foreground" aria-label="Sent" />
+              );
+            })()}
           </span>
         )}
       </div>

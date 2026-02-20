@@ -156,6 +156,42 @@ export type Database = {
           },
         ]
       }
+      message_reads: {
+        Row: {
+          id: string
+          message_id: string
+          user_id: string
+          read_at: string
+        }
+        Insert: {
+          id?: string
+          message_id: string
+          user_id: string
+          read_at?: string
+        }
+        Update: {
+          id?: string
+          message_id?: string
+          user_id?: string
+          read_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_reads_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checklists: {
         Row: {
           completed: boolean | null

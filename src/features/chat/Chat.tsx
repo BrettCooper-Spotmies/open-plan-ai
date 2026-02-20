@@ -16,6 +16,7 @@ import { useChatStore } from './stores/useChatStore';
 import { useConversations, useMessages } from './hooks/useChatData';
 import { useTypingIndicator } from './hooks/useTypingIndicator';
 import { usePresence } from './hooks/usePresence';
+import { useReadReceipts } from './hooks/useReadReceipts';
 import { chatService } from '@/services/chat.service';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
@@ -40,6 +41,8 @@ export default function Chat() {
     activeConv?.members,
     user?.id
   );
+
+  const { readReceiptMap } = useReadReceipts(activeId, messages, user?.id);
 
   useEffect(() => {
     if (conversationId && conversationId !== activeConversationId) {
@@ -120,6 +123,7 @@ export default function Chat() {
                     conversation={activeConv}
                     hasMore={hasMore}
                     onLoadMore={loadMore}
+                    readReceiptMap={readReceiptMap}
                     onEditMessage={handleEditMessage}
                     onDeleteMessage={handleDeleteMessage}
                   />

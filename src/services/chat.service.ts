@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { mapConversation, mapMember, mapMessage } from '@/features/chat/chat.mappers';
-import type { Conversation, ChatMessage, ReachableUser } from '@/features/chat/types';
+import type { Conversation, ChatMessage, ReachableUser, ReadReceipt } from '@/features/chat/types';
 
 async function getCurrentUserId(): Promise<string> {
   const { data } = await supabase.auth.getUser();
@@ -150,6 +150,59 @@ export const chatService = {
       .single();
 
     return mapMessage(data as any, profile as any);
+  },
+
+  /**
+   * Mark all messages in a conversation as read for the current user.
+   * Uses upsert with ignoreDuplicates so re-opening is always safe.
+   */
+  async markConversationAsRead(conversationId: string): Promise<void> {
+    const userId = await getCurrentUserId();
+
+    // Fetch all (non-deleted) message IDs in the conversation
+    const { data: messages, error: msgErr } = await supabase
+      .from('chat_messages')
+      .select('id')
+      .eq('conversation_id', conversationId)
+      .is('deleted_at', null);
+    if (msgErr) throw msgErr;
+    if (!messages?.length) return;
+
+    const rows = messages.map((m: any) => ({
+      message_id: m.id,
+      user_id: userId,
+    }));
+
+    const { error } = await supabase
+      .from('message_reads')
+      .upsert(rows, { onConflict: 'message_id,user_id', ignoreDuplicates: true });
+    if (error) throw error;
+  },
+
+  /**
+   * Fetch read receipts for the given message IDs.
+   * Returns a map of messageId → ReadReceipt[].
+   */
+  async getReadReceipts(messageIds: string[]): Promise<Record<string, ReadReceipt[]>> {
+    if (!messageIds.length) return {};
+
+    const { data, error } = await supabase
+      .from('message_reads')
+      .select('message_id, user_id, read_at')
+      .in('message_id', messageIds);
+    if (error) throw error;
+
+    const map: Record<string, ReadReceipt[]> = {};
+    for (const row of data || []) {
+      const r: ReadReceipt = {
+        messageId: row.message_id,
+        userId: row.user_id,
+        readAt: row.read_at,
+      };
+      if (!map[row.message_id]) map[row.message_id] = [];
+      map[row.message_id].push(r);
+    }
+    return map;
   },
 
   async getOrCreateDM(otherUserId: string): Promise<string> {

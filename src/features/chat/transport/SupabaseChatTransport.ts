@@ -83,6 +83,24 @@ export class SupabaseChatTransport implements IChatTransport {
       .subscribe();
   }
 
+  subscribeToReadReceipts(
+    conversationId: string,
+    onInsert: (payload: any) => void
+  ): RealtimeChannel {
+    return supabase
+      .channel(`read-receipts:${conversationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'message_reads',
+        },
+        onInsert
+      )
+      .subscribe();
+  }
+
   unsubscribe(channel: RealtimeChannel): void {
     supabase.removeChannel(channel);
   }

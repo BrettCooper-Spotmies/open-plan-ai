@@ -2,6 +2,12 @@ export type ConversationType = 'dm' | 'group';
 export type MessageContentType = 'text' | 'system' | 'file';
 export type ConversationMemberRole = 'owner' | 'admin' | 'member';
 
+export interface ReadReceipt {
+  messageId: string;
+  userId: string;
+  readAt: string;
+}
+
 export interface ConversationMember {
   id: string;
   name: string;
@@ -36,6 +42,7 @@ export interface ChatMessage {
   isEdited: boolean;
   deletedAt?: string;
   deletedByName?: string;
+  readReceipts?: ReadReceipt[];
 }
 
 export interface Conversation {
