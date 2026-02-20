@@ -1,15 +1,27 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, Smile } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, Plus, MoreHorizontal, SmilePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { format, differenceInHours } from 'date-fns';
 import { ChatMessage, ReadReceipt, MessageReaction } from '../types';
 import { toast } from 'sonner';
 
-const EMOJI_SET = ['👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '💯'];
+const EMOJI_SET = ['👍', '❤️', '😂', '😮', '🔥', '💯'];
+const EXTENDED_EMOJI_SET = [
+  '👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '💯',
+  '🎉', '🤔', '👀', '🙏', '💪', '✨', '🫡', '😍',
+  '🥳', '😎', '🤣', '😅', '😡', '💔', '👎', '🤝',
+];
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -22,7 +34,7 @@ interface MessageBubbleProps {
   reactions?: MessageReaction[];
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string, senderName: string) => void;
-  onToggleReaction?: (messageId: string, emoji: string) => void;
+  onToggleReaction?: (messageId: string, emoji: string) => void | Promise<void>;
 }
 
 interface FileContent {
@@ -118,10 +130,39 @@ export function MessageBubble({
   const isWithin24h = differenceInHours(new Date(), new Date(message.createdAt)) < 24;
   const canModify = isOwn && isWithin24h && !isDeleted;
 
-
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const editRef = useRef<HTMLTextAreaElement>(null);
+
+  // State-based hover + popover/dropdown management
+  const [isHovered, setIsHovered] = useState(false);
+  const [isMoreEmojiOpen, setIsMoreEmojiOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isReactionPickerOpen, setIsReactionPickerOpen] = useState(false);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Toolbar stays visible while hovered OR any popover/dropdown is open
+  const showToolbar = isHovered || isMoreEmojiOpen || isMenuOpen;
+
+  const handleMouseEnter = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+    setIsHovered(true);
+  };
+
+  const handleMouseLeave = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setIsHovered(false);
+    }, 150);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (isEditing) editRef.current?.focus();
@@ -149,6 +190,35 @@ export function MessageBubble({
     }
   };
 
+  const handleCopy = () => {
+    navigator.clipboard.writeText(message.content);
+    toast.success('Copied to clipboard');
+  };
+
+  const handleEmojiClick = (emoji: string) => {
+    onToggleReaction?.(message.id, emoji);
+  };
+
+  const handleMoreEmojiClick = (emoji: string) => {
+    onToggleReaction?.(message.id, emoji);
+    setIsMoreEmojiOpen(false);
+  };
+
+  // When modifying a reaction via the pill picker, replace existing reaction
+  const handleReactionReplace = async (emoji: string) => {
+    const myExistingReactions = reactions?.filter((r) => r.reactedByMe) ?? [];
+    const alreadyReactedWithThis = myExistingReactions.some((r) => r.emoji === emoji);
+    if (alreadyReactedWithThis) {
+      onToggleReaction?.(message.id, emoji);
+    } else {
+      for (const existing of myExistingReactions) {
+        await onToggleReaction?.(message.id, existing.emoji);
+      }
+      onToggleReaction?.(message.id, emoji);
+    }
+    setIsReactionPickerOpen(false);
+  };
+
   // Deleted message display
   if (isDeleted) {
     return (
@@ -169,7 +239,11 @@ export function MessageBubble({
   }
 
   return (
-    <div className={cn('flex gap-2 px-4 group', isOwn ? 'flex-row-reverse' : 'flex-row')}>
+    <div
+      className={cn('flex gap-2 px-4', isOwn ? 'flex-row-reverse' : 'flex-row')}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       {isGroupChat && (
         <div className="w-8 shrink-0">
           {showSenderInfo && !isOwn && (
@@ -185,24 +259,41 @@ export function MessageBubble({
           <span className="text-xs text-muted-foreground font-medium mb-0.5 px-1">{message.senderName}</span>
         )}
 
-        <div className="relative flex items-center gap-1">
-           <div className={cn(
-            'hidden group-hover:flex items-center gap-0.5 absolute top-0',
-            isOwn ? 'right-full mr-1' : 'left-full ml-1'
+        {/* Hover toolbar: emojis + more + 3-dot menu */}
+        <div className="relative">
+          <div className={cn(
+            'absolute z-10 bottom-full mb-1 rounded-lg border border-border bg-popover shadow-md px-1 py-0.5 flex items-center gap-0.5 transition-opacity',
+            isOwn ? 'right-0' : 'left-0',
+            showToolbar ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
           )}>
-            <Popover>
+            {/* Quick emoji reactions */}
+            {EMOJI_SET.map((emoji) => (
+              <button
+                key={emoji}
+                className="text-base hover:bg-muted rounded p-1 transition-colors cursor-pointer leading-none"
+                title={emoji}
+                onClick={() => handleEmojiClick(emoji)}
+              >
+                {emoji}
+              </button>
+            ))}
+
+      
+
+            {/* More emojis button */}
+            <Popover open={isMoreEmojiOpen} onOpenChange={setIsMoreEmojiOpen}>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6">
-                  <Smile className="h-3 w-3" />
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" title="More reactions">
+                  <SmilePlus className="h-3.5 w-3.5" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-2" side="top" align="center">
-                <div className="flex gap-1">
-                  {EMOJI_SET.map((emoji) => (
+                <div className="grid grid-cols-8 gap-1">
+                  {EXTENDED_EMOJI_SET.map((emoji) => (
                     <button
                       key={emoji}
-                      className="text-lg hover:bg-muted rounded p-1 transition-colors cursor-pointer"
-                      onClick={() => onToggleReaction?.(message.id, emoji)}
+                      className="text-lg hover:bg-muted rounded p-1 transition-colors cursor-pointer leading-none"
+                      onClick={() => handleMoreEmojiClick(emoji)}
                     >
                       {emoji}
                     </button>
@@ -210,24 +301,45 @@ export function MessageBubble({
                 </div>
               </PopoverContent>
             </Popover>
-            <Button
-              variant="ghost" size="icon" className="h-6 w-6"
-              onClick={() => { navigator.clipboard.writeText(message.content); toast.success('Copied'); }}
-            >
-              <Copy className="h-3 w-3" />
-            </Button>
-            {canModify && !isFile && (
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsEditing(true)}>
-                <Pencil className="h-3 w-3" />
-              </Button>
-            )}
-            {canModify && (
-              <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={handleDelete}>
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            )}
+
+            {/* Divider */}
+            <div className="w-px h-5 bg-border mx-0.5" />
+
+            {/* 3-dot menu */}
+            <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md" title="More options">
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="bottom" align={isOwn ? 'end' : 'start'} className="min-w-[140px]">
+                <DropdownMenuItem onClick={handleCopy} className="cursor-pointer">
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy
+                </DropdownMenuItem>
+                {canModify && !isFile && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setIsEditing(true)} className="cursor-pointer">
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {canModify && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleDelete} className="cursor-pointer text-destructive focus:text-destructive">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
+          {/* Message bubble content */}
           {isEditing ? (
             <div className="flex flex-col gap-1 min-w-[200px]">
               <Textarea
@@ -267,24 +379,47 @@ export function MessageBubble({
           )}
         </div>
 
-        {/* Reaction pills */}
+        {/* Reaction pills — clicking opens picker to modify reaction */}
         {reactions && reactions.length > 0 && (
           <div className={cn('flex flex-wrap gap-1 mt-1 px-1', isOwn ? 'justify-end' : 'justify-start')}>
-            {reactions.map((r) => (
-              <button
-                key={r.emoji}
-                className={cn(
-                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border transition-colors cursor-pointer',
-                  r.reactedByMe
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted'
-                )}
-                onClick={() => onToggleReaction?.(message.id, r.emoji)}
-              >
-                <span>{r.emoji}</span>
-                <span>{r.count}</span>
-              </button>
-            ))}
+            <Popover open={isReactionPickerOpen} onOpenChange={setIsReactionPickerOpen}>
+              <PopoverTrigger asChild>
+                <div className="flex flex-wrap gap-1 cursor-pointer">
+                  {reactions.map((r) => (
+                    <span
+                      key={r.emoji}
+                      className={cn(
+                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border transition-colors',
+                        r.reactedByMe
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted'
+                      )}
+                    >
+                      <span>{r.emoji}</span>
+                      <span>{r.count}</span>
+                    </span>
+                  ))}
+                </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-2" side="top" align="center">
+                <div className="flex gap-1">
+                  {EMOJI_SET.map((emoji) => (
+                    <button
+                      key={emoji}
+                      className={cn(
+                        'text-lg rounded p-1 transition-colors cursor-pointer',
+                        reactions?.some((r) => r.emoji === emoji && r.reactedByMe)
+                          ? 'bg-primary/20 ring-1 ring-primary'
+                          : 'hover:bg-muted'
+                      )}
+                      onClick={() => handleReactionReplace(emoji)}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         )}
 
@@ -293,7 +428,6 @@ export function MessageBubble({
             {format(new Date(message.createdAt), 'h:mm a')}
             {message.isEdited && ' (edited)'}
             {isOwn && (() => {
-              // Filter out the sender's own receipt so only other readers count
               const otherReads = (readReceipts ?? []).filter(
                 (r) => r.userId !== currentUserId
               );

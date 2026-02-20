@@ -19,7 +19,7 @@ interface MessageAreaProps {
   reactionMap?: Record<string, MessageReaction[]>;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onDeleteMessage?: (messageId: string, senderName: string) => void;
-  onToggleReaction?: (messageId: string, emoji: string) => void;
+  onToggleReaction?: (messageId: string, emoji: string) => void | Promise<void>;
 }
 
 export function MessageArea({ messages, conversation, hasMore, onLoadMore, readReceiptMap, reactionMap, onEditMessage, onDeleteMessage, onToggleReaction }: MessageAreaProps) {
