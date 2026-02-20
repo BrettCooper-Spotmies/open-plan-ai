@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { OnlineStatus } from './OnlineStatus';
 import { Conversation } from '../types';
-import { CURRENT_USER_ID } from '../mockData';
+import { useAuth } from '@/contexts/AuthContext';
 import { useChatStore } from '../stores/useChatStore';
 import { cn } from '@/lib/utils';
 
@@ -13,11 +13,13 @@ interface ChatHeaderProps {
 }
 
 export function ChatHeader({ conversation, onBack }: ChatHeaderProps) {
+  const { user } = useAuth();
+  const currentUserId = user?.id;
   const toggleDetailPanel = useChatStore((s) => s.toggleDetailPanel);
   const isDetailOpen = useChatStore((s) => s.isDetailPanelOpen);
 
   const otherMember = conversation.type === 'dm'
-    ? conversation.members.find((m) => m.id !== CURRENT_USER_ID)
+    ? conversation.members.find((m) => m.id !== currentUserId)
     : null;
 
   const displayName = conversation.type === 'dm' ? otherMember?.name || conversation.name : conversation.name;
