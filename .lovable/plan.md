@@ -1,168 +1,95 @@
 
 
-# Chat Feature Enhancements — 7 Fixes and Features
+# Fix Chat Issues: Attachments, Edit/Delete, Last Seen, and In-Conversation Search
 
-## Overview
+## Issue 1: Attachment Error (content_type constraint)
 
-This plan addresses all 7 requested modifications to the chat system. Here's a summary of each:
+The database has a CHECK constraint that only allows `'text'` and `'system'` for `content_type`. The code sends `'file'` which violates it.
 
-| # | Feature | What Changes |
-|---|---------|-------------|
-| 1 | File attachments | New storage bucket, DB table, upload UI in MessageInput, display in MessageBubble |
-| 2 | Shimmer loading for conversations | Replace Loader2 spinner with animated shimmer skeletons in message area |
-| 3 | Unread count badge (new messages) | Real-time unread tracking via realtime subscription + badge display |
-| 4 | Typing indicator | Wire up existing broadcast transport to show "X is typing..." |
-| 5 | Send button loader | Show spinner on send button while message is being sent |
-| 6 | Conversation search fix | Fix the search to filter by member names (for DMs) not just conversation name |
-| 7 | Online/offline + last seen | Use Supabase Presence for online status, add `last_seen_at` column to profiles |
+**Fix:** Run a migration to update the constraint to include `'file'`.
+
+```sql
+ALTER TABLE chat_messages DROP CONSTRAINT chat_messages_content_type_check;
+ALTER TABLE chat_messages ADD CONSTRAINT chat_messages_content_type_check 
+  CHECK (content_type = ANY (ARRAY['text', 'system', 'file']));
+```
+
+## Issue 2: Edit and Delete Messages (24-hour window)
+
+Add edit and delete functionality with these rules:
+- Only the sender can edit/delete their own messages
+- Only messages less than 24 hours old can be edited/deleted
+- Deleted messages show "This message was deleted by [sender name]" instead of being removed
+- Edited messages show an "(edited)" indicator
+
+### Database Changes
+- The `chat_messages` table already has `updated_at`, `deleted_at` columns and UPDATE/DELETE RLS policies
+- Add a `deleted_by_name` column (text, nullable) to store the deleter's display name for the "deleted by X" text
+
+### Code Changes
+
+| File | Change |
+|---|---|
+| `src/features/chat/types.ts` | Add `deletedAt?: string` and `deletedByName?: string` to `ChatMessage` |
+| `src/features/chat/chat.mappers.ts` | Map `deleted_at` and `deleted_by_name` fields |
+| `src/services/chat.service.ts` | Add `editMessage(id, content)` and `deleteMessage(id, senderName)` methods; update `getMessages` to include soft-deleted messages (remove the `is(deleted_at, null)` filter so deleted messages still appear with the "deleted by" text) |
+| `src/features/chat/components/MessageBubble.tsx` | Add edit/delete button handlers with 24hr check; show "This message was deleted by X" for deleted messages; show inline edit textarea |
+| `src/features/chat/components/MessageArea.tsx` | Pass `onEditMessage` and `onDeleteMessage` callbacks |
+| `src/features/chat/Chat.tsx` | Create edit/delete handler functions that call the service and trigger refetch |
+
+### Edit Flow
+1. User clicks pencil icon on their message (< 24hrs old)
+2. Message content becomes an editable textarea
+3. User presses Enter or clicks Save
+4. `chatService.editMessage(id, newContent)` updates the DB (`content` + `updated_at`)
+5. `isEdited` flag becomes true, "(edited)" label appears
+
+### Delete Flow
+1. User clicks trash icon on their message (< 24hrs old)
+2. Confirmation dialog appears
+3. `chatService.deleteMessage(id, senderName)` sets `deleted_at = now()` and `deleted_by_name = senderName`
+4. Message renders as: "This message was deleted by Sekhar javvadi" in italic/muted style
+
+## Issue 3: Last Seen Verification
+
+After reviewing the code, last seen is **correctly implemented** and NOT hardcoded:
+- `usePresence` hook tracks online users via Supabase Presence channel
+- `last_seen_at` is updated every 60 seconds and on `beforeunload`
+- `ChatHeader` displays "Online" or "Last seen X ago" using real data from `formatDistanceToNowStrict`
+- `chat.mappers.ts` maps `last_seen_at` from profiles
+
+No changes needed for this item.
+
+## Issue 4: In-Conversation Search (Search icon in ChatHeader)
+
+The Search button in `ChatHeader` (line 71) has no `onClick` handler. It needs to open a search bar within the message area to search through messages in the active conversation.
+
+### Implementation
+
+| File | Change |
+|---|---|
+| `src/features/chat/stores/useChatStore.ts` | Add `isMessageSearchOpen` and `messageSearchQuery` state + toggle/set actions |
+| `src/features/chat/components/ChatHeader.tsx` | Wire Search button to toggle `isMessageSearchOpen` in the store |
+| `src/features/chat/components/MessageSearchBar.tsx` | **New** - Search input bar that appears below the header with input field and close button |
+| `src/features/chat/components/MessageArea.tsx` | Filter/highlight messages matching the search query |
+| `src/features/chat/Chat.tsx` | Render `MessageSearchBar` between ChatHeader and MessageArea when search is open |
+
+The search will filter messages client-side (since messages are already loaded) and highlight matching text in message bubbles.
 
 ---
 
-## 1. File Attachments
-
-### Database Changes
-- Create a `chat-attachments` storage bucket (public)
-- Add RLS policies so conversation members can upload/read files
-
-### Code Changes
-
-**MessageInput.tsx**
-- Add a hidden file input triggered by the existing Paperclip button
-- On file select: upload to `chat-attachments/{conversationId}/{uuid}-{filename}` via Supabase Storage
-- Include the public URL in the message content as a special format, or store attachment metadata in `chat_messages.content` as JSON when `content_type = 'file'`
-- Add `content_type: 'file'` support to the chat_messages table (already a text column, just use new value)
-
-**MessageBubble.tsx**
-- Detect `content_type === 'file'` messages
-- Render image preview for image types, or a file card with download link for other types
-- Parse content as JSON `{ fileName, fileSize, mimeType, url, text? }`
-
-**chat.service.ts**
-- Add `sendFileMessage(conversationId, file)` method that uploads to storage and inserts a message
-
-**types.ts**
-- `MessageContentType` already has 'text' | 'system'; add 'file' as a union member
-
-## 2. Shimmer Loading in Chat Conversation
-
-### Code Changes
-
-**Chat.tsx** (message loading state)
-- Replace the `Loader2` spinner with a `MessageAreaSkeleton` component
-
-**New: MessageAreaSkeleton.tsx**
-- Renders 6-8 shimmer message bubbles (alternating left/right) using the existing `Skeleton` component
-- Mimics the look of real messages with varying widths
-
-## 3. Unread Count Badge
-
-### Code Changes
-
-**useChatData.ts** — `useConversations` hook
-- When a new message arrives via realtime and the conversation is NOT the active one, increment `unreadCounts[convId]` in the chat store
-
-**useChatStore.ts**
-- Add `incrementUnread(conversationId: string)` action
-
-**ConversationItem.tsx**
-- Already shows `UnreadBadge` with `unreadCount` prop — this will work once the store is populated
-
-The existing `setActiveConversation` already resets unread to 0 when opening a conversation.
-
-## 4. Typing Indicator
-
-### Code Changes
-
-**MessageInput.tsx**
-- On text change, call `chatTransport.broadcastTyping(conversationId, userId)` with debounce (every 2 seconds max)
-
-**New: useTypingIndicator.ts** hook
-- Subscribe to `chatTransport.subscribeToTyping(conversationId, ...)`
-- Track which users are typing with a 3-second timeout
-- Return `typingUsers: string[]` (user names)
-- Look up names from conversation members
-
-**Chat.tsx**
-- Use `useTypingIndicator(activeId, activeConv?.members)` 
-- Pass typing info to a `TypingIndicator` component rendered between MessageArea and MessageInput
-
-**TypingIndicator.tsx** (already exists)
-- Update to accept and display user names: "Sudhir is typing..." or "2 people are typing..."
-
-## 5. Send Button Loader
-
-### Code Changes
-
-**MessageInput.tsx**
-- Already has `isSending` state
-- Replace `Send` icon with `Loader2 animate-spin` when `isSending` is true
-- The button is already disabled during sending
-
-## 6. Fix Conversation Search
-
-### Root Cause
-The search filters by `c.name.toLowerCase().includes(q)`. For DMs, `conversation.name` is set by `mapConversation` to the other member's name — but only if `currentUserId` was passed correctly. The search itself works on `.name`, which should be correct now after the previous fix.
-
-### Code Changes
-
-**ConversationList.tsx**
-- Update the search filter to also search through member names and emails:
-```
-list = list.filter((c) => 
-  c.name.toLowerCase().includes(q) ||
-  c.members.some(m => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
-);
-```
-
-## 7. Online/Offline + Last Seen
-
-### Database Changes
-- Add `last_seen_at` column to `profiles` table (timestamp with time zone, nullable)
-
-### Code Changes
-
-**New: usePresence.ts** hook
-- Use Supabase Realtime Presence to track online users
-- On mount: track current user's presence in a global `online-users` channel
-- Update `profiles.last_seen_at` periodically (every 60s) and on window `beforeunload`
-- Return a `Set<string>` of online user IDs
-
-**Chat.tsx**
-- Use `usePresence()` to get the set of online user IDs
-- Pass `onlineUserIds` down to `ConversationList` and `ChatHeader`
-
-**ConversationItem.tsx & ChatHeader.tsx**
-- Check if the other member's ID is in `onlineUserIds` to show green/gray dot
-- If offline, show "Last seen X ago" using the `last_seen_at` from profiles
-
-**chat.service.ts** — `getConversations`
-- Include `last_seen_at` in the profiles query so it's available on `ConversationMember`
-
-**types.ts**
-- Add `lastSeenAt?: string` to `ConversationMember`
-
----
-
-## Technical Details — Files Changed
+## Summary of All Files Changed
 
 | File | Changes |
 |---|---|
-| `supabase/migrations/...` | Create `chat-attachments` bucket + RLS; add `last_seen_at` to profiles |
-| `src/features/chat/types.ts` | Add 'file' to `MessageContentType`, `lastSeenAt` to `ConversationMember` |
-| `src/features/chat/chat.mappers.ts` | Map `last_seen_at` to members |
-| `src/features/chat/stores/useChatStore.ts` | Add `incrementUnread` action |
-| `src/features/chat/hooks/useChatData.ts` | Increment unread on realtime messages for inactive conversations |
-| `src/features/chat/hooks/useTypingIndicator.ts` | **New** — typing subscription hook |
-| `src/features/chat/hooks/usePresence.ts` | **New** — online presence tracking |
-| `src/features/chat/components/MessageInput.tsx` | File upload, typing broadcast, send loader |
-| `src/features/chat/components/MessageBubble.tsx` | File/image attachment rendering |
-| `src/features/chat/components/MessageAreaSkeleton.tsx` | **New** — shimmer skeleton for messages |
-| `src/features/chat/components/TypingIndicator.tsx` | Update to show user names |
-| `src/features/chat/components/ConversationList.tsx` | Fix search to include member names |
-| `src/features/chat/components/ConversationItem.tsx` | Online status + last seen display |
-| `src/features/chat/components/ChatHeader.tsx` | Online status + last seen + typing status |
-| `src/features/chat/Chat.tsx` | Wire up presence, typing, shimmer skeleton |
-| `src/services/chat.service.ts` | Add `sendFileMessage`, include `last_seen_at` in queries |
-| `src/features/chat/transport/IChatTransport.ts` | Add presence methods to interface |
-| `src/features/chat/transport/SupabaseChatTransport.ts` | Implement presence tracking |
+| Migration SQL | Update content_type constraint; add `deleted_by_name` column |
+| `src/features/chat/types.ts` | Add `deletedAt`, `deletedByName` fields |
+| `src/features/chat/chat.mappers.ts` | Map new fields |
+| `src/services/chat.service.ts` | Add `editMessage`, `deleteMessage`; adjust message query for deleted messages |
+| `src/features/chat/stores/useChatStore.ts` | Add message search state |
+| `src/features/chat/components/MessageBubble.tsx` | Edit/delete UI + deleted message display |
+| `src/features/chat/components/MessageArea.tsx` | Pass handlers, search filtering |
+| `src/features/chat/components/ChatHeader.tsx` | Wire search button |
+| `src/features/chat/components/MessageSearchBar.tsx` | **New** - search input component |
+| `src/features/chat/Chat.tsx` | Wire edit/delete handlers, render search bar |
 
