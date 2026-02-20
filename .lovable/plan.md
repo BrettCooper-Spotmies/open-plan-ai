@@ -1,207 +1,103 @@
 
-# Implement Chat Feature — UI Only (No Backend)
 
-## Overview
+# Chat Feature — Full Backend Integration
 
-Build the complete chat UI with mock data, following the planning document's specifications. This creates all visual components, routing, and local state so the feature is fully interactive and ready for backend integration later.
+## What This Does
 
-## What Gets Built
+Replaces the mock chat system with a fully dynamic, real-time, production-ready implementation backed by Lovable Cloud. Messages persist in the database, conversations update in real-time, and the transport layer is abstracted so it can be swapped in the future without touching any UI code.
 
-A full 3-column chat page at `/chat` with:
-- Left panel: Conversation list with search and DM/Group tabs
-- Center panel: Message area with bubbles, date dividers, and input
-- Right panel: Collapsible details (members, shared files)
-- Sidebar navigation with "Chat" icon and unread badge
-- New DM and New Group dialog flows
-- Mobile-responsive layout
-- Full dark/light theme support
-
-## File Structure
+## Architecture
 
 ```text
-src/features/chat/
-  index.ts                    -- Default export (lazy-loaded)
-  Chat.tsx                    -- Main 3-column layout page
-  types.ts                    -- Chat-specific TypeScript types
-  mockData.ts                 -- Mock conversations, messages, users
-  components/
-    ConversationList.tsx       -- Left panel with search + tabs
-    ConversationItem.tsx       -- Single conversation row
-    ConversationSearch.tsx     -- Search input for filtering
-    MessageArea.tsx            -- Center panel message display
-    MessageBubble.tsx          -- Individual message (sender/receiver)
-    MessageInput.tsx           -- Auto-expanding input with toolbar
-    MessageDateDivider.tsx     -- Date separator between message groups
-    SystemMessage.tsx          -- "X joined the group" messages
-    ChatHeader.tsx             -- Top bar of active conversation
-    DetailPanel.tsx            -- Right panel (members, files)
-    NewDMDialog.tsx            -- Start a new DM dialog
-    NewGroupDialog.tsx         -- Create a new group dialog
-    EmptyState.tsx             -- Placeholder states (no selection, no convos)
-    TypingIndicator.tsx        -- Animated "typing..." dots
-    OnlineStatus.tsx           -- Green/gray dot component
-    UnreadBadge.tsx            -- Red unread count badge
-  stores/
-    useChatStore.ts            -- Zustand store for chat UI state
+UI Components (unchanged)
+     |
+Custom Hooks (useChatData.ts) -- new
+     |
+Chat Service (chat.service.ts) -- new
+     |
+Transport Interface (IChatTransport) -- new
+     |
+SupabaseChatTransport -- current implementation
 ```
 
-## Detailed Component Breakdown
+Components never import the database client directly. All data goes through `chat.service.ts`, and all real-time subscriptions go through the transport interface. To switch providers later, you change one line in one file.
 
-### 1. Types (`types.ts`)
-Define all chat-specific types: `Conversation`, `ConversationMember`, `ChatMessage`, `MessageAttachment`, `ConversationType`, `MessageContentType`, `ConversationMemberRole`.
+## Step 1 — Database Tables
 
-### 2. Mock Data (`mockData.ts`)
-- 5 mock conversations (3 DMs, 2 groups)
-- ~20 mock messages across conversations with varied timestamps
-- 6 mock reachable users for the "New DM" dialog
-- Realistic data matching the app's existing mock pattern
+Create three new tables:
 
-### 3. Zustand Store (`useChatStore.ts`)
-Client-side state management:
-- `activeConversationId` -- which conversation is open
-- `conversationFilter` -- "all" / "dms" / "groups" tab
-- `searchQuery` -- conversation list filter
-- `isDetailPanelOpen` -- toggle right panel
-- `draftMessages` -- per-conversation drafts (persisted to localStorage)
-- `unreadCounts` -- mock unread counts
-- `totalUnread` -- computed total for sidebar badge
+- **conversations** — stores conversation metadata (type, name, description)
+- **conversation_members** — links users to conversations with roles (owner/admin/member)
+- **chat_messages** — stores all messages with soft-delete support
 
-### 4. Main Page (`Chat.tsx`)
-3-column responsive layout:
-- Uses `AppLayout` wrapper (consistent with all other pages)
-- Left: `ConversationList` (280px, full-height)
-- Center: `MessageArea` with `ChatHeader` + `MessageInput` (flex-1)
-- Right: `DetailPanel` (280px, collapsible)
-- On mobile (< 768px): Shows conversation list OR message area (not both)
-- When no conversation selected: shows `EmptyState`
+Plus: indexes for performance, a trigger to auto-update `last_message_at` on new messages, Row Level Security policies so users can only see conversations they belong to, and real-time enabled on all three tables.
 
-### 5. Conversation List (`ConversationList.tsx`)
-- `ConversationSearch` at top
-- "New Message" and "New Group" buttons
-- Tabs: All | DMs | Groups
-- Sorted by `lastMessageAt` descending
-- Each item via `ConversationItem`
+Key correction from the planning document: the `organization_members` table uses `organization_id` (not `org_id`), so the reachable users query will use the correct column name.
 
-### 6. Conversation Item (`ConversationItem.tsx`)
-- Avatar (user avatar for DM, group initials for group)
-- Name (other user's name for DM, group name for group)
-- Last message preview (truncated to 1 line)
-- Timestamp (relative: "2m", "1h", "Yesterday")
-- Unread badge (red dot with count)
-- Online status dot for DMs
-- Active/selected highlight
+## Step 2 — Transport Abstraction Layer (3 files)
 
-### 7. Message Area (`MessageArea.tsx`)
-- Scrollable message list using `ScrollArea`
-- Messages grouped by sender (consecutive messages within 2 min)
-- `MessageDateDivider` between different days
-- `SystemMessage` for join/leave events
-- Auto-scroll to bottom on new messages
-- Empty state when conversation has no messages
+- **IChatTransport.ts** — TypeScript interface defining `subscribeToMessages`, `subscribeToConversationUpdates`, `broadcastTyping`, `subscribeToTyping`
+- **SupabaseChatTransport.ts** — implements the interface using Realtime channels and Broadcast for typing indicators
+- **transport/index.ts** — exports a single instance; change one line here to swap providers
 
-### 8. Message Bubble (`MessageBubble.tsx`)
-- Right-aligned (primary color bg) for current user
-- Left-aligned (muted bg) for others
-- Shows sender avatar + name for group messages (first in group only)
-- Timestamp on hover or below last message in group
-- Hover actions: Copy, Edit, Delete (for own messages)
+## Step 3 — Data Mappers (1 file)
 
-### 9. Message Input (`MessageInput.tsx`)
-- Auto-expanding textarea (1-6 lines)
-- Send on Enter, Shift+Enter for newline
-- Attachment button (paperclip icon) -- visual only for now
-- Send button (disabled when empty)
-- Character counter near limit (4000 chars)
-- Draft persistence via Zustand store
+**chat.mappers.ts** — pure functions that convert database rows into the existing TypeScript types (`ChatMessage`, `Conversation`, `ConversationMember`). No type changes needed.
 
-### 10. Chat Header (`ChatHeader.tsx`)
-- Avatar + name + online status
-- Member count for groups
-- Search icon button (visual only)
-- Info/detail panel toggle button
-- Phone/video call buttons (disabled, future)
+## Step 4 — Chat Service (1 file)
 
-### 11. Detail Panel (`DetailPanel.tsx`)
-- Conversation info section (name, description for groups)
-- Members list with avatars and roles
-- "Shared Files" section (empty state for now)
-- "Notification Settings" toggle (visual only)
-- "Leave Group" button for groups
+**chat.service.ts** — all database operations:
+- `getConversations()` — fetches user's conversations with members and last message
+- `getMessages(conversationId, { before, limit })` — paginated message fetch (default 50)
+- `sendMessage(conversationId, content)` — inserts a message
+- `getOrCreateDM(otherUserId)` — finds existing DM or creates new one
+- `createGroup(name, description, memberIds)` — creates group conversation
+- `getReachableUsers()` — fetches org members for "New DM" dialog
 
-### 12. New DM Dialog (`NewDMDialog.tsx`)
-- Search input to filter reachable users
-- List of users with avatar, name, role
-- Click to "start" conversation (adds to mock list)
+All queries use separate fetches joined client-side (no FK hint joins which can fail with stale schema cache).
 
-### 13. New Group Dialog (`NewGroupDialog.tsx`)
-- Step 1: Group name + description
-- Step 2: Select members (checkbox list with search)
-- Create button (adds to mock list)
+## Step 5 — Custom Hooks (1 file)
 
-### 14. Small Components
-- `EmptyState.tsx` -- "No conversations yet" / "Select a conversation"
-- `TypingIndicator.tsx` -- Three bouncing dots animation
-- `OnlineStatus.tsx` -- Green (online) / gray (offline) dot
-- `UnreadBadge.tsx` -- Red circle with count
-- `MessageDateDivider.tsx` -- "Today", "Yesterday", "Feb 15"
-- `SystemMessage.tsx` -- Centered italic text for system events
+**useChatData.ts** with two hooks:
+- `useConversations()` — fetches conversation list + subscribes to real-time updates
+- `useMessages(conversationId)` — fetches paginated messages + subscribes to new messages + supports `loadMore` for infinite scroll
 
-## Routing Changes
+## Step 6 — Update Existing Components
 
-### `src/App.tsx`
-Add two new lazy-loaded routes inside the protected route group:
-```
-/chat          -- Chat page with no conversation selected
-/chat/:conversationId  -- Chat page with conversation open
-```
-
-## Sidebar Changes
-
-### `src/components/layout/AppSidebar.tsx`
-- Add "Chat" item to `mainNavItems` between "Reports" and the Organization group
-- Icon: `MessageSquare` from lucide-react
-- Show unread badge (red dot with count) from `useChatStore.totalUnread`
-
-## Styling Notes
-
-- All components use existing shadcn/ui primitives (Card, Avatar, Badge, Button, Dialog, ScrollArea, Input, Tabs, Separator)
-- Message bubbles: sender uses `bg-primary text-primary-foreground`, receiver uses `bg-muted text-foreground`
-- Online dot: `bg-green-500` with a white ring
-- Follows existing dark/light theme via semantic Tailwind classes
-- Animations: message slide-up on appear, detail panel slide from right
-- Responsive: mobile shows one panel at a time with back button navigation
-
-## Files Modified (Existing)
-
-| File | Change |
+| Component | Change |
 |---|---|
-| `src/App.tsx` | Add lazy import + 2 routes for `/chat` and `/chat/:conversationId` |
-| `src/components/layout/AppSidebar.tsx` | Add "Chat" nav item with `MessageSquare` icon + unread badge |
+| **Chat.tsx** | Replace `mockConversations`/`mockMessages` with `useConversations()` and `useMessages()` hooks. Show loading spinner. |
+| **ConversationList.tsx** | Accept `conversations` and `loading` as props instead of importing mock data. Show skeleton rows while loading. |
+| **MessageArea.tsx** | Accept `hasMore` and `onLoadMore` props. Add scroll-to-top detection for infinite scroll. |
+| **MessageInput.tsx** | Replace toast mock with real `chatService.sendMessage()`. Add `isSending` state. Restore draft on failure. |
+| **NewDMDialog.tsx** | Fetch real users via `chatService.getReachableUsers()`. Use `chatService.getOrCreateDM()` on select. |
+| **NewGroupDialog.tsx** | Fetch real users. Use `chatService.createGroup()` on create. Navigate to new conversation. |
+| **useChatStore.ts** | Clear hardcoded `unreadCounts` to empty object `{}`. |
 
-## Files Created (New)
+## Step 7 — Files NOT Modified
 
-| File | Purpose |
+- `types.ts` — all existing types remain unchanged
+- `mockData.ts` — left in place but no longer imported by any component
+- All small UI components (MessageBubble, ConversationItem, etc.) — unchanged
+
+## Files Summary
+
+| Action | File |
 |---|---|
-| `src/features/chat/index.ts` | Default export |
-| `src/features/chat/Chat.tsx` | Main page layout |
-| `src/features/chat/types.ts` | TypeScript interfaces |
-| `src/features/chat/mockData.ts` | Mock conversations + messages |
-| `src/features/chat/stores/useChatStore.ts` | Zustand UI state |
-| `src/features/chat/components/ConversationList.tsx` | Left panel |
-| `src/features/chat/components/ConversationItem.tsx` | Conversation row |
-| `src/features/chat/components/ConversationSearch.tsx` | Search input |
-| `src/features/chat/components/MessageArea.tsx` | Center message panel |
-| `src/features/chat/components/MessageBubble.tsx` | Message component |
-| `src/features/chat/components/MessageInput.tsx` | Input with toolbar |
-| `src/features/chat/components/MessageDateDivider.tsx` | Date separator |
-| `src/features/chat/components/SystemMessage.tsx` | System event messages |
-| `src/features/chat/components/ChatHeader.tsx` | Conversation header |
-| `src/features/chat/components/DetailPanel.tsx` | Right info panel |
-| `src/features/chat/components/NewDMDialog.tsx` | New DM dialog |
-| `src/features/chat/components/NewGroupDialog.tsx` | New group dialog |
-| `src/features/chat/components/EmptyState.tsx` | Placeholder states |
-| `src/features/chat/components/TypingIndicator.tsx` | Typing animation |
-| `src/features/chat/components/OnlineStatus.tsx` | Status dot |
-| `src/features/chat/components/UnreadBadge.tsx` | Unread count badge |
+| DB Migration | 3 tables, indexes, trigger, RLS, realtime |
+| Create | `src/features/chat/transport/IChatTransport.ts` |
+| Create | `src/features/chat/transport/SupabaseChatTransport.ts` |
+| Create | `src/features/chat/transport/index.ts` |
+| Create | `src/features/chat/chat.mappers.ts` |
+| Create | `src/services/chat.service.ts` |
+| Create | `src/features/chat/hooks/useChatData.ts` |
+| Modify | `src/features/chat/Chat.tsx` |
+| Modify | `src/features/chat/components/ConversationList.tsx` |
+| Modify | `src/features/chat/components/MessageArea.tsx` |
+| Modify | `src/features/chat/components/MessageInput.tsx` |
+| Modify | `src/features/chat/components/NewDMDialog.tsx` |
+| Modify | `src/features/chat/components/NewGroupDialog.tsx` |
+| Modify | `src/features/chat/stores/useChatStore.ts` |
 
-Total: 21 new files, 2 modified files. No new dependencies needed.
+Total: 6 new files, 7 modified files, 1 database migration.
+
