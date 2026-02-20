@@ -119,6 +119,7 @@ export type Database = {
           conversation_id: string
           created_at: string
           deleted_at: string | null
+          deleted_by_name: string | null
           id: string
           sender_id: string
           updated_at: string
@@ -129,6 +130,7 @@ export type Database = {
           conversation_id: string
           created_at?: string
           deleted_at?: string | null
+          deleted_by_name?: string | null
           id?: string
           sender_id: string
           updated_at?: string
@@ -139,6 +141,7 @@ export type Database = {
           conversation_id?: string
           created_at?: string
           deleted_at?: string | null
+          deleted_by_name?: string | null
           id?: string
           sender_id?: string
           updated_at?: string

@@ -10,6 +10,8 @@ interface ChatState {
   isDetailPanelOpen: boolean;
   draftMessages: Record<string, string>;
   unreadCounts: Record<string, number>;
+  isMessageSearchOpen: boolean;
+  messageSearchQuery: string;
 
   setActiveConversation: (id: string | null) => void;
   setConversationFilter: (filter: ConversationFilter) => void;
@@ -21,6 +23,8 @@ interface ChatState {
   markAsRead: (conversationId: string) => void;
   incrementUnread: (conversationId: string) => void;
   getTotalUnread: () => number;
+  toggleMessageSearch: () => void;
+  setMessageSearchQuery: (query: string) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -32,6 +36,8 @@ export const useChatStore = create<ChatState>()(
       isDetailPanelOpen: false,
       draftMessages: {},
       unreadCounts: {},
+      isMessageSearchOpen: false,
+      messageSearchQuery: '',
 
       setActiveConversation: (id) => {
         set({ activeConversationId: id });
@@ -65,6 +71,11 @@ export const useChatStore = create<ChatState>()(
         const counts = get().unreadCounts;
         return Object.values(counts).reduce((sum, c) => sum + c, 0);
       },
+      toggleMessageSearch: () => set((s) => ({
+        isMessageSearchOpen: !s.isMessageSearchOpen,
+        messageSearchQuery: s.isMessageSearchOpen ? '' : s.messageSearchQuery,
+      })),
+      setMessageSearchQuery: (query) => set({ messageSearchQuery: query }),
     }),
     {
       name: 'chat-store',

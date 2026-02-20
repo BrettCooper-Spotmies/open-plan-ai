@@ -64,7 +64,7 @@ export function mapMember(
 }
 
 export function mapMessage(
-  dbMsg: DbMessage,
+  dbMsg: DbMessage & { deleted_by_name?: string | null },
   senderProfile: DbProfile | undefined
 ): ChatMessage {
   return {
@@ -79,7 +79,9 @@ export function mapMessage(
     attachments: [],
     createdAt: dbMsg.created_at,
     updatedAt: dbMsg.updated_at,
-    isEdited: dbMsg.updated_at !== dbMsg.created_at,
+    isEdited: dbMsg.updated_at !== dbMsg.created_at && !dbMsg.deleted_at,
+    deletedAt: dbMsg.deleted_at ?? undefined,
+    deletedByName: dbMsg.deleted_by_name ?? undefined,
   };
 }
 

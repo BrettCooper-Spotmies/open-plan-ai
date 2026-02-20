@@ -11,18 +11,21 @@ import { DetailPanel } from './components/DetailPanel';
 import { EmptyState } from './components/EmptyState';
 import { TypingIndicator } from './components/TypingIndicator';
 import { MessageAreaSkeleton } from './components/MessageAreaSkeleton';
+import { MessageSearchBar } from './components/MessageSearchBar';
 import { useChatStore } from './stores/useChatStore';
 import { useConversations, useMessages } from './hooks/useChatData';
 import { useTypingIndicator } from './hooks/useTypingIndicator';
 import { usePresence } from './hooks/usePresence';
+import { chatService } from '@/services/chat.service';
 import { useEffect } from 'react';
+import { toast } from 'sonner';
 
 export default function Chat() {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const { activeConversationId, setActiveConversation, isDetailPanelOpen } = useChatStore();
+  const { activeConversationId, setActiveConversation, isDetailPanelOpen, isMessageSearchOpen } = useChatStore();
 
   const { conversations, loading: convsLoading, refetch } = useConversations();
   const activeId = conversationId || activeConversationId;
@@ -38,7 +41,6 @@ export default function Chat() {
     user?.id
   );
 
-  // Sync URL param with store
   useEffect(() => {
     if (conversationId && conversationId !== activeConversationId) {
       setActiveConversation(conversationId);
@@ -54,6 +56,26 @@ export default function Chat() {
     setActiveConversation(null);
     navigate('/chat');
   }, [navigate, setActiveConversation]);
+
+  const handleEditMessage = useCallback(async (messageId: string, newContent: string) => {
+    try {
+      await chatService.editMessage(messageId, newContent);
+      await refetch();
+    } catch (err) {
+      console.error('Failed to edit message:', err);
+      toast.error('Failed to edit message');
+    }
+  }, [refetch]);
+
+  const handleDeleteMessage = useCallback(async (messageId: string, senderName: string) => {
+    try {
+      await chatService.deleteMessage(messageId, senderName);
+      await refetch();
+    } catch (err) {
+      console.error('Failed to delete message:', err);
+      toast.error('Failed to delete message');
+    }
+  }, [refetch]);
 
   const showConversationList = isMobile ? !activeConv : true;
   const showMessageArea = isMobile ? !!activeConv : true;
@@ -89,6 +111,7 @@ export default function Chat() {
                   onlineUserIds={onlineUserIds}
                   typingText={typingText}
                 />
+                {isMessageSearchOpen && <MessageSearchBar />}
                 {msgsLoading ? (
                   <MessageAreaSkeleton />
                 ) : (
@@ -97,6 +120,8 @@ export default function Chat() {
                     conversation={activeConv}
                     hasMore={hasMore}
                     onLoadMore={loadMore}
+                    onEditMessage={handleEditMessage}
+                    onDeleteMessage={handleDeleteMessage}
                   />
                 )}
                 <TypingIndicator typingNames={typingNames} />

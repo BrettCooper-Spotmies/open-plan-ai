@@ -85,7 +85,6 @@ export const chatService = {
       .from('chat_messages')
       .select('*')
       .eq('conversation_id', conversationId)
-      .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .limit(limit);
 
@@ -108,6 +107,25 @@ export const chatService = {
     return (messages || [])
       .map((m: any) => mapMessage(m, profileMap.get(m.sender_id)))
       .reverse(); // chronological order
+  },
+
+  async editMessage(messageId: string, newContent: string): Promise<void> {
+    const { error } = await supabase
+      .from('chat_messages')
+      .update({ content: newContent, updated_at: new Date().toISOString() })
+      .eq('id', messageId);
+    if (error) throw error;
+  },
+
+  async deleteMessage(messageId: string, senderName: string): Promise<void> {
+    const { error } = await supabase
+      .from('chat_messages')
+      .update({
+        deleted_at: new Date().toISOString(),
+        deleted_by_name: senderName,
+      } as any)
+      .eq('id', messageId);
+    if (error) throw error;
   },
 
   async sendMessage(conversationId: string, content: string): Promise<ChatMessage> {
