@@ -1,19 +1,22 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from './MessageBubble';
 import { MessageDateDivider } from './MessageDateDivider';
 import { SystemMessage } from './SystemMessage';
 import { EmptyState } from './EmptyState';
 import { ChatMessage, Conversation } from '../types';
-import { CURRENT_USER_ID } from '../mockData';
 import { isSameDay, differenceInMinutes } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 
 interface MessageAreaProps {
   messages: ChatMessage[];
   conversation: Conversation;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
 }
 
-export function MessageArea({ messages, conversation }: MessageAreaProps) {
+export function MessageArea({ messages, conversation, hasMore, onLoadMore }: MessageAreaProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const isGroup = conversation.type === 'group';
 
@@ -28,6 +31,13 @@ export function MessageArea({ messages, conversation }: MessageAreaProps) {
   return (
     <ScrollArea className="flex-1">
       <div className="flex flex-col gap-0.5 pt-4 pb-2">
+        {hasMore && onLoadMore && (
+          <div className="flex justify-center py-2">
+            <Button variant="ghost" size="sm" onClick={onLoadMore} className="text-xs text-muted-foreground">
+              Load older messages
+            </Button>
+          </div>
+        )}
         {messages.map((msg, i) => {
           const prev = i > 0 ? messages[i - 1] : null;
           const next = i < messages.length - 1 ? messages[i + 1] : null;

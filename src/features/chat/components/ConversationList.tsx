@@ -9,20 +9,22 @@ import { NewDMDialog } from './NewDMDialog';
 import { NewGroupDialog } from './NewGroupDialog';
 import { EmptyState } from './EmptyState';
 import { useChatStore } from '../stores/useChatStore';
-import { mockConversations } from '../mockData';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { Conversation } from '../types';
 
 interface ConversationListProps {
+  conversations: Conversation[];
+  loading: boolean;
   onSelect: (id: string) => void;
 }
 
-export function ConversationList({ onSelect }: ConversationListProps) {
+export function ConversationList({ conversations, loading, onSelect }: ConversationListProps) {
   const { activeConversationId, conversationFilter, setConversationFilter, searchQuery, unreadCounts } = useChatStore();
   const [dmDialogOpen, setDmDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
 
   const filtered = useMemo(() => {
-    let list: Conversation[] = [...mockConversations];
+    let list: Conversation[] = [...conversations];
     if (conversationFilter === 'dms') list = list.filter((c) => c.type === 'dm');
     if (conversationFilter === 'groups') list = list.filter((c) => c.type === 'group');
     if (searchQuery.trim()) {
@@ -30,7 +32,7 @@ export function ConversationList({ onSelect }: ConversationListProps) {
       list = list.filter((c) => c.name.toLowerCase().includes(q));
     }
     return list.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-  }, [conversationFilter, searchQuery]);
+  }, [conversations, conversationFilter, searchQuery]);
 
   return (
     <div className="flex flex-col h-full border-r border-border">
@@ -60,7 +62,17 @@ export function ConversationList({ onSelect }: ConversationListProps) {
 
       <ScrollArea className="flex-1 min-w-0">
         <div className="px-1.5 pb-2 overflow-hidden">
-          {filtered.length === 0 ? (
+          {loading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-2 py-3">
+                <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-3.5 w-24" />
+                  <Skeleton className="h-3 w-36" />
+                </div>
+              </div>
+            ))
+          ) : filtered.length === 0 ? (
             <EmptyState type="no-conversations" />
           ) : (
             filtered.map((conv) => (
@@ -77,7 +89,7 @@ export function ConversationList({ onSelect }: ConversationListProps) {
       </ScrollArea>
 
       <NewDMDialog open={dmDialogOpen} onOpenChange={setDmDialogOpen} onSelect={onSelect} />
-      <NewGroupDialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen} />
+      <NewGroupDialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen} onSelect={onSelect} />
     </div>
   );
 }

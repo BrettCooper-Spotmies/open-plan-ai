@@ -30,7 +30,7 @@ export const useChatStore = create<ChatState>()(
       searchQuery: '',
       isDetailPanelOpen: false,
       draftMessages: {},
-      unreadCounts: { 'conv-1': 2, 'conv-2': 1, 'conv-4': 3 },
+      unreadCounts: {},
 
       setActiveConversation: (id) => {
         set({ activeConversationId: id });
