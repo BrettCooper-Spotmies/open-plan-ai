@@ -1,58 +1,44 @@
 
-# Fix: Chat Conversations Not Appearing After Creation
+
+# Fix: DM Name Shows Wrong User + Messages Not Aligned Correctly
 
 ## Root Cause
 
-The backend is working perfectly — conversations and members are created successfully (201 responses). The bug is purely on the frontend:
+Three components import `CURRENT_USER_ID` from `mockData.ts`, which is hardcoded as `'current-user'`. Since the real authenticated user has a UUID like `a1b2c3...`, the comparison never matches:
 
-1. User clicks a person in the "New Message" dialog
-2. `getOrCreateDM()` succeeds and returns the new conversation ID
-3. `onSelect(convId)` is called, which navigates to `/chat/{convId}`
-4. But the conversation list is never refreshed
-5. `activeConv = conversations.find(c => c.id === activeId)` returns `undefined` because the new conversation isn't in the stale list
-6. The UI shows the "Select a conversation" empty state instead of the message area
+- **ConversationItem.tsx** and **ChatHeader.tsx**: `members.find(m => m.id !== 'current-user')` fails to filter out the logged-in user, so the DM shows the wrong name (your own name instead of the other person's)
+- **MessageBubble.tsx**: `message.senderId === 'current-user'` is always false, so every message renders as a received message (left-aligned, gray bubble) instead of showing your own messages on the right in blue
 
 ## Solution
 
-Pass the `refetch` function from `useConversations()` down to `ConversationList`, then into `NewDMDialog` and `NewGroupDialog`. After successfully creating a DM or group, call `refetch()` before navigating.
+Replace the hardcoded `CURRENT_USER_ID` import with the real user ID from `useAuth()` in all three components.
 
-## Changes
-
-### 1. Chat.tsx
-- Pass `refetch` as a prop to `ConversationList`
-
-### 2. ConversationList.tsx
-- Accept `onConversationCreated` prop (which is `refetch`)
-- Pass it to both `NewDMDialog` and `NewGroupDialog`
-
-### 3. NewDMDialog.tsx
-- Accept `onConversationCreated` callback prop
-- Call it after `getOrCreateDM()` succeeds, before calling `onSelect`
-
-### 4. NewGroupDialog.tsx
-- Accept `onConversationCreated` callback prop
-- Call it after `createGroup()` succeeds, before calling `onSelect`
-
-## Technical Details
-
-```text
-Chat.tsx
-  passes refetch -> ConversationList (as onConversationCreated)
-    passes onConversationCreated -> NewDMDialog
-    passes onConversationCreated -> NewGroupDialog
-
-Flow after fix:
-  User clicks person -> getOrCreateDM() -> await refetch() -> onSelect(id) -> navigate
-  Result: conversations list is populated, activeConv is found, message area renders
-```
-
-### Files Modified
+### Changes
 
 | File | Change |
 |---|---|
-| `src/features/chat/Chat.tsx` | Pass `refetch` to `ConversationList` as `onConversationCreated` |
-| `src/features/chat/components/ConversationList.tsx` | Accept and forward `onConversationCreated` to dialogs |
-| `src/features/chat/components/NewDMDialog.tsx` | Call `onConversationCreated` after DM creation |
-| `src/features/chat/components/NewGroupDialog.tsx` | Call `onConversationCreated` after group creation |
+| `src/features/chat/components/ChatHeader.tsx` | Replace `CURRENT_USER_ID` import with `useAuth()` hook; use `user.id` |
+| `src/features/chat/components/ConversationItem.tsx` | Replace `CURRENT_USER_ID` import with `useAuth()` hook; use `user.id` |
+| `src/features/chat/components/MessageBubble.tsx` | Replace `CURRENT_USER_ID` import with `useAuth()` hook; use `user.id` |
+| `src/features/chat/components/MessageArea.tsx` | Pass `currentUserId` to `MessageBubble` if needed (check how it's structured) |
+| `src/features/chat/components/DetailPanel.tsx` | Check if it also uses `CURRENT_USER_ID` and fix if so |
+
+### Technical Detail
+
+Each component will change from:
+```typescript
+import { CURRENT_USER_ID } from '../mockData';
+// ...
+const isOwn = message.senderId === CURRENT_USER_ID;
+```
+
+To:
+```typescript
+import { useAuth } from '@/contexts/AuthContext';
+// ...
+const { user } = useAuth();
+const isOwn = message.senderId === user?.id;
+```
 
 No database changes needed. No new files.
+
