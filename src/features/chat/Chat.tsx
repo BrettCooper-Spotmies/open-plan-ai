@@ -9,14 +9,19 @@ import { ChatHeader } from './components/ChatHeader';
 import { DetailPanel } from './components/DetailPanel';
 import { EmptyState } from './components/EmptyState';
 import { useChatStore } from './stores/useChatStore';
-import { mockConversations, mockMessages } from './mockData';
+import { useConversations, useMessages } from './hooks/useChatData';
 import { useEffect } from 'react';
+import { Loader2 } from 'lucide-react';
 
 export default function Chat() {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { activeConversationId, setActiveConversation, isDetailPanelOpen } = useChatStore();
+
+  const { conversations, loading: convsLoading, refetch } = useConversations();
+  const activeId = conversationId || activeConversationId;
+  const { messages, loading: msgsLoading, hasMore, loadMore } = useMessages(activeId ?? null);
 
   // Sync URL param with store
   useEffect(() => {
@@ -25,8 +30,7 @@ export default function Chat() {
     }
   }, [conversationId, activeConversationId, setActiveConversation]);
 
-  const activeConv = mockConversations.find((c) => c.id === (conversationId || activeConversationId));
-  const messages = activeConv ? mockMessages[activeConv.id] || [] : [];
+  const activeConv = conversations.find((c) => c.id === activeId);
 
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConversation(id);
@@ -47,7 +51,11 @@ export default function Chat() {
         {/* Left panel */}
         {showConversationList && (
           <div className="w-full md:w-[280px] shrink-0 overflow-hidden">
-            <ConversationList onSelect={handleSelectConversation} />
+            <ConversationList
+              conversations={conversations}
+              loading={convsLoading}
+              onSelect={handleSelectConversation}
+            />
           </div>
         )}
 
@@ -57,8 +65,19 @@ export default function Chat() {
             {activeConv ? (
               <>
                 <ChatHeader conversation={activeConv} onBack={isMobile ? handleBack : undefined} />
-                <MessageArea messages={messages} conversation={activeConv} />
-                <MessageInput conversationId={activeConv.id} />
+                {msgsLoading ? (
+                  <div className="flex-1 flex items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  <MessageArea
+                    messages={messages}
+                    conversation={activeConv}
+                    hasMore={hasMore}
+                    onLoadMore={loadMore}
+                  />
+                )}
+                <MessageInput conversationId={activeConv.id} onMessageSent={refetch} />
               </>
             ) : (
               <EmptyState type="no-selection" />

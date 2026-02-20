@@ -1,0 +1,135 @@
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { chatService } from '@/services/chat.service';
+import { chatTransport } from '../transport';
+import { mapMessage } from '../chat.mappers';
+import type { Conversation, ChatMessage } from '../types';
+import type { RealtimeChannel } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
+
+export function useConversations() {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+
+  const fetchConversations = useCallback(async () => {
+    try {
+      const data = await chatService.getConversations();
+      setConversations(data);
+    } catch (err) {
+      console.error('Failed to fetch conversations:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchConversations();
+  }, [fetchConversations]);
+
+  // Subscribe to realtime updates on conversations
+  useEffect(() => {
+    if (!conversations.length) return;
+
+    const convIds = conversations.map((c) => c.id);
+    channelRef.current = chatTransport.subscribeToConversationUpdates(
+      convIds,
+      () => {
+        // Refetch on any change
+        fetchConversations();
+      }
+    );
+
+    return () => {
+      if (channelRef.current) {
+        chatTransport.unsubscribe(channelRef.current);
+      }
+    };
+  }, [conversations.length, fetchConversations]);
+
+  return { conversations, loading, refetch: fetchConversations };
+}
+
+export function useMessages(conversationId: string | null) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const PAGE_SIZE = 50;
+
+  // Initial fetch
+  useEffect(() => {
+    if (!conversationId) {
+      setMessages([]);
+      setHasMore(true);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+
+    chatService
+      .getMessages(conversationId, { limit: PAGE_SIZE })
+      .then((data) => {
+        if (!cancelled) {
+          setMessages(data);
+          setHasMore(data.length === PAGE_SIZE);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to fetch messages:', err);
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationId]);
+
+  // Realtime subscription for new messages
+  useEffect(() => {
+    if (!conversationId) return;
+
+    channelRef.current = chatTransport.subscribeToMessages(
+      conversationId,
+      async (payload) => {
+        const newMsg = payload.new;
+        // Fetch sender profile for the new message
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, name, email, avatar_url, initials, role')
+          .eq('id', newMsg.sender_id)
+          .single();
+
+        const mapped = mapMessage(newMsg, profile as any);
+
+        setMessages((prev) => {
+          // Avoid duplicates
+          if (prev.some((m) => m.id === mapped.id)) return prev;
+          return [...prev, mapped];
+        });
+      }
+    );
+
+    return () => {
+      if (channelRef.current) {
+        chatTransport.unsubscribe(channelRef.current);
+      }
+    };
+  }, [conversationId]);
+
+  const loadMore = useCallback(async () => {
+    if (!conversationId || !messages.length || !hasMore) return;
+
+    const oldest = messages[0];
+    const older = await chatService.getMessages(conversationId, {
+      before: oldest.createdAt,
+      limit: PAGE_SIZE,
+    });
+
+    setHasMore(older.length === PAGE_SIZE);
+    setMessages((prev) => [...older, ...prev]);
+  }, [conversationId, messages, hasMore]);
+
+  return { messages, loading, hasMore, loadMore };
+}

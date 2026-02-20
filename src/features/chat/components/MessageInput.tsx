@@ -1,37 +1,52 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect, useCallback, useState } from 'react';
 import { Send, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useChatStore } from '../stores/useChatStore';
+import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
 
 interface MessageInputProps {
   conversationId: string;
+  onMessageSent?: () => void;
 }
 
 const MAX_CHARS = 4000;
 
-export function MessageInput({ conversationId }: MessageInputProps) {
+export function MessageInput({ conversationId, onMessageSent }: MessageInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const draft = useChatStore((s) => s.getDraft(conversationId));
   const setDraft = useChatStore((s) => s.setDraft);
-
   const value = useChatStore((s) => s.draftMessages[conversationId] || '');
+  const [isSending, setIsSending] = useState(false);
 
   const resize = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 144) + 'px'; // max ~6 lines
+    el.style.height = Math.min(el.scrollHeight, 144) + 'px';
   }, []);
 
   useEffect(() => {
     resize();
   }, [value, resize]);
 
-  const handleSend = () => {
-    if (!value.trim()) return;
-    toast.success('Message sent (mock)');
+  const handleSend = async () => {
+    const trimmed = value.trim();
+    if (!trimmed || isSending) return;
+
+    setIsSending(true);
     setDraft(conversationId, '');
+
+    try {
+      await chatService.sendMessage(conversationId, trimmed);
+      onMessageSent?.();
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      toast.error('Failed to send message');
+      // Restore draft on failure
+      setDraft(conversationId, trimmed);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -74,7 +89,7 @@ export function MessageInput({ conversationId }: MessageInputProps) {
         <Button
           size="icon"
           className="h-8 w-8 shrink-0 rounded-md"
-          disabled={!value.trim()}
+          disabled={!value.trim() || isSending}
           onClick={handleSend}
         >
           <Send className="h-4 w-4" />
