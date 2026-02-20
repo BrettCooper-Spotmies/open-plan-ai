@@ -3,7 +3,7 @@ import { chatService } from '@/services/chat.service';
 import { chatTransport } from '../transport';
 import { mapMessage } from '../chat.mappers';
 import { useChatStore } from '../stores/useChatStore';
-import type { Conversation, ChatMessage } from '../types';
+import type { Conversation, ChatMessage, MessageReaction } from '../types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -193,4 +193,62 @@ export function useMessages(conversationId: string | null) {
   }, [conversationId, messages, hasMore]);
 
   return { messages, loading, hasMore, loadMore, refetchMessages };
+}
+
+export function useReactions(messages: ChatMessage[], currentUserId?: string) {
+  const [reactionMap, setReactionMap] = useState<Record<string, MessageReaction[]>>({});
+  const channelRef = useRef<RealtimeChannel | null>(null);
+
+  const fetchReactions = useCallback(async () => {
+    if (!messages.length || !currentUserId) return;
+    try {
+      const map = await chatService.getReactions(
+        messages.map((m) => m.id),
+        currentUserId
+      );
+      setReactionMap(map);
+    } catch (err) {
+      console.error('Failed to fetch reactions:', err);
+    }
+  }, [messages, currentUserId]);
+
+  useEffect(() => {
+    fetchReactions();
+  }, [fetchReactions]);
+
+  // Realtime subscription for reaction changes
+  useEffect(() => {
+    if (!messages.length) return;
+
+    const channel = supabase
+      .channel('message-reactions-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'message_reactions' },
+        () => {
+          fetchReactions();
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+    };
+  }, [messages.length, fetchReactions]);
+
+  const handleToggleReaction = useCallback(async (messageId: string, emoji: string) => {
+    try {
+      await chatService.toggleReaction(messageId, emoji);
+      // Optimistic: refetch immediately
+      await fetchReactions();
+    } catch (err) {
+      console.error('Failed to toggle reaction:', err);
+    }
+  }, [fetchReactions]);
+
+  return { reactionMap, handleToggleReaction };
 }

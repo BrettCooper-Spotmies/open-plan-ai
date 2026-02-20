@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { mapConversation, mapMember, mapMessage } from '@/features/chat/chat.mappers';
-import type { Conversation, ChatMessage, ReachableUser, ReadReceipt } from '@/features/chat/types';
+import type { Conversation, ChatMessage, ReachableUser, ReadReceipt, MessageReaction } from '@/features/chat/types';
 
 async function getCurrentUserId(): Promise<string> {
   const { data } = await supabase.auth.getUser();
@@ -326,5 +326,58 @@ export const chatService = {
       role: p.role ?? '',
       isOnline: false,
     }));
+  },
+
+  async toggleReaction(messageId: string, emoji: string): Promise<void> {
+    const userId = await getCurrentUserId();
+
+    // Check if reaction exists
+    const { data: existing } = await supabase
+      .from('message_reactions')
+      .select('id')
+      .eq('message_id', messageId)
+      .eq('user_id', userId)
+      .eq('emoji', emoji)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from('message_reactions').delete().eq('id', existing.id);
+    } else {
+      await supabase.from('message_reactions').insert({
+        message_id: messageId,
+        user_id: userId,
+        emoji,
+      });
+    }
+  },
+
+  async getReactions(messageIds: string[], currentUserId: string): Promise<Record<string, MessageReaction[]>> {
+    if (!messageIds.length) return {};
+
+    const { data, error } = await supabase
+      .from('message_reactions')
+      .select('message_id, user_id, emoji')
+      .in('message_id', messageIds);
+    if (error) throw error;
+
+    // Group by message_id + emoji
+    const map: Record<string, Record<string, { count: number; userIds: string[] }>> = {};
+    for (const row of data || []) {
+      if (!map[row.message_id]) map[row.message_id] = {};
+      if (!map[row.message_id][row.emoji]) map[row.message_id][row.emoji] = { count: 0, userIds: [] };
+      map[row.message_id][row.emoji].count++;
+      map[row.message_id][row.emoji].userIds.push(row.user_id);
+    }
+
+    const result: Record<string, MessageReaction[]> = {};
+    for (const [msgId, emojis] of Object.entries(map)) {
+      result[msgId] = Object.entries(emojis).map(([emoji, info]) => ({
+        emoji,
+        count: info.count,
+        userIds: info.userIds,
+        reactedByMe: info.userIds.includes(currentUserId),
+      }));
+    }
+    return result;
   },
 };

@@ -27,6 +27,13 @@ export interface MessageAttachment {
   url: string;
 }
 
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  userIds: string[];
+  reactedByMe: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   conversationId: string;
@@ -43,6 +50,7 @@ export interface ChatMessage {
   deletedAt?: string;
   deletedByName?: string;
   readReceipts?: ReadReceipt[];
+  reactions?: MessageReaction[];
 }
 
 export interface Conversation {
