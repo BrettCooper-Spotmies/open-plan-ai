@@ -3,7 +3,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { OnlineStatus } from './OnlineStatus';
 import { UnreadBadge } from './UnreadBadge';
 import { Conversation } from '../types';
-import { CURRENT_USER_ID } from '../mockData';
+import { useAuth } from '@/contexts/AuthContext';
 import { formatDistanceToNowStrict } from 'date-fns';
 
 interface ConversationItemProps {
@@ -14,8 +14,10 @@ interface ConversationItemProps {
 }
 
 export function ConversationItem({ conversation, isActive, unreadCount, onClick }: ConversationItemProps) {
+  const { user } = useAuth();
+  const currentUserId = user?.id;
   const otherMember = conversation.type === 'dm'
-    ? conversation.members.find((m) => m.id !== CURRENT_USER_ID)
+    ? conversation.members.find((m) => m.id !== currentUserId)
     : null;
 
   const displayName = conversation.type === 'dm' ? otherMember?.name || conversation.name : conversation.name;

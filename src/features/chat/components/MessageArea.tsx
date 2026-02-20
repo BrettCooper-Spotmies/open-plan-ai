@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from './MessageBubble';
 import { MessageDateDivider } from './MessageDateDivider';
@@ -17,6 +18,7 @@ interface MessageAreaProps {
 }
 
 export function MessageArea({ messages, conversation, hasMore, onLoadMore }: MessageAreaProps) {
+  const { user } = useAuth();
   const bottomRef = useRef<HTMLDivElement>(null);
   const isGroup = conversation.type === 'group';
 
@@ -76,6 +78,7 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore }: Mes
                   showSenderInfo={showSenderInfo}
                   showTimestamp={showTimestamp}
                   isGroupChat={isGroup}
+                  currentUserId={user?.id}
                 />
               </div>
             </div>

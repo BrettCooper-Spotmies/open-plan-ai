@@ -4,7 +4,6 @@ import { Copy, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
 import { ChatMessage } from '../types';
-import { CURRENT_USER_ID } from '../mockData';
 import { toast } from 'sonner';
 
 interface MessageBubbleProps {
@@ -12,10 +11,11 @@ interface MessageBubbleProps {
   showSenderInfo: boolean;
   showTimestamp: boolean;
   isGroupChat: boolean;
+  currentUserId?: string;
 }
 
-export function MessageBubble({ message, showSenderInfo, showTimestamp, isGroupChat }: MessageBubbleProps) {
-  const isOwn = message.senderId === CURRENT_USER_ID;
+export function MessageBubble({ message, showSenderInfo, showTimestamp, isGroupChat, currentUserId }: MessageBubbleProps) {
+  const isOwn = message.senderId === currentUserId;
 
   return (
     <div className={cn('flex gap-2 px-4 group', isOwn ? 'flex-row-reverse' : 'flex-row')}>
