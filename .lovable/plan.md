@@ -1,207 +1,95 @@
 
-# Implement Chat Feature — UI Only (No Backend)
 
-## Overview
+# Fix Chat Issues: Attachments, Edit/Delete, Last Seen, and In-Conversation Search
 
-Build the complete chat UI with mock data, following the planning document's specifications. This creates all visual components, routing, and local state so the feature is fully interactive and ready for backend integration later.
+## Issue 1: Attachment Error (content_type constraint)
 
-## What Gets Built
+The database has a CHECK constraint that only allows `'text'` and `'system'` for `content_type`. The code sends `'file'` which violates it.
 
-A full 3-column chat page at `/chat` with:
-- Left panel: Conversation list with search and DM/Group tabs
-- Center panel: Message area with bubbles, date dividers, and input
-- Right panel: Collapsible details (members, shared files)
-- Sidebar navigation with "Chat" icon and unread badge
-- New DM and New Group dialog flows
-- Mobile-responsive layout
-- Full dark/light theme support
+**Fix:** Run a migration to update the constraint to include `'file'`.
 
-## File Structure
-
-```text
-src/features/chat/
-  index.ts                    -- Default export (lazy-loaded)
-  Chat.tsx                    -- Main 3-column layout page
-  types.ts                    -- Chat-specific TypeScript types
-  mockData.ts                 -- Mock conversations, messages, users
-  components/
-    ConversationList.tsx       -- Left panel with search + tabs
-    ConversationItem.tsx       -- Single conversation row
-    ConversationSearch.tsx     -- Search input for filtering
-    MessageArea.tsx            -- Center panel message display
-    MessageBubble.tsx          -- Individual message (sender/receiver)
-    MessageInput.tsx           -- Auto-expanding input with toolbar
-    MessageDateDivider.tsx     -- Date separator between message groups
-    SystemMessage.tsx          -- "X joined the group" messages
-    ChatHeader.tsx             -- Top bar of active conversation
-    DetailPanel.tsx            -- Right panel (members, files)
-    NewDMDialog.tsx            -- Start a new DM dialog
-    NewGroupDialog.tsx         -- Create a new group dialog
-    EmptyState.tsx             -- Placeholder states (no selection, no convos)
-    TypingIndicator.tsx        -- Animated "typing..." dots
-    OnlineStatus.tsx           -- Green/gray dot component
-    UnreadBadge.tsx            -- Red unread count badge
-  stores/
-    useChatStore.ts            -- Zustand store for chat UI state
+```sql
+ALTER TABLE chat_messages DROP CONSTRAINT chat_messages_content_type_check;
+ALTER TABLE chat_messages ADD CONSTRAINT chat_messages_content_type_check 
+  CHECK (content_type = ANY (ARRAY['text', 'system', 'file']));
 ```
 
-## Detailed Component Breakdown
+## Issue 2: Edit and Delete Messages (24-hour window)
 
-### 1. Types (`types.ts`)
-Define all chat-specific types: `Conversation`, `ConversationMember`, `ChatMessage`, `MessageAttachment`, `ConversationType`, `MessageContentType`, `ConversationMemberRole`.
+Add edit and delete functionality with these rules:
+- Only the sender can edit/delete their own messages
+- Only messages less than 24 hours old can be edited/deleted
+- Deleted messages show "This message was deleted by [sender name]" instead of being removed
+- Edited messages show an "(edited)" indicator
 
-### 2. Mock Data (`mockData.ts`)
-- 5 mock conversations (3 DMs, 2 groups)
-- ~20 mock messages across conversations with varied timestamps
-- 6 mock reachable users for the "New DM" dialog
-- Realistic data matching the app's existing mock pattern
+### Database Changes
+- The `chat_messages` table already has `updated_at`, `deleted_at` columns and UPDATE/DELETE RLS policies
+- Add a `deleted_by_name` column (text, nullable) to store the deleter's display name for the "deleted by X" text
 
-### 3. Zustand Store (`useChatStore.ts`)
-Client-side state management:
-- `activeConversationId` -- which conversation is open
-- `conversationFilter` -- "all" / "dms" / "groups" tab
-- `searchQuery` -- conversation list filter
-- `isDetailPanelOpen` -- toggle right panel
-- `draftMessages` -- per-conversation drafts (persisted to localStorage)
-- `unreadCounts` -- mock unread counts
-- `totalUnread` -- computed total for sidebar badge
-
-### 4. Main Page (`Chat.tsx`)
-3-column responsive layout:
-- Uses `AppLayout` wrapper (consistent with all other pages)
-- Left: `ConversationList` (280px, full-height)
-- Center: `MessageArea` with `ChatHeader` + `MessageInput` (flex-1)
-- Right: `DetailPanel` (280px, collapsible)
-- On mobile (< 768px): Shows conversation list OR message area (not both)
-- When no conversation selected: shows `EmptyState`
-
-### 5. Conversation List (`ConversationList.tsx`)
-- `ConversationSearch` at top
-- "New Message" and "New Group" buttons
-- Tabs: All | DMs | Groups
-- Sorted by `lastMessageAt` descending
-- Each item via `ConversationItem`
-
-### 6. Conversation Item (`ConversationItem.tsx`)
-- Avatar (user avatar for DM, group initials for group)
-- Name (other user's name for DM, group name for group)
-- Last message preview (truncated to 1 line)
-- Timestamp (relative: "2m", "1h", "Yesterday")
-- Unread badge (red dot with count)
-- Online status dot for DMs
-- Active/selected highlight
-
-### 7. Message Area (`MessageArea.tsx`)
-- Scrollable message list using `ScrollArea`
-- Messages grouped by sender (consecutive messages within 2 min)
-- `MessageDateDivider` between different days
-- `SystemMessage` for join/leave events
-- Auto-scroll to bottom on new messages
-- Empty state when conversation has no messages
-
-### 8. Message Bubble (`MessageBubble.tsx`)
-- Right-aligned (primary color bg) for current user
-- Left-aligned (muted bg) for others
-- Shows sender avatar + name for group messages (first in group only)
-- Timestamp on hover or below last message in group
-- Hover actions: Copy, Edit, Delete (for own messages)
-
-### 9. Message Input (`MessageInput.tsx`)
-- Auto-expanding textarea (1-6 lines)
-- Send on Enter, Shift+Enter for newline
-- Attachment button (paperclip icon) -- visual only for now
-- Send button (disabled when empty)
-- Character counter near limit (4000 chars)
-- Draft persistence via Zustand store
-
-### 10. Chat Header (`ChatHeader.tsx`)
-- Avatar + name + online status
-- Member count for groups
-- Search icon button (visual only)
-- Info/detail panel toggle button
-- Phone/video call buttons (disabled, future)
-
-### 11. Detail Panel (`DetailPanel.tsx`)
-- Conversation info section (name, description for groups)
-- Members list with avatars and roles
-- "Shared Files" section (empty state for now)
-- "Notification Settings" toggle (visual only)
-- "Leave Group" button for groups
-
-### 12. New DM Dialog (`NewDMDialog.tsx`)
-- Search input to filter reachable users
-- List of users with avatar, name, role
-- Click to "start" conversation (adds to mock list)
-
-### 13. New Group Dialog (`NewGroupDialog.tsx`)
-- Step 1: Group name + description
-- Step 2: Select members (checkbox list with search)
-- Create button (adds to mock list)
-
-### 14. Small Components
-- `EmptyState.tsx` -- "No conversations yet" / "Select a conversation"
-- `TypingIndicator.tsx` -- Three bouncing dots animation
-- `OnlineStatus.tsx` -- Green (online) / gray (offline) dot
-- `UnreadBadge.tsx` -- Red circle with count
-- `MessageDateDivider.tsx` -- "Today", "Yesterday", "Feb 15"
-- `SystemMessage.tsx` -- Centered italic text for system events
-
-## Routing Changes
-
-### `src/App.tsx`
-Add two new lazy-loaded routes inside the protected route group:
-```
-/chat          -- Chat page with no conversation selected
-/chat/:conversationId  -- Chat page with conversation open
-```
-
-## Sidebar Changes
-
-### `src/components/layout/AppSidebar.tsx`
-- Add "Chat" item to `mainNavItems` between "Reports" and the Organization group
-- Icon: `MessageSquare` from lucide-react
-- Show unread badge (red dot with count) from `useChatStore.totalUnread`
-
-## Styling Notes
-
-- All components use existing shadcn/ui primitives (Card, Avatar, Badge, Button, Dialog, ScrollArea, Input, Tabs, Separator)
-- Message bubbles: sender uses `bg-primary text-primary-foreground`, receiver uses `bg-muted text-foreground`
-- Online dot: `bg-green-500` with a white ring
-- Follows existing dark/light theme via semantic Tailwind classes
-- Animations: message slide-up on appear, detail panel slide from right
-- Responsive: mobile shows one panel at a time with back button navigation
-
-## Files Modified (Existing)
+### Code Changes
 
 | File | Change |
 |---|---|
-| `src/App.tsx` | Add lazy import + 2 routes for `/chat` and `/chat/:conversationId` |
-| `src/components/layout/AppSidebar.tsx` | Add "Chat" nav item with `MessageSquare` icon + unread badge |
+| `src/features/chat/types.ts` | Add `deletedAt?: string` and `deletedByName?: string` to `ChatMessage` |
+| `src/features/chat/chat.mappers.ts` | Map `deleted_at` and `deleted_by_name` fields |
+| `src/services/chat.service.ts` | Add `editMessage(id, content)` and `deleteMessage(id, senderName)` methods; update `getMessages` to include soft-deleted messages (remove the `is(deleted_at, null)` filter so deleted messages still appear with the "deleted by" text) |
+| `src/features/chat/components/MessageBubble.tsx` | Add edit/delete button handlers with 24hr check; show "This message was deleted by X" for deleted messages; show inline edit textarea |
+| `src/features/chat/components/MessageArea.tsx` | Pass `onEditMessage` and `onDeleteMessage` callbacks |
+| `src/features/chat/Chat.tsx` | Create edit/delete handler functions that call the service and trigger refetch |
 
-## Files Created (New)
+### Edit Flow
+1. User clicks pencil icon on their message (< 24hrs old)
+2. Message content becomes an editable textarea
+3. User presses Enter or clicks Save
+4. `chatService.editMessage(id, newContent)` updates the DB (`content` + `updated_at`)
+5. `isEdited` flag becomes true, "(edited)" label appears
 
-| File | Purpose |
+### Delete Flow
+1. User clicks trash icon on their message (< 24hrs old)
+2. Confirmation dialog appears
+3. `chatService.deleteMessage(id, senderName)` sets `deleted_at = now()` and `deleted_by_name = senderName`
+4. Message renders as: "This message was deleted by Sekhar javvadi" in italic/muted style
+
+## Issue 3: Last Seen Verification
+
+After reviewing the code, last seen is **correctly implemented** and NOT hardcoded:
+- `usePresence` hook tracks online users via Supabase Presence channel
+- `last_seen_at` is updated every 60 seconds and on `beforeunload`
+- `ChatHeader` displays "Online" or "Last seen X ago" using real data from `formatDistanceToNowStrict`
+- `chat.mappers.ts` maps `last_seen_at` from profiles
+
+No changes needed for this item.
+
+## Issue 4: In-Conversation Search (Search icon in ChatHeader)
+
+The Search button in `ChatHeader` (line 71) has no `onClick` handler. It needs to open a search bar within the message area to search through messages in the active conversation.
+
+### Implementation
+
+| File | Change |
 |---|---|
-| `src/features/chat/index.ts` | Default export |
-| `src/features/chat/Chat.tsx` | Main page layout |
-| `src/features/chat/types.ts` | TypeScript interfaces |
-| `src/features/chat/mockData.ts` | Mock conversations + messages |
-| `src/features/chat/stores/useChatStore.ts` | Zustand UI state |
-| `src/features/chat/components/ConversationList.tsx` | Left panel |
-| `src/features/chat/components/ConversationItem.tsx` | Conversation row |
-| `src/features/chat/components/ConversationSearch.tsx` | Search input |
-| `src/features/chat/components/MessageArea.tsx` | Center message panel |
-| `src/features/chat/components/MessageBubble.tsx` | Message component |
-| `src/features/chat/components/MessageInput.tsx` | Input with toolbar |
-| `src/features/chat/components/MessageDateDivider.tsx` | Date separator |
-| `src/features/chat/components/SystemMessage.tsx` | System event messages |
-| `src/features/chat/components/ChatHeader.tsx` | Conversation header |
-| `src/features/chat/components/DetailPanel.tsx` | Right info panel |
-| `src/features/chat/components/NewDMDialog.tsx` | New DM dialog |
-| `src/features/chat/components/NewGroupDialog.tsx` | New group dialog |
-| `src/features/chat/components/EmptyState.tsx` | Placeholder states |
-| `src/features/chat/components/TypingIndicator.tsx` | Typing animation |
-| `src/features/chat/components/OnlineStatus.tsx` | Status dot |
-| `src/features/chat/components/UnreadBadge.tsx` | Unread count badge |
+| `src/features/chat/stores/useChatStore.ts` | Add `isMessageSearchOpen` and `messageSearchQuery` state + toggle/set actions |
+| `src/features/chat/components/ChatHeader.tsx` | Wire Search button to toggle `isMessageSearchOpen` in the store |
+| `src/features/chat/components/MessageSearchBar.tsx` | **New** - Search input bar that appears below the header with input field and close button |
+| `src/features/chat/components/MessageArea.tsx` | Filter/highlight messages matching the search query |
+| `src/features/chat/Chat.tsx` | Render `MessageSearchBar` between ChatHeader and MessageArea when search is open |
 
-Total: 21 new files, 2 modified files. No new dependencies needed.
+The search will filter messages client-side (since messages are already loaded) and highlight matching text in message bubbles.
+
+---
+
+## Summary of All Files Changed
+
+| File | Changes |
+|---|---|
+| Migration SQL | Update content_type constraint; add `deleted_by_name` column |
+| `src/features/chat/types.ts` | Add `deletedAt`, `deletedByName` fields |
+| `src/features/chat/chat.mappers.ts` | Map new fields |
+| `src/services/chat.service.ts` | Add `editMessage`, `deleteMessage`; adjust message query for deleted messages |
+| `src/features/chat/stores/useChatStore.ts` | Add message search state |
+| `src/features/chat/components/MessageBubble.tsx` | Edit/delete UI + deleted message display |
+| `src/features/chat/components/MessageArea.tsx` | Pass handlers, search filtering |
+| `src/features/chat/components/ChatHeader.tsx` | Wire search button |
+| `src/features/chat/components/MessageSearchBar.tsx` | **New** - search input component |
+| `src/features/chat/Chat.tsx` | Wire edit/delete handlers, render search bar |
+

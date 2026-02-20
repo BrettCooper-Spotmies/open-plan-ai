@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { OnlineStatus } from './OnlineStatus';
 import { Conversation } from '../types';
-import { CURRENT_USER_ID } from '../mockData';
+import { useAuth } from '@/contexts/AuthContext';
 import { useChatStore } from '../stores/useChatStore';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +16,8 @@ interface DetailPanelProps {
 }
 
 export function DetailPanel({ conversation }: DetailPanelProps) {
+  const { user } = useAuth();
+  const currentUserId = user?.id;
   const setDetailPanelOpen = useChatStore((s) => s.setDetailPanelOpen);
   const isGroup = conversation.type === 'group';
 
@@ -36,7 +38,7 @@ export function DetailPanel({ conversation }: DetailPanelProps) {
               <AvatarFallback className={cn('text-lg font-semibold', isGroup && 'bg-primary/10 text-primary')}>
                 {isGroup
                   ? conversation.name.split(' ').map((w) => w[0]).join('').slice(0, 2)
-                  : conversation.members.find((m) => m.id !== CURRENT_USER_ID)?.initials || '??'}
+                  : conversation.members.find((m) => m.id !== currentUserId)?.initials || '??'}
               </AvatarFallback>
             </Avatar>
             <h4 className="font-semibold mt-2">{conversation.name}</h4>
@@ -63,7 +65,7 @@ export function DetailPanel({ conversation }: DetailPanelProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <span className="text-sm truncate block">
-                      {member.id === CURRENT_USER_ID ? 'You' : member.name}
+                      {member.id === currentUserId ? 'You' : member.name}
                     </span>
                   </div>
                   {isGroup && member.role !== 'member' && (

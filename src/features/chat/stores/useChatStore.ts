@@ -10,6 +10,8 @@ interface ChatState {
   isDetailPanelOpen: boolean;
   draftMessages: Record<string, string>;
   unreadCounts: Record<string, number>;
+  isMessageSearchOpen: boolean;
+  messageSearchQuery: string;
 
   setActiveConversation: (id: string | null) => void;
   setConversationFilter: (filter: ConversationFilter) => void;
@@ -19,7 +21,10 @@ interface ChatState {
   setDraft: (conversationId: string, draft: string) => void;
   getDraft: (conversationId: string) => string;
   markAsRead: (conversationId: string) => void;
+  incrementUnread: (conversationId: string) => void;
   getTotalUnread: () => number;
+  toggleMessageSearch: () => void;
+  setMessageSearchQuery: (query: string) => void;
 }
 
 export const useChatStore = create<ChatState>()(
@@ -30,7 +35,9 @@ export const useChatStore = create<ChatState>()(
       searchQuery: '',
       isDetailPanelOpen: false,
       draftMessages: {},
-      unreadCounts: { 'conv-1': 2, 'conv-2': 1, 'conv-4': 3 },
+      unreadCounts: {},
+      isMessageSearchOpen: false,
+      messageSearchQuery: '',
 
       setActiveConversation: (id) => {
         set({ activeConversationId: id });
@@ -53,10 +60,22 @@ export const useChatStore = create<ChatState>()(
         set((state) => ({
           unreadCounts: { ...state.unreadCounts, [conversationId]: 0 },
         })),
+      incrementUnread: (conversationId) =>
+        set((state) => ({
+          unreadCounts: {
+            ...state.unreadCounts,
+            [conversationId]: (state.unreadCounts[conversationId] || 0) + 1,
+          },
+        })),
       getTotalUnread: () => {
         const counts = get().unreadCounts;
         return Object.values(counts).reduce((sum, c) => sum + c, 0);
       },
+      toggleMessageSearch: () => set((s) => ({
+        isMessageSearchOpen: !s.isMessageSearchOpen,
+        messageSearchQuery: s.isMessageSearchOpen ? '' : s.messageSearchQuery,
+      })),
+      setMessageSearchQuery: (query) => set({ messageSearchQuery: query }),
     }),
     {
       name: 'chat-store',

@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { ConversationList } from './components/ConversationList';
 import { MessageArea } from './components/MessageArea';
@@ -8,25 +9,43 @@ import { MessageInput } from './components/MessageInput';
 import { ChatHeader } from './components/ChatHeader';
 import { DetailPanel } from './components/DetailPanel';
 import { EmptyState } from './components/EmptyState';
+import { TypingIndicator } from './components/TypingIndicator';
+import { MessageAreaSkeleton } from './components/MessageAreaSkeleton';
+import { MessageSearchBar } from './components/MessageSearchBar';
 import { useChatStore } from './stores/useChatStore';
-import { mockConversations, mockMessages } from './mockData';
+import { useConversations, useMessages } from './hooks/useChatData';
+import { useTypingIndicator } from './hooks/useTypingIndicator';
+import { usePresence } from './hooks/usePresence';
+import { chatService } from '@/services/chat.service';
 import { useEffect } from 'react';
+import { toast } from 'sonner';
 
 export default function Chat() {
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { activeConversationId, setActiveConversation, isDetailPanelOpen } = useChatStore();
+  const { user } = useAuth();
+  const { activeConversationId, setActiveConversation, isDetailPanelOpen, isMessageSearchOpen } = useChatStore();
 
-  // Sync URL param with store
+  const { conversations, loading: convsLoading, refetch } = useConversations();
+  const activeId = conversationId || activeConversationId;
+  const { messages, loading: msgsLoading, hasMore, loadMore } = useMessages(activeId ?? null);
+
+  const onlineUserIds = usePresence(user?.id);
+
+  const activeConv = conversations.find((c) => c.id === activeId);
+
+  const { typingNames, broadcastTyping } = useTypingIndicator(
+    activeId,
+    activeConv?.members,
+    user?.id
+  );
+
   useEffect(() => {
     if (conversationId && conversationId !== activeConversationId) {
       setActiveConversation(conversationId);
     }
   }, [conversationId, activeConversationId, setActiveConversation]);
-
-  const activeConv = mockConversations.find((c) => c.id === (conversationId || activeConversationId));
-  const messages = activeConv ? mockMessages[activeConv.id] || [] : [];
 
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConversation(id);
@@ -38,27 +57,79 @@ export default function Chat() {
     navigate('/chat');
   }, [navigate, setActiveConversation]);
 
+  const handleEditMessage = useCallback(async (messageId: string, newContent: string) => {
+    try {
+      await chatService.editMessage(messageId, newContent);
+      await refetch();
+    } catch (err) {
+      console.error('Failed to edit message:', err);
+      toast.error('Failed to edit message');
+    }
+  }, [refetch]);
+
+  const handleDeleteMessage = useCallback(async (messageId: string, senderName: string) => {
+    try {
+      await chatService.deleteMessage(messageId, senderName);
+      await refetch();
+    } catch (err) {
+      console.error('Failed to delete message:', err);
+      toast.error('Failed to delete message');
+    }
+  }, [refetch]);
+
   const showConversationList = isMobile ? !activeConv : true;
   const showMessageArea = isMobile ? !!activeConv : true;
+
+  const typingText = typingNames.length > 0
+    ? typingNames.length === 1
+      ? `${typingNames[0]} is typing...`
+      : `${typingNames.length} people typing...`
+    : undefined;
 
   return (
     <AppLayout noPadding>
       <div className="flex h-full overflow-hidden">
-        {/* Left panel */}
         {showConversationList && (
           <div className="w-full md:w-[280px] shrink-0 overflow-hidden">
-            <ConversationList onSelect={handleSelectConversation} />
+            <ConversationList
+              conversations={conversations}
+              loading={convsLoading}
+              onSelect={handleSelectConversation}
+              onConversationCreated={refetch}
+              onlineUserIds={onlineUserIds}
+            />
           </div>
         )}
 
-        {/* Center panel */}
         {showMessageArea && (
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             {activeConv ? (
               <>
-                <ChatHeader conversation={activeConv} onBack={isMobile ? handleBack : undefined} />
-                <MessageArea messages={messages} conversation={activeConv} />
-                <MessageInput conversationId={activeConv.id} />
+                <ChatHeader
+                  conversation={activeConv}
+                  onBack={isMobile ? handleBack : undefined}
+                  onlineUserIds={onlineUserIds}
+                  typingText={typingText}
+                />
+                {isMessageSearchOpen && <MessageSearchBar />}
+                {msgsLoading ? (
+                  <MessageAreaSkeleton />
+                ) : (
+                  <MessageArea
+                    messages={messages}
+                    conversation={activeConv}
+                    hasMore={hasMore}
+                    onLoadMore={loadMore}
+                    onEditMessage={handleEditMessage}
+                    onDeleteMessage={handleDeleteMessage}
+                  />
+                )}
+                <TypingIndicator typingNames={typingNames} />
+                <MessageInput
+                  conversationId={activeConv.id}
+                  onMessageSent={refetch}
+                  onTyping={broadcastTyping}
+                />
               </>
             ) : (
               <EmptyState type="no-selection" />
@@ -66,7 +137,6 @@ export default function Chat() {
           </div>
         )}
 
-        {/* Right panel */}
         {!isMobile && isDetailPanelOpen && activeConv && (
           <DetailPanel conversation={activeConv} />
         )}
