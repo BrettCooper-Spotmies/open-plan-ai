@@ -5,7 +5,7 @@ import { MessageBubble } from './MessageBubble';
 import { MessageDateDivider } from './MessageDateDivider';
 import { SystemMessage } from './SystemMessage';
 import { EmptyState } from './EmptyState';
-import { ChatMessage, Conversation, ReadReceipt } from '../types';
+import { ChatMessage, Conversation, ReadReceipt, MessageReaction } from '../types';
 import { isSameDay, differenceInMinutes } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { useChatStore } from '../stores/useChatStore';
@@ -16,11 +16,13 @@ interface MessageAreaProps {
   hasMore?: boolean;
   onLoadMore?: () => void;
   readReceiptMap?: Record<string, ReadReceipt[]>;
+  reactionMap?: Record<string, MessageReaction[]>;
   onEditMessage?: (messageId: string, newContent: string) => void;
   onDeleteMessage?: (messageId: string, senderName: string) => void;
+  onToggleReaction?: (messageId: string, emoji: string) => void;
 }
 
-export function MessageArea({ messages, conversation, hasMore, onLoadMore, readReceiptMap, onEditMessage, onDeleteMessage }: MessageAreaProps) {
+export function MessageArea({ messages, conversation, hasMore, onLoadMore, readReceiptMap, reactionMap, onEditMessage, onDeleteMessage, onToggleReaction }: MessageAreaProps) {
   const { user } = useAuth();
   const bottomRef = useRef<HTMLDivElement>(null);
   const isGroup = conversation.type === 'group';
@@ -88,8 +90,10 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore, readR
                   currentUserId={user?.id}
                   searchQuery={searchQuery}
                   readReceipts={readReceiptMap?.[msg.id]}
+                  reactions={reactionMap?.[msg.id]}
                   onEdit={onEditMessage}
                   onDelete={onDeleteMessage}
+                  onToggleReaction={onToggleReaction}
                 />
               </div>
             </div>

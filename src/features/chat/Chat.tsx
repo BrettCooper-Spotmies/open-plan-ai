@@ -13,7 +13,7 @@ import { TypingIndicator } from './components/TypingIndicator';
 import { MessageAreaSkeleton } from './components/MessageAreaSkeleton';
 import { MessageSearchBar } from './components/MessageSearchBar';
 import { useChatStore } from './stores/useChatStore';
-import { useConversations, useMessages } from './hooks/useChatData';
+import { useConversations, useMessages, useReactions } from './hooks/useChatData';
 import { useTypingIndicator } from './hooks/useTypingIndicator';
 import { usePresence } from './hooks/usePresence';
 import { useReadReceipts } from './hooks/useReadReceipts';
@@ -31,6 +31,7 @@ export default function Chat() {
   const { conversations, loading: convsLoading, refetch } = useConversations();
   const activeId = conversationId || activeConversationId;
   const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages } = useMessages(activeId ?? null);
+  const { reactionMap, handleToggleReaction } = useReactions(messages, user?.id);
 
   const onlineUserIds = usePresence(user?.id);
 
@@ -124,8 +125,10 @@ export default function Chat() {
                     hasMore={hasMore}
                     onLoadMore={loadMore}
                     readReceiptMap={readReceiptMap}
+                    reactionMap={reactionMap}
                     onEditMessage={handleEditMessage}
                     onDeleteMessage={handleDeleteMessage}
+                    onToggleReaction={handleToggleReaction}
                   />
                 )}
                 <TypingIndicator typingNames={typingNames} />

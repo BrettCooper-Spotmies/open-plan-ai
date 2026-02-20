@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, Smile } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, differenceInHours } from 'date-fns';
-import { ChatMessage, ReadReceipt } from '../types';
+import { ChatMessage, ReadReceipt, MessageReaction } from '../types';
 import { toast } from 'sonner';
+
+const EMOJI_SET = ['👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '💯'];
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -16,8 +19,10 @@ interface MessageBubbleProps {
   currentUserId?: string;
   searchQuery?: string;
   readReceipts?: ReadReceipt[];
+  reactions?: MessageReaction[];
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string, senderName: string) => void;
+  onToggleReaction?: (messageId: string, emoji: string) => void;
 }
 
 interface FileContent {
@@ -104,7 +109,7 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
 
 export function MessageBubble({
   message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
-  searchQuery, readReceipts, onEdit, onDelete,
+  searchQuery, readReceipts, reactions, onEdit, onDelete, onToggleReaction,
 }: MessageBubbleProps) {
   const isOwn = message.senderId === currentUserId;
   const isFile = message.contentType === 'file';
@@ -181,10 +186,30 @@ export function MessageBubble({
         )}
 
         <div className="relative flex items-center gap-1">
-          <div className={cn(
+           <div className={cn(
             'hidden group-hover:flex items-center gap-0.5 absolute top-0',
             isOwn ? 'right-full mr-1' : 'left-full ml-1'
           )}>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6">
+                  <Smile className="h-3 w-3" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-2" side="top" align="center">
+                <div className="flex gap-1">
+                  {EMOJI_SET.map((emoji) => (
+                    <button
+                      key={emoji}
+                      className="text-lg hover:bg-muted rounded p-1 transition-colors cursor-pointer"
+                      onClick={() => onToggleReaction?.(message.id, emoji)}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button
               variant="ghost" size="icon" className="h-6 w-6"
               onClick={() => { navigator.clipboard.writeText(message.content); toast.success('Copied'); }}
@@ -241,6 +266,27 @@ export function MessageBubble({
             </div>
           )}
         </div>
+
+        {/* Reaction pills */}
+        {reactions && reactions.length > 0 && (
+          <div className={cn('flex flex-wrap gap-1 mt-1 px-1', isOwn ? 'justify-end' : 'justify-start')}>
+            {reactions.map((r) => (
+              <button
+                key={r.emoji}
+                className={cn(
+                  'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border transition-colors cursor-pointer',
+                  r.reactedByMe
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted'
+                )}
+                onClick={() => onToggleReaction?.(message.id, r.emoji)}
+              >
+                <span>{r.emoji}</span>
+                <span>{r.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {showTimestamp && (
           <span className="text-[10px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1">
