@@ -151,7 +151,9 @@ Deno.serve(async (req) => {
       .single();
 
     const orgName = org?.name || "the team";
-    const inviteLink = `https://openplanai.lovable.app/join-org?invite=${token}`;
+    // Route existing users to /join-org, new users to /signup
+    const invitePath = existingProfile ? '/join-org' : '/signup';
+    const inviteLink = `https://openplanai.lovable.app${invitePath}?invite=${token}`;
 
     // Send email via Resend
     const emailRes = await fetch("https://api.resend.com/emails", {
