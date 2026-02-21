@@ -3,6 +3,8 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/layout/AppSidebar';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { useUserStore } from '@/stores/useUserStore';
+import { useGlobalChatRealtime } from '@/features/chat/hooks/useGlobalChatRealtime';
+// Trigger HMR
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -11,6 +13,9 @@ interface AppLayoutProps {
 
 export function AppLayout({ children, noPadding }: AppLayoutProps) {
   const preferences = useUserStore((s) => s.preferences);
+
+  // Initialize global chat notifications
+  useGlobalChatRealtime();
 
   // Apply compact mode class to <html>
   useEffect(() => {

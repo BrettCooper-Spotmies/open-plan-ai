@@ -1,9 +1,20 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { Conversation, ChatMessage } from '../types';
 
 type ConversationFilter = 'all' | 'dms' | 'groups';
 
+/** How long cached data is considered "fresh" (ms). After this, a background revalidation fires. */
+const STALE_THRESHOLD_MS = 30_000;
+
+interface MessagesCacheEntry {
+  messages: ChatMessage[];
+  hasMore: boolean;
+  loadedAt: number;
+}
+
 interface ChatState {
+  // ── UI state ──────────────────────────────────────────────────────────
   activeConversationId: string | null;
   conversationFilter: ConversationFilter;
   searchQuery: string;
@@ -13,6 +24,12 @@ interface ChatState {
   isMessageSearchOpen: boolean;
   messageSearchQuery: string;
 
+  // ── Data cache ────────────────────────────────────────────────────────
+  conversations: Conversation[];
+  conversationsLoadedAt: number | null;
+  messagesCache: Record<string, MessagesCacheEntry>;
+
+  // ── UI actions ────────────────────────────────────────────────────────
   setActiveConversation: (id: string | null) => void;
   setConversationFilter: (filter: ConversationFilter) => void;
   setSearchQuery: (query: string) => void;
@@ -25,11 +42,24 @@ interface ChatState {
   getTotalUnread: () => number;
   toggleMessageSearch: () => void;
   setMessageSearchQuery: (query: string) => void;
+
+  // ── Data actions ──────────────────────────────────────────────────────
+  setConversations: (conversations: Conversation[]) => void;
+  isConversationsStale: () => boolean;
+
+  setCachedMessages: (conversationId: string, messages: ChatMessage[], hasMore: boolean) => void;
+  getCachedMessages: (conversationId: string) => MessagesCacheEntry | null;
+  isMessagesStale: (conversationId: string) => boolean;
+  addMessage: (conversationId: string, message: ChatMessage) => void;
+  updateMessage: (conversationId: string, messageId: string, updater: (msg: ChatMessage) => ChatMessage) => void;
+  appendOlderMessages: (conversationId: string, older: ChatMessage[], hasMore: boolean) => void;
+  clearCache: () => void;
 }
 
 export const useChatStore = create<ChatState>()(
   persist(
     (set, get) => ({
+      // ── UI state defaults ─────────────────────────────────────────────
       activeConversationId: null,
       conversationFilter: 'all',
       searchQuery: '',
@@ -39,6 +69,12 @@ export const useChatStore = create<ChatState>()(
       isMessageSearchOpen: false,
       messageSearchQuery: '',
 
+      // ── Data cache defaults ───────────────────────────────────────────
+      conversations: [],
+      conversationsLoadedAt: null,
+      messagesCache: {},
+
+      // ── UI actions ────────────────────────────────────────────────────
       setActiveConversation: (id) => {
         set({ activeConversationId: id });
         if (id) {
@@ -76,6 +112,87 @@ export const useChatStore = create<ChatState>()(
         messageSearchQuery: s.isMessageSearchOpen ? '' : s.messageSearchQuery,
       })),
       setMessageSearchQuery: (query) => set({ messageSearchQuery: query }),
+
+      // ── Data actions ──────────────────────────────────────────────────
+      setConversations: (conversations) =>
+        set({ conversations, conversationsLoadedAt: Date.now() }),
+
+      isConversationsStale: () => {
+        const { conversationsLoadedAt } = get();
+        if (!conversationsLoadedAt) return true;
+        return Date.now() - conversationsLoadedAt > STALE_THRESHOLD_MS;
+      },
+
+      setCachedMessages: (conversationId, messages, hasMore) =>
+        set((state) => ({
+          messagesCache: {
+            ...state.messagesCache,
+            [conversationId]: { messages, hasMore, loadedAt: Date.now() },
+          },
+        })),
+
+      getCachedMessages: (conversationId) => {
+        return get().messagesCache[conversationId] ?? null;
+      },
+
+      isMessagesStale: (conversationId) => {
+        const entry = get().messagesCache[conversationId];
+        if (!entry) return true;
+        return Date.now() - entry.loadedAt > STALE_THRESHOLD_MS;
+      },
+
+      addMessage: (conversationId, message) =>
+        set((state) => {
+          const entry = state.messagesCache[conversationId];
+          if (!entry) return state;
+          // Avoid duplicates
+          if (entry.messages.some((m) => m.id === message.id)) return state;
+          return {
+            messagesCache: {
+              ...state.messagesCache,
+              [conversationId]: {
+                ...entry,
+                messages: [...entry.messages, message],
+              },
+            },
+          };
+        }),
+
+      updateMessage: (conversationId, messageId, updater) =>
+        set((state) => {
+          const entry = state.messagesCache[conversationId];
+          if (!entry) return state;
+          return {
+            messagesCache: {
+              ...state.messagesCache,
+              [conversationId]: {
+                ...entry,
+                messages: entry.messages.map((m) =>
+                  m.id === messageId ? updater(m) : m
+                ),
+              },
+            },
+          };
+        }),
+
+      appendOlderMessages: (conversationId, older, hasMore) =>
+        set((state) => {
+          const entry = state.messagesCache[conversationId];
+          if (!entry) return state;
+          return {
+            messagesCache: {
+              ...state.messagesCache,
+              [conversationId]: {
+                ...entry,
+                messages: [...older, ...entry.messages],
+                hasMore,
+              },
+            },
+          };
+        }),
+
+      clearCache: () =>
+        set({ conversations: [], conversationsLoadedAt: null, messagesCache: {} }),
     }),
     {
       name: 'chat-store',

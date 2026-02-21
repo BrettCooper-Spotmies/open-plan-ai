@@ -61,6 +61,43 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
+function ExpandableText({ text, query }: { text: string; query?: string }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // Consider long if more than 300 characters or more than 5 newlines
+  const isLong = text.length > 300 || (text.match(/\n/g) || []).length > 5;
+  
+  const displayText = isLong && !isExpanded 
+    ? text.substring(0, 300) + (text.length > 300 ? '...' : '') 
+    : text;
+
+  // Split logic for newlines
+  const renderText = (content: string) => {
+    return content.split('\n').map((line, i) => (
+      <span key={i}>
+        <HighlightedText text={line} query={query} />
+        {i < content.split('\n').length - 1 && <br />}
+      </span>
+    ));
+  };
+
+  return (
+    <div className="flex flex-col">
+      <div className={cn('whitespace-pre-wrap', isLong && !isExpanded && 'line-clamp-6')}>
+        {renderText(displayText)}
+      </div>
+      {isLong && (
+        <button 
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-xs opacity-80 hover:opacity-100 font-medium mt-1 self-start underline underline-offset-2"
+        >
+          {isExpanded ? 'Show less' : 'Read more'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function HighlightedText({ text, query }: { text: string; query?: string }) {
   if (!query?.trim()) return <>{text}</>;
   const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
@@ -364,16 +401,16 @@ export function MessageBubble({
           ) : (
             <div
               className={cn(
-                'rounded-2xl px-3 py-2 text-sm leading-relaxed',
+                'rounded-2xl px-3 py-2 text-sm leading-relaxed max-w-full overflow-hidden',
                 isOwn
-                  ? 'bg-primary text-primary-foreground rounded-br-md'
-                  : 'bg-muted text-foreground rounded-bl-md'
+                  ? 'bg-primary text-primary-foreground rounded-br-md border border-primary/20'
+                  : 'bg-muted text-foreground rounded-bl-md border border-border'
               )}
             >
               {isFile && fileData ? (
                 <FileAttachment file={fileData} isOwn={isOwn} />
               ) : (
-                <HighlightedText text={message.content} query={searchQuery} />
+                <ExpandableText text={message.content} query={searchQuery} />
               )}
             </div>
           )}
