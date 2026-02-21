@@ -64,18 +64,16 @@ function formatFileSize(bytes: number): string {
 function ExpandableText({ text, query }: { text: string; query?: string }) {
   const [isExpanded, setIsExpanded] = useState(false);
   
-  // Consider long if more than 300 characters or more than 5 newlines
   const isLong = text.length > 300 || (text.match(/\n/g) || []).length > 5;
   
   const displayText = isLong && !isExpanded 
     ? text.substring(0, 300) + (text.length > 300 ? '...' : '') 
     : text;
 
-  // Split logic for newlines
   const renderText = (content: string) => {
     return content.split('\n').map((line, i) => (
       <span key={i}>
-        <HighlightedText text={line} query={query} />
+        <MentionHighlightedText text={line} query={query} />
         {i < content.split('\n').length - 1 && <br />}
       </span>
     ));
@@ -95,6 +93,40 @@ function ExpandableText({ text, query }: { text: string; query?: string }) {
         </button>
       )}
     </div>
+  );
+}
+
+function MentionHighlightedText({ text, query }: { text: string; query?: string }) {
+  // Split on @mentions first, then apply search highlighting
+  const mentionRegex = /(@\w[\w\s]*?\w)(?=\s|$|[.,!?])/g;
+  const parts: { text: string; isMention: boolean }[] = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = mentionRegex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ text: text.slice(lastIndex, match.index), isMention: false });
+    }
+    parts.push({ text: match[1], isMention: true });
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) {
+    parts.push({ text: text.slice(lastIndex), isMention: false });
+  }
+  if (parts.length === 0) parts.push({ text, isMention: false });
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.isMention ? (
+          <span key={i} className="bg-primary/20 text-primary font-medium rounded px-0.5">
+            <HighlightedText text={part.text} query={query} />
+          </span>
+        ) : (
+          <HighlightedText key={i} text={part.text} query={query} />
+        )
+      )}
+    </>
   );
 }
 

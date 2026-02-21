@@ -136,6 +136,7 @@ export default function Chat() {
                   conversationId={activeConv.id}
                   onMessageSent={refetch}
                   onTyping={broadcastTyping}
+                  members={activeConv.members}
                 />
               </>
             ) : (
@@ -145,7 +146,7 @@ export default function Chat() {
         )}
 
         {!isMobile && isDetailPanelOpen && activeConv && (
-          <DetailPanel conversation={activeConv} />
+          <DetailPanel conversation={activeConv} onRefetch={refetch} />
         )}
       </div>
     </AppLayout>

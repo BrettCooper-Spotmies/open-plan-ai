@@ -20,6 +20,7 @@ import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import NotFound from "./pages/NotFound";
+import JoinOrganization from "./pages/JoinOrganization";
 
 // Lazy loaded feature routes (code splitting)
 const Dashboard = lazy(() => import("./features/dashboard"));
@@ -55,6 +56,7 @@ const App = () => {
                 <Route path="/signup" element={<Signup />} />
                 <Route path="/forgot-password" element={<ForgotPassword />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
+                <Route path="/join-org" element={<JoinOrganization />} />
 
                 {/* Protected routes */}
                 <Route element={<ProtectedRoute />}>
