@@ -151,7 +151,7 @@ Deno.serve(async (req) => {
       .single();
 
     const orgName = org?.name || "the team";
-    const inviteLink = `https://openplanai.lovable.app/signup?invite=${token}`;
+    const inviteLink = `https://openplanai.lovable.app/join-org?invite=${token}`;
 
     // Send email via Resend
     const emailRes = await fetch("https://api.resend.com/emails", {
@@ -171,7 +171,7 @@ Deno.serve(async (req) => {
               You've been invited to join <strong>${orgName}</strong> on OpenPlan AI as a <strong>${role || "member"}</strong>.
             </p>
             <p style="color: #4a4a4a; font-size: 16px;">
-              Click the button below to create your account and join the team:
+              Click the button below to join the team:
             </p>
             <div style="text-align: center; margin: 32px 0;">
               <a href="${inviteLink}" style="background-color: #2563eb; color: white; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">

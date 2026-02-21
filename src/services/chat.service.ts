@@ -360,7 +360,6 @@ export const chatService = {
       .in('message_id', messageIds);
     if (error) throw error;
 
-    // Group by message_id + emoji
     const map: Record<string, Record<string, { count: number; userIds: string[] }>> = {};
     for (const row of data || []) {
       if (!map[row.message_id]) map[row.message_id] = {};
@@ -379,5 +378,48 @@ export const chatService = {
       }));
     }
     return result;
+  },
+
+  async addMemberToGroup(conversationId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('conversation_members')
+      .insert({ conversation_id: conversationId, user_id: userId, role: 'member' });
+    if (error) throw error;
+  },
+
+  async removeMemberFromGroup(conversationId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('conversation_members')
+      .delete()
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId);
+    if (error) throw error;
+  },
+
+  async getSharedFiles(conversationId: string): Promise<{ fileName: string; fileSize: number; mimeType: string; url: string; createdAt: string }[]> {
+    const { data, error } = await supabase
+      .from('chat_messages')
+      .select('content, created_at')
+      .eq('conversation_id', conversationId)
+      .eq('content_type', 'file')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .limit(20);
+    if (error) throw error;
+
+    return (data || []).map((msg: any) => {
+      try {
+        const parsed = JSON.parse(msg.content);
+        return {
+          fileName: parsed.fileName,
+          fileSize: parsed.fileSize,
+          mimeType: parsed.mimeType,
+          url: parsed.url,
+          createdAt: msg.created_at,
+        };
+      } catch {
+        return null;
+      }
+    }).filter(Boolean) as any[];
   },
 };
