@@ -8,18 +8,22 @@ import { useDashboardStats, useRecentActivity, useUpcomingDashboardMilestones, u
 import { Skeleton } from '@/components/ui/skeleton';
 import { Activity, Milestone, Project } from '@/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { Building2, Loader2, Plus } from 'lucide-react';
+import { Building2, Loader2, Plus, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Dashboard() {
-  const { currentOrganization, isLoading: orgLoading, createOrganization } = useOrganization();
-
+  const { currentOrganization, isLoading: orgLoading, createOrganization, refreshOrganizations } = useOrganization();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newOrgForm, setNewOrgForm] = useState({ name: '', description: '' });
@@ -47,6 +51,40 @@ export default function Dashboard() {
       toast.error('Failed to create organization');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  // Fetch pending invitations for current user
+  const { data: pendingInvitations } = useQuery({
+    queryKey: ['pending-invitations', user?.email],
+    queryFn: async () => {
+      if (!user?.email) return [];
+      const { data, error } = await supabase
+        .from('team_invitations')
+        .select('*, organizations(name)')
+        .eq('email', user.email)
+        .eq('status', 'pending')
+        .gt('expires_at', new Date().toISOString());
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!user?.email,
+  });
+
+  const [acceptingInvite, setAcceptingInvite] = useState<string | null>(null);
+
+  const handleAcceptInvite = async (token: string) => {
+    setAcceptingInvite(token);
+    try {
+      const res = await supabase.functions.invoke('accept-invite', { body: { token } });
+      if (res.error) throw res.error;
+      toast.success('Successfully joined the organization!');
+      await refreshOrganizations();
+      queryClient.invalidateQueries({ queryKey: ['pending-invitations'] });
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to accept invitation');
+    } finally {
+      setAcceptingInvite(null);
     }
   };
 
@@ -147,6 +185,38 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
+
+        {/* Pending Invitations Banner */}
+        {pendingInvitations && pendingInvitations.length > 0 && pendingInvitations.map((inv: any) => (
+          <Card key={inv.id} className="border-dashed border border-primary/25 bg-primary/[0.03]">
+            <CardContent className="flex items-center gap-4 py-4 px-5">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                <Mail className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-semibold text-foreground">
+                  Pending Invitation: {inv.organizations?.name || 'Organization'}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  You've been invited as a <strong>{inv.role}</strong>. Click Join to accept.
+                </p>
+              </div>
+              <Button
+                onClick={() => handleAcceptInvite(inv.token)}
+                size="sm"
+                className="gap-1.5 shrink-0"
+                disabled={acceptingInvite === inv.token}
+              >
+                {acceptingInvite === inv.token ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Building2 className="h-3.5 w-3.5" />
+                )}
+                Join
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
 
         {isLoading ? (
           <div className="space-y-6">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,14 +11,16 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const { signIn, isLoading: authLoading, pendingVerificationEmail } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get the redirect path from location state, or default to "/"
-  const from = (location.state as any)?.from?.pathname || "/";
+  // Priority: ?redirect= query param > location.state.from > "/"
+  const redirectParam = searchParams.get("redirect");
+  const from = redirectParam || (location.state as any)?.from?.pathname || "/";
 
   // Auto-redirect to verification if there's a pending verification email
   useEffect(() => {
