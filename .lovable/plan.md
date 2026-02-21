@@ -1,123 +1,64 @@
 
 
-# Chat Group Management, Shared Files, Mentions, and Invite Flow for Existing Users
+# Fix Invite Flow for New vs Existing Users + Dashboard Pending Invitations Badge
 
-## Overview
+## Problem Summary
 
-| # | Feature | Summary |
-|---|---------|---------|
-| 1 | Add/Remove group members | Admin/owner can add or remove members from an existing group conversation via the Detail Panel |
-| 2 | Shared files in Detail Panel | Query file-type messages from the conversation and display them in the "Shared Files" section |
-| 3 | @mention team members in groups | Type `@` in the message input to see a dropdown of group members; insert `@Name` which renders highlighted |
-| 4 | Join Organization page for existing users | Instead of redirecting existing users to the signup page, create a `/join-org` page that lets logged-in users accept the invite directly |
+1. **All invite links go to `/join-org`** which shows "Please log in" -- but new users (no account) need to go to signup instead
+2. **Login page ignores `?redirect=` query param** -- after login, users don't get redirected back to `/join-org`
+3. **No dashboard notification** for pending invitations the user missed
 
----
+## Solution
 
-## 1. Add/Remove Group Members
+### 1. Smart Invite Flow: Differentiate New vs Existing Users
 
-### Changes
+Update the **`send-team-invite` edge function** to check if the invited email already has an account:
+- **Existing user**: invite link goes to `/join-org?invite=TOKEN` (current behavior, correct)
+- **New user**: invite link goes to `/signup?invite=TOKEN` (the original flow for new users)
 
-**DetailPanel.tsx**
-- Add an "Add Member" button (only visible for group conversations where current user is owner/admin)
-- Each non-owner member gets a "Remove" button (X icon) visible to owners/admins
-- "Add Member" opens a small dialog listing reachable users not already in the group
-- On add: call `chatService.addMemberToGroup(conversationId, userId)`
-- On remove: call `chatService.removeMemberFromGroup(conversationId, userId)`
-- After each action, refetch conversations to update member list
+This way, each user type gets the right experience automatically.
 
-**chat.service.ts** -- add two new methods:
-- `addMemberToGroup(conversationId, userId)` -- insert into `conversation_members`
-- `removeMemberFromGroup(conversationId, userId)` -- delete from `conversation_members`
+### 2. Fix Login Redirect for `/join-org`
 
-**Chat.tsx**
-- Pass `refetch` (conversation refetch) to `DetailPanel` so it can refresh after member changes
+Update **`Login.tsx`** to read the `redirect` query parameter from the URL. After successful login, redirect to the `redirect` param (e.g., `/join-org?invite=TOKEN`) instead of always going to `/`.
 
-**conversation_members RLS** -- already allows members to add/remove via existing policies (INSERT for members/creators, DELETE for members). No migration needed.
+### 3. Dashboard Pending Invitations Banner
 
-### "Leave Group" button
-- Wire the existing "Leave Group" button in DetailPanel to call `removeMemberFromGroup(conversationId, currentUserId)`, then navigate back to `/chat`.
+Add a banner on the **Dashboard** that shows when the logged-in user has pending invitations they haven't accepted yet. This handles the case where a user misses the invite link.
+
+- Query `team_invitations` where `email` matches the current user's email, `status = 'pending'`, and not expired
+- Show a banner card with the org name and a "Join" button
+- On click, call `accept-invite` edge function directly (no need to navigate away)
+- After accepting, refresh organizations and dismiss the banner
 
 ---
 
-## 2. Shared Files in Detail Panel
+## Technical Details
 
-### Changes
+### Files Changed
 
-**DetailPanel.tsx**
-- Accept a new prop `sharedFiles` (or fetch internally)
-- Query `chat_messages` where `conversation_id = X` and `content_type = 'file'` and `deleted_at IS NULL`, ordered by `created_at DESC`, limit 20
-- Parse the JSON content of each file message to extract `fileName`, `fileSize`, `mimeType`, `url`
-- Display each file as a clickable card (image thumbnail or file icon + name + size)
-- Replace the current "No shared files yet" placeholder with the actual list
-
-**chat.service.ts** -- add new method:
-- `getSharedFiles(conversationId)` -- fetches file messages and returns parsed file metadata
-
----
-
-## 3. @Mention Feature for Groups
-
-### Changes
-
-**MessageInput.tsx**
-- Detect when user types `@` in the textarea
-- Show a floating dropdown/popover above the cursor position listing group members (filtered as user types after `@`)
-- On selecting a member, replace `@partial` with `@MemberName` in the text
-- Accept `members` prop from Chat.tsx (the active conversation's members excluding self)
-
-**MessageBubble.tsx**
-- Parse message content for `@Name` patterns matching conversation members
-- Render mentions with a highlighted style (e.g., `bg-primary/20 text-primary font-medium rounded px-0.5`)
-
-**Chat.tsx**
-- Pass `activeConv.members` to `MessageInput` so it knows who can be mentioned
-
-No database changes needed -- mentions are stored as plain text `@Name` in the message content.
-
----
-
-## 4. Join Organization Page for Existing Users
-
-### The Problem
-When an existing user receives an invite email, the link goes to `/signup?invite=TOKEN`. Since they already have an account, they see the registration form, which will fail (duplicate email).
-
-### Solution
-- Update the invite email link to go to `/join-org?invite=TOKEN` instead of `/signup?invite=TOKEN`
-- Create a new `/join-org` page that:
-  - If the user is **logged in**: shows the org name, role, and a "Join Organization" button that calls the `accept-invite` edge function
-  - If the user is **not logged in**: shows a message "Please log in to accept this invitation" with a link to `/login?redirect=/join-org?invite=TOKEN`
-- Keep the `/signup?invite=TOKEN` flow working for new users (add a "Don't have an account? Sign up" link on the join-org page)
-
-### Changes
-
-**New: `src/pages/JoinOrganization.tsx`**
-- Read `invite` token from URL params
-- Fetch invitation details (org name, role) from `team_invitations` table using the token
-- If logged in: show "Join [OrgName] as [Role]" with accept button
-- If not logged in: show login prompt with redirect back
-- On accept: call `accept-invite` edge function, then navigate to `/`
-- Show error states for expired/invalid tokens
-
-**send-team-invite edge function**
-- Update the invite link from `/signup?invite=TOKEN` to `/join-org?invite=TOKEN`
-
-**App.tsx**
-- Add public route: `<Route path="/join-org" element={<JoinOrganization />} />`
-
-**JoinOrganization.tsx** -- also include a "New to OpenPlan AI? Create an account" link that goes to `/signup?invite=TOKEN` for users who don't have an account yet.
-
----
-
-## Technical Details -- Files Changed
-
-| File | Changes |
+| File | Change |
 |---|---|
-| `src/features/chat/components/DetailPanel.tsx` | Add/remove members UI, shared files display, leave group wiring |
-| `src/services/chat.service.ts` | Add `addMemberToGroup`, `removeMemberFromGroup`, `getSharedFiles` methods |
-| `src/features/chat/Chat.tsx` | Pass `refetch` to DetailPanel, pass `members` to MessageInput |
-| `src/features/chat/components/MessageInput.tsx` | @mention detection, dropdown, and insertion |
-| `src/features/chat/components/MessageBubble.tsx` | Render @mentions with highlighted style |
-| `src/pages/JoinOrganization.tsx` | **New** -- join org page for existing users |
-| `src/App.tsx` | Add `/join-org` route |
-| `supabase/functions/send-team-invite/index.ts` | Change invite link from `/signup` to `/join-org` |
+| `supabase/functions/send-team-invite/index.ts` | Check if email exists in profiles; if yes, link to `/join-org?invite=TOKEN`; if no, link to `/signup?invite=TOKEN` |
+| `src/pages/Login.tsx` | Read `redirect` from URL search params; after successful login, navigate to that path instead of `from` |
+| `src/features/dashboard/Dashboard.tsx` | Add a query for pending invitations matching the user's email; render a banner with "Join" button; call `accept-invite` on click |
+
+### Edge Function Change (send-team-invite)
+
+The function already checks if a profile exists for the email (lines 100-120). Use that result to decide the invite URL:
+
+```
+if (existingProfile) -> /join-org?invite=TOKEN
+else -> /signup?invite=TOKEN
+```
+
+### Login Redirect Fix
+
+Read `?redirect=` from `useSearchParams()`. If present, use it as the post-login destination instead of `location.state.from`.
+
+### Dashboard Pending Invitations
+
+- Use a `useQuery` to fetch pending invitations for the current user's email
+- Show a compact banner (similar to the existing "Create Organization" banner) with org name, role, and "Join" action button
+- On accept: invoke `accept-invite`, then `refreshOrganizations()`, invalidate the query, and show a success toast
 
