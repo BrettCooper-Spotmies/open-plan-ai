@@ -32,7 +32,9 @@ export interface UploadedProjectFile {
     id: string;
     name: string;
     size: string;
+    sizeBytes: number;
     type: string;
+    mimeType: string;
     url: string;
     path: string;
 }
@@ -101,7 +103,9 @@ export const projectStorageService = {
             id: Math.random().toString(36).substring(2, 11),
             name: file.name,
             size: formatFileSize(file.size),
+            sizeBytes: file.size,
             type: ALLOWED_TYPES[file.type],
+            mimeType: file.type,
             url: publicUrl,
             path: filePath,
         };
@@ -200,7 +204,9 @@ export const projectStorageService = {
                 id: file.id || file.name,
                 name: originalName,
                 size: formatFileSize(file.metadata?.size || 0),
+                sizeBytes: file.metadata?.size || 0,
                 type: (file.metadata?.mimetype || 'unknown').split('/').pop() || 'file',
+                mimeType: file.metadata?.mimetype || 'application/octet-stream',
                 url: publicUrl,
                 path: filePath,
             };
