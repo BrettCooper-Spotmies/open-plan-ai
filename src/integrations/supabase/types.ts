@@ -639,6 +639,64 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          description: string
+          id: string
+          project_id: string | null
+          read: boolean
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          description: string
+          id?: string
+          project_id?: string | null
+          read?: boolean
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          project_id?: string | null
+          read?: boolean
+          title?: string
+          type?: Database["public"]["Enums"]["notification_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_members: {
         Row: {
           department: string | null
@@ -1250,6 +1308,12 @@ export type Database = {
         | "enclosure"
         | "pcb"
         | "power"
+      notification_type:
+        | "mention"
+        | "assignment"
+        | "completed"
+        | "comment"
+        | "deadline"
       org_role: "owner" | "admin" | "member"
       priority: "critical" | "high" | "medium" | "low"
       project_role: "owner" | "admin" | "member" | "viewer"
@@ -1422,6 +1486,13 @@ export const Constants = {
         "enclosure",
         "pcb",
         "power",
+      ],
+      notification_type: [
+        "mention",
+        "assignment",
+        "completed",
+        "comment",
+        "deadline",
       ],
       org_role: ["owner", "admin", "member"],
       priority: ["critical", "high", "medium", "low"],
