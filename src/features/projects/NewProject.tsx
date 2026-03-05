@@ -555,8 +555,8 @@ const NewProject = () => {
               entity_type: 'project' as const,
               file_name: result.name,
               file_path: result.path,
-              file_size: parseInt(result.size) || 0,
-              mime_type: result.type,
+              file_size: result.sizeBytes,
+              mime_type: result.mimeType,
               project_id: project.id,
             }));
 

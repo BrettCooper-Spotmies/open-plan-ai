@@ -6,10 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
     Bell,
@@ -73,13 +73,48 @@ const Notifications = () => {
     const { notifications, isLoading, markAsRead, markAllAsRead, clearRead, deleteNotification } = useNotifications();
     const [activeTab, setActiveTab] = useState('all');
 
-    const unreadCount = notifications.filter((n) => !n.read).length;
+  const filteredNotifications = notifications.filter((n) => {
+    if (activeTab === 'all') return true;
+    if (activeTab === 'unread') return !n.read;
+    return n.type === activeTab;
+  });
 
-    const filteredNotifications = notifications.filter((n) => {
-        if (activeTab === 'all') return true;
-        if (activeTab === 'unread') return !n.read;
-        return n.type === activeTab;
-    });
+  return (
+    <AppLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Notifications</h1>
+            <p className="text-muted-foreground">Stay updated with your team's activity</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <Button variant="outline" size="sm" onClick={() => markAllRead.mutate()}>
+                <CheckCheck className="h-4 w-4 mr-2" />
+                Mark all as read
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Filter className="h-4 w-4 mr-2" />
+                  Actions
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => clearRead.mutate()}>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Clear read notifications
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <BellOff className="h-4 w-4 mr-2" />
+                  Notification settings
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
 
     const handleMarkAsRead = (id: string) => {
         markAsRead.mutate(id);
@@ -117,10 +152,9 @@ const Notifications = () => {
                         )}
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                    <Filter className="h-4 w-4 mr-2" />
-                                    Actions
-                                </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={handleClearAllRead}>
@@ -131,9 +165,17 @@ const Notifications = () => {
                                     <BellOff className="h-4 w-4 mr-2" />
                                     Notification settings
                                 </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem className="text-destructive" onClick={() => remove.mutate(notification.id)}>
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
-                        </DropdownMenu>
+                          </DropdownMenu>
+                        </div>
+                      </div>
                     </div>
+                  ))}
                 </div>
 
                 {/* Stats */}

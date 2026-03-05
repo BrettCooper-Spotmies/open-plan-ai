@@ -1,12 +1,11 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, MessageSquare, CheckCircle2, AlertCircle, Users, FolderKanban, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
@@ -80,16 +79,33 @@ export function NotificationsPopover() {
                     )}
                 </div>
 
-                {/* Notifications List */}
-                <div className="max-h-[400px] overflow-y-auto">
-                    {notifications.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 px-4">
-                            <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
-                                <Bell className="h-6 w-6 text-muted-foreground" />
-                            </div>
-                            <p className="text-sm font-medium text-foreground">No notifications yet</p>
-                            <p className="text-xs text-muted-foreground mt-1">We'll notify you when something arrives</p>
-                        </div>
+        <div className="max-h-[400px] overflow-y-auto">
+          {notifications.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4">
+              <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                <Bell className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium text-foreground">No notifications yet</p>
+              <p className="text-xs text-muted-foreground mt-1">We'll notify you when something arrives</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {notifications.slice(0, 8).map((notification) => (
+                <button
+                  key={notification.id}
+                  className={cn(
+                    'w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50',
+                    !notification.read && 'bg-status-in-progress/5'
+                  )}
+                  onClick={() => markRead.mutate(notification.id)}
+                >
+                  <div className="flex-shrink-0 mt-0.5">
+                    {notification.actor?.initials ? (
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
+                          {notification.actor.initials}
+                        </AvatarFallback>
+                      </Avatar>
                     ) : (
                         <div className="divide-y divide-border">
                             {notifications.map((notification) => (
@@ -155,7 +171,7 @@ export function NotificationsPopover() {
                             ))}
                         </div>
                     )}
-                </div>
+                  </div>
 
                 {/* Footer */}
                 {notifications.length > 0 && (
@@ -172,8 +188,34 @@ export function NotificationsPopover() {
                             View all notifications
                         </Button>
                     </div>
-                )}
-            </PopoverContent>
-        </Popover>
-    );
+                    <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{notification.description}</p>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {notification.project && (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                          <FolderKanban className="h-2.5 w-2.5" />
+                          {notification.project.name}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <Clock className="h-2.5 w-2.5" />
+                        {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {notifications.length > 0 && (
+          <div className="border-t border-border p-2">
+            <Button variant="ghost" size="sm" className="w-full text-xs h-8 text-muted-foreground hover:text-foreground" onClick={() => navigate('/notifications')}>
+              View all notifications
+            </Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
 }
