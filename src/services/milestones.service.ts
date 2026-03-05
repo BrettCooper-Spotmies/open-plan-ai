@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
+import { format } from 'date-fns';
 
 export type Milestone = Tables<'milestones'>;
 export type MilestoneInsert = TablesInsert<'milestones'>;
@@ -81,7 +82,7 @@ export const milestonesService = {
       .from('milestones')
       .select('*')
       .is('deleted_at', null)
-      .gte('due_date', new Date().toISOString().split('T')[0])
+      .gte('due_date', format(new Date(), 'yyyy-MM-dd'))
       .order('due_date', { ascending: true })
       .limit(limit);
 

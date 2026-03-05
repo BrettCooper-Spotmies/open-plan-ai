@@ -207,6 +207,11 @@ export interface Project {
   modules: ModuleSummary[];  // Legacy support
   projectModules?: Module[]; // First-class modules (optional for backward compatibility)
   issues?: Issue[];          // Project-level issues (optional for backward compatibility)
+  clientName?: string;
+  clientOrganization?: string;
+  clientContact?: string;
+  notes?: string;
+  departments?: string[];
   createdAt: string;
   updatedAt: string;
 }

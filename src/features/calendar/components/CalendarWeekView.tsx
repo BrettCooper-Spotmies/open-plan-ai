@@ -50,7 +50,7 @@ export const CalendarWeekView: React.FC<CalendarWeekViewProps> = ({
       <div className="grid grid-cols-7 flex-1 min-h-0">
         {days.map((day, index) => {
           const dayEvents = getEventsForDate(events, day.date);
-          
+
           // Sort events: milestones first, then issues, then tasks
           const sortedEvents = [...dayEvents].sort((a, b) => {
             const typeOrder = { milestone: 0, issue: 1, task: 2 };

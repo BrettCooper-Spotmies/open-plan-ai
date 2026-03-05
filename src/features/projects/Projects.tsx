@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ProjectListProgress } from './components/ProjectListProgress';
-import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, Trash2 } from 'lucide-react';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, Trash2, FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -56,6 +55,8 @@ export default function Projects() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [filesDialogOpen, setFilesDialogOpen] = useState(false);
+  const [selectedFilesProjectId, setSelectedFilesProjectId] = useState<string | null>(null);
 
   // Delete mutation
   const deleteProjectMutation = useDeleteProject();
@@ -64,6 +65,7 @@ export default function Projects() {
   const { data: selectedProjectDetails, isLoading: isLoadingDetails } = useProjectDetail(selectedProjectId || undefined);
   const { data: projectAttachments = [] } = useProjectAttachments(selectedProjectId || undefined);
   const { data: projectLinks = [] } = useProjectLinks(selectedProjectId || undefined);
+  const { data: projectFiles = [], isLoading: isLoadingFiles } = useProjectAttachments(selectedFilesProjectId || undefined);
 
   const projectList = projects || [];
 
@@ -77,6 +79,13 @@ export default function Projects() {
     e.stopPropagation();
     setSelectedProjectId(projectId);
     setDetailsDialogOpen(true);
+  };
+
+  const handleViewFiles = (projectId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedFilesProjectId(projectId);
+    setFilesDialogOpen(true);
   };
 
   const handleEdit = (projectId: string, e: React.MouseEvent) => {
@@ -108,7 +117,7 @@ export default function Projects() {
 
   if (isLoading) {
     return (
-      <AppLayout>
+      <>
         <div className="space-y-6 animate-fade-in">
           <div className="flex justify-between">
             <div>
@@ -127,23 +136,23 @@ export default function Projects() {
             ))}
           </div>
         </div>
-      </AppLayout>
+      </>
     );
   }
 
   if (error) {
     return (
-      <AppLayout>
+      <>
         <div className="text-center py-12">
           <h3 className="text-lg font-medium">Failed to load projects</h3>
           <p className="text-muted-foreground">Please try again later</p>
         </div>
-      </AppLayout>
+      </>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-6 animate-fade-in">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -237,6 +246,10 @@ export default function Projects() {
                           <DropdownMenuItem onClick={(e) => handleViewDetails(project.id, e)}>
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => handleViewFiles(project.id, e)}>
+                            <FolderOpen className="h-4 w-4 mr-2" />
+                            View Files
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={(e) => handleEdit(project.id, e)}>
                             <Pencil className="h-4 w-4 mr-2" />
@@ -342,18 +355,26 @@ export default function Projects() {
               {/* Team Members */}
               {selectedProjectDetails.team && selectedProjectDetails.team.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
                     <Users className="h-4 w-4" />
                     Team Members ({selectedProjectDetails.team.length})
                   </h4>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {selectedProjectDetails.team.map((member) => (
-                      <Badge key={member.id} variant="outline" className="flex items-center gap-1">
-                        <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-[10px] font-medium">
+                      <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg border bg-muted/30">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
                           {member.initials}
                         </div>
-                        {member.name}
-                      </Badge>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{member.name}</p>
+                          {member.role && (
+                            <p className="text-[11px] text-muted-foreground capitalize flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-primary/40" />
+                              {member.role.replace('_', ' ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -483,6 +504,75 @@ export default function Projects() {
         </DialogContent>
       </Dialog>
 
+      {/* View Files Dialog */}
+      <Dialog open={filesDialogOpen} onOpenChange={setFilesDialogOpen}>
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FolderOpen className="h-5 w-5 text-primary" />
+              Project Files
+            </DialogTitle>
+            <DialogDescription>
+              All files attached to this project.
+            </DialogDescription>
+          </DialogHeader>
+
+          {isLoadingFiles ? (
+            <div className="space-y-4 py-4">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : projectFiles.length > 0 ? (
+            <div className="space-y-2 py-4">
+              {projectFiles.map((file: any) => (
+                <a
+                  key={file.id}
+                  href={file.url || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={cn(
+                    "flex items-center gap-3 p-3 rounded-md bg-muted/50 hover:bg-muted transition-colors border",
+                    file.url ? "cursor-pointer" : "cursor-default opacity-70"
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!file.url) e.preventDefault();
+                  }}
+                >
+                  <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate text-foreground">
+                      {file.name || file.file_name}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Click to view • {new Date(file.uploaded_at || Date.now()).toLocaleDateString()}
+                    </p>
+                  </div>
+                  {file.url && (
+                    <span className="text-xs text-primary font-medium shrink-0">Open ↗</span>
+                  )}
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Paperclip className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
+              <h3 className="text-lg font-medium text-foreground">No files attached</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                This project doesn't have any attached files yet. Files can be added when editing the project.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFilesDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent>
@@ -506,6 +596,6 @@ export default function Projects() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </AppLayout>
+    </>
   );
 }

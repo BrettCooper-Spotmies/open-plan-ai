@@ -1,4 +1,5 @@
 import { Task, Issue } from '@/types';
+import { format } from 'date-fns';
 
 export interface WorkerMessage {
   type: 'CALCULATE_KPI' | 'FILTER_TASKS';
@@ -59,7 +60,7 @@ function calculateKPIs(tasks: Task[], issues: Issue[]): KPIResult {
   const projectProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   // Count open issues
-  const openIssuesList = issues.filter(i => 
+  const openIssuesList = issues.filter(i =>
     i.status === 'open' || i.status === 'investigating'
   );
   const openIssues = openIssuesList.length;
@@ -75,10 +76,10 @@ function calculateKPIs(tasks: Task[], issues: Issue[]): KPIResult {
   }).length;
 
   // Calculate average cycle time
-  const completedTasks = tasks.filter(t => 
+  const completedTasks = tasks.filter(t =>
     t.status === 'done' && t.startDate && t.updatedAt
   );
-  
+
   let avgCycleTime = 0;
   if (completedTasks.length > 0) {
     const totalDays = completedTasks.reduce((sum, task) => {
@@ -97,15 +98,15 @@ function calculateKPIs(tasks: Task[], issues: Issue[]): KPIResult {
   for (let i = 29; i >= 0; i--) {
     const date = new Date(now);
     date.setDate(date.getDate() - i);
-    const dateStr = date.toISOString().split('T')[0];
-    
+    const dateStr = format(date, 'yyyy-MM-dd');
+
     // Count tasks completed on or before this date
     const completedByDate = tasks.filter(t => {
       if (t.status !== 'done' || !t.updatedAt) return false;
-      const taskDate = new Date(t.updatedAt).toISOString().split('T')[0];
+      const taskDate = format(new Date(t.updatedAt), 'yyyy-MM-dd');
       return taskDate <= dateStr;
     }).length;
-    
+
     trendData.push({ date: dateStr, value: completedByDate });
   }
 

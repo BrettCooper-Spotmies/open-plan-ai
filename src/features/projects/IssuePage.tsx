@@ -1,5 +1,4 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { IssueDetailContent } from './components/IssueDetailContent';
@@ -37,18 +36,18 @@ export default function IssuePage() {
 
   if (isLoading) {
     return (
-      <AppLayout>
+      <>
         <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
           <Loader2 className="h-10 w-10 animate-spin text-primary opacity-80" />
           <p className="text-muted-foreground animate-pulse">Loading issue details...</p>
         </div>
-      </AppLayout>
+      </>
     );
   }
 
   if (hasError || !project || !issue) {
     return (
-      <AppLayout>
+      <>
         <div className="flex flex-col items-center justify-center h-[60vh] max-w-md mx-auto text-center px-4">
           <div className="bg-muted w-16 h-16 rounded-full flex items-center justify-center mb-6">
             <ArrowLeft className="h-8 w-8 text-muted-foreground" />
@@ -72,7 +71,7 @@ export default function IssuePage() {
             </Button>
           </div>
         </div>
-      </AppLayout>
+      </>
     );
   }
 
@@ -102,7 +101,7 @@ export default function IssuePage() {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="container max-w-5xl mx-auto py-8 px-4 space-y-8 animate-in fade-in duration-500">
         <div className="flex flex-col gap-3">
           <Button
@@ -136,6 +135,6 @@ export default function IssuePage() {
           />
         </div>
       </div>
-    </AppLayout>
+    </>
   );
 }

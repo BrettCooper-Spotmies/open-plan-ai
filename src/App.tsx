@@ -12,6 +12,7 @@ import { AppLayoutSkeleton } from "@/components/layout/AppLayoutSkeleton";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AppLayoutOutlet } from "@/components/layout/AppLayoutOutlet";
 import { useUserStore } from "@/stores/useUserStore";
 
 // Eagerly loaded routes (initial page load)
@@ -41,150 +42,157 @@ const App = () => {
   const storedTheme = useUserStore.getState().preferences.theme;
 
   return (
-  <ThemeProvider attribute="class" defaultTheme={storedTheme} enableSystem disableTransitionOnChange>
-  <ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <OrganizationProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                {/* Public routes */}
-                <Route path="/login" element={<Login />} />
-                <Route path="/signup" element={<Signup />} />
-                <Route path="/forgot-password" element={<ForgotPassword />} />
-                <Route path="/verify-email" element={<VerifyEmail />} />
-                <Route path="/join-org" element={<JoinOrganization />} />
+    <ThemeProvider attribute="class" defaultTheme={storedTheme} enableSystem disableTransitionOnChange>
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <AuthProvider>
+            <OrganizationProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <BrowserRouter>
+                  <Routes>
+                    {/* Public routes */}
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/verify-email" element={<VerifyEmail />} />
+                    <Route path="/join-org" element={<JoinOrganization />} />
 
-                {/* Protected routes */}
-                <Route element={<ProtectedRoute />}>
-                  <Route
-                    path="/"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="dashboard" />}>
-                        <Dashboard />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/my-day"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
-                        <MyDay />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/calendar"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
-                        <Calendar />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/projects"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
-                        <Projects />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/projects/new"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
-                        <NewProject />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/projects/:id"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
-                        <ProjectDetail />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/projects/:id/edit"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
-                        <EditProject />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/projects/:projectId/issues/:issueId"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
-                        <IssuePage />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/team"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
-                        <Team />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/settings"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
-                        <Settings />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/reports"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="dashboard" />}>
-                        <Reports />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/notifications"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
-                        <Notifications />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/chat"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
-                        <Chat />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/chat/:conversationId"
-                    element={
-                      <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
-                        <Chat />
-                      </Suspense>
-                    }
-                  />
-                </Route>
+                    {/* Protected routes */}
+                    <Route element={<ProtectedRoute />}>
+                      <Route element={<AppLayoutOutlet />}>
+                        <Route
+                          path="/"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="dashboard" />}>
+                              <Dashboard />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/my-day"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
+                              <MyDay />
+                            </Suspense>
+                          }
+                        />
 
-                {/* 404 route */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </TooltipProvider>
-        </OrganizationProvider>
-      </AuthProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
-    </QueryClientProvider>
-  </ErrorBoundary>
-  </ThemeProvider>
+                        <Route
+                          path="/projects"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
+                              <Projects />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/projects/new"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                              <NewProject />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/projects/:id"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                              <ProjectDetail />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/projects/:id/edit"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                              <EditProject />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/projects/:projectId/issues/:issueId"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                              <IssuePage />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/team"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
+                              <Team />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/settings"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                              <Settings />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/reports"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="dashboard" />}>
+                              <Reports />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/notifications"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
+                              <Notifications />
+                            </Suspense>
+                          }
+                        />
+                      </Route>
+
+                      {/* Routes with no padding */}
+                      <Route element={<AppLayoutOutlet noPadding />}>
+                        <Route
+                          path="/calendar"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                              <Calendar />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/chat"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                              <Chat />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/chat/:conversationId"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                              <Chat />
+                            </Suspense>
+                          }
+                        />
+                      </Route>
+                    </Route>
+
+                    {/* 404 route */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </BrowserRouter>
+              </TooltipProvider>
+            </OrganizationProvider>
+          </AuthProvider>
+          <ReactQueryDevtools initialIsOpen={false} />
+        </QueryClientProvider>
+      </ErrorBoundary>
+    </ThemeProvider>
   );
 };
 

@@ -14,7 +14,8 @@ import {
   subMonths,
   subWeeks,
   subDays,
-  parseISO,
+  parse,
+  isValid,
 } from 'date-fns';
 import { Task, Milestone, Issue, CalendarFilter, CalendarViewMode, TaskStatus, Priority } from '@/types';
 
@@ -128,10 +129,11 @@ export function formatDateRangeLabel(date: Date, viewMode: CalendarViewMode): st
 /**
  * Parse date string safely
  */
-function parseDate(dateStr: string | undefined): Date | null {
+export function parseDate(dateStr: string | undefined): Date | null {
   if (!dateStr) return null;
   try {
-    return parseISO(dateStr);
+    const result = parse(dateStr, 'yyyy-MM-dd', new Date());
+    return isValid(result) ? result : null;
   } catch {
     return null;
   }

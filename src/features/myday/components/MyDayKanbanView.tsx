@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -300,7 +300,7 @@ export function MyDayKanbanView({
                                           )}
                                           {task.dueDate && (
                                             <span className="text-[10px] text-muted-foreground">
-                                              {format(parseISO(task.dueDate), 'MMM d')}
+                                              {format(parse(task.dueDate, 'yyyy-MM-dd', new Date()), 'MMM d')}
                                             </span>
                                           )}
                                         </div>

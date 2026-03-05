@@ -68,7 +68,7 @@ describe('ReportsKPIRow', () => {
 
   it('should display correct avg cycle time', () => {
     const { getByText } = renderWithProviders(<ReportsKPIRow kpis={mockKPIs} />);
-    expect(getByText('4.5')).toBeInTheDocument();
+    expect(getByText('4.5d')).toBeInTheDocument();
   });
 
   it('should show critical issues warning when criticalIssues > 0', () => {
@@ -96,7 +96,7 @@ describe('ReportsKPIRow', () => {
 
     const progressText = getByText('Project Progress');
     const card = progressText.closest('[class*="cursor-pointer"]');
-    
+
     if (card) {
       await user.click(card);
       expect(handleClick).toHaveBeenCalledWith('progress');
@@ -111,7 +111,7 @@ describe('ReportsKPIRow', () => {
 
     const issuesText = getByText('Open Issues');
     const card = issuesText.closest('[class*="cursor-pointer"]');
-    
+
     if (card) {
       await user.click(card);
       expect(handleClick).toHaveBeenCalledWith('issues');

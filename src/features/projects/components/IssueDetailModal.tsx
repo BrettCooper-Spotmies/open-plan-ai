@@ -16,6 +16,7 @@ import {
 import { IssueDetailContent } from './IssueDetailContent';
 import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 interface IssueDetailModalProps {
   issue: Issue | null;
@@ -48,12 +49,26 @@ export function IssueDetailModal({
   onCreate,
 }: IssueDetailModalProps) {
   const navigate = useNavigate();
+  const [editedIssue, setEditedIssue] = useState<Issue | null>(null);
 
-  if (!issue) return null;
+  useEffect(() => {
+    if (isOpen && issue) {
+      setEditedIssue(issue);
+    }
+  }, [isOpen, issue?.id]);
+
+  if (!editedIssue) return null;
 
   const handleDelete = () => {
-    if (onDelete && issue && window.confirm('Are you sure you want to delete this issue?')) {
-      onDelete(issue.id);
+    if (onDelete && editedIssue && window.confirm('Are you sure you want to delete this issue?')) {
+      onDelete(editedIssue.id);
+      onClose();
+    }
+  };
+
+  const handleUpdateIssue = () => {
+    if (editedIssue) {
+      onUpdate(editedIssue);
       onClose();
     }
   };
@@ -72,23 +87,23 @@ export function IssueDetailModal({
           <DialogTitle className="sr-only">Issue Details</DialogTitle>
         )}
         <DialogDescription className="sr-only">
-          View and edit details for issue {issue?.title || 'New Issue'}
+          View and edit details for issue {editedIssue?.title || 'New Issue'}
         </DialogDescription>
-        <ScrollArea className="flex-1 overflow-y-auto">
+        <ScrollArea className="flex-1 overflow-y-auto w-full">
           <div className="p-6">
             <IssueDetailContent
-              issue={issue}
+              issue={editedIssue}
               tasks={tasks}
               teamMembers={teamMembers}
-              onUpdate={onUpdate}
+              onUpdate={setEditedIssue}
               onDelete={undefined}
-              isDraft={mode === 'create'}
+              isDraft={true} // Always pretend it's draft to enable auto-callbacks to onUpdate instead of parent
               onExpand={mode === 'create' ? undefined : () => {
                 const pathParts = window.location.pathname.split('/');
                 const projectIndex = pathParts.indexOf('projects');
                 if (projectIndex !== -1 && pathParts[projectIndex + 1]) {
                   const projectId = pathParts[projectIndex + 1];
-                  navigate(`/projects/${projectId}/issues/${issue.id}`);
+                  navigate(`/projects/${projectId}/issues/${editedIssue.id}`);
                 } else {
                   console.warn("Could not determine project ID from URL");
                 }
@@ -99,28 +114,30 @@ export function IssueDetailModal({
         </ScrollArea>
 
         {mode === 'create' && (
-          <div className="p-4 border-t flex justify-end gap-2 bg-background z-10">
+          <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={() => onCreate?.(issue!)}>Create Issue</Button>
+            <Button onClick={() => onCreate?.(editedIssue!)}>Create Issue</Button>
           </div>
         )}
 
         {mode === 'view' && (
-          <div className="p-4 border-t flex items-center justify-between bg-background z-10">
-            {/* Delete button on the bottom left */}
-            {onDelete && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleDelete}
-                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
-              >
-                <Trash2 className="h-4 w-4" />
-                Delete Issue
-              </Button>
-            )}
-            {!onDelete && <div />}
-            <Button variant="outline" onClick={onClose}>Close</Button>
+          <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full">
+            <div className="flex-1">
+              {/* Delete button on the bottom left */}
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDelete}
+                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Delete Issue
+                </Button>
+              )}
+            </div>
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button onClick={handleUpdateIssue}>Update Issue</Button>
           </div>
         )}
       </DialogContent>

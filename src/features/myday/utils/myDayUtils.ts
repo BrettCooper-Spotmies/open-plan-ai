@@ -1,5 +1,5 @@
 import { Task, Project, TaskStatus, Issue, IssueStatus, MyDayItem, MyDayItemType } from '@/types';
-import { parseISO, startOfDay, isSameDay, isBefore, isAfter, addDays, endOfDay } from 'date-fns';
+import { parse, startOfDay, isSameDay, isBefore, isAfter, addDays, endOfDay } from 'date-fns';
 
 export interface MyDayTask extends Task {
   projectId: string;
@@ -17,13 +17,39 @@ export type { MyDayItem, MyDayItemType } from '@/types';
 export type DueDateStatus = 'overdue' | 'today' | 'upcoming' | 'none';
 
 /**
+ * Check if a task or issue was completed/resolved today.
+ */
+export function isCompletedToday(item: any): boolean {
+  if (!item) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (item.status === 'done') {
+    if (!item.updatedAt) return false;
+    const updatedDate = new Date(item.updatedAt);
+    updatedDate.setHours(0, 0, 0, 0);
+    return updatedDate.getTime() === today.getTime();
+  }
+
+  if (item.status === 'resolved' || item.status === 'closed') {
+    const timeToUse = item.resolvedAt || item.updatedAt;
+    if (!timeToUse) return false;
+    const resolvedDate = new Date(timeToUse);
+    resolvedDate.setHours(0, 0, 0, 0);
+    return resolvedDate.getTime() === today.getTime();
+  }
+
+  return false;
+}
+
+/**
  * Get due date status relative to today
  */
 export function getDueDateStatus(dueDate?: string): DueDateStatus {
   if (!dueDate) return 'none';
 
   const today = startOfDay(new Date());
-  const due = startOfDay(parseISO(dueDate));
+  const due = startOfDay(parse(dueDate, 'yyyy-MM-dd', new Date()));
 
   if (isBefore(due, today)) return 'overdue';
   if (isSameDay(due, today)) return 'today';
@@ -61,7 +87,7 @@ export function getUserTasks(projects: Project[], userId: string): MyDayTask[] {
 
   return projects.flatMap(project =>
     project.tasks
-      .filter(task => task.assignees?.some(a => a.id === userId) && task.status !== 'done')
+      .filter(task => task.assignees?.some(a => a.id === userId) && (task.status !== 'done' || isCompletedToday(task)))
       .map(task => {
         const dueDateStatus = getDueDateStatus(task.dueDate);
         return {
@@ -85,8 +111,7 @@ export function getUserIssues(projects: Project[], userId: string): Issue[] {
   return projects.flatMap(project =>
     (project.issues || []).filter(issue =>
       issue.assignees?.some(a => a.id === userId) &&
-      issue.status !== 'resolved' &&
-      issue.status !== 'closed'
+      ((issue.status !== 'resolved' && issue.status !== 'closed') || isCompletedToday(issue))
     )
   );
 }
@@ -151,7 +176,7 @@ export function getUserItems(projects: Project[], userId: string): MyDayItem[] {
   // Add tasks
   projects.forEach(project => {
     project.tasks
-      .filter(task => task.assignees?.some(a => a.id === userId) && task.status !== 'done')
+      .filter(task => task.assignees?.some(a => a.id === userId) && (task.status !== 'done' || isCompletedToday(task)))
       .forEach(task => {
         items.push(mapTaskToMyDayItem(task, project, allTasks));
       });
@@ -162,8 +187,7 @@ export function getUserItems(projects: Project[], userId: string): MyDayItem[] {
     (project.issues || [])
       .filter(issue =>
         issue.assignees?.some(a => a.id === userId) &&
-        issue.status !== 'resolved' &&
-        issue.status !== 'closed'
+        ((issue.status !== 'resolved' && issue.status !== 'closed') || isCompletedToday(issue))
       )
       .forEach(issue => {
         items.push(mapIssueToMyDayItem(issue, project));
@@ -186,6 +210,10 @@ export function categorizeMyDayTasks(tasks: MyDayTask[]): {
   const waitingBlocked: MyDayTask[] = [];
 
   for (const task of tasks) {
+    if (task.status === 'done') {
+      continue;
+    }
+
     // Check if task needs attention
     const needsAttentionCheck =
       task.isOverdue ||
@@ -213,7 +241,9 @@ export function categorizeMyDayTasks(tasks: MyDayTask[]): {
     if (priorityDiff !== 0) return priorityDiff;
 
     if (a.dueDate && b.dueDate) {
-      return parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime();
+      const aDate = parse(a.dueDate, 'yyyy-MM-dd', new Date());
+      const bDate = parse(b.dueDate, 'yyyy-MM-dd', new Date());
+      return aDate.getTime() - bDate.getTime();
     }
     return a.dueDate ? -1 : 1;
   };
@@ -238,6 +268,10 @@ export function categorizeMyDayItems(items: MyDayItem[]): {
   const waitingBlocked: MyDayItem[] = [];
 
   for (const item of items) {
+    if (item.status === 'done' || item.status === 'resolved' || item.status === 'closed') {
+      continue;
+    }
+
     // Check if item needs attention
     const needsAttentionCheck =
       item.isOverdue ||
@@ -276,7 +310,9 @@ export function categorizeMyDayItems(items: MyDayItem[]): {
     if (priorityDiff !== 0) return priorityDiff;
 
     if (a.dueDate && b.dueDate) {
-      return parseISO(a.dueDate).getTime() - parseISO(b.dueDate).getTime();
+      const aDate = parse(a.dueDate, 'yyyy-MM-dd', new Date());
+      const bDate = parse(b.dueDate, 'yyyy-MM-dd', new Date());
+      return aDate.getTime() - bDate.getTime();
     }
     return a.dueDate ? -1 : 1;
   };
@@ -326,7 +362,7 @@ export function formatDueDate(dueDate?: string): string {
   if (!dueDate) return 'No due date';
 
   const status = getDueDateStatus(dueDate);
-  const date = parseISO(dueDate);
+  const date = parse(dueDate, 'yyyy-MM-dd', new Date());
   const formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   switch (status) {
@@ -342,7 +378,7 @@ export function formatDueDate(dueDate?: string): string {
 export function isDueTomorrow(dueDate?: string): boolean {
   if (!dueDate) return false;
   const tomorrow = addDays(startOfDay(new Date()), 1);
-  const due = startOfDay(parseISO(dueDate));
+  const due = startOfDay(parse(dueDate, 'yyyy-MM-dd', new Date()));
 
   return isSameDay(due, tomorrow);
 }
@@ -351,7 +387,7 @@ export function isDueThisWeek(dueDate?: string): boolean {
   if (!dueDate) return false;
   const today = startOfDay(new Date());
   const weekEnd = addDays(today, 7);
-  const due = startOfDay(parseISO(dueDate));
+  const due = startOfDay(parse(dueDate, 'yyyy-MM-dd', new Date()));
 
   return isAfter(due, today) && (isBefore(due, weekEnd) || isSameDay(due, weekEnd));
 }
@@ -405,10 +441,10 @@ export function groupTasksByProgress(items: MyDayTask[] | MyDayItem[]): {
   };
 
   for (const item of items) {
-    if (item.status === 'blocked' || item.isBlocked || item.hasUnresolvedDependencies) {
-      groups.dependency.push(item);
-    } else if (item.status === 'done' || item.status === 'resolved' || item.status === 'closed') {
+    if (item.status === 'done' || item.status === 'resolved' || item.status === 'closed') {
       groups.completed.push(item);
+    } else if (item.status === 'blocked' || item.isBlocked || item.hasUnresolvedDependencies) {
+      groups.dependency.push(item);
     } else if (item.status === 'in-progress' || item.status === 'review' || item.status === 'investigating') {
       groups.inProgress.push(item);
     } else {

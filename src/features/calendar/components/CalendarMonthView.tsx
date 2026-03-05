@@ -36,7 +36,7 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
       </div>
 
       {/* Calendar grid */}
-      <div className="grid grid-cols-7 flex-1 auto-rows-fr">
+      <div className="grid grid-cols-7 flex-1 min-h-0 auto-rows-fr">
         {days.map((day, index) => {
           const dayEvents = getEventsForDate(events, day.date);
           const visibleEvents = dayEvents.slice(0, MAX_VISIBLE_EVENTS);
@@ -46,7 +46,8 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
             <div
               key={index}
               className={cn(
-                'min-h-[100px] p-1 border-b border-r border-border cursor-pointer transition-colors',
+                'min-w-0 p-1 border-b border-r border-border cursor-pointer transition-colors',
+                'flex flex-col h-full overflow-hidden',
                 'hover:bg-accent/30',
                 !day.isCurrentMonth && 'bg-muted/30',
                 day.isToday && 'bg-primary/5'
@@ -54,12 +55,12 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
               onClick={() => onDayClick(day.date)}
             >
               {/* Date number */}
-              <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center justify-start mb-1 shrink-0">
                 <span
                   className={cn(
-                    'text-sm font-medium w-6 h-6 flex items-center justify-center rounded-full',
-                    !day.isCurrentMonth && 'text-muted-foreground',
-                    day.isToday && 'bg-primary text-primary-foreground'
+                    'text-sm font-medium w-7 h-7 flex items-center justify-center rounded-full transition-all',
+                    !day.isCurrentMonth && 'text-muted-foreground/60',
+                    day.isToday ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-accent'
                   )}
                 >
                   {format(day.date, 'd')}
@@ -67,7 +68,7 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
               </div>
 
               {/* Events */}
-              <div className="space-y-0.5">
+              <div className="space-y-0.5 flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-0.5 pb-0.5">
                 {visibleEvents.map((event) => (
                   <CalendarEventPreview key={event.id} event={event}>
                     <div onClick={(e) => { e.stopPropagation(); onEventClick(event); }}>

@@ -24,3 +24,6 @@ export { projectMembersService } from './projectMembers.service';
 export type { ProjectMember, ProjectMemberWithProfile, AddProjectMemberInput } from './projectMembers.service';
 export { projectStorageService } from './projectStorage.service';
 export type { UploadedProjectFile } from './projectStorage.service';
+export { notificationsService } from './notifications.service';
+export { commentsService } from './comments.service';
+export type { Comment } from './comments.service';

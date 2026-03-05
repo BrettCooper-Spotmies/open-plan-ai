@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useChatStore } from '../stores/useChatStore';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 export function usePresence(userId: string | undefined) {
-  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
+  const setOnlineUserIds = useChatStore((s) => s.setOnlineUserIds);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -48,9 +49,10 @@ export function usePresence(userId: string | undefined) {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       if (intervalRef.current) clearInterval(intervalRef.current);
-      if (channelRef.current) supabase.removeChannel(channelRef.current);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+      setOnlineUserIds(new Set());
     };
-  }, [userId, updateLastSeen]);
-
-  return onlineUserIds;
+  }, [userId, updateLastSeen, setOnlineUserIds]);
 }

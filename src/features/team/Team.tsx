@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ManageOrgAccessDialog } from './components/ManageOrgAccessDialog';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { useTeamMembers, useInviteTeamMember, useRemoveTeamMember, usePendingInvitations, useCancelInvitation, useUpdateTeamMemberDetails, type TeamMember, type TeamInvitation } from '@/hooks/useTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { chatService } from '@/services/chat.service';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,6 +56,7 @@ import {
   Clock,
   Building,
   XCircle,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -64,12 +66,28 @@ const Team = () => {
   const { currentOrganization } = useOrganization();
   const { data: teamMembers, isLoading, error } = useTeamMembers(currentOrganization?.id);
   const { user } = useAuth();
+  const navigate = useNavigate();
   const inviteMutation = useInviteTeamMember();
   const removeMutation = useRemoveTeamMember();
   const cancelInviteMutation = useCancelInvitation();
   const updateMemberMutation = useUpdateTeamMemberDetails();
+  const [isStartingChat, setIsStartingChat] = useState<string | null>(null);
 
   const { data: pendingInvitations } = usePendingInvitations(currentOrganization?.id || '');
+
+  const handleMessageClick = async (memberId: string) => {
+    if (memberId === user?.id) return;
+    try {
+      setIsStartingChat(memberId);
+      const convId = await chatService.getOrCreateDM(memberId);
+      navigate(`/chat/${convId}`);
+    } catch (err) {
+      console.error('Failed to start chat:', err);
+      toast.error('Failed to start chat');
+    } finally {
+      setIsStartingChat(null);
+    }
+  };
 
   // Check if current user is admin/owner
   const currentMember = teamMembers?.find(m => m.id === user?.id);
@@ -142,7 +160,7 @@ const Team = () => {
 
   const handleRemove = async (memberId: string) => {
     if (!currentOrganization) return;
-    
+
     try {
       await removeMutation.mutateAsync({
         memberId,
@@ -221,7 +239,7 @@ const Team = () => {
                   <Building className="h-4 w-4 mr-2" />
                   Manage Organizations
                 </DropdownMenuItem>
-                <DropdownMenuItem 
+                <DropdownMenuItem
                   className="text-destructive"
                   onClick={() => handleRemove(member.id)}
                 >
@@ -233,6 +251,18 @@ const Team = () => {
           )}
         </div>
         <div className="mt-4 space-y-2">
+          {member.id !== user?.id && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => handleMessageClick(member.id)}
+              disabled={isStartingChat === member.id}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              {isStartingChat === member.id ? 'Connecting...' : 'Message'}
+            </Button>
+          )}
           <p className="text-sm text-muted-foreground flex items-center gap-2">
             <Mail className="h-3.5 w-3.5" />
             {member.email}
@@ -261,7 +291,7 @@ const Team = () => {
 
   if (isLoading) {
     return (
-      <AppLayout>
+      <>
         <div className="space-y-6">
           <div className="flex justify-between">
             <div>
@@ -277,24 +307,24 @@ const Team = () => {
           </div>
           <Skeleton className="h-[400px]" />
         </div>
-      </AppLayout>
+      </>
     );
   }
 
   if (error) {
     return (
-      <AppLayout>
+      <>
         <div className="text-center py-12">
           <Users className="h-12 w-12 mx-auto text-muted-foreground/50" />
           <h3 className="mt-4 text-lg font-medium">Failed to load team members</h3>
           <p className="text-muted-foreground">Please try again later</p>
         </div>
-      </AppLayout>
+      </>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -536,6 +566,19 @@ const Team = () => {
                         {member.status}
                       </Badge>
                     </TableCell>
+                    <TableCell>
+                      {member.id !== user?.id && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleMessageClick(member.id)}
+                          disabled={isStartingChat === member.id}
+                        >
+                          <MessageSquare className="h-4 w-4 mr-2 text-primary" />
+                          {isStartingChat === member.id ? '...' : 'Message'}
+                        </Button>
+                      )}
+                    </TableCell>
                     {isAdminOrOwner && (
                       <TableCell>
                         <DropdownMenu>
@@ -553,7 +596,7 @@ const Team = () => {
                               <Building className="h-4 w-4 mr-2" />
                               Manage Organizations
                             </DropdownMenuItem>
-                            <DropdownMenuItem 
+                            <DropdownMenuItem
                               className="text-destructive"
                               onClick={() => handleRemove(member.id)}
                             >
@@ -582,10 +625,11 @@ const Team = () => {
             </p>
           </div>
         )}
-      </div>
+      </div >
 
       {/* Edit Member Dialog */}
-      <Dialog open={!!editMember} onOpenChange={(open) => !open && setEditMember(null)}>
+      < Dialog open={!!editMember
+      } onOpenChange={(open) => !open && setEditMember(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Team Member</DialogTitle>
@@ -637,7 +681,7 @@ const Team = () => {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       <ManageOrgAccessDialog
         open={!!manageOrgMember}
@@ -645,7 +689,7 @@ const Team = () => {
         member={manageOrgMember}
         currentUserId={user?.id}
       />
-    </AppLayout>
+    </>
   );
 };
 

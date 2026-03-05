@@ -62,6 +62,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { attachmentsService } from '@/services/attachments.service';
+import { commentsService } from '@/services/comments.service';
+import { useNotifications } from '@/hooks/useNotifications';
 import {
   Task,
   TaskStatus,
@@ -200,7 +202,7 @@ const formatFileSize = (bytes: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-export function TaskDetailModal({
+export const TaskDetailModal = ({
   task,
   allTasks,
   isOpen,
@@ -212,12 +214,33 @@ export function TaskDetailModal({
   modules = [],
   projectId,
   onAddModule,
-}: TaskDetailModalProps) {
-  const [editedTask, setEditedTask] = useState<Task | null>(task);
+}: TaskDetailModalProps) => {
+  const { profile } = useAuth();
+  const { data: teamMembers = [] } = useTeamMembers();
+  const { createNotification } = useNotifications();
+  const [editedTask, setEditedTask] = useState<Task>(task || {
+    id: '',
+    title: '',
+    description: '',
+    status: 'todo',
+    priority: 'medium',
+    module: 'software',
+    assignees: [],
+    tags: [],
+    checklist: [],
+    blockedBy: [],
+    dependencies: [],
+    comments: [],
+    attachments: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [newComment, setNewComment] = useState('');
-  const [selectedBlockingTask, setSelectedBlockingTask] = useState('');
-  const [selectedBlockedByTask, setSelectedBlockedByTask] = useState('');
+  const [selectedBlockingTask, setSelectedBlockingTask] = useState<string>('');
+  const [selectedBlockedByTask, setSelectedBlockedByTask] = useState<string>('');
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
   const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
@@ -229,16 +252,37 @@ export function TaskDetailModal({
   const [newModuleName, setNewModuleName] = useState('');
   const [newModuleType, setNewModuleType] = useState<ModuleType>('software');
 
-  // Fetch real team members
-  const { data: teamMembers = [] } = useTeamMembers();
-  const { profile } = useAuth();
+  // Fetch real comments when task changes
+  useEffect(() => {
+    if (isOpen && task?.id && mode !== 'create') {
+      setIsLoadingComments(true);
+      commentsService.getByEntity(task.id, 'task')
+        .then(dbComments => {
+          const mappedComments: Comment[] = dbComments.map(c => ({
+            id: c.id,
+            content: c.content,
+            author: {
+              id: c.profiles?.id || c.author_id,
+              name: c.profiles?.name || 'Unknown',
+              initials: c.profiles?.initials || 'UN',
+              avatar: c.profiles?.avatar_url || undefined,
+              email: c.profiles?.email || '',
+              role: 'member'
+            },
+            createdAt: c.created_at || new Date().toISOString(),
+          }));
+          setEditedTask(prev => ({ ...prev, comments: mappedComments }));
+        })
+        .finally(() => setIsLoadingComments(false));
+    }
+  }, [isOpen, task?.id, mode]);
 
   // Sync editedTask when task prop changes or when switching between modes
   useEffect(() => {
     if (task) {
       setEditedTask(task);
     }
-  }, [task, isOpen, mode]); // Re-sync when modal opens, mode changes, or task changes
+  }, [task]);
 
   // Dependencies handlers
   // Compute "Blocking To" client-side - tasks that have THIS task in their blockedBy
@@ -380,23 +424,80 @@ export function TaskDetailModal({
   // Comments handlers
   const comments = editedTask.comments || [];
 
-  const handleAddComment = () => {
-    if (!newComment.trim()) return;
-    const newCommentObj: Comment = {
-      id: `comment-${Date.now()}`,
-      content: newComment,
-      author: profile ? {
-        id: profile.id,
-        name: profile.name || profile.email,
-        email: profile.email,
-        initials: profile.initials,
-        avatar: profile.avatar_url || undefined,
-        role: profile.role || 'member'
-      } : teamMembers[0], // Fallback to first team member
-      createdAt: new Date().toISOString(),
-    };
-    handleFieldChange('comments', [...comments, newCommentObj]);
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !profile) return;
+
+    const content = newComment.trim();
     setNewComment('');
+
+    // If in view mode, persist to DB immediately
+    if (mode !== 'create' && editedTask.id) {
+      try {
+        const dbComment = await commentsService.create({
+          author_id: profile.id,
+          content: content,
+          entity_id: editedTask.id,
+          entity_type: 'task',
+        });
+
+        const newCommentObj: Comment = {
+          id: dbComment.id,
+          content: dbComment.content,
+          author: {
+            id: profile.id,
+            name: profile.name || profile.email,
+            initials: profile.initials,
+            avatar: profile.avatar_url || undefined,
+            email: profile.email,
+            role: profile.role || 'member'
+          },
+          createdAt: dbComment.created_at || new Date().toISOString(),
+        };
+
+        setEditedTask(prev => ({
+          ...prev,
+          comments: [...(prev.comments || []), newCommentObj]
+        }));
+
+        // Send notifications to all other assignees
+        const otherAssignees = (editedTask.assignees || []).filter(a => a.id !== profile.id);
+
+        for (const assignee of otherAssignees) {
+          createNotification.mutate({
+            user_id: assignee.id,
+            actor_id: profile.id,
+            type: 'comment',
+            title: 'New Comment',
+            description: `${profile.name || 'Someone'} commented on "${editedTask.title}"`,
+            project_id: projectId,
+            entity_id: editedTask.id,
+            entity_type: 'task',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to add comment:', error);
+        setNewComment(content); // Restore content on error
+      }
+    } else {
+      // Just update local state for new tasks
+      const newCommentObj: Comment = {
+        id: `comment-${Date.now()}`,
+        content: content,
+        author: {
+          id: profile.id,
+          name: profile.name || profile.email,
+          initials: profile.initials,
+          avatar: profile.avatar_url || undefined,
+          email: profile.email,
+          role: profile.role || 'member'
+        },
+        createdAt: new Date().toISOString(),
+      };
+      setEditedTask(prev => ({
+        ...prev,
+        comments: [...(prev.comments || []), newCommentObj]
+      }));
+    }
   };
 
 
@@ -496,7 +597,10 @@ export function TaskDetailModal({
                     <User className="h-3 w-3" />
                     Assigned To
                   </Label>
-                  <div className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                  <div
+                    className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => setIsAssigneePopoverOpen(true)}
+                  >
                     {(editedTask.assignees || []).map((assignee) => (
                       <Badge key={assignee.id} variant="secondary" className="pl-1 pr-1.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
                         <Avatar className="h-4 w-4">
@@ -506,7 +610,10 @@ export function TaskDetailModal({
                         </Avatar>
                         <span className="text-xs font-normal">{assignee.name}</span>
                         <button
-                          onClick={() => handleFieldChange('assignees', (editedTask.assignees || []).filter(a => a.id !== assignee.id))}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleFieldChange('assignees', (editedTask.assignees || []).filter(a => a.id !== assignee.id));
+                          }}
                           className="ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none"
                         >
                           <X className="h-3 w-3" />
@@ -749,7 +856,10 @@ export function TaskDetailModal({
                   <Tag className="h-3 w-3" />
                   Tags
                 </Label>
-                <div className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                <div
+                  className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => setIsTagPopoverOpen(true)}
+                >
                   {editedTask.tags.map((tag) => (
                     <Badge
                       key={tag}
@@ -757,7 +867,10 @@ export function TaskDetailModal({
                     >
                       {tag}
                       <button
-                        onClick={() => handleFieldChange('tags', editedTask.tags.filter(t => t !== tag))}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFieldChange('tags', editedTask.tags.filter(t => t !== tag));
+                        }}
                         className="pointer-events-auto hover:bg-black/10 rounded-full p-0.5 transition-colors"
                       >
                         <X className="h-3 w-3" />
