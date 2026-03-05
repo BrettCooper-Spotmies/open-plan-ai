@@ -642,6 +642,7 @@ export type Database = {
       notifications: {
         Row: {
           actor_id: string | null
+          conversation_id: string | null
           created_at: string
           description: string
           id: string
@@ -653,6 +654,7 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
+          conversation_id?: string | null
           created_at?: string
           description: string
           id?: string
@@ -664,6 +666,7 @@ export type Database = {
         }
         Update: {
           actor_id?: string | null
+          conversation_id?: string | null
           created_at?: string
           description?: string
           id?: string
@@ -679,6 +682,13 @@ export type Database = {
             columns: ["actor_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
             referencedColumns: ["id"]
           },
           {
@@ -875,7 +885,7 @@ export type Database = {
           added_by: string | null
           id: string
           project_id: string
-          role: Database["public"]["Enums"]["project_role"]
+          role: string
           user_id: string
         }
         Insert: {
@@ -883,7 +893,7 @@ export type Database = {
           added_by?: string | null
           id?: string
           project_id: string
-          role?: Database["public"]["Enums"]["project_role"]
+          role?: string
           user_id: string
         }
         Update: {
@@ -891,7 +901,7 @@ export type Database = {
           added_by?: string | null
           id?: string
           project_id?: string
-          role?: Database["public"]["Enums"]["project_role"]
+          role?: string
           user_id?: string
         }
         Relationships: [
@@ -920,12 +930,18 @@ export type Database = {
       }
       projects: {
         Row: {
+          client_contact: string | null
+          client_name: string | null
+          client_organization: string | null
           created_at: string | null
           created_by: string | null
           deleted_at: string | null
+          departments: string[] | null
           description: string | null
+          icon: string | null
           id: string
           name: string
+          notes: string | null
           organization_id: string
           progress: number | null
           stage: Database["public"]["Enums"]["project_stage"]
@@ -935,12 +951,18 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          client_contact?: string | null
+          client_name?: string | null
+          client_organization?: string | null
           created_at?: string | null
           created_by?: string | null
           deleted_at?: string | null
+          departments?: string[] | null
           description?: string | null
+          icon?: string | null
           id?: string
           name: string
+          notes?: string | null
           organization_id: string
           progress?: number | null
           stage?: Database["public"]["Enums"]["project_stage"]
@@ -950,12 +972,18 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          client_contact?: string | null
+          client_name?: string | null
+          client_organization?: string | null
           created_at?: string | null
           created_by?: string | null
           deleted_at?: string | null
+          departments?: string[] | null
           description?: string | null
+          icon?: string | null
           id?: string
           name?: string
+          notes?: string | null
           organization_id?: string
           progress?: number | null
           stage?: Database["public"]["Enums"]["project_stage"]
@@ -1279,6 +1307,10 @@ export type Database = {
         | "status_changed"
         | "issue_created"
         | "issue_resolved"
+        | "project_created"
+        | "project_assigned"
+        | "dependency_added"
+        | "project_updated"
       app_role: "owner" | "admin" | "member" | "viewer"
       issue_category:
         | "defect"
@@ -1314,6 +1346,7 @@ export type Database = {
         | "completed"
         | "comment"
         | "deadline"
+        | "message"
       org_role: "owner" | "admin" | "member"
       priority: "critical" | "high" | "medium" | "low"
       project_role: "owner" | "admin" | "member" | "viewer"
@@ -1460,6 +1493,10 @@ export const Constants = {
         "status_changed",
         "issue_created",
         "issue_resolved",
+        "project_created",
+        "project_assigned",
+        "dependency_added",
+        "project_updated",
       ],
       app_role: ["owner", "admin", "member", "viewer"],
       issue_category: [
@@ -1493,6 +1530,7 @@ export const Constants = {
         "completed",
         "comment",
         "deadline",
+        "message",
       ],
       org_role: ["owner", "admin", "member"],
       priority: ["critical", "high", "medium", "low"],
