@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { defaultUserSettings } from '@/data/mockData';
 import { UserSettings } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -71,6 +70,16 @@ const Settings = () => {
   const { theme, changeTheme } = useAppTheme();
   const preferences = useUserStore((s) => s.preferences);
   const updatePreferences = useUserStore((s) => s.updatePreferences);
+
+  // Local state for Appearance tab so changes only apply on Save
+  const [tempTheme, setTempTheme] = useState<'light' | 'dark' | 'system'>(theme as any);
+  const [tempPreferences, setTempPreferences] = useState(preferences);
+
+  // Sync local appearance state when global state loads/changes remotely
+  useEffect(() => {
+    setTempTheme(theme as any);
+    setTempPreferences(preferences);
+  }, [theme, preferences]);
 
   // User settings for notifications/appearance (still local - coming soon)
   const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings);
@@ -320,6 +329,12 @@ const Settings = () => {
     }
   };
 
+  const handleSaveAppearance = () => {
+    changeTheme(tempTheme);
+    updatePreferences(tempPreferences);
+    toast.success('Appearance preferences saved');
+  };
+
   const handleDeleteAccount = async () => {
     setDeleteLoading(true);
     try {
@@ -339,7 +354,7 @@ const Settings = () => {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-6">
         {/* Header */}
         <div>
@@ -847,29 +862,27 @@ const Settings = () => {
                       { id: 'dark' as const, label: 'Dark', icon: Moon },
                       { id: 'system' as const, label: 'System', icon: Monitor },
                     ]).map(({ id, label, icon: Icon }) => {
-                      const isActive = theme === id;
+                      const isActive = tempTheme === id;
                       return (
                         <button
                           key={id}
-                          onClick={() => changeTheme(id)}
-                          className={`relative p-4 rounded-lg border-2 transition-all text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                            isActive
-                              ? 'border-primary bg-primary/5'
-                              : 'border-border hover:border-primary/50 hover:bg-accent'
-                          }`}
+                          onClick={() => setTempTheme(id)}
+                          className={`relative p-4 rounded-lg border-2 transition-all text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${isActive
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/50 hover:bg-accent'
+                            }`}
                         >
                           {isActive && (
                             <span className="absolute top-2 right-2 flex items-center justify-center h-4 w-4 rounded-full bg-primary text-primary-foreground">
                               <Check className="h-2.5 w-2.5" />
                             </span>
                           )}
-                          <div className={`h-12 rounded mb-3 flex items-center justify-center ${
-                            id === 'light'
-                              ? 'bg-background border border-border'
-                              : id === 'dark'
-                                ? 'bg-foreground'
-                                : 'bg-gradient-to-r from-background to-foreground border border-border'
-                          }`}>
+                          <div className={`h-12 rounded mb-3 flex items-center justify-center ${id === 'light'
+                            ? 'bg-background border border-border'
+                            : id === 'dark'
+                              ? 'bg-foreground'
+                              : 'bg-gradient-to-r from-background to-foreground border border-border'
+                            }`}>
                             <Icon className={`h-5 w-5 ${id === 'dark' ? 'text-background' : 'text-foreground'}`} />
                           </div>
                           <span className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
@@ -893,8 +906,8 @@ const Settings = () => {
                       </p>
                     </div>
                     <Switch
-                      checked={preferences.sidebarCollapsed}
-                      onCheckedChange={(checked) => updatePreferences({ sidebarCollapsed: checked })}
+                      checked={tempPreferences.sidebarCollapsed}
+                      onCheckedChange={(checked) => setTempPreferences(prev => ({ ...prev, sidebarCollapsed: checked }))}
                     />
                   </div>
                   <Separator />
@@ -906,13 +919,13 @@ const Settings = () => {
                       </p>
                     </div>
                     <Switch
-                      checked={preferences.compactMode}
-                      onCheckedChange={(checked) => updatePreferences({ compactMode: checked })}
+                      checked={tempPreferences.compactMode}
+                      onCheckedChange={(checked) => setTempPreferences(prev => ({ ...prev, compactMode: checked }))}
                     />
                   </div>
                 </div>
 
-                <Button onClick={() => toast.success('Appearance preferences saved')}>
+                <Button onClick={handleSaveAppearance}>
                   <Save className="h-4 w-4 mr-2" />
                   Save Appearance
                 </Button>
@@ -1015,7 +1028,7 @@ const Settings = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </AppLayout>
+    </>
   );
 };
 

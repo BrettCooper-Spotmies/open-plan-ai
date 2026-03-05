@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConversationMember } from '../types';
 import { cn } from '@/lib/utils';
+import { useNotifications } from '@/hooks/useNotifications';
 
 interface MessageInputProps {
   conversationId: string;
@@ -33,6 +34,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members 
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionStartRef = useRef<number>(-1);
+  const { createNotification } = useNotifications();
 
   const otherMembers = useMemo(
     () => (members || []).filter((m) => m.id !== user?.id),
@@ -92,6 +94,20 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members 
       } else {
         await chatService.sendMessage(conversationId, trimmed);
       }
+
+      // Check for mentions and trigger notifications
+      otherMembers.forEach((member) => {
+        if (trimmed.includes(`@${member.name}`)) {
+          createNotification.mutate({
+            user_id: member.id,
+            actor_id: user?.id,
+            type: 'mention',
+            title: 'Mentioned you in a message',
+            description: trimmed.length > 100 ? trimmed.substring(0, 97) + '...' : trimmed,
+          });
+        }
+      });
+
       onMessageSent?.();
     } catch (err) {
       console.error('Failed to send message:', err);

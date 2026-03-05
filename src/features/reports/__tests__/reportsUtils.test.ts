@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { format } from 'date-fns';
 import {
   calculateKPIs,
   getTaskStatusBreakdown,
@@ -122,7 +123,7 @@ describe('reportsUtils', () => {
       pastDate.setDate(pastDate.getDate() - 7);
 
       const tasks = [
-        createTask({ status: 'done', dueDate: pastDate.toISOString() }),
+        createTask({ status: 'done', dueDate: format(pastDate, 'yyyy-MM-dd') }),
       ];
 
       const result = countOverdueTasks(tasks);
@@ -134,8 +135,8 @@ describe('reportsUtils', () => {
       pastDate.setDate(pastDate.getDate() - 7);
 
       const tasks = [
-        createTask({ status: 'in-progress', dueDate: pastDate.toISOString() }),
-        createTask({ status: 'todo', dueDate: pastDate.toISOString() }),
+        createTask({ status: 'in-progress', dueDate: format(pastDate, 'yyyy-MM-dd') }),
+        createTask({ status: 'todo', dueDate: format(pastDate, 'yyyy-MM-dd') }),
       ];
 
       const result = countOverdueTasks(tasks);

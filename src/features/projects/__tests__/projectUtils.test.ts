@@ -9,6 +9,7 @@ import {
   formatModuleType,
   sortIssuesBySeverity,
   sortMilestonesByDate,
+  calculateProjectProgress,
 } from '../utils/projectUtils';
 import { Task, Milestone, Issue, ModuleType } from '@/types';
 
@@ -99,9 +100,9 @@ describe('projectUtils', () => {
     });
 
     it('should use linkedTaskIds when available', () => {
-      const milestone = createMilestone({ 
-        id: 'ms-1', 
-        linkedTaskIds: ['task-1', 'task-2'] 
+      const milestone = createMilestone({
+        id: 'ms-1',
+        linkedTaskIds: ['task-1', 'task-2']
       });
       const tasks = [
         createTask({ id: 'task-1', status: 'done' }),
@@ -128,9 +129,9 @@ describe('projectUtils', () => {
     });
 
     it('should return tasks linked by linkedTaskIds', () => {
-      const milestone = createMilestone({ 
-        id: 'ms-1', 
-        linkedTaskIds: ['task-1', 'task-3'] 
+      const milestone = createMilestone({
+        id: 'ms-1',
+        linkedTaskIds: ['task-1', 'task-3']
       });
       const tasks = [
         createTask({ id: 'task-1' }),
@@ -220,7 +221,7 @@ describe('projectUtils', () => {
       ];
 
       const sorted = sortIssuesBySeverity(issues);
-      
+
       expect(sorted[0].severity).toBe('critical');
       expect(sorted[1].severity).toBe('major');
       expect(sorted[2].severity).toBe('minor');
@@ -237,10 +238,70 @@ describe('projectUtils', () => {
       ];
 
       const sorted = sortMilestonesByDate(milestones);
-      
+
       expect(sorted[0].date).toBe('2024-01-01');
       expect(sorted[1].date).toBe('2024-02-01');
       expect(sorted[2].date).toBe('2024-03-01');
+    });
+  });
+
+  describe('calculateProjectProgress', () => {
+    it('should return 0 for empty project', () => {
+      const result = calculateProjectProgress([], [], [], []);
+      expect(result.overallProgress).toBe(0);
+    });
+
+    it('should calculate overall progress as average of available metrics', () => {
+      const tasks = [
+        createTask({ status: 'done' }),
+        createTask({ status: 'todo' }),
+      ]; // 50%
+      const milestones = [
+        createMilestone({ completed: true }),
+        createMilestone({ completed: false }),
+      ]; // 50%
+      const modules = [
+        { id: 'mod-1', name: 'Mod 1', progress: 100 },
+        { id: 'mod-2', name: 'Mod 2', progress: 0 },
+      ]; // 50%
+      const issues = [
+        createIssue({ status: 'resolved' }),
+        createIssue({ status: 'open' }),
+      ]; // 50%
+
+      const result = calculateProjectProgress(tasks, milestones, modules, issues);
+
+      expect(result.taskProgress).toBe(50);
+      expect(result.milestoneProgress).toBe(50);
+      expect(result.moduleProgress).toBe(50);
+      expect(result.issueProgress).toBe(50);
+      expect(result.overallProgress).toBe(50);
+    });
+
+    it('should ignore metrics with no data', () => {
+      const tasks = [
+        createTask({ status: 'done' }),
+      ]; // 100%
+      const milestones: Milestone[] = [];
+      const modules: any[] = [];
+      const issues: Issue[] = [];
+
+      const result = calculateProjectProgress(tasks, milestones, modules, issues);
+
+      expect(result.taskProgress).toBe(100);
+      expect(result.milestoneProgress).toBe(0);
+      expect(result.overallProgress).toBe(100);
+    });
+
+    it('should handle issues without affecting other metrics', () => {
+      const tasks = [createTask({ status: 'done' })]; // 100%
+      const issues = [createIssue({ status: 'open' })]; // 0%
+
+      const result = calculateProjectProgress(tasks, [], [], issues);
+
+      expect(result.taskProgress).toBe(100);
+      expect(result.issueProgress).toBe(0);
+      expect(result.overallProgress).toBe(50); // (100 + 0) / 2
     });
   });
 });

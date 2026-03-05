@@ -7,7 +7,7 @@ export interface ProjectMember {
   id: string;
   project_id: string;
   user_id: string;
-  role: ProjectRole;
+  role: string;
   added_at: string | null;
   added_by: string | null;
 }
@@ -25,7 +25,7 @@ export interface ProjectMemberWithProfile extends ProjectMember {
 export interface AddProjectMemberInput {
   project_id: string;
   user_id: string;
-  role?: ProjectRole;
+  role?: string;
 }
 
 export const projectMembersService = {
@@ -41,9 +41,9 @@ export const projectMembersService = {
       .insert({
         project_id: input.project_id,
         user_id: input.user_id,
-        role: input.role || 'member',
+        role: input.role || '',
         added_by: user.id,
-      })
+      } as any)
       .select()
       .single();
 
@@ -58,7 +58,7 @@ export const projectMembersService = {
   /**
    * Add multiple members to a project at once
    */
-  async addMembers(projectId: string, members: { userId: string; role?: ProjectRole }[]): Promise<ProjectMember[]> {
+  async addMembers(projectId: string, members: { userId: string; role?: string }[]): Promise<ProjectMember[]> {
     if (members.length === 0) return [];
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -67,13 +67,13 @@ export const projectMembersService = {
     const records = members.map(member => ({
       project_id: projectId,
       user_id: member.userId,
-      role: member.role || 'member' as ProjectRole,
+      role: member.role || '',
       added_by: user.id,
     }));
 
     const { data, error } = await supabase
       .from('project_members')
-      .insert(records)
+      .insert(records as any)
       .select();
 
     if (error) {
@@ -110,10 +110,10 @@ export const projectMembersService = {
   /**
    * Update a member's role in a project
    */
-  async updateRole(projectId: string, userId: string, role: ProjectRole): Promise<void> {
+  async updateRole(projectId: string, userId: string, role: string): Promise<void> {
     const { error } = await supabase
       .from('project_members')
-      .update({ role })
+      .update({ role } as any)
       .eq('project_id', projectId)
       .eq('user_id', userId);
 
@@ -156,5 +156,23 @@ export const projectMembersService = {
     }
 
     return !!data;
+  },
+
+  /**
+   * Remove multiple members from a project
+   */
+  async removeMembers(projectId: string, userIds: string[]): Promise<void> {
+    if (userIds.length === 0) return;
+
+    const { error } = await supabase
+      .from('project_members')
+      .delete()
+      .eq('project_id', projectId)
+      .in('user_id', userIds);
+
+    if (error) {
+      console.error('Error removing project members:', error);
+      throw new Error(`Failed to remove project members: ${error.message}`);
+    }
   },
 };

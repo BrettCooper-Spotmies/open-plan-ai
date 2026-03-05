@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { CalendarHeader } from './components/CalendarHeader';
 import { CalendarFilters } from './components/CalendarFilters';
 import { CalendarMonthView } from './components/CalendarMonthView';
@@ -18,13 +17,14 @@ import {
 } from './utils/calendarUtils';
 import { CalendarFilter, CalendarViewMode, Task, Milestone, Issue } from '@/types';
 import { useProjects } from '@/hooks/useProjects';
-import { useAllTasks } from '@/hooks/useTasks';
-import { useAllIssues } from '@/hooks/useIssues';
-import { useAllMilestones } from '@/hooks/useMilestones';
+import { useAllTasks, useUpdateTask } from '@/hooks/useTasks';
+import { useAllIssues, useUpdateIssue } from '@/hooks/useIssues';
+import { useAllMilestones, useUpdateMilestone } from '@/hooks/useMilestones';
 import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
-import { parseISO } from 'date-fns';
+import { parse, parseISO } from 'date-fns';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 // Convert a DB milestone row to calendar event
 function dbMilestoneToCalendarEvent(m: any, projectName: string): CalendarEvent | null {
@@ -32,7 +32,7 @@ function dbMilestoneToCalendarEvent(m: any, projectName: string): CalendarEvent 
   if (!dateStr) return null;
   let date: Date;
   try {
-    date = parseISO(dateStr);
+    date = parse(dateStr, 'yyyy-MM-dd', new Date());
   } catch {
     return null;
   }
@@ -53,7 +53,7 @@ function taskToCalendarEvent(task: Task, projectName: string): CalendarEvent | n
   if (!task.dueDate) return null;
   let date: Date;
   try {
-    date = parseISO(task.dueDate);
+    date = parse(task.dueDate, 'yyyy-MM-dd', new Date());
   } catch {
     return null;
   }
@@ -68,7 +68,7 @@ function taskToCalendarEvent(task: Task, projectName: string): CalendarEvent | n
     priority: task.priority,
     assignees: task.assignees?.map(a => ({ id: a.id, name: a.name, initials: a.initials })),
     isBlocked: task.status === 'blocked' || (task.blockedBy && task.blockedBy.length > 0),
-    startDate: task.startDate ? parseISO(task.startDate) : undefined,
+    startDate: task.startDate ? parse(task.startDate, 'yyyy-MM-dd', new Date()) : undefined,
     description: task.description,
     tags: task.tags,
   };
@@ -79,7 +79,7 @@ function issueToCalendarEvent(issue: Issue, projectName: string): CalendarEvent 
   if (!issue.dueDate) return null;
   let date: Date;
   try {
-    date = parseISO(issue.dueDate);
+    date = parse(issue.dueDate, 'yyyy-MM-dd', new Date());
   } catch {
     return null;
   }
@@ -120,6 +120,11 @@ const CalendarPage: React.FC = () => {
   const { data: allMilestones = [], isLoading: milestonesLoading } = useAllMilestones();
   const { data: allIssues = [], isLoading: issuesLoading } = useAllIssues();
   const { data: teamMembers = [] } = useOrganizationMembers(currentOrganization?.id);
+
+  // Mutations
+  const updateTaskMutation = useUpdateTask();
+  const updateMilestoneMutation = useUpdateMilestone();
+  const updateIssueMutation = useUpdateIssue();
 
   const isLoading = tasksLoading || milestonesLoading || issuesLoading;
 
@@ -248,7 +253,7 @@ const CalendarPage: React.FC = () => {
   }));
 
   return (
-    <AppLayout>
+    <>
       <div className="flex flex-col h-full gap-6 animate-fade-in">
         {/* Page Header */}
         <div>
@@ -339,7 +344,23 @@ const CalendarPage: React.FC = () => {
             setTaskModalOpen(false);
             setSelectedTask(null);
           }}
-          onUpdate={() => {}}
+          onUpdate={async (updatedTask) => {
+            try {
+              if (updatedTask.projectId && updatedTask.id) {
+                await updateTaskMutation.mutateAsync({
+                  projectId: updatedTask.projectId,
+                  taskId: updatedTask.id,
+                  updates: updatedTask
+                });
+                toast.success('Task updated successfully');
+              } else {
+                toast.error('Missing project ID or task ID');
+              }
+            } catch (error) {
+              console.error('Failed to update task:', error);
+              toast.error('Failed to update task');
+            }
+          }}
           allTasks={getProjectTasks(selectedTask.projectId || '')}
         />
       )}
@@ -353,7 +374,23 @@ const CalendarPage: React.FC = () => {
             setMilestoneModalOpen(false);
             setSelectedMilestone(null);
           }}
-          onUpdate={() => {}}
+          onUpdate={async (updatedMilestone) => {
+            try {
+              await updateMilestoneMutation.mutateAsync({
+                id: updatedMilestone.id,
+                updates: {
+                  name: updatedMilestone.title,
+                  description: updatedMilestone.description,
+                  due_date: updatedMilestone.date,
+                  status: updatedMilestone.completed ? 'completed' : 'pending' // Mapping back to DB expected format if needed, depending on type
+                }
+              });
+              toast.success('Milestone updated successfully');
+            } catch (error) {
+              console.error('Failed to update milestone:', error);
+              toast.error('Failed to update milestone');
+            }
+          }}
           tasks={[]}
           issues={[]}
           modules={[]}
@@ -369,11 +406,27 @@ const CalendarPage: React.FC = () => {
             setIssueModalOpen(false);
             setSelectedIssue(null);
           }}
-          onUpdate={() => {}}
+          onUpdate={async (updatedIssue) => {
+            try {
+              if (updatedIssue.projectId && updatedIssue.id) {
+                await updateIssueMutation.mutateAsync({
+                  projectId: updatedIssue.projectId,
+                  issueId: updatedIssue.id,
+                  updates: updatedIssue
+                });
+                toast.success('Issue updated successfully');
+              } else {
+                toast.error('Missing project ID or issue ID');
+              }
+            } catch (error) {
+              console.error('Failed to update issue:', error);
+              toast.error('Failed to update issue');
+            }
+          }}
           tasks={getProjectTasks(selectedIssue.projectId)}
         />
       )}
-    </AppLayout>
+    </>
   );
 };
 

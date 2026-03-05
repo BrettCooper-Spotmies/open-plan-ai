@@ -29,6 +29,10 @@ interface ChatState {
   conversationsLoadedAt: number | null;
   messagesCache: Record<string, MessagesCacheEntry>;
 
+  // ── Presence state ────────────────────────────────────────────────────
+  onlineUserIds: Set<string>;
+  setOnlineUserIds: (ids: Set<string>) => void;
+
   // ── UI actions ────────────────────────────────────────────────────────
   setActiveConversation: (id: string | null) => void;
   setConversationFilter: (filter: ConversationFilter) => void;
@@ -73,6 +77,10 @@ export const useChatStore = create<ChatState>()(
       conversations: [],
       conversationsLoadedAt: null,
       messagesCache: {},
+
+      // ── Presence state defaults ───────────────────────────────────────
+      onlineUserIds: new Set(),
+      setOnlineUserIds: (ids) => set({ onlineUserIds: ids }),
 
       // ── UI actions ────────────────────────────────────────────────────
       setActiveConversation: (id) => {

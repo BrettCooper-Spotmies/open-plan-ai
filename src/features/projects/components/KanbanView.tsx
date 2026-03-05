@@ -497,149 +497,149 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
 
                           {/* Tasks Droppable - scrollable area */}
                           <div className="flex-1 overflow-y-auto min-h-0">
-                          <Droppable
-                            droppableId={column.id}
-                            type="TASK"
-                            isDropDisabled={isDependenciesColumn}
-                          >
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.droppableProps}
-                                className={cn(
-                                  'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
-                                  snapshot.isDraggingOver
-                                    ? 'bg-muted/50'
-                                    : 'bg-muted/30'
-                                )}
-                              >
-                                {columnTasks.map((task, taskIndex) => {
-                                  const isBlocked = blockedTaskIds.has(task.id);
-                                  const blockingInfo = isBlocked ? getBlockingInfo(task) : [];
+                            <Droppable
+                              droppableId={column.id}
+                              type="TASK"
+                              isDropDisabled={isDependenciesColumn}
+                            >
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.droppableProps}
+                                  className={cn(
+                                    'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
+                                    snapshot.isDraggingOver
+                                      ? 'bg-muted/50'
+                                      : 'bg-muted/30'
+                                  )}
+                                >
+                                  {columnTasks.map((task, taskIndex) => {
+                                    const isBlocked = blockedTaskIds.has(task.id);
+                                    const blockingInfo = isBlocked ? getBlockingInfo(task) : [];
 
-                                  return (
-                                    <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
-                                      {(provided, snapshot) => (
-                                        <TooltipProvider>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Card
-                                                ref={provided.innerRef}
-                                                {...provided.draggableProps}
-                                                {...provided.dragHandleProps}
-                                                className={cn(
-                                                  'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
-                                                  moduleColors[task.module] || 'border-l-muted',
-                                                  snapshot.isDragging && 'shadow-lg rotate-2'
-                                                )}
-                                                onMouseEnter={() => setHoveredTask(task.id)}
-                                                onMouseLeave={() => setHoveredTask(null)}
-                                                onClick={() => handleTaskClick(task)}
-                                              >
+                                    return (
+                                      <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
+                                        {(provided, snapshot) => (
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <Card
+                                                  ref={provided.innerRef}
+                                                  {...provided.draggableProps}
+                                                  {...provided.dragHandleProps}
+                                                  className={cn(
+                                                    'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
+                                                    moduleColors[task.module] || 'border-l-muted',
+                                                    snapshot.isDragging && 'shadow-lg rotate-2'
+                                                  )}
+                                                  onMouseEnter={() => setHoveredTask(task.id)}
+                                                  onMouseLeave={() => setHoveredTask(null)}
+                                                  onClick={() => handleTaskClick(task)}
+                                                >
 
 
-                                                <div className="space-y-2">
-                                                  <div className="flex items-start justify-between gap-2">
-                                                    <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
-                                                      {(isBlocked || task.status !== 'done') && (
-                                                        <div
+                                                  <div className="space-y-2">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                      <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
+                                                        {(isBlocked || task.status !== 'done') && (
+                                                          <div
+                                                            className={cn(
+                                                              "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
+                                                              hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
+                                                            )}
+                                                          >
+                                                            {isBlocked ? (
+                                                              <AlertTriangle className="h-4 w-4 text-status-blocked" />
+                                                            ) : (
+                                                              <button
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  handleCompleteTask(task.id);
+                                                                }}
+                                                                className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
+                                                              >
+                                                                <Check className="h-3 w-3 text-foreground" />
+                                                              </button>
+                                                            )}
+                                                          </div>
+                                                        )}
+                                                        <h4
                                                           className={cn(
-                                                            "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
-                                                            hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
+                                                            "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
+                                                            (isBlocked || task.status !== 'done') && hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
                                                           )}
                                                         >
-                                                          {isBlocked ? (
-                                                            <AlertTriangle className="h-4 w-4 text-status-blocked" />
-                                                          ) : (
-                                                            <button
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleCompleteTask(task.id);
-                                                              }}
-                                                              className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
-                                                            >
-                                                              <Check className="h-3 w-3 text-foreground" />
-                                                            </button>
-                                                          )}
-                                                        </div>
-                                                      )}
-                                                      <h4
+                                                          {task.title}
+                                                        </h4>
+                                                      </div>
+                                                      <Badge
+                                                        variant="secondary"
                                                         className={cn(
-                                                          "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
-                                                          (isBlocked || task.status !== 'done') && hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
+                                                          'text-[10px] px-1.5 py-0 shrink-0',
+                                                          priorityColors[task.priority]
                                                         )}
                                                       >
-                                                        {task.title}
-                                                      </h4>
+                                                        {task.priority}
+                                                      </Badge>
                                                     </div>
-                                                    <Badge
-                                                      variant="secondary"
-                                                      className={cn(
-                                                        'text-[10px] px-1.5 py-0 shrink-0',
-                                                        priorityColors[task.priority]
-                                                      )}
-                                                    >
-                                                      {task.priority}
-                                                    </Badge>
-                                                  </div>
 
-                                                  {task.description && (
-                                                    <p className="text-xs text-muted-foreground line-clamp-2">
-                                                      {task.description}
-                                                    </p>
-                                                  )}
-
-                                                  <div className="flex items-center justify-between pt-2">
-                                                    <div className="flex -space-x-2">
-                                                      {(task.assignees || []).slice(0, 3).map((assignee) => (
-                                                        <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
-                                                          <AvatarFallback className="text-[9px] bg-muted">
-                                                            {assignee.initials}
-                                                          </AvatarFallback>
-                                                        </Avatar>
-                                                      ))}
-                                                      {(task.assignees || []).length > 3 && (
-                                                        <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
-                                                          <span className="text-[8px] text-muted-foreground font-medium">
-                                                            +{task.assignees!.length - 3}
-                                                          </span>
-                                                        </div>
-                                                      )}
-                                                    </div>
-                                                    {task.dueDate && (
-                                                      <span className="text-[10px] text-muted-foreground">
-                                                        {new Date(task.dueDate).toLocaleDateString('en-US', {
-                                                          month: 'short',
-                                                          day: 'numeric',
-                                                        })}
-                                                      </span>
+                                                    {task.description && (
+                                                      <p className="text-xs text-muted-foreground line-clamp-2">
+                                                        {task.description}
+                                                      </p>
                                                     )}
+
+                                                    <div className="flex items-center justify-between pt-2">
+                                                      <div className="flex -space-x-2">
+                                                        {(task.assignees || []).slice(0, 3).map((assignee) => (
+                                                          <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
+                                                            <AvatarFallback className="text-[9px] bg-muted">
+                                                              {assignee.initials}
+                                                            </AvatarFallback>
+                                                          </Avatar>
+                                                        ))}
+                                                        {(task.assignees || []).length > 3 && (
+                                                          <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
+                                                            <span className="text-[8px] text-muted-foreground font-medium">
+                                                              +{task.assignees!.length - 3}
+                                                            </span>
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                      {task.dueDate && (
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                          {new Date(task.dueDate).toLocaleDateString('en-US', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                          })}
+                                                        </span>
+                                                      )}
+                                                    </div>
                                                   </div>
-                                                </div>
-                                              </Card>
-                                            </TooltipTrigger>
-                                            {isBlocked && blockingInfo.length > 0 && (
-                                              <TooltipContent side="right" className="max-w-xs">
-                                                <div className="space-y-1">
-                                                  <p className="font-medium text-xs">Blocked by:</p>
-                                                  <ul className="text-xs space-y-0.5">
-                                                    {blockingInfo.map((info, i) => (
-                                                      <li key={i} className="text-muted-foreground">• {info}</li>
-                                                    ))}
-                                                  </ul>
-                                                </div>
-                                              </TooltipContent>
-                                            )}
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      )}
-                                    </Draggable>
-                                  );
-                                })}
-                                {provided.placeholder}
-                              </div>
-                            )}
-                          </Droppable>
+                                                </Card>
+                                              </TooltipTrigger>
+                                              {isBlocked && blockingInfo.length > 0 && (
+                                                <TooltipContent side="right" className="max-w-xs">
+                                                  <div className="space-y-1">
+                                                    <p className="font-medium text-xs">Blocked by:</p>
+                                                    <ul className="text-xs space-y-0.5">
+                                                      {blockingInfo.map((info, i) => (
+                                                        <li key={i} className="text-muted-foreground">• {info}</li>
+                                                      ))}
+                                                    </ul>
+                                                  </div>
+                                                </TooltipContent>
+                                              )}
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        )}
+                                      </Draggable>
+                                    );
+                                  })}
+                                  {provided.placeholder}
+                                </div>
+                              )}
+                            </Droppable>
                           </div>
                         </div>
                       )}
@@ -741,7 +741,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Assigned To</Label>
-                <div className="flex flex-wrap gap-2 min-h-10 items-center p-2 border rounded-md">
+                <div
+                  className="flex flex-wrap gap-2 min-h-10 items-center p-2 border rounded-md cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => setIsAssigneePopoverOpen(true)}
+                >
                   {(newTask.assignees || []).map((assignee) => (
                     <Badge key={assignee.id} variant="secondary" className="gap-1 p-1 pr-2">
                       <Avatar className="h-4 w-4">
@@ -750,10 +753,13 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                       <span className="text-xs">{assignee.name}</span>
                       <X
                         className="h-3 w-3 cursor-pointer hover:text-destructive"
-                        onClick={() => setNewTask({
-                          ...newTask,
-                          assignees: newTask.assignees?.filter(a => a.id !== assignee.id)
-                        })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNewTask({
+                            ...newTask,
+                            assignees: newTask.assignees?.filter(a => a.id !== assignee.id)
+                          });
+                        }}
                       />
                     </Badge>
                   ))}

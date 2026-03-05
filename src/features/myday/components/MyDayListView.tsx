@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -198,7 +198,7 @@ export function MyDayListView({
               <TableCell>
                 {task.dueDate ? (
                   <span className="text-sm">
-                    {format(parseISO(task.dueDate), 'dd/MM/yyyy')}
+                    {format(parse(task.dueDate, 'yyyy-MM-dd', new Date()), 'dd/MM/yyyy')}
                   </span>
                 ) : (
                   <span className="text-muted-foreground text-sm">No date</span>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageSquare, CheckCircle2, AlertCircle, Users, FolderKanban, Clock } from 'lucide-react';
+import { Bell, MessageSquare, CheckCircle2, AlertCircle, Users, FolderKanban, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -9,79 +9,9 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
+import { useNotifications, AppNotification } from '@/hooks/useNotifications';
 
-interface Notification {
-    id: string;
-    type: 'mention' | 'assignment' | 'completed' | 'comment' | 'deadline';
-    title: string;
-    description: string;
-    avatar: string | null;
-    initials: string | null;
-    time: string;
-    read: boolean;
-    project: string;
-}
-
-// Mock notifications data
-const mockNotifications: Notification[] = [
-    {
-        id: '1',
-        type: 'mention',
-        title: 'Mentioned you in a comment',
-        description: 'Sarah mentioned you in "API Integration Task"',
-        avatar: null,
-        initials: 'SK',
-        time: '2 min ago',
-        read: false,
-        project: 'Mobile App Redesign',
-    },
-    {
-        id: '2',
-        type: 'assignment',
-        title: 'New task assigned',
-        description: 'You have been assigned to "Database Schema Review"',
-        avatar: null,
-        initials: 'MJ',
-        time: '15 min ago',
-        read: false,
-        project: 'Backend Infrastructure',
-    },
-    {
-        id: '3',
-        type: 'completed',
-        title: 'Task completed',
-        description: 'James marked "User Authentication" as done',
-        avatar: null,
-        initials: 'JW',
-        time: '1 hour ago',
-        read: true,
-        project: 'Mobile App Redesign',
-    },
-    {
-        id: '4',
-        type: 'comment',
-        title: 'New comment',
-        description: 'Emily replied to your comment on "Dashboard Widgets"',
-        avatar: null,
-        initials: 'EC',
-        time: '2 hours ago',
-        read: true,
-        project: 'Analytics Platform',
-    },
-    {
-        id: '5',
-        type: 'deadline',
-        title: 'Deadline approaching',
-        description: '"Sprint Review Preparation" is due tomorrow',
-        avatar: null,
-        initials: null,
-        time: '3 hours ago',
-        read: true,
-        project: 'Q1 Planning',
-    },
-];
-
-const getNotificationIcon = (type: Notification['type']) => {
+const getNotificationIcon = (type: AppNotification['type']) => {
     switch (type) {
         case 'mention':
             return <Users className="h-4 w-4 text-blue-500" />;
@@ -91,6 +21,8 @@ const getNotificationIcon = (type: Notification['type']) => {
             return <CheckCircle2 className="h-4 w-4 text-green-500" />;
         case 'comment':
             return <MessageSquare className="h-4 w-4 text-orange-500" />;
+        case 'message':
+            return <MessageSquare className="h-4 w-4 text-emerald-500" />;
         case 'deadline':
             return <AlertCircle className="h-4 w-4 text-red-500" />;
         default:
@@ -99,23 +31,22 @@ const getNotificationIcon = (type: Notification['type']) => {
 };
 
 export function NotificationsPopover() {
+    const [open, setOpen] = useState(false);
     const navigate = useNavigate();
-    const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+    const { notifications, isLoading, markAsRead, markAllAsRead } = useNotifications();
 
     const unreadCount = notifications.filter((n) => !n.read).length;
 
-    const markAsRead = (id: string) => {
-        setNotifications((prev) =>
-            prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-        );
+    const handleMarkAsRead = (id: string) => {
+        markAsRead.mutate(id);
     };
 
-    const markAllAsRead = () => {
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    const handleMarkAllAsRead = () => {
+        markAllAsRead.mutate();
     };
 
     return (
-        <Popover>
+        <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative">
                     <Bell className="h-4 w-4" />
@@ -142,7 +73,7 @@ export function NotificationsPopover() {
                             variant="ghost"
                             size="sm"
                             className="text-xs h-7 text-muted-foreground hover:text-foreground"
-                            onClick={markAllAsRead}
+                            onClick={handleMarkAllAsRead}
                         >
                             Mark all as read
                         </Button>
@@ -168,7 +99,15 @@ export function NotificationsPopover() {
                                         'w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50',
                                         !notification.read && 'bg-status-in-progress/5'
                                     )}
-                                    onClick={() => markAsRead(notification.id)}
+                                    onClick={() => {
+                                        handleMarkAsRead(notification.id);
+                                        setOpen(false);
+                                        if (notification.type === 'message' && notification.conversation_id) {
+                                            navigate(`/chat/${notification.conversation_id}`);
+                                        } else if (notification.project_id) {
+                                            navigate(`/projects/${notification.project_id}`);
+                                        }
+                                    }}
                                 >
                                     {/* Icon or Avatar */}
                                     <div className="flex-shrink-0 mt-0.5">
@@ -225,7 +164,10 @@ export function NotificationsPopover() {
                             variant="ghost"
                             size="sm"
                             className="w-full text-xs h-8 text-muted-foreground hover:text-foreground"
-                            onClick={() => navigate('/notifications')}
+                            onClick={() => {
+                                setOpen(false);
+                                navigate('/notifications');
+                            }}
                         >
                             View all notifications
                         </Button>

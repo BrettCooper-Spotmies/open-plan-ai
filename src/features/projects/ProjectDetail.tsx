@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
-import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock } from 'lucide-react';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -563,16 +562,16 @@ export default function ProjectDetail() {
   // Loading state
   if (isLoading) {
     return (
-      <AppLayout>
+      <>
         <ProjectDetailSkeleton />
-      </AppLayout>
+      </>
     );
   }
 
   // Error or not found state
   if (error || !project) {
     return (
-      <AppLayout>
+      <>
         <div className="flex flex-col items-center justify-center h-[60vh]">
           <h2 className="text-xl font-medium">Project not found</h2>
           <p className="text-muted-foreground mt-2">
@@ -582,7 +581,7 @@ export default function ProjectDetail() {
             <Link to="/projects">Back to Projects</Link>
           </Button>
         </div>
-      </AppLayout>
+      </>
     );
   }
 
@@ -590,16 +589,24 @@ export default function ProjectDetail() {
   const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed').length || 0;
 
   return (
-    <AppLayout>
+    <>
       <div className="grid grid-cols-1 gap-6 animate-fade-in w-full min-w-0">
         {/* Project Stats with Title */}
         <div className="flex items-center justify-between gap-6 py-4 border-y">
           {/* Left: Project Title and Stage */}
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
-            <Badge variant="secondary" className={cn(stageColors[project.stage])}>
-              {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
-            </Badge>
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="sm" asChild className="gap-1 -ml-2 h-8 px-2 text-muted-foreground hover:text-foreground">
+              <Link to="/projects">
+                <ChevronLeft className="h-4 w-4" />
+                Back
+              </Link>
+            </Button>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
+              <Badge variant="secondary" className={cn(stageColors[project.stage])}>
+                {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
+              </Badge>
+            </div>
           </div>
 
           {/* Right: Stats */}
@@ -784,6 +791,6 @@ export default function ProjectDetail() {
           </TabsContent>
         </Tabs>
       </div>
-    </AppLayout>
+    </>
   );
 }

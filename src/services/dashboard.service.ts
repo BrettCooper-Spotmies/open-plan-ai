@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
+import { format } from 'date-fns';
 
 export type Activity = Tables<'activities'>;
 export type Milestone = Tables<'milestones'>;
@@ -11,6 +12,7 @@ export interface DashboardStats {
   openIssues: number;
   teamMembers: number;
   overdueItems: number;
+  inProgressTasks: number;
 }
 
 export interface ProjectSummary {
@@ -43,6 +45,7 @@ export const dashboardService = {
         openIssues: 0,
         teamMembers: 0,
         overdueItems: 0,
+        inProgressTasks: 0,
       };
     }
 
@@ -53,6 +56,7 @@ export const dashboardService = {
       issuesResult,
       teamResult,
       overdueResult,
+      inProgressResult,
     ] = await Promise.all([
       supabase
         .from('tasks')
@@ -79,8 +83,14 @@ export const dashboardService = {
         .from('tasks')
         .select('*', { count: 'exact', head: true })
         .in('project_id', projectIds)
-        .lt('due_date', new Date().toISOString().split('T')[0])
+        .lt('due_date', format(new Date(), 'yyyy-MM-dd'))
         .neq('status', 'done')
+        .is('deleted_at', null),
+      supabase
+        .from('tasks')
+        .select('*', { count: 'exact', head: true })
+        .in('project_id', projectIds)
+        .in('status', ['in-progress', 'review'])
         .is('deleted_at', null),
     ]);
 
@@ -91,6 +101,7 @@ export const dashboardService = {
       openIssues: issuesResult.count || 0,
       teamMembers: teamResult.count || 0,
       overdueItems: overdueResult.count || 0,
+      inProgressTasks: inProgressResult.count || 0,
     };
   },
 
@@ -117,7 +128,7 @@ export const dashboardService = {
   },
 
   async getUpcomingMilestones(orgId: string, limit: number = 5): Promise<Milestone[]> {
-    const today = new Date().toISOString().split('T')[0];
+    const today = format(new Date(), 'yyyy-MM-dd');
 
     // Get project IDs for this org
     const { data: orgProjects } = await supabase

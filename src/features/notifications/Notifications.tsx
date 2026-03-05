@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -25,123 +25,12 @@ import {
     BellOff,
     Filter,
     CheckCheck,
+    Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useNotifications, AppNotification } from '@/hooks/useNotifications';
 
-interface Notification {
-    id: string;
-    type: 'mention' | 'assignment' | 'completed' | 'comment' | 'deadline';
-    title: string;
-    description: string;
-    avatar: string | null;
-    initials: string | null;
-    time: string;
-    read: boolean;
-    project: string;
-    createdAt: Date;
-}
-
-// Mock notifications data
-const mockNotifications: Notification[] = [
-    {
-        id: '1',
-        type: 'mention',
-        title: 'Mentioned you in a comment',
-        description: 'Sarah mentioned you in "API Integration Task" - "Hey, can you take a look at the API endpoints?"',
-        avatar: null,
-        initials: 'SK',
-        time: '2 min ago',
-        read: false,
-        project: 'Mobile App Redesign',
-        createdAt: new Date(Date.now() - 2 * 60 * 1000),
-    },
-    {
-        id: '2',
-        type: 'assignment',
-        title: 'New task assigned',
-        description: 'You have been assigned to "Database Schema Review" by Michael Johnson',
-        avatar: null,
-        initials: 'MJ',
-        time: '15 min ago',
-        read: false,
-        project: 'Backend Infrastructure',
-        createdAt: new Date(Date.now() - 15 * 60 * 1000),
-    },
-    {
-        id: '3',
-        type: 'completed',
-        title: 'Task completed',
-        description: 'James marked "User Authentication" as done in Mobile App Redesign project',
-        avatar: null,
-        initials: 'JW',
-        time: '1 hour ago',
-        read: true,
-        project: 'Mobile App Redesign',
-        createdAt: new Date(Date.now() - 60 * 60 * 1000),
-    },
-    {
-        id: '4',
-        type: 'comment',
-        title: 'New comment on your task',
-        description: 'Emily replied to your comment on "Dashboard Widgets" - "Great suggestion, I\'ll implement that!"',
-        avatar: null,
-        initials: 'EC',
-        time: '2 hours ago',
-        read: true,
-        project: 'Analytics Platform',
-        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    },
-    {
-        id: '5',
-        type: 'deadline',
-        title: 'Deadline approaching',
-        description: '"Sprint Review Preparation" is due tomorrow. Make sure to complete all pending items.',
-        avatar: null,
-        initials: null,
-        time: '3 hours ago',
-        read: true,
-        project: 'Q1 Planning',
-        createdAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
-    },
-    {
-        id: '6',
-        type: 'mention',
-        title: 'Mentioned in project discussion',
-        description: 'Alex tagged you in the project discussion about deployment strategy',
-        avatar: null,
-        initials: 'AT',
-        time: '5 hours ago',
-        read: true,
-        project: 'Backend Infrastructure',
-        createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
-    },
-    {
-        id: '7',
-        type: 'assignment',
-        title: 'Task reassigned to you',
-        description: '"Performance Optimization" was reassigned to you from David Chen',
-        avatar: null,
-        initials: 'DC',
-        time: 'Yesterday',
-        read: true,
-        project: 'Analytics Platform',
-        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    },
-    {
-        id: '8',
-        type: 'completed',
-        title: 'Sprint completed',
-        description: 'Sprint 12 has been completed. 23 tasks done, 2 carried over.',
-        avatar: null,
-        initials: null,
-        time: '2 days ago',
-        read: true,
-        project: 'Mobile App Redesign',
-        createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    },
-];
-
-const getNotificationIcon = (type: Notification['type']) => {
+const getNotificationIcon = (type: AppNotification['type']) => {
     switch (type) {
         case 'mention':
             return <Users className="h-4 w-4 text-blue-500" />;
@@ -151,6 +40,8 @@ const getNotificationIcon = (type: Notification['type']) => {
             return <CheckCircle2 className="h-4 w-4 text-green-500" />;
         case 'comment':
             return <MessageSquare className="h-4 w-4 text-orange-500" />;
+        case 'message':
+            return <MessageSquare className="h-4 w-4 text-emerald-500" />;
         case 'deadline':
             return <AlertCircle className="h-4 w-4 text-red-500" />;
         default:
@@ -158,7 +49,7 @@ const getNotificationIcon = (type: Notification['type']) => {
     }
 };
 
-const getNotificationTypeLabel = (type: Notification['type']) => {
+const getNotificationTypeLabel = (type: AppNotification['type']) => {
     switch (type) {
         case 'mention':
             return 'Mention';
@@ -168,6 +59,8 @@ const getNotificationTypeLabel = (type: Notification['type']) => {
             return 'Completed';
         case 'comment':
             return 'Comment';
+        case 'message':
+            return 'Message';
         case 'deadline':
             return 'Deadline';
         default:
@@ -176,7 +69,8 @@ const getNotificationTypeLabel = (type: Notification['type']) => {
 };
 
 const Notifications = () => {
-    const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+    const navigate = useNavigate();
+    const { notifications, isLoading, markAsRead, markAllAsRead, clearRead, deleteNotification } = useNotifications();
     const [activeTab, setActiveTab] = useState('all');
 
     const unreadCount = notifications.filter((n) => !n.read).length;
@@ -187,26 +81,24 @@ const Notifications = () => {
         return n.type === activeTab;
     });
 
-    const markAsRead = (id: string) => {
-        setNotifications((prev) =>
-            prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-        );
+    const handleMarkAsRead = (id: string) => {
+        markAsRead.mutate(id);
     };
 
-    const markAllAsRead = () => {
-        setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    const handleMarkAllAsRead = () => {
+        markAllAsRead.mutate();
     };
 
-    const deleteNotification = (id: string) => {
-        setNotifications((prev) => prev.filter((n) => n.id !== id));
+    const handleDeleteNotification = (id: string) => {
+        deleteNotification.mutate(id);
     };
 
-    const clearAllRead = () => {
-        setNotifications((prev) => prev.filter((n) => !n.read));
+    const handleClearAllRead = () => {
+        clearRead.mutate();
     };
 
     return (
-        <AppLayout>
+        <>
             <div className="space-y-6">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -218,7 +110,7 @@ const Notifications = () => {
                     </div>
                     <div className="flex items-center gap-2">
                         {unreadCount > 0 && (
-                            <Button variant="outline" size="sm" onClick={markAllAsRead}>
+                            <Button variant="outline" size="sm" onClick={handleMarkAllAsRead}>
                                 <CheckCheck className="h-4 w-4 mr-2" />
                                 Mark all as read
                             </Button>
@@ -231,7 +123,7 @@ const Notifications = () => {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={clearAllRead}>
+                                <DropdownMenuItem onClick={handleClearAllRead}>
                                     <Trash2 className="h-4 w-4 mr-2" />
                                     Clear read notifications
                                 </DropdownMenuItem>
@@ -342,9 +234,17 @@ const Notifications = () => {
                                         <div
                                             key={notification.id}
                                             className={cn(
-                                                'flex items-start gap-4 p-4 transition-colors hover:bg-muted/50',
+                                                'flex items-start gap-4 p-4 transition-colors hover:bg-muted/50 cursor-pointer',
                                                 !notification.read && 'bg-status-in-progress/5'
                                             )}
+                                            onClick={() => {
+                                                handleMarkAsRead(notification.id);
+                                                if (notification.type === 'message' && notification.conversation_id) {
+                                                    navigate(`/chat/${notification.conversation_id}`);
+                                                } else if (notification.project_id) {
+                                                    navigate(`/projects/${notification.project_id}`);
+                                                }
+                                            }}
                                         >
                                             {/* Icon or Avatar */}
                                             <div className="flex-shrink-0 mt-1">
@@ -401,20 +301,26 @@ const Notifications = () => {
                                                     {/* Actions */}
                                                     <DropdownMenu>
                                                         <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => e.stopPropagation()}>
                                                                 <MoreHorizontal className="h-4 w-4" />
                                                             </Button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end">
                                                             {!notification.read && (
-                                                                <DropdownMenuItem onClick={() => markAsRead(notification.id)}>
+                                                                <DropdownMenuItem onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleMarkAsRead(notification.id);
+                                                                }}>
                                                                     <Check className="h-4 w-4 mr-2" />
                                                                     Mark as read
                                                                 </DropdownMenuItem>
                                                             )}
                                                             <DropdownMenuItem
                                                                 className="text-destructive"
-                                                                onClick={() => deleteNotification(notification.id)}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteNotification(notification.id);
+                                                                }}
                                                             >
                                                                 <Trash2 className="h-4 w-4 mr-2" />
                                                                 Delete
@@ -430,8 +336,8 @@ const Notifications = () => {
                         )}
                     </TabsContent>
                 </Tabs>
-            </div>
-        </AppLayout>
+            </div >
+        </>
     );
 };
 
