@@ -2,6 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Project, Task, Milestone, Issue, TeamMember, Activity } from '@/types';
 import { projects as mockProjects, teamMembers as mockTeamMembers, projectModules as mockModules, projectIssues as mockIssues } from '@/data/mockData';
 import { config } from '@/config';
+import { activitiesService } from './activities.service';
 
 // Environment flag to control data source
 const USE_MOCK_DATA = config.api.useMockData;
@@ -316,7 +317,19 @@ export const projectsService = {
       .single();
 
     if (error) throw error;
-    return mapDbProjectToProject(data);
+    const created = mapDbProjectToProject(data);
+
+    // Log activity (fire-and-forget — don't block on failure)
+    activitiesService.create({
+      project_id: created.id,
+      activity_type: 'project_created',
+      description: `created project "${created.name}"`,
+      user_id: user?.id || null,
+      entity_id: created.id,
+      entity_type: 'project',
+    }).catch(() => { /* non-critical */ });
+
+    return created;
   },
 
   /**
@@ -358,7 +371,20 @@ export const projectsService = {
       .single();
 
     if (error) throw error;
-    return mapDbProjectToProject(data);
+    const updated = mapDbProjectToProject(data);
+
+    // Log activity
+    const { data: { user } } = await supabase.auth.getUser();
+    activitiesService.create({
+      project_id: id,
+      activity_type: 'project_updated',
+      description: `updated project "${updated.name}"`,
+      user_id: user?.id || null,
+      entity_id: id,
+      entity_type: 'project',
+    }).catch(() => { /* non-critical */ });
+
+    return updated;
   },
 
   /**

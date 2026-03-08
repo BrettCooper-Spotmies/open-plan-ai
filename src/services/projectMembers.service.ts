@@ -1,5 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Database } from '@/integrations/supabase/types';
+import { activitiesService } from './activities.service';
 
 type ProjectRole = Database['public']['Enums']['project_role'];
 
@@ -51,6 +52,16 @@ export const projectMembersService = {
       console.error('Error adding project member:', error);
       throw new Error(`Failed to add project member: ${error.message}`);
     }
+
+    // Log activity (fire-and-forget)
+    activitiesService.create({
+      project_id: input.project_id,
+      activity_type: 'project_assigned',
+      description: `assigned a new member to the project`,
+      user_id: user.id,
+      entity_id: input.user_id,
+      entity_type: 'user',
+    }).catch(() => { /* non-critical */ });
 
     return data;
   },

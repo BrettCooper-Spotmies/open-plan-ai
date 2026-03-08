@@ -218,7 +218,19 @@ export interface Project {
 
 export interface Activity {
   id: string;
-  type: 'task_created' | 'task_completed' | 'task_updated' | 'comment_added' | 'milestone_reached' | 'status_changed' | 'issue_created' | 'issue_resolved';
+  type:
+  | 'task_created'
+  | 'task_completed'
+  | 'task_updated'
+  | 'comment_added'
+  | 'milestone_reached'
+  | 'status_changed'
+  | 'issue_created'
+  | 'issue_resolved'
+  | 'project_created'
+  | 'project_updated'
+  | 'project_assigned'
+  | 'dependency_added';
   title: string;
   description: string;
   user: TeamMember;

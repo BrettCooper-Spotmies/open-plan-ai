@@ -8,28 +8,40 @@ import {
   AlertCircle,
   AlertTriangle,
   CheckCircle,
-  Activity as ActivityIcon
+  Activity as ActivityIcon,
+  FolderPlus,
+  UserPlus,
+  RefreshCw,
+  GitBranch,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity } from '@/types';
 import { cn } from '@/lib/utils';
+import { useNavigate } from 'react-router-dom';
 
 interface ActivityFeedProps {
   activities: Activity[];
+  isLoading: boolean;
 }
 
-const activityIcons: Record<Activity['type'], React.ComponentType<{ className?: string }>> = {
+type ActivityType = Activity['type'];
+
+const activityIcons: Record<ActivityType, React.ComponentType<{ className?: string }>> = {
   task_created: Plus,
   task_completed: CheckCircle2,
   task_updated: ArrowRight,
   comment_added: MessageSquare,
   milestone_reached: Flag,
-  status_changed: AlertCircle,
+  status_changed: RefreshCw,
   issue_created: AlertTriangle,
   issue_resolved: CheckCircle,
+  project_created: FolderPlus,
+  project_updated: AlertCircle,
+  project_assigned: UserPlus,
+  dependency_added: GitBranch,
 };
 
-const activityColors: Record<Activity['type'], string> = {
+const activityColors: Record<ActivityType, string> = {
   task_created: 'text-status-in-progress bg-status-in-progress/10',
   task_completed: 'text-status-done bg-status-done/10',
   task_updated: 'text-muted-foreground bg-muted',
@@ -38,9 +50,52 @@ const activityColors: Record<Activity['type'], string> = {
   status_changed: 'text-chart-5 bg-chart-5/10',
   issue_created: 'text-destructive bg-destructive/10',
   issue_resolved: 'text-status-done bg-status-done/10',
+  project_created: 'text-primary bg-primary/10',
+  project_updated: 'text-chart-3 bg-chart-3/10',
+  project_assigned: 'text-chart-2 bg-chart-2/10',
+  dependency_added: 'text-chart-5 bg-chart-5/10',
 };
 
-export function ActivityFeed({ activities }: ActivityFeedProps) {
+const activityLabels: Record<ActivityType, string> = {
+  task_created: 'Task Created',
+  task_completed: 'Task Completed',
+  task_updated: 'Task Updated',
+  comment_added: 'Comment',
+  milestone_reached: 'Milestone',
+  status_changed: 'Status Changed',
+  issue_created: 'Issue Opened',
+  issue_resolved: 'Issue Resolved',
+  project_created: 'New Project',
+  project_updated: 'Project Updated',
+  project_assigned: 'Member Assigned',
+  dependency_added: 'Dependency Added',
+};
+
+export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
+  const navigate = useNavigate();
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base font-medium">Recent Activity</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {/* Placeholder for loading state */}
+          <div className="flex flex-col items-center justify-center py-8 text-center animate-pulse">
+            <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+              <ActivityIcon className="h-5 w-5 text-muted-foreground/50" />
+            </div>
+            <h3 className="text-sm font-medium text-foreground">Loading activity...</h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+              Fetching recent project updates.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card>
       <CardHeader className="pb-4">
@@ -59,13 +114,15 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
           </div>
         ) : (
           activities.map((activity) => {
-            const Icon = activityIcons[activity.type];
-            const colorClass = activityColors[activity.type];
+            const Icon = activityIcons[activity.type] || ActivityIcon;
+            const colorClass = activityColors[activity.type] || 'text-muted-foreground bg-muted';
+            const label = activityLabels[activity.type] || 'Unknown Activity';
 
             return (
               <div
                 key={activity.id}
-                className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0"
+                onClick={() => activity.projectId && navigate(`/projects/${activity.projectId}`)}
+                className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0 hover:bg-muted/30 cursor-pointer transition-colors px-2 -mx-2 rounded-md"
               >
                 {/* Left: Subtle status icon */}
                 <div className={cn(
@@ -84,16 +141,24 @@ export function ActivityFeed({ activities }: ActivityFeedProps) {
                     <span className="text-muted-foreground text-foreground/80">{activity.description}</span>
                   </p>
 
-                  {/* Secondary: Project name & Timestamp row */}
+                  {/* Secondary: Project name, Type badge & Timestamp row */}
                   <div className="flex items-center justify-between mt-1.5 gap-2">
-                    {activity.projectName ? (
-                      <p className="text-xs text-muted-foreground truncate">
-                        in{' '}
-                        <span className="text-primary hover:underline cursor-pointer font-medium">
-                          {activity.projectName}
-                        </span>
-                      </p>
-                    ) : <div></div>}
+                    <div className="flex items-center gap-2">
+                      {activity.projectName && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          in{' '}
+                          <span className="text-primary hover:underline cursor-pointer font-medium">
+                            {activity.projectName}
+                          </span>
+                        </p>
+                      )}
+                      <span className={cn(
+                        'px-2 py-0.5 rounded-full text-xs font-medium',
+                        colorClass
+                      )}>
+                        {label}
+                      </span>
+                    </div>
 
                     <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
                       {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}

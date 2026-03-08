@@ -105,22 +105,31 @@ export default function Dashboard() {
   };
 
   // Transform activities for ActivityFeed (Activity type)
-  const activityItems: Activity[] = (activities || []).map(activity => ({
-    id: activity.id,
-    type: activity.activity_type,
-    title: activity.description.split(' ').slice(0, 3).join(' '),
-    description: activity.description,
-    user: {
-      id: activity.user_id || 'unknown',
-      name: 'Team Member',
-      email: '',
-      role: '',
-      initials: 'TM'
-    },
-    projectId: activity.project_id,
-    projectName: '', // Would need to join with projects
-    timestamp: activity.created_at || new Date().toISOString(),
-  }));
+  const activityItems: Activity[] = (activities || []).map((activity: any) => {
+    const userName: string = activity.profiles?.name || 'Team Member';
+    const initials: string = userName
+      .split(' ')
+      .map((n: string) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || 'TM';
+    return {
+      id: activity.id,
+      type: activity.activity_type,
+      title: activity.description.split(' ').slice(0, 3).join(' '),
+      description: activity.description,
+      user: {
+        id: activity.user_id || 'unknown',
+        name: userName,
+        email: activity.profiles?.email || '',
+        role: '',
+        initials,
+      },
+      projectId: activity.project_id,
+      projectName: activity.projects?.name || '',
+      timestamp: activity.created_at || new Date().toISOString(),
+    };
+  });
 
   // Transform milestones for UpcomingMilestones (Milestone type)
   const milestoneItems: (Milestone & { projectName?: string })[] = (milestones || []).map(m => ({
@@ -242,7 +251,7 @@ export default function Dashboard() {
               </div>
               <div className="space-y-6">
                 <UpcomingMilestones milestones={milestoneItems} />
-                <ActivityFeed activities={activityItems} />
+                <ActivityFeed activities={activityItems} isLoading={activitiesLoading || isLoading} />
               </div>
             </div>
           </>

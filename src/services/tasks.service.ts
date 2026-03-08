@@ -3,6 +3,7 @@ import { Task, TeamMember } from '@/types';
 import { projects as mockProjects } from '@/data/mockData';
 import { config } from '@/config';
 import { attachmentsService } from './attachments.service';
+import { activitiesService } from './activities.service';
 
 // Environment flag to control data source
 const USE_MOCK_DATA = config.api.useMockData;
@@ -361,6 +362,19 @@ export const tasksService = {
 
     if (error) throw error;
 
+    // Log activity if status changed
+    if (updates.status !== undefined) {
+      const { data: { user } } = await supabase.auth.getUser();
+      activitiesService.create({
+        project_id: projectId,
+        activity_type: 'status_changed',
+        description: `changed task "${data.title}" status to ${updates.status}`,
+        user_id: user?.id || null,
+        entity_id: taskId,
+        entity_type: 'task',
+      }).catch(() => { /* non-critical */ });
+    }
+
     // Update assignees if provided
     if (updates.assignees !== undefined) {
       await supabase.from('task_assignees').delete().eq('task_id', taskId);
@@ -399,6 +413,17 @@ export const tasksService = {
           depends_on_id: depId
         }));
         await supabase.from('task_dependencies').insert(dependencyInserts);
+
+        // Log activity for dependency added
+        const { data: { user } } = await supabase.auth.getUser();
+        activitiesService.create({
+          project_id: projectId,
+          activity_type: 'dependency_added',
+          description: `added dependencies to task "${data.title}"`,
+          user_id: user?.id || null,
+          entity_id: taskId,
+          entity_type: 'task',
+        }).catch(() => { /* non-critical */ });
       }
     }
     // Update attachments if provided

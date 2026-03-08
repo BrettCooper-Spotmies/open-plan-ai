@@ -118,13 +118,17 @@ export const dashboardService = {
 
     const { data, error } = await supabase
       .from('activities')
-      .select('*')
+      .select(`
+        *,
+        profiles:user_id ( id, name, email, initials, avatar_url ),
+        projects:project_id ( id, name )
+      `)
       .in('project_id', projectIds)
       .order('created_at', { ascending: false })
       .limit(limit);
 
     if (error) throw error;
-    return data || [];
+    return (data || []) as any;
   },
 
   async getUpcomingMilestones(orgId: string, limit: number = 5): Promise<Milestone[]> {

@@ -1279,6 +1279,10 @@ export type Database = {
       | "status_changed"
       | "issue_created"
       | "issue_resolved"
+      | "project_created"
+      | "project_updated"
+      | "project_assigned"
+      | "dependency_added"
       app_role: "owner" | "admin" | "member" | "viewer"
       issue_category:
       | "defect"
@@ -1460,6 +1464,10 @@ export const Constants = {
         "status_changed",
         "issue_created",
         "issue_resolved",
+        "project_created",
+        "project_updated",
+        "project_assigned",
+        "dependency_added",
       ],
       app_role: ["owner", "admin", "member", "viewer"],
       issue_category: [
