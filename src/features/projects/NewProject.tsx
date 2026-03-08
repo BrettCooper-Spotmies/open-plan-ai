@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -61,8 +60,12 @@ import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useCreateProject } from "@/hooks/useProjects";
 import { useOrganizationMembers } from "@/hooks/useProjectTeam";
+import { useCreateAttachment } from '@/hooks/useProjectAttachments';
+import { useCreateProjectLink } from '@/hooks/useProjectLinks';
 import { modulesService } from "@/services/modules.service";
 import { milestonesService } from "@/services/milestones.service";
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryClient';
 import { projectStorageService, UploadedProjectFile } from "@/services/projectStorage.service";
 import { attachmentsService } from "@/services/attachments.service";
 import { projectLinksService } from "@/services/projectLinks.service";
@@ -163,6 +166,7 @@ interface ProjectMilestone {
 }
 
 const NewProject = () => {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { currentOrganization } = useOrganization();
   const createProjectMutation = useCreateProject();
@@ -507,9 +511,14 @@ const NewProject = () => {
           description: projectDescription || undefined,
           stage: projectStage,
           type: projectType,
-          startDate: startDate?.toISOString().split('T')[0],
-          targetDate: expectedEndDate?.toISOString().split('T')[0],
+          startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
+          targetDate: expectedEndDate ? format(expectedEndDate, 'yyyy-MM-dd') : undefined,
           icon: projectEmoji,
+          clientName,
+          clientOrganization,
+          clientContact,
+          notes,
+          departments: selectedDepartments,
         },
         organizationId: currentOrganization.id,
       });
@@ -531,7 +540,7 @@ const NewProject = () => {
           milestonesService.create({
             project_id: project.id,
             name: m.name,
-            due_date: m.endDate?.toISOString().split('T')[0] || null,
+            due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
           })
         ));
       }
@@ -570,7 +579,7 @@ const NewProject = () => {
         try {
           const memberData = assignedMembers.map(m => ({
             userId: m.memberId,
-            role: m.role.toLowerCase() === 'admin' ? 'admin' as const : 'member' as const,
+            role: m.role,
           }));
           await projectMembersService.addMembers(project.id, memberData);
         } catch (memberError) {
@@ -614,7 +623,7 @@ const NewProject = () => {
   };
 
   return (
-    <AppLayout>
+    <>
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
@@ -915,7 +924,7 @@ const NewProject = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <Badge variant="secondary">{assignment.role}</Badge>
+                        {assignment.role && <Badge variant="secondary">{assignment.role}</Badge>}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1490,7 +1499,7 @@ const NewProject = () => {
           </Button>
         </div>
       </div>
-    </AppLayout>
+    </>
   );
 };
 

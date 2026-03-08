@@ -636,7 +636,7 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "projects"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       notifications: {
@@ -704,7 +704,7 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
-          },
+          }
         ]
       }
       organization_members: {
@@ -1097,6 +1097,7 @@ export type Database = {
           id: string
           milestone_id: string | null
           module_id: string | null
+          module_ids: string[] | null
           module_type: Database["public"]["Enums"]["module_type"] | null
           priority: Database["public"]["Enums"]["priority"]
           project_id: string
@@ -1117,6 +1118,7 @@ export type Database = {
           id?: string
           milestone_id?: string | null
           module_id?: string | null
+          module_ids?: string[] | null
           module_type?: Database["public"]["Enums"]["module_type"] | null
           priority?: Database["public"]["Enums"]["priority"]
           project_id: string
@@ -1137,6 +1139,7 @@ export type Database = {
           id?: string
           milestone_id?: string | null
           module_id?: string | null
+          module_ids?: string[] | null
           module_type?: Database["public"]["Enums"]["module_type"] | null
           priority?: Database["public"]["Enums"]["priority"]
           project_id?: string
@@ -1299,63 +1302,62 @@ export type Database = {
     }
     Enums: {
       activity_type:
-        | "task_created"
-        | "task_completed"
-        | "task_updated"
-        | "comment_added"
-        | "milestone_reached"
-        | "status_changed"
-        | "issue_created"
-        | "issue_resolved"
-        | "project_created"
-        | "project_assigned"
-        | "dependency_added"
-        | "project_updated"
+      | "task_created"
+      | "task_completed"
+      | "task_updated"
+      | "comment_added"
+      | "milestone_reached"
+      | "status_changed"
+      | "issue_created"
+      | "issue_resolved"
+      | "project_created"
+      | "project_updated"
+      | "project_assigned"
+      | "dependency_added"
       app_role: "owner" | "admin" | "member" | "viewer"
       issue_category:
-        | "defect"
-        | "risk"
-        | "supplier"
-        | "compliance"
-        | "test-failure"
-        | "design-change"
-        | "other"
+      | "defect"
+      | "risk"
+      | "supplier"
+      | "compliance"
+      | "test-failure"
+      | "design-change"
+      | "other"
       issue_severity: "critical" | "major" | "minor" | "trivial"
       issue_status:
-        | "open"
-        | "investigating"
-        | "resolved"
-        | "closed"
-        | "wont-fix"
+      | "open"
+      | "investigating"
+      | "resolved"
+      | "closed"
+      | "wont-fix"
       module_type:
-        | "hardware"
-        | "software"
-        | "firmware"
-        | "testing"
-        | "design"
-        | "procurement"
-        | "manufacturing"
-        | "qa"
-        | "logistics"
-        | "enclosure"
-        | "pcb"
-        | "power"
+      | "hardware"
+      | "software"
+      | "firmware"
+      | "testing"
+      | "design"
+      | "procurement"
+      | "manufacturing"
+      | "qa"
+      | "logistics"
+      | "enclosure"
+      | "pcb"
+      | "power"
       notification_type:
-        | "mention"
-        | "assignment"
-        | "completed"
-        | "comment"
-        | "deadline"
-        | "message"
+      | "mention"
+      | "assignment"
+      | "completed"
+      | "comment"
+      | "deadline"
       org_role: "owner" | "admin" | "member"
       priority: "critical" | "high" | "medium" | "low"
       project_role: "owner" | "admin" | "member" | "viewer"
       project_stage:
-        | "concept"
-        | "design"
-        | "development"
-        | "testing"
-        | "production"
+      | "concept"
+      | "design"
+      | "development"
+      | "testing"
+      | "production"
       task_status: "todo" | "in-progress" | "review" | "done" | "blocked"
     }
     CompositeTypes: {
@@ -1370,116 +1372,116 @@ type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+  ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
+    DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
-    ? R
-    : never
+  ? R
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
+    DefaultSchema["Views"])
+  ? (DefaultSchema["Tables"] &
+    DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+      Row: infer R
+    }
+  ? R
+  : never
+  : never
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
+    Insert: infer I
+  }
+  ? I
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Insert: infer I
+  }
+  ? I
+  : never
+  : never
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Tables"]
+  | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
+  : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
+    Update: infer U
+  }
+  ? U
+  : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
+  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+    Update: infer U
+  }
+  ? U
+  : never
+  : never
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["Enums"]
+  | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
+  : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
+  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+  : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+  | keyof DefaultSchema["CompositeTypes"]
+  | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+  ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
+  : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
+  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+  : never
 
 export const Constants = {
   public: {
@@ -1494,9 +1496,9 @@ export const Constants = {
         "issue_created",
         "issue_resolved",
         "project_created",
+        "project_updated",
         "project_assigned",
         "dependency_added",
-        "project_updated",
       ],
       app_role: ["owner", "admin", "member", "viewer"],
       issue_category: [

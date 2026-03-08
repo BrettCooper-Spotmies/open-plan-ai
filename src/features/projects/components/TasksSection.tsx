@@ -194,8 +194,24 @@ export function TasksSection({
       }
 
       // Module filter
-      if (filters.module?.length && !filters.module.includes(task.module)) {
-        return false;
+      if (filters.module?.length) {
+        // Collect all types of assigned modules
+        const assignedModuleTypes = new Set<string>();
+
+        // Add the primary module type for backward compatibility
+        if (task.module) assignedModuleTypes.add(task.module);
+
+        // Add types from all assigned module IDs
+        if (task.moduleIds && task.moduleIds.length > 0) {
+          task.moduleIds.forEach(id => {
+            const m = modules.find(mod => mod.id === id);
+            if (m) assignedModuleTypes.add(m.type);
+          });
+        }
+
+        // Check if there's any intersection between filter and assigned types
+        const hasMatch = filters.module.some(filterType => assignedModuleTypes.has(filterType));
+        if (!hasMatch) return false;
       }
 
       // Assignee filter

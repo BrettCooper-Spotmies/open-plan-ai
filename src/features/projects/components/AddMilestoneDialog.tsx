@@ -95,7 +95,7 @@ export function AddMilestoneDialog({
     const milestone: Omit<Milestone, 'id'> = {
       title: data.title,
       description: data.description,
-      date: data.date.toISOString().split('T')[0],
+      date: format(data.date, 'yyyy-MM-dd'),
       completed: false,
       linkedTaskIds: selectedTasks,
       linkedModuleIds: selectedModules,

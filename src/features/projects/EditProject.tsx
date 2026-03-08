@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { AppLayout } from "@/components/layout/AppLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,6 +9,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     ArrowLeft,
     CalendarIcon,
@@ -21,15 +32,40 @@ import {
     Plus,
     X,
     Upload,
+    Building2,
+    Users,
+    Wrench,
+    Smartphone,
+    Settings,
+    Zap,
+    Cpu,
+    FlaskConical,
+    Factory,
+    BookOpen,
+    Flag,
+    Target,
+    Pencil,
+    Trash2,
+    Globe,
+    ChevronDown,
+    ChevronUp,
+    Palette
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useOrganization } from "@/contexts/OrganizationContext";
 import { useProjectDetail } from "@/hooks/useProjectDetail";
-import { useUpdateProject } from "@/hooks/useProjects";
+import { useUpdateProject, useProject } from "@/hooks/useProjects";
+import { useOrganizationMembers } from "@/hooks/useProjectTeam";
 import { useProjectAttachments, useCreateAttachment, useDeleteAttachment } from "@/hooks/useProjectAttachments";
 import { useProjectLinks, useCreateProjectLink, useDeleteProjectLink } from "@/hooks/useProjectLinks";
 import { projectStorageService } from "@/services/projectStorage.service";
+import { modulesService } from "@/services/modules.service";
+import { milestonesService } from "@/services/milestones.service";
+import { projectMembersService } from "@/services/projectMembers.service";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryClient";
 
 const projectTypes = [
     "Hardware Development",
@@ -42,6 +78,71 @@ const projectTypes = [
     "Production",
 ];
 
+const projectStagesList = [
+    { value: "concept", label: "Concept" },
+    { value: "design", label: "Design" },
+    { value: "development", label: "Development" },
+    { value: "testing", label: "Testing" },
+    { value: "production", label: "Production" },
+];
+
+const departmentsList = [
+    { id: "design", name: "Design", icon: Palette },
+    { id: "hardware", name: "Hardware", icon: Wrench },
+    { id: "software", name: "Software", icon: Smartphone },
+    { id: "mechanical", name: "Mechanical", icon: Settings },
+    { id: "electrical", name: "Electrical", icon: Zap },
+    { id: "firmware", name: "Firmware", icon: Cpu },
+    { id: "testing", name: "Testing & QA", icon: FlaskConical },
+    { id: "manufacturing", name: "Manufacturing", icon: Factory },
+    { id: "documentation", name: "Documentation", icon: BookOpen },
+];
+
+const rolesList = [
+    "Admin",
+    "Member",
+    "Project Lead",
+    "Developer",
+    "Designer",
+    "Hardware Engineer",
+    "Software Engineer",
+    "Mechanical Engineer",
+    "Electrical Engineer",
+    "QA Engineer",
+    "Technical Writer",
+    "Consultant",
+];
+
+interface ProjectLink {
+    id: string;
+    name: string;
+    url: string;
+}
+
+interface TeamMemberAssignment {
+    memberId: string;
+    role: string;
+    name?: string;
+    avatar?: string;
+}
+
+interface Department {
+    id: string;
+    name: string;
+    icon: React.ElementType;
+}
+
+interface ProjectModule {
+    id: string;
+    name: string;
+}
+
+interface ProjectMilestone {
+    id: string;
+    name: string;
+    startDate: Date | undefined;
+    endDate: Date | undefined;
+}
 const projectStages = [
     { value: "concept", label: "Concept" },
     { value: "design", label: "Design" },
@@ -57,19 +158,16 @@ const projectEmojis = [
     "✨", "🌟", "⭐", "💎", "🏆", "🎖️", "🥇", "🎁", "📦", "🗃️"
 ];
 
-interface ProjectLink {
-    id: string;
-    name: string;
-    url: string;
-}
-
 const EditProject = () => {
+    const queryClient = useQueryClient();
     const navigate = useNavigate();
     const { id } = useParams();
+    const { currentOrganization } = useOrganization();
     const updateProjectMutation = useUpdateProject();
+    const { data: orgMembers = [] } = useOrganizationMembers(currentOrganization?.id);
 
     // Fetch project data
-    const { data: project, isLoading, error } = useProjectDetail(id);
+    const { data: project, isLoading, error } = useProject(id);
     const { data: projectAttachments = [] } = useProjectAttachments(id);
     const { data: projectLinks = [] } = useProjectLinks(id);
 
@@ -90,6 +188,36 @@ const EditProject = () => {
     const [targetDate, setTargetDate] = useState<Date>();
     const [isSaving, setIsSaving] = useState(false);
 
+    // Optional Details
+    const [showOptionalDetails, setShowOptionalDetails] = useState(false);
+    const [clientName, setClientName] = useState("");
+    const [clientOrganization, setClientOrganization] = useState("");
+    const [clientContact, setClientContact] = useState("");
+    const [notes, setNotes] = useState("");
+
+    // Team Members
+    const [assignedMembers, setAssignedMembers] = useState<TeamMemberAssignment[]>([]);
+    const [selectedMember, setSelectedMember] = useState("");
+    const [selectedRole, setSelectedRole] = useState("");
+
+    // Departments
+    const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+    const [customDepartments, setCustomDepartments] = useState<Department[]>([]);
+    const [newDeptName, setNewDeptName] = useState("");
+    const [isAddDeptOpen, setIsAddDeptOpen] = useState(false);
+
+    // Modules
+    const [modules, setModules] = useState<ProjectModule[]>([]);
+    const [newModuleName, setNewModuleName] = useState("");
+    const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
+
+    // Milestones
+    const [milestones, setMilestones] = useState<ProjectMilestone[]>([]);
+    const [newMilestoneName, setNewMilestoneName] = useState("");
+    const [newMilestoneStart, setNewMilestoneStart] = useState<Date>();
+    const [newMilestoneEnd, setNewMilestoneEnd] = useState<Date>();
+    const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+
     // Links state
     const [newLinkName, setNewLinkName] = useState("");
     const [newLinkUrl, setNewLinkUrl] = useState("");
@@ -98,6 +226,122 @@ const EditProject = () => {
     const [isUploading, setIsUploading] = useState(false);
     const [isDragOver, setIsDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleAddModule = () => {
+        if (newModuleName.trim()) {
+            if (editingModuleId) {
+                setModules(modules.map(m => m.id === editingModuleId ? { ...m, name: newModuleName.trim() } : m));
+                setEditingModuleId(null);
+            } else {
+                setModules([...modules, { id: Math.random().toString(36).substr(2, 9), name: newModuleName.trim() }]);
+            }
+            setNewModuleName("");
+        }
+    };
+
+    const handleEditModule = (module: ProjectModule) => {
+        setNewModuleName(module.name);
+        setEditingModuleId(module.id);
+    };
+
+    const handleRemoveModule = (id: string) => {
+        setModules(modules.filter(m => m.id !== id));
+        if (editingModuleId === id) {
+            setEditingModuleId(null);
+            setNewModuleName("");
+        }
+    };
+
+    const handleAddMilestone = () => {
+        if (newMilestoneName.trim() && newMilestoneStart && newMilestoneEnd) {
+            if (editingMilestoneId) {
+                setMilestones(milestones.map(m => m.id === editingMilestoneId ? {
+                    ...m,
+                    name: newMilestoneName.trim(),
+                    startDate: newMilestoneStart,
+                    endDate: newMilestoneEnd
+                } : m));
+                setEditingMilestoneId(null);
+            } else {
+                setMilestones([
+                    ...milestones,
+                    {
+                        id: Math.random().toString(36).substr(2, 9),
+                        name: newMilestoneName.trim(),
+                        startDate: newMilestoneStart,
+                        endDate: newMilestoneEnd
+                    }
+                ]);
+            }
+            setNewMilestoneName("");
+            setNewMilestoneStart(undefined);
+            setNewMilestoneEnd(undefined);
+        }
+    };
+
+    const handleEditMilestone = (milestone: ProjectMilestone) => {
+        setNewMilestoneName(milestone.name);
+        setNewMilestoneStart(milestone.startDate);
+        setNewMilestoneEnd(milestone.endDate);
+        setEditingMilestoneId(milestone.id);
+    };
+
+    const handleRemoveMilestone = (id: string) => {
+        setMilestones(milestones.filter(m => m.id !== id));
+        if (editingMilestoneId === id) {
+            setEditingMilestoneId(null);
+            setNewMilestoneName("");
+            setNewMilestoneStart(undefined);
+            setNewMilestoneEnd(undefined);
+        }
+    };
+
+    const handleAddTeamMember = () => {
+        if (selectedMember && selectedRole) {
+            const exists = assignedMembers.find(m => m.memberId === selectedMember);
+            if (!exists) {
+                const memberObj = orgMembers.find(m => m.id === selectedMember);
+                setAssignedMembers([...assignedMembers, {
+                    memberId: selectedMember,
+                    role: selectedRole,
+                    name: memberObj?.name,
+                    avatar: memberObj?.avatar
+                }]);
+                setSelectedMember("");
+                setSelectedRole("");
+            } else {
+                toast.error("Member already assigned");
+            }
+        }
+    };
+
+    const handleRemoveTeamMember = (memberId: string) => {
+        setAssignedMembers(assignedMembers.filter(m => m.memberId !== memberId));
+    };
+
+    const handleDepartmentToggle = (departmentId: string) => {
+        setSelectedDepartments(prev =>
+            prev.includes(departmentId)
+                ? prev.filter(d => d !== departmentId)
+                : [...prev, departmentId]
+        );
+    };
+
+    const handleAddCustomDepartment = () => {
+        if (newDeptName.trim()) {
+            const newId = `custom-${Date.now()}`;
+            const newDept: Department = {
+                id: newId,
+                name: newDeptName.trim(),
+                icon: Building2 // Use generic icon for custom departments
+            };
+
+            setCustomDepartments([...customDepartments, newDept]);
+            setSelectedDepartments([...selectedDepartments, newId]); // Auto-select new department
+            setNewDeptName("");
+            setIsAddDeptOpen(false);
+        }
+    };
 
     // Initialize form with project data
     useEffect(() => {
@@ -112,6 +356,63 @@ const EditProject = () => {
             }
             if (project.targetDate) {
                 setTargetDate(new Date(project.targetDate));
+            }
+
+            // Populating optional details
+            setClientName(project.clientName || "");
+            setClientOrganization(project.clientOrganization || "");
+            setClientContact(project.clientContact || "");
+            setNotes(project.notes || "");
+
+            // Populating departments
+            if (project.departments) {
+                setSelectedDepartments(project.departments);
+                // Identifying custom departments
+                const customDepts = project.departments.filter(dId => !departmentsList.find(d => d.id === dId));
+                if (customDepts.length > 0) {
+                    setCustomDepartments(customDepts.map(dId => ({
+                        id: dId,
+                        name: dId.startsWith('custom-') ? dId.split('-')[1] : dId, // Fallback naming
+                        icon: Building2
+                    })));
+                }
+            }
+
+            // Populating team members
+            if (project.team) {
+                setAssignedMembers(project.team.map(m => ({
+                    memberId: m.id,
+                    role: m.role,
+                    name: m.name,
+                    avatar: m.avatar
+                })));
+            }
+
+            // Populating modules
+            if (project.projectModules) {
+                // First-class modules initialization
+                const projectModules = project.projectModules || [];
+                setModules(projectModules.map(m => ({
+                    id: m.id,
+                    name: m.name,
+                    type: m.type
+                })));
+            } else if (project.modules) {
+                // Fallback for legacy modules
+                setModules(project.modules.map(m => ({
+                    id: Math.random().toString(36).substr(2, 9),
+                    name: m.name
+                })));
+            }
+
+            // Populating milestones
+            if (project.milestones) {
+                setMilestones(project.milestones.map(m => ({
+                    id: m.id,
+                    name: m.title,
+                    startDate: undefined, // Milestone model doesn't have startDate yet? 
+                    endDate: m.date ? new Date(m.date) : undefined
+                })));
             }
         }
     }, [project]);
@@ -232,10 +533,131 @@ const EditProject = () => {
                     type: projectType,
                     stage: projectStage as any,
                     icon: projectEmoji,
-                    startDate: startDate?.toISOString().split('T')[0],
-                    targetDate: targetDate?.toISOString().split('T')[0],
+                    startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
+                    targetDate: targetDate ? format(targetDate, 'yyyy-MM-dd') : undefined,
+                    clientName: clientName || undefined,
+                    clientOrganization: clientOrganization || undefined,
+                    clientContact: clientContact || undefined,
+                    notes: notes || undefined,
+                    departments: selectedDepartments,
                 },
             });
+
+            // Sync team members
+            const currentInDbIds = project.team?.map((m: any) => m.id) || [];
+            const assignedIds = assignedMembers.map(m => m.memberId);
+
+            // Members to add
+            const newMembers = assignedMembers.filter((m) => !currentInDbIds.includes(m.memberId));
+            // Members to remove
+            const removedMemberIds = currentInDbIds.filter(id => !assignedIds.includes(id));
+
+            if (newMembers.length > 0) {
+                try {
+                    const memberData = newMembers.map(m => ({
+                        userId: m.memberId,
+                        role: m.role,
+                    }));
+                    await projectMembersService.addMembers(project.id, memberData);
+                } catch (memberError) {
+                    console.error('Error adding team members:', memberError);
+                    toast.warning('Project updated but some new team members could not be added');
+                }
+            }
+
+            if (removedMemberIds.length > 0) {
+                try {
+                    await projectMembersService.removeMembers(project.id, removedMemberIds);
+                } catch (memberError) {
+                    console.error('Error removing team members:', memberError);
+                    toast.warning('Project updated but some team members could not be removed');
+                }
+            }
+
+            // Sync Modules
+            const initialModules = project.projectModules || [];
+            const initialModuleIds = initialModules.map(m => m.id);
+            const currentModuleIds = modules.map(m => m.id);
+
+            // Modules to add (ones that don't have a UUID-like format or weren't in initial)
+            const modulesToAdd = modules.filter(m => !initialModuleIds.includes(m.id));
+            // Modules to remove
+            const moduleIdsToRemove = initialModuleIds.filter(id => !currentModuleIds.includes(id));
+            // Modules to update
+            const modulesToUpdate = modules.filter(m => {
+                const initial = initialModules.find(im => im.id === m.id);
+                return initial && initial.name !== m.name;
+            });
+
+            if (modulesToAdd.length > 0) {
+                await Promise.all(modulesToAdd.map(m =>
+                    modulesService.create({
+                        project_id: id,
+                        name: m.name,
+                        module_type: 'software', // Default
+                    })
+                ));
+            }
+
+            if (modulesToUpdate.length > 0) {
+                await Promise.all(modulesToUpdate.map(m =>
+                    modulesService.update(m.id, { name: m.name })
+                ));
+            }
+
+            if (moduleIdsToRemove.length > 0) {
+                await Promise.all(moduleIdsToRemove.map(mid =>
+                    modulesService.delete(mid)
+                ));
+            }
+
+            // Sync Milestones
+            const initialMilestones = project.milestones || [];
+            const initialMilestoneIds = initialMilestones.map(m => m.id);
+            const currentMilestoneIds = milestones.map(m => m.id);
+
+            // Milestones to add
+            const milestonesToAdd = milestones.filter(m => !initialMilestoneIds.includes(m.id));
+            // Milestones to remove
+            const milestoneIdsToRemove = initialMilestoneIds.filter(id => !currentMilestoneIds.includes(id));
+            // Milestones to update
+            const milestonesToUpdate = milestones.filter(m => {
+                const initial = initialMilestones.find(im => im.id === m.id);
+                if (!initial) return false;
+                const initialDate = initial.date ? format(new Date(initial.date), 'yyyy-MM-dd') : null;
+                const currentDate = m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null;
+                return initial.title !== m.name || initialDate !== currentDate;
+            });
+
+            if (milestonesToAdd.length > 0) {
+                await Promise.all(milestonesToAdd.map(m =>
+                    milestonesService.create({
+                        project_id: id,
+                        name: m.name,
+                        due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
+                    })
+                ));
+            }
+
+            if (milestonesToUpdate.length > 0) {
+                await Promise.all(milestonesToUpdate.map(m =>
+                    milestonesService.update(m.id, {
+                        name: m.name,
+                        due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
+                    })
+                ));
+            }
+
+            if (milestoneIdsToRemove.length > 0) {
+                await Promise.all(milestoneIdsToRemove.map(mid =>
+                    milestonesService.delete(mid)
+                ));
+            }
+
+            // Invalidate queries to ensure project detail page reflects all changes
+            await queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id) });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.modules.list(id) });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.milestones.list(id) });
 
             toast.success('Project updated successfully!');
             navigate(`/projects/${id}`);
@@ -249,7 +671,7 @@ const EditProject = () => {
 
     if (isLoading) {
         return (
-            <AppLayout>
+            <>
                 <div className="max-w-4xl mx-auto space-y-6">
                     <div className="flex items-center gap-4">
                         <Skeleton className="h-10 w-10" />
@@ -270,13 +692,13 @@ const EditProject = () => {
                         </CardContent>
                     </Card>
                 </div>
-            </AppLayout>
+            </>
         );
     }
 
     if (error || !project) {
         return (
-            <AppLayout>
+            <>
                 <div className="flex flex-col items-center justify-center h-[60vh]">
                     <h2 className="text-xl font-medium">Project not found</h2>
                     <p className="text-muted-foreground mt-2">
@@ -286,12 +708,12 @@ const EditProject = () => {
                         Back to Projects
                     </Button>
                 </div>
-            </AppLayout>
+            </>
         );
     }
 
     return (
-        <AppLayout>
+        <>
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Header */}
                 <div className="flex items-center justify-between">
@@ -483,6 +905,387 @@ const EditProject = () => {
                     </CardContent>
                 </Card>
 
+                {/* Optional Details Toggle */}
+                <div className="flex justify-center">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowOptionalDetails(!showOptionalDetails)}
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                    >
+                        {showOptionalDetails ? (
+                            <>
+                                <ChevronUp className="h-4 w-4 mr-2" />
+                                Hide Optional Details
+                            </>
+                        ) : (
+                            <>
+                                <ChevronDown className="h-4 w-4 mr-2" />
+                                Show Optional Details (Client, Notes)
+                            </>
+                        )}
+                    </Button>
+                </div>
+
+                {/* Optional Details */}
+                {showOptionalDetails && (
+                    <Card className="border-primary/20 bg-primary/5">
+                        <CardHeader>
+                            <CardTitle className="text-lg flex items-center gap-2">
+                                <Building2 className="h-5 w-5 text-primary" />
+                                Optional Details
+                            </CardTitle>
+                            <CardDescription>Client information and project notes</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="clientName">Client Name</Label>
+                                    <Input
+                                        id="clientName"
+                                        placeholder="e.g. John Doe"
+                                        value={clientName}
+                                        onChange={(e) => setClientName(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="clientOrg">Client Organization</Label>
+                                    <Input
+                                        id="clientOrg"
+                                        placeholder="e.g. Acme Corp"
+                                        value={clientOrganization}
+                                        onChange={(e) => setClientOrganization(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="clientContact">Client Contact Info</Label>
+                                <Input
+                                    id="clientContact"
+                                    placeholder="e.g. email or phone number"
+                                    value={clientContact}
+                                    onChange={(e) => setClientContact(e.target.value)}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="notes">Internal Project Notes</Label>
+                                <Textarea
+                                    id="notes"
+                                    placeholder="Any additional information..."
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    rows={3}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Departments Section */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Users className="h-5 w-5 text-primary" />
+                            Project Departments
+                        </CardTitle>
+                        <CardDescription>Select which departments are involved in this project</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            {departmentsList.map((dept) => {
+                                const Icon = dept.icon;
+                                const isSelected = selectedDepartments.includes(dept.id);
+                                return (
+                                    <Button
+                                        key={dept.id}
+                                        variant={isSelected ? "default" : "outline"}
+                                        className={cn(
+                                            "h-auto py-3 px-4 flex flex-col items-center gap-2 transition-all",
+                                            isSelected ? "ring-2 ring-primary ring-offset-2" : "hover:border-primary/50"
+                                        )}
+                                        onClick={() => handleDepartmentToggle(dept.id)}
+                                    >
+                                        <Icon className={cn("h-6 w-6", isSelected ? "text-primary-foreground" : "text-primary")} />
+                                        <span className="text-xs font-medium">{dept.name}</span>
+                                    </Button>
+                                );
+                            })}
+
+                            {/* Custom Departments */}
+                            {customDepartments.map((dept) => {
+                                const Icon = dept.icon;
+                                const isSelected = selectedDepartments.includes(dept.id);
+                                return (
+                                    <Button
+                                        key={dept.id}
+                                        variant={isSelected ? "default" : "outline"}
+                                        className={cn(
+                                            "h-auto py-3 px-4 flex flex-col items-center gap-2 transition-all group",
+                                            isSelected ? "ring-2 ring-primary ring-offset-2" : "hover:border-primary/50"
+                                        )}
+                                        onClick={() => handleDepartmentToggle(dept.id)}
+                                    >
+                                        <Icon className={cn("h-6 w-6", isSelected ? "text-primary-foreground" : "text-primary")} />
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-xs font-medium truncate max-w-[80px]">{dept.name}</span>
+                                            <X
+                                                className="h-3 w-3 text-muted-foreground hover:text-destructive shrink-0"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setCustomDepartments(customDepartments.filter(d => d.id !== dept.id));
+                                                    setSelectedDepartments(selectedDepartments.filter(d => d !== dept.id));
+                                                }}
+                                            />
+                                        </div>
+                                    </Button>
+                                );
+                            })}
+
+                            {/* Add Custom Department Button */}
+                            <Dialog open={isAddDeptOpen} onOpenChange={setIsAddDeptOpen}>
+                                <DialogTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        className="h-auto py-3 px-4 flex flex-col items-center gap-2 border-dashed hover:border-primary hover:bg-primary/5"
+                                    >
+                                        <Plus className="h-6 w-6 text-muted-foreground" />
+                                        <span className="text-xs font-medium">Add Other</span>
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Add Custom Department</DialogTitle>
+                                        <DialogDescription>
+                                            Enter the name of the department you want to add to this project.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="py-4">
+                                        <Label htmlFor="newDeptName">Department Name</Label>
+                                        <Input
+                                            id="newDeptName"
+                                            placeholder="e.g. Finance, Marketing..."
+                                            value={newDeptName}
+                                            onChange={(e) => setNewDeptName(e.target.value)}
+                                            className="mt-2"
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddCustomDepartment()}
+                                        />
+                                    </div>
+                                    <DialogFooter>
+                                        <Button variant="outline" onClick={() => setIsAddDeptOpen(false)}>Cancel</Button>
+                                        <Button onClick={handleAddCustomDepartment}>Add Department</Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Team Members Section */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Users className="h-5 w-5 text-primary" />
+                            Project Team
+                        </CardTitle>
+                        <CardDescription>Assign team members and roles to this project</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="flex flex-col md:flex-row gap-3">
+                            <div className="flex-1 space-y-2">
+                                <Label>Member</Label>
+                                <Select value={selectedMember} onValueChange={setSelectedMember}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select member" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {orgMembers.map((member: any) => (
+                                            <SelectItem key={member.id} value={member.id}>
+                                                <div className="flex items-center gap-2">
+                                                    <Avatar className="h-6 w-6">
+                                                        <AvatarImage src={member.avatar} />
+                                                        <AvatarFallback>{member.name?.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    {member.name}
+                                                </div>
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="flex-1 space-y-2">
+                                <Label>Role</Label>
+                                <Select value={selectedRole} onValueChange={setSelectedRole}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select role" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {rolesList.map((role) => (
+                                            <SelectItem key={role} value={role}>{role}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <Button
+                                className="md:mt-8"
+                                onClick={handleAddTeamMember}
+                                disabled={!selectedMember || !selectedRole}
+                            >
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add
+                            </Button>
+                        </div>
+
+                        {assignedMembers.length > 0 && (
+                            <div className="space-y-3 pt-4 border-t">
+                                <Label>Assigned Members</Label>
+                                <div className="grid gap-3">
+                                    {assignedMembers.map((assignment) => {
+                                        const member = orgMembers.find((m: any) => m.id === assignment.memberId);
+                                        const displayName = member?.name || assignment.name || "Unknown Member";
+                                        const displayAvatar = member?.avatar || assignment.avatar;
+                                        return (
+                                            <div key={assignment.memberId} className="flex items-center justify-between p-3 rounded-md bg-muted/50">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-8 w-8">
+                                                        <AvatarImage src={displayAvatar} />
+                                                        <AvatarFallback>{displayName.charAt(0)}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <p className="text-sm font-medium">{displayName}</p>
+                                                        {assignment.role && (
+                                                            <Badge variant="secondary" className="text-[10px] h-4">
+                                                                {assignment.role}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleRemoveTeamMember(assignment.memberId)}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Modules Section */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Wrench className="h-5 w-5 text-primary" />
+                            Project Modules
+                        </CardTitle>
+                        <CardDescription>Break down the project into logical modules</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="flex gap-2">
+                            <Input
+                                placeholder="Module name (e.g. PCB Design, UI Components)"
+                                value={newModuleName}
+                                onChange={(e) => setNewModuleName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddModule()}
+                            />
+                            <Button onClick={handleAddModule} disabled={!newModuleName.trim()}>
+                                {editingModuleId ? <Settings className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                                {editingModuleId ? "Update" : "Add"}
+                            </Button>
+                        </div>
+
+                        {modules.length > 0 && (
+                            <div className="grid gap-2 pt-2">
+                                {modules.map((module) => (
+                                    <div key={module.id} className="flex items-center justify-between p-3 rounded-md border group">
+                                        <div className="flex items-center gap-3">
+                                            <Badge variant="outline" className="h-6 w-6 rounded-full flex items-center justify-center p-0">
+                                                {modules.indexOf(module) + 1}
+                                            </Badge>
+                                            <span className="text-sm font-medium">{module.name}</span>
+                                        </div>
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditModule(module)}>
+                                                <Pencil className="h-3 w-3" />
+                                            </Button>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveModule(module.id)}>
+                                                <Trash2 className="h-3 w-3" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Milestones Section */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Flag className="h-5 w-5 text-primary" />
+                            Project Milestones
+                        </CardTitle>
+                        <CardDescription>Key targets and schedule for this project</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-3">
+                            <Input
+                                placeholder="Milestone name (e.g. Design Freeze, Prototype V1)"
+                                value={newMilestoneName}
+                                onChange={(e) => setNewMilestoneName(e.target.value)}
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className={cn("w-full justify-start text-left font-normal text-xs", !newMilestoneStart && "text-muted-foreground")}>
+                                            <CalendarIcon className="mr-2 h-3 w-3" />
+                                            {newMilestoneStart ? format(newMilestoneStart, "PP") : "Start"}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneStart} onSelect={setNewMilestoneStart} /></PopoverContent>
+                                </Popover>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className={cn("w-full justify-start text-left font-normal text-xs", !newMilestoneEnd && "text-muted-foreground")}>
+                                            <CalendarIcon className="mr-2 h-3 w-3" />
+                                            {newMilestoneEnd ? format(newMilestoneEnd, "PP") : "End"}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneEnd} onSelect={setNewMilestoneEnd} /></PopoverContent>
+                                </Popover>
+                            </div>
+                            <Button className="w-full" variant="secondary" onClick={handleAddMilestone} disabled={!newMilestoneName.trim() || !newMilestoneStart || !newMilestoneEnd}>
+                                {editingMilestoneId ? "Update Milestone" : "Add Milestone"}
+                            </Button>
+                        </div>
+
+                        {milestones.length > 0 && (
+                            <div className="grid gap-3 pt-2">
+                                {milestones.map((ms) => (
+                                    <div key={ms.id} className="flex items-center justify-between p-3 rounded-md border-l-4 border-l-primary bg-muted/30">
+                                        <div className="space-y-1">
+                                            <p className="text-sm font-semibold">{ms.name}</p>
+                                            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                                                <div className="flex items-center gap-1"><CalendarIcon className="h-3 w-3" /> {ms.startDate ? format(ms.startDate, "PP") : ""}</div>
+                                                <div className="flex items-center gap-1"><Target className="h-3 w-3" /> {ms.endDate ? format(ms.endDate, "PP") : ""}</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditMilestone(ms)}><Pencil className="h-3 w-3" /></Button>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveMilestone(ms.id)}><Trash2 className="h-3 w-3" /></Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
                 {/* Attachments */}
                 <Card>
                     <CardHeader>
@@ -634,7 +1437,7 @@ const EditProject = () => {
                     </CardContent>
                 </Card>
             </div>
-        </AppLayout >
+        </>
     );
 };
 

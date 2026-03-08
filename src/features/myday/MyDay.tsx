@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { Sun, LayoutGrid, List } from 'lucide-react';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { MyDayStats } from './components/MyDayStats';
 import { MyDayKanbanView } from './components/MyDayKanbanView';
 import { MyDayListView } from './components/MyDayListView';
@@ -129,7 +128,7 @@ export default function MyDay() {
   // Loading state
   if (tasksLoading) {
     return (
-      <AppLayout>
+      <>
         <div className="grid grid-cols-1 gap-6 w-full min-w-0">
           <div className="mb-6">
             <div className="flex items-center gap-3 mb-2">
@@ -147,12 +146,12 @@ export default function MyDay() {
           </div>
           <Skeleton className="h-96 rounded-lg" />
         </div>
-      </AppLayout>
+      </>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <div className="grid grid-cols-1 gap-6 w-full min-w-0">
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
@@ -252,6 +251,6 @@ export default function MyDay() {
           onUpdate={handleIssueUpdate}
         />
       )}
-    </AppLayout>
+    </>
   );
 }

@@ -2,6 +2,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Project, Task, Milestone, Issue, TeamMember, Activity } from '@/types';
 import { projects as mockProjects, teamMembers as mockTeamMembers, projectModules as mockModules, projectIssues as mockIssues } from '@/data/mockData';
 import { config } from '@/config';
+import { activitiesService } from './activities.service';
+import { modulesService } from './modules.service';
 
 // Environment flag to control data source
 const USE_MOCK_DATA = config.api.useMockData;
@@ -32,8 +34,8 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
         name: a.profiles.name,
         email: a.profiles.email,
         initials: a.profiles.initials,
-        role: 'member',
-      } : { id: a.uploaded_by, name: 'Unknown', email: '', initials: 'UN', role: 'member' }
+        role: a.profiles.role || '',
+      } : { id: a.uploaded_by, name: 'Unknown', email: '', initials: 'UN', role: '' }
     };
   });
 
@@ -64,11 +66,12 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
     actualHours: dbTask.actual_hours ? parseFloat(dbTask.actual_hours) : undefined,
     milestoneId: dbTask.milestone_id || undefined,
     moduleId: dbTask.module_id || undefined,
+    moduleIds: dbTask.module_ids || [],
   };
 }
 
 // Map database project to frontend Project type
-function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: Milestone[] = [], issues: Issue[] = []): Project {
+function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: Milestone[] = [], issues: Issue[] = [], team: TeamMember[] = [], modules: any[] = []): Project {
   return {
     id: dbProject.id,
     name: dbProject.name,
@@ -77,13 +80,25 @@ function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: M
     progress: dbProject.progress || 0,
     startDate: dbProject.start_date || '',
     targetDate: dbProject.target_date || '',
-    type: dbProject.type, // Map from DB
+    type: dbProject.type,
     icon: dbProject.icon || '📁',
+    clientName: dbProject.client_name || '',
+    clientOrganization: dbProject.client_organization || '',
+    clientContact: dbProject.client_contact || '',
+    notes: dbProject.notes || '',
+    departments: dbProject.departments || [],
     tasks,
     milestones,
     issues,
-    modules: [],
-    team: [],
+    modules: [], // Legacy empty for now
+    projectModules: modules.map(m => ({
+      id: m.id,
+      name: m.name,
+      type: m.module_type || 'software',
+      description: m.description,
+      createdAt: m.created_at,
+    })),
+    team,
     createdAt: dbProject.created_at,
     updatedAt: dbProject.updated_at,
   };
@@ -108,7 +123,7 @@ function mapDbIssueToIssue(dbIssue: any, assignees: TeamMember[] = [], reportedB
     id: dbIssue.reported_by || 'unknown',
     name: 'Unknown User',
     email: '',
-    role: 'member',
+    role: reportedBy?.role || '',
     initials: 'UN',
   };
 
@@ -160,9 +175,10 @@ export const projectsService = {
         let tasksResult: Task[] = [];
         let milestonesResult: Milestone[] = [];
         let issuesResult: Issue[] = [];
+        let modulesResult: any[] = [];
 
         try {
-          [tasksResult, milestonesResult, issuesResult] = await Promise.all([
+          [tasksResult, milestonesResult, issuesResult, modulesResult] = await Promise.all([
             this.getTasks(project.id).catch(err => {
               console.error(`Failed to load tasks for project ${project.id}:`, err);
               return [] as Task[];
@@ -175,12 +191,16 @@ export const projectsService = {
               console.error(`Failed to load issues for project ${project.id}:`, err);
               return [] as Issue[];
             }),
+            modulesService.getByProjectId(project.id).catch(err => {
+              console.error(`Failed to load modules for project ${project.id}:`, err);
+              return [];
+            }),
           ]);
         } catch (err) {
           console.error(`Failed to load details for project ${project.id}:`, err);
         }
 
-        return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult);
+        return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult, [], modulesResult);
       })
     );
 
@@ -211,9 +231,11 @@ export const projectsService = {
     let tasksResult: Task[] = [];
     let milestonesResult: Milestone[] = [];
     let issuesResult: Issue[] = [];
+    let teamResult: TeamMember[] = [];
+    let modulesResult: any[] = [];
 
     try {
-      [tasksResult, milestonesResult, issuesResult] = await Promise.all([
+      [tasksResult, milestonesResult, issuesResult, teamResult, modulesResult] = await Promise.all([
         this.getTasks(id).catch(err => {
           console.error(`Failed to load tasks for project ${id}:`, err);
           return [] as Task[];
@@ -226,19 +248,41 @@ export const projectsService = {
           console.error(`Failed to load issues for project ${id}:`, err);
           return [] as Issue[];
         }),
+        this.getProjectMembers(id).catch(err => {
+          console.error(`Failed to load team for project ${id}:`, err);
+          return [] as TeamMember[];
+        }),
+        modulesService.getByProjectId(id).catch(err => {
+          console.error(`Failed to load modules for project ${id}:`, err);
+          return [];
+        }),
       ]);
     } catch (err) {
       console.error(`Failed to load details for project ${id}:`, err);
     }
 
-    return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult);
+    return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult, teamResult, modulesResult);
   },
 
   /**
    * Create new project
    */
   async create(
-    project: { name: string; description?: string; stage?: string; type?: string; progress?: number; startDate?: string; targetDate?: string; icon?: string },
+    project: {
+      name: string;
+      description?: string;
+      stage?: string;
+      type?: string;
+      progress?: number;
+      startDate?: string;
+      targetDate?: string;
+      icon?: string;
+      clientName?: string;
+      clientOrganization?: string;
+      clientContact?: string;
+      notes?: string;
+      departments?: string[];
+    },
     organizationId: string
   ): Promise<Project> {
     if (USE_MOCK_DATA && !USE_SUPABASE) {
@@ -279,16 +323,22 @@ export const projectsService = {
         progress: project.progress || 0,
         start_date: project.startDate || null,
         target_date: project.targetDate || null,
-        // Note: icon column requires DB migration - uncomment when applied:
-        // icon: project.icon || '📁',
+        icon: project.icon || '📁',
+        type: project.type,
+        client_name: project.clientName,
+        client_organization: project.clientOrganization,
+        client_contact: project.clientContact,
+        notes: project.notes,
+        departments: project.departments,
         created_by: user?.id || null,
-        type: project.type, // Add type
       }])
       .select()
       .single();
 
     if (error) throw error;
-    return mapDbProjectToProject(data);
+
+    // Return full project with all details
+    return (await this.getById(data.id))!;
   },
 
   /**
@@ -317,16 +367,22 @@ export const projectsService = {
         progress: updates.progress,
         start_date: updates.startDate,
         target_date: updates.targetDate,
-        // Note: icon column requires DB migration - uncomment when applied:
-        // icon: updates.icon,
-        type: updates.type, // Add type update
+        icon: updates.icon,
+        type: updates.type,
+        client_name: updates.clientName,
+        client_organization: updates.clientOrganization,
+        client_contact: updates.clientContact,
+        notes: updates.notes,
+        departments: updates.departments,
       })
       .eq('id', id)
       .select()
       .single();
 
     if (error) throw error;
-    return mapDbProjectToProject(data);
+
+    // Return full project with all details
+    return (await this.getById(id))!;
   },
 
   /**
@@ -394,7 +450,14 @@ export const projectsService = {
       profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
     }
 
-    // Step 4: Map everything together client-side
+    // Step 4: Fetch project roles for all users in the project to use for assignees
+    const { data: projectMembers } = await supabase
+      .from('project_members')
+      .select('user_id, role')
+      .eq('project_id', projectId);
+    const memberRoles = Object.fromEntries((projectMembers || []).map(pm => [pm.user_id, pm.role]));
+
+    // Step 5: Map everything together client-side
     return data.map(task => {
       const taskAssigneeRows = (assigneesResult.data || []).filter(a => a.task_id === task.id);
       const taskDeps = (depsResult.data || []).filter(d => d.task_id === task.id);
@@ -411,7 +474,7 @@ export const projectsService = {
         return {
           id: profile?.id || ta.user_id,
           name: profile?.name || 'Unknown',
-          role: 'member' as const,
+          role: memberRoles[ta.user_id] || profile?.role || '',
           avatar: profile?.avatar_url || undefined,
           initials: profile?.initials || 'UN',
           email: profile?.email || '',
@@ -495,7 +558,14 @@ export const projectsService = {
       profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
     }
 
-    // Step 4: Map everything together client-side
+    // Step 4: Fetch project roles
+    const { data: projectMembers } = await supabase
+      .from('project_members')
+      .select('user_id, role')
+      .eq('project_id', projectId);
+    const memberRoles = Object.fromEntries((projectMembers || []).map(pm => [pm.user_id, pm.role]));
+
+    // Step 5: Map everything together client-side
     return data.map(issue => {
       const issueAssigneeRows = (assigneesResult.data || []).filter(a => a.issue_id === issue.id);
       const issueAttachments = (attachmentsResult.data || []).filter(a => a.entity_id === issue.id);
@@ -515,7 +585,7 @@ export const projectsService = {
         return {
           id: profile?.id || ia.user_id,
           name: profile?.name || 'Unknown',
-          role: 'member' as const,
+          role: memberRoles[ia.user_id] || profile?.role || '',
           avatar: profile?.avatar_url || undefined,
           initials: profile?.initials || 'UN',
           email: profile?.email || '',
@@ -540,7 +610,7 @@ export const projectsService = {
             name: uploaderProfile.name,
             email: uploaderProfile.email,
             initials: uploaderProfile.initials || 'UN',
-            role: 'member',
+            role: uploaderProfile?.role || 'member',
           } : { id: a.uploaded_by, name: 'Unknown', email: '', initials: 'UN', role: 'member' }
         };
       });
@@ -560,7 +630,7 @@ export const projectsService = {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, email, avatar_url, initials')
+      .select('id, name, email, avatar_url, initials, role')
       .is('deleted_at', null);
 
     if (error) throw error;
@@ -568,11 +638,45 @@ export const projectsService = {
     return (data || []).map(p => ({
       id: p.id,
       name: p.name,
-      role: 'member' as const,
+      role: p.role || '',
       avatar: p.avatar_url || undefined,
       initials: p.initials,
       email: p.email,
     }));
+  },
+
+  /**
+   * Get project members with roles
+   */
+  async getProjectMembers(projectId: string): Promise<TeamMember[]> {
+    if (USE_MOCK_DATA && !USE_SUPABASE) {
+      await mockDelay();
+      // For mock data, just return a subset of team members
+      return mockTeamMembers.slice(0, 3);
+    }
+
+    const { data, error } = await supabase
+      .from('project_members')
+      .select('role, user_id, profiles:user_id(id, name, email, avatar_url, initials, role)')
+      .eq('project_id', projectId);
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    return data.map((pm: any) => {
+      const profile = Array.isArray(pm.profiles) ? pm.profiles[0] : pm.profiles;
+      return {
+        id: profile?.id || pm.user_id,
+        name: profile?.name || 'Unknown User',
+        email: profile?.email || '',
+        role: pm.role,
+        avatar: profile?.avatar_url || undefined,
+        initials: profile?.initials || '??',
+      };
+    });
   },
 
   /**

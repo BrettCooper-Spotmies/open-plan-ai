@@ -3,6 +3,9 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { Task, TaskStatus, Priority, ModuleType, Issue } from '@/types';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -124,6 +127,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isMaximizedAddTask, setIsMaximizedAddTask] = useState(false);
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
+  const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false);
   const [newTask, setNewTask] = useState<Partial<Task>>({
     title: '',
     description: '',
@@ -135,18 +139,11 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     status: 'todo',
     dependencies: [],
     blockedBy: [],
+    moduleIds: [],
   });
 
-  // Initialize newTask module if modules change
-  useEffect(() => {
-    if (modules && modules.length > 0 && !newTask.moduleId) {
-      setNewTask(prev => ({
-        ...prev,
-        module: modules[0].type,
-        moduleId: modules[0].id
-      }));
-    }
-  }, [modules, newTask.moduleId]);
+  // Initial state for new task has no module pre-selected by default
+  // This allows the "Select Module" placeholder to show up
 
   // Fetch real team members
   const { data: teamMembers = [] } = useTeamMembers();
@@ -335,6 +332,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       priority: taskData.priority || 'medium',
       module: taskData.module || 'software',
       moduleId: taskData.moduleId,
+      moduleIds: taskData.moduleIds || [],
       dependencies: taskData.dependencies || [],
       blockedBy: taskData.blockedBy || [],
       tags: taskData.tags || [],
@@ -374,6 +372,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       status: 'todo',
       dependencies: [],
       blockedBy: [],
+      moduleIds: [],
     });
     setIsAddTaskOpen(false);
     setIsMaximizedAddTask(false);
@@ -497,149 +496,149 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
 
                           {/* Tasks Droppable - scrollable area */}
                           <div className="flex-1 overflow-y-auto min-h-0">
-                          <Droppable
-                            droppableId={column.id}
-                            type="TASK"
-                            isDropDisabled={isDependenciesColumn}
-                          >
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.droppableProps}
-                                className={cn(
-                                  'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
-                                  snapshot.isDraggingOver
-                                    ? 'bg-muted/50'
-                                    : 'bg-muted/30'
-                                )}
-                              >
-                                {columnTasks.map((task, taskIndex) => {
-                                  const isBlocked = blockedTaskIds.has(task.id);
-                                  const blockingInfo = isBlocked ? getBlockingInfo(task) : [];
+                            <Droppable
+                              droppableId={column.id}
+                              type="TASK"
+                              isDropDisabled={isDependenciesColumn}
+                            >
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.droppableProps}
+                                  className={cn(
+                                    'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
+                                    snapshot.isDraggingOver
+                                      ? 'bg-muted/50'
+                                      : 'bg-muted/30'
+                                  )}
+                                >
+                                  {columnTasks.map((task, taskIndex) => {
+                                    const isBlocked = blockedTaskIds.has(task.id);
+                                    const blockingInfo = isBlocked ? getBlockingInfo(task) : [];
 
-                                  return (
-                                    <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
-                                      {(provided, snapshot) => (
-                                        <TooltipProvider>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <Card
-                                                ref={provided.innerRef}
-                                                {...provided.draggableProps}
-                                                {...provided.dragHandleProps}
-                                                className={cn(
-                                                  'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
-                                                  moduleColors[task.module] || 'border-l-muted',
-                                                  snapshot.isDragging && 'shadow-lg rotate-2'
-                                                )}
-                                                onMouseEnter={() => setHoveredTask(task.id)}
-                                                onMouseLeave={() => setHoveredTask(null)}
-                                                onClick={() => handleTaskClick(task)}
-                                              >
+                                    return (
+                                      <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
+                                        {(provided, snapshot) => (
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <Card
+                                                  ref={provided.innerRef}
+                                                  {...provided.draggableProps}
+                                                  {...provided.dragHandleProps}
+                                                  className={cn(
+                                                    'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
+                                                    moduleColors[task.module] || 'border-l-muted',
+                                                    snapshot.isDragging && 'shadow-lg rotate-2'
+                                                  )}
+                                                  onMouseEnter={() => setHoveredTask(task.id)}
+                                                  onMouseLeave={() => setHoveredTask(null)}
+                                                  onClick={() => handleTaskClick(task)}
+                                                >
 
 
-                                                <div className="space-y-2">
-                                                  <div className="flex items-start justify-between gap-2">
-                                                    <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
-                                                      {(isBlocked || task.status !== 'done') && (
-                                                        <div
+                                                  <div className="space-y-2">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                      <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
+                                                        {(isBlocked || task.status !== 'done') && (
+                                                          <div
+                                                            className={cn(
+                                                              "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
+                                                              hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
+                                                            )}
+                                                          >
+                                                            {isBlocked ? (
+                                                              <AlertTriangle className="h-4 w-4 text-status-blocked" />
+                                                            ) : (
+                                                              <button
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  handleCompleteTask(task.id);
+                                                                }}
+                                                                className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
+                                                              >
+                                                                <Check className="h-3 w-3 text-foreground" />
+                                                              </button>
+                                                            )}
+                                                          </div>
+                                                        )}
+                                                        <h4
                                                           className={cn(
-                                                            "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
-                                                            hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
+                                                            "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
+                                                            (isBlocked || task.status !== 'done') && hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
                                                           )}
                                                         >
-                                                          {isBlocked ? (
-                                                            <AlertTriangle className="h-4 w-4 text-status-blocked" />
-                                                          ) : (
-                                                            <button
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleCompleteTask(task.id);
-                                                              }}
-                                                              className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
-                                                            >
-                                                              <Check className="h-3 w-3 text-foreground" />
-                                                            </button>
-                                                          )}
-                                                        </div>
-                                                      )}
-                                                      <h4
+                                                          {task.title}
+                                                        </h4>
+                                                      </div>
+                                                      <Badge
+                                                        variant="secondary"
                                                         className={cn(
-                                                          "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
-                                                          (isBlocked || task.status !== 'done') && hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
+                                                          'text-[10px] px-1.5 py-0 shrink-0',
+                                                          priorityColors[task.priority]
                                                         )}
                                                       >
-                                                        {task.title}
-                                                      </h4>
+                                                        {task.priority}
+                                                      </Badge>
                                                     </div>
-                                                    <Badge
-                                                      variant="secondary"
-                                                      className={cn(
-                                                        'text-[10px] px-1.5 py-0 shrink-0',
-                                                        priorityColors[task.priority]
-                                                      )}
-                                                    >
-                                                      {task.priority}
-                                                    </Badge>
-                                                  </div>
 
-                                                  {task.description && (
-                                                    <p className="text-xs text-muted-foreground line-clamp-2">
-                                                      {task.description}
-                                                    </p>
-                                                  )}
-
-                                                  <div className="flex items-center justify-between pt-2">
-                                                    <div className="flex -space-x-2">
-                                                      {(task.assignees || []).slice(0, 3).map((assignee) => (
-                                                        <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
-                                                          <AvatarFallback className="text-[9px] bg-muted">
-                                                            {assignee.initials}
-                                                          </AvatarFallback>
-                                                        </Avatar>
-                                                      ))}
-                                                      {(task.assignees || []).length > 3 && (
-                                                        <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
-                                                          <span className="text-[8px] text-muted-foreground font-medium">
-                                                            +{task.assignees!.length - 3}
-                                                          </span>
-                                                        </div>
-                                                      )}
-                                                    </div>
-                                                    {task.dueDate && (
-                                                      <span className="text-[10px] text-muted-foreground">
-                                                        {new Date(task.dueDate).toLocaleDateString('en-US', {
-                                                          month: 'short',
-                                                          day: 'numeric',
-                                                        })}
-                                                      </span>
+                                                    {task.description && (
+                                                      <p className="text-xs text-muted-foreground line-clamp-2">
+                                                        {task.description}
+                                                      </p>
                                                     )}
+
+                                                    <div className="flex items-center justify-between pt-2">
+                                                      <div className="flex -space-x-2">
+                                                        {(task.assignees || []).slice(0, 3).map((assignee) => (
+                                                          <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
+                                                            <AvatarFallback className="text-[9px] bg-muted">
+                                                              {assignee.initials}
+                                                            </AvatarFallback>
+                                                          </Avatar>
+                                                        ))}
+                                                        {(task.assignees || []).length > 3 && (
+                                                          <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
+                                                            <span className="text-[8px] text-muted-foreground font-medium">
+                                                              +{task.assignees!.length - 3}
+                                                            </span>
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                      {task.dueDate && (
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                          {new Date(task.dueDate).toLocaleDateString('en-US', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                          })}
+                                                        </span>
+                                                      )}
+                                                    </div>
                                                   </div>
-                                                </div>
-                                              </Card>
-                                            </TooltipTrigger>
-                                            {isBlocked && blockingInfo.length > 0 && (
-                                              <TooltipContent side="right" className="max-w-xs">
-                                                <div className="space-y-1">
-                                                  <p className="font-medium text-xs">Blocked by:</p>
-                                                  <ul className="text-xs space-y-0.5">
-                                                    {blockingInfo.map((info, i) => (
-                                                      <li key={i} className="text-muted-foreground">• {info}</li>
-                                                    ))}
-                                                  </ul>
-                                                </div>
-                                              </TooltipContent>
-                                            )}
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                      )}
-                                    </Draggable>
-                                  );
-                                })}
-                                {provided.placeholder}
-                              </div>
-                            )}
-                          </Droppable>
+                                                </Card>
+                                              </TooltipTrigger>
+                                              {isBlocked && blockingInfo.length > 0 && (
+                                                <TooltipContent side="right" className="max-w-xs">
+                                                  <div className="space-y-1">
+                                                    <p className="font-medium text-xs">Blocked by:</p>
+                                                    <ul className="text-xs space-y-0.5">
+                                                      {blockingInfo.map((info, i) => (
+                                                        <li key={i} className="text-muted-foreground">• {info}</li>
+                                                      ))}
+                                                    </ul>
+                                                  </div>
+                                                </TooltipContent>
+                                              )}
+                                            </Tooltip>
+                                          </TooltipProvider>
+                                        )}
+                                      </Draggable>
+                                    );
+                                  })}
+                                  {provided.placeholder}
+                                </div>
+                              )}
+                            </Droppable>
                           </div>
                         </div>
                       )}
@@ -741,7 +740,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Assigned To</Label>
-                <div className="flex flex-wrap gap-2 min-h-10 items-center p-2 border rounded-md">
+                <div
+                  className="flex flex-wrap gap-2 min-h-10 items-center p-2 border rounded-md cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => setIsAssigneePopoverOpen(true)}
+                >
                   {(newTask.assignees || []).map((assignee) => (
                     <Badge key={assignee.id} variant="secondary" className="gap-1 p-1 pr-2">
                       <Avatar className="h-4 w-4">
@@ -750,10 +752,13 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                       <span className="text-xs">{assignee.name}</span>
                       <X
                         className="h-3 w-3 cursor-pointer hover:text-destructive"
-                        onClick={() => setNewTask({
-                          ...newTask,
-                          assignees: newTask.assignees?.filter(a => a.id !== assignee.id)
-                        })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setNewTask({
+                            ...newTask,
+                            assignees: newTask.assignees?.filter(a => a.id !== assignee.id)
+                          });
+                        }}
                       />
                     </Badge>
                   ))}
@@ -898,43 +903,96 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
             </div>
 
             <div className="space-y-2">
-              <Label>Module</Label>
-              <Select
-                value={newTask.moduleId || (modules?.find(m => m.type === newTask.module)?.id || '')}
-                onValueChange={(v) => {
-                  const selected = modules?.find(m => m.id === v);
-                  if (selected) {
-                    setNewTask({ ...newTask, moduleId: selected.id, module: selected.type });
-                  }
-                }}
+              <Label className="text-sm font-medium">Modules</Label>
+              <div
+                className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => setIsModulePopoverOpen(true)}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Module" />
-                </SelectTrigger>
-                <SelectContent>
-                  {modules && modules.length > 0 ? (
-                    modules.map((module) => (
-                      <SelectItem key={module.id} value={module.id}>
-                        {module.name}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="p-2 flex justify-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full text-xs h-8"
+                {(newTask.moduleIds || []).length === 0 && (
+                  <span className="text-muted-foreground">Select modules...</span>
+                )}
+                {(newTask.moduleIds || []).map((moduleId) => {
+                  const module = modules?.find(m => m.id === moduleId);
+                  if (!module) return null;
+                  return (
+                    <Badge key={module.id} variant="secondary" className="px-2 py-0.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
+                      <span className="text-xs font-normal">{module.name}</span>
+                      <button
                         onClick={(e) => {
-                          e.preventDefault();
-                          onAddModule?.();
+                          e.stopPropagation();
+                          setNewTask({
+                            ...newTask,
+                            moduleIds: (newTask.moduleIds || []).filter(id => id !== module.id)
+                          });
                         }}
+                        className="ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none"
                       >
-                        <Plus className="h-3 w-3 mr-1" /> Create Module
-                      </Button>
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  );
+                })}
+                <Popover open={isModulePopoverOpen} onOpenChange={setIsModulePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
+                      <span>
+                        <Plus className="h-3 w-3" />
+                      </span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[240px]" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search modules..." />
+                      <CommandList>
+                        <CommandEmpty>No modules found.</CommandEmpty>
+                        <CommandGroup heading="Available Modules">
+                          {modules
+                            .filter(m => !(newTask.moduleIds || []).includes(m.id))
+                            .map((module) => (
+                              <CommandItem
+                                key={module.id}
+                                value={module.name}
+                                onSelect={() => {
+                                  const isFirst = (newTask.moduleIds || []).length === 0;
+                                  setNewTask({
+                                    ...newTask,
+                                    moduleIds: [...(newTask.moduleIds || []), module.id],
+                                    moduleId: isFirst ? module.id : newTask.moduleId,
+                                    module: isFirst ? module.type : newTask.module,
+                                  });
+                                  setIsModulePopoverOpen(false);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <div className="flex flex-col">
+                                  <span>{module.name}</span>
+                                  <span className="text-[10px] text-muted-foreground uppercase">{module.type}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                        {onAddModule && (
+                          <>
+                            <Separator />
+                            <CommandGroup>
+                              <CommandItem
+                                onSelect={() => {
+                                  onAddModule();
+                                  setIsModulePopoverOpen(false);
+                                }}
+                                className="cursor-pointer text-primary"
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Create New Module
+                              </CommandItem>
+                            </CommandGroup>
+                          </>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
 
             <div className="space-y-2">

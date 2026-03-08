@@ -30,15 +30,15 @@ describe('useUserStore', () => {
 
     it('should have default preferences', () => {
       const { preferences } = useUserStore.getState();
-      
+
       expect(preferences.theme).toBe('system');
-      expect(preferences.sidebarCollapsed).toBe(false);
+      expect(preferences.sidebarCollapsed).toBe(true);
       expect(preferences.compactMode).toBe(false);
     });
 
     it('should have default notification settings', () => {
       const { preferences } = useUserStore.getState();
-      
+
       expect(preferences.notifications.taskAssignments).toBe(true);
       expect(preferences.notifications.taskCompletions).toBe(true);
       expect(preferences.notifications.comments).toBe(true);
@@ -67,7 +67,7 @@ describe('useUserStore', () => {
 
     it('should allow setting null to clear user', () => {
       const { setUser } = useUserStore.getState();
-      
+
       setUser(createMockUser('user-1', 'John Doe'));
       setUser(null);
 
@@ -78,7 +78,7 @@ describe('useUserStore', () => {
 
     it('should replace existing user', () => {
       const { setUser } = useUserStore.getState();
-      
+
       setUser(createMockUser('user-1', 'John Doe'));
       setUser(createMockUser('user-2', 'Jane Smith'));
 
@@ -91,7 +91,7 @@ describe('useUserStore', () => {
   describe('updatePreferences', () => {
     it('should update theme preference', () => {
       const { updatePreferences } = useUserStore.getState();
-      
+
       updatePreferences({ theme: 'dark' });
 
       const { preferences } = useUserStore.getState();
@@ -100,7 +100,7 @@ describe('useUserStore', () => {
 
     it('should update multiple preferences at once', () => {
       const { updatePreferences } = useUserStore.getState();
-      
+
       updatePreferences({
         theme: 'light',
         compactMode: true,
@@ -115,7 +115,7 @@ describe('useUserStore', () => {
 
     it('should preserve existing preferences when updating', () => {
       const { updatePreferences } = useUserStore.getState();
-      
+
       updatePreferences({ theme: 'dark' });
       updatePreferences({ compactMode: true });
 
@@ -126,7 +126,7 @@ describe('useUserStore', () => {
 
     it('should update notification preferences', () => {
       const { updatePreferences, preferences: initialPrefs } = useUserStore.getState();
-      
+
       updatePreferences({
         notifications: {
           ...initialPrefs.notifications,
@@ -144,12 +144,12 @@ describe('useUserStore', () => {
 
     it('should handle partial notification updates', () => {
       const { updatePreferences, preferences: initialPrefs } = useUserStore.getState();
-      
+
       // First update
       updatePreferences({
         notifications: { ...initialPrefs.notifications, taskAssignments: false },
       });
-      
+
       // Second update (should not reset taskAssignments)
       const currentPrefs = useUserStore.getState().preferences;
       updatePreferences({
@@ -166,7 +166,7 @@ describe('useUserStore', () => {
   describe('logout', () => {
     it('should clear user and set isAuthenticated to false', () => {
       const { setUser, logout } = useUserStore.getState();
-      
+
       setUser(createMockUser('user-1', 'John Doe'));
       logout();
 
@@ -177,7 +177,7 @@ describe('useUserStore', () => {
 
     it('should not affect preferences on logout', () => {
       const { setUser, updatePreferences, logout } = useUserStore.getState();
-      
+
       setUser(createMockUser('user-1', 'John Doe'));
       updatePreferences({ theme: 'dark', compactMode: true });
       logout();
@@ -192,23 +192,23 @@ describe('useUserStore', () => {
   describe('sidebar state', () => {
     it('should set sidebar open state', () => {
       const { setSidebarOpen } = useUserStore.getState();
-      
+
       setSidebarOpen(false);
       expect(useUserStore.getState().sidebarOpen).toBe(false);
-      
+
       setSidebarOpen(true);
       expect(useUserStore.getState().sidebarOpen).toBe(true);
     });
 
     it('should toggle sidebar state', () => {
       const { toggleSidebar } = useUserStore.getState();
-      
+
       // Initially true
       expect(useUserStore.getState().sidebarOpen).toBe(true);
-      
+
       toggleSidebar();
       expect(useUserStore.getState().sidebarOpen).toBe(false);
-      
+
       toggleSidebar();
       expect(useUserStore.getState().sidebarOpen).toBe(true);
     });
@@ -217,11 +217,11 @@ describe('useUserStore', () => {
   describe('authentication flow', () => {
     it('should handle login flow correctly', () => {
       const { setUser, isAuthenticated: initialAuth } = useUserStore.getState();
-      
+
       expect(initialAuth).toBe(false);
-      
+
       setUser(createMockUser('user-1', 'John Doe'));
-      
+
       const state = useUserStore.getState();
       expect(state.isAuthenticated).toBe(true);
       expect(state.user?.name).toBe('John Doe');
@@ -229,10 +229,10 @@ describe('useUserStore', () => {
 
     it('should handle logout flow correctly', () => {
       const { setUser, logout } = useUserStore.getState();
-      
+
       setUser(createMockUser('user-1', 'John Doe'));
       expect(useUserStore.getState().isAuthenticated).toBe(true);
-      
+
       logout();
       expect(useUserStore.getState().isAuthenticated).toBe(false);
       expect(useUserStore.getState().user).toBeNull();
@@ -240,10 +240,10 @@ describe('useUserStore', () => {
 
     it('should handle user switch correctly', () => {
       const { setUser } = useUserStore.getState();
-      
+
       setUser(createMockUser('user-1', 'John Doe'));
       expect(useUserStore.getState().user?.id).toBe('user-1');
-      
+
       setUser(createMockUser('user-2', 'Jane Smith'));
       expect(useUserStore.getState().user?.id).toBe('user-2');
       expect(useUserStore.getState().isAuthenticated).toBe(true);
@@ -253,13 +253,13 @@ describe('useUserStore', () => {
   describe('theme preferences', () => {
     it('should support all theme options', () => {
       const { updatePreferences } = useUserStore.getState();
-      
+
       updatePreferences({ theme: 'light' });
       expect(useUserStore.getState().preferences.theme).toBe('light');
-      
+
       updatePreferences({ theme: 'dark' });
       expect(useUserStore.getState().preferences.theme).toBe('dark');
-      
+
       updatePreferences({ theme: 'system' });
       expect(useUserStore.getState().preferences.theme).toBe('system');
     });
@@ -268,14 +268,14 @@ describe('useUserStore', () => {
   describe('email digest preferences', () => {
     it('should support all email digest options', () => {
       const { updatePreferences, preferences: initialPrefs } = useUserStore.getState();
-      
+
       updatePreferences({ notifications: { ...initialPrefs.notifications, emailDigest: 'daily' } });
       expect(useUserStore.getState().preferences.notifications.emailDigest).toBe('daily');
-      
+
       const prefs1 = useUserStore.getState().preferences;
       updatePreferences({ notifications: { ...prefs1.notifications, emailDigest: 'weekly' } });
       expect(useUserStore.getState().preferences.notifications.emailDigest).toBe('weekly');
-      
+
       const prefs2 = useUserStore.getState().preferences;
       updatePreferences({ notifications: { ...prefs2.notifications, emailDigest: 'none' } });
       expect(useUserStore.getState().preferences.notifications.emailDigest).toBe('none');

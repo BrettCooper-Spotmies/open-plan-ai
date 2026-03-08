@@ -62,6 +62,8 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { attachmentsService } from '@/services/attachments.service';
+import { commentsService } from '@/services/comments.service';
+import { useNotifications } from '@/hooks/useNotifications';
 import {
   Task,
   TaskStatus,
@@ -200,7 +202,7 @@ const formatFileSize = (bytes: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-export function TaskDetailModal({
+export const TaskDetailModal = ({
   task,
   allTasks,
   isOpen,
@@ -212,13 +214,35 @@ export function TaskDetailModal({
   modules = [],
   projectId,
   onAddModule,
-}: TaskDetailModalProps) {
-  const [editedTask, setEditedTask] = useState<Task | null>(task);
+}: TaskDetailModalProps) => {
+  const { profile } = useAuth();
+  const { data: teamMembers = [] } = useTeamMembers();
+  const { createNotification } = useNotifications();
+  const [editedTask, setEditedTask] = useState<Task>(task || {
+    id: '',
+    title: '',
+    description: '',
+    status: 'todo',
+    priority: 'medium',
+    module: '' as ModuleType,
+    assignees: [],
+    tags: [],
+    checklist: [],
+    blockedBy: [],
+    dependencies: [],
+    comments: [],
+    attachments: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [newComment, setNewComment] = useState('');
-  const [selectedBlockingTask, setSelectedBlockingTask] = useState('');
-  const [selectedBlockedByTask, setSelectedBlockedByTask] = useState('');
+  const [selectedBlockingTask, setSelectedBlockingTask] = useState<string>('');
+  const [selectedBlockedByTask, setSelectedBlockedByTask] = useState<string>('');
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
+  const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false);
   const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
   const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
@@ -229,16 +253,37 @@ export function TaskDetailModal({
   const [newModuleName, setNewModuleName] = useState('');
   const [newModuleType, setNewModuleType] = useState<ModuleType>('software');
 
-  // Fetch real team members
-  const { data: teamMembers = [] } = useTeamMembers();
-  const { profile } = useAuth();
+  // Fetch real comments when task changes
+  useEffect(() => {
+    if (isOpen && task?.id && mode !== 'create') {
+      setIsLoadingComments(true);
+      commentsService.getByEntity(task.id, 'task')
+        .then(dbComments => {
+          const mappedComments: Comment[] = dbComments.map(c => ({
+            id: c.id,
+            content: c.content,
+            author: {
+              id: c.profiles?.id || c.author_id,
+              name: c.profiles?.name || 'Unknown',
+              initials: c.profiles?.initials || 'UN',
+              avatar: c.profiles?.avatar_url || undefined,
+              email: c.profiles?.email || '',
+              role: 'member'
+            },
+            createdAt: c.created_at || new Date().toISOString(),
+          }));
+          setEditedTask(prev => ({ ...prev, comments: mappedComments }));
+        })
+        .finally(() => setIsLoadingComments(false));
+    }
+  }, [isOpen, task?.id, mode]);
 
   // Sync editedTask when task prop changes or when switching between modes
   useEffect(() => {
     if (task) {
       setEditedTask(task);
     }
-  }, [task, isOpen, mode]); // Re-sync when modal opens, mode changes, or task changes
+  }, [task]);
 
   // Dependencies handlers
   // Compute "Blocking To" client-side - tasks that have THIS task in their blockedBy
@@ -252,9 +297,11 @@ export function TaskDetailModal({
   if (!editedTask) return null;
 
   const handleFieldChange = <K extends keyof Task>(field: K, value: Task[K]) => {
-    const updated = { ...editedTask, [field]: value, updatedAt: new Date().toISOString() };
-    setEditedTask(updated);
-    onUpdate(updated);
+    setEditedTask(prev => {
+      const updated = { ...prev, [field]: value, updatedAt: new Date().toISOString() };
+      onUpdate(updated);
+      return updated;
+    });
   };
 
   const handleCreate = () => {
@@ -380,23 +427,80 @@ export function TaskDetailModal({
   // Comments handlers
   const comments = editedTask.comments || [];
 
-  const handleAddComment = () => {
-    if (!newComment.trim()) return;
-    const newCommentObj: Comment = {
-      id: `comment-${Date.now()}`,
-      content: newComment,
-      author: profile ? {
-        id: profile.id,
-        name: profile.name || profile.email,
-        email: profile.email,
-        initials: profile.initials,
-        avatar: profile.avatar_url || undefined,
-        role: profile.role || 'member'
-      } : teamMembers[0], // Fallback to first team member
-      createdAt: new Date().toISOString(),
-    };
-    handleFieldChange('comments', [...comments, newCommentObj]);
+  const handleAddComment = async () => {
+    if (!newComment.trim() || !profile) return;
+
+    const content = newComment.trim();
     setNewComment('');
+
+    // If in view mode, persist to DB immediately
+    if (mode !== 'create' && editedTask.id) {
+      try {
+        const dbComment = await commentsService.create({
+          author_id: profile.id,
+          content: content,
+          entity_id: editedTask.id,
+          entity_type: 'task',
+        });
+
+        const newCommentObj: Comment = {
+          id: dbComment.id,
+          content: dbComment.content,
+          author: {
+            id: profile.id,
+            name: profile.name || profile.email,
+            initials: profile.initials,
+            avatar: profile.avatar_url || undefined,
+            email: profile.email,
+            role: profile.role || 'member'
+          },
+          createdAt: dbComment.created_at || new Date().toISOString(),
+        };
+
+        setEditedTask(prev => ({
+          ...prev,
+          comments: [...(prev.comments || []), newCommentObj]
+        }));
+
+        // Send notifications to all other assignees
+        const otherAssignees = (editedTask.assignees || []).filter(a => a.id !== profile.id);
+
+        for (const assignee of otherAssignees) {
+          createNotification.mutate({
+            user_id: assignee.id,
+            actor_id: profile.id,
+            type: 'comment',
+            title: 'New Comment',
+            description: `${profile.name || 'Someone'} commented on "${editedTask.title}"`,
+            project_id: projectId,
+            entity_id: editedTask.id,
+            entity_type: 'task',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to add comment:', error);
+        setNewComment(content); // Restore content on error
+      }
+    } else {
+      // Just update local state for new tasks
+      const newCommentObj: Comment = {
+        id: `comment-${Date.now()}`,
+        content: content,
+        author: {
+          id: profile.id,
+          name: profile.name || profile.email,
+          initials: profile.initials,
+          avatar: profile.avatar_url || undefined,
+          email: profile.email,
+          role: profile.role || 'member'
+        },
+        createdAt: new Date().toISOString(),
+      };
+      setEditedTask(prev => ({
+        ...prev,
+        comments: [...(prev.comments || []), newCommentObj]
+      }));
+    }
   };
 
 
@@ -496,7 +600,10 @@ export function TaskDetailModal({
                     <User className="h-3 w-3" />
                     Assigned To
                   </Label>
-                  <div className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                  <div
+                    className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => setIsAssigneePopoverOpen(true)}
+                  >
                     {(editedTask.assignees || []).map((assignee) => (
                       <Badge key={assignee.id} variant="secondary" className="pl-1 pr-1.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
                         <Avatar className="h-4 w-4">
@@ -506,7 +613,10 @@ export function TaskDetailModal({
                         </Avatar>
                         <span className="text-xs font-normal">{assignee.name}</span>
                         <button
-                          onClick={() => handleFieldChange('assignees', (editedTask.assignees || []).filter(a => a.id !== assignee.id))}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleFieldChange('assignees', (editedTask.assignees || []).filter(a => a.id !== assignee.id));
+                          }}
                           className="ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none"
                         >
                           <X className="h-3 w-3" />
@@ -612,49 +722,106 @@ export function TaskDetailModal({
                   </Select>
                 </div>
 
-                {/* Module */}
+                {/* Module Selection */}
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <Tag className="h-3 w-3" />
-                    Module
+                    Modules
                   </Label>
-                  <Select
-                    value={editedTask.moduleId || (modules?.find(m => m.type === editedTask.module)?.id || '')}
-                    onValueChange={(value) => {
-                      const selected = modules?.find(m => m.id === value);
-                      if (selected) {
-                        handleFieldChange('moduleId', selected.id);
-                        handleFieldChange('module', selected.type);
-                      }
-                    }}
+                  <div
+                    className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => setIsModulePopoverOpen(true)}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Module" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {modules && modules.length > 0 ? (
-                        modules.map((module) => (
-                          <SelectItem key={module.id} value={module.id}>
-                            {module.name}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <div className="p-2 flex justify-center">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full text-xs h-8"
+                    {(editedTask.moduleIds || []).length === 0 && (
+                      <span className="text-muted-foreground">Select modules...</span>
+                    )}
+                    {(editedTask.moduleIds || []).map((moduleId) => {
+                      const module = modules?.find(m => m.id === moduleId);
+                      if (!module) return null;
+                      return (
+                        <Badge key={module.id} variant="secondary" className="px-2 py-0.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
+                          <span className="text-xs font-normal">{module.name}</span>
+                          <button
                             onClick={(e) => {
-                              e.preventDefault();
-                              onAddModule?.();
+                              e.stopPropagation();
+                              handleFieldChange('moduleIds', (editedTask.moduleIds || []).filter(id => id !== module.id));
                             }}
+                            className="ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none"
                           >
-                            <Plus className="h-3 w-3 mr-1" /> Create Module
-                          </Button>
-                        </div>
-                      )}
-                    </SelectContent>
-                  </Select>
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                    <Popover open={isModulePopoverOpen} onOpenChange={setIsModulePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
+                          <span>
+                            <Plus className="h-3 w-3" />
+                          </span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="p-0 w-[240px]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search modules..." />
+                          <CommandList>
+                            <CommandEmpty>No modules found.</CommandEmpty>
+                            <CommandGroup heading="Available Modules">
+                              {modules
+                                .filter(m => !(editedTask.moduleIds || []).includes(m.id))
+                                .map((module) => (
+                                  <CommandItem
+                                    key={module.id}
+                                    value={module.name}
+                                    onSelect={() => {
+                                      // If this is the first module, also set the primary module type for compatibility
+                                      const isFirst = (editedTask.moduleIds || []).length === 0;
+                                      const updatedIds = [...(editedTask.moduleIds || []), module.id];
+
+                                      setEditedTask(prev => {
+                                        const updated = {
+                                          ...prev,
+                                          moduleIds: updatedIds,
+                                          moduleId: isFirst ? module.id : prev.moduleId,
+                                          module: isFirst ? module.type : prev.module,
+                                          updatedAt: new Date().toISOString()
+                                        };
+                                        onUpdate(updated);
+                                        return updated;
+                                      });
+                                      setIsModulePopoverOpen(false);
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    <div className="flex flex-col">
+                                      <span>{module.name}</span>
+                                      <span className="text-[10px] text-muted-foreground uppercase">{module.type}</span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                            {onAddModule && (
+                              <>
+                                <Separator />
+                                <CommandGroup>
+                                  <CommandItem
+                                    onSelect={() => {
+                                      onAddModule();
+                                      setIsModulePopoverOpen(false);
+                                    }}
+                                    className="cursor-pointer text-primary"
+                                  >
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Create New Module
+                                  </CommandItem>
+                                </CommandGroup>
+                              </>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
 
                 {/* Start Date */}
@@ -749,7 +916,10 @@ export function TaskDetailModal({
                   <Tag className="h-3 w-3" />
                   Tags
                 </Label>
-                <div className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                <div
+                  className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
+                  onClick={() => setIsTagPopoverOpen(true)}
+                >
                   {editedTask.tags.map((tag) => (
                     <Badge
                       key={tag}
@@ -757,7 +927,10 @@ export function TaskDetailModal({
                     >
                       {tag}
                       <button
-                        onClick={() => handleFieldChange('tags', editedTask.tags.filter(t => t !== tag))}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleFieldChange('tags', editedTask.tags.filter(t => t !== tag));
+                        }}
                         className="pointer-events-auto hover:bg-black/10 rounded-full p-0.5 transition-colors"
                       >
                         <X className="h-3 w-3" />

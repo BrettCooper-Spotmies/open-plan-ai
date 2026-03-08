@@ -3,7 +3,7 @@ import { LayoutGrid, List, Plus, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Module, ModuleViewMode, Task, Issue, TeamMember } from '@/types';
+import { Module, ModuleViewMode, Task, Issue, TeamMember, ModuleType } from '@/types';
 import { ModulesKanbanView } from './ModulesKanbanView';
 import { ModulesListView } from './ModulesListView';
 import { ModuleDetailModal } from './ModuleDetailModal';
@@ -129,14 +129,10 @@ export function ModulesSection({
   onTaskUpdate,
   onIssueUpdate,
 }: ModulesSectionProps) {
-  const [internalViewMode, setInternalViewMode] = useState<ModuleViewMode>('kanban');
   const [selectedModule, setSelectedModule] = useState<ModuleWithStats | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
-  const [internalIsAddDialogOpen, setInternalIsAddDialogOpen] = useState(false);
 
-  const isAddDialogOpen = externalIsAddDialogOpen ?? internalIsAddDialogOpen;
-
-  const viewMode = externalViewMode ?? internalViewMode;
+  const viewMode = externalViewMode || 'kanban';
 
   // Filter modules by search query
   const filteredModules = searchQuery.trim()
@@ -182,14 +178,33 @@ export function ModulesSection({
   const handleLinkTask = (taskId: string, moduleId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (task && onTaskUpdate) {
-      onTaskUpdate({ ...task, moduleId });
+      const currentIds = task.moduleIds || (task.moduleId ? [task.moduleId] : []);
+      if (!currentIds.includes(moduleId)) {
+        onTaskUpdate({
+          ...task,
+          moduleIds: [...currentIds, moduleId],
+          moduleId: currentIds.length === 0 ? moduleId : task.moduleId,
+          module: currentIds.length === 0 ? (modules.find(m => m.id === moduleId)?.type || task.module) : task.module
+        });
+      }
     }
   };
 
   const handleUnlinkTask = (taskId: string, moduleId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (task && onTaskUpdate) {
-      onTaskUpdate({ ...task, moduleId: undefined });
+      const currentIds = task.moduleIds || (task.moduleId ? [task.moduleId] : []);
+      const updatedIds = currentIds.filter(id => id !== moduleId);
+
+      const nextModuleId = updatedIds.length > 0 ? updatedIds[0] : undefined;
+      const nextModuleType = nextModuleId ? (modules.find(m => m.id === nextModuleId)?.type || task.module) : task.module;
+
+      onTaskUpdate({
+        ...task,
+        moduleIds: updatedIds,
+        moduleId: nextModuleId,
+        module: nextModuleType as ModuleType
+      });
     }
   };
 
@@ -245,27 +260,18 @@ export function ModulesSection({
         onLinkIssue={handleLinkIssue}
         onUnlinkIssue={handleUnlinkIssue}
       />
-
-      {/* Add Module Dialog */}
-      <AddModuleDialog
-        isOpen={isAddDialogOpen}
-        onClose={() => {
-          setInternalIsAddDialogOpen(false);
-          onAddDialogClose?.();
-        }}
-        onAdd={handleAddModule}
-        teamMembers={teamMembers}
-        existingModuleNames={existingModuleNames}
-      />
     </>
   );
 }
 
 // Export a function to open the add dialog from parent
 export function useModulesSectionControls() {
+  const [internalViewMode, setInternalViewMode] = useState<ModuleViewMode>('kanban');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   return {
     isAddDialogOpen,
+    internalViewMode,
+    setInternalViewMode,
     openAddDialog: () => setIsAddDialogOpen(true),
     closeAddDialog: () => setIsAddDialogOpen(false),
   };

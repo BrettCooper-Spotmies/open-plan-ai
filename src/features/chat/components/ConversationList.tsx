@@ -8,8 +8,12 @@ import { ConversationItem } from './ConversationItem';
 import { NewDMDialog } from './NewDMDialog';
 import { NewGroupDialog } from './NewGroupDialog';
 import { EmptyState } from './EmptyState';
+import { PeopleList } from './PeopleList';
 import { useChatStore } from '../stores/useChatStore';
+import { useReachableUsers } from '../hooks/useReachableUsers';
+import { chatService } from '@/services/chat.service';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import type { Conversation } from '../types';
 
 interface ConversationListProps {
@@ -21,9 +25,11 @@ interface ConversationListProps {
 }
 
 export function ConversationList({ conversations, loading, onSelect, onConversationCreated, onlineUserIds }: ConversationListProps) {
-  const { activeConversationId, conversationFilter, setConversationFilter, searchQuery, unreadCounts } = useChatStore();
+  const { activeConversationId, conversationFilter, setConversationFilter, searchQuery, setSearchQuery, unreadCounts } = useChatStore();
   const [dmDialogOpen, setDmDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const { data: reachableUsers = [] } = useReachableUsers();
+  const [isCreatingDM, setIsCreatingDM] = useState(false);
 
   const filtered = useMemo(() => {
     let list: Conversation[] = [...conversations];
@@ -38,6 +44,31 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
     }
     return list.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
   }, [conversations, conversationFilter, searchQuery]);
+
+  const filteredPeople = useMemo(() => {
+    if (!searchQuery.trim() || conversationFilter === 'groups') return [];
+    const q = searchQuery.toLowerCase();
+    // Only show people who don't already have a DM in the list (or filter them visually later)
+    return reachableUsers.filter(u =>
+      (u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) &&
+      !conversations.some(c => c.type === 'dm' && c.members.some(m => m.id === u.id))
+    );
+  }, [searchQuery, reachableUsers, conversations, conversationFilter]);
+
+  const handleSelectPerson = async (userId: string) => {
+    try {
+      setIsCreatingDM(true);
+      const convId = await chatService.getOrCreateDM(userId);
+      if (onConversationCreated) await onConversationCreated();
+      onSelect(convId);
+      setSearchQuery(''); // Clear search after selection
+    } catch (err) {
+      console.error('Failed to start DM:', err);
+      toast.error('Failed to start conversation');
+    } finally {
+      setIsCreatingDM(false);
+    }
+  };
 
   return (
     <div className="flex flex-col h-full border-r border-border">
@@ -77,19 +108,35 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
                 </div>
               </div>
             ))
-          ) : filtered.length === 0 ? (
+          ) : filtered.length === 0 && filteredPeople.length === 0 ? (
             <EmptyState type="no-conversations" />
           ) : (
-            filtered.map((conv) => (
-              <ConversationItem
-                key={conv.id}
-                conversation={conv}
-                isActive={activeConversationId === conv.id}
-                unreadCount={unreadCounts[conv.id] || 0}
-                onClick={() => onSelect(conv.id)}
+            <>
+              {filtered.map((conv) => (
+                <ConversationItem
+                  key={conv.id}
+                  conversation={conv}
+                  isActive={activeConversationId === conv.id}
+                  unreadCount={unreadCounts[conv.id] || 0}
+                  onClick={() => onSelect(conv.id)}
+                  onlineUserIds={onlineUserIds}
+                />
+              ))}
+              <PeopleList
+                users={filteredPeople}
+                onSelect={handleSelectPerson}
                 onlineUserIds={onlineUserIds}
               />
-            ))
+              {isCreatingDM && (
+                <div className="flex items-center gap-3 px-3 py-2 animate-pulse">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-2 w-32" />
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </ScrollArea>

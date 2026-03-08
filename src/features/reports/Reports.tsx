@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { downloadCSVReport, triggerPDFExport } from './utils/exportUtils';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { ReportsHeader } from './components/ReportsHeader';
 import { ReportsFilters } from './components/ReportsFilters';
 import { ReportsKPIRow } from './components/ReportsKPIRow';
@@ -215,7 +214,7 @@ export default function Reports() {
   // ─── Loading skeleton ─────────────────────────────────────────────────────
   if (isLoading) {
     return (
-      <AppLayout>
+      <>
         <div className="space-y-6">
           <Skeleton className="h-16" />
           <Skeleton className="h-12" />
@@ -228,12 +227,12 @@ export default function Reports() {
           <Skeleton className="h-64" />
           <Skeleton className="h-48" />
         </div>
-      </AppLayout>
+      </>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-6">
         <ReportsHeader
           projectName={projectName}
@@ -281,6 +280,6 @@ export default function Reports() {
           onIssueClick={handleIssueClick}
         />
       </div>
-    </AppLayout>
+    </>
   );
 }

@@ -229,12 +229,14 @@ export function IssueDetailContent({
     if (!editedIssue) return null;
 
     const handleFieldChange = <K extends keyof Issue>(field: K, value: Issue[K]) => {
-        const updated = { ...editedIssue, [field]: value };
-        setEditedIssue(updated);
-        // We now rely on the explicit "Save Changes" button
-        if (isDraft) {
-            onUpdate(updated);
-        }
+        setEditedIssue(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev, [field]: value };
+            if (isDraft) {
+                onUpdate(updated);
+            }
+            return updated;
+        });
     };
 
     const checklist = editedIssue.checklist || [];
@@ -447,7 +449,10 @@ export function IssueDetailContent({
                                 <User className="h-3 w-3" />
                                 Assigned To
                             </Label>
-                            <div className="min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm">
+                            <div
+                                className="min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm cursor-pointer hover:border-primary/50 transition-colors"
+                                onClick={() => setIsAssigneePopoverOpen(true)}
+                            >
                                 {(editedIssue.assignees || []).map((assignee) => (
                                     <Badge key={assignee.id} variant="secondary" className="pl-1 pr-1.5 gap-1.5 h-6 cursor-default">
                                         <Avatar className="h-4 w-4">
@@ -455,7 +460,10 @@ export function IssueDetailContent({
                                         </Avatar>
                                         <span className="text-xs font-normal">{assignee.name}</span>
                                         <button
-                                            onClick={() => handleFieldChange('assignees', (editedIssue.assignees || []).filter(a => a.id !== assignee.id))}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleFieldChange('assignees', (editedIssue.assignees || []).filter(a => a.id !== assignee.id));
+                                            }}
                                             className="ml-auto text-muted-foreground hover:text-foreground outline-none"
                                         >
                                             <X className="h-3 w-3" />
@@ -673,7 +681,10 @@ export function IssueDetailContent({
                                 <Tag className="h-3 w-3" />
                                 Tags
                             </Label>
-                            <div className="min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm">
+                            <div
+                                className="min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm cursor-pointer hover:border-primary/50 transition-colors"
+                                onClick={() => setIsTagPopoverOpen(true)}
+                            >
                                 {(editedIssue.tags || []).map((tag) => (
                                     <Badge
                                         key={tag}
@@ -681,7 +692,10 @@ export function IssueDetailContent({
                                     >
                                         {tag}
                                         <button
-                                            onClick={() => handleFieldChange('tags', (editedIssue.tags || []).filter(t => t !== tag))}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleFieldChange('tags', (editedIssue.tags || []).filter(t => t !== tag));
+                                            }}
                                             className="hover:bg-black/10 rounded-full p-0.5 transition-colors"
                                         >
                                             <X className="h-3 w-3" />

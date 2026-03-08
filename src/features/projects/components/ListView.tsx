@@ -137,7 +137,7 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
     description: '',
     status: 'todo',
     priority: 'medium',
-    module: modules.length > 0 ? modules[0].type : 'software',
+    module: '' as ModuleType,
     dependencies: [],
     blockedBy: [],
     tags: [],
@@ -146,7 +146,7 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
     comments: [],
     attachments: [],
     linkedIssueIds: [],
-    moduleId: modules.length > 0 ? modules[0].id : undefined,
+    moduleId: undefined,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -268,7 +268,20 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <span className="text-sm">{formatModuleType(task.module)}</span>
+                    <div className="flex flex-wrap gap-1">
+                      {task.moduleIds && task.moduleIds.length > 0 ? (
+                        task.moduleIds.map((id) => {
+                          const module = modules.find(m => m.id === id);
+                          return module ? (
+                            <Badge key={id} variant="outline" className="text-[10px] px-1 py-0 h-5">
+                              {module.name}
+                            </Badge>
+                          ) : null;
+                        })
+                      ) : (
+                        <span className="text-sm">{formatModuleType(task.module)}</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {milestoneName ? (

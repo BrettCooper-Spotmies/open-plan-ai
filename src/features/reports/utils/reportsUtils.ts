@@ -1,11 +1,12 @@
 import { Task, Issue, Milestone, TeamMember, Module, Priority, TaskStatus, Project } from '@/types';
-import { 
-  subDays, 
-  isAfter, 
-  isBefore, 
-  parseISO, 
-  differenceInDays, 
-  format, 
+import {
+  subDays,
+  isAfter,
+  isBefore,
+  parse,
+  parseISO,
+  differenceInDays,
+  format,
   startOfDay,
   eachDayOfInterval,
   isWithinInterval
@@ -80,7 +81,7 @@ export function getDateRangeFromTimeRange(
   customRange?: { start: string; end: string }
 ): { start: Date; end: Date } {
   const today = startOfDay(new Date());
-  
+
   switch (timeRange) {
     case '7d':
       return { start: subDays(today, 7), end: today };
@@ -90,9 +91,9 @@ export function getDateRangeFromTimeRange(
       return { start: subDays(today, 90), end: today };
     case 'custom':
       if (customRange) {
-        return { 
-          start: parseISO(customRange.start), 
-          end: parseISO(customRange.end) 
+        return {
+          start: parse(customRange.start, 'yyyy-MM-dd', new Date()),
+          end: parse(customRange.end, 'yyyy-MM-dd', new Date())
         };
       }
       return { start: subDays(today, 30), end: today };
@@ -108,21 +109,21 @@ export function filterTasksByTimeRange(
 ): Task[] {
   return tasks.filter(task => {
     if (!task.dueDate) return true;
-    const dueDate = parseISO(task.dueDate);
+    const dueDate = parse(task.dueDate, 'yyyy-MM-dd', new Date());
     return isWithinInterval(dueDate, { start: dateRange.start, end: dateRange.end }) ||
-           isBefore(dueDate, dateRange.start);
+      isBefore(dueDate, dateRange.start);
   });
 }
 
 // Calculate project progress
-export function calculateProjectProgress(tasks: Task[]): { 
-  progress: number; 
-  completed: number; 
-  total: number 
+export function calculateProjectProgress(tasks: Task[]): {
+  progress: number;
+  completed: number;
+  total: number
 } {
   const total = tasks.length;
   if (total === 0) return { progress: 0, completed: 0, total: 0 };
-  
+
   const completed = tasks.filter(t => t.status === 'done').length;
   return {
     progress: Math.round((completed / total) * 100),
@@ -133,11 +134,11 @@ export function calculateProjectProgress(tasks: Task[]): {
 
 // Count open issues
 export function countOpenIssues(issues: Issue[]): { total: number; critical: number } {
-  const openIssues = issues.filter(i => 
+  const openIssues = issues.filter(i =>
     i.status === 'open' || i.status === 'investigating'
   );
   const criticalIssues = openIssues.filter(i => i.severity === 'critical');
-  
+
   return {
     total: openIssues.length,
     critical: criticalIssues.length
@@ -149,24 +150,24 @@ export function countOverdueTasks(tasks: Task[]): number {
   const today = startOfDay(new Date());
   return tasks.filter(task => {
     if (!task.dueDate || task.status === 'done') return false;
-    return isBefore(parseISO(task.dueDate), today);
+    return isBefore(parse(task.dueDate, 'yyyy-MM-dd', new Date()), today);
   }).length;
 }
 
 // Calculate average cycle time
 export function calculateAvgCycleTime(tasks: Task[]): number {
-  const completedTasks = tasks.filter(t => 
+  const completedTasks = tasks.filter(t =>
     t.status === 'done' && t.startDate && t.updatedAt
   );
-  
+
   if (completedTasks.length === 0) return 0;
-  
+
   const totalDays = completedTasks.reduce((sum, task) => {
     const start = parseISO(task.startDate!);
     const end = parseISO(task.updatedAt);
     return sum + differenceInDays(end, start);
   }, 0);
-  
+
   return Math.round((totalDays / completedTasks.length) * 10) / 10;
 }
 
@@ -174,13 +175,13 @@ export function calculateAvgCycleTime(tasks: Task[]): number {
 export function getTaskStatusBreakdown(tasks: Task[]): StatusBreakdown[] {
   const total = tasks.length;
   if (total === 0) return [];
-  
+
   const statusOrder: TaskStatus[] = ['todo', 'in-progress', 'review', 'done', 'blocked'];
   const counts = tasks.reduce((acc, task) => {
     acc[task.status] = (acc[task.status] || 0) + 1;
     return acc;
   }, {} as Record<TaskStatus, number>);
-  
+
   return statusOrder.map(status => ({
     status,
     count: counts[status] || 0,
@@ -194,24 +195,24 @@ export function getMilestoneHealth(
   tasks: Task[]
 ): MilestoneHealthItem[] {
   const today = startOfDay(new Date());
-  
+
   return milestones.map(milestone => {
     const linkedTasks = tasks.filter(t => t.milestoneId === milestone.id);
     const completedTasks = linkedTasks.filter(t => t.status === 'done').length;
     const blockedTasks = linkedTasks.filter(t => t.status === 'blocked').length;
     const overdueTasks = linkedTasks.filter(t => {
       if (!t.dueDate || t.status === 'done') return false;
-      return isBefore(parseISO(t.dueDate), today);
+      return isBefore(parse(t.dueDate, 'yyyy-MM-dd', new Date()), today);
     }).length;
-    
+
     const totalTasks = linkedTasks.length;
     const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
     const daysRemaining = (milestone.date && milestone.date.length > 0)
-      ? differenceInDays(parseISO(milestone.date), today)
+      ? differenceInDays(parse(milestone.date, 'yyyy-MM-dd', new Date()), today)
       : 0;
-    
+
     let status: MilestoneHealthItem['status'] = 'on-track';
-    
+
     if (milestone.completed || progress === 100) {
       status = 'complete';
     } else if (blockedTasks > 0) {
@@ -219,7 +220,7 @@ export function getMilestoneHealth(
     } else if (overdueTasks > 0 || (progress < 50 && daysRemaining < 7 && daysRemaining >= 0)) {
       status = 'at-risk';
     }
-    
+
     return {
       milestone,
       status,
@@ -238,20 +239,20 @@ export function getTeamWorkload(
   teamMembers: TeamMember[]
 ): TeamWorkloadItem[] {
   const today = startOfDay(new Date());
-  
+
   return teamMembers.map(member => {
-    const memberTasks = tasks.filter(t => 
+    const memberTasks = tasks.filter(t =>
       t.assignees?.some(a => a.id === member.id)
     );
-    
+
     const overdueTasks = memberTasks.filter(t => {
       if (!t.dueDate || t.status === 'done') return false;
-      return isBefore(parseISO(t.dueDate), today);
+      return isBefore(parse(t.dueDate, 'yyyy-MM-dd', new Date()), today);
     }).length;
-    
+
     const completedTasks = memberTasks.filter(t => t.status === 'done').length;
     const inProgressTasks = memberTasks.filter(t => t.status === 'in-progress').length;
-    
+
     return {
       member,
       totalTasks: memberTasks.length,
@@ -273,7 +274,7 @@ export function getModuleProgress(
     const completedTasks = moduleTasks.filter(t => t.status === 'done').length;
     const totalTasks = moduleTasks.length;
     const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-    
+
     return {
       module,
       progress,
@@ -290,9 +291,9 @@ export function getCompletedTasksTrend(
 ): TrendDataPoint[] {
   const days = eachDayOfInterval({ start: dateRange.start, end: dateRange.end });
   const totalTasks = tasks.length;
-  
+
   let cumulative = 0;
-  
+
   return days.map(day => {
     const dayStr = format(day, 'yyyy-MM-dd');
     const completedOnDay = tasks.filter(t => {
@@ -300,9 +301,9 @@ export function getCompletedTasksTrend(
       const completedDate = format(parseISO(t.updatedAt), 'yyyy-MM-dd');
       return completedDate === dayStr;
     }).length;
-    
+
     cumulative += completedOnDay;
-    
+
     return {
       date: format(day, 'MMM dd'),
       completed: completedOnDay,
@@ -321,7 +322,7 @@ export function calculateKPIs(
   const progressData = calculateProjectProgress(tasks);
   const issueData = countOpenIssues(issues);
   const trendData = getCompletedTasksTrend(tasks, dateRange);
-  
+
   return {
     projectProgress: progressData.progress,
     completedTasks: progressData.completed,

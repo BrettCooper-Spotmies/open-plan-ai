@@ -2,7 +2,6 @@ import { useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
-import { AppLayout } from '@/components/layout/AppLayout';
 import { ConversationList } from './components/ConversationList';
 import { MessageArea } from './components/MessageArea';
 import { MessageInput } from './components/MessageInput';
@@ -15,7 +14,7 @@ import { MessageSearchBar } from './components/MessageSearchBar';
 import { useChatStore } from './stores/useChatStore';
 import { useConversations, useMessages, useReactions } from './hooks/useChatData';
 import { useTypingIndicator } from './hooks/useTypingIndicator';
-import { usePresence } from './hooks/usePresence';
+import { useReachableUsers } from './hooks/useReachableUsers';
 import { useReadReceipts } from './hooks/useReadReceipts';
 import { chatService } from '@/services/chat.service';
 import { useEffect } from 'react';
@@ -32,8 +31,8 @@ export default function Chat() {
   const activeId = conversationId || activeConversationId;
   const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages } = useMessages(activeId ?? null);
   const { reactionMap, handleToggleReaction } = useReactions(messages, user?.id);
-
-  const onlineUserIds = usePresence(user?.id);
+  const { data: reachableUsers = [] } = useReachableUsers();
+  const onlineUserIds = useChatStore((s) => s.onlineUserIds);
 
   const activeConv = conversations.find((c) => c.id === activeId);
 
@@ -91,7 +90,7 @@ export default function Chat() {
     : undefined;
 
   return (
-    <AppLayout noPadding>
+    <>
       <div className="flex h-full overflow-hidden">
         {showConversationList && (
           <div className="w-full md:w-[280px] shrink-0 overflow-hidden">
@@ -149,6 +148,6 @@ export default function Chat() {
           <DetailPanel conversation={activeConv} onRefetch={refetch} />
         )}
       </div>
-    </AppLayout>
+    </>
   );
 }

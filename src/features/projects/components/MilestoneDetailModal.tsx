@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -81,23 +81,18 @@ export function MilestoneDetailModal({
   const handleFieldChange = <K extends keyof Milestone>(field: K, value: Milestone[K]) => {
     setEditedMilestone(prev => {
       if (!prev) return prev;
-      const updated = { ...prev, [field]: value };
-      // Debounce the update to parent to prevent infinite loops
-      setTimeout(() => onUpdate(updated), 0);
-      return updated;
+      return { ...prev, [field]: value };
     });
   };
 
   const handleToggleComplete = () => {
     setEditedMilestone(prev => {
       if (!prev) return prev;
-      const updated = {
+      return {
         ...prev,
         completed: !prev.completed,
         completedAt: !prev.completed ? new Date().toISOString() : undefined,
       };
-      setTimeout(() => onUpdate(updated), 0);
-      return updated;
     });
   };
 
@@ -169,9 +164,16 @@ export function MilestoneDetailModal({
     }
   };
 
+  const handleUpdateMilestone = () => {
+    if (editedMilestone) {
+      onUpdate(editedMilestone);
+      onClose();
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0 gap-0">
+      <DialogContent className="max-w-2xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden">
         <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between">
           <div>
             <DialogTitle>Milestone Details</DialogTitle>
@@ -191,7 +193,7 @@ export function MilestoneDetailModal({
           )}
         </DialogHeader>
 
-        <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
+        <ScrollArea className="flex-1 overflow-y-auto w-full">
           <div className="p-6 space-y-6">
             {/* Title + Status Badge Row */}
             <div className="space-y-4">
@@ -263,14 +265,14 @@ export function MilestoneDetailModal({
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {format(new Date(editedMilestone.date), 'PPP')}
+                      {format(parseISO(editedMilestone.date), 'PPP')}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
-                      selected={new Date(editedMilestone.date)}
-                      onSelect={(date) => date && handleFieldChange('date', date.toISOString().split('T')[0])}
+                      selected={parseISO(editedMilestone.date)}
+                      onSelect={(date) => date && handleFieldChange('date', format(date, 'yyyy-MM-dd'))}
                       initialFocus
                       className="p-3 pointer-events-auto"
                     />
@@ -605,6 +607,15 @@ export function MilestoneDetailModal({
             </div>
           </div>
         </ScrollArea>
+        {/* Footer actions */}
+        <div className="p-4 border-t flex justify-end gap-2 bg-background z-10">
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={handleUpdateMilestone}>
+            Update Milestone
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

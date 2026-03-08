@@ -72,6 +72,8 @@ export interface Module {
   description?: string;
   color?: string;           // For visual distinction
   owner?: TeamMember;       // Module lead/owner
+  progress: number;
+  status: string;
   createdAt: string;
   createdBy?: TeamMember;  // Who created this module
 }
@@ -115,6 +117,7 @@ export interface Task {
   // NEW optional fields (backward compatible)
   milestoneId?: string;      // Link to parent milestone
   moduleId?: string;         // Link to Module entity (in addition to module type)
+  moduleIds?: string[];      // Multiple module links
   linkedIssueIds?: string[]; // Issues affecting this task
   projectId?: string;        // Project this task belongs to (for cross-project views)
 }
@@ -207,13 +210,30 @@ export interface Project {
   modules: ModuleSummary[];  // Legacy support
   projectModules?: Module[]; // First-class modules (optional for backward compatibility)
   issues?: Issue[];          // Project-level issues (optional for backward compatibility)
+  clientName?: string;
+  clientOrganization?: string;
+  clientContact?: string;
+  notes?: string;
+  departments?: string[];
   createdAt: string;
   updatedAt: string;
 }
 
 export interface Activity {
   id: string;
-  type: 'task_created' | 'task_completed' | 'task_updated' | 'comment_added' | 'milestone_reached' | 'status_changed' | 'issue_created' | 'issue_resolved';
+  type:
+  | 'task_created'
+  | 'task_completed'
+  | 'task_updated'
+  | 'comment_added'
+  | 'milestone_reached'
+  | 'status_changed'
+  | 'issue_created'
+  | 'issue_resolved'
+  | 'project_created'
+  | 'project_updated'
+  | 'project_assigned'
+  | 'dependency_added';
   title: string;
   description: string;
   user: TeamMember;

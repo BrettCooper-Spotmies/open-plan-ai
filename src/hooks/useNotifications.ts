@@ -1,104 +1,157 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import {
-  fetchNotifications,
-  markNotificationRead,
-  markAllNotificationsRead,
-  deleteNotification,
-  clearReadNotifications,
-  type DbNotification,
-} from '@/services/notifications.service';
+import { useAuth } from '@/contexts/AuthContext';
+import { notificationsService, Notification, NotificationType } from '@/services/notifications.service';
+import { useEffect } from 'react';
+import { toast } from 'sonner';
 
-const QUERY_KEY = ['notifications'];
+import { formatDistanceToNow } from 'date-fns';
+
+export interface AppNotification extends Omit<Notification, 'type'> {
+    type: Notification['type'] | 'message';
+    time: string;
+    initials?: string;
+    project: string;
+    conversation_id?: string;
+}
 
 export function useNotifications() {
-  const queryClient = useQueryClient();
+    const { user } = useAuth();
+    const queryClient = useQueryClient();
+    const userId = user?.id;
 
-  const query = useQuery<DbNotification[]>({
-    queryKey: QUERY_KEY,
-    queryFn: fetchNotifications,
-    refetchInterval: 30_000,
-  });
+    const { data: rawNotifications = [], isLoading, error } = useQuery({
+        queryKey: ['notifications', userId],
+        queryFn: () => userId ? notificationsService.getAllByUserId(userId) : Promise.resolve([]),
+        enabled: !!userId,
+    });
 
-  // Realtime subscription
-  useEffect(() => {
-    const channel = supabase
-      .channel('notifications-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications' },
-        () => {
-          queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-        }
-      )
-      .subscribe();
+    const notifications: AppNotification[] = rawNotifications.map(n => ({
+        ...n,
+        time: formatDistanceToNow(new Date(n.created_at), { addSuffix: true }),
+        initials: n.actor?.full_name
+            ? n.actor.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()
+            : n.actor?.email?.substring(0, 2).toUpperCase(),
+        project: n.type === 'message' ? 'Chat' : (n.projects?.name || 'Project'),
+    }));
 
-    return () => {
-      supabase.removeChannel(channel);
+    // Set up realtime subscription
+    useEffect(() => {
+        if (!userId) return;
+
+        const channel = supabase
+            .channel(`user-notifications-${userId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'notifications',
+                    filter: `user_id=eq.${userId}`,
+                },
+                (payload) => {
+                    const newNotification = payload.new as Notification;
+
+                    // Show toast for new notification
+                    toast.info(newNotification.title, {
+                        description: newNotification.description,
+                    });
+
+                    // Update cache - append to the beginning
+                    queryClient.setQueryData(['notifications', userId], (old: Notification[] = []) => {
+                        // Check if already exists to avoid duplicates
+                        if (old.some(n => n.id === newNotification.id)) return old;
+                        return [newNotification, ...old];
+                    });
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'notifications',
+                    filter: `user_id=eq.${userId}`,
+                },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'DELETE',
+                    schema: 'public',
+                    table: 'notifications',
+                    filter: `user_id=eq.${userId}`,
+                },
+                () => {
+                    queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+                }
+            )
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    console.log('Successfully subscribed to notifications');
+                }
+            });
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [userId, queryClient]);
+
+    const markAsRead = useMutation({
+        mutationFn: (id: string) => notificationsService.markAsRead(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+        },
+    });
+
+    const markAllAsRead = useMutation({
+        mutationFn: () => userId ? notificationsService.markAllAsRead(userId) : Promise.reject('No user ID'),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+        },
+    });
+
+    const deleteNotification = useMutation({
+        mutationFn: (id: string) => notificationsService.delete(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+        },
+    });
+
+    const clearRead = useMutation({
+        mutationFn: () => userId ? notificationsService.deleteAllRead(userId) : Promise.reject('No user ID'),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+        },
+    });
+
+    const createNotification = useMutation({
+        mutationFn: (notification: {
+            user_id: string;
+            actor_id?: string;
+            type: NotificationType;
+            title: string;
+            description: string;
+            project_id?: string;
+            entity_id?: string;
+            entity_type?: string;
+        }) => notificationsService.create(notification),
+    });
+
+    const unreadCount = notifications.filter(n => !n.read).length;
+
+    return {
+        notifications,
+        unreadCount,
+        isLoading,
+        error,
+        markAsRead,
+        markAllAsRead,
+        clearRead,
+        deleteNotification,
+        createNotification,
     };
-  }, [queryClient]);
-
-  const markRead = useMutation({
-    mutationFn: markNotificationRead,
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: QUERY_KEY });
-      const prev = queryClient.getQueryData<DbNotification[]>(QUERY_KEY);
-      queryClient.setQueryData<DbNotification[]>(QUERY_KEY, (old) =>
-        old?.map((n) => (n.id === id ? { ...n, read: true } : n))
-      );
-      return { prev };
-    },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(QUERY_KEY, ctx.prev);
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-  });
-
-  const markAllRead = useMutation({
-    mutationFn: markAllNotificationsRead,
-    onMutate: async () => {
-      await queryClient.cancelQueries({ queryKey: QUERY_KEY });
-      const prev = queryClient.getQueryData<DbNotification[]>(QUERY_KEY);
-      queryClient.setQueryData<DbNotification[]>(QUERY_KEY, (old) =>
-        old?.map((n) => ({ ...n, read: true }))
-      );
-      return { prev };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(QUERY_KEY, ctx.prev);
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-  });
-
-  const remove = useMutation({
-    mutationFn: deleteNotification,
-    onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: QUERY_KEY });
-      const prev = queryClient.getQueryData<DbNotification[]>(QUERY_KEY);
-      queryClient.setQueryData<DbNotification[]>(QUERY_KEY, (old) =>
-        old?.filter((n) => n.id !== id)
-      );
-      return { prev };
-    },
-    onError: (_err, _id, ctx) => {
-      if (ctx?.prev) queryClient.setQueryData(QUERY_KEY, ctx.prev);
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-  });
-
-  const clearRead = useMutation({
-    mutationFn: clearReadNotifications,
-    onSettled: () => queryClient.invalidateQueries({ queryKey: QUERY_KEY }),
-  });
-
-  return {
-    notifications: query.data ?? [],
-    isLoading: query.isLoading,
-    unreadCount: query.data?.filter((n) => !n.read).length ?? 0,
-    markRead,
-    markAllRead,
-    remove,
-    clearRead,
-  };
 }
