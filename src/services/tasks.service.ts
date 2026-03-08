@@ -66,6 +66,7 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
     actualHours: dbTask.actual_hours ? parseFloat(dbTask.actual_hours) : undefined,
     milestoneId: dbTask.milestone_id || undefined,
     moduleId: dbTask.module_id || undefined,
+    moduleIds: dbTask.module_ids || [],
     projectId: dbTask.project_id || undefined,
   };
 }
@@ -254,6 +255,7 @@ export const tasksService = {
         estimated_hours: task.estimatedHours || null,
         milestone_id: task.milestoneId || null,
         module_id: task.moduleId || null,
+        module_ids: task.moduleIds || [],
         created_by: user?.id || null,
       })
       .select()
@@ -352,6 +354,7 @@ export const tasksService = {
     if (updates.actualHours !== undefined) updateData.actual_hours = updates.actualHours;
     if (updates.milestoneId !== undefined) updateData.milestone_id = updates.milestoneId;
     if (updates.moduleId !== undefined) updateData.module_id = updates.moduleId;
+    if (updates.moduleIds !== undefined) updateData.module_ids = updates.moduleIds;
 
     const { data, error } = await supabase
       .from('tasks')

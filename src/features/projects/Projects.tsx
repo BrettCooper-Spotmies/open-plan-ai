@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ProjectListProgress } from './components/ProjectListProgress';
-import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, Trash2, FolderOpen } from 'lucide-react';
+import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, Trash2, FolderOpen, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -29,6 +29,7 @@ import { useProjectAttachments } from '@/hooks/useProjectAttachments';
 import { useProjectLinks } from '@/hooks/useProjectLinks';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { formatModuleType } from './utils/projectUtils';
 
 const stageColors = {
   concept: 'bg-muted text-muted-foreground',
@@ -440,6 +441,24 @@ export default function Projects() {
                           </a>
                         )}
                       </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Modules List */}
+              {selectedProjectDetails.projectModules && selectedProjectDetails.projectModules.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <Package className="h-4 w-4" />
+                    Modules ({selectedProjectDetails.projectModules.length})
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedProjectDetails.projectModules.map((module) => (
+                      <Badge key={module.id} variant="outline" className="text-xs font-normal">
+                        <span className="font-semibold mr-1">{module.name}</span>
+                        <span className="text-muted-foreground">({formatModuleType(module.type)})</span>
+                      </Badge>
                     ))}
                   </div>
                 </div>

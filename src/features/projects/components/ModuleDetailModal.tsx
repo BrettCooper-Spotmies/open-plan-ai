@@ -92,7 +92,9 @@ export function ModuleDetailModal({
 
   // Get available tasks and issues that can be linked (must be before early return)
   const availableTasks = useMemo(() =>
-    module ? allTasks.filter(t => t.moduleId !== module.id) : [],
+    module
+      ? allTasks.filter(t => t.moduleId !== module.id && !(t.moduleIds || []).includes(module.id))
+      : [],
     [allTasks, module]
   );
 
@@ -104,8 +106,8 @@ export function ModuleDetailModal({
   if (!module) return null;
 
   const moduleColor = getModuleColor(module.type);
-  // Filter tasks by moduleId to show actually linked tasks
-  const moduleTasks = allTasks.filter(t => t.moduleId === module.id);
+  // Filter tasks by moduleId or moduleIds to show actually linked tasks
+  const moduleTasks = allTasks.filter(t => t.moduleId === module.id || (t.moduleIds || []).includes(module.id));
   const moduleIssues = allIssues.filter(
     i => i.moduleId === module.id && i.status !== 'resolved' && i.status !== 'closed'
   );

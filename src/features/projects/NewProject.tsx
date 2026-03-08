@@ -60,8 +60,12 @@ import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useCreateProject } from "@/hooks/useProjects";
 import { useOrganizationMembers } from "@/hooks/useProjectTeam";
+import { useCreateAttachment } from '@/hooks/useProjectAttachments';
+import { useCreateProjectLink } from '@/hooks/useProjectLinks';
 import { modulesService } from "@/services/modules.service";
 import { milestonesService } from "@/services/milestones.service";
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryClient';
 import { projectStorageService, UploadedProjectFile } from "@/services/projectStorage.service";
 import { attachmentsService } from "@/services/attachments.service";
 import { projectLinksService } from "@/services/projectLinks.service";
@@ -162,6 +166,7 @@ interface ProjectMilestone {
 }
 
 const NewProject = () => {
+  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { currentOrganization } = useOrganization();
   const createProjectMutation = useCreateProject();

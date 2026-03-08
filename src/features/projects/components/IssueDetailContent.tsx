@@ -229,12 +229,14 @@ export function IssueDetailContent({
     if (!editedIssue) return null;
 
     const handleFieldChange = <K extends keyof Issue>(field: K, value: Issue[K]) => {
-        const updated = { ...editedIssue, [field]: value };
-        setEditedIssue(updated);
-        // We now rely on the explicit "Save Changes" button
-        if (isDraft) {
-            onUpdate(updated);
-        }
+        setEditedIssue(prev => {
+            if (!prev) return prev;
+            const updated = { ...prev, [field]: value };
+            if (isDraft) {
+                onUpdate(updated);
+            }
+            return updated;
+        });
     };
 
     const checklist = editedIssue.checklist || [];

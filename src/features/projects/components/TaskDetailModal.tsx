@@ -224,7 +224,7 @@ export const TaskDetailModal = ({
     description: '',
     status: 'todo',
     priority: 'medium',
-    module: 'software',
+    module: '' as ModuleType,
     assignees: [],
     tags: [],
     checklist: [],
@@ -242,6 +242,7 @@ export const TaskDetailModal = ({
   const [selectedBlockingTask, setSelectedBlockingTask] = useState<string>('');
   const [selectedBlockedByTask, setSelectedBlockedByTask] = useState<string>('');
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
+  const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false);
   const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
   const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
@@ -296,9 +297,11 @@ export const TaskDetailModal = ({
   if (!editedTask) return null;
 
   const handleFieldChange = <K extends keyof Task>(field: K, value: Task[K]) => {
-    const updated = { ...editedTask, [field]: value, updatedAt: new Date().toISOString() };
-    setEditedTask(updated);
-    onUpdate(updated);
+    setEditedTask(prev => {
+      const updated = { ...prev, [field]: value, updatedAt: new Date().toISOString() };
+      onUpdate(updated);
+      return updated;
+    });
   };
 
   const handleCreate = () => {
@@ -719,49 +722,106 @@ export const TaskDetailModal = ({
                   </Select>
                 </div>
 
-                {/* Module */}
+                {/* Module Selection */}
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <Tag className="h-3 w-3" />
-                    Module
+                    Modules
                   </Label>
-                  <Select
-                    value={editedTask.moduleId || (modules?.find(m => m.type === editedTask.module)?.id || '')}
-                    onValueChange={(value) => {
-                      const selected = modules?.find(m => m.id === value);
-                      if (selected) {
-                        handleFieldChange('moduleId', selected.id);
-                        handleFieldChange('module', selected.type);
-                      }
-                    }}
+                  <div
+                    className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
+                    onClick={() => setIsModulePopoverOpen(true)}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select Module" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {modules && modules.length > 0 ? (
-                        modules.map((module) => (
-                          <SelectItem key={module.id} value={module.id}>
-                            {module.name}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <div className="p-2 flex justify-center">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full text-xs h-8"
+                    {(editedTask.moduleIds || []).length === 0 && (
+                      <span className="text-muted-foreground">Select modules...</span>
+                    )}
+                    {(editedTask.moduleIds || []).map((moduleId) => {
+                      const module = modules?.find(m => m.id === moduleId);
+                      if (!module) return null;
+                      return (
+                        <Badge key={module.id} variant="secondary" className="px-2 py-0.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
+                          <span className="text-xs font-normal">{module.name}</span>
+                          <button
                             onClick={(e) => {
-                              e.preventDefault();
-                              onAddModule?.();
+                              e.stopPropagation();
+                              handleFieldChange('moduleIds', (editedTask.moduleIds || []).filter(id => id !== module.id));
                             }}
+                            className="ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none"
                           >
-                            <Plus className="h-3 w-3 mr-1" /> Create Module
-                          </Button>
-                        </div>
-                      )}
-                    </SelectContent>
-                  </Select>
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                    <Popover open={isModulePopoverOpen} onOpenChange={setIsModulePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
+                          <span>
+                            <Plus className="h-3 w-3" />
+                          </span>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="p-0 w-[240px]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search modules..." />
+                          <CommandList>
+                            <CommandEmpty>No modules found.</CommandEmpty>
+                            <CommandGroup heading="Available Modules">
+                              {modules
+                                .filter(m => !(editedTask.moduleIds || []).includes(m.id))
+                                .map((module) => (
+                                  <CommandItem
+                                    key={module.id}
+                                    value={module.name}
+                                    onSelect={() => {
+                                      // If this is the first module, also set the primary module type for compatibility
+                                      const isFirst = (editedTask.moduleIds || []).length === 0;
+                                      const updatedIds = [...(editedTask.moduleIds || []), module.id];
+
+                                      setEditedTask(prev => {
+                                        const updated = {
+                                          ...prev,
+                                          moduleIds: updatedIds,
+                                          moduleId: isFirst ? module.id : prev.moduleId,
+                                          module: isFirst ? module.type : prev.module,
+                                          updatedAt: new Date().toISOString()
+                                        };
+                                        onUpdate(updated);
+                                        return updated;
+                                      });
+                                      setIsModulePopoverOpen(false);
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    <div className="flex flex-col">
+                                      <span>{module.name}</span>
+                                      <span className="text-[10px] text-muted-foreground uppercase">{module.type}</span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                            {onAddModule && (
+                              <>
+                                <Separator />
+                                <CommandGroup>
+                                  <CommandItem
+                                    onSelect={() => {
+                                      onAddModule();
+                                      setIsModulePopoverOpen(false);
+                                    }}
+                                    className="cursor-pointer text-primary"
+                                  >
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Create New Module
+                                  </CommandItem>
+                                </CommandGroup>
+                              </>
+                            )}
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
 
                 {/* Start Date */}

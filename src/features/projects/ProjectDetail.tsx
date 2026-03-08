@@ -25,6 +25,7 @@ import { MilestonesView } from './components/MilestonesView';
 import { IssuesView } from './components/IssuesView';
 import { ProjectDetailSkeleton } from './components/ProjectDetailSkeleton';
 import { ProjectProgressPopover } from './components/ProjectProgressPopover';
+import { AddModuleDialog } from './components/AddModuleDialog';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
 import { useUpdateProject } from '@/hooks/useProjects';
 import { useTeamMembers } from '@/hooks/useProjectTeam';
@@ -405,9 +406,11 @@ export default function ProjectDetail() {
       progress: m.progress || 0,
       status: m.status || 'active',
       owner: m.owner_id ? { id: m.owner_id, name: '', initials: '', email: '', role: 'member' } : undefined,
-      createdAt: m.created_at,
+      createdAt: m.created_at || new Date().toISOString(),
     }));
   }, [projectModules]);
+
+  const existingModuleNames = useMemo(() => modules.map(m => m.name), [modules]);
 
   // Calculate project progress breakdown
   const progressBreakdown = useMemo(() => {
@@ -791,6 +794,14 @@ export default function ProjectDetail() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <AddModuleDialog
+        isOpen={isAddModuleDialogOpen}
+        onClose={() => setIsAddModuleDialogOpen(false)}
+        onAdd={handleModuleAdd}
+        teamMembers={allTeamMembers}
+        existingModuleNames={existingModuleNames}
+      />
     </>
   );
 }

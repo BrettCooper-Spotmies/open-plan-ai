@@ -56,7 +56,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useProjectDetail } from "@/hooks/useProjectDetail";
-import { useUpdateProject } from "@/hooks/useProjects";
+import { useUpdateProject, useProject } from "@/hooks/useProjects";
 import { useOrganizationMembers } from "@/hooks/useProjectTeam";
 import { useProjectAttachments, useCreateAttachment, useDeleteAttachment } from "@/hooks/useProjectAttachments";
 import { useProjectLinks, useCreateProjectLink, useDeleteProjectLink } from "@/hooks/useProjectLinks";
@@ -64,6 +64,8 @@ import { projectStorageService } from "@/services/projectStorage.service";
 import { modulesService } from "@/services/modules.service";
 import { milestonesService } from "@/services/milestones.service";
 import { projectMembersService } from "@/services/projectMembers.service";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryClient";
 
 const projectTypes = [
     "Hardware Development",
@@ -157,6 +159,7 @@ const projectEmojis = [
 ];
 
 const EditProject = () => {
+    const queryClient = useQueryClient();
     const navigate = useNavigate();
     const { id } = useParams();
     const { currentOrganization } = useOrganization();
@@ -164,7 +167,7 @@ const EditProject = () => {
     const { data: orgMembers = [] } = useOrganizationMembers(currentOrganization?.id);
 
     // Fetch project data
-    const { data: project, isLoading, error } = useProjectDetail(id);
+    const { data: project, isLoading, error } = useProject(id);
     const { data: projectAttachments = [] } = useProjectAttachments(id);
     const { data: projectLinks = [] } = useProjectLinks(id);
 
@@ -387,9 +390,12 @@ const EditProject = () => {
 
             // Populating modules
             if (project.projectModules) {
-                setModules(project.projectModules.map(m => ({
+                // First-class modules initialization
+                const projectModules = project.projectModules || [];
+                setModules(projectModules.map(m => ({
                     id: m.id,
-                    name: m.name
+                    name: m.name,
+                    type: m.type
                 })));
             } else if (project.modules) {
                 // Fallback for legacy modules
@@ -567,6 +573,91 @@ const EditProject = () => {
                     toast.warning('Project updated but some team members could not be removed');
                 }
             }
+
+            // Sync Modules
+            const initialModules = project.projectModules || [];
+            const initialModuleIds = initialModules.map(m => m.id);
+            const currentModuleIds = modules.map(m => m.id);
+
+            // Modules to add (ones that don't have a UUID-like format or weren't in initial)
+            const modulesToAdd = modules.filter(m => !initialModuleIds.includes(m.id));
+            // Modules to remove
+            const moduleIdsToRemove = initialModuleIds.filter(id => !currentModuleIds.includes(id));
+            // Modules to update
+            const modulesToUpdate = modules.filter(m => {
+                const initial = initialModules.find(im => im.id === m.id);
+                return initial && initial.name !== m.name;
+            });
+
+            if (modulesToAdd.length > 0) {
+                await Promise.all(modulesToAdd.map(m =>
+                    modulesService.create({
+                        project_id: id,
+                        name: m.name,
+                        module_type: 'software', // Default
+                    })
+                ));
+            }
+
+            if (modulesToUpdate.length > 0) {
+                await Promise.all(modulesToUpdate.map(m =>
+                    modulesService.update(m.id, { name: m.name })
+                ));
+            }
+
+            if (moduleIdsToRemove.length > 0) {
+                await Promise.all(moduleIdsToRemove.map(mid =>
+                    modulesService.delete(mid)
+                ));
+            }
+
+            // Sync Milestones
+            const initialMilestones = project.milestones || [];
+            const initialMilestoneIds = initialMilestones.map(m => m.id);
+            const currentMilestoneIds = milestones.map(m => m.id);
+
+            // Milestones to add
+            const milestonesToAdd = milestones.filter(m => !initialMilestoneIds.includes(m.id));
+            // Milestones to remove
+            const milestoneIdsToRemove = initialMilestoneIds.filter(id => !currentMilestoneIds.includes(id));
+            // Milestones to update
+            const milestonesToUpdate = milestones.filter(m => {
+                const initial = initialMilestones.find(im => im.id === m.id);
+                if (!initial) return false;
+                const initialDate = initial.date ? format(new Date(initial.date), 'yyyy-MM-dd') : null;
+                const currentDate = m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null;
+                return initial.title !== m.name || initialDate !== currentDate;
+            });
+
+            if (milestonesToAdd.length > 0) {
+                await Promise.all(milestonesToAdd.map(m =>
+                    milestonesService.create({
+                        project_id: id,
+                        name: m.name,
+                        due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
+                    })
+                ));
+            }
+
+            if (milestonesToUpdate.length > 0) {
+                await Promise.all(milestonesToUpdate.map(m =>
+                    milestonesService.update(m.id, {
+                        name: m.name,
+                        due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
+                    })
+                ));
+            }
+
+            if (milestoneIdsToRemove.length > 0) {
+                await Promise.all(milestoneIdsToRemove.map(mid =>
+                    milestonesService.delete(mid)
+                ));
+            }
+
+            // Invalidate queries to ensure project detail page reflects all changes
+            await queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id) });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.modules.list(id) });
+            await queryClient.invalidateQueries({ queryKey: queryKeys.milestones.list(id) });
 
             toast.success('Project updated successfully!');
             navigate(`/projects/${id}`);

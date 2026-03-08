@@ -1097,6 +1097,7 @@ export type Database = {
           id: string
           milestone_id: string | null
           module_id: string | null
+          module_ids: string[] | null
           module_type: Database["public"]["Enums"]["module_type"] | null
           priority: Database["public"]["Enums"]["priority"]
           project_id: string
@@ -1117,6 +1118,7 @@ export type Database = {
           id?: string
           milestone_id?: string | null
           module_id?: string | null
+          module_ids?: string[] | null
           module_type?: Database["public"]["Enums"]["module_type"] | null
           priority?: Database["public"]["Enums"]["priority"]
           project_id: string
@@ -1137,6 +1139,7 @@ export type Database = {
           id?: string
           milestone_id?: string | null
           module_id?: string | null
+          module_ids?: string[] | null
           module_type?: Database["public"]["Enums"]["module_type"] | null
           priority?: Database["public"]["Enums"]["priority"]
           project_id?: string

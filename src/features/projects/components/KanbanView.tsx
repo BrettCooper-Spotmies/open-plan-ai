@@ -3,6 +3,9 @@ import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea
 import { Task, TaskStatus, Priority, ModuleType, Issue } from '@/types';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -124,6 +127,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isMaximizedAddTask, setIsMaximizedAddTask] = useState(false);
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
+  const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false);
   const [newTask, setNewTask] = useState<Partial<Task>>({
     title: '',
     description: '',
@@ -135,18 +139,11 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     status: 'todo',
     dependencies: [],
     blockedBy: [],
+    moduleIds: [],
   });
 
-  // Initialize newTask module if modules change
-  useEffect(() => {
-    if (modules && modules.length > 0 && !newTask.moduleId) {
-      setNewTask(prev => ({
-        ...prev,
-        module: modules[0].type,
-        moduleId: modules[0].id
-      }));
-    }
-  }, [modules, newTask.moduleId]);
+  // Initial state for new task has no module pre-selected by default
+  // This allows the "Select Module" placeholder to show up
 
   // Fetch real team members
   const { data: teamMembers = [] } = useTeamMembers();
@@ -335,6 +332,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       priority: taskData.priority || 'medium',
       module: taskData.module || 'software',
       moduleId: taskData.moduleId,
+      moduleIds: taskData.moduleIds || [],
       dependencies: taskData.dependencies || [],
       blockedBy: taskData.blockedBy || [],
       tags: taskData.tags || [],
@@ -374,6 +372,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       status: 'todo',
       dependencies: [],
       blockedBy: [],
+      moduleIds: [],
     });
     setIsAddTaskOpen(false);
     setIsMaximizedAddTask(false);
@@ -904,43 +903,96 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
             </div>
 
             <div className="space-y-2">
-              <Label>Module</Label>
-              <Select
-                value={newTask.moduleId || (modules?.find(m => m.type === newTask.module)?.id || '')}
-                onValueChange={(v) => {
-                  const selected = modules?.find(m => m.id === v);
-                  if (selected) {
-                    setNewTask({ ...newTask, moduleId: selected.id, module: selected.type });
-                  }
-                }}
+              <Label className="text-sm font-medium">Modules</Label>
+              <div
+                className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
+                onClick={() => setIsModulePopoverOpen(true)}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Module" />
-                </SelectTrigger>
-                <SelectContent>
-                  {modules && modules.length > 0 ? (
-                    modules.map((module) => (
-                      <SelectItem key={module.id} value={module.id}>
-                        {module.name}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="p-2 flex justify-center">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="w-full text-xs h-8"
+                {(newTask.moduleIds || []).length === 0 && (
+                  <span className="text-muted-foreground">Select modules...</span>
+                )}
+                {(newTask.moduleIds || []).map((moduleId) => {
+                  const module = modules?.find(m => m.id === moduleId);
+                  if (!module) return null;
+                  return (
+                    <Badge key={module.id} variant="secondary" className="px-2 py-0.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
+                      <span className="text-xs font-normal">{module.name}</span>
+                      <button
                         onClick={(e) => {
-                          e.preventDefault();
-                          onAddModule?.();
+                          e.stopPropagation();
+                          setNewTask({
+                            ...newTask,
+                            moduleIds: (newTask.moduleIds || []).filter(id => id !== module.id)
+                          });
                         }}
+                        className="ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none"
                       >
-                        <Plus className="h-3 w-3 mr-1" /> Create Module
-                      </Button>
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  );
+                })}
+                <Popover open={isModulePopoverOpen} onOpenChange={setIsModulePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
+                      <span>
+                        <Plus className="h-3 w-3" />
+                      </span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="p-0 w-[240px]" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search modules..." />
+                      <CommandList>
+                        <CommandEmpty>No modules found.</CommandEmpty>
+                        <CommandGroup heading="Available Modules">
+                          {modules
+                            .filter(m => !(newTask.moduleIds || []).includes(m.id))
+                            .map((module) => (
+                              <CommandItem
+                                key={module.id}
+                                value={module.name}
+                                onSelect={() => {
+                                  const isFirst = (newTask.moduleIds || []).length === 0;
+                                  setNewTask({
+                                    ...newTask,
+                                    moduleIds: [...(newTask.moduleIds || []), module.id],
+                                    moduleId: isFirst ? module.id : newTask.moduleId,
+                                    module: isFirst ? module.type : newTask.module,
+                                  });
+                                  setIsModulePopoverOpen(false);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <div className="flex flex-col">
+                                  <span>{module.name}</span>
+                                  <span className="text-[10px] text-muted-foreground uppercase">{module.type}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                        {onAddModule && (
+                          <>
+                            <Separator />
+                            <CommandGroup>
+                              <CommandItem
+                                onSelect={() => {
+                                  onAddModule();
+                                  setIsModulePopoverOpen(false);
+                                }}
+                                className="cursor-pointer text-primary"
+                              >
+                                <Plus className="mr-2 h-4 w-4" />
+                                Create New Module
+                              </CommandItem>
+                            </CommandGroup>
+                          </>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
 
             <div className="space-y-2">

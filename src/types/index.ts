@@ -72,6 +72,8 @@ export interface Module {
   description?: string;
   color?: string;           // For visual distinction
   owner?: TeamMember;       // Module lead/owner
+  progress: number;
+  status: string;
   createdAt: string;
   createdBy?: TeamMember;  // Who created this module
 }
@@ -115,6 +117,7 @@ export interface Task {
   // NEW optional fields (backward compatible)
   milestoneId?: string;      // Link to parent milestone
   moduleId?: string;         // Link to Module entity (in addition to module type)
+  moduleIds?: string[];      // Multiple module links
   linkedIssueIds?: string[]; // Issues affecting this task
   projectId?: string;        // Project this task belongs to (for cross-project views)
 }

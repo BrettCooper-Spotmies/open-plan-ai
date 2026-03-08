@@ -52,7 +52,9 @@ export function getMilestoneIssues(milestoneId: string, issues: Issue[]): Issue[
  */
 export function getModuleTasks(moduleIdOrType: string, tasks: Task[]): Task[] {
   return tasks.filter(t =>
-    t.moduleId === moduleIdOrType || t.module === moduleIdOrType
+    t.moduleId === moduleIdOrType ||
+    t.module === moduleIdOrType ||
+    (t.moduleIds || []).includes(moduleIdOrType)
   );
 }
 

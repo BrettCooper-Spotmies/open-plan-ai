@@ -3,6 +3,7 @@ import { Project, Task, Milestone, Issue, TeamMember, Activity } from '@/types';
 import { projects as mockProjects, teamMembers as mockTeamMembers, projectModules as mockModules, projectIssues as mockIssues } from '@/data/mockData';
 import { config } from '@/config';
 import { activitiesService } from './activities.service';
+import { modulesService } from './modules.service';
 
 // Environment flag to control data source
 const USE_MOCK_DATA = config.api.useMockData;
@@ -65,11 +66,12 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
     actualHours: dbTask.actual_hours ? parseFloat(dbTask.actual_hours) : undefined,
     milestoneId: dbTask.milestone_id || undefined,
     moduleId: dbTask.module_id || undefined,
+    moduleIds: dbTask.module_ids || [],
   };
 }
 
 // Map database project to frontend Project type
-function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: Milestone[] = [], issues: Issue[] = [], team: TeamMember[] = []): Project {
+function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: Milestone[] = [], issues: Issue[] = [], team: TeamMember[] = [], modules: any[] = []): Project {
   return {
     id: dbProject.id,
     name: dbProject.name,
@@ -88,7 +90,14 @@ function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: M
     tasks,
     milestones,
     issues,
-    modules: [],
+    modules: [], // Legacy empty for now
+    projectModules: modules.map(m => ({
+      id: m.id,
+      name: m.name,
+      type: m.module_type || 'software',
+      description: m.description,
+      createdAt: m.created_at,
+    })),
     team,
     createdAt: dbProject.created_at,
     updatedAt: dbProject.updated_at,
@@ -166,9 +175,10 @@ export const projectsService = {
         let tasksResult: Task[] = [];
         let milestonesResult: Milestone[] = [];
         let issuesResult: Issue[] = [];
+        let modulesResult: any[] = [];
 
         try {
-          [tasksResult, milestonesResult, issuesResult] = await Promise.all([
+          [tasksResult, milestonesResult, issuesResult, modulesResult] = await Promise.all([
             this.getTasks(project.id).catch(err => {
               console.error(`Failed to load tasks for project ${project.id}:`, err);
               return [] as Task[];
@@ -181,12 +191,16 @@ export const projectsService = {
               console.error(`Failed to load issues for project ${project.id}:`, err);
               return [] as Issue[];
             }),
+            modulesService.getByProjectId(project.id).catch(err => {
+              console.error(`Failed to load modules for project ${project.id}:`, err);
+              return [];
+            }),
           ]);
         } catch (err) {
           console.error(`Failed to load details for project ${project.id}:`, err);
         }
 
-        return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult);
+        return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult, [], modulesResult);
       })
     );
 
@@ -218,9 +232,10 @@ export const projectsService = {
     let milestonesResult: Milestone[] = [];
     let issuesResult: Issue[] = [];
     let teamResult: TeamMember[] = [];
+    let modulesResult: any[] = [];
 
     try {
-      [tasksResult, milestonesResult, issuesResult, teamResult] = await Promise.all([
+      [tasksResult, milestonesResult, issuesResult, teamResult, modulesResult] = await Promise.all([
         this.getTasks(id).catch(err => {
           console.error(`Failed to load tasks for project ${id}:`, err);
           return [] as Task[];
@@ -237,12 +252,16 @@ export const projectsService = {
           console.error(`Failed to load team for project ${id}:`, err);
           return [] as TeamMember[];
         }),
+        modulesService.getByProjectId(id).catch(err => {
+          console.error(`Failed to load modules for project ${id}:`, err);
+          return [];
+        }),
       ]);
     } catch (err) {
       console.error(`Failed to load details for project ${id}:`, err);
     }
 
-    return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult, teamResult);
+    return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult, teamResult, modulesResult);
   },
 
   /**
@@ -317,19 +336,9 @@ export const projectsService = {
       .single();
 
     if (error) throw error;
-    const created = mapDbProjectToProject(data);
 
-    // Log activity (fire-and-forget — don't block on failure)
-    activitiesService.create({
-      project_id: created.id,
-      activity_type: 'project_created',
-      description: `created project "${created.name}"`,
-      user_id: user?.id || null,
-      entity_id: created.id,
-      entity_type: 'project',
-    }).catch(() => { /* non-critical */ });
-
-    return created;
+    // Return full project with all details
+    return (await this.getById(data.id))!;
   },
 
   /**
@@ -371,20 +380,9 @@ export const projectsService = {
       .single();
 
     if (error) throw error;
-    const updated = mapDbProjectToProject(data);
 
-    // Log activity
-    const { data: { user } } = await supabase.auth.getUser();
-    activitiesService.create({
-      project_id: id,
-      activity_type: 'project_updated',
-      description: `updated project "${updated.name}"`,
-      user_id: user?.id || null,
-      entity_id: id,
-      entity_type: 'project',
-    }).catch(() => { /* non-critical */ });
-
-    return updated;
+    // Return full project with all details
+    return (await this.getById(id))!;
   },
 
   /**
