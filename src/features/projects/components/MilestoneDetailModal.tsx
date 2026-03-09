@@ -34,6 +34,7 @@ import {
   User,
   Trash2,
 } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { Milestone, Task, Issue, Module } from '@/types';
 import { getMilestoneProgress, getMilestoneTasks, getMilestoneIssues, getMilestoneStatus, getModuleProgress } from '../utils/projectUtils';
 
@@ -68,6 +69,7 @@ export function MilestoneDetailModal({
   onIssueUpdate,
 }: MilestoneDetailModalProps) {
   const [editedMilestone, setEditedMilestone] = useState<Milestone | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     // Only set initial state when opening modal with a new milestone
@@ -158,8 +160,9 @@ export function MilestoneDetailModal({
   };
 
   const handleDelete = () => {
-    if (onDelete && editedMilestone && window.confirm('Are you sure you want to delete this milestone?')) {
+    if (onDelete && editedMilestone) {
       onDelete(editedMilestone.id);
+      setShowDeleteConfirm(false);
       onClose();
     }
   };
@@ -185,7 +188,7 @@ export function MilestoneDetailModal({
             <Button
               variant="ghost"
               size="icon"
-              onClick={handleDelete}
+              onClick={() => setShowDeleteConfirm(true)}
               className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
             >
               <Trash2 className="h-4 w-4" />
@@ -617,6 +620,15 @@ export function MilestoneDetailModal({
           </Button>
         </div>
       </DialogContent>
+      <ConfirmationDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        title="Delete Milestone"
+        description="Are you sure you want to delete this milestone? This will not delete the linked tasks but will remove the milestone reference from them."
+        confirmText="Delete"
+        variant="destructive"
+      />
     </Dialog>
   );
 }

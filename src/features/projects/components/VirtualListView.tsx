@@ -214,7 +214,7 @@ export function VirtualListView({ tasks, milestones = [], onTaskClick }: Virtual
   }, []);
 
   const handleUpdateTask = useCallback((updatedTask: Task) => {
-    setSelectedTask(updatedTask);
+    setSelectedTask((prev) => prev && prev.id === updatedTask.id ? updatedTask : prev);
   }, []);
 
   const SortableHeader = memo(function SortableHeader({ field, children }: { field: SortField; children: React.ReactNode }) {
@@ -271,10 +271,10 @@ export function VirtualListView({ tasks, milestones = [], onTaskClick }: Virtual
             </TableRow>
           </TableHeader>
         </Table>
-        
+
         {/* Virtual scrolling container */}
-        <div 
-          ref={parentRef} 
+        <div
+          ref={parentRef}
           className="max-h-[600px] overflow-auto"
         >
           <Table>
@@ -282,7 +282,7 @@ export function VirtualListView({ tasks, milestones = [], onTaskClick }: Virtual
               {virtualItems.map((virtualRow) => {
                 const task = getItem(virtualRow.index);
                 if (!task) return null;
-                
+
                 const blockerCount = getBlockerCount(task);
                 const milestoneName = getMilestoneName(task.milestoneId);
 

@@ -3,6 +3,7 @@ import { Issue, TeamMember } from '@/types';
 import { projects as mockProjects, projectIssues as mockIssues } from '@/data/mockData';
 import { config } from '@/config';
 import { attachmentsService } from './attachments.service';
+import { activitiesService } from './activities.service';
 
 // Environment flag to control data source
 const USE_MOCK_DATA = config.api.useMockData;
@@ -305,6 +306,16 @@ export const issuesService = {
       });
       await supabase.from('attachments').insert(attachmentInserts);
     }
+
+    // Log activity
+    activitiesService.create({
+      project_id: projectId,
+      activity_type: 'issue_created',
+      description: `opened issue "${data.title}"`,
+      user_id: user?.id || null,
+      entity_id: data.id,
+      entity_type: 'issue',
+    }).catch(() => { /* non-critical */ });
 
     return this.getById(data.id) as Promise<Issue>;
   },

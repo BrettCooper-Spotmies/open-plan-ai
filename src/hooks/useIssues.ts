@@ -87,8 +87,24 @@ export function useUpdateIssue() {
       // Snapshot the previous value
       const previousIssue = queryClient.getQueryData(queryKeys.issues.detail(issueId));
 
-      // Optimistically update the store
-      updateIssue(projectId, issueId, updates);
+      // Optimically update the store
+      const timestamp = (updates.status === 'resolved' || updates.status === 'closed') ? new Date().toISOString() : undefined;
+      const issueUpdates = { ...updates, resolvedAt: timestamp };
+      updateIssue(projectId, issueId, issueUpdates);
+
+      // Also update the projects cache if it exists
+      queryClient.setQueriesData({ queryKey: queryKeys.projects.root }, (old: any) => {
+        if (!old) return old;
+        return old.map((p: any) => {
+          if (p.id !== projectId) return p;
+          return {
+            ...p,
+            issues: (p.issues || []).map((i: any) =>
+              i.id === issueId ? { ...i, ...issueUpdates } : i
+            )
+          };
+        });
+      });
 
       return { previousIssue, projectId };
     },

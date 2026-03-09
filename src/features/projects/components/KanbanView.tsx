@@ -137,7 +137,6 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     startDate: toDateOnly(new Date()),
     tags: [],
     status: 'todo',
-    dependencies: [],
     blockedBy: [],
     moduleIds: [],
   });
@@ -219,7 +218,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       // Fallback to local state update
       setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
     }
-    setSelectedTask(updatedTask);
+    // Only update selected task if it's the one currently being viewed
+    if (selectedTask && selectedTask.id === updatedTask.id) {
+      setSelectedTask(updatedTask);
+    }
   };
 
   const handleDragEnd = (result: DropResult) => {
@@ -333,7 +335,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       module: taskData.module || 'software',
       moduleId: taskData.moduleId,
       moduleIds: taskData.moduleIds || [],
-      dependencies: taskData.dependencies || [],
+      // dependencies: taskData.dependencies || [], (Deprecated)
       blockedBy: taskData.blockedBy || [],
       tags: taskData.tags || [],
       assignees: taskData.assignees || [],
@@ -370,7 +372,6 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       startDate: toDateOnly(new Date()),
       tags: [],
       status: 'todo',
-      dependencies: [],
       blockedBy: [],
       moduleIds: [],
     });
@@ -540,32 +541,43 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                                                   <div className="space-y-2">
                                                     <div className="flex items-start justify-between gap-2">
                                                       <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
-                                                        {(isBlocked || task.status !== 'done') && (
+                                                        {isBlocked ? (
                                                           <div
                                                             className={cn(
                                                               "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
                                                               hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
                                                             )}
                                                           >
-                                                            {isBlocked ? (
-                                                              <AlertTriangle className="h-4 w-4 text-status-blocked" />
-                                                            ) : (
-                                                              <button
-                                                                onClick={(e) => {
-                                                                  e.stopPropagation();
-                                                                  handleCompleteTask(task.id);
-                                                                }}
-                                                                className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
-                                                              >
-                                                                <Check className="h-3 w-3 text-foreground" />
-                                                              </button>
+                                                            <AlertTriangle className="h-4 w-4 text-status-blocked" />
+                                                          </div>
+                                                        ) : task.status === 'done' ? (
+                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                            <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
+                                                              <Check className="h-3 w-3 text-status-done" />
+                                                            </div>
+                                                          </div>
+                                                        ) : (
+                                                          <div
+                                                            className={cn(
+                                                              "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
+                                                              hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
                                                             )}
+                                                          >
+                                                            <button
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleCompleteTask(task.id);
+                                                              }}
+                                                              className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
+                                                            >
+                                                              <Check className="h-3 w-3 text-foreground" />
+                                                            </button>
                                                           </div>
                                                         )}
                                                         <h4
                                                           className={cn(
                                                             "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
-                                                            (isBlocked || task.status !== 'done') && hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
+                                                            task.status === 'done' || (hoveredTask === task.id) ? "translate-x-6" : "translate-x-0"
                                                           )}
                                                         >
                                                           {task.title}

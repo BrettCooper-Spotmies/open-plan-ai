@@ -25,7 +25,6 @@ const createMockTask = (id: string, title: string): Task => ({
   status: 'todo',
   priority: 'medium',
   module: 'software',
-  dependencies: [],
   blockedBy: [],
   tags: [],
   createdAt: new Date().toISOString(),
@@ -102,7 +101,7 @@ describe('useProjectStore', () => {
 
     it('should replace existing projects', () => {
       const { setProjects } = useProjectStore.getState();
-      
+
       setProjects([createMockProject('1', 'Old Project')]);
       setProjects([createMockProject('2', 'New Project')]);
 
@@ -115,7 +114,7 @@ describe('useProjectStore', () => {
   describe('selectProject', () => {
     it('should set selected project ID', () => {
       const { selectProject } = useProjectStore.getState();
-      
+
       selectProject('project-123');
 
       const { selectedProjectId } = useProjectStore.getState();
@@ -124,7 +123,7 @@ describe('useProjectStore', () => {
 
     it('should allow setting null to deselect', () => {
       const { selectProject } = useProjectStore.getState();
-      
+
       selectProject('project-123');
       selectProject(null);
 
@@ -147,7 +146,7 @@ describe('useProjectStore', () => {
 
     it('should add multiple projects', () => {
       const { addProject } = useProjectStore.getState();
-      
+
       addProject(createMockProject('1', 'Project 1'));
       addProject(createMockProject('2', 'Project 2'));
 
@@ -321,7 +320,7 @@ describe('useProjectStore', () => {
     it('should create issues array if it does not exist', () => {
       const { addIssue, projects } = useProjectStore.getState();
       // Project initially has no issues array (undefined)
-      
+
       addIssue('proj-1', createMockIssue('issue-1', 'First Issue', 'proj-1'));
 
       const state = useProjectStore.getState();
@@ -356,27 +355,27 @@ describe('useProjectStore', () => {
   describe('state management', () => {
     it('should set loading state', () => {
       const { setLoading } = useProjectStore.getState();
-      
+
       setLoading(true);
       expect(useProjectStore.getState().isLoading).toBe(true);
-      
+
       setLoading(false);
       expect(useProjectStore.getState().isLoading).toBe(false);
     });
 
     it('should set error state', () => {
       const { setError } = useProjectStore.getState();
-      
+
       setError('Something went wrong');
       expect(useProjectStore.getState().error).toBe('Something went wrong');
-      
+
       setError(null);
       expect(useProjectStore.getState().error).toBeNull();
     });
 
     it('should reset to initial state', () => {
       const { setProjects, selectProject, setLoading, setError, reset } = useProjectStore.getState();
-      
+
       setProjects([createMockProject('1', 'Project')]);
       selectProject('1');
       setLoading(true);
@@ -398,11 +397,11 @@ describe('useProjectStore', () => {
       const project1 = createMockProject('proj-1', 'Project 1');
       project1.tasks = [createMockTask('task-1', 'Task 1')];
       project1.issues = [createMockIssue('issue-1', 'Issue 1', 'proj-1')];
-      
+
       const project2 = createMockProject('proj-2', 'Project 2');
       project2.tasks = [createMockTask('task-2', 'Task 2')];
       project2.issues = [createMockIssue('issue-2', 'Issue 2', 'proj-2')];
-      
+
       setProjects([project1, project2]);
       selectProject('proj-1');
     });
@@ -411,21 +410,21 @@ describe('useProjectStore', () => {
       // Note: In a real test, we'd use renderHook, but for store selectors we can test the logic
       const state = useProjectStore.getState();
       const selectedProject = state.projects.find(p => p.id === state.selectedProjectId);
-      
+
       expect(selectedProject?.name).toBe('Project 1');
     });
 
     it('useAllTasks should return all tasks from all projects', () => {
       const state = useProjectStore.getState();
       const allTasks = state.projects.flatMap(p => p.tasks);
-      
+
       expect(allTasks).toHaveLength(2);
     });
 
     it('useAllIssues should return all issues from all projects', () => {
       const state = useProjectStore.getState();
       const allIssues = state.projects.flatMap(p => p.issues || []);
-      
+
       expect(allIssues).toHaveLength(2);
     });
   });

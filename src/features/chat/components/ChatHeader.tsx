@@ -1,5 +1,5 @@
 import { ArrowLeft, Info, Phone, Search, Video } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { OnlineStatus } from './OnlineStatus';
 import { Conversation } from '../types';
@@ -19,6 +19,7 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText }: 
   const { user } = useAuth();
   const currentUserId = user?.id;
   const toggleDetailPanel = useChatStore((s) => s.toggleDetailPanel);
+  const setDetailPanelOpen = useChatStore((s) => s.setDetailPanelOpen);
   const isDetailOpen = useChatStore((s) => s.isDetailPanelOpen);
 
   const otherMember = conversation.type === 'dm'
@@ -28,9 +29,16 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText }: 
   const isOtherOnline = otherMember ? onlineUserIds?.has(otherMember.id) ?? false : false;
 
   const displayName = conversation.type === 'dm' ? otherMember?.name || conversation.name : conversation.name;
+  const isEmoji = (str: string) => {
+    const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/;
+    return emojiRegex.test(str) && str.length <= 8;
+  };
+
   const initials = conversation.type === 'dm'
     ? otherMember?.initials || '??'
     : conversation.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+
+  const avatarUrl = conversation.type === 'dm' ? otherMember?.avatarUrl : conversation.avatarUrl;
 
   return (
     <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
@@ -40,31 +48,39 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText }: 
         </Button>
       )}
 
-      <div className="relative">
-        <Avatar className="h-9 w-9">
-          <AvatarFallback className={cn('text-xs font-medium', conversation.type === 'group' && 'bg-primary/10 text-primary')}>
-            {initials}
-          </AvatarFallback>
-        </Avatar>
-        {conversation.type === 'dm' && otherMember && (
-          <OnlineStatus isOnline={isOtherOnline} className="absolute -bottom-0.5 -right-0.5" />
-        )}
-      </div>
+      <div
+        className="flex flex-1 min-w-0 items-center gap-3 cursor-pointer hover:bg-accent/50 p-1 -ml-1 rounded-lg transition-colors group"
+        onClick={() => setDetailPanelOpen(true)}
+      >
+        <div className="relative shrink-0">
+          <Avatar className="h-9 w-9 border border-border group-hover:border-primary/50 transition-colors">
+            {avatarUrl && !isEmoji(avatarUrl) && (
+              <AvatarImage src={avatarUrl} alt={displayName} className="object-cover" />
+            )}
+            <AvatarFallback className={cn('text-xs font-medium', conversation.type === 'group' && 'bg-primary/10 text-primary')}>
+              {isEmoji(avatarUrl || '') ? avatarUrl : initials}
+            </AvatarFallback>
+          </Avatar>
+          {conversation.type === 'dm' && otherMember && (
+            <OnlineStatus isOnline={isOtherOnline} className="absolute -bottom-0.5 -right-0.5" />
+          )}
+        </div>
 
-      <div className="flex-1 min-w-0">
-        <h3 className="text-sm font-semibold truncate">{displayName}</h3>
-        <p className="text-xs text-muted-foreground">
-          {typingText
-            ? typingText
-            : conversation.type === 'dm'
-              ? isOtherOnline
-                ? 'Online'
-                : otherMember?.lastSeenAt
-                  ? `Last seen ${formatDistanceToNowStrict(new Date(otherMember.lastSeenAt), { addSuffix: true })}`
-                  : 'Offline'
-              : `${conversation.members.length} members`
-          }
-        </p>
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-semibold truncate group-hover:text-primary transition-colors">{displayName}</h3>
+          <p className="text-xs text-muted-foreground truncate">
+            {typingText
+              ? typingText
+              : conversation.type === 'dm'
+                ? isOtherOnline
+                  ? 'Online'
+                  : otherMember?.lastSeenAt
+                    ? `Last seen ${formatDistanceToNowStrict(new Date(otherMember.lastSeenAt), { addSuffix: true })}`
+                    : 'Offline'
+                : `${conversation.members.length} members`
+            }
+          </p>
+        </div>
       </div>
 
       <div className="flex items-center gap-1">

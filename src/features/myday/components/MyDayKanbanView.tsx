@@ -226,7 +226,13 @@ export function MyDayKanbanView({
                                       <div className="space-y-2">
                                         <div className="flex items-start justify-between gap-2">
                                           <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
-                                            {task.status !== 'done' && task.status !== 'resolved' && task.status !== 'closed' && (
+                                            {(task.status === 'done' || task.status === 'resolved' || task.status === 'closed') ? (
+                                              <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
+                                                  <Check className="h-3 w-3 text-status-done" />
+                                                </div>
+                                              </div>
+                                            ) : (
                                               <div
                                                 className={cn(
                                                   "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
@@ -244,7 +250,7 @@ export function MyDayKanbanView({
                                             <h4
                                               className={cn(
                                                 "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
-                                                task.status !== 'done' && task.status !== 'resolved' && task.status !== 'closed' && hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
+                                                (task.status === 'done' || task.status === 'resolved' || task.status === 'closed') || hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
                                               )}
                                             >
                                               {task.title}
@@ -300,7 +306,7 @@ export function MyDayKanbanView({
                                           )}
                                           {task.dueDate && (
                                             <span className="text-[10px] text-muted-foreground">
-                                              {format(parse(task.dueDate, 'yyyy-MM-dd', new Date()), 'MMM d')}
+                                              {format(new Date(task.dueDate), 'MMM d')}
                                             </span>
                                           )}
                                         </div>

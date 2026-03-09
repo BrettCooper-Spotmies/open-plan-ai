@@ -260,13 +260,20 @@ export const chatService = {
   async createGroup(
     name: string,
     description: string | undefined,
-    memberIds: string[]
+    memberIds: string[],
+    avatarUrl?: string
   ): Promise<string> {
     const userId = await getCurrentUserId();
 
     const { data: conv, error: convErr } = await supabase
       .from('conversations')
-      .insert({ type: 'group', name, description, created_by: userId })
+      .insert({
+        type: 'group',
+        name,
+        description,
+        created_by: userId,
+        avatar_url: avatarUrl || null
+      })
       .select()
       .single();
     if (convErr) throw convErr;
@@ -286,6 +293,18 @@ export const chatService = {
     if (memErr) throw memErr;
 
     return conv.id;
+  },
+
+  async updateGroupDetails(
+    conversationId: string,
+    updates: { name?: string; description?: string; avatar_url?: string }
+  ): Promise<void> {
+    const { error } = await supabase
+      .from('conversations')
+      .update(updates)
+      .eq('id', conversationId)
+      .eq('type', 'group');
+    if (error) throw error;
   },
 
   async getReachableUsers(): Promise<ReachableUser[]> {
@@ -331,18 +350,27 @@ export const chatService = {
   async toggleReaction(messageId: string, emoji: string): Promise<void> {
     const userId = await getCurrentUserId();
 
-    // Check if reaction exists
-    const { data: existing } = await supabase
+    // Check if user already has any reaction to this message
+    const { data: existingReactions } = await supabase
       .from('message_reactions')
-      .select('id')
+      .select('id, emoji')
       .eq('message_id', messageId)
-      .eq('user_id', userId)
-      .eq('emoji', emoji)
-      .maybeSingle();
+      .eq('user_id', userId);
 
-    if (existing) {
-      await supabase.from('message_reactions').delete().eq('id', existing.id);
-    } else {
+    let sameReactionFound = false;
+
+    if (existingReactions && existingReactions.length > 0) {
+      // Find if one of them is the exact same reaction
+      sameReactionFound = existingReactions.some((r: any) => r.emoji === emoji);
+
+      // Delete all existing reactions from this user on this message
+      const idsToDelete = existingReactions.map((r: any) => r.id);
+      await supabase.from('message_reactions').delete().in('id', idsToDelete);
+    }
+
+    // Only insert the new reaction if they didn't just click the same one
+    // (If they clicked the same one, it means they are toggling it OFF)
+    if (!sameReactionFound) {
       await supabase.from('message_reactions').insert({
         message_id: messageId,
         user_id: userId,
@@ -378,6 +406,19 @@ export const chatService = {
       }));
     }
     return result;
+  },
+
+  async addMembersToGroup(conversationId: string, userIds: string[]): Promise<void> {
+    const members = userIds.map((id) => ({
+      conversation_id: conversationId,
+      user_id: id,
+      role: 'member',
+    }));
+
+    const { error } = await supabase
+      .from('conversation_members')
+      .insert(members);
+    if (error) throw error;
   },
 
   async addMemberToGroup(conversationId: string, userId: string): Promise<void> {
@@ -421,5 +462,49 @@ export const chatService = {
         return null;
       }
     }).filter(Boolean) as any[];
+  },
+
+  async uploadGroupAvatar(file: File): Promise<string> {
+    const userId = await getCurrentUserId();
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${userId}/${Date.now()}.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(fileName, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(fileName);
+
+    return publicUrl;
+  },
+
+  async updateMemberRole(conversationId: string, userId: string, role: 'admin' | 'member'): Promise<void> {
+    const { data, error } = await supabase
+      .from('conversation_members')
+      .update({ role })
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+      .select();
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      throw new Error('Failed to update member role: No matching membership found');
+    }
+  },
+
+  async sendSystemMessage(conversationId: string, content: string): Promise<void> {
+    const { error } = await supabase
+      .from('chat_messages')
+      .insert({
+        conversation_id: conversationId,
+        content,
+        content_type: 'system',
+        sender_id: await getCurrentUserId(), // System messages still have a sender in this schema
+      });
+    if (error) throw error;
   },
 };

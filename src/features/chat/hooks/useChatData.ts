@@ -99,10 +99,18 @@ export function useConversations() {
       }
     );
 
+    const memberChannel = chatTransport.subscribeToMemberUpdates(
+      null, // Subscription for all convs
+      () => {
+        fetchConversations(true);
+      }
+    );
+
     return () => {
       if (channelRef.current) {
         chatTransport.unsubscribe(channelRef.current);
       }
+      chatTransport.unsubscribe(memberChannel);
       supabase.removeChannel(msgChannel);
     };
   }, [conversations.length, fetchConversations]);
@@ -125,6 +133,7 @@ export function useMessages(conversationId: string | null) {
     isMessagesStale,
     addMessage: storeAddMessage,
     updateMessage: storeUpdateMessage,
+    resolveOptimisticMessage: storeResolveOptimistic,
     appendOlderMessages: storeAppendOlder,
   } = useChatStore();
 
@@ -190,7 +199,6 @@ export function useMessages(conversationId: string | null) {
         cancelled = true;
       };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
   // Realtime subscription for new messages (INSERT)
@@ -201,6 +209,7 @@ export function useMessages(conversationId: string | null) {
       conversationId,
       async (payload) => {
         const newMsg = payload.new;
+
         // Fetch sender profile for the new message
         const { data: profile } = await supabase
           .from('profiles')
@@ -211,7 +220,7 @@ export function useMessages(conversationId: string | null) {
         const mapped = mapMessage(newMsg, profile as any);
 
         setMessages((prev) => {
-          // Avoid duplicates
+          // Avoid duplicates (including those currently in optimistic state)
           if (prev.some((m) => m.id === mapped.id)) return prev;
           return [...prev, mapped];
         });
@@ -226,6 +235,72 @@ export function useMessages(conversationId: string | null) {
       }
     };
   }, [conversationId, storeAddMessage]);
+
+  const sendMessage = useCallback(async (content: string, type: 'text' | 'file' = 'text', fileData?: any) => {
+    if (!conversationId) return;
+
+    const { user } = (await supabase.auth.getUser()).data;
+    if (!user) return;
+
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      conversationId,
+      senderId: user.id,
+      senderName: user.user_metadata?.name || 'You',
+      senderInitials: (user.user_metadata?.name || 'Y').substring(0, 2).toUpperCase(),
+      contentType: type,
+      content: type === 'file' ? JSON.stringify(fileData) : content,
+      attachments: [],
+      createdAt: new Date().toISOString(),
+      isEdited: false,
+      isOptimistic: true,
+      status: 'sending',
+    };
+
+    // 1. Add optimistically to local state and store
+    setMessages((prev) => [...prev, optimisticMsg]);
+    storeAddMessage(conversationId, optimisticMsg);
+
+    try {
+      // 2. Call the actual service
+      let realMsg: ChatMessage;
+      if (type === 'file') {
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .insert({
+            conversation_id: conversationId,
+            sender_id: user.id,
+            content: optimisticMsg.content,
+            content_type: 'file',
+          })
+          .select()
+          .single();
+        if (error) throw error;
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, name, email, avatar_url, initials, role')
+          .eq('id', user.id)
+          .single();
+
+        realMsg = mapMessage(data as any, profile as any);
+      } else {
+        realMsg = await chatService.sendMessage(conversationId, content);
+      }
+
+      realMsg.status = 'sent';
+
+      // 3. Resolve the optimistic message
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? realMsg : m)));
+      storeResolveOptimistic(conversationId, tempId, realMsg);
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      // Remove optimistic message on failure
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      throw err;
+    }
+  }, [conversationId, storeAddMessage, storeResolveOptimistic]);
 
   // Realtime subscription for message edits & soft-deletes (UPDATE)
   useEffect(() => {
@@ -293,7 +368,7 @@ export function useMessages(conversationId: string | null) {
     storeAppendOlder(conversationId, older, newHasMore);
   }, [conversationId, messages, hasMore, storeAppendOlder]);
 
-  return { messages, loading, hasMore, loadMore, refetchMessages };
+  return { messages, loading, hasMore, loadMore, refetchMessages, sendMessage };
 }
 
 export function useReactions(messages: ChatMessage[], currentUserId?: string) {

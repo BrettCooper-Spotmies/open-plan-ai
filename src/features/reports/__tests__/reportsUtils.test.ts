@@ -21,7 +21,6 @@ const createTask = (overrides: Partial<Task> = {}): Task => ({
   status: 'todo',
   priority: 'medium',
   module: 'software' as ModuleType,
-  dependencies: [],
   blockedBy: [],
   tags: [],
   createdAt: new Date().toISOString(),
@@ -329,6 +328,8 @@ describe('reportsUtils', () => {
       id: `module-${Math.random()}`,
       name: 'Test Module',
       type: 'software' as ModuleType,
+      progress: 0,
+      status: 'active',
       createdAt: new Date().toISOString(),
       ...overrides,
     });

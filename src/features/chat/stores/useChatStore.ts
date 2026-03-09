@@ -56,6 +56,7 @@ interface ChatState {
   isMessagesStale: (conversationId: string) => boolean;
   addMessage: (conversationId: string, message: ChatMessage) => void;
   updateMessage: (conversationId: string, messageId: string, updater: (msg: ChatMessage) => ChatMessage) => void;
+  resolveOptimisticMessage: (conversationId: string, tempId: string, realMessage: ChatMessage) => void;
   appendOlderMessages: (conversationId: string, older: ChatMessage[], hasMore: boolean) => void;
   clearCache: () => void;
 }
@@ -178,6 +179,35 @@ export const useChatStore = create<ChatState>()(
                 messages: entry.messages.map((m) =>
                   m.id === messageId ? updater(m) : m
                 ),
+              },
+            },
+          };
+        }),
+
+      resolveOptimisticMessage: (conversationId, tempId, realMessage) =>
+        set((state) => {
+          const entry = state.messagesCache[conversationId];
+          if (!entry) return state;
+
+          const messages = entry.messages.map((m) =>
+            m.id === tempId ? realMessage : m
+          );
+
+          // If the real message was already added (e.g. by realtime before we resolved),
+          // we should filter out the duplicate (tempId) instead of replacing it.
+          const hasRealAlready = entry.messages.some(
+            (m) => m.id === realMessage.id && m.id !== tempId
+          );
+          const finalMessages = hasRealAlready
+            ? entry.messages.filter((m) => m.id !== tempId)
+            : messages;
+
+          return {
+            messagesCache: {
+              ...state.messagesCache,
+              [conversationId]: {
+                ...entry,
+                messages: finalMessages,
               },
             },
           };

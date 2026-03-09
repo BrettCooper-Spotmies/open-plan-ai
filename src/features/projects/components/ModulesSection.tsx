@@ -145,8 +145,8 @@ export function ModulesSection({
   // Calculate module stats
   const modulesWithStats = useMemo(() => {
     return filteredModules.map(module => {
-      const moduleTasks = getModuleTasks(module.type, tasks);
-      const progress = getModuleProgress(module.type, tasks);
+      const moduleTasks = getModuleTasks(module.id, tasks);
+      const progress = getModuleProgress(module.id, tasks);
       const openIssues = issues.filter(
         i => i.moduleId === module.id && i.status !== 'resolved' && i.status !== 'closed'
       ).length;

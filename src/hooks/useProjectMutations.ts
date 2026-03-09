@@ -66,7 +66,11 @@ export function useUpdateTask(projectId: string) {
         return {
           ...old,
           tasks: old.tasks.map((t: Task) =>
-            t.id === taskId ? { ...t, ...updates } : t
+            t.id === taskId ? {
+              ...t,
+              ...updates,
+              updatedAt: updates.status === 'done' ? new Date().toISOString() : t.updatedAt
+            } : t
           ),
         };
       });
@@ -109,20 +113,22 @@ export function useUpdateTask(projectId: string) {
         const projectDetail = queryClient.getQueryData(queryKeys.projects.detail(projectId)) as any;
         const task = projectDetail?.tasks?.find((t: any) => t.id === variables.taskId);
 
-        task?.assignees?.forEach((assignee: any) => {
-          if (assignee.id !== user?.id) {
-            createNotification.mutate({
-              user_id: assignee.id,
-              actor_id: user?.id,
-              type: 'completed',
-              title: 'Task completed',
-              description: `Task "${task.title}" has been marked as completed`,
-              project_id: projectId,
-              entity_id: variables.taskId,
-              entity_type: 'task',
-            });
-          }
-        });
+        if (task) {
+          task.assignees?.forEach((assignee: any) => {
+            if (assignee.id && assignee.id !== user?.id) {
+              createNotification.mutate({
+                user_id: assignee.id,
+                actor_id: user?.id || undefined,
+                type: 'completed',
+                title: 'Task completed',
+                description: `Task "${task.title}" has been marked as completed`,
+                project_id: projectId || undefined,
+                entity_id: variables.taskId || undefined,
+                entity_type: 'task',
+              });
+            }
+          });
+        }
       }
 
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });

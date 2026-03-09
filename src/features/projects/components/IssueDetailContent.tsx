@@ -59,6 +59,7 @@ import {
     Loader2,
     Upload,
 } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import {
     Command,
     CommandEmpty,
@@ -215,6 +216,7 @@ export function IssueDetailContent({
     const [editingTagValue, setEditingTagValue] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     useEffect(() => {
         if (issue) {
@@ -424,11 +426,7 @@ export function IssueDetailContent({
                                     <DropdownMenuContent align="end">
                                         <DropdownMenuItem
                                             className="text-destructive focus:text-destructive"
-                                            onClick={() => {
-                                                if (window.confirm('Are you sure you want to delete this issue?')) {
-                                                    onDelete(editedIssue.id);
-                                                }
-                                            }}
+                                            onSelect={() => setShowDeleteConfirm(true)}
                                         >
                                             <Trash2 className="h-4 w-4 mr-2" />
                                             Delete Issue
@@ -439,6 +437,19 @@ export function IssueDetailContent({
                         </div>
                     </div>
                 </div>
+
+                <ConfirmationDialog
+                    open={showDeleteConfirm}
+                    onOpenChange={setShowDeleteConfirm}
+                    onConfirm={() => {
+                        onDelete?.(editedIssue.id);
+                        setShowDeleteConfirm(false);
+                    }}
+                    title="Delete Issue"
+                    description="Are you sure you want to delete this issue? This action cannot be undone."
+                    confirmText="Delete"
+                    variant="destructive"
+                />
 
                 <div className="flex flex-col gap-6">
                     {/* Metadata Grid */}
@@ -1104,11 +1115,7 @@ export function IssueDetailContent({
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() => {
-                                            if (window.confirm('Are you sure you want to delete this issue?')) {
-                                                onDelete(editedIssue.id);
-                                            }
-                                        }}
+                                        onClick={() => setShowDeleteConfirm(true)}
                                         className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
                                     >
                                         <Trash2 className="h-4 w-4" />
@@ -1156,6 +1163,6 @@ export function IssueDetailContent({
 
 
             </div>
-        </div>
+        </div >
     );
 }

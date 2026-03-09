@@ -35,6 +35,7 @@ import {
   Link,
   Plus,
 } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { Module, Task, Issue, ModuleType, TeamMember } from '@/types';
 import { formatModuleType, getModuleColor, getModuleTasks, getModuleProgress } from '../utils/projectUtils';
 import { format } from 'date-fns';
@@ -89,6 +90,7 @@ export function ModuleDetailModal({
   const [editedModule, setEditedModule] = useState<Module | null>(null);
   const [isLinkingTasks, setIsLinkingTasks] = useState(false);
   const [isLinkingIssues, setIsLinkingIssues] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Get available tasks and issues that can be linked (must be before early return)
   const availableTasks = useMemo(() =>
@@ -107,9 +109,13 @@ export function ModuleDetailModal({
 
   const moduleColor = getModuleColor(module.type);
   // Filter tasks by moduleId or moduleIds to show actually linked tasks
-  const moduleTasks = allTasks.filter(t => t.moduleId === module.id || (t.moduleIds || []).includes(module.id));
-  const moduleIssues = allIssues.filter(
-    i => i.moduleId === module.id && i.status !== 'resolved' && i.status !== 'closed'
+  const moduleTasks = useMemo(() =>
+    allTasks.filter(t => t.moduleId === module.id || (t.moduleIds || []).includes(module.id)),
+    [allTasks, module.id]
+  );
+  const moduleIssues = useMemo(() =>
+    allIssues.filter(i => i.moduleId === module.id && i.status !== 'resolved' && i.status !== 'closed'),
+    [allIssues, module.id]
   );
   const completedTasks = moduleTasks.filter(t => t.status === 'done').length;
   const progress = moduleTasks.length > 0 ? (completedTasks / moduleTasks.length) * 100 : 0;
@@ -132,8 +138,9 @@ export function ModuleDetailModal({
   };
 
   const handleDelete = () => {
-    if (onDelete && window.confirm('Are you sure you want to delete this module?')) {
+    if (onDelete) {
       onDelete(module.id);
+      setShowDeleteConfirm(false);
       onClose();
     }
   };
@@ -217,7 +224,7 @@ export function ModuleDetailModal({
                   <Button variant="ghost" size="sm" onClick={handleEdit}>
                     <Edit2 className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={handleDelete} className="text-destructive hover:text-destructive">
+                  <Button variant="ghost" size="sm" onClick={() => setShowDeleteConfirm(true)} className="text-destructive hover:text-destructive">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </>
@@ -570,6 +577,15 @@ export function ModuleDetailModal({
           </ScrollArea>
         </div>
       </DialogContent>
+      <ConfirmationDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        title="Delete Module"
+        description="Are you sure you want to delete this module? This action cannot be undone and may affect associated tasks."
+        confirmText="Delete"
+        variant="destructive"
+      />
     </Dialog>
   );
 }

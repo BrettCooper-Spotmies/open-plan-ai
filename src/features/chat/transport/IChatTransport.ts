@@ -23,9 +23,19 @@ export interface IChatTransport {
     onTyping: (userId: string) => void
   ): RealtimeChannel;
 
+  subscribeToMemberUpdates(
+    conversationId: string | null,
+    onUpdate: (payload: any) => void
+  ): RealtimeChannel;
+
   subscribeToReadReceipts(
     conversationId: string,
     onInsert: (payload: any) => void
+  ): RealtimeChannel;
+
+  subscribeToMemberUpdates(
+    conversationId: string | null,
+    onUpdate: (payload: any) => void
   ): RealtimeChannel;
 
   unsubscribe(channel: RealtimeChannel): void;

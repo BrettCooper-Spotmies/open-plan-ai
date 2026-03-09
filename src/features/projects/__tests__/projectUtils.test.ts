@@ -21,7 +21,6 @@ const createTask = (overrides: Partial<Task> = {}): Task => ({
   status: 'todo',
   priority: 'medium',
   module: 'software' as ModuleType,
-  dependencies: [],
   blockedBy: [],
   tags: [],
   createdAt: new Date().toISOString(),

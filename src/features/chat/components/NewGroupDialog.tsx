@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Search, Check } from 'lucide-react';
+import { Search, Check, Camera, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { chatService } from '@/services/chat.service';
@@ -28,6 +28,9 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
   const [search, setSearch] = useState('');
   const [users, setUsers] = useState<ReachableUser[]>([]);
   const [loading, setLoading] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -61,7 +64,8 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
       const convId = await chatService.createGroup(
         name,
         description || undefined,
-        Array.from(selectedIds)
+        Array.from(selectedIds),
+        avatarUrl || undefined
       );
       if (onConversationCreated) await onConversationCreated();
       toast.success(`Group "${name}" created`);
@@ -76,10 +80,37 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
 
   const reset = () => {
     setStep(1);
-    setName('');
-    setDescription('');
-    setSelectedIds(new Set());
     setSearch('');
+    setAvatarUrl('');
+    setAvatarError(false);
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    setIsUploading(true);
+    setAvatarError(false);
+    try {
+      const publicUrl = await chatService.uploadGroupAvatar(file);
+      setAvatarUrl(publicUrl);
+      toast.success('Group photo uploaded');
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Failed to upload image: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const isEmoji = (str: string) => {
+    const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/;
+    return emojiRegex.test(str) && str.length <= 8;
   };
 
   return (
@@ -91,6 +122,42 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
 
         {step === 1 ? (
           <div className="space-y-4">
+            <div className="flex flex-col items-center gap-3 pt-2">
+              <div
+                className="relative group/avatar cursor-pointer transition-transform hover:scale-105"
+                onClick={() => !isUploading && document.getElementById('new-group-avatar')?.click()}
+              >
+                <Avatar className="h-20 w-20 mx-auto border-4 border-primary/10 shadow-sm">
+                  {avatarUrl && !isEmoji(avatarUrl) && !avatarError ? (
+                    <AvatarImage
+                      src={avatarUrl}
+                      onError={() => setAvatarError(true)}
+                      className="object-cover"
+                    />
+                  ) : null}
+                  <AvatarFallback className="text-2xl font-semibold bg-primary/5 text-primary">
+                    {isEmoji(avatarUrl) ? avatarUrl : (name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || '?')}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover/avatar:opacity-100 transition-opacity">
+                  {isUploading ? (
+                    <Loader2 className="h-6 w-6 text-white animate-spin" />
+                  ) : (
+                    <Camera className="h-6 w-6 text-white" />
+                  )}
+                </div>
+                <input
+                  id="new-group-avatar"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileChange}
+                  disabled={isUploading}
+                />
+              </div>
+              <p className="text-[10px] font-medium text-primary/60 uppercase tracking-wider">Add Group Image</p>
+            </div>
+
             <div className="space-y-2">
               <Label>Group Name *</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Design Team" autoFocus />
@@ -153,10 +220,13 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
           {step === 1 ? (
             <Button onClick={() => setStep(2)} disabled={!name.trim()}>Next</Button>
           ) : (
-            <Button onClick={handleCreate} disabled={selectedIds.size === 0}>Create Group</Button>
+            <Button onClick={handleCreate} disabled={selectedIds.size === 0}>
+              <Check className="h-4 w-4 mr-2" />
+              Create Group
+            </Button>
           )}
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   );
 }

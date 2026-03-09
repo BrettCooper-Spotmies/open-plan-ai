@@ -33,7 +33,7 @@ export function useReportWorker() {
     workerRef.current.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const { type, payload } = e.data;
       const resolver = resolversRef.current.get(type);
-      
+
       if (resolver) {
         resolver(payload);
         resolversRef.current.delete(type);
@@ -54,7 +54,9 @@ export function useReportWorker() {
 
   const calculateKPIs = useCallback((
     tasks: Task[],
-    issues: Issue[]
+    issues: Issue[],
+    milestones: any[] = [],
+    modules: any[] = []
   ): Promise<KPIResult> => {
     return new Promise((resolve) => {
       if (!workerRef.current) {
@@ -77,7 +79,7 @@ export function useReportWorker() {
 
       workerRef.current.postMessage({
         type: 'CALCULATE_KPI',
-        payload: { tasks, issues },
+        payload: { tasks, issues, milestones, modules },
       });
     });
   }, []);

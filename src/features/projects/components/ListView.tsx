@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { ArrowUpDown, AlertTriangle, Link2, Plus } from 'lucide-react';
+import { ArrowUpDown, AlertTriangle, Link2, Plus, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TaskDetailModal } from './TaskDetailModal';
 import { formatModuleType } from '../utils/projectUtils';
@@ -138,7 +138,6 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
     status: 'todo',
     priority: 'medium',
     module: '' as ModuleType,
-    dependencies: [],
     blockedBy: [],
     tags: [],
     assignees: [],
@@ -152,7 +151,10 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
   };
 
   const handleTaskUpdate = (updatedTask: Task) => {
-    setSelectedTask(updatedTask);
+    // Only update selected task if it's the one currently being viewed
+    if (selectedTask && selectedTask.id === updatedTask.id) {
+      setSelectedTask(updatedTask);
+    }
     // Call the parent callback
     if (onTaskUpdate) {
       onTaskUpdate(updatedTask);
@@ -246,6 +248,11 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
                     <div className="flex items-start gap-2">
                       {blockerCount > 0 && (
                         <AlertTriangle className="h-4 w-4 text-status-blocked shrink-0 mt-0.5" />
+                      )}
+                      {task.status === 'done' && (
+                        <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center shrink-0 mt-0.5">
+                          <Check className="h-3 w-3 text-status-done" />
+                        </div>
                       )}
                       <div>
                         <p className="font-medium">{task.title}</p>
