@@ -1,19 +1,24 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { chatService } from '@/services/chat.service';
+import { toast } from 'sonner';
 import { chatTransport } from '../transport';
 import { mapMessage } from '../chat.mappers';
 import { useChatStore } from '../stores/useChatStore';
 import type { Conversation, ChatMessage, MessageReaction } from '../types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+
+const generateId = () => {
+  try {
+    return crypto.randomUUID();
+  } catch (e) {
+    return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+  }
+};
 
 /**
  * Stale-while-revalidate hook for conversations.
- *
- * On mount:
- * - If the store already has conversations → return them instantly (loading = false).
- *   A background revalidation is kicked off if the data is stale.
- * - If the store is empty → show loading, fetch, and populate the store.
  */
 export function useConversations() {
   const {
@@ -44,38 +49,21 @@ export function useConversations() {
     }
   }, [setConversations]);
 
-  // Initial fetch / revalidation
   useEffect(() => {
     isMountedRef.current = true;
-
     if (hasCachedData) {
-      // Data already available — show it instantly
       setLocalConversations(cachedConversations);
       setLoading(false);
-
-      // Background-revalidate if stale
-      if (isConversationsStale()) {
-        fetchConversations(true);
-      }
+      if (isConversationsStale()) fetchConversations(true);
     } else {
-      // No cached data — initial load with shimmer
       fetchConversations(false);
     }
-
-    return () => {
-      isMountedRef.current = false;
-    };
-    // Only run on mount — cachedConversations is read from initial snapshot
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { isMountedRef.current = false; };
   }, []);
 
-  // Subscribe to realtime updates — also track unread
   useEffect(() => {
     if (!conversations.length) return;
-
     const convIds = conversations.map((c) => c.id);
-
-    // Listen for new messages across all conversations for unread tracking
     const msgChannel = supabase
       .channel('global-new-messages')
       .on(
@@ -94,15 +82,17 @@ export function useConversations() {
 
     channelRef.current = chatTransport.subscribeToConversationUpdates(
       convIds,
-      () => {
-        fetchConversations(true);
-      }
+      () => { fetchConversations(true); }
+    );
+
+    const memberChannel = chatTransport.subscribeToMemberUpdates(
+      null,
+      () => { fetchConversations(true); }
     );
 
     return () => {
-      if (channelRef.current) {
-        chatTransport.unsubscribe(channelRef.current);
-      }
+      if (channelRef.current) chatTransport.unsubscribe(channelRef.current);
+      chatTransport.unsubscribe(memberChannel);
       supabase.removeChannel(msgChannel);
     };
   }, [conversations.length, fetchConversations]);
@@ -111,21 +101,21 @@ export function useConversations() {
 }
 
 /**
- * Stale-while-revalidate hook for messages.
- *
- * On mount / conversationId change:
- * - If the store has cached messages for this conversation → return them instantly.
- *   A background revalidation is kicked off if the data is stale.
- * - If no cache → show loading, fetch, and populate the store.
+ * Stale-while-revalidate hook for messages with offline support.
  */
 export function useMessages(conversationId: string | null) {
+  const { user, profile } = useAuth();
   const {
     getCachedMessages,
     setCachedMessages,
     isMessagesStale,
     addMessage: storeAddMessage,
     updateMessage: storeUpdateMessage,
+    resolveOptimisticMessage: storeResolveOptimistic,
     appendOlderMessages: storeAppendOlder,
+    pendingMessages,
+    addPendingMessage,
+    removePendingMessage,
   } = useChatStore();
 
   const cached = conversationId ? getCachedMessages(conversationId) : null;
@@ -138,7 +128,15 @@ export function useMessages(conversationId: string | null) {
   const updateChannelRef = useRef<RealtimeChannel | null>(null);
   const PAGE_SIZE = 50;
 
-  // Initial fetch / revalidation
+  const updatePreview = useCallback((convId: string, lastMsg: any) => {
+    const store = useChatStore.getState();
+    store.setConversations(
+      store.conversations.map(c =>
+        c.id === convId ? { ...c, lastMessage: lastMsg, lastMessageAt: lastMsg.createdAt } : c
+      )
+    );
+  }, []);
+
   useEffect(() => {
     if (!conversationId) {
       setMessages([]);
@@ -148,14 +146,10 @@ export function useMessages(conversationId: string | null) {
     }
 
     const cachedEntry = getCachedMessages(conversationId);
-
     if (cachedEntry) {
-      // Show cached data immediately
       setMessages(cachedEntry.messages);
       setHasMore(cachedEntry.hasMore);
       setLoading(false);
-
-      // Background-revalidate if stale
       if (isMessagesStale(conversationId)) {
         chatService
           .getMessages(conversationId, { limit: PAGE_SIZE })
@@ -167,10 +161,8 @@ export function useMessages(conversationId: string | null) {
           .catch((err) => console.error('Background message revalidation failed:', err));
       }
     } else {
-      // No cache — fetch with loading indicator
       let cancelled = false;
       setLoading(true);
-
       chatService
         .getMessages(conversationId, { limit: PAGE_SIZE })
         .then((data) => {
@@ -185,52 +177,184 @@ export function useMessages(conversationId: string | null) {
           console.error('Failed to fetch messages:', err);
           if (!cancelled) setLoading(false);
         });
-
-      return () => {
-        cancelled = true;
-      };
+      return () => { cancelled = true; };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId]);
 
-  // Realtime subscription for new messages (INSERT)
   useEffect(() => {
     if (!conversationId) return;
-
     channelRef.current = chatTransport.subscribeToMessages(
       conversationId,
       async (payload) => {
         const newMsg = payload.new;
-        // Fetch sender profile for the new message
         const { data: profile } = await supabase
           .from('profiles')
           .select('id, name, email, avatar_url, initials, role')
           .eq('id', newMsg.sender_id)
           .single();
-
         const mapped = mapMessage(newMsg, profile as any);
-
         setMessages((prev) => {
-          // Avoid duplicates
           if (prev.some((m) => m.id === mapped.id)) return prev;
           return [...prev, mapped];
         });
-        // Also update the store cache
         storeAddMessage(conversationId, mapped);
       }
     );
-
-    return () => {
-      if (channelRef.current) {
-        chatTransport.unsubscribe(channelRef.current);
-      }
-    };
+    return () => { if (channelRef.current) chatTransport.unsubscribe(channelRef.current); };
   }, [conversationId, storeAddMessage]);
 
-  // Realtime subscription for message edits & soft-deletes (UPDATE)
+  const sendMessage = useCallback(async (content: string, type: 'text' | 'file' = 'text', fileData?: any) => {
+    if (!conversationId || !user) return;
+
+    const tempId = `temp-${generateId()}`;
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      conversationId,
+      senderId: user.id,
+      senderName: profile?.name || 'You',
+      senderInitials: profile?.initials || 'Y',
+      contentType: type,
+      content: type === 'file' ? JSON.stringify(fileData) : content,
+      attachments: [],
+      createdAt: new Date().toISOString(),
+      isEdited: false,
+      isOptimistic: true,
+      status: 'sending',
+    };
+
+    // 1. Add optimistically to local state and store
+    setMessages((prev) => [...prev, optimisticMsg]);
+    storeAddMessage(conversationId, optimisticMsg);
+
+    const markAsPending = () => {
+      const pendingMsg = { ...optimisticMsg, status: 'pending' as const };
+      setMessages((prev) => prev.map(m => m.id === tempId ? pendingMsg : m));
+      storeUpdateMessage(conversationId, tempId, () => pendingMsg);
+      addPendingMessage(pendingMsg);
+      updatePreview(conversationId, {
+        content: pendingMsg.content,
+        senderName: pendingMsg.senderName,
+        createdAt: pendingMsg.createdAt,
+        status: 'pending'
+      });
+    };
+
+    // Check immediate offline
+    if (!navigator.onLine) {
+      markAsPending();
+      return;
+    }
+
+    try {
+      let realMsg: ChatMessage;
+      if (type === 'file') {
+        const { data, error } = await supabase
+          .from('chat_messages')
+          .insert({
+            conversation_id: conversationId,
+            sender_id: user.id,
+            content: optimisticMsg.content,
+            content_type: 'file',
+          })
+          .select()
+          .single();
+        if (error) throw error;
+        const { data: senderProfile } = await supabase
+          .from('profiles')
+          .select('id, name, email, avatar_url, initials, role')
+          .eq('id', user.id)
+          .single();
+        realMsg = mapMessage(data as any, senderProfile as any);
+      } else {
+        realMsg = await chatService.sendMessage(conversationId, content);
+      }
+      realMsg.status = 'sent';
+      setMessages((prev) => {
+        // If the real message was already added by realtime, just remove the temp one
+        if (prev.some((m) => m.id === realMsg.id)) {
+          return prev.filter((m) => m.id !== tempId);
+        }
+        return prev.map((m) => (m.id === tempId ? realMsg : m));
+      });
+      storeResolveOptimistic(conversationId, tempId, realMsg);
+      removePendingMessage(tempId);
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      const isNetworkError = !navigator.onLine ||
+        err.name === 'TypeError' ||
+        err.message?.toLowerCase().includes('fetch') ||
+        err.message?.toLowerCase().includes('network');
+
+      if (isNetworkError) {
+        markAsPending();
+        // Do NOT re-throw, as we handled it by showing it as pending
+        return;
+      } else {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        toast.error('Failed to send message');
+        throw err;
+      }
+    }
+  }, [conversationId, user, profile, storeAddMessage, storeResolveOptimistic, storeUpdateMessage, addPendingMessage, removePendingMessage, updatePreview]);
+
   useEffect(() => {
     if (!conversationId) return;
+    const handleOnline = async () => {
+      const allPending = useChatStore.getState().pendingMessages;
+      if (allPending.length === 0) return;
 
+      toast.info(`Connection restored. Syncing ${allPending.length} pending message(s)...`);
+
+      for (const msg of allPending) {
+        try {
+          const isCurrentConv = msg.conversationId === conversationId;
+          const sendingMsg = { ...msg, status: 'sending' as const };
+
+          if (isCurrentConv) {
+            setMessages(prev => prev.map(m => m.id === msg.id ? sendingMsg : m));
+          }
+          storeUpdateMessage(msg.conversationId, msg.id, () => sendingMsg);
+
+          const realMsg = await chatService.sendMessage(msg.conversationId, msg.content, msg.senderId);
+          realMsg.status = 'sent';
+
+          if (isCurrentConv) {
+            setMessages(prev => {
+              if (prev.some(m => m.id === realMsg.id)) {
+                return prev.filter(m => m.id !== msg.id);
+              }
+              return prev.map(m => m.id === msg.id ? realMsg : m);
+            });
+          }
+          storeResolveOptimistic(msg.conversationId, msg.id, realMsg);
+          removePendingMessage(msg.id);
+        } catch (err) {
+          console.error('Failed to resend:', err);
+          const isStillOffline = !navigator.onLine || err.name === 'TypeError' || err.message?.includes('fetch');
+          if (!isStillOffline) {
+            // If it's a real server error (e.g. 400), remove it to avoid infinite loops
+            removePendingMessage(msg.id);
+            if (msg.conversationId === conversationId) {
+              setMessages(prev => prev.filter(m => m.id !== msg.id));
+            }
+          } else {
+            // Keep as pending
+            const reverted = { ...msg, status: 'pending' as const };
+            if (msg.conversationId === conversationId) {
+              setMessages(prev => prev.map(m => m.id === msg.id ? reverted : m));
+            }
+            storeUpdateMessage(msg.conversationId, msg.id, () => reverted);
+          }
+        }
+      }
+    };
+    window.addEventListener('online', handleOnline);
+    if (navigator.onLine) handleOnline();
+    return () => window.removeEventListener('online', handleOnline);
+  }, [conversationId, pendingMessages, storeUpdateMessage, storeResolveOptimistic, removePendingMessage]);
+
+  useEffect(() => {
+    if (!conversationId) return;
     updateChannelRef.current = chatTransport.subscribeToMessageUpdates(
       conversationId,
       (payload) => {
@@ -238,7 +362,6 @@ export function useMessages(conversationId: string | null) {
         setMessages((prev) =>
           prev.map((m) => {
             if (m.id !== updatedRow.id) return m;
-            // Re-map the updated DB row, preserving sender info from existing state
             return mapMessage(updatedRow, {
               id: m.senderId,
               name: m.senderName,
@@ -246,7 +369,6 @@ export function useMessages(conversationId: string | null) {
             } as any);
           })
         );
-        // Also update the store cache
         storeUpdateMessage(conversationId, updatedRow.id, (m) =>
           mapMessage(updatedRow, {
             id: m.senderId,
@@ -256,15 +378,9 @@ export function useMessages(conversationId: string | null) {
         );
       }
     );
-
-    return () => {
-      if (updateChannelRef.current) {
-        chatTransport.unsubscribe(updateChannelRef.current);
-      }
-    };
+    return () => { if (updateChannelRef.current) chatTransport.unsubscribe(updateChannelRef.current); };
   }, [conversationId, storeUpdateMessage]);
 
-  // Explicit refetch used as a fallback after edit/delete actions complete
   const refetchMessages = useCallback(async () => {
     if (!conversationId) return;
     try {
@@ -279,21 +395,32 @@ export function useMessages(conversationId: string | null) {
 
   const loadMore = useCallback(async () => {
     if (!conversationId || !messages.length || !hasMore) return;
-
     const oldest = messages[0];
     const older = await chatService.getMessages(conversationId, {
       before: oldest.createdAt,
       limit: PAGE_SIZE,
     });
-
     const newHasMore = older.length === PAGE_SIZE;
     setHasMore(newHasMore);
     setMessages((prev) => [...older, ...prev]);
-    // Also update the store cache
     storeAppendOlder(conversationId, older, newHasMore);
   }, [conversationId, messages, hasMore, storeAppendOlder]);
 
-  return { messages, loading, hasMore, loadMore, refetchMessages };
+  const combinedMessages = useMemo(() => {
+    if (!conversationId) return [];
+    const convPending = pendingMessages.filter(m => m.conversationId === conversationId);
+    const result = [...messages];
+
+    for (const pm of convPending) {
+      if (!result.some(m => m.id === pm.id)) {
+        result.push(pm);
+      }
+    }
+
+    return result.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [messages, pendingMessages, conversationId]);
+
+  return { messages: combinedMessages, loading, hasMore, loadMore, refetchMessages, sendMessage };
 }
 
 export function useReactions(messages: ChatMessage[], currentUserId?: string) {
@@ -303,10 +430,12 @@ export function useReactions(messages: ChatMessage[], currentUserId?: string) {
   const fetchReactions = useCallback(async () => {
     if (!messages.length || !currentUserId) return;
     try {
-      const map = await chatService.getReactions(
-        messages.map((m) => m.id),
-        currentUserId
-      );
+      const ids = messages.map((m) => m.id).filter(id => !id.startsWith('temp-'));
+      if (ids.length === 0) {
+        setReactionMap({});
+        return;
+      }
+      const map = await chatService.getReactions(ids, currentUserId);
       setReactionMap(map);
     } catch (err) {
       console.error('Failed to fetch reactions:', err);
@@ -317,34 +446,23 @@ export function useReactions(messages: ChatMessage[], currentUserId?: string) {
     fetchReactions();
   }, [fetchReactions]);
 
-  // Realtime subscription for reaction changes
   useEffect(() => {
     if (!messages.length) return;
-
     const channel = supabase
       .channel('message-reactions-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'message_reactions' },
-        () => {
-          fetchReactions();
-        }
+        () => { fetchReactions(); }
       )
       .subscribe();
-
     channelRef.current = channel;
-
-    return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
-      }
-    };
+    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
   }, [messages.length, fetchReactions]);
 
   const handleToggleReaction = useCallback(async (messageId: string, emoji: string) => {
     try {
       await chatService.toggleReaction(messageId, emoji);
-      // Optimistic: refetch immediately
       await fetchReactions();
     } catch (err) {
       console.error('Failed to toggle reaction:', err);

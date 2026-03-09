@@ -17,6 +17,7 @@ import { IssueDetailContent } from './IssueDetailContent';
 import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 
 interface IssueDetailModalProps {
   issue: Issue | null;
@@ -50,6 +51,7 @@ export function IssueDetailModal({
 }: IssueDetailModalProps) {
   const navigate = useNavigate();
   const [editedIssue, setEditedIssue] = useState<Issue | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (isOpen && issue) {
@@ -60,8 +62,9 @@ export function IssueDetailModal({
   if (!editedIssue) return null;
 
   const handleDelete = () => {
-    if (onDelete && editedIssue && window.confirm('Are you sure you want to delete this issue?')) {
+    if (onDelete && editedIssue) {
       onDelete(editedIssue.id);
+      setShowDeleteConfirm(false);
       onClose();
     }
   };
@@ -128,7 +131,7 @@ export function IssueDetailModal({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleDelete}
+                  onClick={() => setShowDeleteConfirm(true)}
                   className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -141,6 +144,15 @@ export function IssueDetailModal({
           </div>
         )}
       </DialogContent>
+      <ConfirmationDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        title="Delete Issue"
+        description="Are you sure you want to delete this issue? This action cannot be undone."
+        confirmText="Delete"
+        variant="destructive"
+      />
     </Dialog>
   );
 }

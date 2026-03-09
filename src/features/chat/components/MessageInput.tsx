@@ -15,12 +15,13 @@ interface MessageInputProps {
   onMessageSent?: () => void;
   onTyping?: () => void;
   members?: ConversationMember[];
+  sendMessage?: (content: string, type?: 'text' | 'file', fileData?: any) => Promise<void>;
 }
 
 const MAX_CHARS = 4000;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-export function MessageInput({ conversationId, onMessageSent, onTyping, members }: MessageInputProps) {
+export function MessageInput({ conversationId, onMessageSent, onTyping, members, sendMessage }: MessageInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const setDraft = useChatStore((s) => s.setDraft);
@@ -91,6 +92,8 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members 
       if (pendingFile) {
         await sendFileMessage(pendingFile, trimmed);
         setPendingFile(null);
+      } else if (sendMessage) {
+        await sendMessage(trimmed);
       } else {
         await chatService.sendMessage(conversationId, trimmed);
       }
@@ -142,15 +145,25 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members 
     const userId = user?.id;
     if (!userId) throw new Error('Not authenticated');
 
-    const { error } = await supabase
-      .from('chat_messages')
-      .insert({
-        conversation_id: conversationId,
-        sender_id: userId,
-        content,
-        content_type: 'file',
+    if (sendMessage) {
+      await sendMessage('', 'file', {
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type,
+        url: urlData.publicUrl,
+        text: text || undefined,
       });
-    if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('chat_messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: userId,
+          content,
+          content_type: 'file',
+        });
+      if (error) throw error;
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -104,7 +104,6 @@ export interface Task {
   startDate?: string;
   estimatedHours?: number;
   actualHours?: number;
-  dependencies: string[]; // Task IDs this task depends on
   blockedBy: string[]; // Task IDs blocking this task
   tags: string[];
   checklist?: ChecklistItem[];
@@ -153,7 +152,6 @@ export interface Issue {
   comments?: Comment[];
   tags?: string[];
   checklist?: ChecklistItem[];
-  dependencies?: string[]; // IDs of other issues or tasks it depends on? Sticking to generic for now matching Task
   blockedBy?: string[];
 }
 

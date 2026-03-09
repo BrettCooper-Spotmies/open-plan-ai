@@ -72,7 +72,17 @@ export function ProjectListProgress({ projectId, progress }: ProjectListProgress
                     <Progress value={displayProgress} className="h-2" />
                 </div>
             </HoverCardTrigger>
-            <HoverCardContent className="w-64" align="start">
+            <HoverCardContent
+                className="w-64"
+                align="start"
+                onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }}
+                onPointerDown={(e) => {
+                    e.stopPropagation();
+                }}
+            >
                 {isLoading ? (
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">

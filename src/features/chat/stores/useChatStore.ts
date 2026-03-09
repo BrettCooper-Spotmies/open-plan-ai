@@ -28,6 +28,7 @@ interface ChatState {
   conversations: Conversation[];
   conversationsLoadedAt: number | null;
   messagesCache: Record<string, MessagesCacheEntry>;
+  pendingMessages: ChatMessage[];
 
   // ── Presence state ────────────────────────────────────────────────────
   onlineUserIds: Set<string>;
@@ -56,7 +57,10 @@ interface ChatState {
   isMessagesStale: (conversationId: string) => boolean;
   addMessage: (conversationId: string, message: ChatMessage) => void;
   updateMessage: (conversationId: string, messageId: string, updater: (msg: ChatMessage) => ChatMessage) => void;
+  resolveOptimisticMessage: (conversationId: string, tempId: string, realMessage: ChatMessage) => void;
   appendOlderMessages: (conversationId: string, older: ChatMessage[], hasMore: boolean) => void;
+  addPendingMessage: (message: ChatMessage) => void;
+  removePendingMessage: (messageId: string) => void;
   clearCache: () => void;
 }
 
@@ -77,6 +81,7 @@ export const useChatStore = create<ChatState>()(
       conversations: [],
       conversationsLoadedAt: null,
       messagesCache: {},
+      pendingMessages: [],
 
       // ── Presence state defaults ───────────────────────────────────────
       onlineUserIds: new Set(),
@@ -183,6 +188,35 @@ export const useChatStore = create<ChatState>()(
           };
         }),
 
+      resolveOptimisticMessage: (conversationId, tempId, realMessage) =>
+        set((state) => {
+          const entry = state.messagesCache[conversationId];
+          if (!entry) return state;
+
+          const messages = entry.messages.map((m) =>
+            m.id === tempId ? realMessage : m
+          );
+
+          // If the real message was already added (e.g. by realtime before we resolved),
+          // we should filter out the duplicate (tempId) instead of replacing it.
+          const hasRealAlready = entry.messages.some(
+            (m) => m.id === realMessage.id && m.id !== tempId
+          );
+          const finalMessages = hasRealAlready
+            ? entry.messages.filter((m) => m.id !== tempId)
+            : messages;
+
+          return {
+            messagesCache: {
+              ...state.messagesCache,
+              [conversationId]: {
+                ...entry,
+                messages: finalMessages,
+              },
+            },
+          };
+        }),
+
       appendOlderMessages: (conversationId, older, hasMore) =>
         set((state) => {
           const entry = state.messagesCache[conversationId];
@@ -199,12 +233,25 @@ export const useChatStore = create<ChatState>()(
           };
         }),
 
+      addPendingMessage: (message) =>
+        set((state) => ({
+          pendingMessages: [...state.pendingMessages.filter(m => m.id !== message.id), message],
+        })),
+
+      removePendingMessage: (messageId) =>
+        set((state) => ({
+          pendingMessages: state.pendingMessages.filter((m) => m.id !== messageId),
+        })),
+
       clearCache: () =>
-        set({ conversations: [], conversationsLoadedAt: null, messagesCache: {} }),
+        set({ conversations: [], conversationsLoadedAt: null, messagesCache: {}, pendingMessages: [] }),
     }),
     {
       name: 'chat-store',
-      partialize: (state) => ({ draftMessages: state.draftMessages }),
+      partialize: (state) => ({
+        draftMessages: state.draftMessages,
+        pendingMessages: state.pendingMessages
+      }),
     }
   )
 );

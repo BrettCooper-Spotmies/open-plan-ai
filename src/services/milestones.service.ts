@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { format } from 'date-fns';
+import { activitiesService } from './activities.service';
 
 export type Milestone = Tables<'milestones'>;
 export type MilestoneInsert = TablesInsert<'milestones'>;
@@ -53,6 +54,18 @@ export const milestonesService = {
       .single();
 
     if (error) throw error;
+
+    // Log activity
+    const { data: { user } } = await supabase.auth.getUser();
+    activitiesService.create({
+      project_id: data.project_id,
+      activity_type: 'milestone_reached',
+      description: `created milestone "${data.name}"`,
+      user_id: user?.id || null,
+      entity_id: data.id,
+      entity_type: 'milestone',
+    }).catch(() => { /* non-critical */ });
+
     return data;
   },
 

@@ -116,17 +116,69 @@ export function filterTasksByTimeRange(
 }
 
 // Calculate project progress
-export function calculateProjectProgress(tasks: Task[]): {
+export function calculateProjectProgress(
+  tasks: Task[],
+  milestones: Milestone[] = [],
+  modules: Module[] = [],
+  issues: Issue[] = []
+): {
   progress: number;
   completed: number;
   total: number
 } {
   const total = tasks.length;
-  if (total === 0) return { progress: 0, completed: 0, total: 0 };
+  if (total === 0 && milestones.length === 0 && modules.length === 0 && issues.length === 0) {
+    return { progress: 0, completed: 0, total: 0 };
+  }
+
+  // Task progress: % of tasks completed
+  const taskProgress = tasks.length > 0
+    ? Math.round((tasks.filter(t => t.status === 'done').length / tasks.length) * 100)
+    : 0;
+
+  // Milestone progress: % of milestones completed
+  const milestoneProgress = milestones.length > 0
+    ? Math.round((milestones.filter(m => m.completed).length / milestones.length) * 100)
+    : 0;
+
+  // Module progress: average of all module progresses
+  // Calculated dynamically from tasks associated with each module
+  const moduleProgress = modules.length > 0
+    ? Math.round(
+      modules.reduce((sum, m) => {
+        const moduleTasks = tasks.filter(t =>
+          t.moduleId === m.id || (t.moduleIds || []).includes(m.id)
+        );
+        const progress = moduleTasks.length > 0
+          ? (moduleTasks.filter(t => t.status === 'done').length / moduleTasks.length) * 100
+          : (m.progress || 0);
+        return sum + progress;
+      }, 0) / modules.length
+    )
+    : 0;
+
+  // Issue progress: % of issues resolved/closed
+  const resolvedIssues = issues.filter(i =>
+    i.status === 'resolved' || i.status === 'closed'
+  ).length;
+  const issueProgress = issues.length > 0
+    ? Math.round((resolvedIssues / issues.length) * 100)
+    : 0;
+
+  // Overall: average only the metrics that have data
+  const metrics = [];
+  if (tasks.length > 0) metrics.push(taskProgress);
+  if (milestones.length > 0) metrics.push(milestoneProgress);
+  if (modules.length > 0) metrics.push(moduleProgress);
+  if (issues.length > 0) metrics.push(issueProgress);
+
+  const overallProgress = metrics.length > 0
+    ? Math.round(metrics.reduce((sum, val) => sum + val, 0) / metrics.length)
+    : 0;
 
   const completed = tasks.filter(t => t.status === 'done').length;
   return {
-    progress: Math.round((completed / total) * 100),
+    progress: overallProgress,
     completed,
     total
   };
@@ -197,7 +249,10 @@ export function getMilestoneHealth(
   const today = startOfDay(new Date());
 
   return milestones.map(milestone => {
-    const linkedTasks = tasks.filter(t => t.milestoneId === milestone.id);
+    const linkedTasks = tasks.filter(t =>
+      t.milestoneId === milestone.id ||
+      milestone.linkedTaskIds?.includes(t.id)
+    );
     const completedTasks = linkedTasks.filter(t => t.status === 'done').length;
     const blockedTasks = linkedTasks.filter(t => t.status === 'blocked').length;
     const overdueTasks = linkedTasks.filter(t => {
@@ -206,7 +261,9 @@ export function getMilestoneHealth(
     }).length;
 
     const totalTasks = linkedTasks.length;
-    const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+    const progress = totalTasks > 0
+      ? Math.round((completedTasks / totalTasks) * 100)
+      : (milestone.completed ? 100 : 0);
     const daysRemaining = (milestone.date && milestone.date.length > 0)
       ? differenceInDays(parse(milestone.date, 'yyyy-MM-dd', new Date()), today)
       : 0;
@@ -270,10 +327,16 @@ export function getModuleProgress(
   modules: Module[]
 ): ModuleProgressItem[] {
   return modules.map(module => {
-    const moduleTasks = tasks.filter(t => t.moduleId === module.id);
+    const moduleTasks = tasks.filter(t =>
+      t.moduleId === module.id || (t.moduleIds || []).includes(module.id)
+    );
     const completedTasks = moduleTasks.filter(t => t.status === 'done').length;
     const totalTasks = moduleTasks.length;
-    const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+    // Use dynamic progress if tasks exist, otherwise fall back to stored progress
+    const progress = totalTasks > 0
+      ? Math.round((completedTasks / totalTasks) * 100)
+      : (module.progress || 0);
 
     return {
       module,
@@ -281,7 +344,7 @@ export function getModuleProgress(
       totalTasks,
       completedTasks
     };
-  }).filter(item => item.totalTasks > 0);
+  }).filter(item => item.totalTasks > 0 || (item.module.progress && item.module.progress > 0));
 }
 
 // Get completed tasks trend
@@ -317,9 +380,11 @@ export function getCompletedTasksTrend(
 export function calculateKPIs(
   tasks: Task[],
   issues: Issue[],
-  dateRange: { start: Date; end: Date }
+  dateRange: { start: Date; end: Date },
+  milestones: Milestone[] = [],
+  modules: Module[] = []
 ): ReportKPI {
-  const progressData = calculateProjectProgress(tasks);
+  const progressData = calculateProjectProgress(tasks, milestones, modules, issues);
   const issueData = countOpenIssues(issues);
   const trendData = getCompletedTasksTrend(tasks, dateRange);
 

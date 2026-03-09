@@ -3,6 +3,8 @@ import { issuesService } from '@/services/issues.service';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { queryKeys } from '@/lib/queryClient';
 import { Issue } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 /**
  * Fetch all issues across all projects
@@ -11,6 +13,36 @@ export function useAllIssues() {
   return useQuery({
     queryKey: queryKeys.issues.all,
     queryFn: () => issuesService.getAll(),
+  });
+}
+
+/**
+ * Fetch all issues for the current organization
+ */
+export function useOrgAllIssues() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
+  return useQuery({
+    queryKey: [...queryKeys.issues.all, 'org', orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+
+      // Step 1: Get all project IDs for this organization
+      const { data: projectRows } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('organization_id', orgId)
+        .is('deleted_at', null);
+
+      const projectIds = (projectRows || []).map(p => p.id);
+      if (projectIds.length === 0) return [];
+
+      // Step 2: Get all issues for these projects
+      const allIssues = await issuesService.getAll();
+      return allIssues.filter(i => i.projectId && projectIds.includes(i.projectId));
+    },
+    enabled: !!orgId,
   });
 }
 
@@ -87,8 +119,24 @@ export function useUpdateIssue() {
       // Snapshot the previous value
       const previousIssue = queryClient.getQueryData(queryKeys.issues.detail(issueId));
 
-      // Optimistically update the store
-      updateIssue(projectId, issueId, updates);
+      // Optimically update the store
+      const timestamp = (updates.status === 'resolved' || updates.status === 'closed') ? new Date().toISOString() : undefined;
+      const issueUpdates = { ...updates, resolvedAt: timestamp };
+      updateIssue(projectId, issueId, issueUpdates);
+
+      // Also update the projects cache if it exists
+      queryClient.setQueriesData({ queryKey: queryKeys.projects.root }, (old: any) => {
+        if (!old) return old;
+        return old.map((p: any) => {
+          if (p.id !== projectId) return p;
+          return {
+            ...p,
+            issues: (p.issues || []).map((i: any) =>
+              i.id === issueId ? { ...i, ...issueUpdates } : i
+            )
+          };
+        });
+      });
 
       return { previousIssue, projectId };
     },

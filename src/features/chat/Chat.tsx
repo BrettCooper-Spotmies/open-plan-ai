@@ -29,7 +29,7 @@ export default function Chat() {
 
   const { conversations, loading: convsLoading, refetch } = useConversations();
   const activeId = conversationId || activeConversationId;
-  const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages } = useMessages(activeId ?? null);
+  const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages, sendMessage } = useMessages(activeId ?? null);
   const { reactionMap, handleToggleReaction } = useReactions(messages, user?.id);
   const { data: reachableUsers = [] } = useReachableUsers();
   const onlineUserIds = useChatStore((s) => s.onlineUserIds);
@@ -136,6 +136,7 @@ export default function Chat() {
                   onMessageSent={refetch}
                   onTyping={broadcastTyping}
                   members={activeConv.members}
+                  sendMessage={sendMessage}
                 />
               </>
             ) : (

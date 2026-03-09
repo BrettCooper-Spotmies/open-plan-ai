@@ -3,6 +3,8 @@ import { tasksService } from '@/services/tasks.service';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { queryKeys } from '@/lib/queryClient';
 import { Task } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 /**
  * Fetch all tasks across all projects
@@ -11,6 +13,36 @@ export function useAllTasks() {
   return useQuery({
     queryKey: queryKeys.tasks.all,
     queryFn: () => tasksService.getAll(),
+  });
+}
+
+/**
+ * Fetch all tasks for the current organization
+ */
+export function useOrgAllTasks() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
+  return useQuery({
+    queryKey: [...queryKeys.tasks.all, 'org', orgId],
+    queryFn: async () => {
+      if (!orgId) return [];
+
+      // Step 1: Get all project IDs for this organization
+      const { data: projectRows } = await supabase
+        .from('projects')
+        .select('id')
+        .eq('organization_id', orgId)
+        .is('deleted_at', null);
+
+      const projectIds = (projectRows || []).map(p => p.id);
+      if (projectIds.length === 0) return [];
+
+      // Step 2: Get all tasks for these projects
+      const allTasks = await tasksService.getAll();
+      return allTasks.filter(t => t.projectId && projectIds.includes(t.projectId));
+    },
+    enabled: !!orgId,
   });
 }
 
@@ -80,7 +112,24 @@ export function useUpdateTask() {
       const previousTask = queryClient.getQueryData(queryKeys.tasks.detail(taskId));
 
       // Optimistically update the store
-      updateTask(projectId, taskId, updates);
+      const timestamp = updates.status === 'done' ? new Date().toISOString() : undefined;
+      const taskUpdates = { ...updates, updatedAt: timestamp };
+
+      updateTask(projectId, taskId, taskUpdates);
+
+      // Also update the projects cache if it exists
+      queryClient.setQueriesData({ queryKey: queryKeys.projects.root }, (old: any) => {
+        if (!old) return old;
+        return old.map((p: any) => {
+          if (p.id !== projectId) return p;
+          return {
+            ...p,
+            tasks: p.tasks.map((t: any) =>
+              t.id === taskId ? { ...t, ...taskUpdates } : t
+            )
+          };
+        });
+      });
 
       return { previousTask, projectId };
     },

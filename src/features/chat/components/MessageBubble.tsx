@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, Plus, MoreHorizontal, SmilePlus } from 'lucide-react';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, Plus, MoreHorizontal, SmilePlus, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -15,6 +15,7 @@ import {
 import { format, differenceInHours } from 'date-fns';
 import { ChatMessage, ReadReceipt, MessageReaction } from '../types';
 import { toast } from 'sonner';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 
 const EMOJI_SET = ['👍', '❤️', '😂', '😮', '🔥', '💯'];
 const EXTENDED_EMOJI_SET = [
@@ -63,11 +64,11 @@ function formatFileSize(bytes: number): string {
 
 function ExpandableText({ text, query }: { text: string; query?: string }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   const isLong = text.length > 300 || (text.match(/\n/g) || []).length > 5;
-  
-  const displayText = isLong && !isExpanded 
-    ? text.substring(0, 300) + (text.length > 300 ? '...' : '') 
+
+  const displayText = isLong && !isExpanded
+    ? text.substring(0, 300) + (text.length > 300 ? '...' : '')
     : text;
 
   const renderText = (content: string) => {
@@ -85,7 +86,7 @@ function ExpandableText({ text, query }: { text: string; query?: string }) {
         {renderText(displayText)}
       </div>
       {isLong && (
-        <button 
+        <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="text-xs opacity-80 hover:opacity-100 font-medium mt-1 self-start underline underline-offset-2"
         >
@@ -210,6 +211,8 @@ export function MessageBubble({
   const [isReactionPickerOpen, setIsReactionPickerOpen] = useState(false);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
   // Toolbar stays visible while hovered OR any popover/dropdown is open
   const showToolbar = isHovered || isMoreEmojiOpen || isMenuOpen;
 
@@ -254,9 +257,8 @@ export function MessageBubble({
   };
 
   const handleDelete = () => {
-    if (window.confirm('Delete this message? It will show as deleted to everyone.')) {
-      onDelete?.(message.id, message.senderName);
-    }
+    onDelete?.(message.id, message.senderName);
+    setShowDeleteConfirm(false);
   };
 
   const handleCopy = () => {
@@ -273,18 +275,9 @@ export function MessageBubble({
     setIsMoreEmojiOpen(false);
   };
 
-  // When modifying a reaction via the pill picker, replace existing reaction
+  // When modifying a reaction via the pill picker, rely on backend replace logic
   const handleReactionReplace = async (emoji: string) => {
-    const myExistingReactions = reactions?.filter((r) => r.reactedByMe) ?? [];
-    const alreadyReactedWithThis = myExistingReactions.some((r) => r.emoji === emoji);
-    if (alreadyReactedWithThis) {
-      onToggleReaction?.(message.id, emoji);
-    } else {
-      for (const existing of myExistingReactions) {
-        await onToggleReaction?.(message.id, existing.emoji);
-      }
-      onToggleReaction?.(message.id, emoji);
-    }
+    onToggleReaction?.(message.id, emoji);
     setIsReactionPickerOpen(false);
   };
 
@@ -317,6 +310,9 @@ export function MessageBubble({
         <div className="w-8 shrink-0">
           {showSenderInfo && !isOwn && (
             <Avatar className="h-8 w-8">
+              {message.senderAvatar && (
+                <AvatarImage src={message.senderAvatar} alt={message.senderName} className="object-cover" />
+              )}
               <AvatarFallback className="text-[10px]">{message.senderInitials}</AvatarFallback>
             </Avatar>
           )}
@@ -347,7 +343,7 @@ export function MessageBubble({
               </button>
             ))}
 
-      
+
 
             {/* More emojis button */}
             <Popover open={isMoreEmojiOpen} onOpenChange={setIsMoreEmojiOpen}>
@@ -398,7 +394,7 @@ export function MessageBubble({
                 {canModify && (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleDelete} className="cursor-pointer text-destructive focus:text-destructive">
+                    <DropdownMenuItem onClick={() => setShowDeleteConfirm(true)} className="cursor-pointer text-destructive focus:text-destructive">
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete
                     </DropdownMenuItem>
@@ -500,10 +496,23 @@ export function MessageBubble({
               const otherReads = (readReceipts ?? []).filter(
                 (r) => r.userId !== currentUserId
               );
-              return otherReads.length > 0 ? (
-                <CheckCheck className="h-3 w-3 text-primary" aria-label="Read" />
-              ) : (
-                <Check className="h-3 w-3 text-muted-foreground" aria-label="Sent" />
+              if (otherReads.length > 0) {
+                return (
+                  <CheckCheck className="h-3 w-3 text-primary" aria-label="Read" />
+                );
+              }
+              if (message.status === 'pending') {
+                return (
+                  <Clock className="h-3 w-3 text-muted-foreground" aria-label="Pending" />
+                );
+              }
+              if (message.isOptimistic || message.status === 'sending') {
+                return (
+                  <Check className="h-3 w-3 text-muted-foreground" aria-label="Sending" />
+                );
+              }
+              return (
+                <CheckCheck className="h-3 w-3 text-muted-foreground" aria-label="Sent" />
               );
             })()}
           </span>
@@ -514,15 +523,37 @@ export function MessageBubble({
               const otherReads = (readReceipts ?? []).filter(
                 (r) => r.userId !== currentUserId
               );
-              return otherReads.length > 0 ? (
-                <CheckCheck className="h-3 w-3 text-primary" aria-label="Read" />
-              ) : (
-                <Check className="h-3 w-3 text-muted-foreground" aria-label="Sent" />
+              if (otherReads.length > 0) {
+                return (
+                  <CheckCheck className="h-3 w-3 text-primary" aria-label="Read" />
+                );
+              }
+              if (message.status === 'pending') {
+                return (
+                  <Clock className="h-3 w-3 text-muted-foreground" aria-label="Pending" />
+                );
+              }
+              if (message.isOptimistic || message.status === 'sending') {
+                return (
+                  <Check className="h-3 w-3 text-muted-foreground" aria-label="Sending" />
+                );
+              }
+              return (
+                <CheckCheck className="h-3 w-3 text-muted-foreground" aria-label="Sent" />
               );
             })()}
           </span>
         )}
       </div>
+      <ConfirmationDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        title="Delete Message"
+        description="Are you sure you want to delete this message? It will show as deleted to everyone in the chat."
+        confirmText="Delete"
+        variant="destructive"
+      />
     </div>
   );
 }

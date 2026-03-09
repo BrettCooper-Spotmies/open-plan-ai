@@ -21,25 +21,20 @@ export type DueDateStatus = 'overdue' | 'today' | 'upcoming' | 'none';
  */
 export function isCompletedToday(item: any): boolean {
   if (!item) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
-  if (item.status === 'done') {
-    if (!item.updatedAt) return false;
-    const updatedDate = new Date(item.updatedAt);
-    updatedDate.setHours(0, 0, 0, 0);
-    return updatedDate.getTime() === today.getTime();
-  }
+  // Try to find the best timestamp for completion
+  const completedAt =
+    item.resolvedAt ||
+    item.resolved_at ||
+    item.updatedAt ||
+    item.updated_at;
 
-  if (item.status === 'resolved' || item.status === 'closed') {
-    const timeToUse = item.resolvedAt || item.updatedAt;
-    if (!timeToUse) return false;
-    const resolvedDate = new Date(timeToUse);
-    resolvedDate.setHours(0, 0, 0, 0);
-    return resolvedDate.getTime() === today.getTime();
-  }
+  if (!completedAt) return false;
 
-  return false;
+  const completedDate = new Date(completedAt);
+  const now = new Date();
+
+  return isSameDay(completedDate, now);
 }
 
 /**
@@ -49,7 +44,7 @@ export function getDueDateStatus(dueDate?: string): DueDateStatus {
   if (!dueDate) return 'none';
 
   const today = startOfDay(new Date());
-  const due = startOfDay(parse(dueDate, 'yyyy-MM-dd', new Date()));
+  const due = startOfDay(new Date(dueDate));
 
   if (isBefore(due, today)) return 'overdue';
   if (isSameDay(due, today)) return 'today';
@@ -62,7 +57,7 @@ export function getDueDateStatus(dueDate?: string): DueDateStatus {
 export function isBlockingOthers(task: Task, allTasks: Task[]): boolean {
   return allTasks.some(t =>
     t.id !== task.id &&
-    (t.dependencies.includes(task.id) || t.blockedBy.includes(task.id))
+    t.blockedBy.includes(task.id)
   );
 }
 
@@ -70,9 +65,9 @@ export function isBlockingOthers(task: Task, allTasks: Task[]): boolean {
  * Check if a task has unresolved dependencies
  */
 export function hasUnresolvedDependencies(task: Task, allTasks: Task[]): boolean {
-  if (task.dependencies.length === 0 && task.blockedBy.length === 0) return false;
+  if (task.blockedBy.length === 0) return false;
 
-  const dependencyIds = [...task.dependencies, ...task.blockedBy];
+  const dependencyIds = task.blockedBy;
   return dependencyIds.some(depId => {
     const depTask = allTasks.find(t => t.id === depId);
     return depTask && depTask.status !== 'done';
@@ -241,8 +236,8 @@ export function categorizeMyDayTasks(tasks: MyDayTask[]): {
     if (priorityDiff !== 0) return priorityDiff;
 
     if (a.dueDate && b.dueDate) {
-      const aDate = parse(a.dueDate, 'yyyy-MM-dd', new Date());
-      const bDate = parse(b.dueDate, 'yyyy-MM-dd', new Date());
+      const aDate = new Date(a.dueDate);
+      const bDate = new Date(b.dueDate);
       return aDate.getTime() - bDate.getTime();
     }
     return a.dueDate ? -1 : 1;
@@ -310,8 +305,8 @@ export function categorizeMyDayItems(items: MyDayItem[]): {
     if (priorityDiff !== 0) return priorityDiff;
 
     if (a.dueDate && b.dueDate) {
-      const aDate = parse(a.dueDate, 'yyyy-MM-dd', new Date());
-      const bDate = parse(b.dueDate, 'yyyy-MM-dd', new Date());
+      const aDate = new Date(a.dueDate);
+      const bDate = new Date(b.dueDate);
       return aDate.getTime() - bDate.getTime();
     }
     return a.dueDate ? -1 : 1;
@@ -362,7 +357,7 @@ export function formatDueDate(dueDate?: string): string {
   if (!dueDate) return 'No due date';
 
   const status = getDueDateStatus(dueDate);
-  const date = parse(dueDate, 'yyyy-MM-dd', new Date());
+  const date = new Date(dueDate);
   const formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   switch (status) {
@@ -378,7 +373,7 @@ export function formatDueDate(dueDate?: string): string {
 export function isDueTomorrow(dueDate?: string): boolean {
   if (!dueDate) return false;
   const tomorrow = addDays(startOfDay(new Date()), 1);
-  const due = startOfDay(parse(dueDate, 'yyyy-MM-dd', new Date()));
+  const due = startOfDay(new Date(dueDate));
 
   return isSameDay(due, tomorrow);
 }
@@ -387,7 +382,7 @@ export function isDueThisWeek(dueDate?: string): boolean {
   if (!dueDate) return false;
   const today = startOfDay(new Date());
   const weekEnd = addDays(today, 7);
-  const due = startOfDay(parse(dueDate, 'yyyy-MM-dd', new Date()));
+  const due = startOfDay(new Date(dueDate));
 
   return isAfter(due, today) && (isBefore(due, weekEnd) || isSameDay(due, weekEnd));
 }

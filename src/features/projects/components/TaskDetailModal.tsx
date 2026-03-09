@@ -60,6 +60,7 @@ import {
   Check,
   Loader2,
 } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { attachmentsService } from '@/services/attachments.service';
 import { commentsService } from '@/services/comments.service';
@@ -229,7 +230,6 @@ export const TaskDetailModal = ({
     tags: [],
     checklist: [],
     blockedBy: [],
-    dependencies: [],
     comments: [],
     attachments: [],
     createdAt: new Date().toISOString(),
@@ -252,6 +252,7 @@ export const TaskDetailModal = ({
   const [isCreatingModule, setIsCreatingModule] = useState(false);
   const [newModuleName, setNewModuleName] = useState('');
   const [newModuleType, setNewModuleType] = useState<ModuleType>('software');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Fetch real comments when task changes
   useEffect(() => {
@@ -285,21 +286,38 @@ export const TaskDetailModal = ({
     }
   }, [task]);
 
-  // Dependencies handlers
-  // Compute "Blocking To" client-side - tasks that have THIS task in their blockedBy
-  const blockingToTaskIds = useMemo(() => {
-    if (!editedTask) return [];
+  // "Blocking To" - tasks that have THIS task in their blockedBy.
+  // We maintain a local copy to update immediately without waiting for allTasks prop to refresh.
+  const [localBlockingToIds, setLocalBlockingToIds] = useState<string[]>(() => {
+    if (!task) return [];
     return allTasks
-      .filter(task => task.blockedBy.includes(editedTask.id))
-      .map(task => task.id);
-  }, [allTasks, editedTask?.id]);
+      .filter(t => t.blockedBy.includes(task.id))
+      .map(t => t.id);
+  });
+
+  // Sync localBlockingToIds when task or allTasks prop changes
+  useEffect(() => {
+    if (editedTask?.id) {
+      setLocalBlockingToIds(
+        allTasks
+          .filter(t => t.blockedBy.includes(editedTask.id))
+          .map(t => t.id)
+      );
+    }
+  }, [editedTask?.id, allTasks]);
+
+  const blockingToTaskIds = localBlockingToIds;
 
   if (!editedTask) return null;
 
   const handleFieldChange = <K extends keyof Task>(field: K, value: Task[K]) => {
     setEditedTask(prev => {
       const updated = { ...prev, [field]: value, updatedAt: new Date().toISOString() };
-      onUpdate(updated);
+
+      // Auto-save logic
+      if (mode !== 'create') {
+        onUpdate(updated);
+      }
       return updated;
     });
   };
@@ -512,14 +530,16 @@ export const TaskDetailModal = ({
     t => t.id !== editedTask.id && !editedTask.blockedBy.includes(t.id)
   );
 
-  // Adding to "Blocking To" - update the OTHER task's blockedBy
+  // Adding to "Blocking To" - update the OTHER task's blockedBy and update local state
   const handleAddBlockingTask = () => {
     if (!selectedBlockingTask) return;
     const taskToUpdate = allTasks.find(t => t.id === selectedBlockingTask);
-    if (taskToUpdate) {
+    if (taskToUpdate && !localBlockingToIds.includes(selectedBlockingTask)) {
       // Add current task to that task's blockedBy
       const updatedBlockedBy = [...taskToUpdate.blockedBy, editedTask.id];
       onUpdate({ ...taskToUpdate, blockedBy: updatedBlockedBy });
+      // Immediately reflect in the local list
+      setLocalBlockingToIds(prev => [...prev, selectedBlockingTask]);
     }
     setSelectedBlockingTask('');
   };
@@ -543,25 +563,59 @@ export const TaskDetailModal = ({
       const updatedBlockedBy = taskToUpdate.blockedBy.filter(id => id !== editedTask.id);
       onUpdate({ ...taskToUpdate, blockedBy: updatedBlockedBy });
     }
+    // Immediately reflect removal in local list
+    setLocalBlockingToIds(prev => prev.filter(id => id !== taskId));
   };
 
   // Adding to "Blocked By" - update THIS task's blockedBy
   const handleAddBlockedByTask = () => {
     if (!selectedBlockedByTask) return;
-    handleFieldChange('blockedBy', [...editedTask.blockedBy, selectedBlockedByTask]);
+    setEditedTask(prev => {
+      // Prevent duplicates
+      if (prev.blockedBy.includes(selectedBlockedByTask)) return prev;
+
+      const updated = {
+        ...prev,
+        blockedBy: [...prev.blockedBy, selectedBlockedByTask],
+        updatedAt: new Date().toISOString()
+      };
+
+      if (mode !== 'create') {
+        onUpdate(updated);
+      }
+      return updated;
+    });
     setSelectedBlockedByTask('');
   };
 
   // Removing from "Blocked By" - update THIS task's blockedBy
   const handleRemoveBlockedByTask = (taskId: string) => {
-    handleFieldChange('blockedBy', editedTask.blockedBy.filter(id => id !== taskId));
+    setEditedTask(prev => {
+      const updated = {
+        ...prev,
+        blockedBy: prev.blockedBy.filter(id => id !== taskId),
+        updatedAt: new Date().toISOString()
+      };
+
+      if (mode !== 'create') {
+        onUpdate(updated);
+      }
+      return updated;
+    });
   };
 
-  const getTaskById = (id: string) => allTasks.find(t => t.id === id);
+  const getTaskById = (id: string) => {
+    const taskFound = allTasks.find(t => t.id === id);
+    if (!taskFound) {
+      console.warn(`Task with ID ${id} not found in allTasks`);
+    }
+    return taskFound;
+  };
 
   const handleDelete = () => {
-    if (onDelete && editedTask && editedTask.id && window.confirm('Are you sure you want to delete this task?')) {
+    if (onDelete && editedTask && editedTask.id) {
       onDelete(editedTask.id);
+      setShowDeleteConfirm(false);
       onClose();
     }
   };
@@ -951,14 +1005,14 @@ export const TaskDetailModal = ({
                         <Plus className="h-3 w-3 z-10" />
                       </button>
                     </PopoverTrigger>
-                    <PopoverContent className="p-0 w-[240px] max-h-[350px] flex flex-col overflow-hidden" align="start">
-                      <Command className="flex-1 min-h-0">
+                    <PopoverContent className="p-0 w-[240px]" align="start" onWheel={(e) => e.stopPropagation()}>
+                      <Command>
                         <CommandInput
                           placeholder="Search tags..."
                           value={tagSearch}
                           onValueChange={setTagSearch}
                         />
-                        <CommandList className="flex-1 overflow-y-auto min-h-0">
+                        <CommandList>
                           <CommandEmpty className="py-2 px-2">
                             <div className="text-sm text-center py-2 text-muted-foreground">
                               No matching tags.
@@ -1214,6 +1268,24 @@ export const TaskDetailModal = ({
                   <p className="text-xs text-muted-foreground">Tasks that depend on this task</p>
 
                   <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Select value={selectedBlockingTask} onValueChange={setSelectedBlockingTask}>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Select task..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableTasksForBlocking.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button size="icon" variant="outline" onClick={handleAddBlockingTask}>
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+
                     {blockingToTaskIds.map((taskId) => {
                       const depTask = getTaskById(taskId);
                       if (!depTask) return null;
@@ -1240,24 +1312,6 @@ export const TaskDetailModal = ({
                         </div>
                       );
                     })}
-
-                    <div className="flex gap-2">
-                      <Select value={selectedBlockingTask} onValueChange={setSelectedBlockingTask}>
-                        <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Select task..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableTasksForBlocking.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button size="icon" variant="outline" onClick={handleAddBlockingTask}>
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
                   </div>
                 </div>
 
@@ -1270,6 +1324,24 @@ export const TaskDetailModal = ({
                   <p className="text-xs text-muted-foreground">Tasks that must complete first</p>
 
                   <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <Select value={selectedBlockedByTask} onValueChange={setSelectedBlockedByTask}>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Select task..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableTasksForBlockedBy.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>
+                              {t.title}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button size="icon" variant="outline" onClick={handleAddBlockedByTask}>
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+
                     {editedTask.blockedBy.map((taskId) => {
                       const depTask = getTaskById(taskId);
                       if (!depTask) return null;
@@ -1296,24 +1368,6 @@ export const TaskDetailModal = ({
                         </div>
                       );
                     })}
-
-                    <div className="flex gap-2">
-                      <Select value={selectedBlockedByTask} onValueChange={setSelectedBlockedByTask}>
-                        <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Select task..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableTasksForBlockedBy.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.title}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button size="icon" variant="outline" onClick={handleAddBlockedByTask}>
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -1391,7 +1445,7 @@ export const TaskDetailModal = ({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleDelete}
+                onClick={() => setShowDeleteConfirm(true)}
                 className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
               >
                 <Trash2 className="h-4 w-4" />
@@ -1412,6 +1466,15 @@ export const TaskDetailModal = ({
           </div>
         )}
       </DialogContent>
+      <ConfirmationDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDelete}
+        title="Delete Task"
+        description="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+        variant="destructive"
+      />
     </Dialog>
   );
 }

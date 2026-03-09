@@ -17,8 +17,8 @@ const statusColors = {
 };
 
 export function DependencyView({ tasks }: DependencyViewProps) {
-  const tasksWithDeps = tasks.filter(t => t.dependencies.length > 0 || t.blockedBy.length > 0);
-  const independentTasks = tasks.filter(t => t.dependencies.length === 0 && t.blockedBy.length === 0);
+  const tasksWithDeps = tasks.filter(t => t.blockedBy.length > 0);
+  const independentTasks = tasks.filter(t => t.blockedBy.length === 0);
 
   const getTaskById = (id: string) => tasks.find(t => t.id === id);
 
@@ -63,20 +63,7 @@ export function DependencyView({ tasks }: DependencyViewProps) {
                     </div>
                   )}
 
-                  {task.dependencies.length > 0 && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>Depends on {task.dependencies.length} task(s)</span>
-                      <ArrowRight className="h-3 w-3" />
-                      <div className="flex gap-1">
-                        {task.dependencies.slice(0, 2).map((depId) => {
-                          const depTask = getTaskById(depId);
-                          return depTask ? (
-                            <span key={depId} className="text-xs">{depTask.title}</span>
-                          ) : null;
-                        })}
-                      </div>
-                    </div>
-                  )}
+                  {/* Blocking To info could be added here if needed, but per plan we are simplifying to blockedBy focus for chains */}
                 </div>
 
                 <Badge variant="secondary" className="capitalize shrink-0">

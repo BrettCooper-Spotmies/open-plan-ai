@@ -4,7 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { CheckSquare, Bug } from 'lucide-react';
+import { CheckSquare, Bug, Check } from 'lucide-react';
 import {
   MyDayItem,
   groupTasksByProject,
@@ -156,13 +156,20 @@ export function MyDayListView({
                 </Badge>
               </TableCell>
               <TableCell>
-                <div>
-                  <p className="font-medium">{task.title}</p>
-                  {task.description && (
-                    <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                      {task.description}
-                    </p>
+                <div className="flex items-start gap-2">
+                  {(task.status === 'done' || task.status === 'resolved' || task.status === 'closed') && (
+                    <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center shrink-0 mt-0.5">
+                      <Check className="h-3 w-3 text-status-done" />
+                    </div>
                   )}
+                  <div>
+                    <p className="font-medium">{task.title}</p>
+                    {task.description && (
+                      <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                        {task.description}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </TableCell>
               <TableCell>
@@ -198,7 +205,7 @@ export function MyDayListView({
               <TableCell>
                 {task.dueDate ? (
                   <span className="text-sm">
-                    {format(parse(task.dueDate, 'yyyy-MM-dd', new Date()), 'dd/MM/yyyy')}
+                    {format(new Date(task.dueDate), 'dd/MM/yyyy')}
                   </span>
                 ) : (
                   <span className="text-muted-foreground text-sm">No date</span>

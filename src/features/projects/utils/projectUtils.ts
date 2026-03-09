@@ -53,8 +53,8 @@ export function getMilestoneIssues(milestoneId: string, issues: Issue[]): Issue[
 export function getModuleTasks(moduleIdOrType: string, tasks: Task[]): Task[] {
   return tasks.filter(t =>
     t.moduleId === moduleIdOrType ||
-    t.module === moduleIdOrType ||
-    (t.moduleIds || []).includes(moduleIdOrType)
+    (t.moduleIds || []).includes(moduleIdOrType) ||
+    t.module === moduleIdOrType
   );
 }
 
@@ -184,6 +184,14 @@ export interface ProgressBreakdown {
   taskProgress: number;
   issueProgress: number;
   overallProgress: number;
+  taskStats?: {
+    total: number;
+    todo: number;
+    inProgress: number;
+    review: number;
+    done: number;
+    blocked: number;
+  };
 }
 
 /**
@@ -206,8 +214,20 @@ export function calculateProjectProgress(
     : 0;
 
   // Module progress: average of all module progresses
+  // Calculated dynamically from tasks associated with each module
   const moduleProgress = modules.length > 0
-    ? Math.round(modules.reduce((sum, m) => sum + (m.progress || 0), 0) / modules.length)
+    ? Math.round(
+      modules.reduce((sum, m) => {
+        // Calculate progress for this module specifically from the tasks list
+        const moduleTasks = tasks.filter(t =>
+          t.moduleId === m.id || (t.moduleIds || []).includes(m.id)
+        );
+        const progress = moduleTasks.length > 0
+          ? (moduleTasks.filter(t => t.status === 'done').length / moduleTasks.length) * 100
+          : (m.progress || 0);
+        return sum + progress;
+      }, 0) / modules.length
+    )
     : 0;
 
   // Issue progress: % of issues resolved/closed
@@ -236,5 +256,13 @@ export function calculateProjectProgress(
     taskProgress,
     issueProgress,
     overallProgress,
+    taskStats: {
+      total: tasks.length,
+      todo: tasks.filter(t => t.status === 'todo').length,
+      inProgress: tasks.filter(t => t.status === 'in-progress').length,
+      review: tasks.filter(t => t.status === 'review').length,
+      done: tasks.filter(t => t.status === 'done').length,
+      blocked: tasks.filter(t => t.status === 'blocked').length,
+    }
   };
 }

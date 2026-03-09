@@ -1,7 +1,8 @@
 import { cn } from '@/lib/utils';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { OnlineStatus } from './OnlineStatus';
 import { UnreadBadge } from './UnreadBadge';
+import { Clock } from 'lucide-react';
 import { Conversation } from '../types';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDistanceToNowStrict } from 'date-fns';
@@ -27,13 +28,20 @@ export function ConversationItem({ conversation, isActive, unreadCount, onClick,
     ? otherMember?.initials || '??'
     : conversation.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 
+  const isEmoji = (str: string) => {
+    const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/;
+    return emojiRegex.test(str) && str.length <= 8;
+  };
+
   const timeAgo = conversation.lastMessage
     ? formatDistanceToNowStrict(new Date(conversation.lastMessage.createdAt), { addSuffix: false })
-        .replace(' seconds', 's').replace(' second', 's')
-        .replace(' minutes', 'm').replace(' minute', 'm')
-        .replace(' hours', 'h').replace(' hour', 'h')
-        .replace(' days', 'd').replace(' day', 'd')
+      .replace(' seconds', 's').replace(' second', 's')
+      .replace(' minutes', 'm').replace(' minute', 'm')
+      .replace(' hours', 'h').replace(' hour', 'h')
+      .replace(' days', 'd').replace(' day', 'd')
     : '';
+
+  const avatarUrl = conversation.type === 'dm' ? otherMember?.avatarUrl : conversation.avatarUrl;
 
   return (
     <button
@@ -45,8 +53,11 @@ export function ConversationItem({ conversation, isActive, unreadCount, onClick,
     >
       <div className="relative shrink-0">
         <Avatar className="h-9 w-9">
+          {avatarUrl && !isEmoji(avatarUrl) && (
+            <AvatarImage src={avatarUrl} alt={displayName} className="object-cover" />
+          )}
           <AvatarFallback className={cn('text-xs font-medium', conversation.type === 'group' && 'bg-primary/10 text-primary')}>
-            {initials}
+            {isEmoji(avatarUrl || '') ? avatarUrl : initials}
           </AvatarFallback>
         </Avatar>
         {conversation.type === 'dm' && otherMember && (
@@ -65,6 +76,9 @@ export function ConversationItem({ conversation, isActive, unreadCount, onClick,
           <p className={cn('text-xs truncate mt-0.5', unreadCount > 0 ? 'text-foreground' : 'text-muted-foreground')}>
             {conversation.type === 'group' && `${conversation.lastMessage.senderName}: `}
             {conversation.lastMessage.content}
+            {conversation.lastMessage.status === 'pending' && (
+              <Clock className="inline-block h-3 w-3 ml-1 text-muted-foreground" />
+            )}
           </p>
         )}
       </div>
