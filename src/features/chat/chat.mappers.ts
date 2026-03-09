@@ -41,6 +41,7 @@ interface DbConversation {
   type: string;
   name: string | null;
   description: string | null;
+  avatar_url: string | null;
   created_by: string;
   last_message_at: string;
   created_at: string;
@@ -103,7 +104,7 @@ export function mapConversation(
     type: dbConv.type as ConversationType,
     name,
     description: dbConv.description ?? undefined,
-    avatarUrl: undefined,
+    avatarUrl: dbConv.avatar_url ?? undefined,
     members,
     lastMessage,
     lastMessageAt: dbConv.last_message_at,

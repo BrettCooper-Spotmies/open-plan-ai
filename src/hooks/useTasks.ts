@@ -80,7 +80,24 @@ export function useUpdateTask() {
       const previousTask = queryClient.getQueryData(queryKeys.tasks.detail(taskId));
 
       // Optimistically update the store
-      updateTask(projectId, taskId, updates);
+      const timestamp = updates.status === 'done' ? new Date().toISOString() : undefined;
+      const taskUpdates = { ...updates, updatedAt: timestamp };
+
+      updateTask(projectId, taskId, taskUpdates);
+
+      // Also update the projects cache if it exists
+      queryClient.setQueriesData({ queryKey: queryKeys.projects.root }, (old: any) => {
+        if (!old) return old;
+        return old.map((p: any) => {
+          if (p.id !== projectId) return p;
+          return {
+            ...p,
+            tasks: p.tasks.map((t: any) =>
+              t.id === taskId ? { ...t, ...taskUpdates } : t
+            )
+          };
+        });
+      });
 
       return { previousTask, projectId };
     },

@@ -54,6 +54,8 @@ function dbModuleToFrontend(dbM: DbModule): Module {
     type: (dbM.module_type as ModuleType) || 'software',
     description: dbM.description || undefined,
     createdAt: dbM.created_at || '',
+    progress: dbM.progress || 0,
+    status: dbM.status as any || 'active',
   };
 }
 
@@ -145,7 +147,7 @@ export default function Reports() {
   }, [tasks, filter, dateRange]);
 
   // ─── KPIs (synchronous) ───────────────────────────────────────────────────
-  const kpis = useMemo(() => calculateKPIs(filteredTasks, issues, dateRange), [filteredTasks, issues, dateRange]);
+  const kpis = useMemo(() => calculateKPIs(filteredTasks, issues, dateRange, milestones, modules), [filteredTasks, issues, dateRange, milestones, modules]);
 
   // ─── Chart data ───────────────────────────────────────────────────────────
   const statusBreakdown = useMemo(() => getTaskStatusBreakdown(filteredTasks), [filteredTasks]);
@@ -249,7 +251,7 @@ export default function Reports() {
           onFilterChange={setFilter}
         />
 
-          <ReportsKPIRow kpis={kpis} onKPIClick={handleKPIClick} />
+        <ReportsKPIRow kpis={kpis} statusBreakdown={statusBreakdown} onKPIClick={handleKPIClick} />
 
         {/* 2-Column Grid for Charts */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -9,6 +9,8 @@ export interface WorkerMessage {
 export interface KPIPayload {
   tasks: Task[];
   issues: Issue[];
+  milestones?: any[];
+  modules?: any[];
 }
 
 export interface FilterPayload {
@@ -39,8 +41,8 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
 
   switch (type) {
     case 'CALCULATE_KPI': {
-      const { tasks, issues } = payload as KPIPayload;
-      const result = calculateKPIs(tasks, issues);
+      const { tasks, issues, milestones, modules } = payload as KPIPayload;
+      const result = calculateKPIs(tasks, issues, milestones, modules);
       self.postMessage({ type: 'CALCULATE_KPI_RESULT', payload: result });
       break;
     }
@@ -53,11 +55,48 @@ self.onmessage = (e: MessageEvent<WorkerMessage>) => {
   }
 };
 
-function calculateKPIs(tasks: Task[], issues: Issue[]): KPIResult {
-  // Calculate project progress
+function calculateKPIs(
+  tasks: Task[],
+  issues: Issue[],
+  milestones: any[] = [],
+  modules: any[] = []
+): KPIResult {
+  // Task progress: % of tasks completed
+  const taskProgress = tasks.length > 0
+    ? Math.round((tasks.filter(t => t.status === 'done').length / tasks.length) * 100)
+    : 0;
+
+  // Milestone progress: % of milestones completed
+  const milestoneProgress = milestones.length > 0
+    ? Math.round((milestones.filter(m => m.completed).length / milestones.length) * 100)
+    : 0;
+
+  // Module progress: average of all module progresses
+  const moduleProgress = modules.length > 0
+    ? Math.round(modules.reduce((sum, m) => sum + (m.progress || 0), 0) / modules.length)
+    : 0;
+
+  // Issue progress: % of issues resolved/closed
+  const resolvedIssues = issues.filter(i =>
+    i.status === 'resolved' || i.status === 'closed'
+  ).length;
+  const issueProgress = issues.length > 0
+    ? Math.round((resolvedIssues / issues.length) * 100)
+    : 0;
+
+  // Overall: average only the metrics that have data
+  const metrics = [];
+  if (tasks.length > 0) metrics.push(taskProgress);
+  if (milestones.length > 0) metrics.push(milestoneProgress);
+  if (modules.length > 0) metrics.push(moduleProgress);
+  if (issues.length > 0) metrics.push(issueProgress);
+
+  const projectProgress = metrics.length > 0
+    ? Math.round(metrics.reduce((sum, val) => sum + val, 0) / metrics.length)
+    : 0;
+
   const total = tasks.length;
   const completed = tasks.filter(t => t.status === 'done').length;
-  const projectProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   // Count open issues
   const openIssuesList = issues.filter(i =>

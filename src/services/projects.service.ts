@@ -57,8 +57,6 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
     })),
     // blockedBy = tasks this task depends on (from task_dependencies where task_id = this task)
     blockedBy: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id),
-    // dependencies (Blocking To) is computed client-side from allTasks
-    dependencies: [],
     attachments,
     createdAt: dbTask.created_at,
     updatedAt: dbTask.updated_at,
@@ -96,6 +94,8 @@ function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: M
       name: m.name,
       type: m.module_type || 'software',
       description: m.description,
+      progress: m.progress || 0,
+      status: m.status || 'active',
       createdAt: m.created_at,
     })),
     team,
@@ -336,6 +336,16 @@ export const projectsService = {
       .single();
 
     if (error) throw error;
+
+    // Log activity
+    activitiesService.create({
+      project_id: data.id,
+      activity_type: 'project_created',
+      description: `created project "${data.name}"`,
+      user_id: user?.id || null,
+      entity_id: data.id,
+      entity_type: 'project',
+    }).catch(() => { /* non-critical */ });
 
     // Return full project with all details
     return (await this.getById(data.id))!;

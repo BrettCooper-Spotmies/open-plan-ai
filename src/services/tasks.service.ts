@@ -57,8 +57,6 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
     })),
     // blockedBy = tasks this task depends on (from task_dependencies where task_id = this task)
     blockedBy: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id),
-    // dependencies (Blocking To) is computed client-side from allTasks
-    dependencies: [],
     attachments,
     createdAt: dbTask.created_at,
     updatedAt: dbTask.updated_at,
@@ -286,9 +284,9 @@ export const tasksService = {
       await supabase.from('checklists').insert(checklistInserts);
     }
 
-    // Add dependencies if provided
-    if (task.dependencies && task.dependencies.length > 0) {
-      const dependencyInserts = task.dependencies.map(depId => ({
+    // Add dependencies (tasks this task depends on) if provided
+    if (task.blockedBy && task.blockedBy.length > 0) {
+      const dependencyInserts = task.blockedBy.map(depId => ({
         task_id: newTask.id,
         depends_on_id: depId
       }));
@@ -317,6 +315,16 @@ export const tasksService = {
 
       await supabase.from('attachments').insert(attachmentInserts);
     }
+
+    // Log activity
+    activitiesService.create({
+      project_id: projectId,
+      activity_type: 'task_created',
+      description: `created task "${newTask.title}"`,
+      user_id: user?.id || null,
+      entity_id: newTask.id,
+      entity_type: 'task',
+    }).catch(() => { /* non-critical */ });
 
     return this.getById(newTask.id) as Promise<Task>;
   },

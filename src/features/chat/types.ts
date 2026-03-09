@@ -51,6 +51,8 @@ export interface ChatMessage {
   deletedByName?: string;
   readReceipts?: ReadReceipt[];
   reactions?: MessageReaction[];
+  status?: 'sending' | 'sent' | 'delivered' | 'read';
+  isOptimistic?: boolean;
 }
 
 export interface Conversation {

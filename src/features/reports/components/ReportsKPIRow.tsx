@@ -8,11 +8,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { ReportKPI } from '../utils/reportsUtils';
+import { ReportKPI, StatusBreakdown, getStatusColor } from '../utils/reportsUtils';
 import { cn } from '@/lib/utils';
 
 interface ReportsKPIRowProps {
   kpis: ReportKPI;
+  statusBreakdown?: StatusBreakdown[];
   onKPIClick?: (type: 'progress' | 'issues' | 'overdue' | 'cycle') => void;
 }
 
@@ -97,7 +98,7 @@ const KPICard = memo(function KPICard({
   );
 });
 
-export const ReportsKPIRow = memo(function ReportsKPIRow({ kpis, onKPIClick }: ReportsKPIRowProps) {
+export const ReportsKPIRow = memo(function ReportsKPIRow({ kpis, statusBreakdown, onKPIClick }: ReportsKPIRowProps) {
   const handleProgressClick = useCallback(() => onKPIClick?.('progress'), [onKPIClick]);
   const handleIssuesClick = useCallback(() => onKPIClick?.('issues'), [onKPIClick]);
   const handleOverdueClick = useCallback(() => onKPIClick?.('overdue'), [onKPIClick]);
@@ -109,8 +110,23 @@ export const ReportsKPIRow = memo(function ReportsKPIRow({ kpis, onKPIClick }: R
         value={`${kpis.projectProgress}%`}
         subtitle={`${kpis.completedTasks} of ${kpis.totalTasks} tasks`}
         icon={<TrendingUp className="h-4 w-4" />}
-        visual={<Progress value={kpis.projectProgress} className="h-2" />}
-        tooltip="Percentage of completed tasks out of total tasks: (Completed / Total) × 100"
+        visual={
+          statusBreakdown && statusBreakdown.length > 0 ? (
+            <div className="h-2 w-full flex rounded-full overflow-hidden bg-secondary">
+              {statusBreakdown.map((status) => (
+                <div
+                  key={status.status}
+                  style={{ width: `${status.percentage}%`, backgroundColor: getStatusColor(status.status) }}
+                  className="h-full transition-all"
+                  title={`${status.status}: ${status.percentage}%`}
+                />
+              ))}
+            </div>
+          ) : (
+            <Progress value={kpis.projectProgress} className="h-2" />
+          )
+        }
+        tooltip="Weighted average of completed tasks, milestones, modules, and resolved issues"
         onClick={handleProgressClick}
       />
 

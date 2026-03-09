@@ -33,6 +33,7 @@ import {
   Search,
   Filter,
   Link2,
+  Check,
 } from 'lucide-react';
 import { IssueDetailModal } from './IssueDetailModal';
 
@@ -242,11 +243,18 @@ export function IssuesView({
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <div>
-                        <p className="font-medium">{issue.title}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                          {issue.description}
-                        </p>
+                      <div className="flex items-start gap-2">
+                        {(issue.status === 'resolved' || issue.status === 'closed') && (
+                          <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center shrink-0 mt-0.5">
+                            <Check className="h-3 w-3 text-status-done" />
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-medium">{issue.title}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                            {issue.description}
+                          </p>
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>

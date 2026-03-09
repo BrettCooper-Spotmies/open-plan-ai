@@ -10,7 +10,7 @@ import { IssueDetailModal } from '@/features/projects/components/IssueDetailModa
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
-import { Task, Issue, TaskStatus, MyDayView, MyDayGroupBy } from '@/types';
+import { Task, Issue, TaskStatus, IssueStatus, MyDayView, MyDayGroupBy } from '@/types';
 import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
 import { useUpdateTask } from '@/hooks/useTasks';
 import { useUpdateIssue } from '@/hooks/useIssues';
@@ -52,39 +52,62 @@ export default function MyDay() {
   };
 
   const handleStatusUpdate = async (taskId: string, status: TaskStatus) => {
-    // Find the task to get its projectId
-    const task = userTasks.find(t => t.id === taskId);
-    if (!task) return;
+    const item = userTasks.find(t => t.id === taskId);
+    if (!item) return;
 
     try {
-      await updateTaskMutation.mutateAsync({
-        projectId: task.projectId,
-        taskId,
-        updates: { status },
-      });
-      toast.success('Task status updated');
+      if (item.itemType === 'task') {
+        await updateTaskMutation.mutateAsync({
+          projectId: item.projectId,
+          taskId,
+          updates: { status },
+        });
+      } else {
+        const issueStatusMap: Record<TaskStatus, IssueStatus> = {
+          'todo': 'open',
+          'in-progress': 'investigating',
+          'review': 'investigating',
+          'done': 'resolved',
+          'blocked': 'investigating'
+        };
+        await updateIssueMutation.mutateAsync({
+          projectId: item.projectId,
+          issueId: taskId,
+          updates: { status: issueStatusMap[status] },
+        });
+      }
+      toast.success(`${item.itemType === 'task' ? 'Task' : 'Issue'} status updated`);
     } catch (error) {
-      console.error('Failed to update task status:', error);
-      toast.error('Failed to update task status');
+      console.error(`Failed to update ${item.itemType} status:`, error);
+      toast.error(`Failed to update ${item.itemType} status`);
     }
   };
 
   const handleChecklistToggle = async (taskId: string, itemId: string) => {
-    // Find the task to get its projectId and current checklist
     const item = userTasks.find(t => t.id === taskId);
-    if (!item || item.itemType !== 'task' || !item.originalTask) return;
+    if (!item) return;
 
-    const task = item.originalTask;
     try {
-      const updatedChecklist = (task.checklist || []).map(checklistItem =>
+      const checklist = item.itemType === 'task' ? item.originalTask?.checklist : item.originalIssue?.checklist;
+      if (!checklist) return;
+
+      const updatedChecklist = checklist.map(checklistItem =>
         checklistItem.id === itemId ? { ...checklistItem, completed: !checklistItem.completed } : checklistItem
       );
 
-      await updateTaskMutation.mutateAsync({
-        projectId: item.projectId,
-        taskId,
-        updates: { checklist: updatedChecklist },
-      });
+      if (item.itemType === 'task') {
+        await updateTaskMutation.mutateAsync({
+          projectId: item.projectId,
+          taskId,
+          updates: { checklist: updatedChecklist },
+        });
+      } else {
+        await updateIssueMutation.mutateAsync({
+          projectId: item.projectId,
+          issueId: taskId,
+          updates: { checklist: updatedChecklist },
+        });
+      }
     } catch (error) {
       console.error('Failed to toggle checklist item:', error);
       toast.error('Failed to update checklist');
