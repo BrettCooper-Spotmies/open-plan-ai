@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, Plus, MoreHorizontal, SmilePlus } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, Plus, MoreHorizontal, SmilePlus, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -501,6 +501,11 @@ export function MessageBubble({
                   <CheckCheck className="h-3 w-3 text-primary" aria-label="Read" />
                 );
               }
+              if (message.status === 'pending') {
+                return (
+                  <Clock className="h-3 w-3 text-muted-foreground" aria-label="Pending" />
+                );
+              }
               if (message.isOptimistic || message.status === 'sending') {
                 return (
                   <Check className="h-3 w-3 text-muted-foreground" aria-label="Sending" />
@@ -521,6 +526,11 @@ export function MessageBubble({
               if (otherReads.length > 0) {
                 return (
                   <CheckCheck className="h-3 w-3 text-primary" aria-label="Read" />
+                );
+              }
+              if (message.status === 'pending') {
+                return (
+                  <Clock className="h-3 w-3 text-muted-foreground" aria-label="Pending" />
                 );
               }
               if (message.isOptimistic || message.status === 'sending') {

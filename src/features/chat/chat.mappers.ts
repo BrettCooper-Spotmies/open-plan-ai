@@ -89,7 +89,7 @@ export function mapMessage(
 export function mapConversation(
   dbConv: DbConversation,
   members: ConversationMember[],
-  lastMessage?: { content: string; senderName: string; createdAt: string },
+  lastMessage?: { content: string; senderName: string; createdAt: string; status?: any },
   currentUserId?: string
 ): Conversation {
   // For DMs, name is the other person's name

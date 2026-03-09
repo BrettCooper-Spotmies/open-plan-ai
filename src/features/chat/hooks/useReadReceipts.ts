@@ -36,7 +36,11 @@ export function useReadReceipts(
         console.error('[ReadReceipts] markConversationAsRead failed:', err);
       });
 
-      const ids = msgs.map((m) => m.id);
+      const ids = msgs.map((m) => m.id).filter(id => !id.startsWith('temp-'));
+      if (ids.length === 0) {
+        setReadReceiptMap({});
+        return;
+      }
       const map = await chatService.getReadReceipts(ids);
       setReadReceiptMap(map);
     } catch (err) {

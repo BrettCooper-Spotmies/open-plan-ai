@@ -12,8 +12,8 @@ import { ReportOpenIssuesTable } from './components/ReportOpenIssuesTable';
 import { ReportTrendChart } from './components/ReportTrendChart';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useProjects } from '@/hooks/useProjects';
-import { useAllTasks } from '@/hooks/useTasks';
-import { useAllIssues } from '@/hooks/useIssues';
+import { useOrgAllTasks } from '@/hooks/useTasks';
+import { useOrgAllIssues } from '@/hooks/useIssues';
 import { useAllMilestones } from '@/hooks/useMilestones';
 import { useOrgAllModules } from '@/hooks/useModules';
 import { useTeamMembers } from '@/hooks/useTeam';
@@ -32,6 +32,7 @@ import {
   applyFilters,
   filterTasksByTimeRange,
   calculateKPIs,
+  calculateProjectProgress,
 } from './utils/reportsUtils';
 import { TeamMember, Module, Milestone, ModuleType } from '@/types';
 
@@ -81,8 +82,8 @@ export default function Reports() {
 
   // ─── Real data hooks ─────────────────────────────────────────────────────
   const { data: allProjects = [], isLoading: projectsLoading } = useProjects();
-  const { data: allTasks = [], isLoading: tasksLoading } = useAllTasks();
-  const { data: allIssues = [], isLoading: issuesLoading } = useAllIssues();
+  const { data: allTasks = [], isLoading: tasksLoading } = useOrgAllTasks();
+  const { data: allIssues = [], isLoading: issuesLoading } = useOrgAllIssues();
   const { data: dbMilestones = [], isLoading: milestonesLoading } = useAllMilestones();
   const { data: dbModules = [], isLoading: modulesLoading } = useOrgAllModules();
   const { data: serviceTeamMembers = [], isLoading: teamLoading } = useTeamMembers(orgId);
@@ -147,13 +148,24 @@ export default function Reports() {
   }, [tasks, filter, dateRange]);
 
   // ─── KPIs (synchronous) ───────────────────────────────────────────────────
-  const kpis = useMemo(() => calculateKPIs(filteredTasks, issues, dateRange, milestones, modules), [filteredTasks, issues, dateRange, milestones, modules]);
+  const kpis = useMemo(() => {
+    const result = calculateKPIs(filteredTasks, issues, dateRange, milestones, modules);
+
+    // Sync overall progress and task counts with the Projects dashboard
+    // by calculating it from unfiltered project data (cumulative)
+    const { progress: unfilteredProgress, completed, total } = calculateProjectProgress(tasks, milestones, modules, issues);
+    result.projectProgress = unfilteredProgress;
+    result.completedTasks = completed;
+    result.totalTasks = total;
+
+    return result;
+  }, [filteredTasks, tasks, issues, dateRange, milestones, modules]);
 
   // ─── Chart data ───────────────────────────────────────────────────────────
   const statusBreakdown = useMemo(() => getTaskStatusBreakdown(filteredTasks), [filteredTasks]);
-  const milestoneHealth = useMemo(() => getMilestoneHealth(milestones, filteredTasks), [milestones, filteredTasks]);
+  const milestoneHealth = useMemo(() => getMilestoneHealth(milestones, tasks), [milestones, tasks]);
   const teamWorkload = useMemo(() => getTeamWorkload(filteredTasks, allAdaptedTeamMembers), [filteredTasks, allAdaptedTeamMembers]);
-  const moduleProgress = useMemo(() => getModuleProgress(filteredTasks, modules), [filteredTasks, modules]);
+  const moduleProgress = useMemo(() => getModuleProgress(tasks, modules), [tasks, modules]);
   const trendData = useMemo(() => getCompletedTasksTrend(filteredTasks, dateRange), [filteredTasks, dateRange]);
 
   // ─── Time range label ─────────────────────────────────────────────────────

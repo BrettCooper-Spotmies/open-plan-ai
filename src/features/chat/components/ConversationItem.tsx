@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { OnlineStatus } from './OnlineStatus';
 import { UnreadBadge } from './UnreadBadge';
+import { Clock } from 'lucide-react';
 import { Conversation } from '../types';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDistanceToNowStrict } from 'date-fns';
@@ -75,6 +76,9 @@ export function ConversationItem({ conversation, isActive, unreadCount, onClick,
           <p className={cn('text-xs truncate mt-0.5', unreadCount > 0 ? 'text-foreground' : 'text-muted-foreground')}>
             {conversation.type === 'group' && `${conversation.lastMessage.senderName}: `}
             {conversation.lastMessage.content}
+            {conversation.lastMessage.status === 'pending' && (
+              <Clock className="inline-block h-3 w-3 ml-1 text-muted-foreground" />
+            )}
           </p>
         )}
       </div>

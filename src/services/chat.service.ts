@@ -128,14 +128,14 @@ export const chatService = {
     if (error) throw error;
   },
 
-  async sendMessage(conversationId: string, content: string): Promise<ChatMessage> {
-    const userId = await getCurrentUserId();
+  async sendMessage(conversationId: string, content: string, userId?: string): Promise<ChatMessage> {
+    const finalUserId = userId || await getCurrentUserId();
 
     const { data, error } = await supabase
       .from('chat_messages')
       .insert({
         conversation_id: conversationId,
-        sender_id: userId,
+        sender_id: finalUserId,
         content,
         content_type: 'text',
       })
@@ -146,7 +146,7 @@ export const chatService = {
     const { data: profile } = await supabase
       .from('profiles')
       .select('id, name, email, avatar_url, initials, role')
-      .eq('id', userId)
+      .eq('id', finalUserId)
       .single();
 
     return mapMessage(data as any, profile as any);
