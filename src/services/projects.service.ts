@@ -70,6 +70,14 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
 
 // Map database project to frontend Project type
 function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: Milestone[] = [], issues: Issue[] = [], team: TeamMember[] = [], modules: any[] = []): Project {
+  // Re-derive linked IDs for each milestone from the tasks and modules lists
+  // (milestones were mapped before tasks/modules were available, so we re-enrich here)
+  const enrichedMilestones = milestones.map(m => ({
+    ...m,
+    linkedTaskIds: tasks.filter(t => t.milestoneId === m.id).map(t => t.id),
+    linkedModuleIds: modules.filter(mod => mod.milestone_id === m.id).map(mod => mod.id),
+  }));
+
   return {
     id: dbProject.id,
     name: dbProject.name,
@@ -86,7 +94,7 @@ function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: M
     notes: dbProject.notes || '',
     departments: dbProject.departments || [],
     tasks,
-    milestones,
+    milestones: enrichedMilestones,
     issues,
     modules: [], // Legacy empty for now
     projectModules: modules.map(m => ({
@@ -97,6 +105,7 @@ function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: M
       progress: m.progress || 0,
       status: m.status || 'active',
       createdAt: m.created_at,
+      milestoneId: m.milestone_id || undefined,
     })),
     team,
     createdAt: dbProject.created_at,
@@ -105,7 +114,7 @@ function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: M
 }
 
 // Map database milestone to frontend Milestone type
-function mapDbMilestoneToMilestone(dbMilestone: any): Milestone {
+function mapDbMilestoneToMilestone(dbMilestone: any, allTasks: Task[] = [], allModules: any[] = []): Milestone {
   return {
     id: dbMilestone.id,
     title: dbMilestone.name,
@@ -113,7 +122,9 @@ function mapDbMilestoneToMilestone(dbMilestone: any): Milestone {
     completed: dbMilestone.status === 'completed',
     completedAt: dbMilestone.status === 'completed' ? dbMilestone.updated_at : undefined,
     description: dbMilestone.description || '',
-    linkedTaskIds: [],
+    // Derive linked IDs from tasks/modules that point to this milestone
+    linkedTaskIds: allTasks.filter(t => t.milestoneId === dbMilestone.id).map(t => t.id),
+    linkedModuleIds: allModules.filter(m => m.milestone_id === dbMilestone.id).map(m => m.id),
   };
 }
 
@@ -516,7 +527,8 @@ export const projectsService = {
       .order('due_date', { ascending: true });
 
     if (error) throw error;
-    return (data || []).map(mapDbMilestoneToMilestone);
+    return (data || []).map(m => mapDbMilestoneToMilestone(m));
+
   },
 
   /**

@@ -101,6 +101,8 @@ export function AddModuleDialog({
       description: description.trim() || undefined,
       owner,
       color: getSelectedColor(),
+      progress: 0,
+      status: 'active',
     });
 
     // Reset form
@@ -161,13 +163,7 @@ export function AddModuleDialog({
             </Label>
             <Select value={type} onValueChange={(v) => handleTypeChange(v as ModuleType)}>
               <SelectTrigger>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: getModuleColor(type) }}
-                  />
-                  <SelectValue />
-                </div>
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {moduleTypes.map((t) => (

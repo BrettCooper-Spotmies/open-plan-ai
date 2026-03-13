@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, isBefore, startOfToday, parseISO } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -311,15 +311,19 @@ export const TaskDetailModal = ({
   if (!editedTask) return null;
 
   const handleFieldChange = <K extends keyof Task>(field: K, value: Task[K]) => {
-    setEditedTask(prev => {
-      const updated = { ...prev, [field]: value, updatedAt: new Date().toISOString() };
+    setEditedTask(prev => ({
+      ...prev,
+      [field]: value,
+      updatedAt: new Date().toISOString()
+    }));
+  };
 
-      // Auto-save logic
-      if (mode !== 'create') {
-        onUpdate(updated);
-      }
-      return updated;
-    });
+  const handleCancel = () => {
+    // Reset local edits back to original task from props
+    if (task) {
+      setEditedTask(task);
+    }
+    onClose();
   };
 
   const handleCreate = () => {
@@ -524,21 +528,22 @@ export const TaskDetailModal = ({
 
 
   const availableTasksForBlocking = allTasks.filter(
-    t => t.id !== editedTask.id && !blockingToTaskIds.includes(t.id)
+    t => t.id !== editedTask.id
+      && !localBlockingToIds.includes(t.id)
+      && !editedTask.blockedBy.includes(t.id)  // can't block a task that's already blocking you
   );
   const availableTasksForBlockedBy = allTasks.filter(
-    t => t.id !== editedTask.id && !editedTask.blockedBy.includes(t.id)
+    t => t.id !== editedTask.id
+      && !editedTask.blockedBy.includes(t.id)
+      && !localBlockingToIds.includes(t.id)  // can't be blocked by a task you're already blocking
   );
+
 
   // Adding to "Blocking To" - update the OTHER task's blockedBy and update local state
   const handleAddBlockingTask = () => {
     if (!selectedBlockingTask) return;
     const taskToUpdate = allTasks.find(t => t.id === selectedBlockingTask);
     if (taskToUpdate && !localBlockingToIds.includes(selectedBlockingTask)) {
-      // Add current task to that task's blockedBy
-      const updatedBlockedBy = [...taskToUpdate.blockedBy, editedTask.id];
-      onUpdate({ ...taskToUpdate, blockedBy: updatedBlockedBy });
-      // Immediately reflect in the local list
       setLocalBlockingToIds(prev => [...prev, selectedBlockingTask]);
     }
     setSelectedBlockingTask('');
@@ -547,7 +552,32 @@ export const TaskDetailModal = ({
   const handleUpdateTask = async () => {
     setIsSaving(true);
     try {
+      // Commit the main task changes
       await onUpdate(editedTask);
+
+      // Compute blocking-to diffs: tasks where THIS task is listed in their blockedBy
+      const originalBlockingToIds = allTasks
+        .filter(t => t.blockedBy.includes(editedTask.id))
+        .map(t => t.id);
+
+      // Added blocking-to relationships
+      const addedIds = localBlockingToIds.filter(id => !originalBlockingToIds.includes(id));
+      for (const id of addedIds) {
+        const other = allTasks.find(t => t.id === id);
+        if (other && !other.blockedBy.includes(editedTask.id)) {
+          await onUpdate({ ...other, blockedBy: [...other.blockedBy, editedTask.id] });
+        }
+      }
+
+      // Removed blocking-to relationships
+      const removedIds = originalBlockingToIds.filter(id => !localBlockingToIds.includes(id));
+      for (const id of removedIds) {
+        const other = allTasks.find(t => t.id === id);
+        if (other) {
+          await onUpdate({ ...other, blockedBy: other.blockedBy.filter(bid => bid !== editedTask.id) });
+        }
+      }
+
       onClose();
     } catch (error) {
       console.error('Failed to update task:', error);
@@ -560,11 +590,9 @@ export const TaskDetailModal = ({
   const handleRemoveBlockingTask = (taskId: string) => {
     const taskToUpdate = allTasks.find(t => t.id === taskId);
     if (taskToUpdate) {
-      const updatedBlockedBy = taskToUpdate.blockedBy.filter(id => id !== editedTask.id);
-      onUpdate({ ...taskToUpdate, blockedBy: updatedBlockedBy });
+      // Immediately reflect removal in local list
+      setLocalBlockingToIds(prev => prev.filter(id => id !== taskId));
     }
-    // Immediately reflect removal in local list
-    setLocalBlockingToIds(prev => prev.filter(id => id !== taskId));
   };
 
   // Adding to "Blocked By" - update THIS task's blockedBy
@@ -579,10 +607,6 @@ export const TaskDetailModal = ({
         blockedBy: [...prev.blockedBy, selectedBlockedByTask],
         updatedAt: new Date().toISOString()
       };
-
-      if (mode !== 'create') {
-        onUpdate(updated);
-      }
       return updated;
     });
     setSelectedBlockedByTask('');
@@ -596,10 +620,6 @@ export const TaskDetailModal = ({
         blockedBy: prev.blockedBy.filter(id => id !== taskId),
         updatedAt: new Date().toISOString()
       };
-
-      if (mode !== 'create') {
-        onUpdate(updated);
-      }
       return updated;
     });
   };
@@ -621,8 +641,8 @@ export const TaskDetailModal = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>{mode === 'create' ? 'Add New Task' : 'Task Details'}</DialogTitle>
         </DialogHeader>
@@ -906,6 +926,7 @@ export const TaskDetailModal = ({
                         mode="single"
                         selected={editedTask.startDate ? new Date(editedTask.startDate) : undefined}
                         onSelect={(date) => handleFieldChange('startDate', toDateOnly(date || undefined))}
+                        disabled={{ before: startOfToday() }}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
@@ -917,7 +938,7 @@ export const TaskDetailModal = ({
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <CalendarIcon className="h-3 w-3" />
-                    Due Date
+                    Due Date <span className="text-destructive">*</span>
                   </Label>
                   <Popover>
                     <PopoverTrigger asChild>
@@ -939,6 +960,14 @@ export const TaskDetailModal = ({
                         mode="single"
                         selected={editedTask.dueDate ? new Date(editedTask.dueDate) : undefined}
                         onSelect={(date) => handleFieldChange('dueDate', toDateOnly(date || undefined))}
+                        disabled={(date) => {
+                          const today = startOfToday();
+                          if (isBefore(date, today)) return true;
+                          if (editedTask.startDate) {
+                            return isBefore(date, parseISO(editedTask.startDate));
+                          }
+                          return false;
+                        }}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
@@ -1435,7 +1464,7 @@ export const TaskDetailModal = ({
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button onClick={handleCreate}>
+            <Button onClick={handleCreate} disabled={!editedTask.title || !editedTask.dueDate}>
               Create Task
             </Button>
           </div>
@@ -1457,10 +1486,10 @@ export const TaskDetailModal = ({
               <div />
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose} disabled={isSaving}>
+              <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button onClick={handleUpdateTask} disabled={isSaving}>
+              <Button onClick={handleUpdateTask} disabled={isSaving || !editedTask.title || !editedTask.dueDate}>
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Update Task
               </Button>

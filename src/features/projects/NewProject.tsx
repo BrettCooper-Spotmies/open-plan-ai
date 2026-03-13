@@ -53,7 +53,7 @@ import {
   Loader2,
   Smile
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isBefore, startOfToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
@@ -527,6 +527,16 @@ const NewProject = () => {
       return;
     }
 
+    if (!startDate) {
+      toast.error('Start date is required');
+      return;
+    }
+
+    if (!expectedEndDate) {
+      toast.error('Expected completion date is required');
+      return;
+    }
+
     setIsCreating(true);
 
     try {
@@ -803,6 +813,7 @@ const NewProject = () => {
                       mode="single"
                       selected={startDate}
                       onSelect={setStartDate}
+                      disabled={{ before: startOfToday() }}
                       initialFocus
                     />
                   </PopoverContent>
@@ -828,6 +839,7 @@ const NewProject = () => {
                       mode="single"
                       selected={expectedEndDate}
                       onSelect={setExpectedEndDate}
+                      disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false)}
                       initialFocus
                     />
                   </PopoverContent>
@@ -1205,6 +1217,7 @@ const NewProject = () => {
                       mode="single"
                       selected={newMilestoneStart}
                       onSelect={setNewMilestoneStart}
+                      disabled={{ before: startOfToday() }}
                       initialFocus
                     />
                   </PopoverContent>
@@ -1230,6 +1243,7 @@ const NewProject = () => {
                       mode="single"
                       selected={newMilestoneEnd}
                       onSelect={setNewMilestoneEnd}
+                      disabled={(date) => isBefore(date, startOfToday()) || (newMilestoneStart ? isBefore(date, newMilestoneStart) : false)}
                       initialFocus
                     />
                   </PopoverContent>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { format, parse } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
@@ -67,17 +67,22 @@ const moduleColors = {
 };
 
 export function MyDayKanbanView({
-  tasks,
+  tasks: initialTasks,
   groupBy,
   onTaskClick,
   onStatusUpdate,
 }: MyDayKanbanViewProps) {
+  const [localTasks, setLocalTasks] = useState<MyDayItem[]>(initialTasks);
+
+  useEffect(() => {
+    setLocalTasks(initialTasks);
+  }, [initialTasks]);
   const [hoveredTask, setHoveredTask] = useState<string | null>(null);
 
   const columns = useMemo((): KanbanColumn[] => {
     switch (groupBy) {
       case 'project': {
-        const grouped = groupTasksByProject(tasks);
+        const grouped = groupTasksByProject(localTasks);
         return Array.from(grouped.entries()).map(([id, { name, tasks }], index) => ({
           id,
           label: name,
@@ -86,21 +91,21 @@ export function MyDayKanbanView({
         }));
       }
       case 'progress': {
-        const grouped = groupTasksByProgress(tasks);
+        const grouped = groupTasksByProgress(localTasks);
         return progressColumnConfig.map(config => ({
           ...config,
           tasks: grouped[config.id as keyof typeof grouped] || [],
         }));
       }
       case 'dueDate': {
-        const grouped = groupTasksByDueDate(tasks);
+        const grouped = groupTasksByDueDate(localTasks);
         return dueDateColumnConfig.map(config => ({
           ...config,
           tasks: grouped[config.id as keyof typeof grouped] || [],
         }));
       }
       case 'priority': {
-        const grouped = groupTasksByPriority(tasks);
+        const grouped = groupTasksByPriority(localTasks);
         return priorityColumnConfig.map(config => ({
           ...config,
           tasks: grouped[config.id as keyof typeof grouped] || [],
@@ -109,7 +114,7 @@ export function MyDayKanbanView({
       default:
         return [];
     }
-  }, [tasks, groupBy]);
+  }, [localTasks, groupBy]);
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
@@ -117,7 +122,7 @@ export function MyDayKanbanView({
     const { source, destination, draggableId } = result;
 
     // Only allow status updates when grouping by progress
-    if (groupBy === 'progress' && source.droppableId !== destination.droppableId) {
+    if (groupBy === 'progress') {
       const statusMap: Record<string, TaskStatus> = {
         dependency: 'blocked',
         notStarted: 'todo',
@@ -127,7 +132,42 @@ export function MyDayKanbanView({
 
       const newStatus = statusMap[destination.droppableId];
       if (newStatus) {
-        onStatusUpdate(draggableId, newStatus);
+        // Optimistic local update to prevent blinking AND maintain new dragging order
+        const tasksCopy = [...localTasks];
+        // find item in old array
+        const itemIndex = tasksCopy.findIndex(t => t.id === draggableId);
+        if (itemIndex > -1) {
+          const item = tasksCopy[itemIndex];
+          // remove item
+          tasksCopy.splice(itemIndex, 1);
+          
+          let updatedItem = { ...item };
+          if (item.itemType === 'task' && item.originalTask) {
+            updatedItem = { ...updatedItem, status: newStatus, originalTask: { ...item.originalTask, status: newStatus } };
+          } else if (item.itemType === 'issue' && item.originalIssue) {
+            const issueStatusMap: Record<string, any> = {
+              'todo': 'open',
+              'in-progress': 'investigating',
+              'review': 'investigating',
+              'done': 'resolved',
+              'blocked': 'investigating'
+             };
+             const mappedStatus = issueStatusMap[newStatus];
+             updatedItem = { ...updatedItem, status: mappedStatus, originalIssue: { ...item.originalIssue, status: mappedStatus } };
+          }
+          
+          // Re-insert at the estimated destination index relative to the whole array.
+          // Since localTasks is all items, but destination.index is relative to the group,
+          // we need to insert it at a positional index. But inserting it at the end of the array is usually fine 
+          // if we don't care about intra-column sorting in MyDayKanbanView.
+          tasksCopy.push(updatedItem);
+          
+          setLocalTasks(tasksCopy);
+        }
+
+        if (source.droppableId !== destination.droppableId) {
+          onStatusUpdate(draggableId, newStatus);
+        }
       }
     }
   };
@@ -167,8 +207,9 @@ export function MyDayKanbanView({
                       <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
+                        style={provided.draggableProps.style}
                         className={cn(
-                          'flex-1 min-w-0 space-y-3 transition-shadow',
+                          'flex-1 min-w-0 space-y-3',
                           snapshot.isDragging && 'shadow-lg'
                         )}
                       >
@@ -196,7 +237,7 @@ export function MyDayKanbanView({
                               ref={provided.innerRef}
                               {...provided.droppableProps}
                               className={cn(
-                                'space-y-2 min-h-[200px] p-2 rounded-lg transition-colors',
+                                'flex flex-col gap-2 min-h-[200px] p-2 rounded-lg',
                                 snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30'
                               )}
                             >
@@ -212,12 +253,13 @@ export function MyDayKanbanView({
                                       ref={provided.innerRef}
                                       {...provided.draggableProps}
                                       {...provided.dragHandleProps}
+                                      style={provided.draggableProps.style}
                                       className={cn(
-                                        'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
+                                        'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md',
                                         task.itemType === 'task' && task.originalTask?.module
                                           ? moduleColors[task.originalTask.module as keyof typeof moduleColors] || 'border-l-muted'
                                           : 'border-l-muted',
-                                        snapshot.isDragging && 'shadow-lg rotate-2'
+                                        snapshot.isDragging && 'shadow-lg'
                                       )}
                                       onMouseEnter={() => setHoveredTask(task.id)}
                                       onMouseLeave={() => setHoveredTask(null)}

@@ -51,7 +51,7 @@ import {
     ChevronUp,
     Palette
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isBefore, startOfToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -554,6 +554,16 @@ const EditProject = () => {
             return;
         }
 
+        if (!startDate) {
+            toast.error('Start date is required');
+            return;
+        }
+
+        if (!targetDate) {
+            toast.error('Target date is required');
+            return;
+        }
+
         setIsSaving(true);
 
         try {
@@ -915,6 +925,7 @@ const EditProject = () => {
                                             mode="single"
                                             selected={startDate}
                                             onSelect={setStartDate}
+                                            disabled={{ before: startOfToday() }}
                                             initialFocus
                                         />
                                     </PopoverContent>
@@ -940,6 +951,7 @@ const EditProject = () => {
                                             mode="single"
                                             selected={targetDate}
                                             onSelect={setTargetDate}
+                                            disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false)}
                                             initialFocus
                                         />
                                     </PopoverContent>
@@ -1319,7 +1331,7 @@ const EditProject = () => {
                                             {newMilestoneStart ? format(newMilestoneStart, "PP") : "Start"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneStart} onSelect={setNewMilestoneStart} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneStart} onSelect={setNewMilestoneStart} disabled={{ before: startOfToday() }} /></PopoverContent>
                                 </Popover>
                                 <Popover>
                                     <PopoverTrigger asChild>
@@ -1328,7 +1340,7 @@ const EditProject = () => {
                                             {newMilestoneEnd ? format(newMilestoneEnd, "PP") : "End"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneEnd} onSelect={setNewMilestoneEnd} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneEnd} onSelect={setNewMilestoneEnd} disabled={(date) => isBefore(date, startOfToday()) || (newMilestoneStart ? isBefore(date, newMilestoneStart) : false)} /></PopoverContent>
                                 </Popover>
                             </div>
                             <div className="flex gap-2">

@@ -122,14 +122,11 @@ export function MilestonesView({
             <Flag className="h-8 w-8 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-medium mb-2">No milestones yet</h3>
-          <p className="text-sm text-muted-foreground mb-4 max-w-sm">
+          <p className="text-sm text-muted-foreground max-w-sm">
             Create milestones to track important project deadlines and deliverables.
           </p>
-          <Button onClick={() => setInternalIsAddDialogOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Add Milestone
-          </Button>
         </Card>
+
       ) : sortedMilestones.length === 0 ? (
         <Card className="p-12 flex flex-col items-center justify-center text-center">
           <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">

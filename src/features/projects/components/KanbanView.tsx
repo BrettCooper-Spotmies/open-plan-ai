@@ -211,13 +211,14 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
   };
 
   const handleTaskUpdate = (updatedTask: Task) => {
+    // Optimistic local state update
+    setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+
     // Call backend mutation if available
     if (onTaskUpdate) {
       onTaskUpdate(updatedTask);
-    } else {
-      // Fallback to local state update
-      setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
     }
+
     // Only update selected task if it's the one currently being viewed
     if (selectedTask && selectedTask.id === updatedTask.id) {
       setSelectedTask(updatedTask);
@@ -263,15 +264,15 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       status: destColumn.status as TaskStatus,
     };
 
+    // Optimistic local state update
+    const newTasks = tasks.map(t =>
+      t.id === movedTask.id ? updatedTask : t
+    );
+    setTasks(newTasks);
+
     // Call backend mutation if available
     if (onTaskUpdate) {
       onTaskUpdate(updatedTask);
-    } else {
-      // Fallback to local state update
-      const newTasks = tasks.map(t =>
-        t.id === movedTask.id ? updatedTask : t
-      );
-      setTasks(newTasks);
     }
   };
 
@@ -546,26 +547,20 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                                                     <div className="flex items-start justify-between gap-2">
                                                       <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
                                                         {isBlocked ? (
-                                                          <div
-                                                            className={cn(
-                                                              "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
-                                                              hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
-                                                            )}
-                                                          >
-                                                            <AlertTriangle className="h-4 w-4 text-status-blocked" />
+                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                            <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
+                                                              <Check className="h-3 w-3 text-status-blocked" />
+                                                            </div>
                                                           </div>
                                                         ) : task.status === 'done' ? (
                                                           <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
                                                             <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
-                                                              <Check className="h-3 w-3 text-status-done" />
+                                                              <Check className="h-3 w-3 text-green-500" />
                                                             </div>
                                                           </div>
                                                         ) : (
                                                           <div
-                                                            className={cn(
-                                                              "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
-                                                              hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
-                                                            )}
+                                                            className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4"
                                                           >
                                                             <button
                                                               onClick={(e) => {
@@ -579,10 +574,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                                                           </div>
                                                         )}
                                                         <h4
-                                                          className={cn(
-                                                            "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
-                                                            task.status === 'done' || (hoveredTask === task.id) ? "translate-x-6" : "translate-x-0"
-                                                          )}
+                                                          className="text-sm font-medium leading-tight truncate translate-x-6"
                                                         >
                                                           {task.title}
                                                         </h4>
@@ -768,4 +760,3 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     </div>
   );
 }
-

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, startOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -596,6 +596,7 @@ export function IssueDetailContent({
                                                 handleFieldChange('dueDate', undefined);
                                             }
                                         }}
+                                        disabled={(date) => date < startOfDay(new Date())}
                                         initialFocus
                                         className="p-3 pointer-events-auto"
                                     />

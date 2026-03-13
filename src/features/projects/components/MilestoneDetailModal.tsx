@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, startOfToday } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -256,7 +256,7 @@ export function MilestoneDetailModal({
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <CalendarIcon className="h-3 w-3" />
-                  Target Date
+                  Target Date <span className="text-destructive">*</span>
                 </Label>
                 <Popover>
                   <PopoverTrigger asChild>
@@ -276,6 +276,7 @@ export function MilestoneDetailModal({
                       mode="single"
                       selected={parseISO(editedMilestone.date)}
                       onSelect={(date) => date && handleFieldChange('date', format(date, 'yyyy-MM-dd'))}
+                      disabled={{ before: startOfToday() }}
                       initialFocus
                       className="p-3 pointer-events-auto"
                     />
@@ -615,7 +616,7 @@ export function MilestoneDetailModal({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleUpdateMilestone}>
+          <Button onClick={handleUpdateMilestone} disabled={!editedMilestone.title.trim() || !editedMilestone.date}>
             Update Milestone
           </Button>
         </div>
