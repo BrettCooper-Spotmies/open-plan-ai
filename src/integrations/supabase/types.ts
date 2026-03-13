@@ -591,6 +591,7 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           id: string
+          milestone_id: string | null
           module_type: Database["public"]["Enums"]["module_type"]
           name: string
           owner_id: string | null
@@ -604,6 +605,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           id?: string
+          milestone_id?: string | null
           module_type: Database["public"]["Enums"]["module_type"]
           name: string
           owner_id?: string | null
@@ -617,6 +619,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           id?: string
+          milestone_id?: string | null
           module_type?: Database["public"]["Enums"]["module_type"]
           name?: string
           owner_id?: string | null

@@ -51,13 +51,13 @@ export function ModulesKanbanView({ modules, onModuleClick }: ModulesKanbanViewP
             onClick={() => onModuleClick?.(module)}
           >
             {/* Header */}
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <div className="flex items-center gap-2">
+            <div className="flex items-start justify-between gap-2 mb-3 min-w-0">
+              <div className="flex items-center gap-2 min-w-0 overflow-hidden">
                 <div 
                   className="w-3 h-3 rounded-full shrink-0"
                   style={{ backgroundColor: moduleColor }}
                 />
-                <h3 className="font-medium text-sm leading-tight">{module.name}</h3>
+                <h3 className="font-medium text-sm leading-tight truncate">{module.name}</h3>
               </div>
               {isComplete ? (
                 <CheckCircle2 className="h-4 w-4 text-status-done shrink-0" />

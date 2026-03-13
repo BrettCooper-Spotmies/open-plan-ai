@@ -150,6 +150,14 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
     updatedAt: new Date().toISOString(),
   };
 
+  const handleCompleteTask = (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation();
+    const updatedTask = { ...task, status: 'done' as const };
+    if (onTaskUpdate) {
+      onTaskUpdate(updatedTask);
+    }
+  };
+
   const handleTaskUpdate = (updatedTask: Task) => {
     // Only update selected task if it's the one currently being viewed
     if (selectedTask && selectedTask.id === updatedTask.id) {
@@ -249,10 +257,17 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
                       {blockerCount > 0 && (
                         <AlertTriangle className="h-4 w-4 text-status-blocked shrink-0 mt-0.5" />
                       )}
-                      {task.status === 'done' && (
+                      {task.status === 'done' ? (
                         <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center shrink-0 mt-0.5">
                           <Check className="h-3 w-3 text-status-done" />
                         </div>
+                      ) : (
+                        <button
+                          onClick={(e) => handleCompleteTask(e, task)}
+                          className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background shrink-0 mt-0.5"
+                        >
+                          <Check className="h-3 w-3 text-foreground opacity-0 hover:opacity-100" />
+                        </button>
                       )}
                       <div>
                         <p className="font-medium">{task.title}</p>

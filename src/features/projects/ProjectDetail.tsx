@@ -40,6 +40,7 @@ import {
   useUpdateMilestone,
   useDeleteMilestone,
   useCreateModule,
+  useUpdateModule,
   useDeleteModule,
 } from '@/hooks/useProjectMutations';
 import { cn } from '@/lib/utils';
@@ -314,6 +315,7 @@ export default function ProjectDetail() {
   const updateMilestoneMutation = useUpdateMilestone(id || '');
   const deleteMilestoneMutation = useDeleteMilestone(id || '');
   const createModuleMutation = useCreateModule(id || '');
+  const updateModuleMutation = useUpdateModule(id || '');
   const deleteModuleMutation = useDeleteModule(id || '');
   const updateProjectMutation = useUpdateProject();
 
@@ -480,18 +482,43 @@ export default function ProjectDetail() {
     setIsAddModuleDialogOpen(false);
   };
 
-  const handleMilestoneCreate = (newMilestonePartial: Omit<Milestone, 'id'>) => {
+  const handleMilestoneCreate = async (newMilestonePartial: Omit<Milestone, 'id'>) => {
     if (!project) return;
 
-    createMilestoneMutation.mutate({
-      name: newMilestonePartial.title,
-      due_date: newMilestonePartial.date || null,
-      description: newMilestonePartial.description || null,
-      status: newMilestonePartial.completed ? 'completed' : 'upcoming',
-    });
+    try {
+      const createdMilestone = await createMilestoneMutation.mutateAsync({
+        name: newMilestonePartial.title,
+        due_date: newMilestonePartial.date || null,
+        description: newMilestonePartial.description || null,
+        status: newMilestonePartial.completed ? 'completed' : 'upcoming',
+      });
+
+      // Link tasks if any were selected during creation
+      if (newMilestonePartial.linkedTaskIds && newMilestonePartial.linkedTaskIds.length > 0) {
+        for (const taskId of newMilestonePartial.linkedTaskIds) {
+          updateTaskMutation.mutate({
+            taskId,
+            updates: { milestoneId: createdMilestone.id }
+          });
+        }
+      }
+
+      // Link modules if any were selected during creation
+      if (newMilestonePartial.linkedModuleIds && newMilestonePartial.linkedModuleIds.length > 0) {
+        for (const moduleId of newMilestonePartial.linkedModuleIds) {
+          updateModuleMutation.mutate({
+            moduleId,
+            updates: { milestone_id: createdMilestone.id }
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to create milestone and link tasks:', error);
+    }
   };
 
   const handleMilestoneUpdate = (updatedMilestone: Milestone) => {
+    // Update milestone core fields
     updateMilestoneMutation.mutate({
       milestoneId: updatedMilestone.id,
       updates: {
@@ -501,7 +528,51 @@ export default function ProjectDetail() {
         status: updatedMilestone.completed ? 'completed' : 'upcoming',
       },
     });
+
+    // Persist linked task changes by updating ONLY each task's milestoneId field
+    const previousLinkedTaskIds = (project?.tasks || [])
+      .filter(t => t.milestoneId === updatedMilestone.id)
+      .map(t => t.id);
+    const newLinkedTaskIds = updatedMilestone.linkedTaskIds || [];
+
+    // Tasks newly added to this milestone — set milestoneId
+    const addedTaskIds = newLinkedTaskIds.filter(id => !previousLinkedTaskIds.includes(id));
+    for (const taskId of addedTaskIds) {
+      updateTaskMutation.mutate({ taskId, updates: { milestoneId: updatedMilestone.id } });
+    }
+
+    // Clear tasks removed from this milestone
+    const removedTaskIds = previousLinkedTaskIds.filter(id => !newLinkedTaskIds.includes(id));
+    for (const taskId of removedTaskIds) {
+      updateTaskMutation.mutate({ taskId, updates: { milestoneId: null as any } });
+    }
+
+    // Persist linked module changes
+    const currentModules = project?.projectModules || [];
+    const previousLinkedModuleIds = currentModules
+      .filter(m => m.milestoneId === updatedMilestone.id)
+      .map(m => m.id);
+    const newLinkedModuleIds = updatedMilestone.linkedModuleIds || [];
+
+    // Modules newly added to this milestone
+    const addedModuleIds = newLinkedModuleIds.filter(id => !previousLinkedModuleIds.includes(id));
+    for (const moduleId of addedModuleIds) {
+      updateModuleMutation.mutate({
+        moduleId,
+        updates: { milestone_id: updatedMilestone.id }
+      });
+    }
+
+    // Modules removed from this milestone
+    const removedModuleIds = previousLinkedModuleIds.filter(id => !newLinkedModuleIds.includes(id));
+    for (const moduleId of removedModuleIds) {
+      updateModuleMutation.mutate({
+        moduleId,
+        updates: { milestone_id: null }
+      });
+    }
   };
+
 
   const handleTaskCreate = (newTask: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
     createTaskMutation.mutate(newTask);

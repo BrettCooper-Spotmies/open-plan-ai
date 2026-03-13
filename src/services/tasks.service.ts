@@ -360,7 +360,8 @@ export const tasksService = {
     if (updates.tags !== undefined) updateData.tags = updates.tags;
     if (updates.estimatedHours !== undefined) updateData.estimated_hours = updates.estimatedHours;
     if (updates.actualHours !== undefined) updateData.actual_hours = updates.actualHours;
-    if (updates.milestoneId !== undefined) updateData.milestone_id = updates.milestoneId;
+    if ('milestoneId' in updates) updateData.milestone_id = updates.milestoneId ?? null;
+
     if (updates.moduleId !== undefined) updateData.module_id = updates.moduleId;
     if (updates.moduleIds !== undefined) updateData.module_ids = updates.moduleIds;
 

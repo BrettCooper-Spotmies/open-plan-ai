@@ -127,15 +127,31 @@ export function useUpdateIssue() {
       // Also update the projects cache if it exists
       queryClient.setQueriesData({ queryKey: queryKeys.projects.root }, (old: any) => {
         if (!old) return old;
-        return old.map((p: any) => {
-          if (p.id !== projectId) return p;
+        
+        // Handle case where old is an array (list of projects)
+        if (Array.isArray(old)) {
+          return old.map((p: any) => {
+            if (p.id !== projectId) return p;
+            return {
+              ...p,
+              issues: (p.issues || []).map((i: any) =>
+                i.id === issueId ? { ...i, ...issueUpdates } : i
+              )
+            };
+          });
+        }
+        
+        // Handle case where old is a single project object (project detail)
+        if (typeof old === 'object' && old.id === projectId) {
           return {
-            ...p,
-            issues: (p.issues || []).map((i: any) =>
+            ...old,
+            issues: (old.issues || []).map((i: any) =>
               i.id === issueId ? { ...i, ...issueUpdates } : i
             )
           };
-        });
+        }
+        
+        return old;
       });
 
       return { previousIssue, projectId };

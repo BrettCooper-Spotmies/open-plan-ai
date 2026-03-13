@@ -105,18 +105,22 @@ export function ModuleDetailModal({
     [allIssues, module]
   );
 
+  const moduleTasks = useMemo(() =>
+    module
+      ? allTasks.filter(t => t.moduleId === module.id || (t.moduleIds || []).includes(module.id))
+      : [],
+    [allTasks, module]
+  );
+  const moduleIssues = useMemo(() =>
+    module
+      ? allIssues.filter(i => i.moduleId === module.id && i.status !== 'resolved' && i.status !== 'closed')
+      : [],
+    [allIssues, module]
+  );
+
   if (!module) return null;
 
   const moduleColor = getModuleColor(module.type);
-  // Filter tasks by moduleId or moduleIds to show actually linked tasks
-  const moduleTasks = useMemo(() =>
-    allTasks.filter(t => t.moduleId === module.id || (t.moduleIds || []).includes(module.id)),
-    [allTasks, module.id]
-  );
-  const moduleIssues = useMemo(() =>
-    allIssues.filter(i => i.moduleId === module.id && i.status !== 'resolved' && i.status !== 'closed'),
-    [allIssues, module.id]
-  );
   const completedTasks = moduleTasks.filter(t => t.status === 'done').length;
   const progress = moduleTasks.length > 0 ? (completedTasks / moduleTasks.length) * 100 : 0;
 
