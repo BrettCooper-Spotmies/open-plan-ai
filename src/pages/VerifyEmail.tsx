@@ -6,13 +6,16 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Layers, Mail, AlertCircle, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const VerifyEmail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const email = location.state?.email || "";
+  const password = location.state?.password || "";
   const fromLogin = location.state?.fromLogin || false;
   const redirectMessage = location.state?.message || "";
+  const { signIn } = useAuth();
 
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -87,8 +90,26 @@ const VerifyEmail = () => {
       }
 
       setSuccess(true);
+      setOtp(""); // Clear OTP on success
 
-      // Wait briefly, then redirect to login
+      // If we have the password, try to log in directly
+      if (password) {
+        try {
+          const signInResult = await signIn(email, password);
+          if (!signInResult.error) {
+            // Wait briefly to show success message, then redirect to app
+            setTimeout(() => {
+              navigate("/", { replace: true });
+            }, 1500);
+            return;
+          }
+        } catch (signInErr) {
+          console.error("Auto-login after verification failed:", signInErr);
+          // Fallback to login page if auto-login fails
+        }
+      }
+
+      // Fallback: Redirect to login if no password or sign-in failed
       setTimeout(() => {
         navigate("/login", {
           state: {

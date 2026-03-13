@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Bell, LogOut, FileText, UserPlus, UserMinus, Download, Image, Pencil, Check, Loader2, Camera, Trash2, ShieldCheck } from 'lucide-react';
+import { X, Bell, LogOut, FileText, UserPlus, Download, Image, Pencil, Check, Loader2, Camera, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -44,10 +44,11 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
   const navigate = useNavigate();
   const currentUserId = user?.id;
   const setDetailPanelOpen = useChatStore((s) => s.setDetailPanelOpen);
+  const onlineUserIds = useChatStore((s) => s.onlineUserIds);
   const isGroup = conversation.type === 'group';
 
   const currentMember = conversation.members.find((m) => m.id === currentUserId);
-  const isAdminOrOwner = currentMember?.role === 'owner' || currentMember?.role === 'admin';
+  const isOwner = currentMember?.role === 'owner';
 
   // Shared files
   const [sharedFiles, setSharedFiles] = useState<SharedFile[]>([]);
@@ -72,8 +73,6 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
 
   // Confirmation state
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
-  const [confirmAdminId, setConfirmAdminId] = useState<string | null>(null);
-  const [confirmDismissId, setConfirmDismissId] = useState<string | null>(null);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
   useEffect(() => {
@@ -223,41 +222,6 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
     }
   };
 
-  const handleMakeAdmin = async (userId: string) => {
-    try {
-      await chatService.updateMemberRole(conversation.id, userId, 'admin');
-
-      // Get member name for system message
-      const member = conversation.members.find(m => m.id === userId);
-      const memberName = member ? member.name : 'A member';
-      await chatService.sendSystemMessage(conversation.id, `${memberName} was promoted to Admin`);
-
-      toast.success('Member promoted to Admin');
-      setConfirmAdminId(null);
-      onRefetch?.();
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to promote member');
-    }
-  };
-
-  const handleDismissAdmin = async (userId: string) => {
-    try {
-      await chatService.updateMemberRole(conversation.id, userId, 'member');
-
-      // Get member name for system message
-      const member = conversation.members.find(m => m.id === userId);
-      const memberName = member ? member.name : 'An admin';
-      await chatService.sendSystemMessage(conversation.id, `${memberName} is no longer an Admin`);
-
-      toast.success('Admin dismissed');
-      setConfirmDismissId(null);
-      onRefetch?.();
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to dismiss admin');
-    }
-  };
 
   const handleLeaveGroup = async () => {
     if (!currentUserId) return;
@@ -300,7 +264,7 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
         <div className="p-4 space-y-4">
           {/* Info */}
           <div className="text-center relative group/info">
-            {isGroup && isAdminOrOwner && !isEditing && (
+            {isGroup && isOwner && !isEditing && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -430,7 +394,7 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
               <h5 className="text-xs font-medium text-muted-foreground">
                 Members ({conversation.members.length})
               </h5>
-              {isGroup && isAdminOrOwner && (
+              {isGroup && isOwner && (
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={openAddDialog} title="Add member">
                   <UserPlus className="h-3.5 w-3.5" />
                 </Button>
@@ -443,7 +407,7 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
                     <Avatar className="h-7 w-7">
                       <AvatarFallback className="text-[10px]">{member.initials}</AvatarFallback>
                     </Avatar>
-                    <OnlineStatus isOnline={member.isOnline} className="absolute -bottom-0.5 -right-0.5" size="sm" />
+                    <OnlineStatus isOnline={onlineUserIds.has(member.id)} className="absolute -bottom-0.5 -right-0.5" size="sm" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <span className="text-sm truncate block">
@@ -456,29 +420,8 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
                   {isGroup && member.role?.toLowerCase() === 'admin' && (
                     <Badge variant="secondary" className="text-[10px] h-5 bg-blue-500/10 text-blue-600 border-none">admin</Badge>
                   )}
-                  {isGroup && isAdminOrOwner && member.id !== currentUserId && member.role !== 'owner' && (
+                  {isGroup && isOwner && member.id !== currentUserId && member.role !== 'owner' && (
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {member.role === 'member' ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
-                          onClick={() => setConfirmAdminId(member.id)}
-                          title="Make Admin"
-                        >
-                          <ShieldCheck className="h-4 w-4" />
-                        </Button>
-                      ) : member.role === 'admin' && isAdminOrOwner ? (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
-                          onClick={() => setConfirmDismissId(member.id)}
-                          title="Dismiss as Admin"
-                        >
-                          <UserMinus className="h-4 w-4" />
-                        </Button>
-                      ) : null}
                       <Button
                         variant="ghost"
                         size="icon"
@@ -677,24 +620,7 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
         variant="destructive"
       />
 
-      <ConfirmationDialog
-        open={!!confirmAdminId}
-        onOpenChange={(open) => !open && setConfirmAdminId(null)}
-        onConfirm={() => confirmAdminId && handleMakeAdmin(confirmAdminId)}
-        title="Make Group Admin"
-        description="Are you sure you want to make this member an admin? They will be able to manage members and group info."
-        confirmText="Make Admin"
-      />
 
-      <ConfirmationDialog
-        open={!!confirmDismissId}
-        onOpenChange={(open) => !open && setConfirmDismissId(null)}
-        onConfirm={() => confirmDismissId && handleDismissAdmin(confirmDismissId)}
-        title="Dismiss as Admin"
-        description="Are you sure you want to dismiss this admin? They will no longer have management permissions."
-        confirmText="Dismiss"
-        variant="destructive"
-      />
     </div>
   );
 }

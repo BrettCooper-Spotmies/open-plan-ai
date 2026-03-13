@@ -102,12 +102,17 @@ export const attachmentsService = {
   /**
    * Get all attachments for a project
    */
-  async getByProject(projectId: string): Promise<AttachmentRecord[]> {
-    const { data, error } = await supabase
+  async getByProject(projectId: string, includeAllEntities: boolean = false): Promise<AttachmentRecord[]> {
+    let query = supabase
       .from('attachments')
       .select('*')
-      .eq('project_id', projectId)
-      .order('uploaded_at', { ascending: false });
+      .eq('project_id', projectId);
+
+    if (!includeAllEntities) {
+      query = query.eq('entity_type', 'project');
+    }
+
+    const { data, error } = await query.order('uploaded_at', { ascending: false });
 
     if (error) {
       console.error('Error fetching project attachments:', error);

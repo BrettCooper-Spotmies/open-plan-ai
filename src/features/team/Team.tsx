@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import {
   Dialog,
   DialogContent,
@@ -290,25 +291,7 @@ const Team = () => {
   );
 
   if (isLoading) {
-    return (
-      <>
-        <div className="space-y-6">
-          <div className="flex justify-between">
-            <div>
-              <Skeleton className="h-8 w-48" />
-              <Skeleton className="h-4 w-64 mt-2" />
-            </div>
-            <Skeleton className="h-10 w-32" />
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-24" />
-            ))}
-          </div>
-          <Skeleton className="h-[400px]" />
-        </div>
-      </>
-    );
+    return <AppLayoutSkeleton variant="team" />;
   }
 
   if (error) {

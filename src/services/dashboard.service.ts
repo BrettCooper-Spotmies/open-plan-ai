@@ -90,7 +90,7 @@ export const dashboardService = {
         .from('tasks')
         .select('*', { count: 'exact', head: true })
         .in('project_id', projectIds)
-        .in('status', ['in-progress', 'review'])
+        .eq('status', 'in-progress')
         .is('deleted_at', null),
     ]);
 

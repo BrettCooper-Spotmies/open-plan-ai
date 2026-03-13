@@ -1,11 +1,99 @@
 import * as React from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { DayPicker } from "react-day-picker";
+import { DayPicker, useNavigation } from "react-day-picker";
+import { format, setMonth, setYear, getYear, getMonth } from "date-fns";
 
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>;
+
+// ── Custom caption with month + year dropdowns ─────────────────────────────
+
+const MONTHS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December"
+];
+
+const currentYear = new Date().getFullYear();
+const YEARS = Array.from({ length: 21 }, (_, i) => currentYear - 5 + i); // 5 past → 15 future
+
+function CustomCaption({ displayMonth }: { displayMonth: Date }) {
+  const { goToMonth, nextMonth, previousMonth } = useNavigation();
+
+  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newDate = setMonth(displayMonth, parseInt(e.target.value, 10));
+    goToMonth(newDate);
+  };
+
+  const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newDate = setYear(displayMonth, parseInt(e.target.value, 10));
+    goToMonth(newDate);
+  };
+
+  return (
+    <div className="flex items-center justify-between px-1 py-1">
+      {/* Previous month */}
+      <button
+        type="button"
+        className={cn(
+          buttonVariants({ variant: "outline" }),
+          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+        )}
+        onClick={() => previousMonth && goToMonth(previousMonth)}
+        disabled={!previousMonth}
+        aria-label="Go to previous month"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+
+      {/* Month & Year selects */}
+      <div className="flex items-center gap-1">
+        <select
+          value={getMonth(displayMonth)}
+          onChange={handleMonthChange}
+          className="text-sm font-medium bg-transparent cursor-pointer rounded-md px-1 py-0.5 hover:bg-accent focus:outline-none focus:ring-1 focus:ring-ring"
+          aria-label="Select month"
+        >
+          {MONTHS.map((month, i) => (
+            <option key={month} value={i} className="bg-popover text-popover-foreground">
+              {month}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={getYear(displayMonth)}
+          onChange={handleYearChange}
+          className="text-sm font-medium bg-transparent cursor-pointer rounded-md px-1 py-0.5 hover:bg-accent focus:outline-none focus:ring-1 focus:ring-ring"
+          aria-label="Select year"
+        >
+          {YEARS.map((year) => (
+            <option key={year} value={year} className="bg-popover text-popover-foreground">
+              {year}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Next month */}
+      <button
+        type="button"
+        className={cn(
+          buttonVariants({ variant: "outline" }),
+          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
+        )}
+        onClick={() => nextMonth && goToMonth(nextMonth)}
+        disabled={!nextMonth}
+        aria-label="Go to next month"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+// ── Main Calendar ──────────────────────────────────────────────────────────
 
 function Calendar({ className, classNames, showOutsideDays = true, ...props }: CalendarProps) {
   return (
@@ -16,7 +104,7 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
         month: "space-y-4",
         caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium",
+        caption_label: "text-sm font-medium hidden", // hidden – replaced by CustomCaption
         nav: "space-x-1 flex items-center",
         nav_button: cn(
           buttonVariants({ variant: "outline" }),
@@ -42,13 +130,13 @@ function Calendar({ className, classNames, showOutsideDays = true, ...props }: C
         ...classNames,
       }}
       components={{
-        IconLeft: ({ ..._props }) => <ChevronLeft className="h-4 w-4" />,
-        IconRight: ({ ..._props }) => <ChevronRight className="h-4 w-4" />,
+        Caption: ({ displayMonth }) => <CustomCaption displayMonth={displayMonth} />,
       }}
       {...props}
     />
   );
 }
+
 Calendar.displayName = "Calendar";
 
 export { Calendar };

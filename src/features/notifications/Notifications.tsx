@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
-import { AppLayout } from '@/components/layout/AppLayout';
+import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 
 const getNotificationIcon = (type: AppNotification['type']) => {
     switch (type) {
@@ -104,18 +104,11 @@ const Notifications = () => {
     };
 
     if (isLoading) {
-        return (
-            <AppLayout>
-                <div className="flex items-center justify-center p-12">
-                    <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                </div>
-            </AppLayout>
-        );
+        return <AppLayoutSkeleton variant="notifications" />;
     }
 
     return (
-        <AppLayout>
-            <div className="space-y-6">
+        <div className="space-y-6">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>
@@ -352,8 +345,7 @@ const Notifications = () => {
                         )}
                     </TabsContent>
                 </Tabs>
-            </div>
-        </AppLayout>
+        </div>
     );
 };
 

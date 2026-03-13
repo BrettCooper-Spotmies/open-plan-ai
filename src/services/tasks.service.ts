@@ -480,10 +480,7 @@ export const tasksService = {
       return;
     }
 
-    const { error } = await supabase
-      .from('tasks')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', taskId);
+    const { error } = await (supabase.rpc as any)('soft_delete_task', { task_id: taskId });
 
     if (error) throw error;
   },

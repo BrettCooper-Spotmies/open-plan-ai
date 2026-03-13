@@ -153,12 +153,12 @@ export function MyDayKanbanView({
             <div
               ref={provided.innerRef}
               {...provided.droppableProps}
-              className="w-full max-w-full overflow-x-auto pb-4"
+              className="w-full pb-4"
             >
               <div
-                className="inline-flex gap-4 min-w-full"
+                className="grid gap-4"
                 style={{
-                  width: 'max-content',
+                  gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
                 }}
               >
                 {columns.map((column, index) => (
@@ -168,7 +168,7 @@ export function MyDayKanbanView({
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         className={cn(
-                          'w-[280px] flex-shrink-0 space-y-3 transition-shadow',
+                          'flex-1 min-w-0 space-y-3 transition-shadow',
                           snapshot.isDragging && 'shadow-lg'
                         )}
                       >

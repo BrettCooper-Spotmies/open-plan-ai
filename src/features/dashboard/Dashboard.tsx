@@ -4,7 +4,7 @@ import { ActivityFeed } from './components/ActivityFeed';
 import { ProjectsOverview } from './components/ProjectsOverview';
 import { UpcomingMilestones } from './components/UpcomingMilestones';
 import { useDashboardStats, useRecentActivity, useUpcomingDashboardMilestones, useProjectSummaries } from '@/hooks/useDashboard';
-import { Skeleton } from '@/components/ui/skeleton';
+import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { Activity, Milestone, Project } from '@/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -227,20 +227,7 @@ export default function Dashboard() {
         ))}
 
         {isLoading ? (
-          <div className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-24" />
-              ))}
-            </div>
-            <div className="grid gap-6 lg:grid-cols-3">
-              <Skeleton className="lg:col-span-2 h-[400px]" />
-              <div className="space-y-6">
-                <Skeleton className="h-48" />
-                <Skeleton className="h-48" />
-              </div>
-            </div>
-          </div>
+          <AppLayoutSkeleton variant="dashboard" />
         ) : (
           <>
             <DashboardStats stats={dashboardStats} />

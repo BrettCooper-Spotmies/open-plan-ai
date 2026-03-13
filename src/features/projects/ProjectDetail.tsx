@@ -72,42 +72,26 @@ function MilestoneViewControls({
   onSearchQueryChange: (query: string) => void;
   onAddMilestone: () => void;
 }) {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-
   return (
     <div className="flex items-center gap-2">
-      {/* Search Icon / Input */}
-      <div className="flex items-center">
-        {isSearchOpen ? (
-          <div className="flex items-center gap-1">
-            <Input
-              type="text"
-              placeholder="Search milestones..."
-              value={searchQuery}
-              onChange={(e) => onSearchQueryChange(e.target.value)}
-              className="h-8 w-40"
-              autoFocus
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => {
-                setIsSearchOpen(false);
-                onSearchQueryChange('');
-              }}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
+      {/* Search Input */}
+      <div className="relative flex items-center">
+        <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search milestones..."
+          value={searchQuery}
+          onChange={(e) => onSearchQueryChange(e.target.value)}
+          className="pl-9 w-[200px] h-8"
+        />
+        {searchQuery && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
-            onClick={() => setIsSearchOpen(true)}
+            className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={() => onSearchQueryChange('')}
           >
-            <Search className="h-4 w-4" />
+            <X className="h-4 w-4" />
           </Button>
         )}
       </div>
@@ -140,42 +124,26 @@ function IssueViewControls({
   onClearFilters: () => void;
   onReportIssue: () => void;
 }) {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-
   return (
     <div className="flex items-center gap-2">
-      {/* Search Icon / Input */}
-      <div className="flex items-center">
-        {isSearchOpen ? (
-          <div className="flex items-center gap-1">
-            <Input
-              type="text"
-              placeholder="Search issues..."
-              value={searchQuery}
-              onChange={(e) => onSearchQueryChange(e.target.value)}
-              className="h-8 w-40"
-              autoFocus
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => {
-                setIsSearchOpen(false);
-                onSearchQueryChange('');
-              }}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
+      {/* Search Input */}
+      <div className="relative flex items-center">
+        <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search issues..."
+          value={searchQuery}
+          onChange={(e) => onSearchQueryChange(e.target.value)}
+          className="pl-9 w-[200px] h-8"
+        />
+        {searchQuery && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
-            onClick={() => setIsSearchOpen(true)}
+            className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={() => onSearchQueryChange('')}
           >
-            <Search className="h-4 w-4" />
+            <X className="h-4 w-4" />
           </Button>
         )}
       </div>
@@ -597,16 +565,16 @@ export default function ProjectDetail() {
         {/* Project Stats with Title */}
         <div className="flex items-center justify-between gap-6 py-4 border-y">
           {/* Left: Project Title and Stage */}
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" asChild className="gap-1 -ml-2 h-8 px-2 text-muted-foreground hover:text-foreground">
+          <div className="flex items-center gap-4 min-w-0 w-full md:w-auto flex-1 pr-4">
+            <Button variant="ghost" size="sm" asChild className="shrink-0 gap-1 -ml-2 h-8 px-2 text-muted-foreground hover:text-foreground">
               <Link to="/projects">
                 <ChevronLeft className="h-4 w-4" />
                 Back
               </Link>
             </Button>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
-              <Badge variant="secondary" className={cn(stageColors[project.stage])}>
+            <div className="flex items-center gap-3 min-w-0">
+              <h1 className="text-2xl font-semibold tracking-tight truncate">{project.name}</h1>
+              <Badge variant="secondary" className={cn(stageColors[project.stage], "shrink-0")}>
                 {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
               </Badge>
             </div>
