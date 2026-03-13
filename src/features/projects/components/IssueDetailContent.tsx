@@ -396,7 +396,8 @@ export function IssueDetailContent({
             {/* Header with Title and Metadata */}
             <div className="flex flex-col gap-4">
                 <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
+                    <div className="flex-1 space-y-2">
+                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Issue Title <span className="text-destructive">*</span></Label>
                         <Input
                             value={editedIssue.title}
                             onChange={(e) => handleFieldChange('title', e.target.value)}
@@ -523,7 +524,7 @@ export function IssueDetailContent({
                         <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                                 <AlertCircle className="h-3 w-3" />
-                                Status
+                                Status <span className="text-destructive">*</span>
                             </Label>
                             <Select
                                 value={editedIssue.status}
@@ -622,7 +623,7 @@ export function IssueDetailContent({
                         <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                                 <AlertTriangle className="h-3 w-3" />
-                                Severity
+                                Severity <span className="text-destructive">*</span>
                             </Label>
                             <Select
                                 value={editedIssue.severity}
@@ -653,7 +654,7 @@ export function IssueDetailContent({
                         <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                                 <Tag className="h-3 w-3" />
-                                Category
+                                Category <span className="text-destructive">*</span>
                             </Label>
                             <Select
                                 value={editedIssue.category}

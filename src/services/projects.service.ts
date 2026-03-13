@@ -408,10 +408,7 @@ export const projectsService = {
       return;
     }
 
-    const { error } = await supabase
-      .from('projects')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id);
+    const { error } = await (supabase.rpc as any)('soft_delete_project', { project_id: id });
 
     if (error) throw error;
   },

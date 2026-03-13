@@ -52,6 +52,8 @@ import {
   Monitor,
   Sun,
   Moon,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -59,6 +61,7 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { profileService } from '@/services/profile.service';
 import { organizationsService, OrganizationSettings } from '@/services/organizations.service';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useUserStore } from '@/stores/useUserStore';
 
@@ -120,6 +123,8 @@ const Settings = () => {
     newPassword: '',
     confirmPassword: '',
   });
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
@@ -353,6 +358,11 @@ const Settings = () => {
     }
   };
 
+  // Unify the shimmer loading state across the whole page to prevent blinking
+  if (orgContextLoading) {
+    return <AppLayoutSkeleton variant="settings" />;
+  }
+
   return (
     <>
       <div className="space-y-6">
@@ -413,37 +423,7 @@ const Settings = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Loading State */}
-                {orgContextLoading ? (
-                  <div className="space-y-6">
-                    <div className="flex items-center gap-6">
-                      <Skeleton className="h-20 w-20 rounded-lg" />
-                      <div className="space-y-2">
-                        <Skeleton className="h-9 w-32" />
-                        <Skeleton className="h-4 w-48" />
-                      </div>
-                    </div>
-                    <Skeleton className="h-px w-full" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-10 w-full" />
-                    </div>
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-20" />
-                      <Skeleton className="h-20 w-full" />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Skeleton className="h-4 w-24" />
-                        <Skeleton className="h-10 w-full" />
-                      </div>
-                      <div className="space-y-2">
-                        <Skeleton className="h-4 w-24" />
-                        <Skeleton className="h-10 w-full" />
-                      </div>
-                    </div>
-                  </div>
-                ) : !currentOrganization ? (
+                {!currentOrganization ? (
                   /* Create Workspace Form */
                   <div className="space-y-6">
                     <div className="text-center py-6">
@@ -947,23 +927,53 @@ const Settings = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="new-password">New Password</Label>
-                      <Input
-                        id="new-password"
-                        type="password"
-                        value={passwordForm.newPassword}
-                        onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                        placeholder="Enter new password"
-                      />
+                      <div className="relative">
+                        <Input
+                          id="new-password"
+                          type={showNewPassword ? "text" : "password"}
+                          value={passwordForm.newPassword}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                          placeholder="Enter new password"
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                          tabIndex={-1}
+                        >
+                          {showNewPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="confirm-password">Confirm Password</Label>
-                      <Input
-                        id="confirm-password"
-                        type="password"
-                        value={passwordForm.confirmPassword}
-                        onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                        placeholder="Confirm new password"
-                      />
+                      <div className="relative">
+                        <Input
+                          id="confirm-password"
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={passwordForm.confirmPassword}
+                          onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                          placeholder="Confirm new password"
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                          tabIndex={-1}
+                        >
+                          {showConfirmPassword ? (
+                            <EyeOff className="h-4 w-4" />
+                          ) : (
+                            <Eye className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <Button

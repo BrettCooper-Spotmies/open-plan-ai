@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Layers, Mail, Lock, ArrowRight, AlertCircle } from "lucide-react";
+import { Layers, Mail, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -17,6 +17,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Priority: ?redirect= query param > location.state.from > "/"
   const redirectParam = searchParams.get("redirect");
@@ -53,6 +54,7 @@ const Login = () => {
         navigate("/verify-email", {
           state: {
             email: email,
+            password: password,
             fromLogin: true,
             message: "Please verify your email to continue. A new verification code has been sent."
           }
@@ -67,6 +69,7 @@ const Login = () => {
       navigate("/verify-email", {
         state: {
           email: result.email || email,
+          password: password,
           fromLogin: true,
           message: "Please verify your email to continue."
         }
@@ -165,14 +168,26 @@ const Login = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 pr-10"
                     required
                     disabled={isLoading}
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
               </div>
             </CardContent>

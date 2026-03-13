@@ -82,7 +82,7 @@ const App = () => {
                         <Route
                           path="/projects"
                           element={
-                            <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
+                            <Suspense fallback={<AppLayoutSkeleton variant="projects" />}>
                               <Projects />
                             </Suspense>
                           }
@@ -122,7 +122,7 @@ const App = () => {
                         <Route
                           path="/team"
                           element={
-                            <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
+                            <Suspense fallback={<AppLayoutSkeleton variant="team" />}>
                               <Team />
                             </Suspense>
                           }
@@ -130,7 +130,7 @@ const App = () => {
                         <Route
                           path="/settings"
                           element={
-                            <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                            <Suspense fallback={<AppLayoutSkeleton variant="settings" />}>
                               <Settings />
                             </Suspense>
                           }
@@ -138,7 +138,7 @@ const App = () => {
                         <Route
                           path="/reports"
                           element={
-                            <Suspense fallback={<AppLayoutSkeleton variant="dashboard" />}>
+                            <Suspense fallback={<AppLayoutSkeleton variant="reports" />}>
                               <Reports />
                             </Suspense>
                           }
@@ -146,7 +146,7 @@ const App = () => {
                         <Route
                           path="/notifications"
                           element={
-                            <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
+                            <Suspense fallback={<AppLayoutSkeleton variant="notifications" />}>
                               <Notifications />
                             </Suspense>
                           }
@@ -158,7 +158,7 @@ const App = () => {
                         <Route
                           path="/calendar"
                           element={
-                            <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                            <Suspense fallback={<AppLayoutSkeleton variant="calendar" />}>
                               <Calendar />
                             </Suspense>
                           }
@@ -166,7 +166,7 @@ const App = () => {
                         <Route
                           path="/chat"
                           element={
-                            <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                            <Suspense fallback={<AppLayoutSkeleton variant="chat" />}>
                               <Chat />
                             </Suspense>
                           }
@@ -174,7 +174,7 @@ const App = () => {
                         <Route
                           path="/chat/:conversationId"
                           element={
-                            <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                            <Suspense fallback={<AppLayoutSkeleton variant="chat" />}>
                               <Chat />
                             </Suspense>
                           }
@@ -197,4 +197,5 @@ const App = () => {
 };
 
 export default App;
+
 

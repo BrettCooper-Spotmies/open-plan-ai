@@ -632,13 +632,15 @@ export const TaskDetailModal = ({
 
         <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
           <div className="p-6 space-y-6">
-            {/* Task Title */}
-            <Input
-              value={editedTask.title}
-              onChange={(e) => handleFieldChange('title', e.target.value)}
-              className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0"
-              placeholder="Task title..."
-            />
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Task Title <span className="text-destructive">*</span></Label>
+              <Input
+                value={editedTask.title}
+                onChange={(e) => handleFieldChange('title', e.target.value)}
+                className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0 bg-transparent"
+                placeholder="Task title..."
+              />
+            </div>
 
             {/* Task Overview Section */}
             <section className="space-y-4">
@@ -725,7 +727,7 @@ export const TaskDetailModal = ({
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <AlertCircle className="h-3 w-3" />
-                    Status
+                    Status <span className="text-destructive">*</span>
                   </Label>
                   <Select
                     value={editedTask.status}
@@ -754,7 +756,7 @@ export const TaskDetailModal = ({
 
                 {/* Priority */}
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Priority</Label>
+                  <Label className="text-xs text-muted-foreground">Priority <span className="text-destructive">*</span></Label>
                   <Select
                     value={editedTask.priority}
                     onValueChange={(value) => handleFieldChange('priority', value as Priority)}
@@ -780,7 +782,7 @@ export const TaskDetailModal = ({
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <Tag className="h-3 w-3" />
-                    Modules
+                    Modules <span className="text-destructive">*</span>
                   </Label>
                   <div
                     className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"

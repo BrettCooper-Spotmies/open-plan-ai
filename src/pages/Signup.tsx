@@ -5,11 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, Mail, Lock, User, Building2, Factory, ArrowRight, Check, AlertCircle } from "lucide-react";
+import { Layers, Mail, Lock, User, Building2, Factory, ArrowRight, Check, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
 
 const industries = [
   "Medical Devices",
@@ -40,6 +41,8 @@ const Signup = () => {
     companyName: "",
     industry: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // If there's an invite token, store it and fetch the invited email
   useEffect(() => {
@@ -68,18 +71,27 @@ const Signup = () => {
     e.preventDefault();
     setError(null);
 
+    const passwordRequirements = [
+      { label: "Minimum 8 characters", met: formData.password.length >= 8 },
+      { label: "One uppercase letter", met: /[A-Z]/.test(formData.password) },
+      { label: "One lowercase letter", met: /[a-z]/.test(formData.password) },
+      { label: "One number", met: /[0-9]/.test(formData.password) },
+      { label: "One special character", met: /[^A-Za-z0-9]/.test(formData.password) },
+    ];
+
+    const unmetRequirements = passwordRequirements.filter(r => !r.met);
+    if (unmetRequirements.length > 0) {
+      setError(`Password is too weak. Missing: ${unmetRequirements.map(r => r.label.toLowerCase()).join(", ")}`);
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
-
     setIsLoading(true);
-    
+
     const result = await signUp(formData.email, formData.password, {
       name: formData.fullName,
       company: formData.companyName,
@@ -97,7 +109,7 @@ const Signup = () => {
       const { data, error: otpError } = await supabase.functions.invoke('send-otp', {
         body: { email: formData.email },
       });
-      
+
       if (otpError || data?.error) {
         console.error('Error sending OTP:', otpError || data?.error);
       }
@@ -115,7 +127,7 @@ const Signup = () => {
     }
 
     setIsLoading(false);
-    navigate("/verify-email", { state: { email: formData.email } });
+    navigate("/verify-email", { state: { email: formData.email, password: formData.password } });
   };
 
   const passwordsMatch = formData.password === formData.confirmPassword && formData.confirmPassword.length > 0;
@@ -258,15 +270,53 @@ const Signup = () => {
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       value={formData.password}
                       onChange={(e) => handleChange("password", e.target.value)}
-                      className="pl-10"
+                      className="pl-10 pr-10"
                       required
                       disabled={isLoading}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
+                  {formData.password.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        {[
+                          { label: "8+ chars", met: formData.password.length >= 8 },
+                          { label: "Uppercase", met: /[A-Z]/.test(formData.password) },
+                          { label: "Lowercase", met: /[a-z]/.test(formData.password) },
+                          { label: "Number", met: /[0-9]/.test(formData.password) },
+                          { label: "Special char", met: /[^A-Za-z0-9]/.test(formData.password) },
+                        ].map((req, i) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <div className={cn(
+                              "h-1.5 w-1.5 rounded-full shrink-0",
+                              req.met ? "bg-green-500" : "bg-muted-foreground/30"
+                            )} />
+                            <span className={cn(
+                              "text-[10px] leading-none transition-colors",
+                              req.met ? "text-green-600 font-medium" : "text-muted-foreground"
+                            )}>
+                              {req.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
@@ -274,14 +324,29 @@ const Signup = () => {
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="confirmPassword"
-                      type="password"
+                      type={showConfirmPassword ? "text" : "password"}
                       placeholder="••••••••"
                       value={formData.confirmPassword}
                       onChange={(e) => handleChange("confirmPassword", e.target.value)}
-                      className={`pl-10 ${formData.confirmPassword && (passwordsMatch ? "border-green-500" : "border-red-500")}`}
+                      className={cn(
+                        "pl-10 pr-10",
+                        formData.confirmPassword && (passwordsMatch ? "border-green-500" : "border-red-500")
+                      )}
                       required
                       disabled={isLoading}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      tabIndex={-1}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>
