@@ -397,12 +397,13 @@ export function IssueDetailContent({
             <div className="flex flex-col gap-4">
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-2">
-                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Issue Title <span className="text-destructive">*</span></Label>
+                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Issue Title <span className="text-destructive" aria-hidden="true">*</span></Label>
                         <Input
                             value={editedIssue.title}
                             onChange={(e) => handleFieldChange('title', e.target.value)}
                             className="text-2xl font-bold border-none shadow-none p-0 h-auto focus-visible:ring-0 bg-transparent"
                             placeholder="Issue title..."
+                            aria-required="true"
                         />
                     </div>
                     {/* Severity Badge and Actions on the right */}
@@ -524,13 +525,13 @@ export function IssueDetailContent({
                         <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                                 <AlertCircle className="h-3 w-3" />
-                                Status <span className="text-destructive">*</span>
+                                Status <span className="text-destructive" aria-hidden="true">*</span>
                             </Label>
                             <Select
                                 value={editedIssue.status}
                                 onValueChange={(value) => handleFieldChange('status', value as IssueStatus)}
                             >
-                                <SelectTrigger className="h-9">
+                                <SelectTrigger className="h-9" aria-required="true">
                                     <SelectValue>
                                         <div className="flex items-center gap-2">
                                             <div className={cn('w-2 h-2 rounded-full', statusOptions.find(s => s.value === editedIssue.status)?.color)} />
@@ -624,13 +625,13 @@ export function IssueDetailContent({
                         <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                                 <AlertTriangle className="h-3 w-3" />
-                                Severity <span className="text-destructive">*</span>
+                                Severity <span className="text-destructive" aria-hidden="true">*</span>
                             </Label>
                             <Select
                                 value={editedIssue.severity}
                                 onValueChange={(value) => handleFieldChange('severity', value as IssueSeverity)}
                             >
-                                <SelectTrigger className="h-9">
+                                <SelectTrigger className="h-9" aria-required="true">
                                     <SelectValue>
                                         <Badge className={cn('text-xs gap-1', severityOptions.find(s => s.value === editedIssue.severity)?.color)}>
                                             <AlertTriangle className="h-3 w-3" />
@@ -655,13 +656,13 @@ export function IssueDetailContent({
                         <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                                 <Tag className="h-3 w-3" />
-                                Category <span className="text-destructive">*</span>
+                                Category <span className="text-destructive" aria-hidden="true">*</span>
                             </Label>
                             <Select
                                 value={editedIssue.category}
                                 onValueChange={(value) => handleFieldChange('category', value as IssueCategory)}
                             >
-                                <SelectTrigger className="h-9">
+                                <SelectTrigger className="h-9" aria-required="true">
                                     <SelectValue>
                                         {(() => {
                                             const cat = categoryOptions.find(c => c.value === editedIssue.category);

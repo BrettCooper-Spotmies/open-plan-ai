@@ -420,8 +420,10 @@ export const projectsService = {
     }
 
     const { error } = await (supabase.rpc as any)('soft_delete_project', { project_id: id });
-
-    if (error) throw error;
+    if (error) {
+      console.error('[projectsService] soft_delete_project failed', error);
+      throw error;
+    }
   },
 
   /**

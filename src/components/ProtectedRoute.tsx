@@ -2,14 +2,14 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { authService } from '@/services/auth.service';
 
 interface ProtectedRouteProps {
   redirectTo?: string;
 }
 
-/** Map a pathname to the best-matching AppLayoutSkeleton variant */
+/** Map a pathname to the best-matching AppLayoutSkeleton variant (pure, for easy testing). */
 function getSkeletonVariant(pathname: string): 'list' | 'projects' | 'dashboard' | 'detail' | 'default' | 'chat' | 'team' | 'settings' | 'notifications' | 'calendar' | 'reports' {
   if (pathname.startsWith('/my-day')) return 'list';
   if (pathname === '/projects' || pathname === '/projects/') return 'projects';
@@ -41,12 +41,13 @@ export function ProtectedRoute({ redirectTo = '/login' }: ProtectedRouteProps) {
     handleUnverifiedEmail();
   }, [isAuthenticated, isEmailVerified, user?.email, isRedirecting, signOut]);
 
+  const skeletonVariant = useMemo(() => getSkeletonVariant(location.pathname), [location.pathname]);
+
   if (isLoading) {
-    const variant = getSkeletonVariant(location.pathname);
-    const requiresNoPadding = variant === 'calendar' || variant === 'chat';
+    const requiresNoPadding = skeletonVariant === 'calendar' || skeletonVariant === 'chat';
     return (
       <AppLayout noPadding={requiresNoPadding}>
-        <AppLayoutSkeleton variant={variant} />
+        <AppLayoutSkeleton variant={skeletonVariant} />
       </AppLayout>
     );
   }

@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import { getPasswordRequirements, getUnmetRequirementLabels } from "@/lib/passwordValidation";
 
 const industries = [
   "Medical Devices",
@@ -71,17 +72,9 @@ const Signup = () => {
     e.preventDefault();
     setError(null);
 
-    const passwordRequirements = [
-      { label: "Minimum 8 characters", met: formData.password.length >= 8 },
-      { label: "One uppercase letter", met: /[A-Z]/.test(formData.password) },
-      { label: "One lowercase letter", met: /[a-z]/.test(formData.password) },
-      { label: "One number", met: /[0-9]/.test(formData.password) },
-      { label: "One special character", met: /[^A-Za-z0-9]/.test(formData.password) },
-    ];
-
-    const unmetRequirements = passwordRequirements.filter(r => !r.met);
-    if (unmetRequirements.length > 0) {
-      setError(`Password is too weak. Missing: ${unmetRequirements.map(r => r.label.toLowerCase()).join(", ")}`);
+    const unmetLabels = getUnmetRequirementLabels(formData.password);
+    if (unmetLabels.length > 0) {
+      setError(`Password is too weak. Missing: ${unmetLabels.join(", ")}`);
       return;
     }
 
@@ -282,7 +275,8 @@ const Signup = () => {
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      tabIndex={-1}
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      title={showPassword ? 'Hide password' : 'Show password'}
                     >
                       {showPassword ? (
                         <EyeOff className="h-4 w-4" />
@@ -294,13 +288,7 @@ const Signup = () => {
                   {formData.password.length > 0 && (
                     <div className="mt-2 space-y-1">
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                        {[
-                          { label: "8+ chars", met: formData.password.length >= 8 },
-                          { label: "Uppercase", met: /[A-Z]/.test(formData.password) },
-                          { label: "Lowercase", met: /[a-z]/.test(formData.password) },
-                          { label: "Number", met: /[0-9]/.test(formData.password) },
-                          { label: "Special char", met: /[^A-Za-z0-9]/.test(formData.password) },
-                        ].map((req, i) => (
+                        {getPasswordRequirements(formData.password).map((req, i) => (
                           <div key={i} className="flex items-center gap-1.5">
                             <div className={cn(
                               "h-1.5 w-1.5 rounded-full shrink-0",
@@ -339,7 +327,8 @@ const Signup = () => {
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      tabIndex={-1}
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      title={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
                     >
                       {showConfirmPassword ? (
                         <EyeOff className="h-4 w-4" />

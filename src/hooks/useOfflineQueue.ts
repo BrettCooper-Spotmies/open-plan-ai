@@ -27,6 +27,15 @@ export type QueuedFileMessage = {
 
 export type QueuedItem = QueuedTextMessage | QueuedFileMessage;
 
+// ── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Sanitize file name for storage path: no path traversal, only safe chars. */
+function sanitizeFileName(name: string): string {
+  const basename = name.replace(/^.*[/\\]/, '');
+  const safe = basename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return safe || 'file';
+}
+
 // ── IndexedDB helpers ──────────────────────────────────────────────────────
 
 const DB_NAME = 'openplan_offline_queue';
@@ -45,33 +54,48 @@ function openDB(): Promise<IDBDatabase> {
 }
 
 async function dbGetAll(): Promise<QueuedItem[]> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).getAll();
-    req.onsuccess = () => resolve(req.result as QueuedItem[]);
-    req.onerror = () => reject(req.error);
-  });
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).getAll();
+      req.onsuccess = () => resolve(req.result as QueuedItem[]);
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.error('[OfflineQueue] dbGetAll failed:', err);
+    return [];
+  }
 }
 
 async function dbPut(item: QueuedItem): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).put(item);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(item);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.error('[OfflineQueue] dbPut failed:', err);
+    throw err;
+  }
 }
 
 async function dbDelete(id: string): Promise<void> {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).delete(id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  try {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('Transaction failed'));
+    });
+  } catch (err) {
+    console.error('[OfflineQueue] dbDelete failed', id, err);
+    throw err;
+  }
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -80,6 +104,7 @@ export function useOfflineQueue(userId: string | undefined) {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingCount, setPendingCount] = useState(0);
   const isFlushing = useRef(false);
+  const flushTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Refresh count from DB
   const refreshCount = useCallback(async () => {
@@ -100,19 +125,26 @@ export function useOfflineQueue(userId: string | undefined) {
       const items = await dbGetAll();
       if (items.length === 0) return;
 
-      // Sort oldest-first
-      items.sort((a, b) => a.timestamp - b.timestamp);
+      const validItems = items.filter(
+        (item) => typeof item.timestamp === 'number' && !Number.isNaN(item.timestamp)
+      );
+      if (validItems.length !== items.length) {
+        console.warn('[OfflineQueue] Some items had invalid timestamps and were skipped');
+      }
+      validItems.sort((a, b) => a.timestamp - b.timestamp);
 
       let sentCount = 0;
-      for (const item of items) {
+      let failedCount = 0;
+
+      for (const item of validItems) {
         try {
           if (item.kind === 'text') {
             await chatService.sendMessage(item.conversationId, item.content);
           } else {
-            // Re-upload the stored binary
-            const file = new File([item.data], item.fileName, { type: item.mimeType });
-            const ext = item.fileName.split('.').pop();
+            const safeName = sanitizeFileName(item.fileName);
+            const ext = safeName.split('.').pop() || 'bin';
             const path = `${item.conversationId}/${crypto.randomUUID()}.${ext}`;
+            const file = new File([item.data], safeName, { type: item.mimeType });
 
             const { error: uploadErr } = await supabase.storage
               .from('chat-attachments')
@@ -146,12 +178,15 @@ export function useOfflineQueue(userId: string | undefined) {
           sentCount++;
         } catch (err) {
           console.error('[OfflineQueue] Failed to send queued item', item.id, err);
-          // Leave it in the queue for next flush
+          failedCount++;
         }
       }
 
       if (sentCount > 0) {
         toast.success(`📤 ${sentCount} queued message${sentCount > 1 ? 's' : ''} sent`);
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} message(s) could not be sent after retries. They remain in the queue.`);
       }
     } finally {
       isFlushing.current = false;
@@ -159,12 +194,16 @@ export function useOfflineQueue(userId: string | undefined) {
     }
   }, [userId, refreshCount]);
 
-  // Online / offline listeners
+  // Online / offline listeners (debounce flush to avoid rapid repeated calls)
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
       toast.info('🌐 Back online — sending queued messages…');
-      flush();
+      if (flushTimeoutRef.current) clearTimeout(flushTimeoutRef.current);
+      flushTimeoutRef.current = setTimeout(() => {
+        flushTimeoutRef.current = null;
+        flush();
+      }, 300);
     };
     const handleOffline = () => {
       setIsOnline(false);
@@ -174,6 +213,7 @@ export function useOfflineQueue(userId: string | undefined) {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => {
+      if (flushTimeoutRef.current) clearTimeout(flushTimeoutRef.current);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
@@ -192,14 +232,14 @@ export function useOfflineQueue(userId: string | undefined) {
     refreshCount();
   }, [refreshCount]);
 
-  // Enqueue a file (reads it into ArrayBuffer for storage)
+  // Enqueue a file (reads it into ArrayBuffer for storage; sanitized filename)
   const enqueueFile = useCallback(async (conversationId: string, file: File, caption?: string) => {
     const data = await file.arrayBuffer();
     const item: QueuedFileMessage = {
       id: crypto.randomUUID(),
       kind: 'file',
       conversationId,
-      fileName: file.name,
+      fileName: sanitizeFileName(file.name),
       fileSize: file.size,
       mimeType: file.type,
       data,

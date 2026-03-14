@@ -16,18 +16,29 @@ const MONTHS = [
 ];
 
 const currentYear = new Date().getFullYear();
-const YEARS = Array.from({ length: 21 }, (_, i) => currentYear - 5 + i); // 5 past → 15 future
+/** Configurable year range: yearsBefore past → yearsAfter future (default 5 past, 15 future) */
+const YEARS_BEFORE = 5;
+const YEARS_AFTER = 15;
+const YEARS = Array.from(
+  { length: YEARS_BEFORE + YEARS_AFTER + 1 },
+  (_, i) => currentYear - YEARS_BEFORE + i
+);
+
+function isValidDate(d: unknown): d is Date {
+  return d instanceof Date && !Number.isNaN(d.getTime());
+}
 
 function CustomCaption({ displayMonth }: { displayMonth: Date }) {
   const { goToMonth, nextMonth, previousMonth } = useNavigation();
+  const safeMonth = isValidDate(displayMonth) ? displayMonth : new Date();
 
   const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newDate = setMonth(displayMonth, parseInt(e.target.value, 10));
+    const newDate = setMonth(safeMonth, parseInt(e.target.value, 10));
     goToMonth(newDate);
   };
 
   const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newDate = setYear(displayMonth, parseInt(e.target.value, 10));
+    const newDate = setYear(safeMonth, parseInt(e.target.value, 10));
     goToMonth(newDate);
   };
 
@@ -50,7 +61,7 @@ function CustomCaption({ displayMonth }: { displayMonth: Date }) {
       {/* Month & Year selects */}
       <div className="flex items-center gap-1">
         <select
-          value={getMonth(displayMonth)}
+          value={getMonth(safeMonth)}
           onChange={handleMonthChange}
           className="text-sm font-medium bg-transparent cursor-pointer rounded-md px-1 py-0.5 hover:bg-accent focus:outline-none focus:ring-1 focus:ring-ring"
           aria-label="Select month"
@@ -63,7 +74,7 @@ function CustomCaption({ displayMonth }: { displayMonth: Date }) {
         </select>
 
         <select
-          value={getYear(displayMonth)}
+          value={getYear(safeMonth)}
           onChange={handleYearChange}
           className="text-sm font-medium bg-transparent cursor-pointer rounded-md px-1 py-0.5 hover:bg-accent focus:outline-none focus:ring-1 focus:ring-ring"
           aria-label="Select year"

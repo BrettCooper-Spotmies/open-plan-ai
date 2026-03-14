@@ -1,4 +1,6 @@
+import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getDaysInMonth, startOfMonth, getDay } from 'date-fns';
 
 interface AppLayoutSkeletonProps {
   variant?: 'dashboard' | 'list' | 'detail' | 'default' | 'projects' | 'chat' | 'team' | 'settings' | 'notifications' | 'calendar' | 'reports';
@@ -624,6 +626,16 @@ function CalendarSkeleton() {
 // Exported — used inline inside Calendar.tsx while data loads
 // (the page header + nav are already rendered, only the grid area is loading)
 export function CalendarGridSkeleton() {
+  const cellCount = (() => {
+    const now = new Date();
+    const daysInMonth = getDaysInMonth(now);
+    const first = startOfMonth(now);
+    const startOffset = getDay(first);
+    const totalCells = startOffset + daysInMonth;
+    const rows = Math.ceil(totalCells / 7);
+    return rows * 7;
+  })();
+
   return (
     <>
       {/* Weekday header row */}
@@ -635,9 +647,9 @@ export function CalendarGridSkeleton() {
         ))}
       </div>
 
-      {/* 5-week grid of day cells */}
+      {/* Month-aware grid of day cells */}
       <div className="grid grid-cols-7 flex-1 min-h-0 auto-rows-fr">
-        {[...Array(35)].map((_, i) => (
+        {[...Array(cellCount)].map((_, i) => (
           <div
             key={i}
             className="p-2 border-b border-r border-border flex flex-col gap-1.5 min-h-[90px]"
@@ -655,21 +667,25 @@ export function CalendarGridSkeleton() {
   );
 }
 
+const VARIANT_SKELETONS: Record<NonNullable<AppLayoutSkeletonProps['variant']>, React.ReactNode> = {
+  dashboard: <DashboardSkeleton />,
+  list: <ListPageSkeleton />,
+  projects: <ProjectsPageSkeleton />,
+  team: <TeamSkeleton />,
+  settings: <SettingsSkeleton />,
+  notifications: <NotificationsSkeleton />,
+  chat: <ChatSkeleton />,
+  detail: <DetailPageSkeleton />,
+  calendar: <CalendarSkeleton />,
+  reports: <ReportsSkeleton />,
+  default: <DefaultPageSkeleton />,
+};
+
 export function AppLayoutSkeleton({ variant = 'default' }: AppLayoutSkeletonProps) {
   return (
-    <>
-      {variant === 'dashboard' && <DashboardSkeleton />}
-      {variant === 'list' && <ListPageSkeleton />}
-      {variant === 'projects' && <ProjectsPageSkeleton />}
-      {variant === 'team' && <TeamSkeleton />}
-      {variant === 'settings' && <SettingsSkeleton />}
-      {variant === 'notifications' && <NotificationsSkeleton />}
-      {variant === 'chat' && <ChatSkeleton />}
-      {variant === 'detail' && <DetailPageSkeleton />}
-      {variant === 'calendar' && <CalendarSkeleton />}
-      {variant === 'reports' && <ReportsSkeleton />}
-      {variant === 'default' && <DefaultPageSkeleton />}
-    </>
+    <div role="status" aria-label="Loading" aria-busy="true">
+      {VARIANT_SKELETONS[variant] ?? <DefaultPageSkeleton />}
+    </div>
   );
 }
 

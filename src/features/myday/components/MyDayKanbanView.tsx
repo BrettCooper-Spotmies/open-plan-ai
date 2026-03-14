@@ -14,6 +14,7 @@ import {
   groupTasksByPriority
 } from '../utils/myDayUtils';
 import { MyDayGroupBy, TaskStatus } from '@/types';
+import { toast } from 'sonner';
 
 interface KanbanColumn {
   id: string;
@@ -166,7 +167,12 @@ export function MyDayKanbanView({
         }
 
         if (source.droppableId !== destination.droppableId) {
-          onStatusUpdate(draggableId, newStatus);
+          const prevTasks = [...localTasks];
+          Promise.resolve(onStatusUpdate(draggableId, newStatus)).catch((err) => {
+            console.error('Status update failed', err);
+            setLocalTasks(prevTasks);
+            toast.error('Failed to update status');
+          });
         }
       }
     }

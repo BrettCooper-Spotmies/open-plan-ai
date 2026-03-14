@@ -232,18 +232,33 @@ const EditProject = () => {
         type: null,
         id: null
     });
+    const [deleteInProgress, setDeleteInProgress] = useState(false);
 
     const confirmDelete = async () => {
         const { type, id } = deleteConfirmation;
-        if (!type || !id) return;
+        if (!type || id == null || id === '') return;
 
+        setDeleteInProgress(true);
+        try {
         if (type === 'module') {
+            const exists = modules.some(m => m.id === id);
+            if (!exists) {
+                toast.error('Module not found');
+                setDeleteConfirmation({ isOpen: false, type: null, id: null });
+                return;
+            }
             setModules(modules.filter(m => m.id !== id));
             if (editingModuleId === id) {
                 setEditingModuleId(null);
                 setNewModuleName("");
             }
         } else if (type === 'milestone') {
+            const exists = milestones.some(m => m.id === id);
+            if (!exists) {
+                toast.error('Milestone not found');
+                setDeleteConfirmation({ isOpen: false, type: null, id: null });
+                return;
+            }
             setMilestones(milestones.filter(m => m.id !== id));
             if (editingMilestoneId === id) {
                 setEditingMilestoneId(null);
@@ -271,6 +286,9 @@ const EditProject = () => {
         }
 
         setDeleteConfirmation({ isOpen: false, type: null, id: null });
+        } finally {
+            setDeleteInProgress(false);
+        }
     };
 
     // File upload state
@@ -1550,11 +1568,18 @@ const EditProject = () => {
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>
-                            <Button variant="outline" onClick={() => setDeleteConfirmation({ isOpen: false, type: null, id: null })}>
+                            <Button variant="outline" onClick={() => setDeleteConfirmation({ isOpen: false, type: null, id: null })} disabled={deleteInProgress}>
                                 Cancel
                             </Button>
-                            <Button variant="destructive" onClick={confirmDelete}>
-                                Delete
+                            <Button variant="destructive" onClick={confirmDelete} disabled={deleteInProgress}>
+                                {deleteInProgress ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                        Deleting...
+                                    </>
+                                ) : (
+                                    'Delete'
+                                )}
                             </Button>
                         </DialogFooter>
                     </DialogContent>

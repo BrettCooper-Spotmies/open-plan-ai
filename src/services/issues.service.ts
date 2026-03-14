@@ -440,8 +440,10 @@ export const issuesService = {
     }
 
     const { error } = await (supabase.rpc as any)('soft_delete_issue', { issue_id: issueId });
-
-    if (error) throw error;
+    if (error) {
+      console.error('[issuesService] soft_delete_issue failed', error);
+      throw error;
+    }
   },
 
   /**

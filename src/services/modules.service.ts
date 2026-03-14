@@ -69,7 +69,9 @@ export const modulesService = {
 
   async delete(id: string): Promise<void> {
     const { error } = await (supabase.rpc as any)('soft_delete_module', { module_id: id });
-
-    if (error) throw error;
+    if (error) {
+      console.error('[modulesService] soft_delete_module failed', error);
+      throw error;
+    }
   },
 };

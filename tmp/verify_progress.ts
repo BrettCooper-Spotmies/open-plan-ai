@@ -1,7 +1,7 @@
 import { calculateProjectProgress } from '../src/features/projects/utils/projectUtils';
-import { Task, Module, Milestone, Issue } from '../src/types';
+import { Task, Module, Milestone } from '../src/types';
 
-const mockTasks: any[] = [
+const mockTasks: Task[] = [
     { id: 't1', title: 'Task 1', status: 'done', moduleId: 'm1', moduleIds: ['m1'], tags: [], blockedBy: [] },
     { id: 't2', title: 'Task 2', status: 'todo', moduleId: 'm1', moduleIds: ['m1'], tags: [], blockedBy: [] },
     { id: 't3', title: 'Task 3', status: 'done', moduleId: 'm2', moduleIds: ['m2'], tags: [], blockedBy: [] },
@@ -13,9 +13,9 @@ const mockModules = [
 ];
 
 const result = calculateProjectProgress(
-    mockTasks as any,
+    mockTasks,
     [],
-    mockModules as any,
+    mockModules as Module[],
     []
 );
 

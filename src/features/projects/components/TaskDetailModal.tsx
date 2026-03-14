@@ -653,12 +653,13 @@ export const TaskDetailModal = ({
         <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
           <div className="p-6 space-y-6">
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Task Title <span className="text-destructive">*</span></Label>
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Task Title <span className="text-destructive" aria-hidden="true">*</span></Label>
               <Input
                 value={editedTask.title}
                 onChange={(e) => handleFieldChange('title', e.target.value)}
                 className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0 bg-transparent"
                 placeholder="Task title..."
+                aria-required="true"
               />
             </div>
 
@@ -747,13 +748,13 @@ export const TaskDetailModal = ({
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <AlertCircle className="h-3 w-3" />
-                    Status <span className="text-destructive">*</span>
+                    Status <span className="text-destructive" aria-hidden="true">*</span>
                   </Label>
                   <Select
                     value={editedTask.status}
                     onValueChange={(value) => handleFieldChange('status', value as TaskStatus)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-required="true">
                       <SelectValue>
                         <div className="flex items-center gap-2">
                           <div className={cn('w-2 h-2 rounded-full', statusOptions.find(s => s.value === editedTask.status)?.color)} />
@@ -776,12 +777,12 @@ export const TaskDetailModal = ({
 
                 {/* Priority */}
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Priority <span className="text-destructive">*</span></Label>
+                  <Label className="text-xs text-muted-foreground">Priority <span className="text-destructive" aria-hidden="true">*</span></Label>
                   <Select
                     value={editedTask.priority}
                     onValueChange={(value) => handleFieldChange('priority', value as Priority)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-required="true">
                       <SelectValue>
                         <Badge className={cn('text-xs', priorityOptions.find(p => p.value === editedTask.priority)?.color)}>
                           {priorityOptions.find(p => p.value === editedTask.priority)?.label}
@@ -938,12 +939,13 @@ export const TaskDetailModal = ({
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <CalendarIcon className="h-3 w-3" />
-                    Due Date <span className="text-destructive">*</span>
+                    Due Date <span className="text-destructive" aria-hidden="true">*</span>
                   </Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
+                        aria-required="true"
                         className={cn(
                           'w-full justify-start text-left font-normal',
                           !editedTask.dueDate && 'text-muted-foreground'
