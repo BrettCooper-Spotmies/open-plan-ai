@@ -6,15 +6,20 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Layers, Mail, AlertCircle, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/contexts/AuthContext";
 
 const VerifyEmail = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const email = location.state?.email || "";
-  const fromLogin = location.state?.fromLogin || false;
-  const redirectMessage = location.state?.message || "";
-  const { signIn } = useAuth();
+  const locationState = (location.state ?? {}) as {
+    email?: string;
+    fromLogin?: boolean;
+    message?: string;
+  };
+  const locationEmail = locationState.email || "";
+  const [persistedEmail, setPersistedEmail] = useState("");
+  const email = (locationEmail || persistedEmail || "").trim();
+  const fromLogin = locationState.fromLogin || false;
+  const redirectMessage = locationState.message || "";
 
   const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -22,6 +27,25 @@ const VerifyEmail = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [countdown, setCountdown] = useState(0);
+
+  useEffect(() => {
+    if (locationEmail) {
+      return;
+    }
+
+    try {
+      const raw = sessionStorage.getItem('openplan_pending_verify');
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as { email?: unknown };
+      if (typeof parsed.email === 'string' && parsed.email.trim()) {
+        setPersistedEmail(parsed.email.trim());
+      }
+    } catch {
+      // Ignore malformed or inaccessible session storage.
+    }
+  }, [locationEmail]);
 
   // Redirect if no email
   useEffect(() => {
