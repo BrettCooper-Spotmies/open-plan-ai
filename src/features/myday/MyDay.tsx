@@ -12,7 +12,7 @@ import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
 import { Task, Issue, TaskStatus, IssueStatus, MyDayView, MyDayGroupBy } from '@/types';
 import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
-import { useUpdateTask } from '@/hooks/useTasks';
+import { useUpdateTask, useBatchUpdateTasks } from '@/hooks/useTasks';
 import { useUpdateIssue } from '@/hooks/useIssues';
 import { useProjects } from '@/hooks/useProjects';
 import { toast } from 'sonner';
@@ -30,6 +30,7 @@ export default function MyDay() {
   const { data: completedTodayCount = 0 } = useCompletedTodayCount();
   const { data: projects = [] } = useProjects();
   const updateTaskMutation = useUpdateTask();
+  const batchUpdateTasksMutation = useBatchUpdateTasks();
   const updateIssueMutation = useUpdateIssue();
 
   const allTasks = useMemo(() => {
@@ -239,8 +240,40 @@ export default function MyDay() {
           allTasks={allTasks}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
-          onUpdate={(updatedTask) => {
-            console.log('Task updated:', updatedTask);
+          onUpdate={async (updatedTask) => {
+            try {
+              const item = userTasks.find(t => t.id === updatedTask.id);
+              if (item) {
+                await updateTaskMutation.mutateAsync({
+                  projectId: item.projectId,
+                  taskId: updatedTask.id,
+                  updates: updatedTask,
+                });
+                toast.success('Task updated');
+              }
+            } catch (error) {
+              console.error('Failed to update task:', error);
+              toast.error('Failed to update task');
+            }
+          }}
+          onBatchUpdate={async (updates) => {
+            try {
+              // Note: useBatchUpdateTasks in useTasks.ts expects {projectId, updates}
+              // We'll pick the projectId from the first update (assuming same project for now, 
+              // or handle individually if needed, but MyDay has projectId per item)
+              if (updates.length === 0) return;
+              const firstItem = userTasks.find(t => t.id === updates[0].id);
+              if (firstItem) {
+                await batchUpdateTasksMutation.mutateAsync({
+                  projectId: firstItem.projectId,
+                  updates: updates
+                });
+                toast.success('Dependencies updated');
+              }
+            } catch (error) {
+              console.error('Failed to batch update tasks:', error);
+              toast.error('Failed to update dependent tasks');
+            }
           }}
         />
       )}

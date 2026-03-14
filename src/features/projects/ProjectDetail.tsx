@@ -42,6 +42,8 @@ import {
   useCreateModule,
   useUpdateModule,
   useDeleteModule,
+  useBatchUpdateTasks,
+  useBatchUpdateModules,
 } from '@/hooks/useProjectMutations';
 import { cn } from '@/lib/utils';
 import { calculateProjectProgress } from './utils/projectUtils';
@@ -317,6 +319,8 @@ export default function ProjectDetail() {
   const createModuleMutation = useCreateModule(id || '');
   const updateModuleMutation = useUpdateModule(id || '');
   const deleteModuleMutation = useDeleteModule(id || '');
+  const batchUpdateTasksMutation = useBatchUpdateTasks(id || '');
+  const batchUpdateModulesMutation = useBatchUpdateModules(id || '');
   const updateProjectMutation = useUpdateProject();
 
   // Update section from URL params
@@ -495,22 +499,16 @@ export default function ProjectDetail() {
 
       // Link tasks if any were selected during creation
       if (newMilestonePartial.linkedTaskIds && newMilestonePartial.linkedTaskIds.length > 0) {
-        for (const taskId of newMilestonePartial.linkedTaskIds) {
-          updateTaskMutation.mutate({
-            taskId,
-            updates: { milestoneId: createdMilestone.id }
-          });
-        }
+        batchUpdateTasksMutation.mutate(
+          newMilestonePartial.linkedTaskIds.map(taskId => ({ id: taskId, updates: { milestoneId: createdMilestone.id } }))
+        );
       }
 
       // Link modules if any were selected during creation
       if (newMilestonePartial.linkedModuleIds && newMilestonePartial.linkedModuleIds.length > 0) {
-        for (const moduleId of newMilestonePartial.linkedModuleIds) {
-          updateModuleMutation.mutate({
-            moduleId,
-            updates: { milestone_id: createdMilestone.id }
-          });
-        }
+        batchUpdateModulesMutation.mutate(
+          newMilestonePartial.linkedModuleIds.map(moduleId => ({ id: moduleId, milestone_id: createdMilestone.id }))
+        );
       }
     } catch (error) {
       console.error('Failed to create milestone and link tasks:', error);
@@ -535,16 +533,16 @@ export default function ProjectDetail() {
       .map(t => t.id);
     const newLinkedTaskIds = updatedMilestone.linkedTaskIds || [];
 
-    // Tasks newly added to this milestone — set milestoneId
     const addedTaskIds = newLinkedTaskIds.filter(id => !previousLinkedTaskIds.includes(id));
-    for (const taskId of addedTaskIds) {
-      updateTaskMutation.mutate({ taskId, updates: { milestoneId: updatedMilestone.id } });
-    }
-
-    // Clear tasks removed from this milestone
     const removedTaskIds = previousLinkedTaskIds.filter(id => !newLinkedTaskIds.includes(id));
-    for (const taskId of removedTaskIds) {
-      updateTaskMutation.mutate({ taskId, updates: { milestoneId: null as any } });
+
+    const taskUpdates = [
+      ...addedTaskIds.map(id => ({ id, updates: { milestoneId: updatedMilestone.id } })),
+      ...removedTaskIds.map(id => ({ id, updates: { milestoneId: null as any } }))
+    ];
+
+    if (taskUpdates.length > 0) {
+      batchUpdateTasksMutation.mutate(taskUpdates);
     }
 
     // Persist linked module changes
@@ -554,22 +552,16 @@ export default function ProjectDetail() {
       .map(m => m.id);
     const newLinkedModuleIds = updatedMilestone.linkedModuleIds || [];
 
-    // Modules newly added to this milestone
     const addedModuleIds = newLinkedModuleIds.filter(id => !previousLinkedModuleIds.includes(id));
-    for (const moduleId of addedModuleIds) {
-      updateModuleMutation.mutate({
-        moduleId,
-        updates: { milestone_id: updatedMilestone.id }
-      });
-    }
-
-    // Modules removed from this milestone
     const removedModuleIds = previousLinkedModuleIds.filter(id => !newLinkedModuleIds.includes(id));
-    for (const moduleId of removedModuleIds) {
-      updateModuleMutation.mutate({
-        moduleId,
-        updates: { milestone_id: null }
-      });
+
+    const moduleUpdates = [
+      ...addedModuleIds.map(id => ({ id, milestone_id: updatedMilestone.id })),
+      ...removedModuleIds.map(id => ({ id, milestone_id: null }))
+    ];
+
+    if (moduleUpdates.length > 0) {
+      batchUpdateModulesMutation.mutate(moduleUpdates);
     }
   };
 
@@ -578,15 +570,23 @@ export default function ProjectDetail() {
     createTaskMutation.mutate(newTask);
   };
 
-  const handleTaskUpdate = (updatedTask: Task) => {
+  const handleTaskUpdate = (updatedTask: Task, onError?: () => void) => {
     updateTaskMutation.mutate({
       taskId: updatedTask.id,
       updates: updatedTask,
+    }, {
+      onError: () => {
+        if (onError) onError();
+      }
     });
   };
 
   const handleTaskDelete = (taskId: string) => {
     deleteTaskMutation.mutate(taskId);
+  };
+
+  const handleBatchTaskUpdate = async (updates: Array<{ id: string; updates: Partial<Task> }>) => {
+    await batchUpdateTasksMutation.mutateAsync(updates);
   };
 
   const handleModuleDelete = (moduleId: string) => {
@@ -778,6 +778,7 @@ export default function ProjectDetail() {
               onFiltersChange={setFilters}
               onTaskCreate={handleTaskCreate}
               onTaskUpdate={handleTaskUpdate}
+              onBatchTaskUpdate={handleBatchTaskUpdate}
               onTaskDelete={handleTaskDelete}
               onAddModule={handleAddModule}
             />

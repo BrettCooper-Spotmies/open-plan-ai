@@ -52,7 +52,7 @@ const Login = () => {
         try {
           sessionStorage.setItem(
             'openplan_pending_verify',
-            JSON.stringify({ email, password })
+            JSON.stringify({ email })
           );
         } catch {
           // sessionStorage may be full or unavailable
@@ -73,7 +73,7 @@ const Login = () => {
       try {
         sessionStorage.setItem(
           'openplan_pending_verify',
-          JSON.stringify({ email: result.email || email, password })
+          JSON.stringify({ email: result.email || email })
         );
       } catch {
         // sessionStorage may be full or unavailable

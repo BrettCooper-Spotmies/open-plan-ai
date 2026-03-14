@@ -626,16 +626,6 @@ function CalendarSkeleton() {
 // Exported — used inline inside Calendar.tsx while data loads
 // (the page header + nav are already rendered, only the grid area is loading)
 export function CalendarGridSkeleton() {
-  const cellCount = (() => {
-    const now = new Date();
-    const daysInMonth = getDaysInMonth(now);
-    const first = startOfMonth(now);
-    const startOffset = getDay(first);
-    const totalCells = startOffset + daysInMonth;
-    const rows = Math.ceil(totalCells / 7);
-    return rows * 7;
-  })();
-
   return (
     <>
       {/* Weekday header row */}
@@ -647,9 +637,9 @@ export function CalendarGridSkeleton() {
         ))}
       </div>
 
-      {/* Month-aware grid of day cells */}
+      {/* Fixed 6-row grid (42 cells) to match standard calendar layout and avoid dynamic allocation */}
       <div className="grid grid-cols-7 flex-1 min-h-0 auto-rows-fr">
-        {[...Array(cellCount)].map((_, i) => (
+        {[...Array(42)].map((_, i) => (
           <div
             key={i}
             className="p-2 border-b border-r border-border flex flex-col gap-1.5 min-h-[90px]"

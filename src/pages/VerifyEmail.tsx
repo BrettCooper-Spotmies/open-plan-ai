@@ -13,17 +13,6 @@ const VerifyEmail = () => {
   const location = useLocation();
   const email = location.state?.email || "";
   const fromLogin = location.state?.fromLogin || false;
-  const password = (() => {
-    try {
-      const raw = sessionStorage.getItem('openplan_pending_verify');
-      if (!raw) return '';
-      const parsed = JSON.parse(raw) as { email?: string; password?: string };
-      if (parsed?.email === email && parsed?.password) return parsed.password;
-      return '';
-    } catch {
-      return '';
-    }
-  })();
   const redirectMessage = location.state?.message || "";
   const { signIn } = useAuth();
 
@@ -102,23 +91,8 @@ const VerifyEmail = () => {
       setSuccess(true);
       setOtp(""); // Clear OTP on success
 
-      // If we have the password (from sessionStorage), try to log in directly
-      if (password) {
-        try {
-          sessionStorage.removeItem('openplan_pending_verify');
-          const signInResult = await signIn(email, password);
-          if (!signInResult.error) {
-            setTimeout(() => {
-              navigate("/", { replace: true });
-            }, 1500);
-            return;
-          }
-        } catch (signInErr) {
-          console.error("Auto-login after verification failed:", signInErr);
-        }
-      }
+      sessionStorage.removeItem('openplan_pending_verify');
 
-      // Fallback: Redirect to login if no password or sign-in failed
       setTimeout(() => {
         navigate("/login", {
           state: {

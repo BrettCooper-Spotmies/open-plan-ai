@@ -93,7 +93,8 @@ interface TaskDetailModalProps {
   allTasks: Task[];
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (task: Task) => void;
+  onUpdate: (task: Task) => Promise<void> | void;
+  onBatchUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => Promise<void> | void;
   onDelete?: (taskId: string) => void;
   mode?: 'view' | 'create';
   onCreate?: (task: Task) => void;
@@ -209,6 +210,7 @@ export const TaskDetailModal = ({
   isOpen,
   onClose,
   onUpdate,
+  onBatchUpdate,
   onDelete,
   mode = 'view',
   onCreate,
@@ -560,12 +562,18 @@ export const TaskDetailModal = ({
         .filter(t => t.blockedBy.includes(editedTask.id))
         .map(t => t.id);
 
+      // addedIds/removedIds logic...
+      const batchUpdates: Array<{ id: string; updates: Partial<Task> }> = [];
+
       // Added blocking-to relationships
       const addedIds = localBlockingToIds.filter(id => !originalBlockingToIds.includes(id));
       for (const id of addedIds) {
         const other = allTasks.find(t => t.id === id);
         if (other && !other.blockedBy.includes(editedTask.id)) {
-          await onUpdate({ ...other, blockedBy: [...other.blockedBy, editedTask.id] });
+          batchUpdates.push({
+            id,
+            updates: { blockedBy: [...other.blockedBy, editedTask.id] }
+          });
         }
       }
 
@@ -574,7 +582,24 @@ export const TaskDetailModal = ({
       for (const id of removedIds) {
         const other = allTasks.find(t => t.id === id);
         if (other) {
-          await onUpdate({ ...other, blockedBy: other.blockedBy.filter(bid => bid !== editedTask.id) });
+          batchUpdates.push({
+            id,
+            updates: { blockedBy: other.blockedBy.filter(bid => bid !== editedTask.id) }
+          });
+        }
+      }
+
+      if (batchUpdates.length > 0) {
+        if (onBatchUpdate) {
+          await onBatchUpdate(batchUpdates);
+        } else {
+          // Fallback to sequential if onBatchUpdate is not provided
+          for (const update of batchUpdates) {
+            const other = allTasks.find(t => t.id === update.id);
+            if (other) {
+              await onUpdate({ ...other, ...update.updates });
+            }
+          }
         }
       }
 

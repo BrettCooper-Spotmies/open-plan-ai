@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Bell, LogOut, FileText, UserPlus, Download, Image, Pencil, Check, Loader2, Camera, Trash2 } from 'lucide-react';
+import { X, Bell, LogOut, FileText, UserPlus, Download, Image, Pencil, Check, Loader2, Camera, Trash2, Shield, ShieldOff } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -49,6 +49,8 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
 
   const currentMember = conversation.members.find((m) => m.id === currentUserId);
   const isOwner = currentMember?.role === 'owner';
+  const isAdmin = currentMember?.role === 'admin';
+  const canManageGroup = isOwner || isAdmin;
 
   // Shared files
   const [sharedFiles, setSharedFiles] = useState<SharedFile[]>([]);
@@ -222,6 +224,26 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
     }
   };
 
+  const handleMakeAdmin = async (userId: string) => {
+    try {
+      await chatService.updateMemberRole(conversation.id, userId, 'admin');
+      toast.success('Made admin');
+      onRefetch?.();
+    } catch (err) {
+      toast.error('Failed to update role');
+    }
+  };
+
+  const handleDismissAdmin = async (userId: string) => {
+    try {
+      await chatService.updateMemberRole(conversation.id, userId, 'member');
+      toast.success('Dismissed admin');
+      onRefetch?.();
+    } catch (err) {
+      toast.error('Failed to update role');
+    }
+  };
+
 
   const handleLeaveGroup = async () => {
     if (!currentUserId) return;
@@ -264,7 +286,7 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
         <div className="p-4 space-y-4">
           {/* Info */}
           <div className="text-center relative group/info">
-            {isGroup && isOwner && !isEditing && (
+            {isGroup && canManageGroup && !isEditing && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -394,7 +416,7 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
               <h5 className="text-xs font-medium text-muted-foreground">
                 Members ({conversation.members.length})
               </h5>
-              {isGroup && isOwner && (
+              {isGroup && canManageGroup && (
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={openAddDialog} title="Add member">
                   <UserPlus className="h-3.5 w-3.5" />
                 </Button>
@@ -420,17 +442,41 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
                   {isGroup && member.role?.toLowerCase() === 'admin' && (
                     <Badge variant="secondary" className="text-[10px] h-5 bg-blue-500/10 text-blue-600 border-none">admin</Badge>
                   )}
-                  {isGroup && isOwner && member.id !== currentUserId && member.role !== 'owner' && (
+                  {isGroup && canManageGroup && member.id !== currentUserId && member.role !== 'owner' && (
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => setConfirmRemoveId(member.id)}
-                        title="Remove member"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {isOwner && member.role !== 'admin' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10"
+                          onClick={() => handleMakeAdmin(member.id)}
+                          title="Make Admin"
+                        >
+                          <Shield className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {isOwner && member.role === 'admin' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted"
+                          onClick={() => handleDismissAdmin(member.id)}
+                          title="Dismiss Admin"
+                        >
+                          <ShieldOff className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {!(isAdmin && member.role === 'admin') && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setConfirmRemoveId(member.id)}
+                          title="Remove member"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   )}
                 </div>

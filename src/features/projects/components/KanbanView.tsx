@@ -57,7 +57,8 @@ interface KanbanViewProps {
   allTasks?: Task[]; // All tasks for dependency resolution
   issues?: Issue[]; // Issues for blocking indicator
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  onTaskUpdate?: (task: Task) => void;
+  onTaskUpdate?: (task: Task, onError?: () => void) => void;
+  onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
   modules?: { id: string; name: string; type: ModuleType }[];
   projectId?: string;
@@ -105,6 +106,7 @@ const columnColorOptions = [
 
 export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskCreate,
   onTaskUpdate,
+  onBatchTaskUpdate,
   onTaskDelete,
   modules = [],
   projectId,
@@ -212,11 +214,12 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
 
   const handleTaskUpdate = (updatedTask: Task) => {
     // Optimistic local state update
+    const prevTasks = [...tasks];
     setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
 
     // Call backend mutation if available
     if (onTaskUpdate) {
-      onTaskUpdate(updatedTask);
+      onTaskUpdate(updatedTask, () => setTasks(prevTasks));
     }
 
     // Only update selected task if it's the one currently being viewed
@@ -265,6 +268,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     };
 
     // Optimistic local state update
+    const prevTasks = [...tasks];
     const newTasks = tasks.map(t =>
       t.id === movedTask.id ? updatedTask : t
     );
@@ -272,7 +276,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
 
     // Call backend mutation if available
     if (onTaskUpdate) {
-      onTaskUpdate(updatedTask);
+      onTaskUpdate(updatedTask, () => setTasks(prevTasks));
     }
   };
 
@@ -280,9 +284,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
+    const prevTasks = [...tasks];
     const updatedTask = { ...task, status: 'done' as TaskStatus };
     if (onTaskUpdate) {
-      onTaskUpdate(updatedTask);
+      onTaskUpdate(updatedTask, () => setTasks(prevTasks));
     } else {
       setTasks(tasks.map(t => t.id === taskId ? updatedTask : t));
     }
@@ -734,6 +739,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
           setSelectedTask(null);
         }}
         onUpdate={handleTaskUpdate}
+        onBatchUpdate={onBatchTaskUpdate}
         onDelete={onTaskDelete}
         modules={modules}
         projectId={projectId}
@@ -747,6 +753,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
         isOpen={isMaximizedAddTask}
         onClose={() => setIsMaximizedAddTask(false)}
         onUpdate={(updated) => setNewTask(updated as unknown as Partial<Task>)}
+        onBatchUpdate={onBatchTaskUpdate}
         mode="create"
         onCreate={(newTask) => {
           onTaskCreate?.(newTask as Omit<Task, 'id' | 'createdAt' | 'updatedAt'>);
