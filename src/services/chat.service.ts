@@ -2,6 +2,27 @@ import { supabase } from '@/integrations/supabase/client';
 import { mapConversation, mapMember, mapMessage } from '@/features/chat/chat.mappers';
 import type { Conversation, ChatMessage, ReachableUser, ReadReceipt, MessageReaction } from '@/features/chat/types';
 
+interface ChatFilePayload {
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  storagePath?: string;
+  url?: string;
+}
+
+function extractStoragePathFromPublicUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const marker = '/storage/v1/object/public/chat-attachments/';
+    const index = parsed.pathname.indexOf(marker);
+    if (index === -1) return null;
+    const encodedPath = parsed.pathname.slice(index + marker.length);
+    return decodeURIComponent(encodedPath);
+  } catch {
+    return null;
+  }
+}
+
 async function getCurrentUserId(): Promise<string> {
   const { data } = await supabase.auth.getUser();
   if (!data.user) throw new Error('Not authenticated');
@@ -9,6 +30,51 @@ async function getCurrentUserId(): Promise<string> {
 }
 
 export const chatService = {
+  async getChatAttachmentDownloadUrl(file: { storagePath?: string; url?: string; fileName?: string }): Promise<string> {
+    const resolvedPath = file.storagePath || (file.url ? extractStoragePathFromPublicUrl(file.url) : null);
+
+    if (resolvedPath) {
+      const { data, error } = await supabase.storage
+        .from('chat-attachments')
+        .createSignedUrl(resolvedPath, 60, {
+          download: file.fileName || true,
+        });
+
+      if (error || !data?.signedUrl) {
+        throw new Error(error?.message || 'Failed to create secure download URL');
+      }
+
+      return data.signedUrl;
+    }
+
+    if (file.url) {
+      return file.url;
+    }
+
+    throw new Error('Attachment URL is not available');
+  },
+
+  async downloadChatAttachment(file: ChatFilePayload): Promise<void> {
+    const downloadUrl = await this.getChatAttachmentDownloadUrl(file);
+    const response = await fetch(downloadUrl);
+
+    if (!response.ok) {
+      throw new Error('Failed to download attachment');
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = objectUrl;
+    anchor.download = file.fileName;
+    anchor.style.display = 'none';
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  },
+
   async getConversations(): Promise<Conversation[]> {
     const userId = await getCurrentUserId();
 
@@ -437,7 +503,7 @@ export const chatService = {
     if (error) throw error;
   },
 
-  async getSharedFiles(conversationId: string): Promise<{ fileName: string; fileSize: number; mimeType: string; url: string; createdAt: string }[]> {
+  async getSharedFiles(conversationId: string): Promise<{ fileName: string; fileSize: number; mimeType: string; url?: string; storagePath?: string; createdAt: string }[]> {
     const { data, error } = await supabase
       .from('chat_messages')
       .select('content, created_at')
@@ -451,11 +517,15 @@ export const chatService = {
     return (data || []).map((msg: any) => {
       try {
         const parsed = JSON.parse(msg.content);
+        if (!parsed.fileName || (!parsed.storagePath && !parsed.url)) {
+          return null;
+        }
         return {
           fileName: parsed.fileName,
           fileSize: parsed.fileSize,
           mimeType: parsed.mimeType,
           url: parsed.url,
+          storagePath: parsed.storagePath,
           createdAt: msg.created_at,
         };
       } catch {

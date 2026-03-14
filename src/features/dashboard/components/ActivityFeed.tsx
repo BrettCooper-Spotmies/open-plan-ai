@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity } from '@/types';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ActivityFeedProps {
   activities: Activity[];
@@ -73,6 +74,7 @@ const activityLabels: Record<ActivityType, string> = {
 
 export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   if (isLoading) {
     return (
@@ -101,7 +103,7 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
       <CardHeader className="pb-4">
         <CardTitle className="text-base font-medium">Recent Activity</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-1">
+      <CardContent className="space-y-1 px-3 md:px-6 overflow-x-hidden">
         {activities.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center animate-fade-in">
             <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
@@ -122,7 +124,10 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
               <div
                 key={activity.id}
                 onClick={() => activity.projectId && navigate(`/projects/${activity.projectId}`)}
-                className="flex items-start gap-3 py-3 border-b border-border/50 last:border-0 hover:bg-muted/30 cursor-pointer transition-colors px-2 -mx-2 rounded-md"
+                className={cn(
+                  'flex items-start gap-3 py-3 border-b border-border/50 last:border-0 hover:bg-muted/30 cursor-pointer transition-colors px-2 rounded-md',
+                  !isMobile && '-mx-2'
+                )}
               >
                 {/* Left: Subtle status icon */}
                 <div className={cn(
@@ -135,17 +140,17 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
                 {/* Center: Content */}
                 <div className="flex-1 min-w-0">
                   {/* Primary: Actor name (bold) + action text */}
-                  <p className="text-sm leading-snug break-words line-clamp-3">
+                  <p className="text-sm leading-snug break-all line-clamp-2">
                     <span className="font-semibold">{activity.user.name}</span>
                     {' '}
                     <span className="text-muted-foreground text-foreground/80">{activity.description}</span>
                   </p>
 
                   {/* Secondary: Project name, Type badge & Timestamp row */}
-                  <div className="flex items-center justify-between mt-1.5 gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
+                  <div className={cn('mt-1.5 gap-2', isMobile ? 'flex flex-col items-start' : 'flex items-center justify-between')}>
+                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
                       {activity.projectName && (
-                        <p className="text-xs text-muted-foreground truncate min-w-0">
+                        <p className="text-xs text-muted-foreground truncate min-w-0 max-w-[150px] sm:max-w-full">
                           in{' '}
                           <span className="text-primary hover:underline cursor-pointer font-medium">
                             {activity.projectName}

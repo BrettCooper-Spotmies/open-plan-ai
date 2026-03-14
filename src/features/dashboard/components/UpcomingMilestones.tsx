@@ -3,12 +3,15 @@ import { Flag, Calendar } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Milestone } from '@/types';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface UpcomingMilestonesProps {
   milestones: Array<Milestone & { projectName?: string }>;
 }
 
 export function UpcomingMilestones({ milestones }: UpcomingMilestonesProps) {
+  const isMobile = useIsMobile();
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -17,7 +20,7 @@ export function UpcomingMilestones({ milestones }: UpcomingMilestonesProps) {
           Upcoming Milestones
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-2.5 md:space-y-3 px-3 md:px-6 overflow-x-hidden">
         {milestones.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-6 text-center animate-fade-in">
             <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
@@ -38,7 +41,7 @@ export function UpcomingMilestones({ milestones }: UpcomingMilestonesProps) {
               <div
                 key={milestone.id}
                 className={cn(
-                  'p-3 rounded-lg border transition-colors',
+                  'p-3 rounded-lg border transition-colors overflow-hidden',
                   milestone.completed
                     ? 'bg-muted/30 border-muted'
                     : isOverdue
@@ -48,16 +51,16 @@ export function UpcomingMilestones({ milestones }: UpcomingMilestonesProps) {
                         : 'bg-card border-border'
                 )}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                <div className={cn('flex gap-2', isMobile ? 'flex-col' : 'items-start justify-between')}>
+                  <div className="min-w-0 flex-1">
                     <h4 className={cn(
-                      'text-sm font-medium',
+                      'text-sm font-medium truncate max-w-full',
                       milestone.completed && 'line-through text-muted-foreground'
                     )}>
                       {milestone.title}
                     </h4>
                     {milestone.description && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-full">
                         {milestone.description}
                       </p>
                     )}

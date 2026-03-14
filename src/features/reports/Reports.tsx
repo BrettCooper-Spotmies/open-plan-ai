@@ -180,6 +180,10 @@ export default function Reports() {
     }
   }, [filter.timeRange]);
 
+  const handleTimeRangeChange = useCallback((value: ReportFilter['timeRange']) => {
+    setFilter(prev => ({ ...prev, timeRange: value }));
+  }, []);
+
   // ─── Handlers ────────────────────────────────────────────────────────────
   const handleKPIClick = useCallback((_type: 'progress' | 'issues' | 'overdue' | 'cycle') => {
     if (filter.projectId) navigate(`/projects/${filter.projectId}`);
@@ -232,10 +236,12 @@ export default function Reports() {
 
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6">
         <ReportsHeader
           projectName={projectName}
           timeRangeLabel={timeRangeLabel}
+          timeRange={filter.timeRange}
+          onTimeRangeChange={handleTimeRangeChange}
           onExport={handleExport}
         />
 
@@ -246,6 +252,7 @@ export default function Reports() {
           milestones={milestones}
           filter={filter}
           onFilterChange={setFilter}
+          onExport={handleExport}
         />
 
         <ReportsKPIRow kpis={kpis} statusBreakdown={statusBreakdown} onKPIClick={handleKPIClick} />

@@ -1,4 +1,5 @@
-import { useNavigate } from 'react-router-dom';
+import { useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Search, Sun, Moon, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,11 +16,32 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationsPopover } from './NotificationsPopover';
 import { useAppTheme } from '@/hooks/useAppTheme';
+import { useIsMobile } from '@/hooks/use-mobile';
+
+function getMobileHeaderTitle(pathname: string): string {
+  if (pathname === '/') return 'Dashboard';
+  if (pathname.startsWith('/my-day')) return 'My Day';
+  if (pathname.startsWith('/projects')) return 'Projects';
+  if (pathname.startsWith('/calendar')) return 'Calendar';
+  if (pathname.startsWith('/reports')) return 'Reports';
+  if (pathname.startsWith('/chat')) return 'Chat';
+  if (pathname.startsWith('/team')) return 'Team';
+  if (pathname.startsWith('/settings')) return 'Settings';
+  if (pathname.startsWith('/notifications')) return 'Notifications';
+  return 'Open Plan AI';
+}
 
 export function AppHeader() {
+  const location = useLocation();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { profile, signOut } = useAuth();
   const { theme, changeTheme } = useAppTheme();
+
+  const mobileTitle = useMemo(
+    () => getMobileHeaderTitle(location.pathname),
+    [location.pathname],
+  );
 
   const cycleTheme = () => {
     if (theme === 'system') changeTheme('light');
@@ -36,6 +58,12 @@ export function AppHeader() {
     <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-4">
         <SidebarTrigger className="-ml-1" />
+
+        {isMobile && (
+          <h1 className="text-base font-semibold text-foreground leading-none">
+            {mobileTitle}
+          </h1>
+        )}
 
         <div className="relative hidden md:flex">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

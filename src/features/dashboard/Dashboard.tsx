@@ -18,8 +18,10 @@ import { Building2, Loader2, Plus, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function Dashboard() {
+  const isMobile = useIsMobile();
   const { currentOrganization, isLoading: orgLoading, createOrganization, refreshOrganizations } = useOrganization();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -160,23 +162,29 @@ export default function Dashboard() {
     updatedAt: new Date().toISOString(),
   }));
 
+  const dashboardProjects = isMobile ? projectItems.slice(0, 3) : projectItems;
+  const dashboardMilestones = isMobile ? milestoneItems.slice(0, 3) : milestoneItems;
+  const dashboardActivities = isMobile ? activityItems.slice(0, 4) : activityItems;
+
   // Show "Create Organization" card when no org exists
   const showNoOrgState = !orgLoading && !currentOrganization;
 
   return (
     <>
-      <div className="space-y-6 animate-fade-in">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Welcome back! Here's an overview of your projects.
-          </p>
-        </div>
+      <div className="space-y-4 md:space-y-6 animate-fade-in overflow-x-hidden">
+        {!isMobile && (
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground text-sm mt-1">
+              Welcome back! Here's an overview of your projects.
+            </p>
+          </div>
+        )}
 
         {/* Compact Create Organization Banner */}
         {showNoOrgState && (
           <Card className="border-dashed border border-primary/25 bg-primary/[0.03]">
-            <CardContent className="flex items-center gap-4 py-4 px-5">
+            <CardContent className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-4 px-4 sm:px-5">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <Building2 className="h-5 w-5 text-primary" />
               </div>
@@ -186,7 +194,7 @@ export default function Dashboard() {
                   Set up an organization to manage projects and collaborate with your team.
                 </p>
               </div>
-              <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5 shrink-0">
+              <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="gap-1.5 shrink-0 w-full sm:w-auto">
                 <Plus className="h-3.5 w-3.5" />
                 Create
               </Button>
@@ -197,7 +205,7 @@ export default function Dashboard() {
         {/* Pending Invitations Banner */}
         {pendingInvitations && pendingInvitations.length > 0 && pendingInvitations.map((inv: any) => (
           <Card key={inv.id} className="border-dashed border border-primary/25 bg-primary/[0.03]">
-            <CardContent className="flex items-center gap-4 py-4 px-5">
+            <CardContent className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-4 px-4 sm:px-5">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                 <Mail className="h-5 w-5 text-primary" />
               </div>
@@ -212,7 +220,7 @@ export default function Dashboard() {
               <Button
                 onClick={() => handleAcceptInvite(inv.token)}
                 size="sm"
-                className="gap-1.5 shrink-0"
+                className="gap-1.5 shrink-0 w-full sm:w-auto"
                 disabled={acceptingInvite === inv.token}
               >
                 {acceptingInvite === inv.token ? (
@@ -232,13 +240,13 @@ export default function Dashboard() {
           <>
             <DashboardStats stats={dashboardStats} />
 
-            <div className="grid gap-6 lg:grid-cols-3">
+            <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2 h-full">
-                <ProjectsOverview projects={projectItems} />
+                <ProjectsOverview projects={dashboardProjects} />
               </div>
-              <div className="space-y-6">
-                <UpcomingMilestones milestones={milestoneItems} />
-                <ActivityFeed activities={activityItems} isLoading={activitiesLoading || isLoading} />
+              <div className="space-y-4 md:space-y-6">
+                <UpcomingMilestones milestones={dashboardMilestones} />
+                <ActivityFeed activities={dashboardActivities} isLoading={activitiesLoading || isLoading} />
               </div>
             </div>
           </>

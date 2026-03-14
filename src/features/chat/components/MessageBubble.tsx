@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, Plus, MoreHorizontal, SmilePlus, Clock } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -16,6 +16,7 @@ import { format, differenceInHours } from 'date-fns';
 import { ChatMessage, ReadReceipt, MessageReaction } from '../types';
 import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { chatService } from '@/services/chat.service';
 
 const EMOJI_SET = ['👍', '❤️', '😂', '😮', '🔥', '💯'];
 const EXTENDED_EMOJI_SET = [
@@ -42,14 +43,15 @@ interface FileContent {
   fileName: string;
   fileSize: number;
   mimeType: string;
-  url: string;
+  storagePath?: string;
+  url?: string;
   text?: string;
 }
 
 function parseFileContent(content: string): FileContent | null {
   try {
     const parsed = JSON.parse(content);
-    if (parsed.url && parsed.fileName) return parsed;
+    if (parsed.fileName && (parsed.storagePath || parsed.url)) return parsed;
     return null;
   } catch {
     return null;
@@ -149,18 +151,88 @@ function HighlightedText({ text, query }: { text: string; query?: string }) {
 }
 
 function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) {
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [imageUrl, setImageUrl] = useState<string | null>(file.url || null);
   const isImage = file.mimeType?.startsWith('image/');
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!isImage) return;
+    if (file.url) {
+      setImageUrl(file.url);
+      return;
+    }
+    if (!file.storagePath) {
+      setImageUrl(null);
+      return;
+    }
+
+    chatService
+      .getChatAttachmentDownloadUrl({
+        storagePath: file.storagePath,
+        fileName: file.fileName,
+      })
+      .then((signedUrl) => {
+        if (isMounted) setImageUrl(signedUrl);
+      })
+      .catch(() => {
+        if (isMounted) setImageUrl(null);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isImage, file.url, file.storagePath, file.fileName]);
+
+  const handleDownload = async () => {
+    if (isDownloading) return;
+
+    setIsDownloading(true);
+    try {
+      await chatService.downloadChatAttachment({
+        fileName: file.fileName,
+        fileSize: file.fileSize,
+        mimeType: file.mimeType,
+        storagePath: file.storagePath,
+        url: file.url,
+      });
+      toast.success(`Downloading ${file.fileName}`);
+    } catch (error) {
+      console.error('Failed to download file:', error);
+      toast.error('Failed to download file');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   if (isImage) {
     return (
       <div className="space-y-1">
-        <a href={file.url} target="_blank" rel="noopener noreferrer">
-          <img
-            src={file.url}
-            alt={file.fileName}
-            className="max-w-[280px] max-h-[200px] rounded-lg object-cover cursor-pointer"
-          />
-        </a>
+        <div>
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt={file.fileName}
+              className="max-w-[280px] max-h-[200px] rounded-lg object-cover"
+            />
+          ) : (
+            <div className="w-[220px] h-[120px] rounded-lg bg-muted/50 flex items-center justify-center">
+              <FileText className="h-6 w-6 opacity-60" />
+            </div>
+          )}
+        </div>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="h-7 px-2 text-xs"
+          onClick={handleDownload}
+          disabled={isDownloading}
+        >
+          {isDownloading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Download className="h-3 w-3 mr-1" />}
+          Download
+        </Button>
         {file.text && <p className="text-sm">{file.text}</p>}
       </div>
     );
@@ -168,22 +240,27 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
 
   return (
     <div className="space-y-1">
-      <a
-        href={file.url}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        onClick={handleDownload}
+        disabled={isDownloading}
         className={cn(
-          'flex items-center gap-2 p-2 rounded-lg border',
+          'flex w-full items-center gap-2 p-2 rounded-lg border text-left transition-colors',
+          'disabled:opacity-70 disabled:cursor-not-allowed',
           isOwn ? 'border-primary-foreground/20' : 'border-border'
         )}
       >
         <FileText className="h-8 w-8 shrink-0 opacity-70" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium truncate">{file.fileName}</p>
+          <p className="text-sm font-medium break-all whitespace-normal">{file.fileName}</p>
           <p className="text-xs opacity-70">{formatFileSize(file.fileSize)}</p>
         </div>
-        <Download className="h-4 w-4 shrink-0 opacity-70" />
-      </a>
+        {isDownloading ? (
+          <Loader2 className="h-4 w-4 shrink-0 opacity-70 animate-spin" />
+        ) : (
+          <Download className="h-4 w-4 shrink-0 opacity-70" />
+        )}
+      </button>
       {file.text && <p className="text-sm">{file.text}</p>}
     </div>
   );
