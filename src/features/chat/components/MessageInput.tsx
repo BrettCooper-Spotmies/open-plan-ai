@@ -13,6 +13,7 @@ import Picker from '@emoji-mart/react';
 import data from '@emoji-mart/data';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 import { WifiOff, Clock } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface MessageInputProps {
   conversationId: string;
@@ -37,19 +38,22 @@ function buildFileContent(payload: {
   fileName: string;
   fileSize: number;
   mimeType: string;
-  url: string;
+  storagePath: string;
+  url?: string;
   text?: string;
 }) {
   return {
     fileName: payload.fileName,
     fileSize: payload.fileSize,
     mimeType: payload.mimeType,
+    storagePath: payload.storagePath,
     url: payload.url,
     text: payload.text,
   };
 }
 
 export function MessageInput({ conversationId, onMessageSent, onTyping, members, sendMessage }: MessageInputProps) {
+  const isMobile = useIsMobile();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
@@ -201,15 +205,11 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
       .upload(path, file);
     if (uploadErr) throw uploadErr;
 
-    const { data: urlData } = supabase.storage
-      .from('chat-attachments')
-      .getPublicUrl(path);
-
     const fileData = buildFileContent({
       fileName: file.name,
       fileSize: file.size,
       mimeType: file.type,
-      url: urlData.publicUrl,
+      storagePath: path,
       text: text || undefined,
     });
 
@@ -338,7 +338,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   const showCharCount = value.length > MAX_CHARS * 0.9;
 
   return (
-    <div className="border-t border-border px-4 py-2">
+    <div className="border-t border-border/70 bg-gradient-to-t from-background via-background/95 to-background/80 px-2 md:px-4 py-2">
 
       {/* ── Offline banner ── */}
       {!isOnline && (
@@ -458,13 +458,17 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
         <input ref={mediaInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
 
         {/* Input bar */}
-        <div className="flex items-center gap-1 rounded-xl border border-input bg-background px-2 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ring-offset-background transition-shadow">
+        <div className="mx-auto w-full max-w-[860px] flex items-center gap-1 rounded-2xl border border-input/80 bg-background/85 backdrop-blur-md px-2 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] focus-within:ring-2 focus-within:ring-ring/70 focus-within:ring-offset-2 ring-offset-background transition-all">
 
           {/* 😊 Emoji */}
           <Button
             ref={emojiButtonRef}
             variant="ghost" size="icon" type="button"
-            className={cn('h-8 w-8 shrink-0 text-muted-foreground hover:text-yellow-500 transition-colors', showEmojiPicker && 'text-yellow-500 bg-yellow-500/10')}
+            className={cn(
+              'h-7 w-7 md:h-8 md:w-8 shrink-0 text-muted-foreground hover:text-yellow-500 transition-colors',
+              'rounded-full hover:bg-accent/70',
+              showEmojiPicker && 'text-yellow-500 bg-yellow-500/10'
+            )}
             title="Emoji"
             onClick={() => setShowEmojiPicker(v => !v)}
           >
@@ -474,7 +478,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
           {/* 📷 Media */}
           <Button
             variant="ghost" size="icon" type="button"
-            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-blue-500 transition-colors"
+            className="h-7 w-7 md:h-8 md:w-8 shrink-0 rounded-full text-muted-foreground hover:text-blue-500 hover:bg-accent/70 transition-colors"
             title="Send photos or videos"
             onClick={() => mediaInputRef.current?.click()}
           >
@@ -484,7 +488,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
           {/* 📎 File */}
           <Button
             variant="ghost" size="icon" type="button"
-            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+            className="h-7 w-7 md:h-8 md:w-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-colors"
             title="Attach files"
             onClick={() => fileInputRef.current?.click()}
           >
@@ -492,15 +496,15 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
           </Button>
 
           {/* Textarea */}
-          <div className="flex-1 min-w-0 relative">
+          <div className="flex-1 min-w-0 relative px-0.5">
             <textarea
               ref={textareaRef}
               value={value}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message... Use @ to mention"
+              placeholder={isMobile ? 'Type a message...' : 'Type a message... Use @ to mention'}
               rows={1}
-              className="w-full resize-none bg-transparent py-1.5 text-sm leading-5 placeholder:text-muted-foreground focus-visible:outline-none"
+              className="w-full resize-none bg-transparent py-1.5 text-sm leading-5 min-h-[32px] max-h-[140px] placeholder:text-muted-foreground/90 focus-visible:outline-none"
             />
             {showCharCount && (
               <span className="absolute bottom-0.5 right-1 text-[10px] text-muted-foreground">
@@ -512,7 +516,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
           {/* Send */}
           <Button
             size="icon" type="button"
-            className="h-8 w-8 shrink-0 rounded-lg"
+            className="h-8 w-8 shrink-0 rounded-full bg-primary text-primary-foreground shadow-[0_3px_10px_rgba(0,0,0,0.22)] hover:bg-primary/90"
             disabled={(!value.trim() && pendingFiles.length === 0) || isSending}
             onClick={handleSend}
           >

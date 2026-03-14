@@ -100,11 +100,14 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
         <div className="px-1.5 pb-2 overflow-hidden">
           {loading ? (
             Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-2 py-3">
+              <div key={i} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-md overflow-hidden">
                 <Skeleton className="h-9 w-9 rounded-full shrink-0" />
-                <div className="flex-1 space-y-1.5">
-                  <Skeleton className="h-3.5 w-24" />
-                  <Skeleton className="h-3 w-36" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <Skeleton className="h-3.5 w-24" />
+                    <Skeleton className="h-2.5 w-8 shrink-0" />
+                  </div>
+                  <Skeleton className="h-3 w-[72%] mt-1.5" />
                 </div>
               </div>
             ))

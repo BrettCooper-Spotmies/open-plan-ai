@@ -5,9 +5,11 @@ import { CalendarFilters } from './components/CalendarFilters';
 import { CalendarMonthView } from './components/CalendarMonthView';
 import { CalendarWeekView } from './components/CalendarWeekView';
 import { CalendarDayView } from './components/CalendarDayView';
+import { MobileCalendar } from './components/MobileCalendar';
 import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
 import { MilestoneDetailModal } from '@/features/projects/components/MilestoneDetailModal';
 import { IssueDetailModal } from '@/features/projects/components/IssueDetailModal';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   getMonthDays,
   getWeekDays,
@@ -114,6 +116,7 @@ function dbMilestoneToFrontend(m: any): Milestone {
 }
 
 const CalendarPage: React.FC = () => {
+  const isMobile = useIsMobile();
   const { currentOrganization } = useOrganization();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -311,6 +314,115 @@ const CalendarPage: React.FC = () => {
     return <AppLayoutSkeleton variant="calendar" />;
   }
 
+  // ── Shared modals (used by both mobile and desktop) ──────────────────────
+  const sharedModals = (
+    <>
+      {selectedTask && (
+        <TaskDetailModal
+          task={selectedTask}
+          isOpen={!!selectedTask}
+          onClose={() => handleModalClose('task')}
+          onUpdate={async (updatedTask) => {
+            try {
+              if (updatedTask.projectId && updatedTask.id) {
+                await updateTaskMutation.mutateAsync({
+                  projectId: updatedTask.projectId,
+                  taskId: updatedTask.id,
+                  updates: updatedTask,
+                });
+                toast.success('Task updated successfully');
+              } else {
+                toast.error('Missing project ID or task ID');
+              }
+            } catch (error) {
+              console.error('Failed to update task:', error);
+              toast.error('Failed to update task');
+            }
+          }}
+          onBatchUpdate={async (updates) => {
+            try {
+              await batchUpdateTasksMutation.mutateAsync(updates);
+            } catch (error) {
+              console.error('Failed to batch update tasks:', error);
+              toast.error('Failed to update dependent tasks');
+            }
+          }}
+          allTasks={getProjectTasks(selectedTask.projectId || '')}
+        />
+      )}
+
+      {selectedMilestone && (
+        <MilestoneDetailModal
+          milestone={selectedMilestone}
+          isOpen={!!selectedMilestone}
+          onClose={() => handleModalClose('milestone')}
+          onUpdate={async (updatedMilestone) => {
+            try {
+              await updateMilestoneMutation.mutateAsync({
+                id: updatedMilestone.id,
+                updates: {
+                  name: updatedMilestone.title,
+                  description: updatedMilestone.description,
+                  due_date: updatedMilestone.date,
+                  status: updatedMilestone.completed ? 'completed' : 'pending',
+                },
+              });
+              toast.success('Milestone updated successfully');
+            } catch (error) {
+              console.error('Failed to update milestone:', error);
+              toast.error('Failed to update milestone');
+            }
+          }}
+          tasks={[]}
+          issues={[]}
+          modules={[]}
+        />
+      )}
+
+      {selectedIssue && (
+        <IssueDetailModal
+          issue={selectedIssue}
+          isOpen={!!selectedIssue}
+          onClose={() => handleModalClose('issue')}
+          onUpdate={async (updatedIssue) => {
+            try {
+              if (updatedIssue.projectId && updatedIssue.id) {
+                await updateIssueMutation.mutateAsync({
+                  projectId: updatedIssue.projectId,
+                  issueId: updatedIssue.id,
+                  updates: updatedIssue,
+                });
+                toast.success('Issue updated successfully');
+              } else {
+                toast.error('Missing project ID or issue ID');
+              }
+            } catch (error) {
+              console.error('Failed to update issue:', error);
+              toast.error('Failed to update issue');
+            }
+          }}
+          tasks={getProjectTasks(selectedIssue.projectId)}
+        />
+      )}
+    </>
+  );
+
+  // ── Mobile layout ──────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <>
+        <MobileCalendar
+          currentDate={currentDate}
+          events={filteredEvents}
+          onDateChange={(date) => updateUrlParams({ date: formatDate(date, 'yyyy-MM-dd') }, true)}
+          onEventClick={handleEventClick}
+        />
+        {sharedModals}
+      </>
+    );
+  }
+
+  // ── Desktop layout ─────────────────────────────────────────────────────────
   return (
     <>
       <div className="flex flex-col h-full gap-6 animate-fade-in">
@@ -387,96 +499,7 @@ const CalendarPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Task Detail Modal */}
-      {selectedTask && (
-        <TaskDetailModal
-          task={selectedTask}
-          isOpen={!!selectedTask}
-          onClose={() => handleModalClose('task')}
-          onUpdate={async (updatedTask) => {
-            try {
-              if (updatedTask.projectId && updatedTask.id) {
-                await updateTaskMutation.mutateAsync({
-                  projectId: updatedTask.projectId,
-                  taskId: updatedTask.id,
-                  updates: updatedTask
-                });
-                toast.success('Task updated successfully');
-              } else {
-                toast.error('Missing project ID or task ID');
-              }
-            } catch (error) {
-              console.error('Failed to update task:', error);
-              toast.error('Failed to update task');
-            }
-          }}
-          onBatchUpdate={async (updates) => {
-            try {
-              await batchUpdateTasksMutation.mutateAsync(updates);
-            } catch (error) {
-              console.error('Failed to batch update tasks:', error);
-              toast.error('Failed to update dependent tasks');
-            }
-          }}
-          allTasks={getProjectTasks(selectedTask.projectId || '')}
-        />
-      )}
-
-      {/* Milestone Detail Modal */}
-      {selectedMilestone && (
-        <MilestoneDetailModal
-          milestone={selectedMilestone}
-          isOpen={!!selectedMilestone}
-          onClose={() => handleModalClose('milestone')}
-          onUpdate={async (updatedMilestone) => {
-            try {
-              await updateMilestoneMutation.mutateAsync({
-                id: updatedMilestone.id,
-                updates: {
-                  name: updatedMilestone.title,
-                  description: updatedMilestone.description,
-                  due_date: updatedMilestone.date,
-                  status: updatedMilestone.completed ? 'completed' : 'pending'
-                }
-              });
-              toast.success('Milestone updated successfully');
-            } catch (error) {
-              console.error('Failed to update milestone:', error);
-              toast.error('Failed to update milestone');
-            }
-          }}
-          tasks={[]}
-          issues={[]}
-          modules={[]}
-        />
-      )}
-
-      {/* Issue Detail Modal */}
-      {selectedIssue && (
-        <IssueDetailModal
-          issue={selectedIssue}
-          isOpen={!!selectedIssue}
-          onClose={() => handleModalClose('issue')}
-          onUpdate={async (updatedIssue) => {
-            try {
-              if (updatedIssue.projectId && updatedIssue.id) {
-                await updateIssueMutation.mutateAsync({
-                  projectId: updatedIssue.projectId,
-                  issueId: updatedIssue.id,
-                  updates: updatedIssue
-                });
-                toast.success('Issue updated successfully');
-              } else {
-                toast.error('Missing project ID or issue ID');
-              }
-            } catch (error) {
-              console.error('Failed to update issue:', error);
-              toast.error('Failed to update issue');
-            }
-          }}
-          tasks={getProjectTasks(selectedIssue.projectId)}
-        />
-      )}
+      {sharedModals}
     </>
   );
 };
