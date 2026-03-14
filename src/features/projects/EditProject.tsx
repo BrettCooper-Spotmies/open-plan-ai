@@ -635,78 +635,88 @@ const EditProject = () => {
             }
 
             // Sync Modules
-            const initialModules = project.projectModules || [];
-            const initialModuleIds = initialModules.map(m => m.id);
-            const currentModuleIds = modules.map(m => m.id);
+            try {
+                const initialModules = project.projectModules || [];
+                const initialModuleIds = initialModules.map(m => m.id);
+                const currentModuleIds = modules.map(m => m.id);
 
-            // Modules to add (ones that don't have a UUID-like format or weren't in initial)
-            const modulesToAdd = modules.filter(m => !initialModuleIds.includes(m.id));
-            // Modules to remove
-            const moduleIdsToRemove = initialModuleIds.filter(id => !currentModuleIds.includes(id));
-            // Modules to update
-            const modulesToUpdate = modules.filter(m => {
-                const initial = initialModules.find(im => im.id === m.id);
-                return initial && initial.name !== m.name;
-            });
+                // Modules to add
+                const modulesToAdd = modules.filter(m => !initialModuleIds.includes(m.id));
+                // Modules to remove
+                const moduleIdsToRemove = initialModuleIds.filter(id => !currentModuleIds.includes(id));
+                // Modules to update
+                const modulesToUpdate = modules.filter(m => {
+                    const initial = initialModules.find(im => im.id === m.id);
+                    return initial && initial.name !== m.name;
+                });
 
-            if (modulesToAdd.length > 0) {
-                await modulesService.createMany(modulesToAdd.map(m => ({
-                    project_id: id,
-                    name: m.name,
-                    module_type: 'software' as any, // Default
-                })));
-            }
-
-            if (modulesToUpdate.length > 0) {
-                if (modulesService.updateMany) {
-                    await modulesService.updateMany(modulesToUpdate.map(m => ({ id: m.id, name: m.name })));
-                } else {
-                    await Promise.all(modulesToUpdate.map(m =>
-                        modulesService.update(m.id, { name: m.name })
-                    ));
+                if (modulesToAdd.length > 0) {
+                    await modulesService.createMany(modulesToAdd.map(m => ({
+                        project_id: id,
+                        name: m.name,
+                        module_type: 'software' as any,
+                    })));
                 }
-            }
 
-            if (moduleIdsToRemove.length > 0) {
-                await modulesService.deleteMany(moduleIdsToRemove);
+                if (modulesToUpdate.length > 0) {
+                    if (modulesService.updateMany) {
+                        await modulesService.updateMany(modulesToUpdate.map(m => ({ id: m.id, name: m.name })));
+                    } else {
+                        await Promise.all(modulesToUpdate.map(m =>
+                            modulesService.update(m.id, { name: m.name })
+                        ));
+                    }
+                }
+
+                if (moduleIdsToRemove.length > 0) {
+                    await modulesService.deleteMany(moduleIdsToRemove);
+                }
+            } catch (moduleError) {
+                console.error('Error syncing modules:', moduleError);
+                toast.warning('Project updated but module changes failed to sync');
             }
 
             // Sync Milestones
-            const initialMilestones = project.milestones || [];
-            const initialMilestoneIds = initialMilestones.map(m => m.id);
-            const currentMilestoneIds = milestones.map(m => m.id);
+            try {
+                const initialMilestones = project.milestones || [];
+                const initialMilestoneIds = initialMilestones.map(m => m.id);
+                const currentMilestoneIds = milestones.map(m => m.id);
 
-            // Milestones to add
-            const milestonesToAdd = milestones.filter(m => !initialMilestoneIds.includes(m.id));
-            // Milestones to remove
-            const milestoneIdsToRemove = initialMilestoneIds.filter(id => !currentMilestoneIds.includes(id));
-            // Milestones to update
-            const milestonesToUpdate = milestones.filter(m => {
-                const initial = initialMilestones.find(im => im.id === m.id);
-                if (!initial) return false;
-                const initialDate = initial.date ? format(new Date(initial.date), 'yyyy-MM-dd') : null;
-                const currentDate = m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null;
-                return initial.title !== m.name || initialDate !== currentDate;
-            });
+                // Milestones to add
+                const milestonesToAdd = milestones.filter(m => !initialMilestoneIds.includes(m.id));
+                // Milestones to remove
+                const milestoneIdsToRemove = initialMilestoneIds.filter(id => !currentMilestoneIds.includes(id));
+                // Milestones to update
+                const milestonesToUpdate = milestones.filter(m => {
+                    const initial = initialMilestones.find(im => im.id === m.id);
+                    if (!initial) return false;
+                    const initialDate = initial.date ? format(new Date(initial.date), 'yyyy-MM-dd') : null;
+                    const currentDate = m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null;
+                    return initial.title !== m.name || initialDate !== currentDate;
+                });
 
-            if (milestonesToAdd.length > 0) {
-                await milestonesService.createMany(milestonesToAdd.map(m => ({
-                    project_id: id,
-                    name: m.name,
-                    due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
-                })));
-            }
+                if (milestonesToAdd.length > 0) {
+                    await milestonesService.createMany(milestonesToAdd.map(m => ({
+                        project_id: id,
+                        name: m.name,
+                        due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
+                    })));
+                }
 
-            if (milestonesToUpdate.length > 0) {
-                await milestonesService.updateMany(milestonesToUpdate.map(m => ({
-                    id: m.id,
-                    name: m.name,
-                    due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
-                })));
-            }
+                if (milestonesToUpdate.length > 0) {
+                    await milestonesService.updateMany(milestonesToUpdate.map(m => ({
+                        id: m.id,
+                        name: m.name,
+                        due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
+                    })));
+                }
 
-            if (milestoneIdsToRemove.length > 0) {
-                await milestonesService.deleteMany(milestoneIdsToRemove);
+                if (milestoneIdsToRemove.length > 0) {
+                    await milestonesService.deleteMany(milestoneIdsToRemove);
+                }
+            } catch (milestoneError) {
+                console.error('Error syncing milestones:', milestoneError);
+                toast.warning('Project updated but milestone changes failed to sync');
             }
 
             // Invalidate queries to ensure project detail page reflects all changes
