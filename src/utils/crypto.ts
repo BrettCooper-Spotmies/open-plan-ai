@@ -3,39 +3,92 @@
  * This provides a basic layer of security for data stored in IndexedDB or localStorage.
  */
 
-// A static salt for derivation, in a real production app this might be user-specific or fetched from the server
-const SALT = new TextEncoder().encode('open-plan-ai-offline-storage-salt');
+const KEY_STORAGE_KEY = 'openplan_crypto_key_v2';
+const SALT_STORAGE_KEY = 'openplan_crypto_salt_v2';
+const LEGACY_KEY_STORAGE_KEY = 'openplan_crypto_key';
+const LEGACY_SALT = new TextEncoder().encode('open-plan-ai-offline-storage-salt');
 const ITERATIONS = 100000;
+const MAX_STRING_PAYLOAD_BYTES = 1024 * 1024;
+const MAX_BINARY_PAYLOAD_BYTES = 25 * 1024 * 1024;
 
-/**
- * Generates an encryption key. In a real application, you might derive this
- * from a user session token or password. For this implementation, we'll
- * generate a random key and store it in memory/sessionStorage.
- */
-async function getEncryptionKey(): Promise<CryptoKey> {
-  // Check if we have a raw key in sessionStorage
-  let rawKeyStr = sessionStorage.getItem('openplan_crypto_key');
-  let rawKey: Uint8Array;
+let cachedKeyPromise: Promise<CryptoKey> | null = null;
+let cachedLegacyKeyPromise: Promise<CryptoKey> | null = null;
 
-  if (rawKeyStr) {
-    // Convert base64 string back to Uint8Array
-    const binaryString = atob(rawKeyStr);
-    rawKey = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      rawKey[i] = binaryString.charCodeAt(i);
+function readSessionItem(key: string): string | null {
+  try {
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionItem(key: string, value: string): void {
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    // Best effort only in restricted browsing modes.
+  }
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function getOrCreateSalt(): Uint8Array {
+  const stored = readSessionItem(SALT_STORAGE_KEY);
+  if (stored) {
+    try {
+      const bytes = base64ToBytes(stored);
+      if (bytes.length >= 16) {
+        return bytes;
+      }
+    } catch {
+      // Fall through and regenerate.
     }
-  } else {
-    // Generate a new random key material
-    const buffer = new Uint8Array(32);
-    crypto.getRandomValues(buffer);
-    rawKey = buffer;
-    
-    // Convert to base64 for storage
-    const binaryString = Array.from(rawKey).map(b => String.fromCharCode(b)).join('');
-    sessionStorage.setItem('openplan_crypto_key', btoa(binaryString));
   }
 
-  // Import the raw key material
+  const fresh = crypto.getRandomValues(new Uint8Array(16));
+  writeSessionItem(SALT_STORAGE_KEY, bytesToBase64(fresh));
+  return fresh;
+}
+
+function getOrCreateRawKey(): Uint8Array {
+  const existing = readSessionItem(KEY_STORAGE_KEY) || readSessionItem(LEGACY_KEY_STORAGE_KEY);
+  if (existing) {
+    try {
+      const bytes = base64ToBytes(existing);
+      if (bytes.length === 32) {
+        if (!readSessionItem(KEY_STORAGE_KEY)) {
+          writeSessionItem(KEY_STORAGE_KEY, existing);
+        }
+        return bytes;
+      }
+    } catch {
+      // Fall through and regenerate.
+    }
+  }
+
+  const fresh = crypto.getRandomValues(new Uint8Array(32));
+  writeSessionItem(KEY_STORAGE_KEY, bytesToBase64(fresh));
+  return fresh;
+}
+
+async function deriveAesKey(rawKey: Uint8Array, salt: Uint8Array): Promise<CryptoKey> {
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
     rawKey.buffer as ArrayBuffer,
@@ -44,19 +97,37 @@ async function getEncryptionKey(): Promise<CryptoKey> {
     ['deriveBits', 'deriveKey']
   );
 
-  // Derive the actual AES-GCM key
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt: SALT,
+      salt,
       iterations: ITERATIONS,
-      hash: 'SHA-256'
+      hash: 'SHA-256',
     },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
-    true,
+    false,
     ['encrypt', 'decrypt']
   );
+}
+
+/**
+ * Generates an encryption key. In a real application, you might derive this
+ * from a user session token or password. For this implementation, we'll
+ * generate a random key and store it in memory/sessionStorage.
+ */
+async function getEncryptionKey(): Promise<CryptoKey> {
+  if (!cachedKeyPromise) {
+    cachedKeyPromise = deriveAesKey(getOrCreateRawKey(), getOrCreateSalt());
+  }
+  return cachedKeyPromise;
+}
+
+async function getLegacyEncryptionKey(): Promise<CryptoKey> {
+  if (!cachedLegacyKeyPromise) {
+    cachedLegacyKeyPromise = deriveAesKey(getOrCreateRawKey(), LEGACY_SALT);
+  }
+  return cachedLegacyKeyPromise;
 }
 
 /**
@@ -68,6 +139,9 @@ export async function encryptData(payload: string): Promise<{ ciphertext: string
     const key = await getEncryptionKey();
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encodedPayload = new TextEncoder().encode(payload);
+    if (encodedPayload.byteLength > MAX_STRING_PAYLOAD_BYTES) {
+      throw new Error('Payload too large to encrypt safely');
+    }
 
     const encryptedContent = await crypto.subtle.encrypt(
       {
@@ -79,8 +153,8 @@ export async function encryptData(payload: string): Promise<{ ciphertext: string
     );
 
     // Convert to base64 for easier storage
-    const ciphertextBase64 = btoa(String.fromCharCode(...new Uint8Array(encryptedContent)));
-    const ivBase64 = btoa(String.fromCharCode(...iv));
+    const ciphertextBase64 = bytesToBase64(new Uint8Array(encryptedContent));
+    const ivBase64 = bytesToBase64(iv);
 
     return { ciphertext: ciphertextBase64, iv: ivBase64 };
   } catch (error) {
@@ -94,20 +168,35 @@ export async function encryptData(payload: string): Promise<{ ciphertext: string
  */
 export async function decryptData(encryptedData: { ciphertext: string; iv: string }): Promise<string> {
   try {
-    const key = await getEncryptionKey();
-    
     // Decode from base64
-    const ivBytes = new Uint8Array(atob(encryptedData.iv).split('').map(c => c.charCodeAt(0)));
-    const cipherBytes = new Uint8Array(atob(encryptedData.ciphertext).split('').map(c => c.charCodeAt(0)));
+    const ivBytes = base64ToBytes(encryptedData.iv);
+    const cipherBytes = base64ToBytes(encryptedData.ciphertext);
+    if (ivBytes.byteLength !== 12) {
+      throw new Error('Invalid IV length');
+    }
 
-    const decryptedContent = await crypto.subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv: ivBytes
-      },
-      key,
-      cipherBytes
-    );
+    let decryptedContent: ArrayBuffer;
+    try {
+      const key = await getEncryptionKey();
+      decryptedContent = await crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: ivBytes,
+        },
+        key,
+        cipherBytes
+      );
+    } catch {
+      const legacyKey = await getLegacyEncryptionKey();
+      decryptedContent = await crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: ivBytes,
+        },
+        legacyKey,
+        cipherBytes
+      );
+    }
 
     return new TextDecoder().decode(decryptedContent);
   } catch (error) {
@@ -119,7 +208,7 @@ export async function decryptData(encryptedData: { ciphertext: string; iv: strin
 /**
  * Helper to encrypt a JSON object.
  */
-export async function encryptObject(obj: any): Promise<{ ciphertext: string; iv: string }> {
+export async function encryptObject(obj: unknown): Promise<{ ciphertext: string; iv: string }> {
   return encryptData(JSON.stringify(obj));
 }
 
@@ -145,6 +234,10 @@ export async function decryptObject<T>(encryptedData: { ciphertext: string; iv: 
  */
 export async function encryptArrayBuffer(buffer: ArrayBuffer): Promise<{ ciphertext: ArrayBuffer; iv: ArrayBuffer }> {
   try {
+    if (buffer.byteLength > MAX_BINARY_PAYLOAD_BYTES) {
+      throw new Error('Binary payload too large to encrypt safely');
+    }
+
     const key = await getEncryptionKey();
     const iv = crypto.getRandomValues(new Uint8Array(12));
 
@@ -169,16 +262,32 @@ export async function encryptArrayBuffer(buffer: ArrayBuffer): Promise<{ ciphert
  */
 export async function decryptArrayBuffer(encryptedData: { ciphertext: ArrayBuffer; iv: ArrayBuffer }): Promise<ArrayBuffer> {
   try {
-    const key = await getEncryptionKey();
-    
-    const decryptedContent = await crypto.subtle.decrypt(
-      {
-        name: 'AES-GCM',
-        iv: encryptedData.iv
-      },
-      key,
-      encryptedData.ciphertext
-    );
+    if (encryptedData.iv.byteLength !== 12) {
+      throw new Error('Invalid IV length');
+    }
+
+    let decryptedContent: ArrayBuffer;
+    try {
+      const key = await getEncryptionKey();
+      decryptedContent = await crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: encryptedData.iv,
+        },
+        key,
+        encryptedData.ciphertext
+      );
+    } catch {
+      const legacyKey = await getLegacyEncryptionKey();
+      decryptedContent = await crypto.subtle.decrypt(
+        {
+          name: 'AES-GCM',
+          iv: encryptedData.iv,
+        },
+        legacyKey,
+        encryptedData.ciphertext
+      );
+    }
 
     return decryptedContent;
   } catch (error) {

@@ -119,8 +119,17 @@ const Signup = () => {
       }
     }
 
+    try {
+      sessionStorage.setItem(
+        'openplan_pending_verify',
+        JSON.stringify({ email: formData.email })
+      );
+    } catch {
+      // sessionStorage may be unavailable in restricted browser contexts.
+    }
+
     setIsLoading(false);
-    navigate("/verify-email", { state: { email: formData.email, password: formData.password } });
+    navigate("/verify-email", { state: { email: formData.email } });
   };
 
   const passwordsMatch = formData.password === formData.confirmPassword && formData.confirmPassword.length > 0;

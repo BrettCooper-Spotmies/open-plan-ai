@@ -3,6 +3,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
 
+const MAX_RETRY_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 500;
+const MAX_QUEUE_FILE_SIZE = 10 * 1024 * 1024;
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type QueuedTextMessage = {
@@ -34,6 +38,18 @@ function sanitizeFileName(name: string): string {
   const basename = name.replace(/^.*[/\\]/, '');
   const safe = basename.replace(/[^a-zA-Z0-9._-]/g, '_');
   return safe || 'file';
+}
+
+function createUuid(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  const random = Math.random().toString(36).slice(2, 10);
+  return `legacy-${Date.now()}-${random}`;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 import { encryptObject, decryptObject, encryptArrayBuffer, decryptArrayBuffer } from '@/utils/crypto';
@@ -181,43 +197,67 @@ export function useOfflineQueue(userId: string | undefined) {
 
       let sentCount = 0;
       let failedCount = 0;
+      let firstFailureDelayMs: number | null = null;
+
+      const sendQueuedItem = async (item: QueuedItem) => {
+        if (item.kind === 'text') {
+          await chatService.sendMessage(item.conversationId, item.content);
+          return;
+        }
+
+        const safeName = sanitizeFileName(item.fileName);
+        const ext = safeName.split('.').pop() || 'bin';
+        const path = `${item.conversationId}/${createUuid()}.${ext}`;
+        const file = new File([item.data], safeName, { type: item.mimeType });
+
+        const { error: uploadErr } = await supabase.storage
+          .from('chat-attachments')
+          .upload(path, file);
+        if (uploadErr) throw uploadErr;
+
+        const { data: urlData } = supabase.storage
+          .from('chat-attachments')
+          .getPublicUrl(path);
+
+        const content = JSON.stringify({
+          fileName: item.fileName,
+          fileSize: item.fileSize,
+          mimeType: item.mimeType,
+          url: urlData.publicUrl,
+          text: item.caption || undefined,
+        });
+
+        const { error } = await supabase
+          .from('chat_messages')
+          .insert({
+            conversation_id: item.conversationId,
+            sender_id: userId,
+            content,
+            content_type: 'file',
+          });
+        if (error) throw error;
+      };
 
       for (const item of validItems) {
         try {
-          if (item.kind === 'text') {
-            await chatService.sendMessage(item.conversationId, item.content);
-          } else {
-            const safeName = sanitizeFileName(item.fileName);
-            const ext = safeName.split('.').pop() || 'bin';
-            const path = `${item.conversationId}/${crypto.randomUUID()}.${ext}`;
-            const file = new File([item.data], safeName, { type: item.mimeType });
+          let sent = false;
+          for (let attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
+            try {
+              await sendQueuedItem(item);
+              sent = true;
+              break;
+            } catch (err) {
+              if (attempt === MAX_RETRY_ATTEMPTS) {
+                throw err;
+              }
+              const delay = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+              await sleep(delay);
+            }
+          }
 
-            const { error: uploadErr } = await supabase.storage
-              .from('chat-attachments')
-              .upload(path, file);
-            if (uploadErr) throw uploadErr;
-
-            const { data: urlData } = supabase.storage
-              .from('chat-attachments')
-              .getPublicUrl(path);
-
-            const content = JSON.stringify({
-              fileName: item.fileName,
-              fileSize: item.fileSize,
-              mimeType: item.mimeType,
-              url: urlData.publicUrl,
-              text: item.caption || undefined,
-            });
-
-            const { error } = await supabase
-              .from('chat_messages')
-              .insert({
-                conversation_id: item.conversationId,
-                sender_id: userId,
-                content,
-                content_type: 'file',
-              });
-            if (error) throw error;
+          if (!sent) {
+            failedCount++;
+            continue;
           }
 
           await dbDelete(item.id);
@@ -225,6 +265,9 @@ export function useOfflineQueue(userId: string | undefined) {
         } catch (err) {
           console.error('[OfflineQueue] Failed to send queued item', item.id, err);
           failedCount++;
+          if (firstFailureDelayMs === null) {
+            firstFailureDelayMs = RETRY_BASE_DELAY_MS * 2 ** (MAX_RETRY_ATTEMPTS - 1);
+          }
         }
       }
 
@@ -233,6 +276,13 @@ export function useOfflineQueue(userId: string | undefined) {
       }
       if (failedCount > 0) {
         toast.error(`${failedCount} message(s) could not be sent after retries. They remain in the queue.`);
+        if (isOnline && firstFailureDelayMs !== null) {
+          if (flushTimeoutRef.current) clearTimeout(flushTimeoutRef.current);
+          flushTimeoutRef.current = setTimeout(() => {
+            flushTimeoutRef.current = null;
+            flush();
+          }, firstFailureDelayMs);
+        }
       }
     } finally {
       isFlushing.current = false;
@@ -267,11 +317,16 @@ export function useOfflineQueue(userId: string | undefined) {
 
   // Enqueue a text message
   const enqueueText = useCallback(async (conversationId: string, content: string) => {
+    const trimmed = content.trim();
+    if (!conversationId || !trimmed) {
+      throw new Error('Cannot queue an empty text message.');
+    }
+
     const item: QueuedTextMessage = {
-      id: crypto.randomUUID(),
+      id: createUuid(),
       kind: 'text',
       conversationId,
-      content,
+      content: trimmed,
       timestamp: Date.now(),
     };
     await dbPut(item);
@@ -280,9 +335,19 @@ export function useOfflineQueue(userId: string | undefined) {
 
   // Enqueue a file (reads it into ArrayBuffer for storage; sanitized filename)
   const enqueueFile = useCallback(async (conversationId: string, file: File, caption?: string) => {
+    if (!conversationId) {
+      throw new Error('Cannot queue file without a conversation.');
+    }
+    if (!(file instanceof File) || file.size <= 0) {
+      throw new Error('Cannot queue an invalid file.');
+    }
+    if (file.size > MAX_QUEUE_FILE_SIZE) {
+      throw new Error('Cannot queue files larger than 10MB.');
+    }
+
     const data = await file.arrayBuffer();
     const item: QueuedFileMessage = {
-      id: crypto.randomUUID(),
+      id: createUuid(),
       kind: 'file',
       conversationId,
       fileName: sanitizeFileName(file.name),
