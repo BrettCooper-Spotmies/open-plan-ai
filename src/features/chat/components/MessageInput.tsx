@@ -32,6 +32,23 @@ function formatBytes(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
+/** Build file message content payload (shared for send and queue). */
+function buildFileContent(payload: {
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  url: string;
+  text?: string;
+}) {
+  return {
+    fileName: payload.fileName,
+    fileSize: payload.fileSize,
+    mimeType: payload.mimeType,
+    url: payload.url,
+    text: payload.text,
+  };
+}
+
 export function MessageInput({ conversationId, onMessageSent, onTyping, members, sendMessage }: MessageInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -44,6 +61,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
 
   const [isSending, setIsSending] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const lastTypingRef = useRef(0);
   const { user } = useAuth();
@@ -75,6 +93,19 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   }, []);
 
   useEffect(() => { resize(); }, [value, resize]);
+
+  // Create and revoke object URLs for file previews to avoid memory leaks
+  useEffect(() => {
+    const urls = pendingFiles.map((file) => {
+      const isImage = file.type.startsWith('image/');
+      const isVideo = file.type.startsWith('video/');
+      return isImage || isVideo ? URL.createObjectURL(file) : '';
+    });
+    setPreviewUrls(urls);
+    return () => {
+      urls.forEach((u) => u && URL.revokeObjectURL(u));
+    };
+  }, [pendingFiles]);
 
   // Close emoji picker on outside click
   useEffect(() => {
@@ -136,9 +167,21 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     }
     const valid = newFiles.filter(f => f.size <= MAX_FILE_SIZE);
     setPendingFiles(prev => {
-      const combined = [...prev, ...valid];
+      const seen = new Set(prev.map(f => `${f.name}-${f.size}-${f.lastModified}`));
+      const deduped = valid.filter(f => {
+        const key = `${f.name}-${f.size}-${f.lastModified}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if (deduped.length < valid.length) {
+        toast.info('Duplicate file(s) were skipped.');
+      }
+      const combined = [...prev, ...deduped];
       if (combined.length > MAX_FILES) {
-        toast.warning(`Only ${MAX_FILES} files allowed. Extra files were dropped.`);
+        const dropped = combined.length - MAX_FILES;
+        const droppedNames = combined.slice(MAX_FILES).map(f => f.name).join(', ');
+        toast.warning(`Only ${MAX_FILES} files allowed. Dropped: ${droppedNames || dropped + ' file(s)'}.`);
         return combined.slice(0, MAX_FILES);
       }
       return combined;
@@ -150,7 +193,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   };
 
   const sendFileMessage = async (file: File, text?: string) => {
-    const ext = file.name.split('.').pop();
+    const ext = file.name.split('.').pop() || 'bin';
     const path = `${conversationId}/${crypto.randomUUID()}.${ext}`;
 
     const { error: uploadErr } = await supabase.storage
@@ -162,22 +205,17 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
       .from('chat-attachments')
       .getPublicUrl(path);
 
+    const fileData = buildFileContent({
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type,
+      url: urlData.publicUrl,
+      text: text || undefined,
+    });
+
     if (sendMessage) {
-      await sendMessage('', 'file', {
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type,
-        url: urlData.publicUrl,
-        text: text || undefined,
-      });
+      await sendMessage('', 'file', fileData);
     } else {
-      const content = JSON.stringify({
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type,
-        url: urlData.publicUrl,
-        text: text || undefined,
-      });
       const userId = user?.id;
       if (!userId) throw new Error('Not authenticated');
       const { error } = await supabase
@@ -185,7 +223,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
         .insert({
           conversation_id: conversationId,
           sender_id: userId,
-          content,
+          content: JSON.stringify(fileData),
           content_type: 'file',
         });
       if (error) throw error;
@@ -195,18 +233,27 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   const handleSend = async () => {
     const trimmed = value.trim();
     if ((!trimmed && pendingFiles.length === 0) || isSending) return;
+    if (pendingFiles.length > MAX_FILES) {
+      toast.warning(`Maximum ${MAX_FILES} files allowed. Remove some before sending.`);
+      return;
+    }
 
     setDraft(conversationId, '');
     setMentionQuery(null);
 
     // ── OFFLINE: enqueue everything locally ──────────────────────────────
     if (!isOnline) {
-      if (trimmed) await enqueueText(conversationId, trimmed);
-      for (const file of pendingFiles) {
-        await enqueueFile(conversationId, file);
+      try {
+        if (trimmed) await enqueueText(conversationId, trimmed);
+        if (pendingFiles.length > 0) {
+          await Promise.all(pendingFiles.map((file) => enqueueFile(conversationId, file)));
+        }
+        setPendingFiles([]);
+        toast.info('📵 Saved offline — will send when you reconnect');
+      } catch (err) {
+        console.error('[MessageInput] Offline queue failed:', err);
+        toast.error('Failed to save message offline. Please try again.');
       }
-      setPendingFiles([]);
-      toast.info('📵 Saved offline — will send when you reconnect');
       return;
     }
 
@@ -229,13 +276,17 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
 
       otherMembers.forEach((member) => {
         if (trimmed.includes(`@${member.name}`)) {
-          createNotification.mutate({
-            user_id: member.id,
-            actor_id: user?.id,
-            type: 'mention',
-            title: 'Mentioned you in a message',
-            description: trimmed.length > 100 ? trimmed.substring(0, 97) + '...' : trimmed,
-          });
+          try {
+            createNotification.mutate({
+              user_id: member.id,
+              actor_id: user?.id,
+              type: 'mention',
+              title: 'Mentioned you in a message',
+              description: trimmed.length > 100 ? trimmed.substring(0, 97) + '...' : trimmed,
+            });
+          } catch (notifErr) {
+            console.warn('[MessageInput] Failed to create mention notification:', notifErr);
+          }
         }
       });
 
@@ -309,7 +360,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
           {pendingFiles.map((file, i) => {
             const isImage = file.type.startsWith('image/');
             const isVideo = file.type.startsWith('video/');
-            const previewUrl = (isImage || isVideo) ? URL.createObjectURL(file) : null;
+            const previewUrl = (isImage || isVideo) ? previewUrls[i] || null : null;
 
             return (
               <div

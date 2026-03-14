@@ -23,7 +23,7 @@ import { useAllIssues, useUpdateIssue } from '@/hooks/useIssues';
 import { useAllMilestones, useUpdateMilestone } from '@/hooks/useMilestones';
 import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
-import { parse, format as formatDate } from 'date-fns';
+import { parse, format as formatDate, isValid } from 'date-fns';
 import { toast } from 'sonner';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 
@@ -131,13 +131,21 @@ const CalendarPage: React.FC = () => {
   const isLoading = tasksLoading || milestonesLoading || issuesLoading;
 
   // Derived state from search params
-  const viewMode = (searchParams.get('view') as CalendarViewMode) || 'month';
+  const validViewModes: CalendarViewMode[] = ['month', 'week', 'day'];
+  const viewParam = searchParams.get('view');
+  const viewMode: CalendarViewMode =
+    viewParam && validViewModes.includes(viewParam as CalendarViewMode)
+      ? (viewParam as CalendarViewMode)
+      : 'month';
   const dateParam = searchParams.get('date');
   const currentDate = useMemo(() => {
     if (!dateParam) return new Date();
     try {
-      return parse(dateParam, 'yyyy-MM-dd', new Date());
-    } catch {
+      const parsed = parse(dateParam, 'yyyy-MM-dd', new Date());
+      if (!isValid(parsed)) throw new Error('Invalid date');
+      return parsed;
+    } catch (e) {
+      console.warn('[Calendar] Invalid date param, using today:', dateParam, e);
       return new Date();
     }
   }, [dateParam]);
@@ -220,14 +228,14 @@ const CalendarPage: React.FC = () => {
     return Array.from(tagSet).sort();
   }, [allEvents]);
 
-  // Navigation handlers
-  const updateUrlParams = (updates: Record<string, string | null>, replace = false) => {
+  // Navigation handlers – safely update query params (handles null/undefined)
+  const updateUrlParams = (updates: Record<string, string | null | undefined>, replace = false) => {
     const newParams = new URLSearchParams(searchParams);
     Object.entries(updates).forEach(([key, value]) => {
-      if (value === null) {
+      if (value === null || value === undefined) {
         newParams.delete(key);
       } else {
-        newParams.set(key, value);
+        newParams.set(key, String(value));
       }
     });
     setSearchParams(newParams, { replace });
@@ -270,11 +278,16 @@ const CalendarPage: React.FC = () => {
     }
   };
 
-  const handleModalClose = () => {
+  type ModalType = 'task' | 'milestone' | 'issue';
+  const handleModalClose = (modalType?: ModalType) => {
     const newParams = new URLSearchParams(searchParams);
-    newParams.delete('task');
-    newParams.delete('milestone');
-    newParams.delete('issue');
+    if (modalType) {
+      newParams.delete(modalType);
+    } else {
+      newParams.delete('task');
+      newParams.delete('milestone');
+      newParams.delete('issue');
+    }
     setSearchParams(newParams);
   };
 
@@ -377,7 +390,7 @@ const CalendarPage: React.FC = () => {
         <TaskDetailModal
           task={selectedTask}
           isOpen={true}
-          onClose={handleModalClose}
+          onClose={() => handleModalClose('task')}
           onUpdate={async (updatedTask) => {
             try {
               if (updatedTask.projectId && updatedTask.id) {
@@ -404,7 +417,7 @@ const CalendarPage: React.FC = () => {
         <MilestoneDetailModal
           milestone={selectedMilestone}
           isOpen={true}
-          onClose={handleModalClose}
+          onClose={() => handleModalClose('milestone')}
           onUpdate={async (updatedMilestone) => {
             try {
               await updateMilestoneMutation.mutateAsync({
@@ -433,7 +446,7 @@ const CalendarPage: React.FC = () => {
         <IssueDetailModal
           issue={selectedIssue}
           isOpen={true}
-          onClose={handleModalClose}
+          onClose={() => handleModalClose('issue')}
           onUpdate={async (updatedIssue) => {
             try {
               if (updatedIssue.projectId && updatedIssue.id) {

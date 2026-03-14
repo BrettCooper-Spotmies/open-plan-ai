@@ -83,8 +83,10 @@ export const milestonesService = {
 
   async delete(id: string): Promise<void> {
     const { error } = await (supabase.rpc as any)('soft_delete_milestone', { milestone_id: id });
-
-    if (error) throw error;
+    if (error) {
+      console.error('[milestonesService] soft_delete_milestone failed', error);
+      throw error;
+    }
   },
 
   async getUpcoming(limit: number = 5): Promise<Milestone[]> {

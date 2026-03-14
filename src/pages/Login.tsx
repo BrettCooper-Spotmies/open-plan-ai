@@ -47,14 +47,19 @@ const Login = () => {
       // Check if the error is "Email not confirmed" - redirect to verify page
       const errorMessage = result.error.message.toLowerCase();
       if (errorMessage.includes("email not confirmed") || errorMessage.includes("email_not_confirmed")) {
-        // Import authService to send OTP
         const { authService } = await import("@/services/auth.service");
         await authService.sendOtp(email);
-
+        try {
+          sessionStorage.setItem(
+            'openplan_pending_verify',
+            JSON.stringify({ email, password })
+          );
+        } catch {
+          // sessionStorage may be full or unavailable
+        }
         navigate("/verify-email", {
           state: {
-            email: email,
-            password: password,
+            email,
             fromLogin: true,
             message: "Please verify your email to continue. A new verification code has been sent."
           }
@@ -65,11 +70,17 @@ const Login = () => {
       setError(result.error.message);
       setIsLoading(false);
     } else if (result.requiresVerification) {
-      // Redirect to verification page with message
+      try {
+        sessionStorage.setItem(
+          'openplan_pending_verify',
+          JSON.stringify({ email: result.email || email, password })
+        );
+      } catch {
+        // sessionStorage may be full or unavailable
+      }
       navigate("/verify-email", {
         state: {
           email: result.email || email,
-          password: password,
           fromLogin: true,
           message: "Please verify your email to continue."
         }
@@ -180,7 +191,8 @@ const Login = () => {
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    tabIndex={-1}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    title={showPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPassword ? (
                       <EyeOff className="h-4 w-4" />

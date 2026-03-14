@@ -940,7 +940,8 @@ const Settings = () => {
                           type="button"
                           onClick={() => setShowNewPassword(!showNewPassword)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                          tabIndex={-1}
+                          aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                          title={showNewPassword ? 'Hide new password' : 'Show new password'}
                         >
                           {showNewPassword ? (
                             <EyeOff className="h-4 w-4" />
@@ -965,7 +966,8 @@ const Settings = () => {
                           type="button"
                           onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                          tabIndex={-1}
+                          aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                          title={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
                         >
                           {showConfirmPassword ? (
                             <EyeOff className="h-4 w-4" />

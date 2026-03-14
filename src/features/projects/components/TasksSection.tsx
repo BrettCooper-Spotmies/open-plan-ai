@@ -73,7 +73,10 @@ export function ViewControls({
             variant="ghost"
             size="icon"
             className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={() => onSearchQueryChange?.('')}
+            onClick={() => {
+              if (onSearchQueryChange) onSearchQueryChange('');
+              else if (import.meta.env.DEV) console.warn('[TasksSection] onSearchQueryChange undefined');
+            }}
           >
             <X className="h-4 w-4" />
           </Button>

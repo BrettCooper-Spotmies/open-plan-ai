@@ -482,8 +482,10 @@ export const tasksService = {
     }
 
     const { error } = await (supabase.rpc as any)('soft_delete_task', { task_id: taskId });
-
-    if (error) throw error;
+    if (error) {
+      console.error('[tasksService] soft_delete_task failed', error);
+      throw error;
+    }
   },
 
   /**
