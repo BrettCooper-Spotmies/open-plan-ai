@@ -650,25 +650,25 @@ const EditProject = () => {
             });
 
             if (modulesToAdd.length > 0) {
-                await Promise.all(modulesToAdd.map(m =>
-                    modulesService.create({
-                        project_id: id,
-                        name: m.name,
-                        module_type: 'software', // Default
-                    })
-                ));
+                await modulesService.createMany(modulesToAdd.map(m => ({
+                    project_id: id,
+                    name: m.name,
+                    module_type: 'software' as any, // Default
+                })));
             }
 
             if (modulesToUpdate.length > 0) {
-                await Promise.all(modulesToUpdate.map(m =>
-                    modulesService.update(m.id, { name: m.name })
-                ));
+                if (modulesService.updateMany) {
+                    await modulesService.updateMany(modulesToUpdate.map(m => ({ id: m.id, name: m.name })));
+                } else {
+                    await Promise.all(modulesToUpdate.map(m =>
+                        modulesService.update(m.id, { name: m.name })
+                    ));
+                }
             }
 
             if (moduleIdsToRemove.length > 0) {
-                await Promise.all(moduleIdsToRemove.map(mid =>
-                    modulesService.delete(mid)
-                ));
+                await modulesService.deleteMany(moduleIdsToRemove);
             }
 
             // Sync Milestones
@@ -690,28 +690,23 @@ const EditProject = () => {
             });
 
             if (milestonesToAdd.length > 0) {
-                await Promise.all(milestonesToAdd.map(m =>
-                    milestonesService.create({
-                        project_id: id,
-                        name: m.name,
-                        due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
-                    })
-                ));
+                await milestonesService.createMany(milestonesToAdd.map(m => ({
+                    project_id: id,
+                    name: m.name,
+                    due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
+                })));
             }
 
             if (milestonesToUpdate.length > 0) {
-                await Promise.all(milestonesToUpdate.map(m =>
-                    milestonesService.update(m.id, {
-                        name: m.name,
-                        due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
-                    })
-                ));
+                await milestonesService.updateMany(milestonesToUpdate.map(m => ({
+                    id: m.id,
+                    name: m.name,
+                    due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
+                })));
             }
 
             if (milestoneIdsToRemove.length > 0) {
-                await Promise.all(milestoneIdsToRemove.map(mid =>
-                    milestonesService.delete(mid)
-                ));
+                await milestonesService.deleteMany(milestoneIdsToRemove);
             }
 
             // Invalidate queries to ensure project detail page reflects all changes

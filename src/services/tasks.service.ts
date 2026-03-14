@@ -512,12 +512,26 @@ export const tasksService = {
       return updatedTasks;
     }
 
-    // For Supabase, update each task individually
-    const results: Task[] = [];
-    for (const { id, updates: taskUpdates } of updates) {
-      const updated = await this.update(projectId, id, taskUpdates);
-      results.push(updated);
+    // Prepare payload for RPC if possible
+    const payload = updates.map(({ id, updates: u }) => ({
+      id,
+      status: u.status,
+      priority: u.priority,
+      milestoneId: u.milestoneId,
+    }));
+
+    try {
+      const { error } = await (supabase.rpc as any)('batch_update_tasks', { updates: payload });
+      if (error) throw error;
+      return []; // Return empty as we rely on query invalidation
+    } catch (rpcError) {
+      console.warn('Batch update RPC failed, falling back to sequential update:', rpcError);
+      const results: Task[] = [];
+      for (const { id, updates: taskUpdates } of updates) {
+        const updated = await this.update(projectId, id, taskUpdates);
+        results.push(updated);
+      }
+      return results;
     }
-    return results;
   },
 };

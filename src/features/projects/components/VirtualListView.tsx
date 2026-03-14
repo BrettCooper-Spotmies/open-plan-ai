@@ -14,6 +14,8 @@ interface VirtualListViewProps {
   tasks: Task[];
   milestones?: Milestone[];
   onTaskClick?: (task: Task) => void;
+  onUpdate?: (task: Task) => void;
+  onBatchUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
 }
 
 const statusColors = {
@@ -128,7 +130,7 @@ const TaskTableRow = memo(function TaskTableRow({
   );
 });
 
-export function VirtualListView({ tasks, milestones = [], onTaskClick }: VirtualListViewProps) {
+export function VirtualListView({ tasks, milestones = [], onTaskClick, onUpdate, onBatchUpdate }: VirtualListViewProps) {
   const [sortField, setSortField] = useState<SortField>('priority');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -215,7 +217,8 @@ export function VirtualListView({ tasks, milestones = [], onTaskClick }: Virtual
 
   const handleUpdateTask = useCallback((updatedTask: Task) => {
     setSelectedTask((prev) => prev && prev.id === updatedTask.id ? updatedTask : prev);
-  }, []);
+    if (onUpdate) onUpdate(updatedTask);
+  }, [onUpdate]);
 
   const SortableHeader = memo(function SortableHeader({ field, children }: { field: SortField; children: React.ReactNode }) {
     return (
@@ -384,6 +387,7 @@ export function VirtualListView({ tasks, milestones = [], onTaskClick }: Virtual
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         onUpdate={handleUpdateTask}
+        onBatchUpdate={onBatchUpdate}
       />
     </>
   );

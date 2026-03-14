@@ -383,3 +383,21 @@ export function useDeleteModule(projectId: string) {
     },
   });
 }
+
+export function useBatchUpdateModules(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (updates: Array<{ id: string; name?: string; milestone_id?: string | null }>) =>
+      modulesService.updateMany(updates),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.modules.list(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+    },
+    onError: () => {
+      toast.error('Failed to update modules');
+    },
+  });
+}

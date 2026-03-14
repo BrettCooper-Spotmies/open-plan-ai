@@ -24,7 +24,8 @@ interface TasksSectionProps {
   filters?: TaskFilter;
   onFiltersChange?: (filters: TaskFilter) => void;
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  onTaskUpdate?: (task: Task) => void;
+  onTaskUpdate?: (task: Task, onError?: () => void) => void;
+  onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
   onAddModule?: () => void;
 }
@@ -139,6 +140,7 @@ export function TasksSection({
   onFiltersChange: externalOnFiltersChange,
   onTaskCreate,
   onTaskUpdate,
+  onBatchTaskUpdate,
   onTaskDelete,
   onAddModule,
 }: TasksSectionProps) {
@@ -317,6 +319,7 @@ export function TasksSection({
             issues={issues}
             onTaskCreate={onTaskCreate}
             onTaskUpdate={onTaskUpdate}
+            onBatchTaskUpdate={onBatchTaskUpdate}
             onTaskDelete={onTaskDelete}
             modules={modules}
             onAddModule={onAddModule}
@@ -330,6 +333,7 @@ export function TasksSection({
             modules={modules}
             onTaskCreate={onTaskCreate}
             onTaskUpdate={onTaskUpdate}
+            onBatchTaskUpdate={onBatchTaskUpdate}
             onTaskDelete={onTaskDelete}
             onAddModule={onAddModule}
           />

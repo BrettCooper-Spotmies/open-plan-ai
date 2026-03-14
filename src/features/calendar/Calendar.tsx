@@ -21,6 +21,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { useAllTasks, useUpdateTask } from '@/hooks/useTasks';
 import { useAllIssues, useUpdateIssue } from '@/hooks/useIssues';
 import { useAllMilestones, useUpdateMilestone } from '@/hooks/useMilestones';
+import { useBatchUpdateTasks } from '@/hooks/useProjectMutations';
 import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { parse, format as formatDate, isValid } from 'date-fns';
@@ -126,6 +127,7 @@ const CalendarPage: React.FC = () => {
   // Mutations
   const updateTaskMutation = useUpdateTask();
   const updateMilestoneMutation = useUpdateMilestone();
+  const batchUpdateTasksMutation = useBatchUpdateTasks(''); // projectId will be overridden if needed by service
   const updateIssueMutation = useUpdateIssue();
 
   const isLoading = tasksLoading || milestonesLoading || issuesLoading;
@@ -389,7 +391,7 @@ const CalendarPage: React.FC = () => {
       {selectedTask && (
         <TaskDetailModal
           task={selectedTask}
-          isOpen={true}
+          isOpen={!!selectedTask}
           onClose={() => handleModalClose('task')}
           onUpdate={async (updatedTask) => {
             try {
@@ -408,6 +410,14 @@ const CalendarPage: React.FC = () => {
               toast.error('Failed to update task');
             }
           }}
+          onBatchUpdate={async (updates) => {
+            try {
+              await batchUpdateTasksMutation.mutateAsync(updates);
+            } catch (error) {
+              console.error('Failed to batch update tasks:', error);
+              toast.error('Failed to update dependent tasks');
+            }
+          }}
           allTasks={getProjectTasks(selectedTask.projectId || '')}
         />
       )}
@@ -416,7 +426,7 @@ const CalendarPage: React.FC = () => {
       {selectedMilestone && (
         <MilestoneDetailModal
           milestone={selectedMilestone}
-          isOpen={true}
+          isOpen={!!selectedMilestone}
           onClose={() => handleModalClose('milestone')}
           onUpdate={async (updatedMilestone) => {
             try {
@@ -445,7 +455,7 @@ const CalendarPage: React.FC = () => {
       {selectedIssue && (
         <IssueDetailModal
           issue={selectedIssue}
-          isOpen={true}
+          isOpen={!!selectedIssue}
           onClose={() => handleModalClose('issue')}
           onUpdate={async (updatedIssue) => {
             try {

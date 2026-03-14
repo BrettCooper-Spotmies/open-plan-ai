@@ -36,11 +36,20 @@ function sanitizeFileName(name: string): string {
   return safe || 'file';
 }
 
+import { encryptObject, decryptObject, encryptArrayBuffer, decryptArrayBuffer } from '@/utils/crypto';
+
 // ── IndexedDB helpers ──────────────────────────────────────────────────────
 
 const DB_NAME = 'openplan_offline_queue';
 const DB_VERSION = 1;
 const STORE = 'queue';
+
+// The record type actually stored in IndexedDB
+type SecureStoreRecord = {
+  id: string;
+  encryptedMetadata: { ciphertext: string; iv: string };
+  encryptedData?: { ciphertext: ArrayBuffer; iv: ArrayBuffer };
+};
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -56,12 +65,30 @@ function openDB(): Promise<IDBDatabase> {
 async function dbGetAll(): Promise<QueuedItem[]> {
   try {
     const db = await openDB();
-    return new Promise((resolve, reject) => {
+    const records = await new Promise<SecureStoreRecord[]>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readonly');
       const req = tx.objectStore(STORE).getAll();
-      req.onsuccess = () => resolve(req.result as QueuedItem[]);
+      req.onsuccess = () => resolve(req.result as SecureStoreRecord[]);
       req.onerror = () => reject(req.error);
     });
+
+    const decryptedItems: QueuedItem[] = [];
+    for (const record of records) {
+      try {
+        const metadata = await decryptObject<any>(record.encryptedMetadata);
+        if (!metadata) continue;
+
+        if (metadata.kind === 'file' && record.encryptedData) {
+          const originalData = await decryptArrayBuffer(record.encryptedData);
+          metadata.data = originalData;
+        }
+
+        decryptedItems.push({ id: record.id, ...metadata } as QueuedItem);
+      } catch (err) {
+        console.error('[OfflineQueue] Failed to decrypt item', record.id, err);
+      }
+    }
+    return decryptedItems;
   } catch (err) {
     console.error('[OfflineQueue] dbGetAll failed:', err);
     return [];
@@ -71,9 +98,28 @@ async function dbGetAll(): Promise<QueuedItem[]> {
 async function dbPut(item: QueuedItem): Promise<void> {
   try {
     const db = await openDB();
+    
+    // Separate data from metadata for file messages
+    const metadata: any = { ...item };
+    delete metadata.id; // Store ID at the root level for IndexedDB
+    
+    let encryptedData;
+    if (item.kind === 'file') {
+      encryptedData = await encryptArrayBuffer(item.data);
+      delete metadata.data;
+    }
+
+    const encryptedMetadata = await encryptObject(metadata);
+
+    const recordToStore: SecureStoreRecord = {
+      id: item.id,
+      encryptedMetadata,
+      encryptedData
+    };
+
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(item);
+      tx.objectStore(STORE).put(recordToStore);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
