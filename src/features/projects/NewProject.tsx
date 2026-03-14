@@ -53,7 +53,7 @@ import {
   Loader2,
   Smile
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isBefore, startOfToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
@@ -249,6 +249,44 @@ const NewProject = () => {
   const [newMilestoneEnd, setNewMilestoneEnd] = useState<Date>();
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
 
+  // Deletion Confirmation State
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{
+    isOpen: boolean;
+    type: 'module' | 'milestone' | 'attachment' | 'link' | null;
+    id: string | null;
+  }>({
+    isOpen: false,
+    type: null,
+    id: null
+  });
+
+  const confirmDelete = () => {
+    const { type, id } = deleteConfirmation;
+    if (!type || !id) return;
+
+    if (type === 'module') {
+      setModules(modules.filter(m => m.id !== id));
+      if (editingModuleId === id) {
+        setEditingModuleId(null);
+        setNewModuleName("");
+      }
+    } else if (type === 'milestone') {
+      setMilestones(milestones.filter(m => m.id !== id));
+      if (editingMilestoneId === id) {
+        setEditingMilestoneId(null);
+        setNewMilestoneName("");
+        setNewMilestoneStart(undefined);
+        setNewMilestoneEnd(undefined);
+      }
+    } else if (type === 'attachment') {
+      setAttachments(attachments.filter(f => f.id !== id));
+    } else if (type === 'link') {
+      setLinks(links.filter(l => l.id !== id));
+    }
+
+    setDeleteConfirmation({ isOpen: false, type: null, id: null });
+  };
+
   const handleAddModule = () => {
     if (newModuleName.trim()) {
       if (editingModuleId) {
@@ -267,11 +305,7 @@ const NewProject = () => {
   };
 
   const handleRemoveModule = (id: string) => {
-    setModules(modules.filter(m => m.id !== id));
-    if (editingModuleId === id) {
-      setEditingModuleId(null);
-      setNewModuleName("");
-    }
+    setDeleteConfirmation({ isOpen: true, type: 'module', id });
   };
 
   const handleAddMilestone = () => {
@@ -309,13 +343,7 @@ const NewProject = () => {
   };
 
   const handleRemoveMilestone = (id: string) => {
-    setMilestones(milestones.filter(m => m.id !== id));
-    if (editingMilestoneId === id) {
-      setEditingMilestoneId(null);
-      setNewMilestoneName("");
-      setNewMilestoneStart(undefined);
-      setNewMilestoneEnd(undefined);
-    }
+    setDeleteConfirmation({ isOpen: true, type: 'milestone', id });
   };
 
   const handleAddTeamMember = () => {
@@ -358,7 +386,7 @@ const NewProject = () => {
   };
 
   const handleRemoveAttachment = (fileId: string) => {
-    setAttachments(attachments.filter(f => f.id !== fileId));
+    setDeleteConfirmation({ isOpen: true, type: 'attachment', id: fileId });
   };
 
   const handleAddLink = () => {
@@ -370,7 +398,7 @@ const NewProject = () => {
   };
 
   const handleRemoveLink = (linkId: string) => {
-    setLinks(links.filter(l => l.id !== linkId));
+    setDeleteConfirmation({ isOpen: true, type: 'link', id: linkId });
   };
 
   // File upload handlers
@@ -496,6 +524,16 @@ const NewProject = () => {
 
     if (!projectName.trim()) {
       toast.error('Project name is required');
+      return;
+    }
+
+    if (!startDate) {
+      toast.error('Start date is required');
+      return;
+    }
+
+    if (!expectedEndDate) {
+      toast.error('Expected completion date is required');
       return;
     }
 
@@ -653,7 +691,7 @@ const NewProject = () => {
           <CardContent className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="projectName">Project Name *</Label>
+                <Label htmlFor="projectName">Project Name <span className="text-destructive">*</span></Label>
                 <div className="flex gap-2">
                   <Popover open={isEmojiPickerOpen} onOpenChange={setIsEmojiPickerOpen}>
                     <PopoverTrigger asChild>
@@ -698,13 +736,14 @@ const NewProject = () => {
                     id="projectName"
                     placeholder="Enter project name"
                     value={projectName}
+                    maxLength={100}
                     onChange={(e) => setProjectName(e.target.value)}
                     className="flex-1"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="projectType">Project Type *</Label>
+                <Label htmlFor="projectType">Project Type <span className="text-destructive">*</span></Label>
                 <Select value={projectType} onValueChange={setProjectType}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select project type" />
@@ -717,7 +756,7 @@ const NewProject = () => {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="projectStage">Project Stage *</Label>
+                <Label htmlFor="projectStage">Project Stage <span className="text-destructive">*</span></Label>
                 <Select value={projectStage} onValueChange={setProjectStage}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select project stage" />
@@ -732,19 +771,30 @@ const NewProject = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="projectDescription">Project Description *</Label>
-              <Textarea
-                id="projectDescription"
-                placeholder="Describe your project goals, scope, and key deliverables..."
-                value={projectDescription}
-                onChange={(e) => setProjectDescription(e.target.value)}
-                rows={4}
-              />
+              <Label htmlFor="projectDescription">Project Description <span className="text-destructive">*</span></Label>
+              <div className="space-y-1">
+                <Textarea
+                  id="projectDescription"
+                  placeholder="Describe your project goals, scope, and key deliverables..."
+                  value={projectDescription}
+                  maxLength={1000}
+                  onChange={(e) => setProjectDescription(e.target.value)}
+                  rows={4}
+                />
+                <div className="flex justify-end">
+                  <span className={cn(
+                    "text-[10px] tabular-nums",
+                    projectDescription.length >= 1000 ? "text-destructive font-medium" : "text-muted-foreground"
+                  )}>
+                    {projectDescription.length}/1000
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>Start Date *</Label>
+                <Label>Start Date <span className="text-destructive">*</span></Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -763,13 +813,14 @@ const NewProject = () => {
                       mode="single"
                       selected={startDate}
                       onSelect={setStartDate}
+                      disabled={{ before: startOfToday() }}
                       initialFocus
                     />
                   </PopoverContent>
                 </Popover>
               </div>
               <div className="space-y-2">
-                <Label>Expected Completion Date *</Label>
+                <Label>Expected Completion Date <span className="text-destructive">*</span></Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -788,6 +839,7 @@ const NewProject = () => {
                       mode="single"
                       selected={expectedEndDate}
                       onSelect={setExpectedEndDate}
+                      disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false)}
                       initialFocus
                     />
                   </PopoverContent>
@@ -815,6 +867,7 @@ const NewProject = () => {
                       id="clientName"
                       placeholder="Client name"
                       value={clientName}
+                      maxLength={100}
                       onChange={(e) => setClientName(e.target.value)}
                     />
                   </div>
@@ -824,28 +877,44 @@ const NewProject = () => {
                       id="clientOrg"
                       placeholder="Organisation"
                       value={clientOrganization}
+                      maxLength={100}
                       onChange={(e) => setClientOrganization(e.target.value)}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="clientContact">Contact Details</Label>
+                    <Label htmlFor="clientContact">Contact Number (10 digits)</Label>
                     <Input
                       id="clientContact"
-                      placeholder="Email or phone"
+                      placeholder="e.g. 1234567890"
                       value={clientContact}
-                      onChange={(e) => setClientContact(e.target.value)}
+                      maxLength={10}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "");
+                        setClientContact(val);
+                      }}
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="notes">Notes</Label>
-                  <Textarea
-                    id="notes"
-                    placeholder="Any additional notes or comments..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={3}
-                  />
+                  <div className="space-y-1">
+                    <Textarea
+                      id="notes"
+                      placeholder="Any additional notes or comments..."
+                      value={notes}
+                      maxLength={2000}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={3}
+                    />
+                    <div className="flex justify-end">
+                      <span className={cn(
+                        "text-[10px] tabular-nums",
+                        notes.length >= 2000 ? "text-destructive font-medium" : "text-muted-foreground"
+                      )}>
+                        {notes.length}/2000
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1148,6 +1217,7 @@ const NewProject = () => {
                       mode="single"
                       selected={newMilestoneStart}
                       onSelect={setNewMilestoneStart}
+                      disabled={{ before: startOfToday() }}
                       initialFocus
                     />
                   </PopoverContent>
@@ -1173,6 +1243,7 @@ const NewProject = () => {
                       mode="single"
                       selected={newMilestoneEnd}
                       onSelect={setNewMilestoneEnd}
+                      disabled={(date) => isBefore(date, startOfToday()) || (newMilestoneStart ? isBefore(date, newMilestoneStart) : false)}
                       initialFocus
                     />
                   </PopoverContent>
@@ -1498,6 +1569,28 @@ const NewProject = () => {
             )}
           </Button>
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteConfirmation.isOpen} onOpenChange={(open) => {
+          if (!open) setDeleteConfirmation({ isOpen: false, type: null, id: null });
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Confirm Deletion</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete this {deleteConfirmation.type}? This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDeleteConfirmation({ isOpen: false, type: null, id: null })}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={confirmDelete}>
+                Delete
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </>
   );

@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CalendarHeader } from './components/CalendarHeader';
 import { CalendarFilters } from './components/CalendarFilters';
 import { CalendarMonthView } from './components/CalendarMonthView';
@@ -20,11 +21,12 @@ import { useProjects } from '@/hooks/useProjects';
 import { useAllTasks, useUpdateTask } from '@/hooks/useTasks';
 import { useAllIssues, useUpdateIssue } from '@/hooks/useIssues';
 import { useAllMilestones, useUpdateMilestone } from '@/hooks/useMilestones';
+import { useBatchUpdateTasks } from '@/hooks/useProjectMutations';
 import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
-import { parse, parseISO } from 'date-fns';
-import { Loader2 } from 'lucide-react';
+import { parse, format as formatDate, isValid } from 'date-fns';
 import { toast } from 'sonner';
+import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 
 // Convert a DB milestone row to calendar event
 function dbMilestoneToCalendarEvent(m: any, projectName: string): CalendarEvent | null {
@@ -113,6 +115,7 @@ function dbMilestoneToFrontend(m: any): Milestone {
 
 const CalendarPage: React.FC = () => {
   const { currentOrganization } = useOrganization();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Real data hooks
   const { data: projects = [] } = useProjects();
@@ -124,22 +127,52 @@ const CalendarPage: React.FC = () => {
   // Mutations
   const updateTaskMutation = useUpdateTask();
   const updateMilestoneMutation = useUpdateMilestone();
+  const batchUpdateTasksMutation = useBatchUpdateTasks(''); // projectId will be overridden if needed by service
   const updateIssueMutation = useUpdateIssue();
 
   const isLoading = tasksLoading || milestonesLoading || issuesLoading;
 
-  // State
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<CalendarViewMode>('month');
-  const [filters, setFilters] = useState<CalendarFilter>({});
+  // Derived state from search params
+  const validViewModes: CalendarViewMode[] = ['month', 'week', 'day'];
+  const viewParam = searchParams.get('view');
+  const viewMode: CalendarViewMode =
+    viewParam && validViewModes.includes(viewParam as CalendarViewMode)
+      ? (viewParam as CalendarViewMode)
+      : 'month';
+  const dateParam = searchParams.get('date');
+  const currentDate = useMemo(() => {
+    if (!dateParam) return new Date();
+    try {
+      const parsed = parse(dateParam, 'yyyy-MM-dd', new Date());
+      if (!isValid(parsed)) throw new Error('Invalid date');
+      return parsed;
+    } catch (e) {
+      console.warn('[Calendar] Invalid date param, using today:', dateParam, e);
+      return new Date();
+    }
+  }, [dateParam]);
 
-  // Modal state
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
-  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
-  const [milestoneModalOpen, setMilestoneModalOpen] = useState(false);
-  const [issueModalOpen, setIssueModalOpen] = useState(false);
+  // Selected entities for modals from search params
+  const taskId = searchParams.get('task');
+  const milestoneId = searchParams.get('milestone');
+  const issueId = searchParams.get('issue');
+
+  const selectedTask = useMemo(() => 
+    taskId ? allTasks.find(t => t.id === taskId) || null : null
+  , [taskId, allTasks]);
+  
+  const selectedMilestone = useMemo(() => {
+    if (!milestoneId) return null;
+    const dbM = allMilestones.find((m: any) => m.id === milestoneId);
+    return dbM ? dbMilestoneToFrontend(dbM) : null;
+  }, [milestoneId, allMilestones]);
+
+  const selectedIssue = useMemo(() => 
+    issueId ? allIssues.find(i => i.id === issueId) || null : null
+  , [issueId, allIssues]);
+
+  // Filter state remains local as it's complex and might be too long for URL
+  const [filters, setFilters] = React.useState<CalendarFilter>({});
 
   // Build project map for lookups
   const projectMap = useMemo(
@@ -197,46 +230,67 @@ const CalendarPage: React.FC = () => {
     return Array.from(tagSet).sort();
   }, [allEvents]);
 
-  // Navigation handlers
+  // Navigation handlers – safely update query params (handles null/undefined)
+  const updateUrlParams = (updates: Record<string, string | null | undefined>, replace = false) => {
+    const newParams = new URLSearchParams(searchParams);
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === undefined) {
+        newParams.delete(key);
+      } else {
+        newParams.set(key, String(value));
+      }
+    });
+    setSearchParams(newParams, { replace });
+  };
+
   const handleNavigatePrevious = () => {
-    setCurrentDate(prev => navigatePrevious(prev, viewMode));
+    const nextDate = navigatePrevious(currentDate, viewMode);
+    updateUrlParams({ date: formatDate(nextDate, 'yyyy-MM-dd') }, true);
   };
 
   const handleNavigateNext = () => {
-    setCurrentDate(prev => navigateNext(prev, viewMode));
+    const nextDate = navigateNext(currentDate, viewMode);
+    updateUrlParams({ date: formatDate(nextDate, 'yyyy-MM-dd') }, true);
   };
 
   const handleNavigateToday = () => {
-    setCurrentDate(new Date());
+    updateUrlParams({ date: formatDate(new Date(), 'yyyy-MM-dd') }, true);
+  };
+
+  const setViewMode = (mode: CalendarViewMode) => {
+    updateUrlParams({ view: mode }, true);
   };
 
   // Day click handler - switch to day view
   const handleDayClick = (date: Date) => {
-    setCurrentDate(date);
-    setViewMode('day');
+    updateUrlParams({ 
+      view: 'day',
+      date: formatDate(date, 'yyyy-MM-dd')
+    });
   };
 
-  // Event click handler - open appropriate modal
+  // Event click handler - open appropriate modal by adding ID to URL
   const handleEventClick = (event: CalendarEvent) => {
     if (event.type === 'task') {
-      const task = allTasks.find(t => t.id === event.id);
-      if (task) {
-        setSelectedTask(task);
-        setTaskModalOpen(true);
-      }
+      updateUrlParams({ task: event.id });
     } else if (event.type === 'milestone') {
-      const dbMilestone = allMilestones.find((m: any) => m.id === event.id);
-      if (dbMilestone) {
-        setSelectedMilestone(dbMilestoneToFrontend(dbMilestone));
-        setMilestoneModalOpen(true);
-      }
+      updateUrlParams({ milestone: event.id });
     } else if (event.type === 'issue') {
-      const issue = allIssues.find(i => i.id === event.id);
-      if (issue) {
-        setSelectedIssue(issue);
-        setIssueModalOpen(true);
-      }
+      updateUrlParams({ issue: event.id });
     }
+  };
+
+  type ModalType = 'task' | 'milestone' | 'issue';
+  const handleModalClose = (modalType?: ModalType) => {
+    const newParams = new URLSearchParams(searchParams);
+    if (modalType) {
+      newParams.delete(modalType);
+    } else {
+      newParams.delete('task');
+      newParams.delete('milestone');
+      newParams.delete('issue');
+    }
+    setSearchParams(newParams);
   };
 
   // Get tasks for the same project (for modal context)
@@ -251,6 +305,11 @@ const CalendarPage: React.FC = () => {
     milestones: [],
     issues: [],
   }));
+
+  // Early return: show identical skeleton to Suspense fallback while data loads
+  if (isLoading) {
+    return <AppLayoutSkeleton variant="calendar" />;
+  }
 
   return (
     <>
@@ -299,51 +358,41 @@ const CalendarPage: React.FC = () => {
         </div>
 
         {/* Calendar View */}
-        <div className="flex-1 min-h-0 border border-border rounded-lg overflow-hidden bg-card">
-          {isLoading ? (
-            <div className="flex-1 h-full flex items-center justify-center text-muted-foreground gap-2">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Loading calendar data…</span>
-            </div>
-          ) : (
-            <>
-              {viewMode === 'month' && (
-                <CalendarMonthView
-                  days={days}
-                  events={filteredEvents}
-                  onDayClick={handleDayClick}
-                  onEventClick={handleEventClick}
-                />
-              )}
-              {viewMode === 'week' && (
-                <CalendarWeekView
-                  days={days}
-                  events={filteredEvents}
-                  onDayClick={handleDayClick}
-                  onEventClick={handleEventClick}
-                />
-              )}
-              {viewMode === 'day' && (
-                <CalendarDayView
-                  date={currentDate}
-                  events={filteredEvents}
-                  onEventClick={handleEventClick}
-                />
-              )}
-            </>
-          )}
+        <div className="flex-1 min-h-0 border border-border rounded-lg overflow-hidden bg-card flex flex-col">
+          <>
+            {viewMode === 'month' && (
+              <CalendarMonthView
+                days={days}
+                events={filteredEvents}
+                onDayClick={handleDayClick}
+                onEventClick={handleEventClick}
+              />
+            )}
+            {viewMode === 'week' && (
+              <CalendarWeekView
+                days={days}
+                events={filteredEvents}
+                onDayClick={handleDayClick}
+                onEventClick={handleEventClick}
+              />
+            )}
+            {viewMode === 'day' && (
+              <CalendarDayView
+                date={currentDate}
+                events={filteredEvents}
+                onEventClick={handleEventClick}
+              />
+            )}
+          </>
         </div>
       </div>
 
       {/* Task Detail Modal */}
-      {taskModalOpen && selectedTask && (
+      {selectedTask && (
         <TaskDetailModal
           task={selectedTask}
-          isOpen={taskModalOpen}
-          onClose={() => {
-            setTaskModalOpen(false);
-            setSelectedTask(null);
-          }}
+          isOpen={!!selectedTask}
+          onClose={() => handleModalClose('task')}
           onUpdate={async (updatedTask) => {
             try {
               if (updatedTask.projectId && updatedTask.id) {
@@ -361,19 +410,24 @@ const CalendarPage: React.FC = () => {
               toast.error('Failed to update task');
             }
           }}
+          onBatchUpdate={async (updates) => {
+            try {
+              await batchUpdateTasksMutation.mutateAsync(updates);
+            } catch (error) {
+              console.error('Failed to batch update tasks:', error);
+              toast.error('Failed to update dependent tasks');
+            }
+          }}
           allTasks={getProjectTasks(selectedTask.projectId || '')}
         />
       )}
 
       {/* Milestone Detail Modal */}
-      {milestoneModalOpen && selectedMilestone && (
+      {selectedMilestone && (
         <MilestoneDetailModal
           milestone={selectedMilestone}
-          isOpen={milestoneModalOpen}
-          onClose={() => {
-            setMilestoneModalOpen(false);
-            setSelectedMilestone(null);
-          }}
+          isOpen={!!selectedMilestone}
+          onClose={() => handleModalClose('milestone')}
           onUpdate={async (updatedMilestone) => {
             try {
               await updateMilestoneMutation.mutateAsync({
@@ -382,7 +436,7 @@ const CalendarPage: React.FC = () => {
                   name: updatedMilestone.title,
                   description: updatedMilestone.description,
                   due_date: updatedMilestone.date,
-                  status: updatedMilestone.completed ? 'completed' : 'pending' // Mapping back to DB expected format if needed, depending on type
+                  status: updatedMilestone.completed ? 'completed' : 'pending'
                 }
               });
               toast.success('Milestone updated successfully');
@@ -398,14 +452,11 @@ const CalendarPage: React.FC = () => {
       )}
 
       {/* Issue Detail Modal */}
-      {issueModalOpen && selectedIssue && (
+      {selectedIssue && (
         <IssueDetailModal
           issue={selectedIssue}
-          isOpen={issueModalOpen}
-          onClose={() => {
-            setIssueModalOpen(false);
-            setSelectedIssue(null);
-          }}
+          isOpen={!!selectedIssue}
+          onClose={() => handleModalClose('issue')}
           onUpdate={async (updatedIssue) => {
             try {
               if (updatedIssue.projectId && updatedIssue.id) {

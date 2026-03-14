@@ -49,42 +49,29 @@ export function ModuleViewControls({
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
 }) {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-
   return (
     <div className="flex items-center gap-2">
-      {/* Search Icon / Input */}
-      <div className="flex items-center">
-        {isSearchOpen ? (
-          <div className="flex items-center gap-1">
-            <Input
-              type="text"
-              placeholder="Search modules..."
-              value={searchQuery}
-              onChange={(e) => onSearchQueryChange?.(e.target.value)}
-              className="h-8 w-40"
-              autoFocus
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => {
-                setIsSearchOpen(false);
-                onSearchQueryChange?.('');
-              }}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
+      {/* Search Input */}
+      <div className="relative flex items-center">
+        <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search modules..."
+          value={searchQuery}
+          onChange={(e) => onSearchQueryChange?.(e.target.value)}
+          className="pl-9 w-[200px] h-8"
+        />
+        {searchQuery && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
-            onClick={() => setIsSearchOpen(true)}
+            className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              if (onSearchQueryChange) onSearchQueryChange('');
+              else if (import.meta.env.DEV) console.warn('[ModulesSection] onSearchQueryChange undefined');
+            }}
           >
-            <Search className="h-4 w-4" />
+            <X className="h-4 w-4" />
           </Button>
         )}
       </div>

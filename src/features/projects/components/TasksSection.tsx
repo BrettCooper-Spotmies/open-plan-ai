@@ -24,7 +24,8 @@ interface TasksSectionProps {
   filters?: TaskFilter;
   onFiltersChange?: (filters: TaskFilter) => void;
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  onTaskUpdate?: (task: Task) => void;
+  onTaskUpdate?: (task: Task, onError?: () => void) => void;
+  onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
   onAddModule?: () => void;
 }
@@ -57,43 +58,31 @@ export function ViewControls({
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
 }) {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-
   return (
     <div className="flex items-center gap-2">
-      {/* Search Icon/Input */}
-      {isSearchOpen ? (
-        <div className="relative flex items-center">
-          <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search tasks..."
-            value={searchQuery || ''}
-            onChange={(e) => onSearchQueryChange?.(e.target.value)}
-            className="pl-9 w-[200px] h-8"
-            autoFocus
-          />
+      {/* Search Input */}
+      <div className="relative flex items-center">
+        <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search tasks..."
+          value={searchQuery || ''}
+          onChange={(e) => onSearchQueryChange?.(e.target.value)}
+          className="pl-9 w-[200px] h-8"
+        />
+        {searchQuery && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 ml-1"
+            className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
             onClick={() => {
-              setIsSearchOpen(false);
-              onSearchQueryChange?.('');
+              if (onSearchQueryChange) onSearchQueryChange('');
+              else if (import.meta.env.DEV) console.warn('[TasksSection] onSearchQueryChange undefined');
             }}
           >
             <X className="h-4 w-4" />
           </Button>
-        </div>
-      ) : (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={() => setIsSearchOpen(true)}
-        >
-          <Search className="h-4 w-4" />
-        </Button>
-      )}
+        )}
+      </div>
 
       {/* View Toggle */}
       <ToggleGroup
@@ -151,6 +140,7 @@ export function TasksSection({
   onFiltersChange: externalOnFiltersChange,
   onTaskCreate,
   onTaskUpdate,
+  onBatchTaskUpdate,
   onTaskDelete,
   onAddModule,
 }: TasksSectionProps) {
@@ -329,6 +319,7 @@ export function TasksSection({
             issues={issues}
             onTaskCreate={onTaskCreate}
             onTaskUpdate={onTaskUpdate}
+            onBatchTaskUpdate={onBatchTaskUpdate}
             onTaskDelete={onTaskDelete}
             modules={modules}
             onAddModule={onAddModule}
@@ -342,6 +333,7 @@ export function TasksSection({
             modules={modules}
             onTaskCreate={onTaskCreate}
             onTaskUpdate={onTaskUpdate}
+            onBatchTaskUpdate={onBatchTaskUpdate}
             onTaskDelete={onTaskDelete}
             onAddModule={onAddModule}
           />

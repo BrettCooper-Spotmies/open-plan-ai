@@ -135,7 +135,7 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
                 {/* Center: Content */}
                 <div className="flex-1 min-w-0">
                   {/* Primary: Actor name (bold) + action text */}
-                  <p className="text-sm leading-snug break-words">
+                  <p className="text-sm leading-snug break-words line-clamp-3">
                     <span className="font-semibold">{activity.user.name}</span>
                     {' '}
                     <span className="text-muted-foreground text-foreground/80">{activity.description}</span>
@@ -143,9 +143,9 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
 
                   {/* Secondary: Project name, Type badge & Timestamp row */}
                   <div className="flex items-center justify-between mt-1.5 gap-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       {activity.projectName && (
-                        <p className="text-xs text-muted-foreground truncate">
+                        <p className="text-xs text-muted-foreground truncate min-w-0">
                           in{' '}
                           <span className="text-primary hover:underline cursor-pointer font-medium">
                             {activity.projectName}
@@ -153,7 +153,7 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
                         </p>
                       )}
                       <span className={cn(
-                        'px-2 py-0.5 rounded-full text-xs font-medium',
+                        'px-2 py-0.5 rounded-full text-xs font-medium shrink-0',
                         colorClass
                       )}>
                         {label}

@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format, isBefore, startOfToday, parseISO } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -93,7 +93,8 @@ interface TaskDetailModalProps {
   allTasks: Task[];
   isOpen: boolean;
   onClose: () => void;
-  onUpdate: (task: Task) => void;
+  onUpdate: (task: Task) => Promise<void> | void;
+  onBatchUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => Promise<void> | void;
   onDelete?: (taskId: string) => void;
   mode?: 'view' | 'create';
   onCreate?: (task: Task) => void;
@@ -209,6 +210,7 @@ export const TaskDetailModal = ({
   isOpen,
   onClose,
   onUpdate,
+  onBatchUpdate,
   onDelete,
   mode = 'view',
   onCreate,
@@ -311,15 +313,19 @@ export const TaskDetailModal = ({
   if (!editedTask) return null;
 
   const handleFieldChange = <K extends keyof Task>(field: K, value: Task[K]) => {
-    setEditedTask(prev => {
-      const updated = { ...prev, [field]: value, updatedAt: new Date().toISOString() };
+    setEditedTask(prev => ({
+      ...prev,
+      [field]: value,
+      updatedAt: new Date().toISOString()
+    }));
+  };
 
-      // Auto-save logic
-      if (mode !== 'create') {
-        onUpdate(updated);
-      }
-      return updated;
-    });
+  const handleCancel = () => {
+    // Reset local edits back to original task from props
+    if (task) {
+      setEditedTask(task);
+    }
+    onClose();
   };
 
   const handleCreate = () => {
@@ -524,21 +530,22 @@ export const TaskDetailModal = ({
 
 
   const availableTasksForBlocking = allTasks.filter(
-    t => t.id !== editedTask.id && !blockingToTaskIds.includes(t.id)
+    t => t.id !== editedTask.id
+      && !localBlockingToIds.includes(t.id)
+      && !editedTask.blockedBy.includes(t.id)  // can't block a task that's already blocking you
   );
   const availableTasksForBlockedBy = allTasks.filter(
-    t => t.id !== editedTask.id && !editedTask.blockedBy.includes(t.id)
+    t => t.id !== editedTask.id
+      && !editedTask.blockedBy.includes(t.id)
+      && !localBlockingToIds.includes(t.id)  // can't be blocked by a task you're already blocking
   );
+
 
   // Adding to "Blocking To" - update the OTHER task's blockedBy and update local state
   const handleAddBlockingTask = () => {
     if (!selectedBlockingTask) return;
     const taskToUpdate = allTasks.find(t => t.id === selectedBlockingTask);
     if (taskToUpdate && !localBlockingToIds.includes(selectedBlockingTask)) {
-      // Add current task to that task's blockedBy
-      const updatedBlockedBy = [...taskToUpdate.blockedBy, editedTask.id];
-      onUpdate({ ...taskToUpdate, blockedBy: updatedBlockedBy });
-      // Immediately reflect in the local list
       setLocalBlockingToIds(prev => [...prev, selectedBlockingTask]);
     }
     setSelectedBlockingTask('');
@@ -547,7 +554,55 @@ export const TaskDetailModal = ({
   const handleUpdateTask = async () => {
     setIsSaving(true);
     try {
+      // Commit the main task changes
       await onUpdate(editedTask);
+
+      // Compute blocking-to diffs: tasks where THIS task is listed in their blockedBy
+      const originalBlockingToIds = allTasks
+        .filter(t => t.blockedBy.includes(editedTask.id))
+        .map(t => t.id);
+
+      // addedIds/removedIds logic...
+      const batchUpdates: Array<{ id: string; updates: Partial<Task> }> = [];
+
+      // Added blocking-to relationships
+      const addedIds = localBlockingToIds.filter(id => !originalBlockingToIds.includes(id));
+      for (const id of addedIds) {
+        const other = allTasks.find(t => t.id === id);
+        if (other && !other.blockedBy.includes(editedTask.id)) {
+          batchUpdates.push({
+            id,
+            updates: { blockedBy: [...other.blockedBy, editedTask.id] }
+          });
+        }
+      }
+
+      // Removed blocking-to relationships
+      const removedIds = originalBlockingToIds.filter(id => !localBlockingToIds.includes(id));
+      for (const id of removedIds) {
+        const other = allTasks.find(t => t.id === id);
+        if (other) {
+          batchUpdates.push({
+            id,
+            updates: { blockedBy: other.blockedBy.filter(bid => bid !== editedTask.id) }
+          });
+        }
+      }
+
+      if (batchUpdates.length > 0) {
+        if (onBatchUpdate) {
+          await onBatchUpdate(batchUpdates);
+        } else {
+          // Fallback to sequential if onBatchUpdate is not provided
+          for (const update of batchUpdates) {
+            const other = allTasks.find(t => t.id === update.id);
+            if (other) {
+              await onUpdate({ ...other, ...update.updates });
+            }
+          }
+        }
+      }
+
       onClose();
     } catch (error) {
       console.error('Failed to update task:', error);
@@ -560,11 +615,9 @@ export const TaskDetailModal = ({
   const handleRemoveBlockingTask = (taskId: string) => {
     const taskToUpdate = allTasks.find(t => t.id === taskId);
     if (taskToUpdate) {
-      const updatedBlockedBy = taskToUpdate.blockedBy.filter(id => id !== editedTask.id);
-      onUpdate({ ...taskToUpdate, blockedBy: updatedBlockedBy });
+      // Immediately reflect removal in local list
+      setLocalBlockingToIds(prev => prev.filter(id => id !== taskId));
     }
-    // Immediately reflect removal in local list
-    setLocalBlockingToIds(prev => prev.filter(id => id !== taskId));
   };
 
   // Adding to "Blocked By" - update THIS task's blockedBy
@@ -579,10 +632,6 @@ export const TaskDetailModal = ({
         blockedBy: [...prev.blockedBy, selectedBlockedByTask],
         updatedAt: new Date().toISOString()
       };
-
-      if (mode !== 'create') {
-        onUpdate(updated);
-      }
       return updated;
     });
     setSelectedBlockedByTask('');
@@ -596,10 +645,6 @@ export const TaskDetailModal = ({
         blockedBy: prev.blockedBy.filter(id => id !== taskId),
         updatedAt: new Date().toISOString()
       };
-
-      if (mode !== 'create') {
-        onUpdate(updated);
-      }
       return updated;
     });
   };
@@ -621,8 +666,8 @@ export const TaskDetailModal = ({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="px-6 py-4 border-b">
           <DialogTitle>{mode === 'create' ? 'Add New Task' : 'Task Details'}</DialogTitle>
         </DialogHeader>
@@ -632,13 +677,16 @@ export const TaskDetailModal = ({
 
         <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
           <div className="p-6 space-y-6">
-            {/* Task Title */}
-            <Input
-              value={editedTask.title}
-              onChange={(e) => handleFieldChange('title', e.target.value)}
-              className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0"
-              placeholder="Task title..."
-            />
+            <div className="space-y-2">
+              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Task Title <span className="text-destructive" aria-hidden="true">*</span></Label>
+              <Input
+                value={editedTask.title}
+                onChange={(e) => handleFieldChange('title', e.target.value)}
+                className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0 bg-transparent"
+                placeholder="Task title..."
+                aria-required="true"
+              />
+            </div>
 
             {/* Task Overview Section */}
             <section className="space-y-4">
@@ -725,13 +773,13 @@ export const TaskDetailModal = ({
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <AlertCircle className="h-3 w-3" />
-                    Status
+                    Status <span className="text-destructive" aria-hidden="true">*</span>
                   </Label>
                   <Select
                     value={editedTask.status}
                     onValueChange={(value) => handleFieldChange('status', value as TaskStatus)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-required="true">
                       <SelectValue>
                         <div className="flex items-center gap-2">
                           <div className={cn('w-2 h-2 rounded-full', statusOptions.find(s => s.value === editedTask.status)?.color)} />
@@ -754,12 +802,12 @@ export const TaskDetailModal = ({
 
                 {/* Priority */}
                 <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">Priority</Label>
+                  <Label className="text-xs text-muted-foreground">Priority <span className="text-destructive" aria-hidden="true">*</span></Label>
                   <Select
                     value={editedTask.priority}
                     onValueChange={(value) => handleFieldChange('priority', value as Priority)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger aria-required="true">
                       <SelectValue>
                         <Badge className={cn('text-xs', priorityOptions.find(p => p.value === editedTask.priority)?.color)}>
                           {priorityOptions.find(p => p.value === editedTask.priority)?.label}
@@ -780,7 +828,7 @@ export const TaskDetailModal = ({
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <Tag className="h-3 w-3" />
-                    Modules
+                    Modules <span className="text-destructive">*</span>
                   </Label>
                   <div
                     className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
@@ -904,6 +952,7 @@ export const TaskDetailModal = ({
                         mode="single"
                         selected={editedTask.startDate ? new Date(editedTask.startDate) : undefined}
                         onSelect={(date) => handleFieldChange('startDate', toDateOnly(date || undefined))}
+                        disabled={{ before: startOfToday() }}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
@@ -915,12 +964,13 @@ export const TaskDetailModal = ({
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <CalendarIcon className="h-3 w-3" />
-                    Due Date
+                    Due Date <span className="text-destructive" aria-hidden="true">*</span>
                   </Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
+                        aria-required="true"
                         className={cn(
                           'w-full justify-start text-left font-normal',
                           !editedTask.dueDate && 'text-muted-foreground'
@@ -937,6 +987,14 @@ export const TaskDetailModal = ({
                         mode="single"
                         selected={editedTask.dueDate ? new Date(editedTask.dueDate) : undefined}
                         onSelect={(date) => handleFieldChange('dueDate', toDateOnly(date || undefined))}
+                        disabled={(date) => {
+                          const today = startOfToday();
+                          if (isBefore(date, today)) return true;
+                          if (editedTask.startDate) {
+                            return isBefore(date, parseISO(editedTask.startDate));
+                          }
+                          return false;
+                        }}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
@@ -1433,7 +1491,7 @@ export const TaskDetailModal = ({
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button onClick={handleCreate}>
+            <Button onClick={handleCreate} disabled={!editedTask.title || !editedTask.dueDate}>
               Create Task
             </Button>
           </div>
@@ -1455,10 +1513,10 @@ export const TaskDetailModal = ({
               <div />
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose} disabled={isSaving}>
+              <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button onClick={handleUpdateTask} disabled={isSaving}>
+              <Button onClick={handleUpdateTask} disabled={isSaving || !editedTask.title || !editedTask.dueDate}>
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Update Task
               </Button>

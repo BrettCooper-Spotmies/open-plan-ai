@@ -1,5 +1,5 @@
-import { calculateProjectProgress } from './src/features/projects/utils/projectUtils';
-import { Task, Module, Milestone, Issue } from './src/types';
+import { calculateProjectProgress } from '../src/features/projects/utils/projectUtils';
+import { Task, Module, Milestone } from '../src/types';
 
 const mockTasks: Task[] = [
     { id: 't1', title: 'Task 1', status: 'done', moduleId: 'm1', moduleIds: ['m1'], tags: [], blockedBy: [] },
@@ -13,9 +13,9 @@ const mockModules = [
 ];
 
 const result = calculateProjectProgress(
-    mockTasks as any,
+    mockTasks,
     [],
-    mockModules as any,
+    mockModules as Module[],
     []
 );
 

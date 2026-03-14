@@ -40,7 +40,10 @@ import {
   useUpdateMilestone,
   useDeleteMilestone,
   useCreateModule,
+  useUpdateModule,
   useDeleteModule,
+  useBatchUpdateTasks,
+  useBatchUpdateModules,
 } from '@/hooks/useProjectMutations';
 import { cn } from '@/lib/utils';
 import { calculateProjectProgress } from './utils/projectUtils';
@@ -72,42 +75,26 @@ function MilestoneViewControls({
   onSearchQueryChange: (query: string) => void;
   onAddMilestone: () => void;
 }) {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-
   return (
     <div className="flex items-center gap-2">
-      {/* Search Icon / Input */}
-      <div className="flex items-center">
-        {isSearchOpen ? (
-          <div className="flex items-center gap-1">
-            <Input
-              type="text"
-              placeholder="Search milestones..."
-              value={searchQuery}
-              onChange={(e) => onSearchQueryChange(e.target.value)}
-              className="h-8 w-40"
-              autoFocus
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => {
-                setIsSearchOpen(false);
-                onSearchQueryChange('');
-              }}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
+      {/* Search Input */}
+      <div className="relative flex items-center">
+        <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search milestones..."
+          value={searchQuery}
+          onChange={(e) => onSearchQueryChange(e.target.value)}
+          className="pl-9 w-[200px] h-8"
+        />
+        {searchQuery && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
-            onClick={() => setIsSearchOpen(true)}
+            className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={() => onSearchQueryChange('')}
           >
-            <Search className="h-4 w-4" />
+            <X className="h-4 w-4" />
           </Button>
         )}
       </div>
@@ -140,42 +127,26 @@ function IssueViewControls({
   onClearFilters: () => void;
   onReportIssue: () => void;
 }) {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-
   return (
     <div className="flex items-center gap-2">
-      {/* Search Icon / Input */}
-      <div className="flex items-center">
-        {isSearchOpen ? (
-          <div className="flex items-center gap-1">
-            <Input
-              type="text"
-              placeholder="Search issues..."
-              value={searchQuery}
-              onChange={(e) => onSearchQueryChange(e.target.value)}
-              className="h-8 w-40"
-              autoFocus
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => {
-                setIsSearchOpen(false);
-                onSearchQueryChange('');
-              }}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
+      {/* Search Input */}
+      <div className="relative flex items-center">
+        <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search issues..."
+          value={searchQuery}
+          onChange={(e) => onSearchQueryChange(e.target.value)}
+          className="pl-9 w-[200px] h-8"
+        />
+        {searchQuery && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8"
-            onClick={() => setIsSearchOpen(true)}
+            className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+            onClick={() => onSearchQueryChange('')}
           >
-            <Search className="h-4 w-4" />
+            <X className="h-4 w-4" />
           </Button>
         )}
       </div>
@@ -346,7 +317,10 @@ export default function ProjectDetail() {
   const updateMilestoneMutation = useUpdateMilestone(id || '');
   const deleteMilestoneMutation = useDeleteMilestone(id || '');
   const createModuleMutation = useCreateModule(id || '');
+  const updateModuleMutation = useUpdateModule(id || '');
   const deleteModuleMutation = useDeleteModule(id || '');
+  const batchUpdateTasksMutation = useBatchUpdateTasks(id || '');
+  const batchUpdateModulesMutation = useBatchUpdateModules(id || '');
   const updateProjectMutation = useUpdateProject();
 
   // Update section from URL params
@@ -512,18 +486,37 @@ export default function ProjectDetail() {
     setIsAddModuleDialogOpen(false);
   };
 
-  const handleMilestoneCreate = (newMilestonePartial: Omit<Milestone, 'id'>) => {
+  const handleMilestoneCreate = async (newMilestonePartial: Omit<Milestone, 'id'>) => {
     if (!project) return;
 
-    createMilestoneMutation.mutate({
-      name: newMilestonePartial.title,
-      due_date: newMilestonePartial.date || null,
-      description: newMilestonePartial.description || null,
-      status: newMilestonePartial.completed ? 'completed' : 'upcoming',
-    });
+    try {
+      const createdMilestone = await createMilestoneMutation.mutateAsync({
+        name: newMilestonePartial.title,
+        due_date: newMilestonePartial.date || null,
+        description: newMilestonePartial.description || null,
+        status: newMilestonePartial.completed ? 'completed' : 'upcoming',
+      });
+
+      // Link tasks if any were selected during creation
+      if (newMilestonePartial.linkedTaskIds && newMilestonePartial.linkedTaskIds.length > 0) {
+        batchUpdateTasksMutation.mutate(
+          newMilestonePartial.linkedTaskIds.map(taskId => ({ id: taskId, updates: { milestoneId: createdMilestone.id } }))
+        );
+      }
+
+      // Link modules if any were selected during creation
+      if (newMilestonePartial.linkedModuleIds && newMilestonePartial.linkedModuleIds.length > 0) {
+        batchUpdateModulesMutation.mutate(
+          newMilestonePartial.linkedModuleIds.map(moduleId => ({ id: moduleId, milestone_id: createdMilestone.id }))
+        );
+      }
+    } catch (error) {
+      console.error('Failed to create milestone and link tasks:', error);
+    }
   };
 
   const handleMilestoneUpdate = (updatedMilestone: Milestone) => {
+    // Update milestone core fields
     updateMilestoneMutation.mutate({
       milestoneId: updatedMilestone.id,
       updates: {
@@ -533,21 +526,67 @@ export default function ProjectDetail() {
         status: updatedMilestone.completed ? 'completed' : 'upcoming',
       },
     });
+
+    // Persist linked task changes by updating ONLY each task's milestoneId field
+    const previousLinkedTaskIds = (project?.tasks || [])
+      .filter(t => t.milestoneId === updatedMilestone.id)
+      .map(t => t.id);
+    const newLinkedTaskIds = updatedMilestone.linkedTaskIds || [];
+
+    const addedTaskIds = newLinkedTaskIds.filter(id => !previousLinkedTaskIds.includes(id));
+    const removedTaskIds = previousLinkedTaskIds.filter(id => !newLinkedTaskIds.includes(id));
+
+    const taskUpdates = [
+      ...addedTaskIds.map(id => ({ id, updates: { milestoneId: updatedMilestone.id } })),
+      ...removedTaskIds.map(id => ({ id, updates: { milestoneId: null as any } }))
+    ];
+
+    if (taskUpdates.length > 0) {
+      batchUpdateTasksMutation.mutate(taskUpdates);
+    }
+
+    // Persist linked module changes
+    const currentModules = project?.projectModules || [];
+    const previousLinkedModuleIds = currentModules
+      .filter(m => m.milestoneId === updatedMilestone.id)
+      .map(m => m.id);
+    const newLinkedModuleIds = updatedMilestone.linkedModuleIds || [];
+
+    const addedModuleIds = newLinkedModuleIds.filter(id => !previousLinkedModuleIds.includes(id));
+    const removedModuleIds = previousLinkedModuleIds.filter(id => !newLinkedModuleIds.includes(id));
+
+    const moduleUpdates = [
+      ...addedModuleIds.map(id => ({ id, milestone_id: updatedMilestone.id })),
+      ...removedModuleIds.map(id => ({ id, milestone_id: null }))
+    ];
+
+    if (moduleUpdates.length > 0) {
+      batchUpdateModulesMutation.mutate(moduleUpdates);
+    }
   };
+
 
   const handleTaskCreate = (newTask: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
     createTaskMutation.mutate(newTask);
   };
 
-  const handleTaskUpdate = (updatedTask: Task) => {
+  const handleTaskUpdate = (updatedTask: Task, onError?: () => void) => {
     updateTaskMutation.mutate({
       taskId: updatedTask.id,
       updates: updatedTask,
+    }, {
+      onError: () => {
+        if (onError) onError();
+      }
     });
   };
 
   const handleTaskDelete = (taskId: string) => {
     deleteTaskMutation.mutate(taskId);
+  };
+
+  const handleBatchTaskUpdate = async (updates: Array<{ id: string; updates: Partial<Task> }>) => {
+    await batchUpdateTasksMutation.mutateAsync(updates);
   };
 
   const handleModuleDelete = (moduleId: string) => {
@@ -597,16 +636,16 @@ export default function ProjectDetail() {
         {/* Project Stats with Title */}
         <div className="flex items-center justify-between gap-6 py-4 border-y">
           {/* Left: Project Title and Stage */}
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" asChild className="gap-1 -ml-2 h-8 px-2 text-muted-foreground hover:text-foreground">
+          <div className="flex items-center gap-4 min-w-0 w-full md:w-auto flex-1 pr-4">
+            <Button variant="ghost" size="sm" asChild className="shrink-0 gap-1 -ml-2 h-8 px-2 text-muted-foreground hover:text-foreground">
               <Link to="/projects">
                 <ChevronLeft className="h-4 w-4" />
                 Back
               </Link>
             </Button>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
-              <Badge variant="secondary" className={cn(stageColors[project.stage])}>
+            <div className="flex items-center gap-3 min-w-0">
+              <h1 className="text-2xl font-semibold tracking-tight truncate">{project.name}</h1>
+              <Badge variant="secondary" className={cn(stageColors[project.stage], "shrink-0")}>
                 {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
               </Badge>
             </div>
@@ -739,6 +778,7 @@ export default function ProjectDetail() {
               onFiltersChange={setFilters}
               onTaskCreate={handleTaskCreate}
               onTaskUpdate={handleTaskUpdate}
+              onBatchTaskUpdate={handleBatchTaskUpdate}
               onTaskDelete={handleTaskDelete}
               onAddModule={handleAddModule}
             />

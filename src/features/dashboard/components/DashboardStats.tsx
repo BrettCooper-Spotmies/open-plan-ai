@@ -104,7 +104,7 @@ export function DashboardStats({ stats }: DashboardStatsProps) {
         subtitle={`of ${stats.totalTasks} tasks`}
         icon={<CheckCircle2 className="h-full w-full" />}
         progress={{ value: completionRate, color: 'bg-status-done' }}
-        trend={{ value: 12, label: 'vs last week' }}
+        trend={{ value: Math.round(completionRate), label: 'completion rate' }}
         variant="success"
       />
       <StatCard

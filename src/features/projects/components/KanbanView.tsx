@@ -57,7 +57,8 @@ interface KanbanViewProps {
   allTasks?: Task[]; // All tasks for dependency resolution
   issues?: Issue[]; // Issues for blocking indicator
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
-  onTaskUpdate?: (task: Task) => void;
+  onTaskUpdate?: (task: Task, onError?: () => void) => void;
+  onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
   modules?: { id: string; name: string; type: ModuleType }[];
   projectId?: string;
@@ -105,6 +106,7 @@ const columnColorOptions = [
 
 export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskCreate,
   onTaskUpdate,
+  onBatchTaskUpdate,
   onTaskDelete,
   modules = [],
   projectId,
@@ -211,13 +213,15 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
   };
 
   const handleTaskUpdate = (updatedTask: Task) => {
+    // Optimistic local state update
+    const prevTasks = [...tasks];
+    setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+
     // Call backend mutation if available
     if (onTaskUpdate) {
-      onTaskUpdate(updatedTask);
-    } else {
-      // Fallback to local state update
-      setTasks(tasks.map(t => t.id === updatedTask.id ? updatedTask : t));
+      onTaskUpdate(updatedTask, () => setTasks(prevTasks));
     }
+
     // Only update selected task if it's the one currently being viewed
     if (selectedTask && selectedTask.id === updatedTask.id) {
       setSelectedTask(updatedTask);
@@ -263,15 +267,16 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       status: destColumn.status as TaskStatus,
     };
 
+    // Optimistic local state update
+    const prevTasks = [...tasks];
+    const newTasks = tasks.map(t =>
+      t.id === movedTask.id ? updatedTask : t
+    );
+    setTasks(newTasks);
+
     // Call backend mutation if available
     if (onTaskUpdate) {
-      onTaskUpdate(updatedTask);
-    } else {
-      // Fallback to local state update
-      const newTasks = tasks.map(t =>
-        t.id === movedTask.id ? updatedTask : t
-      );
-      setTasks(newTasks);
+      onTaskUpdate(updatedTask, () => setTasks(prevTasks));
     }
   };
 
@@ -279,9 +284,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
+    const prevTasks = [...tasks];
     const updatedTask = { ...task, status: 'done' as TaskStatus };
     if (onTaskUpdate) {
-      onTaskUpdate(updatedTask);
+      onTaskUpdate(updatedTask, () => setTasks(prevTasks));
     } else {
       setTasks(tasks.map(t => t.id === taskId ? updatedTask : t));
     }
@@ -486,7 +492,11 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                                 <Button
                                   variant="ghost"
                                   className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                                  onClick={() => openAddTaskDialog(column.id)}
+                                  onClick={() => {
+                                    setAddTaskToColumn(column.id);
+                                    setNewTask(prev => ({ ...prev, status: column?.status as TaskStatus || 'todo' }));
+                                    setIsMaximizedAddTask(true);
+                                  }}
                                 >
                                   <Plus className="h-3 w-3 mr-1" />
                                   Add Task
@@ -542,26 +552,20 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                                                     <div className="flex items-start justify-between gap-2">
                                                       <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
                                                         {isBlocked ? (
-                                                          <div
-                                                            className={cn(
-                                                              "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
-                                                              hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
-                                                            )}
-                                                          >
-                                                            <AlertTriangle className="h-4 w-4 text-status-blocked" />
+                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                            <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
+                                                              <Check className="h-3 w-3 text-status-blocked" />
+                                                            </div>
                                                           </div>
                                                         ) : task.status === 'done' ? (
                                                           <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
                                                             <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
-                                                              <Check className="h-3 w-3 text-status-done" />
+                                                              <Check className="h-3 w-3 text-green-500" />
                                                             </div>
                                                           </div>
                                                         ) : (
                                                           <div
-                                                            className={cn(
-                                                              "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
-                                                              hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
-                                                            )}
+                                                            className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4"
                                                           >
                                                             <button
                                                               onClick={(e) => {
@@ -575,10 +579,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                                                           </div>
                                                         )}
                                                         <h4
-                                                          className={cn(
-                                                            "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
-                                                            task.status === 'done' || (hoveredTask === task.id) ? "translate-x-6" : "translate-x-0"
-                                                          )}
+                                                          className="text-sm font-medium leading-tight truncate translate-x-6"
                                                         >
                                                           {task.title}
                                                         </h4>
@@ -723,305 +724,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
         </Droppable>
       </DragDropContext>
 
-      {/* Add Task Dialog */}
-      <Dialog open={isAddTaskOpen} onOpenChange={setIsAddTaskOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader className="flex flex-row items-center justify-between border-b pb-4">
-            <DialogTitle>Add New Task</DialogTitle>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" onClick={handleMaximizeAddTask}>
-                    <Maximize2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Maximize</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <Label>Task Title</Label>
-              <Input
-                placeholder="Enter task title"
-                value={newTask.title}
-                onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-              />
-            </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Assigned To</Label>
-                <div
-                  className="flex flex-wrap gap-2 min-h-10 items-center p-2 border rounded-md cursor-pointer hover:border-primary/50 transition-colors"
-                  onClick={() => setIsAssigneePopoverOpen(true)}
-                >
-                  {(newTask.assignees || []).map((assignee) => (
-                    <Badge key={assignee.id} variant="secondary" className="gap-1 p-1 pr-2">
-                      <Avatar className="h-4 w-4">
-                        <AvatarFallback className="text-[9px]">{assignee.initials}</AvatarFallback>
-                      </Avatar>
-                      <span className="text-xs">{assignee.name}</span>
-                      <X
-                        className="h-3 w-3 cursor-pointer hover:text-destructive"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNewTask({
-                            ...newTask,
-                            assignees: newTask.assignees?.filter(a => a.id !== assignee.id)
-                          });
-                        }}
-                      />
-                    </Badge>
-                  ))}
-                  <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
-                        <span>
-                          <Plus className="h-3 w-3" />
-                        </span>
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="p-0 w-[200px]" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search members..." />
-                        <CommandList>
-                          <CommandEmpty>No results found.</CommandEmpty>
-                          <CommandGroup heading="Team Members">
-                            {teamMembers
-                              .filter(m => !newTask.assignees?.some(a => a.id === m.id))
-                              .map((member) => (
-                                <CommandItem
-                                  key={member.id}
-                                  value={member.name}
-                                  onSelect={() => {
-                                    setNewTask({ ...newTask, assignees: [...(newTask.assignees || []), member] });
-                                    setIsAssigneePopoverOpen(false);
-                                  }}
-                                  className="cursor-pointer"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <Avatar className="h-5 w-5">
-                                      <AvatarFallback className="text-[9px]">
-                                        {member.initials}
-                                      </AvatarFallback>
-                                    </Avatar>
-                                    {member.name}
-                                  </div>
-                                </CommandItem>
-                              ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Priority</Label>
-                <Select
-                  value={newTask.priority}
-                  onValueChange={(v) => setNewTask({ ...newTask, priority: v as Priority })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="critical">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-priority-critical" />
-                        Critical
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="high">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-priority-high" />
-                        High
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="medium">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-priority-medium" />
-                        Medium
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="low">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-priority-low" />
-                        Low
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Start Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-start text-left font-normal',
-                        !newTask.startDate && 'text-muted-foreground'
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {newTask.startDate
-                        ? format(new Date(newTask.startDate), 'PPP')
-                        : 'Pick a date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={newTask.startDate ? new Date(newTask.startDate) : undefined}
-                      onSelect={(date) => setNewTask({ ...newTask, startDate: toDateOnly(date || undefined) })}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
-                <Label>Due Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        'w-full justify-start text-left font-normal',
-                        !newTask.dueDate && 'text-muted-foreground'
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {newTask.dueDate
-                        ? format(new Date(newTask.dueDate), 'PPP')
-                        : 'Pick a date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={newTask.dueDate ? new Date(newTask.dueDate) : undefined}
-                      onSelect={(date) => setNewTask({ ...newTask, dueDate: toDateOnly(date || undefined) })}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Modules</Label>
-              <div
-                className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={() => setIsModulePopoverOpen(true)}
-              >
-                {(newTask.moduleIds || []).length === 0 && (
-                  <span className="text-muted-foreground">Select modules...</span>
-                )}
-                {(newTask.moduleIds || []).map((moduleId) => {
-                  const module = modules?.find(m => m.id === moduleId);
-                  if (!module) return null;
-                  return (
-                    <Badge key={module.id} variant="secondary" className="px-2 py-0.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
-                      <span className="text-xs font-normal">{module.name}</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setNewTask({
-                            ...newTask,
-                            moduleIds: (newTask.moduleIds || []).filter(id => id !== module.id)
-                          });
-                        }}
-                        className="ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  );
-                })}
-                <Popover open={isModulePopoverOpen} onOpenChange={setIsModulePopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
-                      <span>
-                        <Plus className="h-3 w-3" />
-                      </span>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="p-0 w-[240px]" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search modules..." />
-                      <CommandList>
-                        <CommandEmpty>No modules found.</CommandEmpty>
-                        <CommandGroup heading="Available Modules">
-                          {modules
-                            .filter(m => !(newTask.moduleIds || []).includes(m.id))
-                            .map((module) => (
-                              <CommandItem
-                                key={module.id}
-                                value={module.name}
-                                onSelect={() => {
-                                  const isFirst = (newTask.moduleIds || []).length === 0;
-                                  setNewTask({
-                                    ...newTask,
-                                    moduleIds: [...(newTask.moduleIds || []), module.id],
-                                    moduleId: isFirst ? module.id : newTask.moduleId,
-                                    module: isFirst ? module.type : newTask.module,
-                                  });
-                                  setIsModulePopoverOpen(false);
-                                }}
-                                className="cursor-pointer"
-                              >
-                                <div className="flex flex-col">
-                                  <span>{module.name}</span>
-                                  <span className="text-[10px] text-muted-foreground uppercase">{module.type}</span>
-                                </div>
-                              </CommandItem>
-                            ))}
-                        </CommandGroup>
-                        {onAddModule && (
-                          <>
-                            <Separator />
-                            <CommandGroup>
-                              <CommandItem
-                                onSelect={() => {
-                                  onAddModule();
-                                  setIsModulePopoverOpen(false);
-                                }}
-                                className="cursor-pointer text-primary"
-                              >
-                                <Plus className="mr-2 h-4 w-4" />
-                                Create New Module
-                              </CommandItem>
-                            </CommandGroup>
-                          </>
-                        )}
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Description (optional)</Label>
-              <Textarea
-                placeholder="Enter task description"
-                value={newTask.description}
-                onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-              />
-            </div>
-
-            <Button onClick={() => handleAddTask()} className="w-full">
-              Add Task
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Task Detail Modal (Viewing/Editing) */}
       <TaskDetailModal
@@ -1036,6 +739,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
           setSelectedTask(null);
         }}
         onUpdate={handleTaskUpdate}
+        onBatchUpdate={onBatchTaskUpdate}
         onDelete={onTaskDelete}
         modules={modules}
         projectId={projectId}
@@ -1049,6 +753,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
         isOpen={isMaximizedAddTask}
         onClose={() => setIsMaximizedAddTask(false)}
         onUpdate={(updated) => setNewTask(updated as unknown as Partial<Task>)}
+        onBatchUpdate={onBatchTaskUpdate}
         mode="create"
         onCreate={(newTask) => {
           onTaskCreate?.(newTask as Omit<Task, 'id' | 'createdAt' | 'updatedAt'>);
@@ -1062,4 +767,3 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     </div>
   );
 }
-

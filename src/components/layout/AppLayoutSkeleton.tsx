@@ -1,8 +1,9 @@
-import { AppLayout } from '@/components/layout/AppLayout';
+import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { getDaysInMonth, startOfMonth, getDay } from 'date-fns';
 
 interface AppLayoutSkeletonProps {
-  variant?: 'dashboard' | 'list' | 'detail' | 'default';
+  variant?: 'dashboard' | 'list' | 'detail' | 'default' | 'projects' | 'chat' | 'team' | 'settings' | 'notifications' | 'calendar' | 'reports';
 }
 
 function DashboardSkeleton() {
@@ -79,33 +80,57 @@ function DashboardSkeleton() {
 
 function ListPageSkeleton() {
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header with title and action button */}
-      <div className="flex items-center justify-between">
-        <div>
-          <Skeleton className="h-8 w-32 mb-2" />
-          <Skeleton className="h-4 w-48" />
+    <div className="grid grid-cols-1 gap-6 w-full min-w-0 animate-fade-in">
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-2">
+          <Skeleton className="h-10 w-10 rounded-lg" />
+          <div>
+            <Skeleton className="h-8 w-20 mb-1" />
+            <Skeleton className="h-4 w-40" />
+          </div>
         </div>
-        <Skeleton className="h-9 w-28" />
+        <Skeleton className="h-4 w-72 mt-2" />
       </div>
-
-      {/* Filter bar */}
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-9 w-32" />
-        <Skeleton className="h-9 w-24" />
-        <Skeleton className="h-9 w-28" />
-      </div>
-
-      {/* List rows */}
-      <div className="space-y-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 p-4 rounded-lg border bg-card">
-            <Skeleton className="h-10 w-10 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-3 w-1/2" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <Skeleton className="h-3 w-24 mb-2" />
+                <Skeleton className="h-8 w-8" />
+              </div>
+              <Skeleton className="h-9 w-9 rounded-lg" />
             </div>
-            <Skeleton className="h-6 w-16 rounded-full" />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <Skeleton className="h-10 w-40" />
+        <Skeleton className="h-10 w-32" />
+      </div>
+      <div className="grid grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map(col => (
+          <div key={col} className="space-y-3">
+            <div className="flex items-center gap-2 pb-3">
+              <Skeleton className="h-2 w-2 rounded-full" />
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-4 w-4 rounded-full" />
+            </div>
+            <div className="space-y-2 p-2 rounded-lg bg-muted/30 min-h-[200px]">
+              {[0, 1].map(card => (
+                <div key={card} className="rounded-lg border bg-card p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <Skeleton className="h-4 flex-1" />
+                    <Skeleton className="h-5 w-14 rounded-full" />
+                  </div>
+                  <Skeleton className="h-3 w-3/4" />
+                  <div className="flex items-center justify-between pt-1">
+                    <Skeleton className="h-5 w-5 rounded-full" />
+                    <Skeleton className="h-3 w-12" />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
@@ -205,13 +230,452 @@ function DefaultPageSkeleton() {
   );
 }
 
-export function AppLayoutSkeleton({ variant = 'default' }: AppLayoutSkeletonProps) {
+function ProjectsPageSkeleton() {
   return (
-    <AppLayout>
-      {variant === 'dashboard' && <DashboardSkeleton />}
-      {variant === 'list' && <ListPageSkeleton />}
-      {variant === 'detail' && <DetailPageSkeleton />}
-      {variant === 'default' && <DefaultPageSkeleton />}
-    </AppLayout>
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <Skeleton className="h-8 w-24 mb-2" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <Skeleton className="h-10 w-32 rounded-md" />
+      </div>
+      <div className="flex items-center gap-4">
+        <Skeleton className="h-10 flex-1 max-w-sm" />
+        <Skeleton className="h-9 w-9 rounded" />
+        <Skeleton className="h-9 w-9 rounded" />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="rounded-lg border bg-card p-4 space-y-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-5 w-5 rounded" />
+                <Skeleton className="h-5 w-32" />
+              </div>
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-5 w-16 rounded-full" />
+                <Skeleton className="h-5 w-5 rounded" />
+              </div>
+            </div>
+            <Skeleton className="h-4 w-3/4" />
+            <div className="space-y-1">
+              <div className="flex justify-between">
+                <Skeleton className="h-3 w-14" />
+                <Skeleton className="h-3 w-8" />
+              </div>
+              <Skeleton className="h-2 w-full rounded-full" />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <Skeleton className="h-5 w-5 rounded-full" />
+              <Skeleton className="h-3 w-24" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
+
+function ChatSkeleton() {
+  return (
+    <div className="flex h-full overflow-hidden animate-fade-in">
+      {/* Left: Conversation list - 280px */}
+      <div className="w-[280px] shrink-0 flex flex-col border-r h-full">
+        {/* Search bar */}
+        <div className="p-3 border-b">
+          <Skeleton className="h-9 w-full rounded-md" />
+        </div>
+        {/* Conversation rows */}
+        <div className="flex-1 overflow-hidden divide-y">
+          {[0, 1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="flex items-center gap-3 p-3">
+              <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-3 w-10" />
+                </div>
+                <Skeleton className="h-3 w-3/4" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Right: Message area */}
+      <div className="flex-1 flex flex-col min-w-0 h-full">
+        {/* Chat header */}
+        <div className="flex items-center gap-3 p-4 border-b shrink-0">
+          <Skeleton className="h-9 w-9 rounded-full" />
+          <div className="flex-1 space-y-1">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+          <Skeleton className="h-8 w-8 rounded" />
+        </div>
+
+        {/* Messages area */}
+        <div className="flex-1 overflow-hidden p-4 space-y-4">
+          {/* Received message */}
+          <div className="flex items-end gap-2">
+            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+            <div className="space-y-1">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-10 w-52 rounded-xl" />
+            </div>
+          </div>
+          {/* Sent message */}
+          <div className="flex items-end gap-2 justify-end">
+            <Skeleton className="h-12 w-64 rounded-xl" />
+          </div>
+          {/* Received message */}
+          <div className="flex items-end gap-2">
+            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+            <div className="space-y-1">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-16 w-48 rounded-xl" />
+            </div>
+          </div>
+          {/* Sent message */}
+          <div className="flex items-end gap-2 justify-end">
+            <Skeleton className="h-10 w-40 rounded-xl" />
+          </div>
+        </div>
+
+        {/* Message input */}
+        <div className="p-3 border-t shrink-0">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-10 flex-1 rounded-lg" />
+            <Skeleton className="h-10 w-10 rounded-lg" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TeamSkeleton() {
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <Skeleton className="h-9 w-40 mb-2" />
+          <Skeleton className="h-4 w-56" />
+        </div>
+        <Skeleton className="h-10 w-32 rounded-md" />
+      </div>
+      {/* 4 stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[0,1,2,3].map(i => (
+          <div key={i} className="rounded-lg border bg-card p-4 flex items-center gap-3">
+            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+            <div className="space-y-1">
+              <Skeleton className="h-6 w-10" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Search + view toggle */}
+      <div className="flex items-center justify-between gap-4">
+        <Skeleton className="h-10 w-80" />
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-9 rounded" />
+          <Skeleton className="h-9 w-9 rounded" />
+        </div>
+      </div>
+      {/* Member table */}
+      <div className="rounded-lg border bg-card overflow-hidden">
+        {/* Table header */}
+        <div className="flex items-center gap-4 p-3 border-b bg-muted/30">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-40 flex-1" />
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-4 w-14" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+        {/* Rows */}
+        {[0,1,2,3,4].map(i => (
+          <div key={i} className="flex items-center gap-4 p-3 border-b last:border-0">
+            <div className="flex items-center gap-3 w-28">
+              <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-4 w-40 flex-1" />
+            <Skeleton className="h-5 w-20 rounded-full" />
+            <Skeleton className="h-4 w-8" />
+            <Skeleton className="h-5 w-16 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SettingsSkeleton() {
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Header */}
+      <div>
+        <Skeleton className="h-9 w-28 mb-2" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+      {/* 5-tab nav */}
+      <div className="flex gap-1">
+        {[0,1,2,3,4].map(i => (
+          <Skeleton key={i} className="h-10 w-24 rounded-md" />
+        ))}
+      </div>
+      {/* Settings card */}
+      <div className="rounded-lg border bg-card p-6 space-y-6">
+        {/* Logo/avatar row */}
+        <div className="flex items-center gap-6">
+          <Skeleton className="h-20 w-20 rounded-lg shrink-0" />
+          <div className="space-y-2">
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        </div>
+        <Skeleton className="h-px w-full" />
+        {/* Form fields */}
+        {[0,1].map(i => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="h-4 w-28" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ))}
+        <div className="grid grid-cols-2 gap-4">
+          {[0,1].map(i => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          ))}
+        </div>
+        <Skeleton className="h-10 w-28 rounded-md" />
+      </div>
+    </div>
+  );
+}
+
+function NotificationsSkeleton() {
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <Skeleton className="h-9 w-44 mb-2" />
+          <Skeleton className="h-4 w-56" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-9 w-36 rounded-md" />
+          <Skeleton className="h-9 w-24 rounded-md" />
+        </div>
+      </div>
+      {/* 4 stat cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="rounded-lg border bg-card p-4 flex items-center gap-3">
+            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+            <div className="space-y-1">
+              <Skeleton className="h-6 w-8" />
+              <Skeleton className="h-3 w-16" />
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Tab bar */}
+      <div className="flex gap-1">
+        {[0, 1, 2, 3, 4].map(i => (
+          <Skeleton key={i} className="h-9 w-20 rounded-md" />
+        ))}
+      </div>
+      {/* Notification list */}
+      <div className="rounded-lg border bg-card divide-y">
+        {[0, 1, 2, 3, 4].map(i => (
+          <div key={i} className="flex items-start gap-4 p-4">
+            <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+            <div className="flex-1 min-w-0 space-y-2">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-4 w-48" />
+                <Skeleton className="h-8 w-8 rounded" />
+              </div>
+              <Skeleton className="h-4 w-3/4" />
+              <div className="flex gap-2">
+                <Skeleton className="h-5 w-20 rounded-full" />
+                <Skeleton className="h-5 w-24 rounded" />
+                <Skeleton className="h-5 w-16" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReportsSkeleton() {
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Header Layout Match */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+          <div>
+            <Skeleton className="h-8 w-32 mb-1.5" />
+            <Skeleton className="h-4 w-48" />
+          </div>
+        </div>
+        <Skeleton className="h-9 w-24 rounded-md" />
+      </div>
+
+      {/* Filters Row Layout Match */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Skeleton className="h-10 w-[200px] rounded-md" />
+        <div className="flex items-center gap-3">
+          <Skeleton className="h-9 w-[280px] rounded-md" />
+          <Skeleton className="h-9 w-[90px] rounded-md" />
+        </div>
+      </div>
+
+      {/* KPI Row Layout Match */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="rounded-lg border bg-card p-4">
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-8 w-8 rounded-lg" />
+                <Skeleton className="h-4 w-24" />
+              </div>
+              <Skeleton className="h-4 w-4 rounded-full" />
+            </div>
+            <div className="space-y-1.5">
+              <Skeleton className="h-8 w-16" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+            <div className="mt-3">
+              <Skeleton className="h-2 w-full rounded-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 2-Column Grid for Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="rounded-lg border bg-card p-6 flex flex-col h-[400px]">
+             <div className="flex justify-between items-center mb-6">
+               <Skeleton className="h-5 w-40" />
+               <Skeleton className="h-8 w-24 rounded-md" />
+             </div>
+             <Skeleton className="flex-1 w-full rounded-lg" />
+          </div>
+        ))}
+      </div>
+
+      {/* Full Width Chart Match */}
+      <div className="rounded-lg border bg-card p-6 h-[400px] flex flex-col">
+          <Skeleton className="h-5 w-40 mb-6" />
+          <Skeleton className="flex-1 w-full rounded-lg" />
+      </div>
+    </div>
+  );
+}
+
+// Used as Suspense fallback for /calendar route (full page)
+function CalendarSkeleton() {
+  return (
+    <div className="flex flex-col h-full gap-6 animate-fade-in px-6 py-6">
+      {/* Page Header - matches "Calendar" title + subtitle */}
+      <div>
+        <Skeleton className="h-8 w-28 mb-2" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+
+      {/* Calendar Nav row - matches: ← Today → [Date label] ............. [Month|Week|Day] [Filters] */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          {/* ← Today → */}
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-8 rounded-md" />
+            <Skeleton className="h-8 w-14 rounded-md" />
+            <Skeleton className="h-8 w-8 rounded-md" />
+          </div>
+          {/* "March 2026" */}
+          <Skeleton className="h-5 w-32" />
+        </div>
+        {/* Right: [Month|Week|Day] tabs + Filters */}
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-9 w-[140px] rounded-lg" />
+          <Skeleton className="h-9 w-24 rounded-md" />
+        </div>
+      </div>
+
+      {/* Calendar Grid - full bordered card */}
+      <div className="flex-1 min-h-0 border border-border rounded-lg overflow-hidden bg-card flex flex-col">
+        <CalendarGridSkeleton />
+      </div>
+    </div>
+  );
+}
+
+// Exported — used inline inside Calendar.tsx while data loads
+// (the page header + nav are already rendered, only the grid area is loading)
+export function CalendarGridSkeleton() {
+  return (
+    <>
+      {/* Weekday header row */}
+      <div className="grid grid-cols-7 border-b border-border">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+          <div key={d} className="py-2 flex items-center justify-center">
+            <Skeleton className="h-3 w-8" />
+          </div>
+        ))}
+      </div>
+
+      {/* Fixed 6-row grid (42 cells) to match standard calendar layout and avoid dynamic allocation */}
+      <div className="grid grid-cols-7 flex-1 min-h-0 auto-rows-fr">
+        {[...Array(42)].map((_, i) => (
+          <div
+            key={i}
+            className="p-2 border-b border-r border-border flex flex-col gap-1.5 min-h-[90px]"
+          >
+            {/* Date circle */}
+            <Skeleton className="h-6 w-6 rounded-full shrink-0" />
+            {/* Sparse event bars to match real calendar look */}
+            {i % 4 === 0 && <Skeleton className="h-5 w-full rounded" />}
+            {i % 7 === 1 && <Skeleton className="h-5 w-3/4 rounded" />}
+            {i % 9 === 2 && <Skeleton className="h-5 w-5/6 rounded" />}
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+const VARIANT_SKELETONS: Record<NonNullable<AppLayoutSkeletonProps['variant']>, React.ReactNode> = {
+  dashboard: <DashboardSkeleton />,
+  list: <ListPageSkeleton />,
+  projects: <ProjectsPageSkeleton />,
+  team: <TeamSkeleton />,
+  settings: <SettingsSkeleton />,
+  notifications: <NotificationsSkeleton />,
+  chat: <ChatSkeleton />,
+  detail: <DetailPageSkeleton />,
+  calendar: <CalendarSkeleton />,
+  reports: <ReportsSkeleton />,
+  default: <DefaultPageSkeleton />,
+};
+
+export function AppLayoutSkeleton({ variant = 'default' }: AppLayoutSkeletonProps) {
+  return (
+    <div role="status" aria-label="Loading" aria-busy="true">
+      {VARIANT_SKELETONS[variant] ?? <DefaultPageSkeleton />}
+    </div>
+  );
+}
+

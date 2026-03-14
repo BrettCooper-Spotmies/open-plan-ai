@@ -5,11 +5,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, Mail, Lock, User, Building2, Factory, ArrowRight, Check, AlertCircle } from "lucide-react";
+import { Layers, Mail, Lock, User, Building2, Factory, ArrowRight, Check, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { supabase } from "@/integrations/supabase/client";
+import { cn } from "@/lib/utils";
+import { getPasswordRequirements, getUnmetRequirementLabels } from "@/lib/passwordValidation";
 
 const industries = [
   "Medical Devices",
@@ -40,6 +42,8 @@ const Signup = () => {
     companyName: "",
     industry: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // If there's an invite token, store it and fetch the invited email
   useEffect(() => {
@@ -68,18 +72,19 @@ const Signup = () => {
     e.preventDefault();
     setError(null);
 
+    const unmetLabels = getUnmetRequirementLabels(formData.password);
+    if (unmetLabels.length > 0) {
+      setError(`Password is too weak. Missing: ${unmetLabels.join(", ")}`);
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
-
     setIsLoading(true);
-    
+
     const result = await signUp(formData.email, formData.password, {
       name: formData.fullName,
       company: formData.companyName,
@@ -97,7 +102,7 @@ const Signup = () => {
       const { data, error: otpError } = await supabase.functions.invoke('send-otp', {
         body: { email: formData.email },
       });
-      
+
       if (otpError || data?.error) {
         console.error('Error sending OTP:', otpError || data?.error);
       }
@@ -112,6 +117,15 @@ const Signup = () => {
       } catch (err) {
         console.error('Error creating organization:', err);
       }
+    }
+
+    try {
+      sessionStorage.setItem(
+        'openplan_pending_verify',
+        JSON.stringify({ email: formData.email })
+      );
+    } catch {
+      // sessionStorage may be unavailable in restricted browser contexts.
     }
 
     setIsLoading(false);
@@ -258,15 +272,48 @@ const Signup = () => {
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
                       value={formData.password}
                       onChange={(e) => handleChange("password", e.target.value)}
-                      className="pl-10"
+                      className="pl-10 pr-10"
                       required
                       disabled={isLoading}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
+                  {formData.password.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        {getPasswordRequirements(formData.password).map((req, i) => (
+                          <div key={i} className="flex items-center gap-1.5">
+                            <div className={cn(
+                              "h-1.5 w-1.5 rounded-full shrink-0",
+                              req.met ? "bg-green-500" : "bg-muted-foreground/30"
+                            )} />
+                            <span className={cn(
+                              "text-[10px] leading-none transition-colors",
+                              req.met ? "text-green-600 font-medium" : "text-muted-foreground"
+                            )}>
+                              {req.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
@@ -274,14 +321,30 @@ const Signup = () => {
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                       id="confirmPassword"
-                      type="password"
+                      type={showConfirmPassword ? "text" : "password"}
                       placeholder="••••••••"
                       value={formData.confirmPassword}
                       onChange={(e) => handleChange("confirmPassword", e.target.value)}
-                      className={`pl-10 ${formData.confirmPassword && (passwordsMatch ? "border-green-500" : "border-red-500")}`}
+                      className={cn(
+                        "pl-10 pr-10",
+                        formData.confirmPassword && (passwordsMatch ? "border-green-500" : "border-red-500")
+                      )}
                       required
                       disabled={isLoading}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                      title={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
                 </div>
               </div>

@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -117,28 +118,7 @@ export default function Projects() {
   };
 
   if (isLoading) {
-    return (
-      <>
-        <div className="space-y-6 animate-fade-in">
-          <div className="flex justify-between">
-            <div>
-              <Skeleton className="h-8 w-32" />
-              <Skeleton className="h-4 w-64 mt-2" />
-            </div>
-            <Skeleton className="h-10 w-32" />
-          </div>
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-10 flex-1 max-w-sm" />
-            <Skeleton className="h-10 w-20" />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[...Array(6)].map((_, i) => (
-              <Skeleton key={i} className="h-48" />
-            ))}
-          </div>
-        </div>
-      </>
-    );
+    return <AppLayoutSkeleton variant="projects" />;
   }
 
   if (error) {
@@ -220,9 +200,9 @@ export default function Projects() {
               : 'space-y-3'
           )}>
             {filteredProjects.map((project) => (
-              <Link key={project.id} to={`/projects/${project.id}`}>
-                <Card className="p-5 card-hover cursor-pointer">
-                  <div className="flex items-start justify-between gap-3 mb-4">
+              <Link key={project.id} to={`/projects/${project.id}`} className="block h-full">
+                <Card className="p-5 card-hover cursor-pointer h-full flex flex-col">
+                  <div className="flex items-start justify-between gap-3 mb-4 flex-1">
                     <div className="min-w-0 flex-1">
                       <h3 className="font-medium truncate flex items-center gap-2">
                         {project.icon && <span className="text-lg">{project.icon}</span>}
@@ -597,7 +577,7 @@ export default function Projects() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete Project</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-all">
               Are you sure you want to delete <strong>"{projectToDelete?.name}"</strong>? This action cannot be undone and will permanently delete all associated data including tasks, milestones, and files.
             </DialogDescription>
           </DialogHeader>

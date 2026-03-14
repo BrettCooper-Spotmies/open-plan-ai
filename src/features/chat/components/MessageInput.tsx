@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
-import { Send, Paperclip, Loader2, X } from 'lucide-react';
+import { Send, Paperclip, Loader2, X, Smile, Image as ImageIcon, File as FileIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useChatStore } from '../stores/useChatStore';
 import { chatService } from '@/services/chat.service';
@@ -9,6 +9,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { ConversationMember } from '../types';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/hooks/useNotifications';
+import Picker from '@emoji-mart/react';
+import data from '@emoji-mart/data';
+import { useOfflineQueue } from '@/hooks/useOfflineQueue';
+import { WifiOff, Clock } from 'lucide-react';
 
 interface MessageInputProps {
   conversationId: string;
@@ -19,17 +23,50 @@ interface MessageInputProps {
 }
 
 const MAX_CHARS = 4000;
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
+const MAX_FILES = 10;
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes}B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+/** Build file message content payload (shared for send and queue). */
+function buildFileContent(payload: {
+  fileName: string;
+  fileSize: number;
+  mimeType: string;
+  url: string;
+  text?: string;
+}) {
+  return {
+    fileName: payload.fileName,
+    fileSize: payload.fileSize,
+    mimeType: payload.mimeType,
+    url: payload.url,
+    text: payload.text,
+  };
+}
 
 export function MessageInput({ conversationId, onMessageSent, onTyping, members, sendMessage }: MessageInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
+
   const setDraft = useChatStore((s) => s.setDraft);
   const value = useChatStore((s) => s.draftMessages[conversationId] || '');
+
   const [isSending, setIsSending] = useState(false);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const lastTypingRef = useRef(0);
   const { user } = useAuth();
+
+  const { isOnline, pendingCount, enqueueText, enqueueFile } = useOfflineQueue(user?.id);
 
   // Mention state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -55,15 +92,58 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     el.style.height = Math.min(el.scrollHeight, 144) + 'px';
   }, []);
 
+  useEffect(() => { resize(); }, [value, resize]);
+
+  // Create and revoke object URLs for file previews to avoid memory leaks
   useEffect(() => {
-    resize();
-  }, [value, resize]);
+    const urls = pendingFiles.map((file) => {
+      const isImage = file.type.startsWith('image/');
+      const isVideo = file.type.startsWith('video/');
+      return isImage || isVideo ? URL.createObjectURL(file) : '';
+    });
+    setPreviewUrls(urls);
+    return () => {
+      urls.forEach((u) => u && URL.revokeObjectURL(u));
+    };
+  }, [pendingFiles]);
+
+  // Close emoji picker on outside click
+  useEffect(() => {
+    if (!showEmojiPicker) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!emojiPickerRef.current?.contains(target) && !emojiButtonRef.current?.contains(target)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showEmojiPicker]);
+
+  const handleEmojiSelect = (emoji: any) => {
+    const native = emoji.native as string;
+    const el = textareaRef.current;
+    if (el) {
+      const start = el.selectionStart ?? value.length;
+      const end = el.selectionEnd ?? value.length;
+      const newValue = value.substring(0, start) + native + value.substring(end);
+      if (newValue.length <= MAX_CHARS) {
+        setDraft(conversationId, newValue);
+        requestAnimationFrame(() => {
+          const pos = start + native.length;
+          el.setSelectionRange(pos, pos);
+        });
+      }
+    } else {
+      setDraft(conversationId, value + native);
+    }
+    // Picker stays open
+  };
 
   const insertMention = (member: ConversationMember) => {
     const start = mentionStartRef.current;
     const el = textareaRef.current;
     if (start < 0 || !el) return;
-
     const before = value.substring(0, start);
     const after = value.substring(el.selectionStart);
     const newValue = `${before}@${member.name} ${after}`;
@@ -71,43 +151,142 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     setMentionQuery(null);
     mentionStartRef.current = -1;
     setMentionIndex(0);
-
-    // Set cursor after mention
     requestAnimationFrame(() => {
-      const pos = start + member.name.length + 2; // @Name + space
+      const pos = start + member.name.length + 2;
       el.setSelectionRange(pos, pos);
       el.focus();
     });
   };
 
+  const addFiles = (incoming: FileList | null) => {
+    if (!incoming) return;
+    const newFiles = Array.from(incoming);
+    const tooBig = newFiles.filter(f => f.size > MAX_FILE_SIZE);
+    if (tooBig.length > 0) {
+      toast.error(`${tooBig.length} file(s) exceed 10MB limit and were skipped`);
+    }
+    const valid = newFiles.filter(f => f.size <= MAX_FILE_SIZE);
+    setPendingFiles(prev => {
+      const seen = new Set(prev.map(f => `${f.name}-${f.size}-${f.lastModified}`));
+      const deduped = valid.filter(f => {
+        const key = `${f.name}-${f.size}-${f.lastModified}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if (deduped.length < valid.length) {
+        toast.info('Duplicate file(s) were skipped.');
+      }
+      const combined = [...prev, ...deduped];
+      if (combined.length > MAX_FILES) {
+        const dropped = combined.length - MAX_FILES;
+        const droppedNames = combined.slice(MAX_FILES).map(f => f.name).join(', ');
+        toast.warning(`Only ${MAX_FILES} files allowed. Dropped: ${droppedNames || dropped + ' file(s)'}.`);
+        return combined.slice(0, MAX_FILES);
+      }
+      return combined;
+    });
+  };
+
+  const removeFile = (index: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const sendFileMessage = async (file: File, text?: string) => {
+    const ext = file.name.split('.').pop() || 'bin';
+    const path = `${conversationId}/${crypto.randomUUID()}.${ext}`;
+
+    const { error: uploadErr } = await supabase.storage
+      .from('chat-attachments')
+      .upload(path, file);
+    if (uploadErr) throw uploadErr;
+
+    const { data: urlData } = supabase.storage
+      .from('chat-attachments')
+      .getPublicUrl(path);
+
+    const fileData = buildFileContent({
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type,
+      url: urlData.publicUrl,
+      text: text || undefined,
+    });
+
+    if (sendMessage) {
+      await sendMessage('', 'file', fileData);
+    } else {
+      const userId = user?.id;
+      if (!userId) throw new Error('Not authenticated');
+      const { error } = await supabase
+        .from('chat_messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: userId,
+          content: JSON.stringify(fileData),
+          content_type: 'file',
+        });
+      if (error) throw error;
+    }
+  };
+
   const handleSend = async () => {
     const trimmed = value.trim();
-    if ((!trimmed && !pendingFile) || isSending) return;
+    if ((!trimmed && pendingFiles.length === 0) || isSending) return;
+    if (pendingFiles.length > MAX_FILES) {
+      toast.warning(`Maximum ${MAX_FILES} files allowed. Remove some before sending.`);
+      return;
+    }
 
-    setIsSending(true);
     setDraft(conversationId, '');
     setMentionQuery(null);
 
+    // ── OFFLINE: enqueue everything locally ──────────────────────────────
+    if (!isOnline) {
+      try {
+        if (trimmed) await enqueueText(conversationId, trimmed);
+        if (pendingFiles.length > 0) {
+          await Promise.all(pendingFiles.map((file) => enqueueFile(conversationId, file)));
+        }
+        setPendingFiles([]);
+        toast.info('📵 Saved offline — will send when you reconnect');
+      } catch (err) {
+        console.error('[MessageInput] Offline queue failed:', err);
+        toast.error('Failed to save message offline. Please try again.');
+      }
+      return;
+    }
+
+    // ── ONLINE: send normally ─────────────────────────────────────────────
+    setIsSending(true);
     try {
-      if (pendingFile) {
-        await sendFileMessage(pendingFile, trimmed);
-        setPendingFile(null);
-      } else if (sendMessage) {
-        await sendMessage(trimmed);
+      if (pendingFiles.length > 0) {
+        if (trimmed) {
+          if (sendMessage) await sendMessage(trimmed);
+          else await chatService.sendMessage(conversationId, trimmed);
+        }
+        for (const file of pendingFiles) {
+          await sendFileMessage(file);
+        }
+        setPendingFiles([]);
       } else {
-        await chatService.sendMessage(conversationId, trimmed);
+        if (sendMessage) await sendMessage(trimmed);
+        else await chatService.sendMessage(conversationId, trimmed);
       }
 
-      // Check for mentions and trigger notifications
       otherMembers.forEach((member) => {
         if (trimmed.includes(`@${member.name}`)) {
-          createNotification.mutate({
-            user_id: member.id,
-            actor_id: user?.id,
-            type: 'mention',
-            title: 'Mentioned you in a message',
-            description: trimmed.length > 100 ? trimmed.substring(0, 97) + '...' : trimmed,
-          });
+          try {
+            createNotification.mutate({
+              user_id: member.id,
+              actor_id: user?.id,
+              type: 'mention',
+              title: 'Mentioned you in a message',
+              description: trimmed.length > 100 ? trimmed.substring(0, 97) + '...' : trimmed,
+            });
+          } catch (notifErr) {
+            console.warn('[MessageInput] Failed to create mention notification:', notifErr);
+          }
         }
       });
 
@@ -121,116 +300,30 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     }
   };
 
-  const sendFileMessage = async (file: File, text?: string) => {
-    const ext = file.name.split('.').pop();
-    const path = `${conversationId}/${crypto.randomUUID()}.${ext}`;
-
-    const { error: uploadErr } = await supabase.storage
-      .from('chat-attachments')
-      .upload(path, file);
-    if (uploadErr) throw uploadErr;
-
-    const { data: urlData } = supabase.storage
-      .from('chat-attachments')
-      .getPublicUrl(path);
-
-    const content = JSON.stringify({
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType: file.type,
-      url: urlData.publicUrl,
-      text: text || undefined,
-    });
-
-    const userId = user?.id;
-    if (!userId) throw new Error('Not authenticated');
-
-    if (sendMessage) {
-      await sendMessage('', 'file', {
-        fileName: file.name,
-        fileSize: file.size,
-        mimeType: file.type,
-        url: urlData.publicUrl,
-        text: text || undefined,
-      });
-    } else {
-      const { error } = await supabase
-        .from('chat_messages')
-        .insert({
-          conversation_id: conversationId,
-          sender_id: userId,
-          content,
-          content_type: 'file',
-        });
-      if (error) throw error;
-    }
-  };
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > MAX_FILE_SIZE) {
-      toast.error('File size must be under 10MB');
-      return;
-    }
-    setPendingFile(file);
-    e.target.value = '';
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Mention navigation
     if (mentionQuery !== null && filteredMentions.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setMentionIndex((prev) => (prev + 1) % filteredMentions.length);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setMentionIndex((prev) => (prev - 1 + filteredMentions.length) % filteredMentions.length);
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        insertMention(filteredMentions[mentionIndex]);
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setMentionQuery(null);
-        mentionStartRef.current = -1;
-        return;
-      }
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(p => (p + 1) % filteredMentions.length); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(p => (p - 1 + filteredMentions.length) % filteredMentions.length); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(filteredMentions[mentionIndex]); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setMentionQuery(null); mentionStartRef.current = -1; return; }
     }
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
     if (newValue.length > MAX_CHARS) return;
-
     setDraft(conversationId, newValue);
 
-    // Debounced typing broadcast
     const now = Date.now();
-    if (now - lastTypingRef.current > 2000) {
-      lastTypingRef.current = now;
-      onTyping?.();
-    }
+    if (now - lastTypingRef.current > 2000) { lastTypingRef.current = now; onTyping?.(); }
 
-    // Mention detection
     const cursorPos = e.target.selectionStart;
     const textBeforeCursor = newValue.substring(0, cursorPos);
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-
     if (lastAtIndex >= 0) {
       const charBefore = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
       const queryText = textBeforeCursor.substring(lastAtIndex + 1);
-      // Only trigger if @ is at start or after whitespace, and no space in query
       if ((charBefore === ' ' || charBefore === '\n' || lastAtIndex === 0) && !queryText.includes(' ')) {
         mentionStartRef.current = lastAtIndex;
         setMentionQuery(queryText);
@@ -246,18 +339,88 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
 
   return (
     <div className="border-t border-border px-4 py-2">
-      {pendingFile && (
-        <div className="flex items-center gap-2 mb-2 p-2 rounded-md bg-muted text-sm">
-          <Paperclip className="h-4 w-4 text-muted-foreground shrink-0" />
-          <span className="truncate flex-1">{pendingFile.name}</span>
-          <span className="text-xs text-muted-foreground shrink-0">
-            {(pendingFile.size / 1024).toFixed(0)}KB
-          </span>
-          <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={() => setPendingFile(null)}>
-            <X className="h-3 w-3" />
-          </Button>
+
+      {/* ── Offline banner ── */}
+      {!isOnline && (
+        <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs">
+          <WifiOff className="h-3.5 w-3.5 shrink-0" />
+          <span className="flex-1 font-medium">No internet connection — messages will be queued</span>
+          {pendingCount > 0 && (
+            <span className="flex items-center gap-1 text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              {pendingCount} queued
+            </span>
+          )}
         </div>
       )}
+
+      {/* ── Pending files preview grid ── */}
+      {pendingFiles.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {pendingFiles.map((file, i) => {
+            const isImage = file.type.startsWith('image/');
+            const isVideo = file.type.startsWith('video/');
+            const previewUrl = (isImage || isVideo) ? previewUrls[i] || null : null;
+
+            return (
+              <div
+                key={i}
+                className="relative group w-16 h-16 rounded-lg border bg-muted overflow-hidden shrink-0 flex items-center justify-center"
+              >
+                {isImage && previewUrl ? (
+                  <img src={previewUrl} alt={file.name} className="w-full h-full object-cover" />
+                ) : isVideo && previewUrl ? (
+                  <video src={previewUrl} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-1 p-1.5 w-full h-full">
+                    <FileIcon className="h-5 w-5 text-muted-foreground shrink-0" />
+                    <span className="text-[8px] font-bold text-primary bg-primary/10 rounded px-1 py-0.5 uppercase leading-none shrink-0">
+                      {file.name.split('.').pop()}
+                    </span>
+                    <span className="text-[8px] text-muted-foreground text-center leading-tight line-clamp-2 w-full break-all">
+                      {file.name.replace(/\.[^.]+$/, '')}
+                    </span>
+                  </div>
+                )}
+
+                {/* Size badge */}
+                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[9px] text-center py-0.5 opacity-0 group-hover:opacity-100 transition-opacity truncate px-0.5">
+                  {formatBytes(file.size)}
+                </div>
+
+                {/* Remove button */}
+                <button
+                  className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive"
+                  onClick={() => removeFile(i)}
+                  title="Remove"
+                  type="button"
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            );
+          })}
+
+          {/* +Add more slot (if < 10) */}
+          {pendingFiles.length < MAX_FILES && (
+            <button
+              type="button"
+              className="w-16 h-16 rounded-lg border-2 border-dashed border-border bg-muted/50 flex flex-col items-center justify-center gap-0.5 text-muted-foreground hover:border-primary hover:text-primary transition-colors shrink-0"
+              onClick={() => fileInputRef.current?.click()}
+              title="Add more files"
+            >
+              <Paperclip className="h-4 w-4" />
+              <span className="text-[9px]">Add</span>
+            </button>
+          )}
+
+          {/* Count badge */}
+          <div className="self-end text-[10px] text-muted-foreground pb-1">
+            {pendingFiles.length}/{MAX_FILES}
+          </div>
+        </div>
+      )}
+
       <div className="relative">
         {/* Mention dropdown */}
         {mentionQuery !== null && filteredMentions.length > 0 && (
@@ -265,14 +428,8 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
             {filteredMentions.map((member, i) => (
               <button
                 key={member.id}
-                className={cn(
-                  'flex items-center gap-2 w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors',
-                  i === mentionIndex && 'bg-muted'
-                )}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  insertMention(member);
-                }}
+                className={cn('flex items-center gap-2 w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors', i === mentionIndex && 'bg-muted')}
+                onMouseDown={(e) => { e.preventDefault(); insertMention(member); }}
               >
                 <span className="font-medium">{member.name}</span>
                 <span className="text-xs text-muted-foreground truncate">{member.email}</span>
@@ -281,22 +438,60 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 rounded-lg border border-input bg-background px-2 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ring-offset-background">
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onChange={handleFileSelect}
-          />
+        {/* Emoji picker */}
+        {showEmojiPicker && (
+          <div ref={emojiPickerRef} className="absolute bottom-full mb-2 left-0 z-50 shadow-2xl rounded-xl overflow-hidden">
+            <Picker
+              data={data}
+              onEmojiSelect={handleEmojiSelect}
+              theme="auto"
+              previewPosition="none"
+              skinTonePosition="none"
+              maxFrequentRows={2}
+              perLine={8}
+            />
+          </div>
+        )}
+
+        {/* Hidden inputs — both support multiple */}
+        <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
+        <input ref={mediaInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
+
+        {/* Input bar */}
+        <div className="flex items-center gap-1 rounded-xl border border-input bg-background px-2 py-1 focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 ring-offset-background transition-shadow">
+
+          {/* 😊 Emoji */}
           <Button
-            variant="ghost" size="icon"
-            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
-            title="Attach file"
+            ref={emojiButtonRef}
+            variant="ghost" size="icon" type="button"
+            className={cn('h-8 w-8 shrink-0 text-muted-foreground hover:text-yellow-500 transition-colors', showEmojiPicker && 'text-yellow-500 bg-yellow-500/10')}
+            title="Emoji"
+            onClick={() => setShowEmojiPicker(v => !v)}
+          >
+            <Smile className="h-4 w-4" />
+          </Button>
+
+          {/* 📷 Media */}
+          <Button
+            variant="ghost" size="icon" type="button"
+            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-blue-500 transition-colors"
+            title="Send photos or videos"
+            onClick={() => mediaInputRef.current?.click()}
+          >
+            <ImageIcon className="h-4 w-4" />
+          </Button>
+
+          {/* 📎 File */}
+          <Button
+            variant="ghost" size="icon" type="button"
+            className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+            title="Attach files"
             onClick={() => fileInputRef.current?.click()}
           >
             <Paperclip className="h-4 w-4" />
           </Button>
 
+          {/* Textarea */}
           <div className="flex-1 min-w-0 relative">
             <textarea
               ref={textareaRef}
@@ -314,17 +509,14 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
             )}
           </div>
 
+          {/* Send */}
           <Button
-            size="icon"
-            className="h-8 w-8 shrink-0 rounded-md"
-            disabled={(!value.trim() && !pendingFile) || isSending}
+            size="icon" type="button"
+            className="h-8 w-8 shrink-0 rounded-lg"
+            disabled={(!value.trim() && pendingFiles.length === 0) || isSending}
             onClick={handleSend}
           >
-            {isSending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
+            {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
       </div>

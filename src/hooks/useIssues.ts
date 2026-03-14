@@ -125,17 +125,32 @@ export function useUpdateIssue() {
       updateIssue(projectId, issueId, issueUpdates);
 
       // Also update the projects cache if it exists
-      queryClient.setQueriesData({ queryKey: queryKeys.projects.root }, (old: any) => {
-        if (!old) return old;
-        return old.map((p: any) => {
-          if (p.id !== projectId) return p;
+      queryClient.setQueriesData({ queryKey: queryKeys.projects.root }, (old: unknown) => {
+        if (old == null) return old;
+        if (Array.isArray(old)) {
+          return old.map((p: any) => {
+            if (p.id !== projectId) return p;
+            return {
+              ...p,
+              issues: (p.issues || []).map((i: any) =>
+                i.id === issueId ? { ...i, ...issueUpdates } : i
+              )
+            };
+          });
+        }
+        if (typeof old === 'object' && old !== null && 'id' in old && (old as { id: string }).id === projectId) {
+          const o = old as { issues?: any[]; [k: string]: unknown };
           return {
-            ...p,
-            issues: (p.issues || []).map((i: any) =>
+            ...o,
+            issues: (o.issues || []).map((i: any) =>
               i.id === issueId ? { ...i, ...issueUpdates } : i
             )
           };
-        });
+        }
+        if (typeof old !== 'object' || !('id' in (old as object))) {
+          console.warn('[useIssues] setQueriesData: unexpected cache shape', typeof old);
+        }
+        return old;
       });
 
       return { previousIssue, projectId };

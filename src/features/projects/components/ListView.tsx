@@ -18,6 +18,7 @@ interface ListViewProps {
   onTaskClick?: (task: Task) => void;
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onTaskUpdate?: (task: Task) => void;
+  onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
   onAddModule?: () => void;
 }
@@ -40,7 +41,7 @@ const priorityColors = {
 type SortField = 'title' | 'status' | 'priority' | 'module' | 'dueDate' | 'assignee';
 type SortDirection = 'asc' | 'desc';
 
-export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modules = [], onTaskClick, onTaskCreate, onTaskUpdate, onTaskDelete, projectId, onAddModule }: ListViewProps) {
+export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modules = [], onTaskClick, onTaskCreate, onTaskUpdate, onBatchTaskUpdate, onTaskDelete, projectId, onAddModule }: ListViewProps) {
   // Use allTasks prop if provided, otherwise fallback to tasks
   const allTasksForDependencies = allTasksProp || tasks;
   const [sortField, setSortField] = useState<SortField>('priority');
@@ -150,6 +151,14 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
     updatedAt: new Date().toISOString(),
   };
 
+  const handleCompleteTask = (e: React.MouseEvent, task: Task) => {
+    e.stopPropagation();
+    const updatedTask = { ...task, status: 'done' as const };
+    if (onTaskUpdate) {
+      onTaskUpdate(updatedTask);
+    }
+  };
+
   const handleTaskUpdate = (updatedTask: Task) => {
     // Only update selected task if it's the one currently being viewed
     if (selectedTask && selectedTask.id === updatedTask.id) {
@@ -249,10 +258,17 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
                       {blockerCount > 0 && (
                         <AlertTriangle className="h-4 w-4 text-status-blocked shrink-0 mt-0.5" />
                       )}
-                      {task.status === 'done' && (
+                      {task.status === 'done' ? (
                         <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center shrink-0 mt-0.5">
                           <Check className="h-3 w-3 text-status-done" />
                         </div>
+                      ) : (
+                        <button
+                          onClick={(e) => handleCompleteTask(e, task)}
+                          className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background shrink-0 mt-0.5"
+                        >
+                          <Check className="h-3 w-3 text-foreground opacity-0 hover:opacity-100" />
+                        </button>
                       )}
                       <div>
                         <p className="font-medium">{task.title}</p>
@@ -352,6 +368,7 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
           setSelectedTask(null);
         }}
         onUpdate={handleTaskUpdate}
+        onBatchUpdate={onBatchTaskUpdate}
         onDelete={onTaskDelete}
         modules={modules}
         projectId={projectId}
@@ -365,6 +382,7 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onUpdate={() => { }} // Not used in create mode
+        onBatchUpdate={onBatchTaskUpdate}
         mode="create"
         onCreate={handleTaskCreate}
         modules={modules}

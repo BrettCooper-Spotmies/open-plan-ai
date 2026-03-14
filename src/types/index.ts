@@ -76,6 +76,7 @@ export interface Module {
   status: string;
   createdAt: string;
   createdBy?: TeamMember;  // Who created this module
+  milestoneId?: string;     // Added to point to a milestone
 }
 
 // Enhanced Milestone interface

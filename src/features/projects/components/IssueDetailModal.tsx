@@ -119,7 +119,12 @@ export function IssueDetailModal({
         {mode === 'create' && (
           <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={() => onCreate?.(editedIssue!)}>Create Issue</Button>
+            <Button 
+              onClick={() => onCreate?.(editedIssue!)}
+              disabled={!editedIssue.title.trim()}
+            >
+              Create Issue
+            </Button>
           </div>
         )}
 
@@ -140,7 +145,12 @@ export function IssueDetailModal({
               )}
             </div>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleUpdateIssue}>Update Issue</Button>
+            <Button 
+              onClick={handleUpdateIssue}
+              disabled={!editedIssue.title.trim()}
+            >
+              Update Issue
+            </Button>
           </div>
         )}
       </DialogContent>

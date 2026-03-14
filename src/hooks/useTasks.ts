@@ -118,17 +118,32 @@ export function useUpdateTask() {
       updateTask(projectId, taskId, taskUpdates);
 
       // Also update the projects cache if it exists
-      queryClient.setQueriesData({ queryKey: queryKeys.projects.root }, (old: any) => {
-        if (!old) return old;
-        return old.map((p: any) => {
-          if (p.id !== projectId) return p;
+      queryClient.setQueriesData({ queryKey: queryKeys.projects.root }, (old: unknown) => {
+        if (old == null) return old;
+        if (Array.isArray(old)) {
+          return old.map((p: any) => {
+            if (p.id !== projectId) return p;
+            return {
+              ...p,
+              tasks: (p.tasks || []).map((t: any) =>
+                t.id === taskId ? { ...t, ...taskUpdates } : t
+              )
+            };
+          });
+        }
+        if (typeof old === 'object' && old !== null && 'id' in old && (old as { id: string }).id === projectId) {
+          const o = old as { tasks?: any[]; [k: string]: unknown };
           return {
-            ...p,
-            tasks: p.tasks.map((t: any) =>
+            ...o,
+            tasks: (o.tasks || []).map((t: any) =>
               t.id === taskId ? { ...t, ...taskUpdates } : t
             )
           };
-        });
+        }
+        if (typeof old !== 'object' || !('id' in (old as object))) {
+          console.warn('[useTasks] setQueriesData: unexpected cache shape', typeof old);
+        }
+        return old;
       });
 
       return { previousTask, projectId };

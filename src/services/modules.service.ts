@@ -55,6 +55,16 @@ export const modulesService = {
     return data;
   },
 
+  async createMany(modules: ModuleInsert[]): Promise<Module[]> {
+    const { data, error } = await supabase
+      .from('modules')
+      .insert(modules)
+      .select();
+
+    if (error) throw error;
+    return data || [];
+  },
+
   async update(id: string, updates: ModuleUpdate): Promise<Module> {
     const { data, error } = await supabase
       .from('modules')
@@ -67,12 +77,29 @@ export const modulesService = {
     return data;
   },
 
-  async delete(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('modules')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id);
+  async updateMany(updates: { id: string; name?: string; milestone_id?: string | null }[]): Promise<void> {
+    try {
+      const { error } = await (supabase.rpc as any)('batch_update_modules', { updates });
+      if (error) throw error;
+    } catch (err) {
+      console.warn('Batch update RPC failed, falling back to sequential update:', err);
+      await Promise.all(updates.map(u => this.update(u.id, u as ModuleUpdate)));
+    }
+  },
 
-    if (error) throw error;
+  async delete(id: string): Promise<void> {
+    const { error } = await (supabase.rpc as any)('soft_delete_module', { module_id: id });
+    if (error) {
+      console.error('[modulesService] soft_delete_module failed', error);
+      throw error;
+    }
+  },
+
+  async deleteMany(ids: string[]): Promise<void> {
+    const { error } = await (supabase.rpc as any)('batch_soft_delete_modules', { module_ids: ids });
+    if (error) {
+      console.error('[modulesService] batch_soft_delete_modules failed', error);
+      throw error;
+    }
   },
 };

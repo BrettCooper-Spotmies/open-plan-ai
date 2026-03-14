@@ -8,11 +8,11 @@ import { MyDayGroupBySelector } from './components/MyDayGroupBySelector';
 import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
 import { IssueDetailModal } from '@/features/projects/components/IssueDetailModal';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Skeleton } from '@/components/ui/skeleton';
+import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
 import { Task, Issue, TaskStatus, IssueStatus, MyDayView, MyDayGroupBy } from '@/types';
 import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
-import { useUpdateTask } from '@/hooks/useTasks';
+import { useUpdateTask, useBatchUpdateTasks } from '@/hooks/useTasks';
 import { useUpdateIssue } from '@/hooks/useIssues';
 import { useProjects } from '@/hooks/useProjects';
 import { toast } from 'sonner';
@@ -30,6 +30,7 @@ export default function MyDay() {
   const { data: completedTodayCount = 0 } = useCompletedTodayCount();
   const { data: projects = [] } = useProjects();
   const updateTaskMutation = useUpdateTask();
+  const batchUpdateTasksMutation = useBatchUpdateTasks();
   const updateIssueMutation = useUpdateIssue();
 
   const allTasks = useMemo(() => {
@@ -148,34 +149,15 @@ export default function MyDay() {
 
   const today = format(new Date(), 'EEEE, MMMM d');
 
-  // Loading state
+  // Early return: show identical skeleton to Suspense fallback while data loads
   if (tasksLoading) {
-    return (
-      <>
-        <div className="grid grid-cols-1 gap-6 w-full min-w-0">
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-2">
-              <Skeleton className="h-10 w-10 rounded-lg" />
-              <div>
-                <Skeleton className="h-8 w-32 mb-2" />
-                <Skeleton className="h-4 w-48" />
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => (
-              <Skeleton key={i} className="h-24 rounded-lg" />
-            ))}
-          </div>
-          <Skeleton className="h-96 rounded-lg" />
-        </div>
-      </>
-    );
+    return <AppLayoutSkeleton variant="list" />;
   }
 
   return (
     <>
       <div className="grid grid-cols-1 gap-6 w-full min-w-0">
+        {/* Header - always visible, never shimmers */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-2 rounded-lg bg-primary/10">
@@ -191,6 +173,7 @@ export default function MyDay() {
           </p>
         </div>
 
+        {/* Stats - always visible once data is ready */}
         <MyDayStats
           attentionCount={needsAttention.length}
           readyCount={readyToWork.length}
@@ -198,23 +181,24 @@ export default function MyDay() {
           completedTodayCount={completedTodayCount}
         />
 
+        {/* View controls - always visible once data is ready */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-          <Tabs value={view} onValueChange={(v) => setView(v as MyDayView)}>
-            <TabsList>
-              <TabsTrigger value="kanban" className="gap-2">
-                <LayoutGrid className="h-4 w-4" />
-                Kanban
-              </TabsTrigger>
-              <TabsTrigger value="list" className="gap-2">
-                <List className="h-4 w-4" />
-                List
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          <MyDayGroupBySelector value={groupBy} onChange={setGroupBy} />
+            <Tabs value={view} onValueChange={(v) => setView(v as MyDayView)}>
+              <TabsList>
+                <TabsTrigger value="kanban" className="gap-2">
+                  <LayoutGrid className="h-4 w-4" />
+                  Kanban
+                </TabsTrigger>
+                <TabsTrigger value="list" className="gap-2">
+                  <List className="h-4 w-4" />
+                  List
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
         </div>
 
-        {userTasks.length === 0 && (
+        {/* Kanban/List content */}
+        {userTasks.length === 0 ? (
           <div className="text-center py-16">
             <div className="p-4 rounded-full bg-muted/50 inline-block mb-4">
               <Sun className="h-8 w-8 text-muted-foreground" />
@@ -226,9 +210,7 @@ export default function MyDay() {
               You have no active tasks assigned to you. Check the Projects page to see available work.
             </p>
           </div>
-        )}
-
-        {userTasks.length > 0 && (
+        ) : (
           <div className="grid grid-cols-1 w-full min-w-0">
             <div className="min-h-[400px] w-full min-w-0">
               {view === 'kanban' ? (
@@ -258,8 +240,40 @@ export default function MyDay() {
           allTasks={allTasks}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
-          onUpdate={(updatedTask) => {
-            console.log('Task updated:', updatedTask);
+          onUpdate={async (updatedTask) => {
+            try {
+              const item = userTasks.find(t => t.id === updatedTask.id);
+              if (item) {
+                await updateTaskMutation.mutateAsync({
+                  projectId: item.projectId,
+                  taskId: updatedTask.id,
+                  updates: updatedTask,
+                });
+                toast.success('Task updated');
+              }
+            } catch (error) {
+              console.error('Failed to update task:', error);
+              toast.error('Failed to update task');
+            }
+          }}
+          onBatchUpdate={async (updates) => {
+            try {
+              // Note: useBatchUpdateTasks in useTasks.ts expects {projectId, updates}
+              // We'll pick the projectId from the first update (assuming same project for now, 
+              // or handle individually if needed, but MyDay has projectId per item)
+              if (updates.length === 0) return;
+              const firstItem = userTasks.find(t => t.id === updates[0].id);
+              if (firstItem) {
+                await batchUpdateTasksMutation.mutateAsync({
+                  projectId: firstItem.projectId,
+                  updates: updates
+                });
+                toast.success('Dependencies updated');
+              }
+            } catch (error) {
+              console.error('Failed to batch update tasks:', error);
+              toast.error('Failed to update dependent tasks');
+            }
           }}
         />
       )}

@@ -360,7 +360,8 @@ export const tasksService = {
     if (updates.tags !== undefined) updateData.tags = updates.tags;
     if (updates.estimatedHours !== undefined) updateData.estimated_hours = updates.estimatedHours;
     if (updates.actualHours !== undefined) updateData.actual_hours = updates.actualHours;
-    if (updates.milestoneId !== undefined) updateData.milestone_id = updates.milestoneId;
+    if ('milestoneId' in updates) updateData.milestone_id = updates.milestoneId ?? null;
+
     if (updates.moduleId !== undefined) updateData.module_id = updates.moduleId;
     if (updates.moduleIds !== undefined) updateData.module_ids = updates.moduleIds;
 
@@ -480,12 +481,11 @@ export const tasksService = {
       return;
     }
 
-    const { error } = await supabase
-      .from('tasks')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', taskId);
-
-    if (error) throw error;
+    const { error } = await (supabase.rpc as any)('soft_delete_task', { task_id: taskId });
+    if (error) {
+      console.error('[tasksService] soft_delete_task failed', error);
+      throw error;
+    }
   },
 
   /**
@@ -512,12 +512,26 @@ export const tasksService = {
       return updatedTasks;
     }
 
-    // For Supabase, update each task individually
-    const results: Task[] = [];
-    for (const { id, updates: taskUpdates } of updates) {
-      const updated = await this.update(projectId, id, taskUpdates);
-      results.push(updated);
+    // Prepare payload for RPC if possible
+    const payload = updates.map(({ id, updates: u }) => ({
+      id,
+      status: u.status,
+      priority: u.priority,
+      milestoneId: u.milestoneId,
+    }));
+
+    try {
+      const { error } = await (supabase.rpc as any)('batch_update_tasks', { updates: payload });
+      if (error) throw error;
+      return []; // Return empty as we rely on query invalidation
+    } catch (rpcError) {
+      console.warn('Batch update RPC failed, falling back to sequential update:', rpcError);
+      const results: Task[] = [];
+      for (const { id, updates: taskUpdates } of updates) {
+        const updated = await this.update(projectId, id, taskUpdates);
+        results.push(updated);
+      }
+      return results;
     }
-    return results;
   },
 };

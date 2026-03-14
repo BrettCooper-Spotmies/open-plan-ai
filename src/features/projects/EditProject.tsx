@@ -51,7 +51,7 @@ import {
     ChevronUp,
     Palette
 } from "lucide-react";
-import { format } from "date-fns";
+import { format, isBefore, startOfToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -222,6 +222,75 @@ const EditProject = () => {
     const [newLinkName, setNewLinkName] = useState("");
     const [newLinkUrl, setNewLinkUrl] = useState("");
 
+    // Deletion Confirmation State
+    const [deleteConfirmation, setDeleteConfirmation] = useState<{
+        isOpen: boolean;
+        type: 'module' | 'milestone' | 'attachment' | 'link' | null;
+        id: string | null;
+    }>({
+        isOpen: false,
+        type: null,
+        id: null
+    });
+    const [deleteInProgress, setDeleteInProgress] = useState(false);
+
+    const confirmDelete = async () => {
+        const { type, id } = deleteConfirmation;
+        if (!type || id == null || id === '') return;
+
+        setDeleteInProgress(true);
+        try {
+        if (type === 'module') {
+            const exists = modules.some(m => m.id === id);
+            if (!exists) {
+                toast.error('Module not found');
+                setDeleteConfirmation({ isOpen: false, type: null, id: null });
+                return;
+            }
+            setModules(modules.filter(m => m.id !== id));
+            if (editingModuleId === id) {
+                setEditingModuleId(null);
+                setNewModuleName("");
+            }
+        } else if (type === 'milestone') {
+            const exists = milestones.some(m => m.id === id);
+            if (!exists) {
+                toast.error('Milestone not found');
+                setDeleteConfirmation({ isOpen: false, type: null, id: null });
+                return;
+            }
+            setMilestones(milestones.filter(m => m.id !== id));
+            if (editingMilestoneId === id) {
+                setEditingMilestoneId(null);
+                setNewMilestoneName("");
+                setNewMilestoneStart(undefined);
+                setNewMilestoneEnd(undefined);
+            }
+        } else if (type === 'attachment') {
+            try {
+                await deleteAttachmentMutation.mutateAsync(id);
+                // Also remove it from local state to trigger rerender if it was an unsaved local file
+                // But typically it relies on the query invalidation.
+            } catch (err) {
+                toast.error('Failed to delete attachment');
+            }
+        } else if (type === 'link') {
+            const projectId = project?.id; // Assuming `id` from useParams is the projectId
+            if (projectId) {
+                try {
+                    await deleteLinkMutation.mutateAsync({ linkId: id, projectId: projectId });
+                } catch (err) {
+                    toast.error('Failed to delete link');
+                }
+            }
+        }
+
+        setDeleteConfirmation({ isOpen: false, type: null, id: null });
+        } finally {
+            setDeleteInProgress(false);
+        }
+    };
+
     // File upload state
     const [isUploading, setIsUploading] = useState(false);
     const [isDragOver, setIsDragOver] = useState(false);
@@ -245,11 +314,7 @@ const EditProject = () => {
     };
 
     const handleRemoveModule = (id: string) => {
-        setModules(modules.filter(m => m.id !== id));
-        if (editingModuleId === id) {
-            setEditingModuleId(null);
-            setNewModuleName("");
-        }
+        setDeleteConfirmation({ isOpen: true, type: 'module', id });
     };
 
     const handleAddMilestone = () => {
@@ -287,13 +352,7 @@ const EditProject = () => {
     };
 
     const handleRemoveMilestone = (id: string) => {
-        setMilestones(milestones.filter(m => m.id !== id));
-        if (editingMilestoneId === id) {
-            setEditingMilestoneId(null);
-            setNewMilestoneName("");
-            setNewMilestoneStart(undefined);
-            setNewMilestoneEnd(undefined);
-        }
+        setDeleteConfirmation({ isOpen: true, type: 'milestone', id });
     };
 
     const handleAddTeamMember = () => {
@@ -497,21 +556,12 @@ const EditProject = () => {
         }
     };
 
-    const handleDeleteAttachment = async (attachmentId: string) => {
-        try {
-            await deleteAttachmentMutation.mutateAsync(attachmentId);
-        } catch (err) {
-            toast.error('Failed to delete attachment');
-        }
+    const handleDeleteAttachment = (attachmentId: string) => {
+        setDeleteConfirmation({ isOpen: true, type: 'attachment', id: attachmentId });
     };
 
-    const handleDeleteLink = async (linkId: string) => {
-        if (!id) return;
-        try {
-            await deleteLinkMutation.mutateAsync({ linkId, projectId: id });
-        } catch (err) {
-            toast.error('Failed to delete link');
-        }
+    const handleDeleteLink = (linkId: string) => {
+        setDeleteConfirmation({ isOpen: true, type: 'link', id: linkId });
     };
 
     const handleSave = async () => {
@@ -519,6 +569,16 @@ const EditProject = () => {
 
         if (!projectName.trim()) {
             toast.error('Project name is required');
+            return;
+        }
+
+        if (!startDate) {
+            toast.error('Start date is required');
+            return;
+        }
+
+        if (!targetDate) {
+            toast.error('Target date is required');
             return;
         }
 
@@ -575,83 +635,88 @@ const EditProject = () => {
             }
 
             // Sync Modules
-            const initialModules = project.projectModules || [];
-            const initialModuleIds = initialModules.map(m => m.id);
-            const currentModuleIds = modules.map(m => m.id);
+            try {
+                const initialModules = project.projectModules || [];
+                const initialModuleIds = initialModules.map(m => m.id);
+                const currentModuleIds = modules.map(m => m.id);
 
-            // Modules to add (ones that don't have a UUID-like format or weren't in initial)
-            const modulesToAdd = modules.filter(m => !initialModuleIds.includes(m.id));
-            // Modules to remove
-            const moduleIdsToRemove = initialModuleIds.filter(id => !currentModuleIds.includes(id));
-            // Modules to update
-            const modulesToUpdate = modules.filter(m => {
-                const initial = initialModules.find(im => im.id === m.id);
-                return initial && initial.name !== m.name;
-            });
+                // Modules to add
+                const modulesToAdd = modules.filter(m => !initialModuleIds.includes(m.id));
+                // Modules to remove
+                const moduleIdsToRemove = initialModuleIds.filter(id => !currentModuleIds.includes(id));
+                // Modules to update
+                const modulesToUpdate = modules.filter(m => {
+                    const initial = initialModules.find(im => im.id === m.id);
+                    return initial && initial.name !== m.name;
+                });
 
-            if (modulesToAdd.length > 0) {
-                await Promise.all(modulesToAdd.map(m =>
-                    modulesService.create({
+                if (modulesToAdd.length > 0) {
+                    await modulesService.createMany(modulesToAdd.map(m => ({
                         project_id: id,
                         name: m.name,
-                        module_type: 'software', // Default
-                    })
-                ));
-            }
+                        module_type: 'software' as any,
+                    })));
+                }
 
-            if (modulesToUpdate.length > 0) {
-                await Promise.all(modulesToUpdate.map(m =>
-                    modulesService.update(m.id, { name: m.name })
-                ));
-            }
+                if (modulesToUpdate.length > 0) {
+                    if (modulesService.updateMany) {
+                        await modulesService.updateMany(modulesToUpdate.map(m => ({ id: m.id, name: m.name })));
+                    } else {
+                        await Promise.all(modulesToUpdate.map(m =>
+                            modulesService.update(m.id, { name: m.name })
+                        ));
+                    }
+                }
 
-            if (moduleIdsToRemove.length > 0) {
-                await Promise.all(moduleIdsToRemove.map(mid =>
-                    modulesService.delete(mid)
-                ));
+                if (moduleIdsToRemove.length > 0) {
+                    await modulesService.deleteMany(moduleIdsToRemove);
+                }
+            } catch (moduleError) {
+                console.error('Error syncing modules:', moduleError);
+                toast.warning('Project updated but module changes failed to sync');
             }
 
             // Sync Milestones
-            const initialMilestones = project.milestones || [];
-            const initialMilestoneIds = initialMilestones.map(m => m.id);
-            const currentMilestoneIds = milestones.map(m => m.id);
+            try {
+                const initialMilestones = project.milestones || [];
+                const initialMilestoneIds = initialMilestones.map(m => m.id);
+                const currentMilestoneIds = milestones.map(m => m.id);
 
-            // Milestones to add
-            const milestonesToAdd = milestones.filter(m => !initialMilestoneIds.includes(m.id));
-            // Milestones to remove
-            const milestoneIdsToRemove = initialMilestoneIds.filter(id => !currentMilestoneIds.includes(id));
-            // Milestones to update
-            const milestonesToUpdate = milestones.filter(m => {
-                const initial = initialMilestones.find(im => im.id === m.id);
-                if (!initial) return false;
-                const initialDate = initial.date ? format(new Date(initial.date), 'yyyy-MM-dd') : null;
-                const currentDate = m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null;
-                return initial.title !== m.name || initialDate !== currentDate;
-            });
+                // Milestones to add
+                const milestonesToAdd = milestones.filter(m => !initialMilestoneIds.includes(m.id));
+                // Milestones to remove
+                const milestoneIdsToRemove = initialMilestoneIds.filter(id => !currentMilestoneIds.includes(id));
+                // Milestones to update
+                const milestonesToUpdate = milestones.filter(m => {
+                    const initial = initialMilestones.find(im => im.id === m.id);
+                    if (!initial) return false;
+                    const initialDate = initial.date ? format(new Date(initial.date), 'yyyy-MM-dd') : null;
+                    const currentDate = m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null;
+                    return initial.title !== m.name || initialDate !== currentDate;
+                });
 
-            if (milestonesToAdd.length > 0) {
-                await Promise.all(milestonesToAdd.map(m =>
-                    milestonesService.create({
+                if (milestonesToAdd.length > 0) {
+                    await milestonesService.createMany(milestonesToAdd.map(m => ({
                         project_id: id,
                         name: m.name,
                         due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
-                    })
-                ));
-            }
+                    })));
+                }
 
-            if (milestonesToUpdate.length > 0) {
-                await Promise.all(milestonesToUpdate.map(m =>
-                    milestonesService.update(m.id, {
+                if (milestonesToUpdate.length > 0) {
+                    await milestonesService.updateMany(milestonesToUpdate.map(m => ({
+                        id: m.id,
                         name: m.name,
                         due_date: m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null,
-                    })
-                ));
-            }
+                    })));
+                }
 
-            if (milestoneIdsToRemove.length > 0) {
-                await Promise.all(milestoneIdsToRemove.map(mid =>
-                    milestonesService.delete(mid)
-                ));
+                if (milestoneIdsToRemove.length > 0) {
+                    await milestonesService.deleteMany(milestoneIdsToRemove);
+                }
+            } catch (milestoneError) {
+                console.error('Error syncing milestones:', milestoneError);
+                toast.warning('Project updated but milestone changes failed to sync');
             }
 
             // Invalidate queries to ensure project detail page reflects all changes
@@ -716,8 +781,8 @@ const EditProject = () => {
         <>
             <div className="max-w-4xl mx-auto space-y-6">
                 {/* Header */}
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4 min-w-0 w-full sm:w-auto">
                         <Button
                             variant="ghost"
                             size="icon"
@@ -726,12 +791,12 @@ const EditProject = () => {
                         >
                             <ArrowLeft className="h-5 w-5" />
                         </Button>
-                        <div>
-                            <h1 className="text-2xl font-semibold text-foreground">Edit Project</h1>
-                            <p className="text-muted-foreground text-sm">{project.name}</p>
+                        <div className="min-w-0 flex-1">
+                            <h1 className="text-2xl font-semibold text-foreground truncate">Edit Project</h1>
+                            <p className="text-muted-foreground text-sm truncate">{project.name}</p>
                         </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 shrink-0">
                         <Button variant="outline" onClick={() => navigate(`/projects/${id}`)}>
                             Cancel
                         </Button>
@@ -754,7 +819,7 @@ const EditProject = () => {
                     <CardContent className="space-y-4">
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
-                                <Label htmlFor="projectName">Project Name *</Label>
+                                <Label htmlFor="projectName">Project Name <span className="text-destructive">*</span></Label>
                                 <div className="flex gap-2">
                                     <Popover open={isEmojiPickerOpen} onOpenChange={setIsEmojiPickerOpen}>
                                         <PopoverTrigger asChild>
@@ -799,6 +864,7 @@ const EditProject = () => {
                                         id="projectName"
                                         placeholder="Enter project name"
                                         value={projectName}
+                                        maxLength={100}
                                         onChange={(e) => setProjectName(e.target.value)}
                                         className="flex-1"
                                     />
@@ -808,7 +874,7 @@ const EditProject = () => {
 
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
-                                <Label htmlFor="projectType">Project Type</Label>
+                                <Label htmlFor="projectType">Project Type <span className="text-destructive">*</span></Label>
                                 <Select value={projectType} onValueChange={setProjectType}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select type" />
@@ -823,7 +889,7 @@ const EditProject = () => {
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="projectStage">Project Stage</Label>
+                                <Label htmlFor="projectStage">Project Stage <span className="text-destructive">*</span></Label>
                                 <Select value={projectStage} onValueChange={setProjectStage}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select stage" />
@@ -840,19 +906,30 @@ const EditProject = () => {
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="projectDescription">Description</Label>
-                            <Textarea
-                                id="projectDescription"
-                                placeholder="Describe your project..."
-                                value={projectDescription}
-                                onChange={(e) => setProjectDescription(e.target.value)}
-                                rows={4}
-                            />
+                            <Label htmlFor="projectDescription">Project Description <span className="text-destructive">*</span></Label>
+                            <div className="space-y-1">
+                                <Textarea
+                                    id="projectDescription"
+                                    placeholder="Describe your project..."
+                                    value={projectDescription}
+                                    maxLength={1000}
+                                    onChange={(e) => setProjectDescription(e.target.value)}
+                                    rows={4}
+                                />
+                                <div className="flex justify-end">
+                                    <span className={cn(
+                                        "text-[10px] tabular-nums",
+                                        projectDescription.length >= 1000 ? "text-destructive font-medium" : "text-muted-foreground"
+                                    )}>
+                                        {projectDescription.length}/1000
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
-                                <Label>Start Date</Label>
+                                <Label>Start Date <span className="text-destructive">*</span></Label>
                                 <Popover>
                                     <PopoverTrigger asChild>
                                         <Button
@@ -871,13 +948,14 @@ const EditProject = () => {
                                             mode="single"
                                             selected={startDate}
                                             onSelect={setStartDate}
+                                            disabled={{ before: startOfToday() }}
                                             initialFocus
                                         />
                                     </PopoverContent>
                                 </Popover>
                             </div>
                             <div className="space-y-2">
-                                <Label>Target Date</Label>
+                                <Label>Target Date <span className="text-destructive">*</span></Label>
                                 <Popover>
                                     <PopoverTrigger asChild>
                                         <Button
@@ -896,6 +974,7 @@ const EditProject = () => {
                                             mode="single"
                                             selected={targetDate}
                                             onSelect={setTargetDate}
+                                            disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false)}
                                             initialFocus
                                         />
                                     </PopoverContent>
@@ -945,6 +1024,7 @@ const EditProject = () => {
                                         id="clientName"
                                         placeholder="e.g. John Doe"
                                         value={clientName}
+                                        maxLength={100}
                                         onChange={(e) => setClientName(e.target.value)}
                                     />
                                 </div>
@@ -954,28 +1034,44 @@ const EditProject = () => {
                                         id="clientOrg"
                                         placeholder="e.g. Acme Corp"
                                         value={clientOrganization}
+                                        maxLength={100}
                                         onChange={(e) => setClientOrganization(e.target.value)}
                                     />
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="clientContact">Client Contact Info</Label>
+                                <Label htmlFor="clientContact">Contact Number (10 digits)</Label>
                                 <Input
                                     id="clientContact"
-                                    placeholder="e.g. email or phone number"
+                                    placeholder="e.g. 1234567890"
                                     value={clientContact}
-                                    onChange={(e) => setClientContact(e.target.value)}
+                                    maxLength={10}
+                                    onChange={(e) => {
+                                        const val = e.target.value.replace(/\D/g, "");
+                                        setClientContact(val);
+                                    }}
                                 />
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="notes">Internal Project Notes</Label>
-                                <Textarea
-                                    id="notes"
-                                    placeholder="Any additional information..."
-                                    value={notes}
-                                    onChange={(e) => setNotes(e.target.value)}
-                                    rows={3}
-                                />
+                                <div className="space-y-1">
+                                    <Textarea
+                                        id="notes"
+                                        placeholder="Any additional information..."
+                                        value={notes}
+                                        maxLength={2000}
+                                        onChange={(e) => setNotes(e.target.value)}
+                                        rows={3}
+                                    />
+                                    <div className="flex justify-end">
+                                        <span className={cn(
+                                            "text-[10px] tabular-nums",
+                                            notes.length >= 2000 ? "text-destructive font-medium" : "text-muted-foreground"
+                                        )}>
+                                            {notes.length}/2000
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -1192,8 +1288,19 @@ const EditProject = () => {
                                 onChange={(e) => setNewModuleName(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleAddModule()}
                             />
+                            {editingModuleId && (
+                                <Button 
+                                    variant="outline" 
+                                    onClick={() => {
+                                        setEditingModuleId(null);
+                                        setNewModuleName("");
+                                    }}
+                                >
+                                    <X className="h-4 w-4 mr-0" />
+                                </Button>
+                            )}
                             <Button onClick={handleAddModule} disabled={!newModuleName.trim()}>
-                                {editingModuleId ? <Settings className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                                {editingModuleId ? <Settings className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
                                 {editingModuleId ? "Update" : "Add"}
                             </Button>
                         </div>
@@ -1247,7 +1354,7 @@ const EditProject = () => {
                                             {newMilestoneStart ? format(newMilestoneStart, "PP") : "Start"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneStart} onSelect={setNewMilestoneStart} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneStart} onSelect={setNewMilestoneStart} disabled={{ before: startOfToday() }} /></PopoverContent>
                                 </Popover>
                                 <Popover>
                                     <PopoverTrigger asChild>
@@ -1256,12 +1363,29 @@ const EditProject = () => {
                                             {newMilestoneEnd ? format(newMilestoneEnd, "PP") : "End"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneEnd} onSelect={setNewMilestoneEnd} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneEnd} onSelect={setNewMilestoneEnd} disabled={(date) => isBefore(date, startOfToday()) || (newMilestoneStart ? isBefore(date, newMilestoneStart) : false)} /></PopoverContent>
                                 </Popover>
                             </div>
-                            <Button className="w-full" variant="secondary" onClick={handleAddMilestone} disabled={!newMilestoneName.trim() || !newMilestoneStart || !newMilestoneEnd}>
-                                {editingMilestoneId ? "Update Milestone" : "Add Milestone"}
-                            </Button>
+                            <div className="flex gap-2">
+                                {editingMilestoneId && (
+                                    <Button 
+                                        variant="outline" 
+                                        className="w-1/3"
+                                        onClick={() => {
+                                            setEditingMilestoneId(null);
+                                            setNewMilestoneName("");
+                                            setNewMilestoneStart(undefined);
+                                            setNewMilestoneEnd(undefined);
+                                        }}
+                                    >
+                                        <X className="h-4 w-4 mr-1" />
+                                        Cancel
+                                    </Button>
+                                )}
+                                <Button className="flex-1" variant="secondary" onClick={handleAddMilestone} disabled={!newMilestoneName.trim() || !newMilestoneStart || !newMilestoneEnd}>
+                                    {editingMilestoneId ? "Update Milestone" : "Add Milestone"}
+                                </Button>
+                            </div>
                         </div>
 
                         {milestones.length > 0 && (
@@ -1436,6 +1560,35 @@ const EditProject = () => {
                         )}
                     </CardContent>
                 </Card>
+
+                {/* Delete Confirmation Dialog */}
+                <Dialog open={deleteConfirmation.isOpen} onOpenChange={(open) => {
+                    if (!open) setDeleteConfirmation({ isOpen: false, type: null, id: null });
+                }}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Confirm Deletion</DialogTitle>
+                            <DialogDescription>
+                                Are you sure you want to delete this {deleteConfirmation.type}? This action cannot be undone.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setDeleteConfirmation({ isOpen: false, type: null, id: null })} disabled={deleteInProgress}>
+                                Cancel
+                            </Button>
+                            <Button variant="destructive" onClick={confirmDelete} disabled={deleteInProgress}>
+                                {deleteInProgress ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                        Deleting...
+                                    </>
+                                ) : (
+                                    'Delete'
+                                )}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
             </div>
         </>
     );

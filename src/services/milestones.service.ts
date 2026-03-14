@@ -69,6 +69,16 @@ export const milestonesService = {
     return data;
   },
 
+  async createMany(milestones: MilestoneInsert[]): Promise<Milestone[]> {
+    const { data, error } = await supabase
+      .from('milestones')
+      .insert(milestones)
+      .select();
+
+    if (error) throw error;
+    return data || [];
+  },
+
   async update(id: string, updates: MilestoneUpdate): Promise<Milestone> {
     const { data, error } = await supabase
       .from('milestones')
@@ -81,13 +91,33 @@ export const milestonesService = {
     return data;
   },
 
-  async delete(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('milestones')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id);
+  async updateMany(updates: { id: string; name?: string; due_date?: string | null }[]): Promise<void> {
+    try {
+      const { error } = await (supabase.rpc as any)('batch_update_milestones', { updates });
+      if (error) throw error;
+    } catch (err) {
+      console.warn('Batch update RPC failed, falling back to sequential update:', err);
+      await Promise.all(updates.map(u => this.update(u.id, { 
+        name: u.name, 
+        due_date: u.due_date 
+      } as MilestoneUpdate)));
+    }
+  },
 
-    if (error) throw error;
+  async delete(id: string): Promise<void> {
+    const { error } = await (supabase.rpc as any)('soft_delete_milestone', { milestone_id: id });
+    if (error) {
+      console.error('[milestonesService] soft_delete_milestone failed', error);
+      throw error;
+    }
+  },
+
+  async deleteMany(ids: string[]): Promise<void> {
+    const { error } = await (supabase.rpc as any)('batch_soft_delete_milestones', { milestone_ids: ids });
+    if (error) {
+      console.error('[milestonesService] batch_soft_delete_milestones failed', error);
+      throw error;
+    }
   },
 
   async getUpcoming(limit: number = 5): Promise<Milestone[]> {
