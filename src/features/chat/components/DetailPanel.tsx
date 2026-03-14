@@ -24,7 +24,8 @@ interface SharedFile {
   fileName: string;
   fileSize: number;
   mimeType: string;
-  url: string;
+  storagePath?: string;
+  url?: string;
   createdAt: string;
 }
 
@@ -55,6 +56,7 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
   // Shared files
   const [sharedFiles, setSharedFiles] = useState<SharedFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(false);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
   // Add member dialog
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -221,6 +223,28 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
     } catch (err) {
       console.error(err);
       toast.error('Failed to remove member');
+    }
+  };
+
+  const handleDownloadSharedFile = async (file: SharedFile) => {
+    const key = `${file.fileName}-${file.createdAt}`;
+    if (downloadingFile === key) return;
+
+    setDownloadingFile(key);
+    try {
+      await chatService.downloadChatAttachment({
+        fileName: file.fileName,
+        fileSize: file.fileSize,
+        mimeType: file.mimeType,
+        storagePath: file.storagePath,
+        url: file.url,
+      });
+      toast.success(`Downloading ${file.fileName}`);
+    } catch (error) {
+      console.error('Failed to download shared file:', error);
+      toast.error('Failed to download file');
+    } finally {
+      setDownloadingFile(null);
     }
   };
 
@@ -500,13 +524,15 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
               <div className="space-y-1.5">
                 {sharedFiles.map((file, i) => {
                   const isImage = file.mimeType?.startsWith('image/');
+                  const fileKey = `${file.fileName}-${file.createdAt}`;
+                  const isDownloading = downloadingFile === fileKey;
                   return (
-                    <a
+                    <button
                       key={i}
-                      href={file.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 p-2 rounded-md hover:bg-muted transition-colors"
+                      type="button"
+                      onClick={() => handleDownloadSharedFile(file)}
+                      disabled={isDownloading}
+                      className="w-full flex items-center gap-2 p-2 rounded-md hover:bg-muted transition-colors text-left disabled:opacity-70"
                     >
                       {isImage ? (
                         <Image className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -514,11 +540,15 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
                         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium truncate">{file.fileName}</p>
+                        <p className="text-xs font-medium break-all whitespace-normal">{file.fileName}</p>
                         <p className="text-[10px] text-muted-foreground">{formatFileSize(file.fileSize)}</p>
                       </div>
-                      <Download className="h-3 w-3 text-muted-foreground shrink-0" />
-                    </a>
+                      {isDownloading ? (
+                        <Loader2 className="h-3 w-3 text-muted-foreground shrink-0 animate-spin" />
+                      ) : (
+                        <Download className="h-3 w-3 text-muted-foreground shrink-0" />
+                      )}
+                    </button>
                   );
                 })}
               </div>

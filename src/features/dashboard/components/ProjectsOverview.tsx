@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Project } from '@/types';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ProjectsOverviewProps {
   projects: Project[];
@@ -29,9 +30,11 @@ const stageLabels = {
 };
 
 export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
+  const isMobile = useIsMobile();
+
   return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="pb-3 flex flex-row items-center justify-between">
+    <Card className="h-full flex flex-col overflow-hidden">
+      <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
         <CardTitle className="text-base font-medium">Active Projects</CardTitle>
         <Button variant="ghost" size="sm" asChild>
           <Link to="/projects" className="text-muted-foreground hover:text-foreground">
@@ -40,7 +43,7 @@ export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
           </Link>
         </Button>
       </CardHeader>
-      <CardContent className="space-y-4 flex-1">
+      <CardContent className="space-y-3 md:space-y-4 flex-1 px-3 md:px-6 overflow-x-hidden">
         {projects.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in">
             <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
@@ -63,17 +66,20 @@ export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
               to={`/projects/${project.id}`}
               className="block"
             >
-              <div className="p-4 rounded-lg border border-border hover:border-border/80 hover:shadow-subtle transition-all cursor-pointer group">
-                <div className="flex items-start justify-between gap-4 mb-3">
-                  <div className="min-w-0">
-                    <h3 className="font-medium text-sm group-hover:text-primary transition-colors truncate">
+              <div className="p-3 md:p-4 rounded-lg border border-border/70 hover:border-border/80 hover:shadow-subtle transition-all cursor-pointer group overflow-hidden max-w-full">
+                <div className="flex items-start justify-between gap-2 md:gap-4 mb-3">
+                  <div className="min-w-0 flex-1">
+                    <h3
+                      className="font-medium text-sm group-hover:text-primary transition-colors max-w-full break-all line-clamp-2 md:line-clamp-1"
+                      title={project.name}
+                    >
                       {project.name}
                     </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-full whitespace-nowrap overflow-hidden text-ellipsis">
                       {project.description}
                     </p>
                   </div>
-                  <Badge variant="secondary" className={cn('shrink-0', stageColors[project.stage])}>
+                  <Badge variant="secondary" className={cn('shrink-0 text-[11px]', stageColors[project.stage])}>
                     {stageLabels[project.stage]}
                   </Badge>
                 </div>
@@ -86,7 +92,7 @@ export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
                   <Progress value={project.progress} className="h-1.5" />
                 </div>
 
-                <div className="flex items-center justify-between mt-3">
+                <div className="flex items-center justify-between mt-3 gap-2">
                   <div className="flex items-center gap-1">
                     <Users className="h-3.5 w-3.5 text-muted-foreground" />
                     <div className="flex -space-x-1.5 ml-1">
@@ -106,10 +112,14 @@ export function ProjectsOverview({ projects }: ProjectsOverviewProps) {
                       )}
                     </div>
                   </div>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground shrink-0">
                     Due {new Date(project.targetDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   </span>
                 </div>
+
+                {isMobile && project.team.length === 0 && (
+                  <div className="mt-2 text-[11px] text-muted-foreground">No team assigned</div>
+                )}
               </div>
             </Link>
           ))

@@ -215,15 +215,11 @@ export function useOfflineQueue(userId: string | undefined) {
           .upload(path, file);
         if (uploadErr) throw uploadErr;
 
-        const { data: urlData } = supabase.storage
-          .from('chat-attachments')
-          .getPublicUrl(path);
-
         const content = JSON.stringify({
           fileName: item.fileName,
           fileSize: item.fileSize,
           mimeType: item.mimeType,
-          url: urlData.publicUrl,
+          storagePath: path,
           text: item.caption || undefined,
         });
 

@@ -46,8 +46,6 @@ import { Label } from '@/components/ui/label';
 import {
   Search,
   UserPlus,
-  LayoutGrid,
-  List,
   MoreHorizontal,
   Mail,
   Edit,
@@ -95,7 +93,6 @@ const Team = () => {
   const isAdminOrOwner = currentMember?.role === 'admin' || currentMember?.role === 'owner';
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('');
@@ -309,15 +306,8 @@ const Team = () => {
   return (
     <>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">Team Members</h1>
-            <p className="text-muted-foreground">
-              Manage your team and invite new members
-            </p>
-          </div>
-          {isAdminOrOwner && (
+        {isAdminOrOwner && (
+          <div className="flex justify-end">
             <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -380,8 +370,8 @@ const Team = () => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -482,120 +472,14 @@ const Team = () => {
               className="pl-10"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-              size="icon"
-              onClick={() => setViewMode('grid')}
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-              size="icon"
-              onClick={() => setViewMode('list')}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
 
         {/* Team Members */}
-        {viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredMembers.map((member) => (
-              <MemberCard key={member.id} member={member} />
-            ))}
-          </div>
-        ) : (
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Member</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead>Projects</TableHead>
-                  <TableHead>Status</TableHead>
-                  {isAdminOrOwner && <TableHead className="w-[50px]"></TableHead>}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMembers.map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                            {member.initials}
-                          </AvatarFallback>
-                        </Avatar>
-                        <span className="font-medium">{member.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{member.role}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {member.email}
-                    </TableCell>
-                    <TableCell>
-                      {member.department && (
-                        <Badge variant="secondary">{member.department}</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>{member.projectCount}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={getStatusColor(member.status)}>
-                        {member.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {member.id !== user?.id && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleMessageClick(member.id)}
-                          disabled={isStartingChat === member.id}
-                        >
-                          <MessageSquare className="h-4 w-4 mr-2 text-primary" />
-                          {isStartingChat === member.id ? '...' : 'Message'}
-                        </Button>
-                      )}
-                    </TableCell>
-                    {isAdminOrOwner && (
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleOpenEdit(member)}>
-                              <Edit className="h-4 w-4 mr-2" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => setManageOrgMember(member)}>
-                              <Building className="h-4 w-4 mr-2" />
-                              Manage Organizations
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={() => handleRemove(member.id)}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              Remove
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        )}
+        <div className="space-y-4">
+          {filteredMembers.map((member) => (
+            <MemberCard key={member.id} member={member} />
+          ))}
+        </div>
 
         {filteredMembers.length === 0 && (
           <div className="text-center py-12">

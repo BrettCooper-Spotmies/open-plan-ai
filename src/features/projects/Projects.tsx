@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ProjectListProgress } from './components/ProjectListProgress';
-import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, Trash2, FolderOpen, Package } from 'lucide-react';
+import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, Trash2, FolderOpen, Package, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -31,6 +31,7 @@ import { useProjectLinks } from '@/hooks/useProjectLinks';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { formatModuleType } from './utils/projectUtils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const stageColors = {
   concept: 'bg-muted text-muted-foreground',
@@ -50,9 +51,11 @@ const stageLabels = {
 
 export default function Projects() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { data: projects, isLoading, error } = useProjects();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -70,6 +73,18 @@ export default function Projects() {
   const { data: projectFiles = [], isLoading: isLoadingFiles } = useProjectAttachments(selectedFilesProjectId || undefined);
 
   const projectList = projects || [];
+
+  useEffect(() => {
+    if (isMobile && view !== 'list') {
+      setView('list');
+    }
+  }, [isMobile, view]);
+
+  useEffect(() => {
+    if (!isMobile) {
+      setMobileSearchOpen(false);
+    }
+  }, [isMobile]);
 
   const filteredProjects = projectList.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -134,48 +149,102 @@ export default function Projects() {
 
   return (
     <>
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Manage and track all your hardware projects.
-            </p>
+      <div className="space-y-4 md:space-y-6 animate-fade-in">
+        {!isMobile && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+              <p className="text-muted-foreground text-sm mt-1">
+                Manage and track all your hardware projects.
+              </p>
+            </div>
+            <Button className="gap-2 shrink-0" onClick={() => navigate('/projects/new')}>
+              <Plus className="h-4 w-4" />
+              New Project
+            </Button>
           </div>
-          <Button className="gap-2 shrink-0" onClick={() => navigate('/projects/new')}>
-            <Plus className="h-4 w-4" />
-            New Project
-          </Button>
-        </div>
+        )}
 
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search projects..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <div className="flex border rounded-lg">
-            <Button
-              variant={view === 'grid' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="rounded-r-none"
-              onClick={() => setView('grid')}
-            >
-              <Grid3X3 className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={view === 'list' ? 'secondary' : 'ghost'}
-              size="icon"
-              className="rounded-l-none"
-              onClick={() => setView('list')}
-            >
-              <List className="h-4 w-4" />
-            </Button>
-          </div>
+        <div className="space-y-2.5 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-sm p-2.5 md:p-0 md:border-0 md:bg-transparent md:backdrop-blur-0">
+          <div className={cn('flex items-center gap-2 md:gap-4', isMobile && !mobileSearchOpen && 'justify-end')}>
+            {isMobile ? (
+              mobileSearchOpen ? (
+                <div className="relative flex-1 max-w-none">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    autoFocus
+                    placeholder="Search projects..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9 pr-9 h-10 rounded-xl bg-background/80"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Close search"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setMobileSearchOpen(false);
+                      setSearch('');
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 rounded-xl shrink-0 border-border/70 bg-background/70"
+                  onClick={() => setMobileSearchOpen(true)}
+                  aria-label="Open search"
+                  title="Search Projects"
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+              )
+            ) : (
+              <div className="relative flex-1 max-w-none md:max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search projects..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9 h-10 md:h-9 rounded-xl md:rounded-md bg-background/80"
+                />
+              </div>
+            )}
+
+            {isMobile ? (
+              <Button
+                size="icon"
+                className="h-10 w-10 rounded-xl shrink-0 bg-primary text-primary-foreground shadow-[0_8px_24px_rgba(0,0,0,0.18)] hover:bg-primary/90"
+                onClick={() => navigate('/projects/new')}
+                aria-label="Create project"
+                title="New Project"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            ) : (
+              <div className="flex border border-border/70 rounded-xl md:rounded-lg bg-background/60 shrink-0">
+                <Button
+                  variant={view === 'grid' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-10 w-10 md:h-9 md:w-9 rounded-r-none"
+                  onClick={() => setView('grid')}
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={view === 'list' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-10 w-10 md:h-9 md:w-9 rounded-l-none"
+                  onClick={() => setView('list')}
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+        </div>
         </div>
 
         {filteredProjects.length === 0 ? (
@@ -196,19 +265,19 @@ export default function Projects() {
         ) : (
           <div className={cn(
             view === 'grid'
-              ? 'grid gap-4 sm:grid-cols-2 lg:grid-cols-3'
+              ? 'grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3'
               : 'space-y-3'
           )}>
             {filteredProjects.map((project) => (
               <Link key={project.id} to={`/projects/${project.id}`} className="block h-full">
-                <Card className="p-5 card-hover cursor-pointer h-full flex flex-col">
+                <Card className="p-4 md:p-5 rounded-2xl border-border/70 bg-gradient-to-b from-card to-card/80 card-hover cursor-pointer h-full flex flex-col shadow-[0_10px_30px_rgba(0,0,0,0.16)]">
                   <div className="flex items-start justify-between gap-3 mb-4 flex-1">
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-medium truncate flex items-center gap-2">
+                      <h3 className="font-semibold truncate flex items-center gap-2">
                         {project.icon && <span className="text-lg">{project.icon}</span>}
                         {project.name}
                       </h3>
-                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                      <p className="text-sm text-muted-foreground/90 line-clamp-2 mt-1">
                         {project.description || 'No description'}
                       </p>
                     </div>
@@ -251,11 +320,11 @@ export default function Projects() {
 
                   <ProjectListProgress projectId={project.id} progress={project.progress || 0} />
 
-                  <div className="flex items-center justify-between pt-3 border-t">
+                  <div className="flex items-center justify-between pt-3 border-t border-border/60">
                     <div className="flex items-center gap-2">
                       <Users className="h-4 w-4 text-muted-foreground" />
                     </div>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-[11px] text-muted-foreground">
                       Updated {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : 'N/A'}
                     </span>
                   </div>

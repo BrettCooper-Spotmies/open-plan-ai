@@ -24,7 +24,8 @@ export interface MessageAttachment {
   fileName: string;
   fileSize: number;
   mimeType: string;
-  url: string;
+  storagePath?: string;
+  url?: string;
 }
 
 export interface MessageReaction {

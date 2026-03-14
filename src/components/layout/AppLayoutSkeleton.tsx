@@ -1,6 +1,8 @@
 import React from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { getDaysInMonth, startOfMonth, getDay } from 'date-fns';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { useLocation } from 'react-router-dom';
 
 interface AppLayoutSkeletonProps {
   variant?: 'dashboard' | 'list' | 'detail' | 'default' | 'projects' | 'chat' | 'team' | 'settings' | 'notifications' | 'calendar' | 'reports';
@@ -278,6 +280,80 @@ function ProjectsPageSkeleton() {
 }
 
 function ChatSkeleton() {
+  const isMobile = useIsMobile();
+  const location = useLocation();
+  const hasConversationInRoute = /^\/chat\/[^/]+/.test(location.pathname);
+
+  if (isMobile) {
+    if (hasConversationInRoute) {
+      return (
+        <div className="flex h-full flex-col overflow-hidden animate-fade-in bg-background">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-border/70 shrink-0">
+            <Skeleton className="h-4 w-4" />
+            <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+            <div className="flex-1 min-w-0">
+              <Skeleton className="h-4 w-24 mb-1" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-4 w-4" />
+              <Skeleton className="h-4 w-4" />
+              <Skeleton className="h-4 w-4" />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-hidden px-3 py-3 space-y-3">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className={`flex items-end gap-2 ${i % 2 ? 'justify-end' : 'justify-start'}`}>
+                {i % 2 === 0 && <Skeleton className="h-7 w-7 rounded-full shrink-0" />}
+                <Skeleton className={`h-9 rounded-2xl ${i % 2 ? 'w-[62%]' : 'w-[72%]'}`} />
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-border/70 px-2 py-2 shrink-0">
+            <div className="flex items-center gap-2 rounded-2xl border border-input/80 px-2 py-1.5">
+              <Skeleton className="h-7 w-7 rounded-full" />
+              <Skeleton className="h-7 w-7 rounded-full" />
+              <Skeleton className="h-7 w-7 rounded-full" />
+              <Skeleton className="h-8 flex-1 rounded-lg" />
+              <Skeleton className="h-8 w-8 rounded-full" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex h-full flex-col overflow-hidden animate-fade-in bg-background">
+        <div className="px-3 py-3 border-b border-border/70 shrink-0">
+          <Skeleton className="h-5 w-20 mb-3" />
+          <Skeleton className="h-9 w-full rounded-md mb-2" />
+          <div className="grid grid-cols-3 gap-1">
+            <Skeleton className="h-7 rounded-md" />
+            <Skeleton className="h-7 rounded-md" />
+            <Skeleton className="h-7 rounded-md" />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-hidden px-1.5 py-2">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex items-center gap-3 px-2.5 py-2.5 rounded-md">
+              <Skeleton className="h-9 w-9 rounded-full shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <Skeleton className="h-3.5 w-24" />
+                  <Skeleton className="h-2.5 w-8" />
+                </div>
+                <Skeleton className="h-3 w-[72%] mt-1.5" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full overflow-hidden animate-fade-in">
       {/* Left: Conversation list - 280px */}
@@ -588,6 +664,77 @@ function ReportsSkeleton() {
 
 // Used as Suspense fallback for /calendar route (full page)
 function CalendarSkeleton() {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-full bg-background animate-fade-in px-3 py-3">
+        <div className="px-2 pt-2 pb-2 border-b border-border/60">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-24" />
+              <Skeleton className="h-5 w-10" />
+            </div>
+            <Skeleton className="h-8 w-8 rounded-full" />
+          </div>
+
+          <div className="flex items-center gap-2 mt-3">
+            <Skeleton className="h-8 w-20 rounded-full" />
+            <Skeleton className="h-8 w-16 rounded-full" />
+          </div>
+        </div>
+
+        <div className="px-2 py-2 border-b border-border/60">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <div className="flex-1 grid grid-cols-7 gap-1">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <div key={i} className="flex flex-col items-center gap-1">
+                  <Skeleton className="h-3 w-3" />
+                  <Skeleton className="h-7 w-7 rounded-full" />
+                </div>
+              ))}
+            </div>
+            <Skeleton className="h-8 w-8 rounded-full" />
+          </div>
+
+          <div className="flex justify-center mt-2">
+            <Skeleton className="h-4 w-4 rounded" />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-hidden">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="border-b border-border/50 px-4 py-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-6 w-14" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+                <Skeleton className="h-4 w-4" />
+              </div>
+
+              {i % 2 === 0 ? (
+                <div className="space-y-2">
+                  <div className="flex items-start gap-3 p-2 rounded-md border border-border/60">
+                    <Skeleton className="h-4 w-4 rounded-full mt-1" />
+                    <div className="flex-1">
+                      <Skeleton className="h-4 w-40 mb-2" />
+                      <Skeleton className="h-3 w-24" />
+                    </div>
+                    <Skeleton className="h-5 w-12 rounded-full" />
+                  </div>
+                </div>
+              ) : (
+                <Skeleton className="h-4 w-20" />
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full gap-6 animate-fade-in px-6 py-6">
       {/* Page Header - matches "Calendar" title + subtitle */}

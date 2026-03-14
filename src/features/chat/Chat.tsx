@@ -28,7 +28,7 @@ export default function Chat() {
   const { activeConversationId, setActiveConversation, isDetailPanelOpen, isMessageSearchOpen } = useChatStore();
 
   const { conversations, loading: convsLoading, refetch } = useConversations();
-  const activeId = conversationId || activeConversationId;
+  const activeId = conversationId || (isMobile ? null : activeConversationId);
   const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages, sendMessage } = useMessages(activeId ?? null);
   const { reactionMap, handleToggleReaction } = useReactions(messages, user?.id);
   const { data: reachableUsers = [] } = useReachableUsers();
@@ -49,6 +49,13 @@ export default function Chat() {
       setActiveConversation(conversationId);
     }
   }, [conversationId, activeConversationId, setActiveConversation]);
+
+  useEffect(() => {
+    // On mobile /chat route, do not auto-open a stale cached conversation.
+    if (isMobile && !conversationId && activeConversationId) {
+      setActiveConversation(null);
+    }
+  }, [isMobile, conversationId, activeConversationId, setActiveConversation]);
 
   const handleSelectConversation = useCallback((id: string) => {
     setActiveConversation(id);
@@ -80,8 +87,9 @@ export default function Chat() {
     }
   }, [refetchMessages]);
 
-  const showConversationList = isMobile ? !activeConv : true;
-  const showMessageArea = isMobile ? !!activeConv : true;
+  const routeHasConversation = Boolean(conversationId);
+  const showConversationList = isMobile ? !routeHasConversation : true;
+  const showMessageArea = isMobile ? routeHasConversation : true;
 
   const typingText = typingNames.length > 0
     ? typingNames.length === 1
@@ -140,7 +148,7 @@ export default function Chat() {
                 />
               </>
             ) : (
-              <EmptyState type="no-selection" />
+              routeHasConversation && convsLoading ? <MessageAreaSkeleton /> : <EmptyState type="no-selection" />
             )}
           </div>
         )}

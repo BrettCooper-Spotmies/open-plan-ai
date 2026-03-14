@@ -60,10 +60,18 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { profileService } from '@/services/profile.service';
 import { organizationsService, OrganizationSettings } from '@/services/organizations.service';
-import { Skeleton } from '@/components/ui/skeleton';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useUserStore } from '@/stores/useUserStore';
+
+type ThemePreference = 'light' | 'dark' | 'system';
+
+function normalizeTheme(value: unknown): ThemePreference {
+  if (value === 'light' || value === 'dark' || value === 'system') {
+    return value;
+  }
+  return 'system';
+}
 
 
 const Settings = () => {
@@ -75,17 +83,17 @@ const Settings = () => {
   const updatePreferences = useUserStore((s) => s.updatePreferences);
 
   // Local state for Appearance tab so changes only apply on Save
-  const [tempTheme, setTempTheme] = useState<'light' | 'dark' | 'system'>(theme as any);
+  const [tempTheme, setTempTheme] = useState<ThemePreference>(normalizeTheme(theme));
   const [tempPreferences, setTempPreferences] = useState(preferences);
 
   // Sync local appearance state when global state loads/changes remotely
   useEffect(() => {
-    setTempTheme(theme as any);
+    setTempTheme(normalizeTheme(theme));
     setTempPreferences(preferences);
   }, [theme, preferences]);
 
   // User settings for notifications/appearance (still local - coming soon)
-  const [userSettings, setUserSettings] = useState<UserSettings>(defaultUserSettings);
+  const [userSettings] = useState<UserSettings>(defaultUserSettings);
 
 
   // Profile form state
@@ -366,33 +374,25 @@ const Settings = () => {
   return (
     <>
       <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your organization & personal preferences
-          </p>
-        </div>
-
+      
         {/* Tabs */}
         <Tabs defaultValue="general" className="space-y-6">
           <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="general" className="gap-2">
-              <SettingsIcon className="h-4 w-4 hidden sm:block" />
-              General
+            <TabsTrigger value="general" className="gap-1 px-0 sm:px-3" title="General">
+              <SettingsIcon className="h-4 w-4" />
+              <span className="hidden sm:inline">General</span>
             </TabsTrigger>
-            <TabsTrigger value="profile" className="gap-2">
-              <User className="h-4 w-4 hidden sm:block" />
-              Profile
+            <TabsTrigger value="profile" className="gap-1 px-0 sm:px-3" title="Profile">
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">Profile</span>
             </TabsTrigger>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <TabsTrigger value="notifications" className="gap-2">
-                    <Bell className="h-4 w-4 hidden sm:block" />
+                  <TabsTrigger value="notifications" className="gap-1 px-0 sm:px-3" title="Notifications (Coming Soon)">
+                    <Bell className="h-4 w-4" />
                     <span className="hidden sm:inline">Notifications</span>
-                    <span className="sm:hidden">Notifs</span>
-                    <Badge variant="outline" className="ml-1 bg-amber-100 text-amber-800 border-amber-300 text-xs">
+                    <Badge variant="outline" className="ml-1 bg-amber-100 text-amber-800 border-amber-300 text-xs hidden sm:inline-flex">
                       Soon
                     </Badge>
                   </TabsTrigger>
@@ -402,14 +402,13 @@ const Settings = () => {
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <TabsTrigger value="appearance" className="gap-2">
-              <Palette className="h-4 w-4 hidden sm:block" />
+            <TabsTrigger value="appearance" className="gap-1 px-0 sm:px-3" title="Appearance">
+              <Palette className="h-4 w-4" />
               <span className="hidden sm:inline">Appearance</span>
-              <span className="sm:hidden">Theme</span>
             </TabsTrigger>
-            <TabsTrigger value="danger" className="gap-2 text-destructive data-[state=active]:text-destructive">
-              <ShieldAlert className="h-4 w-4 hidden sm:block" />
-              Danger
+            <TabsTrigger value="danger" className="gap-1 px-0 sm:px-3 text-destructive data-[state=active]:text-destructive" title="Danger Zone">
+              <ShieldAlert className="h-4 w-4" />
+              <span className="hidden sm:inline">Danger</span>
             </TabsTrigger>
           </TabsList>
 
