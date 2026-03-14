@@ -16,30 +16,43 @@ const MONTHS = [
 ];
 
 const currentYear = new Date().getFullYear();
-/** Configurable year range: yearsBefore past → yearsAfter future (default 5 past, 15 future) */
-const YEARS_BEFORE = 5;
-const YEARS_AFTER = 15;
+/** Configurable year range: yearsBefore past → yearsAfter future (default 50 past, 50 future) */
+const YEARS_BEFORE = 50;
+const YEARS_AFTER = 50;
 const YEARS = Array.from(
   { length: YEARS_BEFORE + YEARS_AFTER + 1 },
   (_, i) => currentYear - YEARS_BEFORE + i
 );
 
+/**
+ * Checks if a value is a valid Date object.
+ * @param d - The value to check
+ */
 function isValidDate(d: unknown): d is Date {
   return d instanceof Date && !Number.isNaN(d.getTime());
 }
 
+/**
+ * Custom caption component for react-day-picker with month and year dropdowns.
+ */
 function CustomCaption({ displayMonth }: { displayMonth: Date }) {
   const { goToMonth, nextMonth, previousMonth } = useNavigation();
-  const safeMonth = isValidDate(displayMonth) ? displayMonth : new Date();
+  const safeMonth = React.useMemo(() => (isValidDate(displayMonth) ? displayMonth : new Date()), [displayMonth]);
 
   const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newDate = setMonth(safeMonth, parseInt(e.target.value, 10));
-    goToMonth(newDate);
+    const val = parseInt(e.target.value, 10);
+    if (!isNaN(val)) {
+      const newDate = setMonth(safeMonth, val);
+      goToMonth(newDate);
+    }
   };
 
   const handleYearChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newDate = setYear(safeMonth, parseInt(e.target.value, 10));
-    goToMonth(newDate);
+    const val = parseInt(e.target.value, 10);
+    if (!isNaN(val)) {
+      const newDate = setYear(safeMonth, val);
+      goToMonth(newDate);
+    }
   };
 
   return (

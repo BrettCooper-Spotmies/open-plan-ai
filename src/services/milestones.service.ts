@@ -92,10 +92,16 @@ export const milestonesService = {
   },
 
   async updateMany(updates: { id: string; name?: string; due_date?: string | null }[]): Promise<void> {
-    await Promise.all(updates.map(u => this.update(u.id, { 
-      name: u.name, 
-      due_date: u.due_date 
-    } as MilestoneUpdate)));
+    try {
+      const { error } = await (supabase.rpc as any)('batch_update_milestones', { updates });
+      if (error) throw error;
+    } catch (err) {
+      console.warn('Batch update RPC failed, falling back to sequential update:', err);
+      await Promise.all(updates.map(u => this.update(u.id, { 
+        name: u.name, 
+        due_date: u.due_date 
+      } as MilestoneUpdate)));
+    }
   },
 
   async delete(id: string): Promise<void> {
