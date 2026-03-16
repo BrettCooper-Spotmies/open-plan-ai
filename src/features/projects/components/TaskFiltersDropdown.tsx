@@ -42,21 +42,6 @@ const priorityOptions: { value: Priority; label: string; color: string }[] = [
   { value: 'low', label: 'Low', color: 'bg-priority-low' },
 ];
 
-const moduleTypeOptions: { value: ModuleType; label: string }[] = [
-  { value: 'hardware', label: 'Hardware' },
-  { value: 'software', label: 'Software' },
-  { value: 'firmware', label: 'Firmware' },
-  { value: 'testing', label: 'Testing' },
-  { value: 'design', label: 'Design' },
-  { value: 'procurement', label: 'Procurement' },
-  { value: 'manufacturing', label: 'Manufacturing' },
-  { value: 'qa', label: 'QA' },
-  { value: 'logistics', label: 'Logistics' },
-  { value: 'enclosure', label: 'Enclosure' },
-  { value: 'pcb', label: 'PCB' },
-  { value: 'power', label: 'Power' },
-];
-
 const dueDateOptions = [
   { value: 'overdue', label: 'Overdue' },
   { value: 'today', label: 'Today' },
@@ -90,12 +75,12 @@ export function TaskFiltersDropdown({
     onFiltersChange({ ...filters, priority: updated.length ? updated : undefined });
   };
 
-  const toggleModule = (module: ModuleType) => {
-    const current = filters.module || [];
-    const updated = current.includes(module)
-      ? current.filter(m => m !== module)
-      : [...current, module];
-    onFiltersChange({ ...filters, module: updated.length ? updated : undefined });
+  const toggleModule = (moduleId: string) => {
+    const current = filters.moduleIds || [];
+    const updated = current.includes(moduleId)
+      ? current.filter(id => id !== moduleId)
+      : [...current, moduleId];
+    onFiltersChange({ ...filters, moduleIds: updated.length ? updated : undefined });
   };
 
   const toggleAssignee = (assigneeId: string) => {
@@ -187,22 +172,26 @@ export function TaskFiltersDropdown({
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <span>Module</span>
-            {filters.module?.length ? (
+            {filters.moduleIds?.length ? (
               <Badge variant="secondary" className="ml-auto h-4 px-1.5 text-[10px]">
-                {filters.module.length}
+                {filters.moduleIds.length}
               </Badge>
             ) : null}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="max-h-[300px] overflow-y-auto">
-            {moduleTypeOptions.map(option => (
-              <DropdownMenuCheckboxItem
-                key={option.value}
-                checked={filters.module?.includes(option.value) || false}
-                onCheckedChange={() => toggleModule(option.value)}
-              >
-                {option.label}
-              </DropdownMenuCheckboxItem>
-            ))}
+            {modules.length === 0 ? (
+              <DropdownMenuItem disabled>No modules created</DropdownMenuItem>
+            ) : (
+              modules.map(module => (
+                <DropdownMenuCheckboxItem
+                  key={module.id}
+                  checked={filters.moduleIds?.includes(module.id) || false}
+                  onCheckedChange={() => toggleModule(module.id)}
+                >
+                  {module.name}
+                </DropdownMenuCheckboxItem>
+              ))
+            )}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 

@@ -313,7 +313,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     const column = columns.find(c => c.id === columnId);
     // Don't allow removing special columns or columns with tasks
     if (column?.isSpecial) return;
-    if (column && tasks.some(t => t.status === column.status && !blockedTaskIds.has(t.id))) {
+    if (column && tasks.some(t => t.status === column.status)) {
       return;
     }
     setColumns(columns.filter(c => c.id !== columnId));
@@ -403,11 +403,11 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
   // Get tasks for a column, considering blocked tasks go to Dependencies
   const getColumnTasks = (column: KanbanColumn) => {
     if (column.isSpecial && column.status === 'blocked') {
-      // Dependencies bucket shows blocked tasks
-      return tasks.filter(t => blockedTaskIds.has(t.id) && t.status !== 'done');
+      // Dependencies bucket is the blocked-status lane
+      return tasks.filter(t => t.status === 'blocked');
     }
-    // Regular columns show non-blocked tasks with that status
-    return tasks.filter(t => t.status === column.status && !blockedTaskIds.has(t.id));
+    // Regular columns are status-driven
+    return tasks.filter(t => t.status === column.status);
   };
 
   return (
@@ -539,7 +539,9 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                                                   {...provided.dragHandleProps}
                                                   className={cn(
                                                     'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
-                                                    moduleColors[task.module] || 'border-l-muted',
+                                                    isDependenciesColumn
+                                                      ? 'border-l-red-500'
+                                                      : (moduleColors[task.module] || 'border-l-muted'),
                                                     snapshot.isDragging && 'shadow-lg rotate-2'
                                                   )}
                                                   onMouseEnter={() => setHoveredTask(task.id)}
@@ -551,10 +553,16 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                                                   <div className="space-y-2">
                                                     <div className="flex items-start justify-between gap-2">
                                                       <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
-                                                        {isBlocked ? (
+                                                        {isDependenciesColumn ? (
                                                           <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
-                                                            <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
-                                                              <Check className="h-3 w-3 text-status-blocked" />
+                                                            <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
+                                                              <AlertTriangle className="h-3 w-3 text-status-blocked" />
+                                                            </div>
+                                                          </div>
+                                                        ) : isBlocked ? (
+                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                            <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
+                                                              <AlertTriangle className="h-3 w-3 text-status-blocked" />
                                                             </div>
                                                           </div>
                                                         ) : task.status === 'done' ? (

@@ -362,17 +362,30 @@ export const tasksService = {
     if (updates.actualHours !== undefined) updateData.actual_hours = updates.actualHours;
     if ('milestoneId' in updates) updateData.milestone_id = updates.milestoneId ?? null;
 
-    if (updates.moduleId !== undefined) updateData.module_id = updates.moduleId;
+    // Use key existence so explicit unlinks can set module_id to null.
+    if ('moduleId' in updates) updateData.module_id = updates.moduleId ?? null;
     if (updates.moduleIds !== undefined) updateData.module_ids = updates.moduleIds;
 
-    const { data, error } = await supabase
-      .from('tasks')
-      .update(updateData)
-      .eq('id', taskId)
-      .select()
-      .single();
-
-    if (error) throw error;
+    let data: { id: string; title: string; [key: string]: any };
+    if (Object.keys(updateData).length > 0) {
+      const { data: updatedData, error } = await supabase
+        .from('tasks')
+        .update(updateData)
+        .eq('id', taskId)
+        .select()
+        .single();
+      if (error) throw error;
+      data = updatedData;
+    } else {
+      // No direct column changes — fetch current row for activity logging
+      const { data: currentData, error } = await supabase
+        .from('tasks')
+        .select('id, title')
+        .eq('id', taskId)
+        .single();
+      if (error) throw error;
+      data = currentData;
+    }
 
     // Log activity if status changed
     if (updates.status !== undefined) {
@@ -510,6 +523,29 @@ export const tasksService = {
         }
       }
       return updatedTasks;
+    }
+
+    const hasUnsupportedBatchFields = updates.some(({ updates: taskUpdates }) => (
+      taskUpdates.blockedBy !== undefined
+      || taskUpdates.assignees !== undefined
+      || taskUpdates.checklist !== undefined
+      || taskUpdates.attachments !== undefined
+      || taskUpdates.title !== undefined
+      || taskUpdates.description !== undefined
+      || taskUpdates.module !== undefined
+      || taskUpdates.dueDate !== undefined
+      || taskUpdates.startDate !== undefined
+      || taskUpdates.tags !== undefined
+      || taskUpdates.estimatedHours !== undefined
+      || taskUpdates.actualHours !== undefined
+      || taskUpdates.moduleId !== undefined
+      || taskUpdates.moduleIds !== undefined
+    ));
+
+    if (hasUnsupportedBatchFields) {
+      return Promise.all(
+        updates.map(({ id, updates: taskUpdates }) => this.update(projectId, id, taskUpdates))
+      );
     }
 
     // Prepare payload for RPC if possible

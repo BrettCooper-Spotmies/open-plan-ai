@@ -170,13 +170,20 @@ export function MilestonesView({
                       <Card className={cn(
                         'p-4 transition-shadow hover:shadow-md cursor-pointer',
                         milestone.completed && 'opacity-75'
-                      )}>
+                      )}
+                        onClick={() => handleMilestoneClick(milestone)}
+                      >
                         <div className="space-y-3">
                           {/* Header */}
                           <div className="flex items-start justify-between">
                             <div className="flex items-start gap-3 flex-1">
                               <CollapsibleTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 shrink-0"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
                                   {isExpanded ? (
                                     <ChevronDown className="h-4 w-4" />
                                   ) : (
@@ -184,7 +191,7 @@ export function MilestonesView({
                                   )}
                                 </Button>
                               </CollapsibleTrigger>
-                              <div className="flex-1" onClick={() => handleMilestoneClick(milestone)}>
+                              <div className="flex-1">
                                 <div className="flex items-center gap-2">
                                   <h3 className={cn(
                                     'font-medium',

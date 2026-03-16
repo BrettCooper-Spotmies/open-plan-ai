@@ -262,6 +262,7 @@ export interface TaskFilter {
   status?: TaskStatus[];
   priority?: Priority[];
   module?: ModuleType[];
+  moduleIds?: string[];
   assignee?: string[];
   milestoneId?: string;
   dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
