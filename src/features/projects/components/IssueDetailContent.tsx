@@ -16,12 +16,6 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
     Select,
     SelectContent,
     SelectItem,
@@ -55,7 +49,6 @@ import {
     File,
     Check,
     Maximize2,
-    MoreVertical,
     Loader2,
     Upload,
 } from 'lucide-react';
@@ -84,6 +77,7 @@ import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { attachmentsService } from '@/services/attachments.service';
 import { toast } from 'sonner';
+import { ISSUE_SEVERITY_DISPLAY, ISSUE_SEVERITY_OPTIONS } from './issueSeverity';
 
 interface IssueDetailContentProps {
     issue: Issue | null;
@@ -95,13 +89,6 @@ interface IssueDetailContentProps {
     isExpanded?: boolean;
     isDraft?: boolean;
 }
-
-const severityOptions: { value: IssueSeverity; label: string; color: string }[] = [
-    { value: 'critical', label: 'Critical', color: 'bg-destructive text-destructive-foreground' },
-    { value: 'major', label: 'Major', color: 'bg-orange-500 text-white' },
-    { value: 'minor', label: 'Minor', color: 'bg-yellow-500 text-black' },
-    { value: 'trivial', label: 'Trivial', color: 'bg-muted text-muted-foreground' },
-];
 
 const statusOptions: { value: IssueStatus; label: string; color: string }[] = [
     { value: 'open', label: 'Open', color: 'bg-destructive' },
@@ -409,32 +396,17 @@ export function IssueDetailContent({
                     {/* Severity Badge and Actions on the right */}
                     <div className="flex-shrink-0 pt-1">
                         <div className="flex items-center gap-2">
-                            <Badge className={cn(severityOptions.find(s => s.value === editedIssue.severity)?.color)}>
-                                <AlertTriangle className="h-3 w-3 mr-1" />
-                                {severityOptions.find(s => s.value === editedIssue.severity)?.label}
+                            <Badge className={cn(ISSUE_SEVERITY_DISPLAY[editedIssue.severity].color)}>
+                                {(() => {
+                                    const SeverityIcon = ISSUE_SEVERITY_DISPLAY[editedIssue.severity].icon;
+                                    return <SeverityIcon className="h-3 w-3 mr-1" />;
+                                })()}
+                                {ISSUE_SEVERITY_DISPLAY[editedIssue.severity].label}
                             </Badge>
                             {!isExpanded && onExpand && (
                                 <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" onClick={onExpand}>
                                     <Maximize2 className="h-4 w-4" />
                                 </Button>
-                            )}
-                            {onDelete && (
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground">
-                                            <MoreVertical className="h-4 w-4" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                        <DropdownMenuItem
-                                            className="text-destructive focus:text-destructive"
-                                            onSelect={() => setShowDeleteConfirm(true)}
-                                        >
-                                            <Trash2 className="h-4 w-4 mr-2" />
-                                            Delete Issue
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
                             )}
                         </div>
                     </div>
@@ -633,17 +605,20 @@ export function IssueDetailContent({
                             >
                                 <SelectTrigger className="h-9" aria-required="true">
                                     <SelectValue>
-                                        <Badge className={cn('text-xs gap-1', severityOptions.find(s => s.value === editedIssue.severity)?.color)}>
-                                            <AlertTriangle className="h-3 w-3" />
-                                            {severityOptions.find(s => s.value === editedIssue.severity)?.label}
+                                        <Badge className={cn('text-xs gap-1', ISSUE_SEVERITY_DISPLAY[editedIssue.severity].color)}>
+                                            {(() => {
+                                                const SeverityIcon = ISSUE_SEVERITY_DISPLAY[editedIssue.severity].icon;
+                                                return <SeverityIcon className="h-3 w-3" />;
+                                            })()}
+                                            {ISSUE_SEVERITY_DISPLAY[editedIssue.severity].label}
                                         </Badge>
                                     </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {severityOptions.map((option) => (
+                                    {ISSUE_SEVERITY_OPTIONS.map((option) => (
                                         <SelectItem key={option.value} value={option.value}>
                                             <Badge className={cn('text-xs gap-1', option.color)}>
-                                                <AlertTriangle className="h-3 w-3" />
+                                                <option.icon className="h-3 w-3" />
                                                 {option.label}
                                             </Badge>
                                         </SelectItem>
@@ -959,6 +934,24 @@ export function IssueDetailContent({
                                 <p className="text-xs text-muted-foreground">Tasks blocked by this issue</p>
 
                                 <div className="space-y-2">
+                                    <div className="flex gap-2">
+                                        <Select value={selectedBlockingTask} onValueChange={setSelectedBlockingTask}>
+                                            <SelectTrigger className="flex-1">
+                                                <SelectValue placeholder="Select task..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {availableTasksForBlocking.map((t) => (
+                                                    <SelectItem key={t.id} value={t.id}>
+                                                        {t.title}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button size="icon" variant="outline" onClick={handleAddBlockingTask}>
+                                            <Plus className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+
                                     {(editedIssue.blocksTaskIds || []).map((taskId) => {
                                         const depTask = getTaskById(taskId);
                                         const title = depTask ? depTask.title : `Task ${taskId}`;
@@ -987,24 +980,6 @@ export function IssueDetailContent({
                                             </div>
                                         );
                                     })}
-
-                                    <div className="flex gap-2">
-                                        <Select value={selectedBlockingTask} onValueChange={setSelectedBlockingTask}>
-                                            <SelectTrigger className="flex-1">
-                                                <SelectValue placeholder="Select task..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {availableTasksForBlocking.map((t) => (
-                                                    <SelectItem key={t.id} value={t.id}>
-                                                        {t.title}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <Button size="icon" variant="outline" onClick={handleAddBlockingTask}>
-                                            <Plus className="h-4 w-4" />
-                                        </Button>
-                                    </div>
                                 </div>
                             </div>
 
@@ -1017,6 +992,24 @@ export function IssueDetailContent({
                                 <p className="text-xs text-muted-foreground">Tasks blocking this issue</p>
 
                                 <div className="space-y-2">
+                                    <div className="flex gap-2">
+                                        <Select value={selectedBlockedByTask} onValueChange={setSelectedBlockedByTask}>
+                                            <SelectTrigger className="flex-1">
+                                                <SelectValue placeholder="Select task..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {availableTasksForBlockedBy.map((t) => (
+                                                    <SelectItem key={t.id} value={t.id}>
+                                                        {t.title}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <Button size="icon" variant="outline" onClick={handleAddBlockedByTask}>
+                                            <Plus className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+
                                     {(editedIssue.blockedBy || []).map((taskId) => {
                                         const depTask = getTaskById(taskId);
                                         const title = depTask ? depTask.title : `Task ${taskId}`;
@@ -1045,24 +1038,6 @@ export function IssueDetailContent({
                                             </div>
                                         );
                                     })}
-
-                                    <div className="flex gap-2">
-                                        <Select value={selectedBlockedByTask} onValueChange={setSelectedBlockedByTask}>
-                                            <SelectTrigger className="flex-1">
-                                                <SelectValue placeholder="Select task..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {availableTasksForBlockedBy.map((t) => (
-                                                    <SelectItem key={t.id} value={t.id}>
-                                                        {t.title}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <Button size="icon" variant="outline" onClick={handleAddBlockedByTask}>
-                                            <Plus className="h-4 w-4" />
-                                        </Button>
-                                    </div>
                                 </div>
                             </div>
                         </div>

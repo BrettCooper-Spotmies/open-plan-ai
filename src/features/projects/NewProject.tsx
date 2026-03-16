@@ -527,6 +527,16 @@ const NewProject = () => {
       return;
     }
 
+    if (!projectType.trim()) {
+      toast.error('Project type is required');
+      return;
+    }
+
+    if (!projectDescription.trim()) {
+      toast.error('Project description is required');
+      return;
+    }
+
     if (!startDate) {
       toast.error('Start date is required');
       return;
@@ -545,8 +555,8 @@ const NewProject = () => {
       // Create the project
       const project = await createProjectMutation.mutateAsync({
         project: {
-          name: projectName,
-          description: projectDescription || undefined,
+          name: projectName.trim(),
+          description: projectDescription.trim(),
           stage: projectStage,
           type: projectType,
           startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
@@ -1557,7 +1567,15 @@ const NewProject = () => {
           </Button>
           <Button
             onClick={handleCreateProject}
-            disabled={!projectName || !projectType || !startDate || !expectedEndDate || isCreating || !currentOrganization}
+            disabled={
+              !projectName.trim()
+              || !projectType.trim()
+              || !projectDescription.trim()
+              || !startDate
+              || !expectedEndDate
+              || isCreating
+              || !currentOrganization
+            }
           >
             {isCreating ? (
               <>

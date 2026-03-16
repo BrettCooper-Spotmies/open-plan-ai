@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { Issue, TeamMember } from '@/types';
+import { Issue, TeamMember, Comment } from '@/types';
 import { projects as mockProjects, projectIssues as mockIssues } from '@/data/mockData';
 import { config } from '@/config';
 import { attachmentsService } from './attachments.service';
@@ -13,7 +13,11 @@ const USE_SUPABASE = config.api.useSupabase;
 const mockDelay = (ms: number = 100) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Map database issue to frontend Issue type
-function mapDbIssueToIssue(dbIssue: any, assignees: TeamMember[] = [], reportedBy?: TeamMember): Issue {
+function mapDbIssueToIssue(
+  dbIssue: any,
+  assignees: TeamMember[] = [],
+  reportedBy?: TeamMember,
+): Issue {
   const defaultReporter: TeamMember = {
     id: dbIssue.reported_by || 'unknown',
     name: 'Unknown User',
@@ -36,6 +40,27 @@ function mapDbIssueToIssue(dbIssue: any, assignees: TeamMember[] = [], reportedB
     dueDate: dbIssue.due_date || undefined,
     assignees,
     attachments: dbIssue.attachments || [],
+    comments: dbIssue.comments || [],
+    blockedBy: dbIssue.blocked_by_task_ids || [],
+    blocksTaskIds: dbIssue.blocks_task_ids || [],
+    blocksMilestoneIds: dbIssue.blocks_milestone_ids || [],
+  };
+}
+
+function mapDbCommentToComment(dbComment: any): Comment {
+  const profile = Array.isArray(dbComment.profiles) ? dbComment.profiles[0] : dbComment.profiles;
+  return {
+    id: dbComment.id,
+    content: dbComment.content,
+    createdAt: dbComment.created_at,
+    author: {
+      id: profile?.id || dbComment.author_id || 'unknown',
+      name: profile?.name || 'Unknown User',
+      email: profile?.email || '',
+      initials: profile?.initials || 'UN',
+      role: 'member',
+      avatar: profile?.avatar_url || undefined,
+    },
   };
 }
 
@@ -63,9 +88,16 @@ export const issuesService = {
     const issueIds = data.map(i => i.id);
 
     // Step 2: Fetch assignees and attachments separately (no FK hints)
-    const [assigneesResult, attachmentsResult] = await Promise.all([
+    const [assigneesResult, attachmentsResult, commentsResult] = await Promise.all([
       supabase.from('issue_assignees').select('issue_id, user_id').in('issue_id', issueIds),
       supabase.from('attachments').select('*').in('entity_id', issueIds).eq('entity_type', 'issue'),
+      supabase
+        .from('comments')
+        .select('id, content, created_at, author_id, entity_id, profiles:author_id(id, name, email, initials, avatar_url)')
+        .in('entity_id', issueIds)
+        .eq('entity_type', 'issue')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true }),
     ]);
 
     // Step 3: Fetch profiles for all referenced user IDs
@@ -87,6 +119,9 @@ export const issuesService = {
     return data.map(issue => {
       const issueAssigneeRows = (assigneesResult.data || []).filter(a => a.issue_id === issue.id);
       const issueAttachments = (attachmentsResult.data || []).filter(a => a.entity_id === issue.id);
+      const issueComments = (commentsResult.data || [])
+        .filter((c: any) => c.entity_id === issue.id)
+        .map((c: any) => mapDbCommentToComment(c));
 
       const reporterProfile = issue.reported_by ? profilesMap[issue.reported_by] : null;
       const reporter = reporterProfile ? {
@@ -133,7 +168,7 @@ export const issuesService = {
         };
       });
 
-      return mapDbIssueToIssue({ ...issue, attachments }, assignees, reporter);
+      return mapDbIssueToIssue({ ...issue, attachments, comments: issueComments }, assignees, reporter);
     });
   },
 
@@ -165,9 +200,16 @@ export const issuesService = {
     if (!data) return null;
 
     // Step 2: Fetch assignees and attachments separately
-    const [assigneesResult, attachmentsResult] = await Promise.all([
+    const [assigneesResult, attachmentsResult, commentsResult] = await Promise.all([
       supabase.from('issue_assignees').select('issue_id, user_id').eq('issue_id', issueId),
       supabase.from('attachments').select('*').eq('entity_id', issueId).eq('entity_type', 'issue'),
+      supabase
+        .from('comments')
+        .select('id, content, created_at, author_id, entity_id, profiles:author_id(id, name, email, initials, avatar_url)')
+        .eq('entity_id', issueId)
+        .eq('entity_type', 'issue')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true }),
     ]);
 
     // Step 3: Fetch profiles for all referenced user IDs
@@ -231,7 +273,9 @@ export const issuesService = {
       };
     });
 
-    return mapDbIssueToIssue({ ...data, attachments }, assignees, reporter);
+    const comments = (commentsResult.data || []).map((c: any) => mapDbCommentToComment(c));
+
+    return mapDbIssueToIssue({ ...data, attachments, comments }, assignees, reporter);
   },
 
   /**
@@ -270,6 +314,7 @@ export const issuesService = {
         category: issue.category || 'other',
         reported_by: user?.id || null,
         due_date: issue.dueDate || null,
+        blocks_milestone_ids: issue.blocksMilestoneIds || [],
       })
       .select()
       .single();
@@ -362,6 +407,9 @@ export const issuesService = {
     if (updates.category !== undefined) updateData.category = updates.category;
     if (updates.resolvedAt !== undefined) updateData.resolved_at = updates.resolvedAt;
     if (updates.dueDate !== undefined) updateData.due_date = updates.dueDate;
+    if (updates.blockedBy !== undefined) updateData.blocked_by_task_ids = updates.blockedBy;
+    if (updates.blocksTaskIds !== undefined) updateData.blocks_task_ids = updates.blocksTaskIds;
+    if (updates.blocksMilestoneIds !== undefined) updateData.blocks_milestone_ids = updates.blocksMilestoneIds;
 
     const { data, error } = await supabase
       .from('issues')
@@ -407,6 +455,37 @@ export const issuesService = {
             console.error('Failed to delete attachment during issue update:', err);
           }
         }
+      }
+    }
+
+    // Persist newly added comments into comments table.
+    if (updates.comments !== undefined) {
+      const { data: existingComments } = await supabase
+        .from('comments')
+        .select('id')
+        .eq('entity_id', issueId)
+        .eq('entity_type', 'issue')
+        .is('deleted_at', null);
+
+      const existingCommentIds = new Set((existingComments || []).map(c => c.id));
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const commentsToInsert = (updates.comments || [])
+        .filter(c => !!c.content?.trim())
+        .filter(c => !existingCommentIds.has(c.id))
+        .map(c => ({
+          entity_id: issueId,
+          entity_type: 'issue',
+          content: c.content.trim(),
+          author_id: user?.id || c.author?.id,
+        }))
+        .filter(c => !!c.author_id);
+
+      if (commentsToInsert.length > 0) {
+        const { error: commentInsertError } = await supabase
+          .from('comments')
+          .insert(commentsToInsert as any);
+        if (commentInsertError) throw commentInsertError;
       }
     }
 

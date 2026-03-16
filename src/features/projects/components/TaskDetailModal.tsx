@@ -77,6 +77,7 @@ import {
 } from '@/types';
 import { useTeamMembers } from '@/hooks/useProjects';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 // Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
 const toDateOnly = (date: Date | undefined | null): string | undefined => {
@@ -116,13 +117,6 @@ const priorityOptions: { value: Priority; label: string; color: string }[] = [
   { value: 'high', label: 'High', color: 'bg-priority-high text-white' },
   { value: 'medium', label: 'Medium', color: 'bg-priority-medium text-white' },
   { value: 'low', label: 'Low', color: 'bg-priority-low text-white' },
-];
-
-const moduleOptions: { value: ModuleType; label: string }[] = [
-  { value: 'hardware', label: 'Hardware' },
-  { value: 'software', label: 'Software' },
-  { value: 'firmware', label: 'Firmware' },
-  { value: 'testing', label: 'Testing' },
 ];
 
 // 30 Colors: 15 Primary (Hard) + 15 Light
@@ -204,6 +198,39 @@ const formatFileSize = (bytes: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const serializeTaskForDirtyCheck = (task: Task): string => {
+  const attachmentSnapshot = (task.attachments || [])
+    .map(a => ({
+      id: a.id,
+      filename: a.filename,
+      fileType: a.fileType,
+      fileSize: a.fileSize,
+      url: a.url,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  return JSON.stringify({
+    title: task.title || '',
+    description: task.description || '',
+    status: task.status,
+    priority: task.priority,
+    module: task.module || null,
+    moduleId: task.moduleId || null,
+    moduleIds: [...(task.moduleIds || [])].sort(),
+    dueDate: task.dueDate || null,
+    startDate: task.startDate || null,
+    assigneeIds: (task.assignees || []).map(a => a.id).sort(),
+    tags: [...(task.tags || [])].sort(),
+    checklist: (task.checklist || []).map(item => ({
+      id: item.id,
+      text: item.text,
+      completed: item.completed,
+    })),
+    blockedBy: [...(task.blockedBy || [])].sort(),
+    attachments: attachmentSnapshot,
+  });
+};
+
 export const TaskDetailModal = ({
   task,
   allTasks,
@@ -238,7 +265,7 @@ export const TaskDetailModal = ({
     updatedAt: new Date().toISOString(),
   });
 
-  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [, setIsLoadingComments] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [newComment, setNewComment] = useState('');
   const [selectedBlockingTask, setSelectedBlockingTask] = useState<string>('');
@@ -251,10 +278,11 @@ export const TaskDetailModal = ({
   const [editingTagValue, setEditingTagValue] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isCreatingModule, setIsCreatingModule] = useState(false);
-  const [newModuleName, setNewModuleName] = useState('');
-  const [newModuleType, setNewModuleType] = useState<ModuleType>('software');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [initialTaskSnapshot, setInitialTaskSnapshot] = useState('');
+  const [initialBlockingToIds, setInitialBlockingToIds] = useState<string[]>([]);
+  const [initializedForKey, setInitializedForKey] = useState<string | null>(null);
+  const formSessionKey = `${mode}:${task?.id || 'create'}`;
 
   // Fetch real comments when task changes
   useEffect(() => {
@@ -281,36 +309,40 @@ export const TaskDetailModal = ({
     }
   }, [isOpen, task?.id, mode]);
 
-  // Sync editedTask when task prop changes or when switching between modes
+  // Initialize form baselines once per modal session key
   useEffect(() => {
-    if (task) {
-      setEditedTask(task);
+    if (!isOpen) {
+      setInitializedForKey(null);
+      return;
     }
-  }, [task]);
+
+    if (initializedForKey === formSessionKey) {
+      return;
+    }
+
+    const baseTask = task || editedTask;
+    setEditedTask(baseTask);
+    setInitialTaskSnapshot(serializeTaskForDirtyCheck(baseTask));
+
+    const linkedTaskIds = baseTask.id
+      ? allTasks.filter(t => t.blockedBy.includes(baseTask.id)).map(t => t.id)
+      : [];
+
+    setLocalBlockingToIds(linkedTaskIds);
+    setInitialBlockingToIds(linkedTaskIds);
+    setInitializedForKey(formSessionKey);
+  }, [allTasks, editedTask, formSessionKey, initializedForKey, isOpen, task]);
 
   // "Blocking To" - tasks that have THIS task in their blockedBy.
   // We maintain a local copy to update immediately without waiting for allTasks prop to refresh.
-  const [localBlockingToIds, setLocalBlockingToIds] = useState<string[]>(() => {
-    if (!task) return [];
-    return allTasks
-      .filter(t => t.blockedBy.includes(task.id))
-      .map(t => t.id);
-  });
-
-  // Sync localBlockingToIds when task or allTasks prop changes
-  useEffect(() => {
-    if (editedTask?.id) {
-      setLocalBlockingToIds(
-        allTasks
-          .filter(t => t.blockedBy.includes(editedTask.id))
-          .map(t => t.id)
-      );
-    }
-  }, [editedTask?.id, allTasks]);
+  const [localBlockingToIds, setLocalBlockingToIds] = useState<string[]>([]);
 
   const blockingToTaskIds = localBlockingToIds;
-
-  if (!editedTask) return null;
+  const dependencyExcludedTaskIds = useMemo(() => new Set([
+    editedTask.id,
+    ...editedTask.blockedBy,
+    ...blockingToTaskIds,
+  ]), [blockingToTaskIds, editedTask.blockedBy, editedTask.id]);
 
   const handleFieldChange = <K extends keyof Task>(field: K, value: Task[K]) => {
     setEditedTask(prev => ({
@@ -318,6 +350,21 @@ export const TaskDetailModal = ({
       [field]: value,
       updatedAt: new Date().toISOString()
     }));
+  };
+
+  const handleStatusChange = (value: TaskStatus) => {
+    if (value === 'blocked') {
+      const hasDependencies =
+        (editedTask.blockedBy?.length || 0) > 0 ||
+        localBlockingToIds.length > 0 ||
+        (editedTask.linkedIssueIds?.length || 0) > 0;
+
+      if (!hasDependencies) {
+        toast.error('Blocked selected. Please add dependencies before saving.');
+      }
+    }
+
+    handleFieldChange('status', value);
   };
 
   const handleCancel = () => {
@@ -329,6 +376,15 @@ export const TaskDetailModal = ({
   };
 
   const handleCreate = () => {
+    if (!editedTask.moduleIds || editedTask.moduleIds.length === 0 || !isFormDirty) {
+      return;
+    }
+
+    if (isBlockedWithoutDependencies) {
+      toast.error('Please add dependencies before creating a blocked task');
+      return;
+    }
+
     if (editedTask && onCreate) {
       onCreate(editedTask);
       onClose();
@@ -395,7 +451,7 @@ export const TaskDetailModal = ({
 
         // Create attachment record in the database if task exists
         let attachmentId = `attachment-${Date.now()}-${Math.random()}`;
-        let uploadedBy: TeamMember = profile ? {
+        const uploadedBy: TeamMember = profile ? {
           id: profile.id,
           name: profile.name || profile.email,
           email: profile.email,
@@ -447,6 +503,37 @@ export const TaskDetailModal = ({
   const handleRemoveAttachment = (attachmentId: string) => {
     handleFieldChange('attachments', attachments.filter(a => a.id !== attachmentId));
   };
+
+  const hasSelectedModules = (editedTask.moduleIds || []).length > 0;
+  const normalizedEditedTaskSnapshot = useMemo(
+    () => serializeTaskForDirtyCheck(editedTask),
+    [editedTask]
+  );
+  const sortedCurrentBlockingToIds = useMemo(
+    () => [...localBlockingToIds].sort(),
+    [localBlockingToIds]
+  );
+  const sortedInitialBlockingToIds = useMemo(
+    () => [...initialBlockingToIds].sort(),
+    [initialBlockingToIds]
+  );
+  const hasBlockingToChanges = useMemo(() => {
+    if (sortedCurrentBlockingToIds.length !== sortedInitialBlockingToIds.length) {
+      return true;
+    }
+
+    return sortedCurrentBlockingToIds.some((id, idx) => id !== sortedInitialBlockingToIds[idx]);
+  }, [sortedCurrentBlockingToIds, sortedInitialBlockingToIds]);
+  const hasDependenciesForBlocked =
+    (editedTask.blockedBy?.length || 0) > 0 ||
+    localBlockingToIds.length > 0 ||
+    (editedTask.linkedIssueIds?.length || 0) > 0;
+  const isBlockedWithoutDependencies = editedTask.status === 'blocked' && !hasDependenciesForBlocked;
+  const isTaskDirty = initialTaskSnapshot !== '' && normalizedEditedTaskSnapshot !== initialTaskSnapshot;
+  const isFormDirty = isTaskDirty || hasBlockingToChanges;
+  const canSubmitTask = Boolean(
+    editedTask.title && editedTask.dueDate && hasSelectedModules && isFormDirty && !isBlockedWithoutDependencies
+  );
 
   // Comments handlers
   const comments = editedTask.comments || [];
@@ -526,18 +613,11 @@ export const TaskDetailModal = ({
       }));
     }
   };
-
-
-
   const availableTasksForBlocking = allTasks.filter(
-    t => t.id !== editedTask.id
-      && !localBlockingToIds.includes(t.id)
-      && !editedTask.blockedBy.includes(t.id)  // can't block a task that's already blocking you
+    t => !dependencyExcludedTaskIds.has(t.id)
   );
   const availableTasksForBlockedBy = allTasks.filter(
-    t => t.id !== editedTask.id
-      && !editedTask.blockedBy.includes(t.id)
-      && !localBlockingToIds.includes(t.id)  // can't be blocked by a task you're already blocking
+    t => !dependencyExcludedTaskIds.has(t.id)
   );
 
 
@@ -545,13 +625,18 @@ export const TaskDetailModal = ({
   const handleAddBlockingTask = () => {
     if (!selectedBlockingTask) return;
     const taskToUpdate = allTasks.find(t => t.id === selectedBlockingTask);
-    if (taskToUpdate && !localBlockingToIds.includes(selectedBlockingTask)) {
+    if (taskToUpdate && !dependencyExcludedTaskIds.has(selectedBlockingTask)) {
       setLocalBlockingToIds(prev => [...prev, selectedBlockingTask]);
     }
     setSelectedBlockingTask('');
   };
 
   const handleUpdateTask = async () => {
+    if (isBlockedWithoutDependencies) {
+      toast.error('Please add dependencies before saving blocked status');
+      return;
+    }
+
     setIsSaving(true);
     try {
       // Commit the main task changes
@@ -625,7 +710,7 @@ export const TaskDetailModal = ({
     if (!selectedBlockedByTask) return;
     setEditedTask(prev => {
       // Prevent duplicates
-      if (prev.blockedBy.includes(selectedBlockedByTask)) return prev;
+      if (dependencyExcludedTaskIds.has(selectedBlockedByTask)) return prev;
 
       const updated = {
         ...prev,
@@ -777,7 +862,7 @@ export const TaskDetailModal = ({
                   </Label>
                   <Select
                     value={editedTask.status}
-                    onValueChange={(value) => handleFieldChange('status', value as TaskStatus)}
+                    onValueChange={(value) => handleStatusChange(value as TaskStatus)}
                   >
                     <SelectTrigger aria-required="true">
                       <SelectValue>
@@ -841,12 +926,21 @@ export const TaskDetailModal = ({
                       const module = modules?.find(m => m.id === moduleId);
                       if (!module) return null;
                       return (
-                        <Badge key={module.id} variant="secondary" className="px-2 py-0.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
-                          <span className="text-xs font-normal">{module.name}</span>
+                        <Badge key={module.id} variant="secondary" className="max-w-full px-2 py-0.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
+                          <span className="text-xs font-normal truncate max-w-[180px] sm:max-w-[220px]">{module.name}</span>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleFieldChange('moduleIds', (editedTask.moduleIds || []).filter(id => id !== module.id));
+                              const updatedIds = (editedTask.moduleIds || []).filter(id => id !== module.id);
+                              setEditedTask(prev => ({
+                                ...prev,
+                                moduleIds: updatedIds,
+                                moduleId: updatedIds[0] || undefined,
+                                module: updatedIds.length > 0
+                                  ? (modules.find(m => m.id === updatedIds[0])?.type || prev.module)
+                                  : undefined,
+                                updatedAt: new Date().toISOString()
+                              }));
                             }}
                             className="ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none"
                           >
@@ -893,11 +987,11 @@ export const TaskDetailModal = ({
                                       });
                                       setIsModulePopoverOpen(false);
                                     }}
-                                    className="cursor-pointer"
+                                    className="cursor-pointer min-w-0"
                                   >
-                                    <div className="flex flex-col">
-                                      <span>{module.name}</span>
-                                      <span className="text-[10px] text-muted-foreground uppercase">{module.type}</span>
+                                    <div className="flex flex-col min-w-0 w-full">
+                                      <span className="truncate block">{module.name}</span>
+                                      <span className="text-[10px] text-muted-foreground uppercase truncate block">{module.type}</span>
                                     </div>
                                   </CommandItem>
                                 ))}
@@ -1362,7 +1456,7 @@ export const TaskDetailModal = ({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
                             onClick={() => handleRemoveBlockingTask(taskId)}
                           >
                             <X className="h-3 w-3" />
@@ -1418,7 +1512,7 @@ export const TaskDetailModal = ({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
                             onClick={() => handleRemoveBlockedByTask(taskId)}
                           >
                             <X className="h-3 w-3" />
@@ -1491,7 +1585,7 @@ export const TaskDetailModal = ({
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={!editedTask.title || !editedTask.dueDate}>
+            <Button onClick={handleCreate} disabled={!canSubmitTask}>
               Create Task
             </Button>
           </div>
@@ -1516,7 +1610,7 @@ export const TaskDetailModal = ({
               <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button onClick={handleUpdateTask} disabled={isSaving || !editedTask.title || !editedTask.dueDate}>
+              <Button onClick={handleUpdateTask} disabled={isSaving || !editedTask.title || !editedTask.dueDate || !isFormDirty || isBlockedWithoutDependencies}>
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Update Task
               </Button>

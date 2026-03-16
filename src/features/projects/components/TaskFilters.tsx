@@ -32,21 +32,6 @@ const priorityOptions: { value: Priority; label: string; color: string }[] = [
   { value: 'low', label: 'Low', color: 'bg-priority-low' },
 ];
 
-const moduleTypeOptions: { value: ModuleType; label: string }[] = [
-  { value: 'hardware', label: 'Hardware' },
-  { value: 'software', label: 'Software' },
-  { value: 'firmware', label: 'Firmware' },
-  { value: 'testing', label: 'Testing' },
-  { value: 'design', label: 'Design' },
-  { value: 'procurement', label: 'Procurement' },
-  { value: 'manufacturing', label: 'Manufacturing' },
-  { value: 'qa', label: 'QA' },
-  { value: 'logistics', label: 'Logistics' },
-  { value: 'enclosure', label: 'Enclosure' },
-  { value: 'pcb', label: 'PCB' },
-  { value: 'power', label: 'Power' },
-];
-
 const dueDateOptions = [
   { value: 'overdue', label: 'Overdue' },
   { value: 'today', label: 'Today' },
@@ -79,12 +64,12 @@ export function TaskFilters({
     onFiltersChange({ ...filters, priority: updated.length ? updated : undefined });
   };
 
-  const toggleModule = (module: ModuleType) => {
-    const current = filters.module || [];
-    const updated = current.includes(module)
-      ? current.filter(m => m !== module)
-      : [...current, module];
-    onFiltersChange({ ...filters, module: updated.length ? updated : undefined });
+  const toggleModule = (moduleId: string) => {
+    const current = filters.moduleIds || [];
+    const updated = current.includes(moduleId)
+      ? current.filter(id => id !== moduleId)
+      : [...current, moduleId];
+    onFiltersChange({ ...filters, moduleIds: updated.length ? updated : undefined });
   };
 
   const toggleAssignee = (assigneeId: string) => {
@@ -170,9 +155,9 @@ export function TaskFilters({
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="gap-1">
             Module
-            {filters.module?.length ? (
+            {filters.moduleIds?.length ? (
               <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
-                {filters.module.length}
+                {filters.moduleIds.length}
               </Badge>
             ) : (
               <ChevronDown className="h-3 w-3 opacity-50" />
@@ -181,15 +166,19 @@ export function TaskFilters({
         </PopoverTrigger>
         <PopoverContent className="w-48 p-2" align="start">
           <div className="space-y-2 max-h-60 overflow-y-auto">
-            {moduleTypeOptions.map(option => (
-              <label key={option.value} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded">
-                <Checkbox
-                  checked={filters.module?.includes(option.value) || false}
-                  onCheckedChange={() => toggleModule(option.value)}
-                />
-                <span className="text-sm">{option.label}</span>
-              </label>
-            ))}
+            {modules.length === 0 ? (
+              <div className="text-sm text-muted-foreground p-1">No modules created</div>
+            ) : (
+              modules.map(module => (
+                <label key={module.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded">
+                  <Checkbox
+                    checked={filters.moduleIds?.includes(module.id) || false}
+                    onCheckedChange={() => toggleModule(module.id)}
+                  />
+                  <span className="text-sm">{module.name}</span>
+                </label>
+              ))
+            )}
           </div>
         </PopoverContent>
       </Popover>

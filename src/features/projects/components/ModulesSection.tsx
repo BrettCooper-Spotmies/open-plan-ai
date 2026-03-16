@@ -28,7 +28,7 @@ interface ModulesSectionProps {
   isAddDialogOpen?: boolean;
   onAddDialogClose?: () => void;
   onModuleAdd?: (module: Omit<Module, 'id' | 'createdAt'>) => void;
-  onModuleUpdate?: (module: Module) => void;
+  onModuleUpdate?: (module: Module) => Promise<boolean> | boolean | void;
   onModuleDelete?: (moduleId: string) => void;
   onTaskClick?: (task: Task) => void;
   onIssueClick?: (issue: Issue) => void;
@@ -158,6 +158,33 @@ export function ModulesSection({
     setSelectedModule(null);
   };
 
+  const handleModuleUpdateFromModal = async (updatedModule: Module): Promise<boolean> => {
+    try {
+      const didSave = await onModuleUpdate?.(updatedModule);
+      if (didSave === false) return false;
+
+      // Reflect the saved state in the open detail modal.
+      setSelectedModule(prev => {
+        if (!prev || prev.id !== updatedModule.id) return prev;
+        const updatedTasks = getModuleTasks(updatedModule.id, tasks);
+        return {
+          ...prev,
+          ...updatedModule,
+          tasks: updatedTasks,
+          taskCount: updatedTasks.length,
+          progress: getModuleProgress(updatedModule.id, tasks),
+          openIssues: issues.filter(
+            i => i.moduleId === updatedModule.id && i.status !== 'resolved' && i.status !== 'closed'
+          ).length,
+        };
+      });
+
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleAddModule = (newModule: Omit<Module, 'id' | 'createdAt'>) => {
     onModuleAdd?.(newModule);
   };
@@ -238,7 +265,7 @@ export function ModulesSection({
         teamMembers={teamMembers}
         isOpen={isDetailModalOpen}
         onClose={handleCloseDetailModal}
-        onUpdate={onModuleUpdate}
+        onUpdate={handleModuleUpdateFromModal}
         onDelete={onModuleDelete}
         onTaskClick={onTaskClick}
         onIssueClick={onIssueClick}

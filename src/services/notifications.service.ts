@@ -61,12 +61,25 @@ export const notificationsService = {
         title: string;
         description: string; // Changed from content to description to match DB schema
         project_id?: string;
+        conversation_id?: string;
         entity_id?: string;
         entity_type?: string;
     }) {
+        // Keep backward compatibility with callers that still pass legacy fields
+        // but only insert columns that exist on the notifications table.
+        const payload = {
+            user_id: notification.user_id,
+            actor_id: notification.actor_id ?? null,
+            type: notification.type,
+            title: notification.title,
+            description: notification.description,
+            project_id: notification.project_id ?? null,
+            conversation_id: notification.conversation_id ?? null,
+        };
+
         const { data, error } = await supabase
             .from('notifications')
-            .insert(notification)
+            .insert(payload)
             .select()
             .single();
 

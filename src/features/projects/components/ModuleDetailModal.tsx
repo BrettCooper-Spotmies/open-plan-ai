@@ -1,7 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -55,7 +56,7 @@ interface ModuleDetailModalProps {
   teamMembers: TeamMember[];
   isOpen: boolean;
   onClose: () => void;
-  onUpdate?: (module: Module) => void;
+  onUpdate?: (module: Module) => Promise<boolean> | boolean | void;
   onDelete?: (moduleId: string) => void;
   onTaskClick?: (task: Task) => void;
   onIssueClick?: (issue: Issue) => void;
@@ -91,6 +92,24 @@ export function ModuleDetailModal({
   const [isLinkingTasks, setIsLinkingTasks] = useState(false);
   const [isLinkingIssues, setIsLinkingIssues] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Reset transient editing state when dialog closes or when selecting a different module.
+  useEffect(() => {
+    if (!isOpen) {
+      setIsEditing(false);
+      setEditedModule(null);
+      setIsLinkingTasks(false);
+      setIsLinkingIssues(false);
+      setIsSaving(false);
+      return;
+    }
+
+    setIsEditing(false);
+    setEditedModule(null);
+    setIsLinkingTasks(false);
+    setIsLinkingIssues(false);
+  }, [isOpen, module?.id]);
 
   // Get available tasks and issues that can be linked (must be before early return)
   const availableTasks = useMemo(() =>
@@ -129,15 +148,28 @@ export function ModuleDetailModal({
     setIsEditing(true);
   };
 
-  const handleSave = () => {
-    if (editedModule && onUpdate) {
-      onUpdate(editedModule);
+  const handleSave = async () => {
+    if (!editedModule || !onUpdate) {
+      setIsEditing(false);
+      return;
     }
-    setIsEditing(false);
+
+    setIsSaving(true);
+    try {
+      const didSave = await onUpdate(editedModule);
+      if (didSave === false) return;
+      setIsLinkingTasks(false);
+      setIsLinkingIssues(false);
+      setIsEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCancel = () => {
     setEditedModule(null);
+    setIsLinkingTasks(false);
+    setIsLinkingIssues(false);
     setIsEditing(false);
   };
 
@@ -150,24 +182,28 @@ export function ModuleDetailModal({
   };
 
   const handleLinkTask = (taskId: string) => {
+    if (!isEditing) return;
     if (onLinkTask) {
       onLinkTask(taskId, module.id);
     }
   };
 
   const handleUnlinkTask = (taskId: string) => {
+    if (!isEditing) return;
     if (onUnlinkTask) {
       onUnlinkTask(taskId, module.id);
     }
   };
 
   const handleLinkIssue = (issueId: string) => {
+    if (!isEditing) return;
     if (onLinkIssue) {
       onLinkIssue(issueId, module.id);
     }
   };
 
   const handleUnlinkIssue = (issueId: string) => {
+    if (!isEditing) return;
     if (onUnlinkIssue) {
       onUnlinkIssue(issueId, module.id);
     }
@@ -194,10 +230,13 @@ export function ModuleDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl h-[90vh] p-0 flex flex-col gap-0 overflow-hidden">
+      <DialogContent className="max-w-3xl h-[90vh] p-0 flex flex-col gap-0 overflow-hidden [&>button]:hidden">
         <DialogHeader className="p-6 pb-4">
+          <DialogDescription className="sr-only">
+            View and edit module details, linked tasks, and linked issues.
+          </DialogDescription>
           <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
               <div
                 className="w-4 h-4 rounded-full shrink-0"
                 style={{ backgroundColor: moduleColor }}
@@ -206,33 +245,49 @@ export function ModuleDetailModal({
                 <Input
                   value={editedModule.name}
                   onChange={(e) => setEditedModule({ ...editedModule, name: e.target.value })}
-                  className="text-lg font-semibold h-8"
+                  className="text-lg font-semibold h-8 min-w-0"
                 />
               ) : (
-                <DialogTitle className="text-xl">{module.name}</DialogTitle>
+                <DialogTitle className="text-xl truncate max-w-full" title={module.name}>{module.name}</DialogTitle>
               )}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               {isEditing ? (
                 <>
-                  <Button variant="ghost" size="sm" onClick={handleCancel}>
-                    <X className="h-4 w-4" />
+                  <Button variant="outline" size="sm" onClick={handleCancel} disabled={isSaving}>
+                    Cancel
                   </Button>
-                  <Button size="sm" onClick={handleSave}>
+                  <Button size="sm" onClick={handleSave} disabled={isSaving}>
                     <Save className="h-4 w-4 mr-1" />
-                    Save
+                    {isSaving ? 'Updating...' : 'Update Module'}
                   </Button>
                 </>
               ) : (
                 <>
-                  <Button variant="ghost" size="sm" onClick={handleEdit}>
-                    <Edit2 className="h-4 w-4" />
+                  <Button variant="outline" size="sm" onClick={handleEdit}>
+                    <Edit2 className="h-4 w-4 mr-1" />
+                    Edit
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setShowDeleteConfirm(true)} className="text-destructive hover:text-destructive">
-                    <Trash2 className="h-4 w-4" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="text-destructive border-destructive/30 hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete
                   </Button>
                 </>
               )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Close module details"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </DialogHeader>
@@ -403,6 +458,7 @@ export function ModuleDetailModal({
                         size="sm"
                         onClick={() => setIsLinkingTasks(!isLinkingTasks)}
                         className="h-7"
+                        disabled={!isEditing}
                       >
                         <Link className="h-3.5 w-3.5 mr-1" />
                         {isLinkingTasks ? 'Done' : 'Link'}
@@ -411,7 +467,7 @@ export function ModuleDetailModal({
                   </div>
                 </div>
 
-                {isLinkingTasks && availableTasks.length > 0 && (
+                {isEditing && isLinkingTasks && availableTasks.length > 0 && (
                   <div className="p-3 border rounded-lg bg-muted/30 space-y-2">
                     <Label className="text-xs font-medium">Link Tasks to Module</Label>
                     <Select onValueChange={handleLinkTask}>
@@ -458,17 +514,17 @@ export function ModuleDetailModal({
                               </AvatarFallback>
                             </Avatar>
                           )}
-                          {onUnlinkTask && (
+                          {isEditing && onUnlinkTask && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleUnlinkTask(task.id);
                               }}
                             >
-                              <X className="h-3 w-3" />
+                              Unlink
                             </Button>
                           )}
                           <ExternalLink
@@ -502,6 +558,7 @@ export function ModuleDetailModal({
                         size="sm"
                         onClick={() => setIsLinkingIssues(!isLinkingIssues)}
                         className="h-7"
+                        disabled={!isEditing}
                       >
                         <Link className="h-3.5 w-3.5 mr-1" />
                         {isLinkingIssues ? 'Done' : 'Link'}
@@ -510,7 +567,7 @@ export function ModuleDetailModal({
                   </div>
                 </div>
 
-                {isLinkingIssues && availableIssues.length > 0 && (
+                {isEditing && isLinkingIssues && availableIssues.length > 0 && (
                   <div className="p-3 border rounded-lg bg-muted/30 space-y-2">
                     <Label className="text-xs font-medium">Link Issues to Module</Label>
                     <Select onValueChange={handleLinkIssue}>
@@ -550,17 +607,17 @@ export function ModuleDetailModal({
                           <span className="text-sm truncate">{issue.title}</span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {onUnlinkIssue && (
+                          {isEditing && onUnlinkIssue && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleUnlinkIssue(issue.id);
                               }}
                             >
-                              <X className="h-3 w-3" />
+                              Unlink
                             </Button>
                           )}
                           <ExternalLink
@@ -580,6 +637,7 @@ export function ModuleDetailModal({
             </div>
           </ScrollArea>
         </div>
+
       </DialogContent>
       <ConfirmationDialog
         open={showDeleteConfirm}

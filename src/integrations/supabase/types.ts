@@ -396,6 +396,8 @@ export type Database = {
       }
       issues: {
         Row: {
+          blocked_by_task_ids: string[]
+          blocks_task_ids: string[]
           category: Database["public"]["Enums"]["issue_category"] | null
           created_at: string | null
           deleted_at: string | null
@@ -413,6 +415,8 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          blocked_by_task_ids?: string[]
+          blocks_task_ids?: string[]
           category?: Database["public"]["Enums"]["issue_category"] | null
           created_at?: string | null
           deleted_at?: string | null
@@ -430,6 +434,8 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          blocked_by_task_ids?: string[]
+          blocks_task_ids?: string[]
           category?: Database["public"]["Enums"]["issue_category"] | null
           created_at?: string | null
           deleted_at?: string | null

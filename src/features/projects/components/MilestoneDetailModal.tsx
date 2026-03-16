@@ -176,7 +176,7 @@ export function MilestoneDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden">
+      <DialogContent className="max-w-2xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden [&>button]:hidden">
         <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between">
           <div>
             <DialogTitle>Milestone Details</DialogTitle>
@@ -184,16 +184,28 @@ export function MilestoneDetailModal({
               View and edit milestone information, linked tasks, modules, and issues.
             </DialogDescription>
           </div>
-          {onDelete && (
+          <div className="flex items-center gap-2">
+            {onDelete && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowDeleteConfirm(true)}
+                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                aria-label="Delete milestone"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setShowDeleteConfirm(true)}
-              className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+              onClick={onClose}
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              aria-label="Close milestone details"
             >
-              <Trash2 className="h-4 w-4" />
+              <X className="h-4 w-4" />
             </Button>
-          )}
+          </div>
         </DialogHeader>
 
         <ScrollArea className="flex-1 overflow-y-auto w-full">

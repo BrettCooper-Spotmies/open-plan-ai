@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { format } from 'date-fns';
+import { format, isBefore, startOfToday } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -92,6 +92,14 @@ export function AddMilestoneDialog({
 
 
   const handleSubmit = (data: MilestoneFormData) => {
+    if (isBefore(data.date, startOfToday())) {
+      form.setError('date', {
+        type: 'manual',
+        message: 'Target date cannot be in the past',
+      });
+      return;
+    }
+
     const milestone: Omit<Milestone, 'id'> = {
       title: data.title,
       description: data.description,
@@ -229,6 +237,7 @@ export function AddMilestoneDialog({
                             mode="single"
                             selected={field.value}
                             onSelect={field.onChange}
+                            disabled={(date) => isBefore(date, startOfToday())}
                             initialFocus
                             className="p-3 pointer-events-auto"
                           />
