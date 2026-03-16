@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 interface TasksSectionProps {
   projectId: string;
   tasks: Task[];
+  allTasks?: Task[];
   milestones: Milestone[];
   issues: Issue[];
   modules: { id: string; name: string; type: ModuleType }[];
@@ -129,6 +130,7 @@ export function ViewControls({
 export function TasksSection({
   projectId,
   tasks,
+  allTasks,
   milestones,
   issues,
   modules,
@@ -144,6 +146,8 @@ export function TasksSection({
   onTaskDelete,
   onAddModule,
 }: TasksSectionProps) {
+    const dependencyTasks = allTasks ?? tasks;
+
   const [internalViewMode, setInternalViewMode] = useState<TaskViewMode>('kanban');
   const [internalFilters, setInternalFilters] = useState<TaskFilter>({});
   const [internalIsFiltersOpen, setInternalIsFiltersOpen] = useState(false);
@@ -161,7 +165,7 @@ export function TasksSection({
     let count = 0;
     if (filters.status?.length) count++;
     if (filters.priority?.length) count++;
-    if (filters.module?.length) count++;
+    if (filters.moduleIds?.length || filters.module?.length) count++;
     if (filters.assignee?.length) count++;
     if (filters.milestoneId) count++;
     if (filters.dueDate) count++;
@@ -183,7 +187,22 @@ export function TasksSection({
         return false;
       }
 
-      // Module filter
+      // Module filter by module IDs (dynamic project modules)
+      if (filters.moduleIds?.length) {
+        const assignedModuleIds = new Set<string>(task.moduleIds || []);
+
+        // Backward compatibility for older tasks that only store module type
+        if (assignedModuleIds.size === 0 && task.module) {
+          modules.forEach(module => {
+            if (module.type === task.module) assignedModuleIds.add(module.id);
+          });
+        }
+
+        const hasMatch = filters.moduleIds.some(filterId => assignedModuleIds.has(filterId));
+        if (!hasMatch) return false;
+      }
+
+      // Legacy module-type filter fallback
       if (filters.module?.length) {
         // Collect all types of assigned modules
         const assignedModuleTypes = new Set<string>();
@@ -315,7 +334,7 @@ export function TasksSection({
           <KanbanView
             projectId={projectId}
             tasks={filteredTasks}
-            allTasks={tasks}
+            allTasks={dependencyTasks}
             issues={issues}
             onTaskCreate={onTaskCreate}
             onTaskUpdate={onTaskUpdate}
@@ -328,7 +347,7 @@ export function TasksSection({
           <ListView
             projectId={projectId}
             tasks={filteredTasks}
-            allTasks={tasks}
+            allTasks={dependencyTasks}
             milestones={milestones}
             modules={modules}
             onTaskCreate={onTaskCreate}

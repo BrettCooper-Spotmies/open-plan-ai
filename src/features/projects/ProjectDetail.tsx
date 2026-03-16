@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, Link, useLocation } from 'react-router-dom';
-import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft } from 'lucide-react';
+import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -109,6 +109,8 @@ function MilestoneViewControls({
 
 // Issue View Controls Component
 function IssueViewControls({
+  viewMode,
+  onViewModeChange,
   searchQuery,
   onSearchQueryChange,
   filters,
@@ -118,6 +120,8 @@ function IssueViewControls({
   onClearFilters,
   onReportIssue,
 }: {
+  viewMode: 'table' | 'kanban';
+  onViewModeChange: (mode: 'table' | 'kanban') => void;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
   filters: IssueFilter;
@@ -149,6 +153,25 @@ function IssueViewControls({
             <X className="h-4 w-4" />
           </Button>
         )}
+      </div>
+
+      <div className="flex items-center rounded-md border p-1">
+        <Button
+          variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-7 px-2"
+          onClick={() => onViewModeChange('kanban')}
+        >
+          <LayoutGrid className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-7 px-2"
+          onClick={() => onViewModeChange('table')}
+        >
+          <List className="h-4 w-4" />
+        </Button>
       </div>
 
       {/* Filter Dropdown */}
@@ -297,6 +320,7 @@ export default function ProjectDetail() {
   const [milestoneSearchQuery, setMilestoneSearchQuery] = useState('');
   const [issueSearchQuery, setIssueSearchQuery] = useState('');
   const [issueFilters, setIssueFilters] = useState<IssueFilter>({});
+  const [issueViewMode, setIssueViewMode] = useState<'table' | 'kanban'>('kanban');
   const [isAddModuleDialogOpen, setIsAddModuleDialogOpen] = useState(false);
   const [isAddMilestoneDialogOpen, setIsAddMilestoneDialogOpen] = useState(false);
   const [isAddIssueDialogOpen, setIsAddIssueDialogOpen] = useState(false);
@@ -372,7 +396,7 @@ export default function ProjectDetail() {
 
   // Map database modules to frontend Module type
   const modules: Module[] = useMemo(() => {
-    return projectModules.map((m: any) => ({
+    return projectModules.map((m) => ({
       id: m.id,
       name: m.name,
       type: m.module_type,
@@ -486,6 +510,26 @@ export default function ProjectDetail() {
     setIsAddModuleDialogOpen(false);
   };
 
+  const handleModuleUpdate = async (updatedModule: Module): Promise<boolean> => {
+    try {
+      await updateModuleMutation.mutateAsync({
+        moduleId: updatedModule.id,
+        updates: {
+          name: updatedModule.name,
+          module_type: updatedModule.type,
+          description: updatedModule.description || null,
+          status: updatedModule.status || 'active',
+          progress: updatedModule.progress ?? 0,
+          owner_id: updatedModule.owner?.id || null,
+          milestone_id: updatedModule.milestoneId || null,
+        },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const handleMilestoneCreate = async (newMilestonePartial: Omit<Milestone, 'id'>) => {
     if (!project) return;
 
@@ -538,7 +582,7 @@ export default function ProjectDetail() {
 
     const taskUpdates = [
       ...addedTaskIds.map(id => ({ id, updates: { milestoneId: updatedMilestone.id } })),
-      ...removedTaskIds.map(id => ({ id, updates: { milestoneId: null as any } }))
+      ...removedTaskIds.map(id => ({ id, updates: { milestoneId: undefined } }))
     ];
 
     if (taskUpdates.length > 0) {
@@ -570,15 +614,16 @@ export default function ProjectDetail() {
     createTaskMutation.mutate(newTask);
   };
 
-  const handleTaskUpdate = (updatedTask: Task, onError?: () => void) => {
-    updateTaskMutation.mutate({
-      taskId: updatedTask.id,
-      updates: updatedTask,
-    }, {
-      onError: () => {
-        if (onError) onError();
-      }
-    });
+  const handleTaskUpdate = async (updatedTask: Task, onError?: () => void) => {
+    try {
+      await updateTaskMutation.mutateAsync({
+        taskId: updatedTask.id,
+        updates: updatedTask,
+      });
+    } catch (error) {
+      if (onError) onError();
+      throw error;
+    }
   };
 
   const handleTaskDelete = (taskId: string) => {
@@ -753,6 +798,8 @@ export default function ProjectDetail() {
             {/* Issues View Controls */}
             {section === 'issues' && (
               <IssueViewControls
+                viewMode={issueViewMode}
+                onViewModeChange={setIssueViewMode}
                 searchQuery={issueSearchQuery}
                 onSearchQueryChange={setIssueSearchQuery}
                 filters={issueFilters}
@@ -768,6 +815,7 @@ export default function ProjectDetail() {
           <TabsContent value="tasks" className="mt-6">
             <TasksSection
               tasks={filteredTasks}
+              allTasks={project.tasks || []}
               projectId={project.id}
               milestones={project.milestones || []}
               issues={project.issues || []}
@@ -795,6 +843,7 @@ export default function ProjectDetail() {
               isAddDialogOpen={isAddModuleDialogOpen}
               onAddDialogClose={() => setIsAddModuleDialogOpen(false)}
               onModuleAdd={handleModuleAdd}
+              onModuleUpdate={handleModuleUpdate}
               onModuleDelete={handleModuleDelete}
               onTaskUpdate={handleTaskUpdate}
               onIssueUpdate={handleIssueUpdate}
@@ -818,6 +867,7 @@ export default function ProjectDetail() {
           <TabsContent value="issues" className="mt-6">
             <IssuesView
               issues={project.issues || []}
+              viewMode={issueViewMode}
               tasks={project.tasks || []}
               teamMembers={allTeamMembers}
               searchQuery={issueSearchQuery}

@@ -57,7 +57,9 @@ import {
   XCircle,
   MessageSquare,
 } from 'lucide-react';
-import { toast } from 'sonner';
+  import { LayoutGrid, List } from 'lucide-react';
+  import { toast } from 'sonner';
+  import { useIsMobile } from '@/hooks/use-mobile';
 
 const DEPARTMENTS = ['Engineering', 'Design', 'Management', 'Quality Assurance', 'Operations', 'Sales', 'Marketing', 'Support'];
 
@@ -66,6 +68,7 @@ const Team = () => {
   const { data: teamMembers, isLoading, error } = useTeamMembers(currentOrganization?.id);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const inviteMutation = useInviteTeamMember();
   const removeMutation = useRemoveTeamMember();
   const cancelInviteMutation = useCancelInvitation();
@@ -101,6 +104,9 @@ const Team = () => {
   const [editMember, setEditMember] = useState<TeamMember | null>(null);
   const [editRole, setEditRole] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
+  const [viewMode, setViewMode] = useState<'columns' | 'list'>(() =>
+    typeof window !== 'undefined' && window.innerWidth < 768 ? 'list' : 'columns'
+  );
 
   const members = teamMembers || [];
   const invitations = pendingInvitations || [];
@@ -253,7 +259,7 @@ const Team = () => {
             <Button
               variant="outline"
               size="sm"
-              className="w-full"
+              className="h-8 px-3 min-w-28 justify-center border-border/70"
               onClick={() => handleMessageClick(member.id)}
               disabled={isStartingChat === member.id}
             >
@@ -472,14 +478,129 @@ const Team = () => {
               className="pl-10"
             />
           </div>
+            <div className="hidden sm:flex items-center gap-1 border rounded-md p-1">
+              <Button
+                variant={viewMode === 'columns' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setViewMode('columns')}
+                title="Columns view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-7 px-2"
+                onClick={() => setViewMode('list')}
+                title="List view"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+            </div>
         </div>
 
         {/* Team Members */}
-        <div className="space-y-4">
-          {filteredMembers.map((member) => (
-            <MemberCard key={member.id} member={member} />
-          ))}
-        </div>
+        {(viewMode === 'columns' && !isMobile) ? (
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Member</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Joined</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredMembers.map((member) => (
+                  <TableRow key={member.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">
+                            {member.initials}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium text-sm">{member.name}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="capitalize text-sm font-medium">{member.role}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{member.email}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={getStatusColor(member.status)}>
+                        {member.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {member.department && (
+                        <Badge variant="secondary">{member.department}</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {member.joinedAt
+                        ? new Date(member.joinedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+                        : 'N/A'}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {member.id !== user?.id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => handleMessageClick(member.id)}
+                            disabled={isStartingChat === member.id}
+                            title="Message"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {isAdminOrOwner && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleOpenEdit(member)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setManageOrgMember(member)}>
+                                <Building className="h-4 w-4 mr-2" />
+                                Manage Organizations
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-destructive"
+                                onClick={() => handleRemove(member.id)}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remove
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredMembers.map((member) => (
+              <MemberCard key={member.id} member={member} />
+            ))}
+          </div>
+        )}
 
         {filteredMembers.length === 0 && (
           <div className="text-center py-12">

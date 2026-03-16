@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import { Project, Task, Milestone, Issue, TeamMember, Activity } from '@/types';
+import { Project, Task, Milestone, Issue, TeamMember, Activity, Comment } from '@/types';
 import { projects as mockProjects, teamMembers as mockTeamMembers, projectModules as mockModules, projectIssues as mockIssues } from '@/data/mockData';
 import { config } from '@/config';
 import { activitiesService } from './activities.service';
@@ -152,6 +152,27 @@ function mapDbIssueToIssue(dbIssue: any, assignees: TeamMember[] = [], reportedB
     dueDate: dbIssue.due_date || undefined,
     assignees,
     attachments: dbIssue.attachments || [],
+    comments: dbIssue.comments || [],
+    blocksTaskIds: dbIssue.blocks_task_ids || [],
+    blocksMilestoneIds: dbIssue.blocks_milestone_ids || [],
+    blockedBy: dbIssue.blocked_by_task_ids || [],
+  };
+}
+
+function mapDbCommentToComment(dbComment: any): Comment {
+  const profile = Array.isArray(dbComment.profiles) ? dbComment.profiles[0] : dbComment.profiles;
+  return {
+    id: dbComment.id,
+    content: dbComment.content,
+    createdAt: dbComment.created_at,
+    author: {
+      id: profile?.id || dbComment.author_id || 'unknown',
+      name: profile?.name || 'Unknown User',
+      email: profile?.email || '',
+      initials: profile?.initials || 'UN',
+      role: 'member',
+      avatar: profile?.avatar_url || undefined,
+    },
   };
 }
 
@@ -559,9 +580,16 @@ export const projectsService = {
     const issueIds = data.map(i => i.id);
 
     // Step 2: Fetch assignees and attachments separately (no FK hints)
-    const [assigneesResult, attachmentsResult] = await Promise.all([
+    const [assigneesResult, attachmentsResult, commentsResult] = await Promise.all([
       supabase.from('issue_assignees').select('issue_id, user_id').in('issue_id', issueIds),
       supabase.from('attachments').select('*').in('entity_id', issueIds).eq('entity_type', 'issue'),
+      supabase
+        .from('comments')
+        .select('id, content, created_at, author_id, entity_id, profiles:author_id(id, name, email, initials, avatar_url)')
+        .in('entity_id', issueIds)
+        .eq('entity_type', 'issue')
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true }),
     ]);
 
     // Step 3: Fetch profiles for all referenced user IDs (reporters + assignees + attachment uploaders)
@@ -590,6 +618,9 @@ export const projectsService = {
     return data.map(issue => {
       const issueAssigneeRows = (assigneesResult.data || []).filter(a => a.issue_id === issue.id);
       const issueAttachments = (attachmentsResult.data || []).filter(a => a.entity_id === issue.id);
+      const issueComments = (commentsResult.data || [])
+        .filter((c: any) => c.entity_id === issue.id)
+        .map((c: any) => mapDbCommentToComment(c));
 
       const reporterProfile = issue.reported_by ? profilesMap[issue.reported_by] : null;
       const reporter = reporterProfile ? {
@@ -636,7 +667,7 @@ export const projectsService = {
         };
       });
 
-      return mapDbIssueToIssue({ ...issue, attachments }, assignees, reporter);
+      return mapDbIssueToIssue({ ...issue, attachments, comments: issueComments }, assignees, reporter);
     });
   },
 

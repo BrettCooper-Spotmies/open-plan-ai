@@ -59,6 +59,7 @@ export function useUpdateTask(projectId: string) {
     onMutate: async ({ taskId, updates }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.projects.detail(projectId) });
       const previousProject = queryClient.getQueryData(queryKeys.projects.detail(projectId));
+      const previousTask = (previousProject as any)?.tasks?.find((t: Task) => t.id === taskId) as Task | undefined;
 
       // Optimistic update
       queryClient.setQueryData(queryKeys.projects.detail(projectId), (old: any) => {
@@ -75,7 +76,7 @@ export function useUpdateTask(projectId: string) {
         };
       });
 
-      return { previousProject };
+      return { previousProject, previousTask };
     },
     onError: (_err, _vars, context) => {
       if (context?.previousProject) {
@@ -83,12 +84,10 @@ export function useUpdateTask(projectId: string) {
       }
       toast.error('Failed to update task');
     },
-    onSuccess: (updatedTask, variables) => {
+    onSuccess: (updatedTask, variables, context) => {
       // Find newly added assignees
       if (variables.updates.assignees) {
-        // Fetch previous task state from cache if available
-        const projectDetail = queryClient.getQueryData(queryKeys.projects.detail(projectId)) as any;
-        const previousTask = projectDetail?.tasks?.find((t: any) => t.id === variables.taskId);
+        const previousTask = context?.previousTask;
 
         const previousAssigneeIds = new Set(previousTask?.assignees?.map((a: any) => a.id) || []);
 
@@ -109,9 +108,10 @@ export function useUpdateTask(projectId: string) {
       }
 
       // Notify on completion
-      if (variables.updates.status === 'done' && updatedTask.status === 'done') {
-        const projectDetail = queryClient.getQueryData(queryKeys.projects.detail(projectId)) as any;
-        const task = projectDetail?.tasks?.find((t: any) => t.id === variables.taskId);
+      const wasDone = context?.previousTask?.status === 'done';
+      const isNowDone = updatedTask.status === 'done';
+      if (!wasDone && isNowDone) {
+        const task = updatedTask;
 
         if (task) {
           task.assignees?.forEach((assignee: any) => {
@@ -361,7 +361,11 @@ export function useUpdateModule(projectId: string) {
     mutationFn: ({ moduleId, updates }: { moduleId: string; updates: ModuleUpdate }) =>
       modulesService.update(moduleId, updates),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.modules.list(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+      toast.success('Module updated successfully');
     },
     onError: () => {
       toast.error('Failed to update module');
