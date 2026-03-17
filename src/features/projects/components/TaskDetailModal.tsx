@@ -280,6 +280,7 @@ export const TaskDetailModal = ({
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [initialTaskSnapshot, setInitialTaskSnapshot] = useState('');
+  const [initialBlockedByIds, setInitialBlockedByIds] = useState<string[]>([]);
   const [initialBlockingToIds, setInitialBlockingToIds] = useState<string[]>([]);
   const [initializedForKey, setInitializedForKey] = useState<string | null>(null);
   const formSessionKey = `${mode}:${task?.id || 'create'}`;
@@ -323,6 +324,9 @@ export const TaskDetailModal = ({
     const baseTask = task || editedTask;
     setEditedTask(baseTask);
     setInitialTaskSnapshot(serializeTaskForDirtyCheck(baseTask));
+    
+    // Track initial blocked by items
+    setInitialBlockedByIds(baseTask.blockedBy || []);
 
     const linkedTaskIds = baseTask.id
       ? allTasks.filter(t => t.blockedBy.includes(baseTask.id)).map(t => t.id)
@@ -524,13 +528,22 @@ export const TaskDetailModal = ({
 
     return sortedCurrentBlockingToIds.some((id, idx) => id !== sortedInitialBlockingToIds[idx]);
   }, [sortedCurrentBlockingToIds, sortedInitialBlockingToIds]);
+  
+  // Check if blockedBy has changed
+  const hasBlockedByChanges = useMemo(() => {
+    const current = [...(editedTask.blockedBy || [])].sort();
+    const initial = [...initialBlockedByIds].sort();
+    if (current.length !== initial.length) return true;
+    return current.some((id, idx) => id !== initial[idx]);
+  }, [editedTask.blockedBy, initialBlockedByIds]);
+  
   const hasDependenciesForBlocked =
     (editedTask.blockedBy?.length || 0) > 0 ||
     localBlockingToIds.length > 0 ||
     (editedTask.linkedIssueIds?.length || 0) > 0;
   const isBlockedWithoutDependencies = editedTask.status === 'blocked' && !hasDependenciesForBlocked;
   const isTaskDirty = initialTaskSnapshot !== '' && normalizedEditedTaskSnapshot !== initialTaskSnapshot;
-  const isFormDirty = isTaskDirty || hasBlockingToChanges;
+  const isFormDirty = isTaskDirty || hasBlockingToChanges || hasBlockedByChanges;
   const canSubmitTask = Boolean(
     editedTask.title && editedTask.dueDate && hasSelectedModules && isFormDirty && !isBlockedWithoutDependencies
   );
@@ -647,6 +660,11 @@ export const TaskDetailModal = ({
         .filter(t => t.blockedBy.includes(editedTask.id))
         .map(t => t.id);
 
+      // Compute blockedBy diffs: tasks that THIS task depends on
+      const originalBlockedByIds = editedTask.id 
+        ? allTasks.find(t => t.id === editedTask.id)?.blockedBy || []
+        : [];
+
       // addedIds/removedIds logic...
       const batchUpdates: Array<{ id: string; updates: Partial<Task> }> = [];
 
@@ -657,7 +675,10 @@ export const TaskDetailModal = ({
         if (other && !other.blockedBy.includes(editedTask.id)) {
           batchUpdates.push({
             id,
-            updates: { blockedBy: [...other.blockedBy, editedTask.id] }
+            updates: { 
+              blockedBy: [...other.blockedBy, editedTask.id],
+              status: other.status === 'blocked' ? other.status : 'blocked'
+            }
           });
         }
       }
@@ -667,10 +688,45 @@ export const TaskDetailModal = ({
       for (const id of removedIds) {
         const other = allTasks.find(t => t.id === id);
         if (other) {
+          const newBlockedBy = other.blockedBy.filter(bid => bid !== editedTask.id);
           batchUpdates.push({
             id,
-            updates: { blockedBy: other.blockedBy.filter(bid => bid !== editedTask.id) }
+            updates: { 
+              blockedBy: newBlockedBy,
+              // If no more blockers, change status back to 'todo'
+              status: newBlockedBy.length === 0 && other.status === 'blocked' ? 'todo' : other.status
+            }
           });
+        }
+      }
+
+      // Added blockedBy relationships (THIS task's dependencies)
+      const addedBlockedByIds = editedTask.blockedBy.filter(id => !(originalBlockedByIds || []).includes(id));
+      for (const id of addedBlockedByIds) {
+        const blocker = allTasks.find(t => t.id === id);
+        if (blocker) {
+          batchUpdates.push({
+            id,
+            updates: { 
+              status: blocker.status === 'blocked' ? blocker.status : 'blocked'
+            }
+          });
+        }
+      }
+
+      // Removed blockedBy relationships
+      const removedBlockedByIds = (originalBlockedByIds || []).filter(id => !editedTask.blockedBy.includes(id));
+      for (const id of removedBlockedByIds) {
+        const blocker = allTasks.find(t => t.id === id);
+        if (blocker && blocker.status === 'blocked') {
+          // Only change status if this blocker doesn't block anything else
+          const blockingOthers = allTasks.some(t => t.blockedBy.includes(id));
+          if (!blockingOthers) {
+            batchUpdates.push({
+              id,
+              updates: { status: 'todo' }
+            });
+          }
         }
       }
 
@@ -696,13 +752,20 @@ export const TaskDetailModal = ({
     }
   };
 
-  // Removing from "Blocking To" - remove current task from the OTHER task's blockedBy
+  // Removing from "Blocking To" - will be handled in batch updates
   const handleRemoveBlockingTask = (taskId: string) => {
-    const taskToUpdate = allTasks.find(t => t.id === taskId);
-    if (taskToUpdate) {
-      // Immediately reflect removal in local list
-      setLocalBlockingToIds(prev => prev.filter(id => id !== taskId));
-    }
+    setLocalBlockingToIds(prev => {
+      const updated = prev.filter(id => id !== taskId);
+      // If removing this leaves no blocking tasks and no blocked-by tasks, change status to 'todo'
+      if (updated.length === 0 && editedTask.blockedBy.length === 0 && editedTask.status === 'blocked') {
+        setEditedTask(prevTask => ({
+          ...prevTask,
+          status: 'todo',
+          updatedAt: new Date().toISOString()
+        }));
+      }
+      return updated;
+    });
   };
 
   // Adding to "Blocked By" - update THIS task's blockedBy
@@ -722,14 +785,19 @@ export const TaskDetailModal = ({
     setSelectedBlockedByTask('');
   };
 
-  // Removing from "Blocked By" - update THIS task's blockedBy
+  // Removing from "Blocked By" - will be handled in batch updates
   const handleRemoveBlockedByTask = (taskId: string) => {
     setEditedTask(prev => {
+      const updatedBlockedBy = prev.blockedBy.filter(id => id !== taskId);
       const updated = {
         ...prev,
-        blockedBy: prev.blockedBy.filter(id => id !== taskId),
+        blockedBy: updatedBlockedBy,
         updatedAt: new Date().toISOString()
       };
+      // If removing this leaves no blocked-by tasks and no blocking tasks, change status to 'todo'
+      if (updatedBlockedBy.length === 0 && localBlockingToIds.length === 0 && prev.status === 'blocked') {
+        updated.status = 'todo';
+      }
       return updated;
     });
   };
