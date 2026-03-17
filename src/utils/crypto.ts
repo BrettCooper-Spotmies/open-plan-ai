@@ -100,7 +100,7 @@ async function deriveAesKey(rawKey: Uint8Array, salt: Uint8Array): Promise<Crypt
   return crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt,
+      salt: salt as unknown as BufferSource,
       iterations: ITERATIONS,
       hash: 'SHA-256',
     },
@@ -146,10 +146,10 @@ export async function encryptData(payload: string): Promise<{ ciphertext: string
     const encryptedContent = await crypto.subtle.encrypt(
       {
         name: 'AES-GCM',
-        iv: iv
+        iv: iv as unknown as BufferSource
       },
       key,
-      encodedPayload
+      encodedPayload as unknown as BufferSource
     );
 
     // Convert to base64 for easier storage
@@ -181,20 +181,20 @@ export async function decryptData(encryptedData: { ciphertext: string; iv: strin
       decryptedContent = await crypto.subtle.decrypt(
         {
           name: 'AES-GCM',
-          iv: ivBytes,
+          iv: ivBytes as unknown as BufferSource,
         },
         key,
-        cipherBytes
+        cipherBytes as unknown as BufferSource
       );
     } catch {
       const legacyKey = await getLegacyEncryptionKey();
       decryptedContent = await crypto.subtle.decrypt(
         {
           name: 'AES-GCM',
-          iv: ivBytes,
+          iv: ivBytes as unknown as BufferSource,
         },
         legacyKey,
-        cipherBytes
+        cipherBytes as unknown as BufferSource
       );
     }
 
@@ -219,7 +219,7 @@ export async function decryptObject<T>(encryptedData: { ciphertext: string; iv: 
   if (!encryptedData || !encryptedData.ciphertext || !encryptedData.iv) {
     return null;
   }
-  
+
   try {
     const decryptedString = await decryptData(encryptedData);
     return JSON.parse(decryptedString) as T;
@@ -244,10 +244,10 @@ export async function encryptArrayBuffer(buffer: ArrayBuffer): Promise<{ ciphert
     const encryptedContent = await crypto.subtle.encrypt(
       {
         name: 'AES-GCM',
-        iv: iv
+        iv: iv as unknown as BufferSource
       },
       key,
-      buffer
+      buffer as unknown as BufferSource
     );
 
     return { ciphertext: encryptedContent, iv: iv.buffer as ArrayBuffer };
@@ -272,20 +272,20 @@ export async function decryptArrayBuffer(encryptedData: { ciphertext: ArrayBuffe
       decryptedContent = await crypto.subtle.decrypt(
         {
           name: 'AES-GCM',
-          iv: encryptedData.iv,
+          iv: encryptedData.iv as unknown as BufferSource,
         },
         key,
-        encryptedData.ciphertext
+        encryptedData.ciphertext as unknown as BufferSource
       );
     } catch {
       const legacyKey = await getLegacyEncryptionKey();
       decryptedContent = await crypto.subtle.decrypt(
         {
           name: 'AES-GCM',
-          iv: encryptedData.iv,
+          iv: encryptedData.iv as unknown as BufferSource,
         },
         legacyKey,
-        encryptedData.ciphertext
+        encryptedData.ciphertext as unknown as BufferSource
       );
     }
 
