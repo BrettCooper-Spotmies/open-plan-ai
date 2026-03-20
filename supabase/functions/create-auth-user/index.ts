@@ -19,11 +19,11 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const { email, password, metadata } = await req.json();
+    const { invite, email, password, metadata } = await req.json();
 
-    if (!email || !password) {
+    if (!invite || !email || !password) {
       return new Response(
-        JSON.stringify({ error: "Email and password are required" }),
+        JSON.stringify({ error: "Invitation, email, and password are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -33,6 +33,45 @@ Deno.serve(async (req: Request) => {
 
     // Create admin client with service role
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    const invitationById = await adminClient
+      .from("team_invitations")
+      .select("id, email, expires_at, status")
+      .eq("id", invite)
+      .eq("status", "pending")
+      .maybeSingle();
+
+    let invitation = invitationById.data;
+    if (!invitation) {
+      const invitationByToken = await adminClient
+        .from("team_invitations")
+        .select("id, email, expires_at, status")
+        .eq("token", invite)
+        .eq("status", "pending")
+        .maybeSingle();
+      invitation = invitationByToken.data;
+    }
+
+    if (!invitation) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired invitation" }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (new Date(invitation.expires_at) < new Date()) {
+      return new Response(
+        JSON.stringify({ error: "Invitation has expired" }),
+        { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+      return new Response(
+        JSON.stringify({ error: "Invitation email does not match signup email" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Create new user with metadata
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
@@ -78,11 +117,36 @@ Deno.serve(async (req: Request) => {
       throw profileError;
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate a cryptographically secure 6-digit OTP.
+    const randomBytes = new Uint32Array(1);
+    crypto.getRandomValues(randomBytes);
+    const otp = (randomBytes[0] % 900000 + 100000).toString();
 
-    // Store OTP in a temporary record (or use a table if you have one)
-    // For now, we'll just send it via email
+    // Hash and persist OTP for verify-otp function.
+    const encoder = new TextEncoder();
+    const data = encoder.encode(otp);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const otpHash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    const { error: otpInsertError } = await adminClient
+      .from("email_verifications")
+      .insert({
+        email,
+        otp_hash: otpHash,
+        expires_at: expiresAt,
+      });
+
+    if (otpInsertError) {
+      console.error("Error storing OTP:", otpInsertError);
+      await adminClient.auth.admin.deleteUser(userId);
+      return new Response(
+        JSON.stringify({ error: "Failed to create verification code" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     if (resendApiKey) {
       const emailRes = await fetch("https://api.resend.com/emails", {

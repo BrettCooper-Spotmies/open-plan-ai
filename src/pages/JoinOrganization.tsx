@@ -8,11 +8,12 @@ import { Loader2, Building2, CheckCircle, AlertTriangle } from 'lucide-react';
 
 export default function JoinOrganization() {
   const [searchParams] = useSearchParams();
-  const token = searchParams.get('invite');
+  const inviteParam = searchParams.get('invite');
   const navigate = useNavigate();
   const { user, isLoading: authLoading } = useAuth();
 
   const [invitation, setInvitation] = useState<any>(null);
+  const [resolvedInvite, setResolvedInvite] = useState<{ inviteId?: string; token?: string } | null>(null);
   const [orgName, setOrgName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
@@ -20,19 +21,38 @@ export default function JoinOrganization() {
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (!token) {
-      setError('No invitation token provided.');
+    if (!inviteParam) {
+      setError('No invitation identifier provided.');
       setLoading(false);
       return;
     }
 
     const fetchInvitation = async () => {
-      const { data, error: fetchErr } = await supabase
+      const byId = await supabase
         .from('team_invitations')
         .select('*, organizations(name)')
-        .eq('token', token)
+        .eq('id', inviteParam)
         .eq('status', 'pending')
         .maybeSingle();
+
+      let data = byId.data;
+      let fetchErr = byId.error;
+
+      if (!data) {
+        const byToken = await supabase
+          .from('team_invitations')
+          .select('*, organizations(name)')
+          .eq('token', inviteParam)
+          .eq('status', 'pending')
+          .maybeSingle();
+        data = byToken.data;
+        fetchErr = byToken.error;
+        if (data) {
+          setResolvedInvite({ token: inviteParam });
+        }
+      } else {
+        setResolvedInvite({ inviteId: inviteParam });
+      }
 
       if (fetchErr || !data) {
         setError('This invitation is invalid or has already been used.');
@@ -52,10 +72,10 @@ export default function JoinOrganization() {
     };
 
     fetchInvitation();
-  }, [token]);
+  }, [inviteParam]);
 
   const handleAccept = async () => {
-    if (!token) return;
+    if (!resolvedInvite) return;
     setAccepting(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -65,7 +85,7 @@ export default function JoinOrganization() {
       }
 
       const res = await supabase.functions.invoke('accept-invite', {
-        body: { token },
+        body: resolvedInvite.inviteId ? { inviteId: resolvedInvite.inviteId } : { token: resolvedInvite.token },
       });
 
       if (res.error) throw res.error;
@@ -122,12 +142,12 @@ export default function JoinOrganization() {
               <p className="text-sm text-muted-foreground">
                 Please log in to accept this invitation.
               </p>
-              <Link to={`/login?redirect=${encodeURIComponent(`/join-org?invite=${token}`)}`}>
+              <Link to={`/login?redirect=${encodeURIComponent(`/join-org?invite=${inviteParam}`)}`}>
                 <Button>Log In</Button>
               </Link>
               <p className="text-xs text-muted-foreground">
                 Don't have an account?{' '}
-                <Link to={`/signup?invite=${token}`} className="text-primary underline">
+                <Link to={`/signup?invite=${inviteParam}`} className="text-primary underline">
                   Sign up
                 </Link>
               </p>

@@ -37,9 +37,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { token } = await req.json();
-    if (!token) {
-      return new Response(JSON.stringify({ error: "Missing invitation token" }), {
+    const { token, inviteId } = await req.json();
+    if (!token && !inviteId) {
+      return new Response(JSON.stringify({ error: "Missing invitation identifier" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -47,13 +47,19 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    // Find the invitation
-    const { data: invitation, error: inviteError } = await adminClient
+    // Find the invitation by ID (preferred) or token (legacy links).
+    let invitationQuery = adminClient
       .from("team_invitations")
       .select("*")
-      .eq("token", token)
-      .eq("status", "pending")
-      .single();
+      .eq("status", "pending");
+
+    if (inviteId) {
+      invitationQuery = invitationQuery.eq("id", inviteId);
+    } else {
+      invitationQuery = invitationQuery.eq("token", token);
+    }
+
+    const { data: invitation, error: inviteError } = await invitationQuery.single();
 
     if (inviteError || !invitation) {
       return new Response(JSON.stringify({ error: "Invalid or expired invitation" }), {
@@ -71,6 +77,13 @@ Deno.serve(async (req) => {
 
       return new Response(JSON.stringify({ error: "Invitation has expired" }), {
         status: 410,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!user.email || user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+      return new Response(JSON.stringify({ error: "This invitation is for a different email address" }), {
+        status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
