@@ -4,25 +4,13 @@ import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useEffect, useMemo, useState } from 'react';
 import { authService } from '@/services/auth.service';
+import { getSkeletonVariant } from '@/utils/route-skeleton';
 
 interface ProtectedRouteProps {
   redirectTo?: string;
 }
 
-/** Map a pathname to the best-matching AppLayoutSkeleton variant (pure, for easy testing). */
-function getSkeletonVariant(pathname: string): 'list' | 'projects' | 'dashboard' | 'detail' | 'default' | 'chat' | 'team' | 'settings' | 'notifications' | 'calendar' | 'reports' {
-  if (pathname.startsWith('/my-day')) return 'list';
-  if (pathname === '/projects' || pathname === '/projects/') return 'projects';
-  if (pathname.startsWith('/projects/')) return 'detail';
-  if (pathname.startsWith('/dashboard') || pathname === '/') return 'dashboard';
-  if (pathname.startsWith('/chat')) return 'chat';
-  if (pathname.startsWith('/team')) return 'team';
-  if (pathname.startsWith('/settings')) return 'settings';
-  if (pathname.startsWith('/notifications')) return 'notifications';
-  if (pathname.startsWith('/calendar')) return 'calendar';
-  if (pathname.startsWith('/reports')) return 'reports';
-  return 'default';
-}
+
 
 export function ProtectedRoute({ redirectTo = '/login' }: ProtectedRouteProps) {
   const { isAuthenticated, isEmailVerified, isLoading, user, signOut } = useAuth();
