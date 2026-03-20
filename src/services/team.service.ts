@@ -56,12 +56,12 @@ export const teamService = {
 
     const { data: profilesData, error: profilesError } = await supabase
       .from('profiles')
-      .select('id, name, email, initials, avatar_url, created_at, updated_at, deleted_at')
+      .select('*')
       .in('id', userIds);
 
     if (profilesError) throw profilesError;
 
-    const profileMap = new Map<string, any>();
+    const profileMap = new Map<string, Profile>();
     for (const p of (profilesData || [])) {
       if (!p.deleted_at) {
         profileMap.set(p.id, p);
@@ -83,7 +83,7 @@ export const teamService = {
         ...profile,
         role: member.role,
         status: 'active' as const,
-        department: (member as any).department || undefined,
+        department: (member as Record<string, unknown>).department as string | undefined || undefined,
         projectCount: count || 0,
         joinedAt: member.joined_at,
       });
@@ -126,32 +126,32 @@ export const teamService = {
   },
 
   async invite(email: string, role: string, orgId: string): Promise<void> {
-    const { data, error } = await supabase.functions.invoke('send-team-invite', {
+    const { data, error } = await supabase.functions.invoke<Record<string, unknown>>('send-team-invite', {
       body: { email, role, orgId },
     });
 
     if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-    if (data?.warning) {
-      console.warn('Invite warning:', data.warning);
+    if ((data as Record<string, unknown>)?.error) throw new Error((data as Record<string, unknown>).error as string);
+    if ((data as Record<string, unknown>)?.warning) {
+      console.warn('Invite warning:', (data as Record<string, unknown>).warning);
     }
   },
 
   async getPendingInvitations(orgId: string): Promise<TeamInvitation[]> {
-    const { data, error } = await supabase
-      .from('team_invitations' as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.from('team_invitations' as any) as any)
       .select('*')
       .eq('organization_id', orgId)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return (data || []) as unknown as TeamInvitation[];
+    return (data || []) as TeamInvitation[];
   },
 
   async cancelInvitation(invitationId: string): Promise<void> {
-    const { error } = await supabase
-      .from('team_invitations' as any)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.from('team_invitations' as any) as any)
       .update({ status: 'cancelled' })
       .eq('id', invitationId);
 
@@ -159,7 +159,7 @@ export const teamService = {
   },
 
   async getInvitationByToken(token: string): Promise<TeamInvitation | null> {
-    const { data, error } = await supabase.functions.invoke('accept-invite', {
+    await supabase.functions.invoke('accept-invite', {
       body: { token, action: 'get' },
     });
     // We won't use this — the signup page will just store the token
@@ -168,12 +168,12 @@ export const teamService = {
   },
 
   async acceptInvitation(token: string): Promise<void> {
-    const { data, error } = await supabase.functions.invoke('accept-invite', {
+    const { error, data } = await supabase.functions.invoke<Record<string, unknown>>('accept-invite', {
       body: { token },
     });
 
     if (error) throw error;
-    if (data?.error) throw new Error(data.error);
+    if ((data as Record<string, unknown>)?.error) throw new Error((data as Record<string, unknown>).error as string);
   },
 
   async updateRole(memberId: string, role: string, orgId: string): Promise<void> {
@@ -187,7 +187,7 @@ export const teamService = {
   },
 
   async updateMember(memberId: string, orgId: string, updates: { role?: string; department?: string }): Promise<void> {
-    const updateData: any = {};
+    const updateData: Record<string, string> = {};
     if (updates.role) updateData.role = updates.role as 'owner' | 'admin' | 'member';
     if (updates.department !== undefined) updateData.department = updates.department;
 

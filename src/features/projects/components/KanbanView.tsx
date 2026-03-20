@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { Plus, Check, GripVertical, X, AlertTriangle, Link2, Calendar as CalendarIcon, Maximize2 } from 'lucide-react';
+import { Plus, Check, GripVertical, X, Link2, Calendar as CalendarIcon, Maximize2 } from 'lucide-react';
 import {
   Command,
   CommandEmpty,
@@ -181,7 +181,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
     return blocked;
   }, [tasks, allTasks, issues]);
 
-  // Get blocking info for a task
+  // Get blocking info for a task (what's blocking THIS task)
   const getBlockingInfo = (task: Task) => {
     const blockers: string[] = [];
     const allTasksToCheck = allTasks || tasks;
@@ -190,7 +190,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       task.blockedBy.forEach(blockerId => {
         const blocker = allTasksToCheck.find(t => t.id === blockerId);
         if (blocker && blocker.status !== 'done') {
-          blockers.push(`Task: ${blocker.title}`);
+          blockers.push(`${blocker.title}`);
         }
       });
     }
@@ -199,12 +199,27 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
       task.linkedIssueIds.forEach(issueId => {
         const issue = issues.find(i => i.id === issueId);
         if (issue && issue.status !== 'resolved' && issue.status !== 'closed') {
-          blockers.push(`Issue: ${issue.title}`);
+          blockers.push(`${issue.title} (Issue)`);
         }
       });
     }
 
     return blockers;
+  };
+
+  // Get blocking-to info for a task (what THIS task is blocking)
+  const getBlockingToInfo = (task: Task) => {
+    const blockedTasks: string[] = [];
+    const allTasksToCheck = allTasks || tasks;
+
+    // Find all tasks that have THIS task in their blockedBy
+    allTasksToCheck.forEach(t => {
+      if (t.blockedBy && t.blockedBy.includes(task.id) && t.status !== 'done') {
+        blockedTasks.push(t.title);
+      }
+    });
+
+    return blockedTasks;
   };
 
   const handleTaskClick = (task: Task) => {
@@ -525,7 +540,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                                 >
                                   {columnTasks.map((task, taskIndex) => {
                                     const isBlocked = blockedTaskIds.has(task.id);
-                                    const blockingInfo = isBlocked ? getBlockingInfo(task) : [];
+                                    const blockingInfo = getBlockingInfo(task);
+                                    const blockingToInfo = getBlockingToInfo(task);
+                                    const hasAnyDependencies = blockingInfo.length > 0 || blockingToInfo.length > 0;
+                                    const isBlockingOthers = blockingToInfo.length > 0;
 
                                     return (
                                       <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
@@ -556,13 +574,19 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                                                         {isDependenciesColumn ? (
                                                           <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
                                                             <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
-                                                              <AlertTriangle className="h-3 w-3 text-status-blocked" />
+                                                              <Link2 className="h-3 w-3 text-status-blocked" />
                                                             </div>
                                                           </div>
                                                         ) : isBlocked ? (
                                                           <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
                                                             <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
-                                                              <AlertTriangle className="h-3 w-3 text-status-blocked" />
+                                                              <Link2 className="h-3 w-3 text-status-blocked" />
+                                                            </div>
+                                                          </div>
+                                                        ) : isBlockingOthers ? (
+                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                            <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
+                                                              <Link2 className="h-3 w-3 text-status-blocked" />
                                                             </div>
                                                           </div>
                                                         ) : task.status === 'done' ? (
@@ -638,15 +662,29 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                                                   </div>
                                                 </Card>
                                               </TooltipTrigger>
-                                              {isBlocked && blockingInfo.length > 0 && (
+                                              {hasAnyDependencies && (
                                                 <TooltipContent side="right" className="max-w-xs">
-                                                  <div className="space-y-1">
-                                                    <p className="font-medium text-xs">Blocked by:</p>
-                                                    <ul className="text-xs space-y-0.5">
-                                                      {blockingInfo.map((info, i) => (
-                                                        <li key={i} className="text-muted-foreground">• {info}</li>
-                                                      ))}
-                                                    </ul>
+                                                  <div className="space-y-2">
+                                                    {blockingInfo.length > 0 && (
+                                                      <div className="space-y-1">
+                                                        <p className="font-medium text-xs text-red-400">⛔ Blocked by:</p>
+                                                        <ul className="text-xs space-y-0.5">
+                                                          {blockingInfo.map((info, i) => (
+                                                            <li key={i} className="text-muted-foreground">• {info}</li>
+                                                          ))}
+                                                        </ul>
+                                                      </div>
+                                                    )}
+                                                    {blockingToInfo.length > 0 && (
+                                                      <div className="space-y-1">
+                                                        <p className="font-medium text-xs text-amber-400">🔗 Blocking:</p>
+                                                        <ul className="text-xs space-y-0.5">
+                                                          {blockingToInfo.map((info, i) => (
+                                                            <li key={i} className="text-muted-foreground">• {info}</li>
+                                                          ))}
+                                                        </ul>
+                                                      </div>
+                                                    )}
                                                   </div>
                                                 </TooltipContent>
                                               )}
