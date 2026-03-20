@@ -10,21 +10,34 @@ interface ProtectedRouteProps {
 }
 
 /** Map a pathname to the best-matching AppLayoutSkeleton variant (pure, for easy testing). */
-function getSkeletonVariant(pathname: string): 'list' | 'projects' | 'dashboard' | 'detail' | 'project-detail' | 'default' | 'chat' | 'team' | 'settings' | 'notifications' | 'calendar' | 'reports' {
-  if (pathname.startsWith('/my-day')) return 'list';
-  if (pathname === '/projects' || pathname === '/projects/') return 'projects';
-  if (pathname === '/projects/new') return 'detail';
-  if (pathname.endsWith('/edit')) return 'detail';
-  if (pathname.includes('/issues/')) return 'detail';
-  if (pathname.startsWith('/projects/')) return 'project-detail';
-  if (pathname.startsWith('/dashboard') || pathname === '/') return 'dashboard';
-  if (pathname.startsWith('/chat')) return 'chat';
-  if (pathname.startsWith('/team')) return 'team';
-  if (pathname.startsWith('/settings')) return 'settings';
-  if (pathname.startsWith('/notifications')) return 'notifications';
-  if (pathname.startsWith('/calendar')) return 'calendar';
-  if (pathname.startsWith('/reports')) return 'reports';
-  return 'default';
+type SkeletonVariant = 'list' | 'projects' | 'dashboard' | 'detail' | 'project-detail' | 'default' | 'chat' | 'team' | 'settings' | 'notifications' | 'calendar' | 'reports';
+
+function getSkeletonVariant(pathname: string): SkeletonVariant {
+  // Handle root and dashboards
+  if (pathname === '/' || pathname.startsWith('/dashboard')) return 'dashboard';
+
+  // Handle specific project routes
+  if (pathname.startsWith('/projects')) {
+    if (pathname === '/projects' || pathname === '/projects/') return 'projects';
+    if (pathname === '/projects/new' || pathname.endsWith('/edit') || pathname.includes('/issues/')) {
+      return 'detail';
+    }
+    return 'project-detail';
+  }
+
+  // Handle base path variants
+  const basePath = pathname.split('/')[1];
+  const exactMatches: Record<string, SkeletonVariant> = {
+    'my-day': 'list',
+    'chat': 'chat',
+    'team': 'team',
+    'settings': 'settings',
+    'notifications': 'notifications',
+    'calendar': 'calendar',
+    'reports': 'reports'
+  };
+
+  return exactMatches[basePath] || 'default';
 }
 
 export function ProtectedRoute({ redirectTo = '/login' }: ProtectedRouteProps) {
