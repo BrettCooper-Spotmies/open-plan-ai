@@ -4,41 +4,13 @@ import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useEffect, useMemo, useState } from 'react';
 import { authService } from '@/services/auth.service';
+import { getSkeletonVariant } from '@/utils/route-skeleton';
 
 interface ProtectedRouteProps {
   redirectTo?: string;
 }
 
-/** Map a pathname to the best-matching AppLayoutSkeleton variant (pure, for easy testing). */
-type SkeletonVariant = 'list' | 'projects' | 'dashboard' | 'detail' | 'project-detail' | 'default' | 'chat' | 'team' | 'settings' | 'notifications' | 'calendar' | 'reports';
 
-function getSkeletonVariant(pathname: string): SkeletonVariant {
-  // Handle root and dashboards
-  if (pathname === '/' || pathname.startsWith('/dashboard')) return 'dashboard';
-
-  // Handle specific project routes
-  if (pathname.startsWith('/projects')) {
-    if (pathname === '/projects' || pathname === '/projects/') return 'projects';
-    if (pathname === '/projects/new' || pathname.endsWith('/edit') || pathname.includes('/issues/')) {
-      return 'detail';
-    }
-    return 'project-detail';
-  }
-
-  // Handle base path variants
-  const basePath = pathname.split('/')[1];
-  const exactMatches: Record<string, SkeletonVariant> = {
-    'my-day': 'list',
-    'chat': 'chat',
-    'team': 'team',
-    'settings': 'settings',
-    'notifications': 'notifications',
-    'calendar': 'calendar',
-    'reports': 'reports'
-  };
-
-  return exactMatches[basePath] || 'default';
-}
 
 export function ProtectedRoute({ redirectTo = '/login' }: ProtectedRouteProps) {
   const { isAuthenticated, isEmailVerified, isLoading, user, signOut } = useAuth();
