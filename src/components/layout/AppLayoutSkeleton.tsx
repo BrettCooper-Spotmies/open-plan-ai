@@ -3,9 +3,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { getDaysInMonth, startOfMonth, getDay } from 'date-fns';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLocation } from 'react-router-dom';
+import { ProjectDetailSkeleton } from '@/features/projects/components/ProjectDetailSkeleton';
 
 interface AppLayoutSkeletonProps {
-  variant?: 'dashboard' | 'list' | 'detail' | 'default' | 'projects' | 'chat' | 'team' | 'settings' | 'notifications' | 'calendar' | 'reports';
+  variant?: 'dashboard' | 'list' | 'detail' | 'project-detail' | 'default' | 'projects' | 'chat' | 'team' | 'settings' | 'notifications' | 'calendar' | 'reports';
 }
 
 function DashboardSkeleton() {
@@ -804,6 +805,10 @@ export function CalendarGridSkeleton() {
   );
 }
 
+function ProjectDetailAppSkeleton() {
+  return <ProjectDetailSkeleton />;
+}
+
 const VARIANT_SKELETONS: Record<NonNullable<AppLayoutSkeletonProps['variant']>, React.ReactNode> = {
   dashboard: <DashboardSkeleton />,
   list: <ListPageSkeleton />,
@@ -813,6 +818,7 @@ const VARIANT_SKELETONS: Record<NonNullable<AppLayoutSkeletonProps['variant']>, 
   notifications: <NotificationsSkeleton />,
   chat: <ChatSkeleton />,
   detail: <DetailPageSkeleton />,
+  'project-detail': <ProjectDetailAppSkeleton />,
   calendar: <CalendarSkeleton />,
   reports: <ReportsSkeleton />,
   default: <DefaultPageSkeleton />,
