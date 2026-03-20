@@ -11,3 +11,4 @@ ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS deleted_by_name TEXT;
 DROP POLICY IF EXISTS "Members can view messages" ON chat_messages;
 CREATE POLICY "Members can view messages" ON chat_messages
   FOR SELECT USING (is_conversation_member(conversation_id));
+

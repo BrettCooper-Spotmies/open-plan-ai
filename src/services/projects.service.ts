@@ -707,19 +707,33 @@ export const projectsService = {
       return mockTeamMembers.slice(0, 3);
     }
 
-    const { data, error } = await supabase
+    // Step 1: Get project members
+    const { data: projectMembers, error: pmError } = await supabase
       .from('project_members')
-      .select('role, user_id, profiles:user_id(id, name, email, avatar_url, initials, role)')
+      .select('role, user_id')
       .eq('project_id', projectId);
 
-    if (error) throw error;
+    if (pmError) throw pmError;
 
-    if (!data || data.length === 0) {
+    if (!projectMembers || projectMembers.length === 0) {
       return [];
     }
 
-    return data.map((pm: any) => {
-      const profile = Array.isArray(pm.profiles) ? pm.profiles[0] : pm.profiles;
+    // Step 2: Get profiles for these users
+    const userIds = projectMembers.map(pm => pm.user_id);
+    const { data: profiles, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, name, email, avatar_url, initials')
+      .in('id', userIds);
+
+    if (profileError) throw profileError;
+
+    // Create a map of profiles by user_id for quick lookup
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+    // Merge members with their profiles
+    return projectMembers.map((pm: any) => {
+      const profile = profileMap.get(pm.user_id);
       return {
         id: profile?.id || pm.user_id,
         name: profile?.name || 'Unknown User',
