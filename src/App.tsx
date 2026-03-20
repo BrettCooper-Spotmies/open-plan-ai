@@ -98,7 +98,7 @@ const App = () => {
                         <Route
                           path="/projects/:id"
                           element={
-                            <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                            <Suspense fallback={<AppLayoutSkeleton variant="project-detail" />}>
                               <ProjectDetail />
                             </Suspense>
                           }

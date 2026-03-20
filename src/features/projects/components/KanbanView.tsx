@@ -480,8 +480,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                               ) : (
                                 <div className={cn('w-2 h-2 rounded-full', column.color)} />
                               )}
-                              <h3 className={cn(
-                                'font-medium text-sm',
+                              <h3 
+                                title={column.label}
+                                className={cn(
+                                'font-medium text-sm truncate',
                                 isDependenciesColumn && 'text-status-blocked'
                               )}>
                                 {column.label}
@@ -735,6 +737,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
                             <Input
                               placeholder="e.g., QA Testing"
                               value={newColumnName}
+                              maxLength={30}
                               onChange={(e) => setNewColumnName(e.target.value)}
                             />
                           </div>
