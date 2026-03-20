@@ -1,12 +1,35 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+// ------------------------------------------------------------------
+// CORS – restrict to known origins via ALLOWED_ORIGINS env var.
+// Never use "*" on an authenticated endpoint.
+// ------------------------------------------------------------------
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ||
+  "http://localhost:5173,http://localhost:3000,https://open-plan-ai.vercel.app")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const baseCorsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin");
+  const allowOrigin =
+    origin && allowedOrigins.includes(origin)
+      ? origin
+      : allowedOrigins[0] || "http://localhost:5173";
+
+  return {
+    ...baseCorsHeaders,
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Vary": "Origin",
+  };
+}
 
 interface VerifyOtpRequest {
   email: string;
@@ -15,13 +38,17 @@ interface VerifyOtpRequest {
 
 // Get client IP from request headers
 function getClientIp(req: Request): string {
-  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
     req.headers.get("x-real-ip") ||
     req.headers.get("cf-connecting-ip") ||
-    "unknown";
+    "unknown"
+  );
 }
 
 const handler = async (req: Request): Promise<Response> => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -91,12 +118,15 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Hash the provided OTP
+    // Hash the OTP with the same email salt used during generation.
+    // This matches the salted hash stored by send-otp / create-auth-user,
+    // which hashes "${email.toLowerCase()}:${otp}" to prevent precomputed attacks.
     const encoder = new TextEncoder();
-    const data = encoder.encode(otp);
+    const saltedOtp = `${email.toLowerCase()}:${otp}`;
+    const data = encoder.encode(saltedOtp);
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const otpHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+    const otpHash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
 
     // Find the verification record
     const { data: verification, error: findError } = await supabase
@@ -163,7 +193,6 @@ const handler = async (req: Request): Promise<Response> => {
     }
 
     // Update the user's email_confirmed_at in auth.users
-    // First, get users by email using the admin API
     try {
       // Use the admin API to list users filtered by email
       const { data: usersData, error: listError } = await supabase.auth.admin.listUsers({
@@ -176,7 +205,9 @@ const handler = async (req: Request): Promise<Response> => {
       }
 
       // Find the specific user by email
-      const user = usersData?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+      const user = usersData?.users?.find(
+        (u) => u.email?.toLowerCase() === email.toLowerCase()
+      );
 
       if (user && !user.email_confirmed_at) {
         console.log(`Updating email_confirmed_at for user ${user.id}`);
@@ -194,22 +225,23 @@ const handler = async (req: Request): Promise<Response> => {
       } else if (user) {
         console.log(`User ${user.id} already has email_confirmed_at set`);
       } else {
-        // If the user wasn't found in the first page, search more explicitly
+        // Search additional pages if not found in the first page
         console.log(`User not found in first page, searching all users for email: ${email}`);
 
-        // Note: In production with many users, you'd want to implement proper pagination
-        // or use a different approach like a database trigger
         const { data: allUsersData } = await supabase.auth.admin.listUsers({
           page: 1,
-          perPage: 1000, // Adjust based on your expected user count
+          perPage: 1000,
         });
 
-        const foundUser = allUsersData?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase());
+        const foundUser = allUsersData?.users?.find(
+          (u) => u.email?.toLowerCase() === email.toLowerCase()
+        );
 
         if (foundUser && !foundUser.email_confirmed_at) {
-          const { error: updateFoundUserError } = await supabase.auth.admin.updateUserById(foundUser.id, {
-            email_confirm: true,
-          });
+          const { error: updateFoundUserError } = await supabase.auth.admin.updateUserById(
+            foundUser.id,
+            { email_confirm: true }
+          );
 
           if (updateFoundUserError) {
             console.error("Error updating user email_confirmed_at:", updateFoundUserError);

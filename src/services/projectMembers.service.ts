@@ -96,43 +96,47 @@ export const projectMembersService = {
   },
 
   /**
-   * Get all members for a project with their profiles
+   * Get all members for a project with their profiles.
+   * Uses a single join query to avoid multiple database round trips.
    */
   async getByProject(projectId: string): Promise<ProjectMemberWithProfile[]> {
-    // Step 1: Get project members
-    const { data: members, error: membersError } = await supabase
+    const { data, error } = await supabase
       .from('project_members')
-      .select('id, project_id, user_id, role, added_at, added_by')
+      .select(`
+        id,
+        project_id,
+        user_id,
+        role,
+        added_at,
+        added_by,
+        profile:profiles!fk_project_members_user_id (
+          id,
+          name,
+          email,
+          avatar_url,
+          initials
+        )
+      `)
       .eq('project_id', projectId);
 
-    if (membersError) {
-      console.error('Error fetching project members:', membersError);
-      throw new Error(`Failed to fetch project members: ${membersError.message}`);
+    if (error) {
+      console.error('Error fetching project members with profiles:', error);
+      throw new Error(`Failed to fetch project members: ${error.message}`);
     }
 
-    if (!members || members.length === 0) {
+    if (!data || data.length === 0) {
       return [];
     }
 
-    // Step 2: Get profiles for these users
-    const userIds = members.map(m => m.user_id);
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, name, email, avatar_url, initials')
-      .in('id', userIds);
-
-    if (profilesError) {
-      console.error('Error fetching profiles:', profilesError);
-      throw new Error(`Failed to fetch profiles: ${profilesError.message}`);
-    }
-
-    // Create a map of profiles by id for quick lookup
-    const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
-
-    // Merge members with their profiles
-    return members.map((member: any) => ({
-      ...member,
-      profile: profileMap.get(member.user_id) || undefined,
+    // Normalise the embedded profile (Supabase returns it as an object or null)
+    return data.map((row: any) => ({
+      id: row.id,
+      project_id: row.project_id,
+      user_id: row.user_id,
+      role: row.role,
+      added_at: row.added_at,
+      added_by: row.added_by,
+      profile: row.profile ?? undefined,
     }));
   },
 
