@@ -102,7 +102,7 @@ export const projectMembersService = {
     // Step 1: Get project members
     const { data: members, error: membersError } = await supabase
       .from('project_members')
-      .select('*')
+      .select('id, project_id, user_id, role, added_at, added_by')
       .eq('project_id', projectId);
 
     if (membersError) {

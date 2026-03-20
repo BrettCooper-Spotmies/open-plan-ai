@@ -12,6 +12,22 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function generateSixDigitOtp(): string {
+  const maxUint32 = 0x1_0000_0000;
+  const range = 900000;
+  const threshold = maxUint32 - (maxUint32 % range);
+
+  while (true) {
+    const randomBytes = new Uint32Array(1);
+    crypto.getRandomValues(randomBytes);
+    const randomValue = randomBytes[0];
+
+    if (randomValue < threshold) {
+      return (100000 + (randomValue % range)).toString();
+    }
+  }
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -117,10 +133,8 @@ Deno.serve(async (req: Request) => {
       throw profileError;
     }
 
-    // Generate a cryptographically secure 6-digit OTP.
-    const randomBytes = new Uint32Array(1);
-    crypto.getRandomValues(randomBytes);
-    const otp = (randomBytes[0] % 900000 + 100000).toString();
+    // Generate an unbiased cryptographically secure 6-digit OTP.
+    const otp = generateSixDigitOtp();
 
     // Hash and persist OTP for verify-otp function.
     const encoder = new TextEncoder();
@@ -139,7 +153,10 @@ Deno.serve(async (req: Request) => {
       });
 
     if (otpInsertError) {
-      console.error("Error storing OTP:", otpInsertError);
+      console.error("Error storing OTP", {
+        code: otpInsertError.code,
+        message: otpInsertError.message,
+      });
       await adminClient.auth.admin.deleteUser(userId);
       return new Response(
         JSON.stringify({ error: "Failed to create verification code" }),
