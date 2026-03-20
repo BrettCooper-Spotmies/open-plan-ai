@@ -1,13 +1,40 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+// ------------------------------------------------------------------
+// CORS – restrict to known origins via ALLOWED_ORIGINS env var.
+// Never use "*" on an authenticated endpoint.
+// ------------------------------------------------------------------
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ||
+  "http://localhost:5173,http://localhost:3000,https://open-plan-ai.vercel.app")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const baseCorsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin");
+  const allowOrigin =
+    origin && allowedOrigins.includes(origin)
+      ? origin
+      : allowedOrigins[0] || "http://localhost:5173";
+  return {
+    ...baseCorsHeaders,
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Vary": "Origin",
+  };
+}
+
+/** Maximum allowed length for invitation identifiers to prevent abuse. */
+const MAX_INVITE_ID_LENGTH = 500;
+
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
@@ -38,8 +65,24 @@ Deno.serve(async (req) => {
     }
 
     const { token, inviteId } = await req.json();
+
+    // Require at least one identifier
     if (!token && !inviteId) {
       return new Response(JSON.stringify({ error: "Missing invitation identifier" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Basic format validation – reject empty strings, non-strings, or oversized values
+    // to prevent injection or resource-exhaustion before touching the database.
+    const effectiveId = inviteId ?? token;
+    if (
+      typeof effectiveId !== "string" ||
+      effectiveId.trim().length === 0 ||
+      effectiveId.length > MAX_INVITE_ID_LENGTH
+    ) {
+      return new Response(JSON.stringify({ error: "Invalid invitation identifier format" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -81,18 +124,25 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Null-check both emails before comparison to prevent runtime errors
     if (!user.email || !invitation.email) {
-      return new Response(JSON.stringify({ error: "Invitation email information is missing" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Invitation email information is missing" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
-      return new Response(JSON.stringify({ error: "This invitation is for a different email address" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "This invitation is for a different email address" }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Check if already a member
@@ -128,10 +178,13 @@ Deno.serve(async (req) => {
 
     if (memberError) {
       console.error("Error adding member:", memberError);
-      return new Response(JSON.stringify({ error: "Failed to add member to organization" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Failed to add member to organization" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     // Update invitation status

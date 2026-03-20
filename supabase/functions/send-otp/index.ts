@@ -5,7 +5,7 @@ import { EMAIL_FROM } from "../_shared/constants.ts";
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ||
   "http://localhost:5173,http://localhost:3000,https://open-plan-ai.vercel.app")
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin: string) => origin.trim())
   .filter(Boolean);
 
 const baseCorsHeaders = {
@@ -30,12 +30,15 @@ interface SendOtpRequest {
   email: string;
 }
 
+/** Maximum retry attempts for unbiased OTP generation. In practice converges in 1-2 tries. */
+const MAX_OTP_RETRIES = 100;
+
 function generateSixDigitOtp(): string {
   const maxUint32 = 0x1_0000_0000;
   const range = 900000;
   const threshold = maxUint32 - (maxUint32 % range);
 
-  while (true) {
+  for (let attempt = 0; attempt < MAX_OTP_RETRIES; attempt++) {
     const randomBytes = new Uint32Array(1);
     crypto.getRandomValues(randomBytes);
     const randomValue = randomBytes[0];
@@ -44,6 +47,8 @@ function generateSixDigitOtp(): string {
       return (100000 + (randomValue % range)).toString();
     }
   }
+
+  throw new Error("Failed to generate a secure OTP after maximum retries");
 }
 
 // Get client IP from request headers
@@ -141,9 +146,11 @@ const handler = async (req: Request): Promise<Response> => {
     // Generate an unbiased cryptographically secure 6-digit OTP.
     const otp = generateSixDigitOtp();
 
-    // Hash the OTP for storage
+    // Hash the OTP salted with the user's email to prevent precomputed attacks.
+    // The same salted format must be used in verify-otp when verifying.
     const encoder = new TextEncoder();
-    const data = encoder.encode(otp);
+    const saltedOtp = `${email.toLowerCase()}:${otp}`;
+    const data = encoder.encode(saltedOtp);
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const otpHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");

@@ -34,6 +34,7 @@ const Signup = () => {
   const { createOrganization } = useOrganization();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -49,6 +50,7 @@ const Signup = () => {
   useEffect(() => {
     if (inviteToken) {
       const fetchInvitation = async () => {
+        // Try match by UUID (invite ID first)
         let { data } = await supabase
           .from('team_invitations')
           .select('email')
@@ -57,7 +59,9 @@ const Signup = () => {
           .maybeSingle();
 
         if (data?.email) {
-          localStorage.setItem("pending_invite_id", inviteToken);
+          // Clear any stale token key before writing invite ID
+          localStorage.removeItem('pending_invite_token');
+          localStorage.setItem('pending_invite_id', inviteToken);
         } else {
           const fallback = await supabase
             .from('team_invitations')
@@ -68,12 +72,19 @@ const Signup = () => {
 
           data = fallback.data;
           if (data?.email) {
-            localStorage.setItem("pending_invite_token", inviteToken);
+            // Clear any stale ID key before writing invite token
+            localStorage.removeItem('pending_invite_id');
+            localStorage.setItem('pending_invite_token', inviteToken);
           }
         }
 
         if (data?.email) {
           setFormData(prev => ({ ...prev, email: data.email }));
+        } else {
+          // Token matched neither table — it's invalid or already used
+          setInviteError(
+            'This invitation link is invalid or has already been used. Please request a new invitation from your team admin.'
+          );
         }
       };
       fetchInvitation();
@@ -271,7 +282,14 @@ const Signup = () => {
                 </Alert>
               )}
 
-              {isInviteSignup && (
+              {inviteError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{inviteError}</AlertDescription>
+                </Alert>
+              )}
+
+              {isInviteSignup && !inviteError && (
                 <Alert>
                   <Mail className="h-4 w-4" />
                   <AlertDescription>

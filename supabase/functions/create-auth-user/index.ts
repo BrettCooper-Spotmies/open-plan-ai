@@ -5,19 +5,44 @@ import { EMAIL_FROM } from "../_shared/constants.ts";
 // @ts-expect-error - Deno is available in edge function runtime
 const Deno = globalThis.Deno;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+// ------------------------------------------------------------------
+// CORS – restrict to known origins via ALLOWED_ORIGINS env var.
+// Never use "*" on an authenticated endpoint.
+// ------------------------------------------------------------------
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ||
+  "http://localhost:5173,http://localhost:3000,https://open-plan-ai.vercel.app")
+  .split(",")
+  .map((origin: string) => origin.trim())
+  .filter(Boolean);
+
+const baseCorsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin");
+  const allowOrigin =
+    origin && allowedOrigins.includes(origin)
+      ? origin
+      : allowedOrigins[0] || "http://localhost:5173";
+  return {
+    ...baseCorsHeaders,
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Vary": "Origin",
+  };
+}
+
+/** Maximum retry attempts for unbiased OTP generation. Converges in 1-2 tries in practice. */
+const MAX_OTP_RETRIES = 100;
 
 function generateSixDigitOtp(): string {
   const maxUint32 = 0x1_0000_0000;
   const range = 900000;
   const threshold = maxUint32 - (maxUint32 % range);
 
-  while (true) {
+  for (let attempt = 0; attempt < MAX_OTP_RETRIES; attempt++) {
     const randomBytes = new Uint32Array(1);
     crypto.getRandomValues(randomBytes);
     const randomValue = randomBytes[0];
@@ -26,9 +51,13 @@ function generateSixDigitOtp(): string {
       return (100000 + (randomValue % range)).toString();
     }
   }
+
+  throw new Error("Failed to generate a secure OTP after maximum retries");
 }
 
 Deno.serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -40,6 +69,14 @@ Deno.serve(async (req: Request) => {
     if (!invite || !email || !password) {
       return new Response(
         JSON.stringify({ error: "Invitation, email, and password are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Basic format validation to reject obviously invalid inputs
+    if (typeof invite !== "string" || invite.length > 500 || invite.trim().length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Invalid invitation identifier format" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -79,6 +116,14 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({ error: "Invitation has expired" }),
         { status: 410, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Null-check both emails before comparison
+    if (!invitation.email || !email) {
+      return new Response(
+        JSON.stringify({ error: "Invitation email information is missing" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -136,9 +181,11 @@ Deno.serve(async (req: Request) => {
     // Generate an unbiased cryptographically secure 6-digit OTP.
     const otp = generateSixDigitOtp();
 
-    // Hash and persist OTP for verify-otp function.
+    // Hash the OTP salted with the user's email to prevent precomputed attacks.
+    // The same salted format must be used in verify-otp when verifying.
     const encoder = new TextEncoder();
-    const data = encoder.encode(otp);
+    const saltedOtp = `${email.toLowerCase()}:${otp}`;
+    const data = encoder.encode(saltedOtp);
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const otpHash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
