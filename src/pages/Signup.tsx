@@ -85,51 +85,83 @@ const Signup = () => {
 
     setIsLoading(true);
 
-    const result = await signUp(formData.email, formData.password, {
-      name: formData.fullName,
-      company: formData.companyName,
-      industry: formData.industry,
-    });
-
-    if (result.error) {
-      setError(result.error.message);
-      setIsLoading(false);
-      return;
-    }
-
-    // Send OTP for email verification
     try {
-      const { data, error: otpError } = await supabase.functions.invoke('send-otp', {
-        body: { email: formData.email },
-      });
+      // For invite signups, use the create-auth-user edge function to avoid anonymous sign-in issues
+      if (inviteToken) {
+        const { data, error: createError } = await supabase.functions.invoke('create-auth-user', {
+          body: {
+            email: formData.email,
+            password: formData.password,
+            metadata: {
+              name: formData.fullName,
+              company: formData.companyName,
+              industry: formData.industry,
+            },
+          },
+        });
 
-      if (otpError || data?.error) {
-        console.error('Error sending OTP:', otpError || data?.error);
+        if (createError) {
+          setError(createError.message);
+          setIsLoading(false);
+          return;
+        }
+
+        if (data?.error) {
+          setError(data.error);
+          setIsLoading(false);
+          return;
+        }
+      } else {
+        // For regular signups, use the normal auth flow
+        const result = await signUp(formData.email, formData.password, {
+          name: formData.fullName,
+          company: formData.companyName,
+          industry: formData.industry,
+        });
+
+        if (result.error) {
+          setError(result.error.message);
+          setIsLoading(false);
+          return;
+        }
+
+        // Send OTP for email verification
+        try {
+          const { data, error: otpError } = await supabase.functions.invoke('send-otp', {
+            body: { email: formData.email },
+          });
+
+          if (otpError || data?.error) {
+            console.error('Error sending OTP:', otpError || data?.error);
+          }
+        } catch (err) {
+          console.error('Error sending OTP:', err);
+        }
+
+        // Only create organization if NOT an invite signup
+        try {
+          await createOrganization(formData.companyName, `${formData.industry} company`);
+        } catch (err) {
+          console.error('Error creating organization:', err);
+        }
       }
-    } catch (err) {
-      console.error('Error sending OTP:', err);
-    }
 
-    // Only create organization if NOT an invite signup
-    if (!inviteToken) {
       try {
-        await createOrganization(formData.companyName, `${formData.industry} company`);
-      } catch (err) {
-        console.error('Error creating organization:', err);
+        sessionStorage.setItem(
+          'openplan_pending_verify',
+          JSON.stringify({ email: formData.email })
+        );
+      } catch {
+        // sessionStorage may be unavailable in restricted browser contexts.
       }
-    }
 
-    try {
-      sessionStorage.setItem(
-        'openplan_pending_verify',
-        JSON.stringify({ email: formData.email })
-      );
-    } catch {
-      // sessionStorage may be unavailable in restricted browser contexts.
+      setIsLoading(false);
+      navigate("/verify-email", { state: { email: formData.email } });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      setError(errorMessage);
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
-    navigate("/verify-email", { state: { email: formData.email } });
   };
 
   const passwordsMatch = formData.password === formData.confirmPassword && formData.confirmPassword.length > 0;
@@ -256,11 +288,10 @@ const Signup = () => {
                     placeholder="you@company.com"
                     value={formData.email}
                     onChange={(e) => handleChange("email", e.target.value)}
-                    className={`pl-10 ${isInviteSignup ? "bg-muted cursor-not-allowed" : ""}`}
+                    className="pl-10"
                     required
-                    readOnly={isInviteSignup}
                     disabled={isLoading}
-                    autoComplete={isInviteSignup ? "off" : "email"}
+                    autoComplete="email"
                   />
                 </div>
               </div>

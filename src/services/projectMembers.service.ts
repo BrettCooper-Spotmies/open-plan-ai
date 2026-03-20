@@ -99,22 +99,40 @@ export const projectMembersService = {
    * Get all members for a project with their profiles
    */
   async getByProject(projectId: string): Promise<ProjectMemberWithProfile[]> {
-    const { data, error } = await supabase
+    // Step 1: Get project members
+    const { data: members, error: membersError } = await supabase
       .from('project_members')
-      .select(`
-        *,
-        profile:profiles(id, name, email, avatar_url, initials)
-      `)
+      .select('*')
       .eq('project_id', projectId);
 
-    if (error) {
-      console.error('Error fetching project members:', error);
-      throw new Error(`Failed to fetch project members: ${error.message}`);
+    if (membersError) {
+      console.error('Error fetching project members:', membersError);
+      throw new Error(`Failed to fetch project members: ${membersError.message}`);
     }
 
-    return (data || []).map((member: any) => ({
+    if (!members || members.length === 0) {
+      return [];
+    }
+
+    // Step 2: Get profiles for these users
+    const userIds = members.map(m => m.user_id);
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, name, email, avatar_url, initials')
+      .in('id', userIds);
+
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError);
+      throw new Error(`Failed to fetch profiles: ${profilesError.message}`);
+    }
+
+    // Create a map of profiles by id for quick lookup
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+    // Merge members with their profiles
+    return members.map((member: any) => ({
       ...member,
-      profile: member.profile || undefined,
+      profile: profileMap.get(member.user_id) || undefined,
     }));
   },
 

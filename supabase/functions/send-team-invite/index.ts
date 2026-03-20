@@ -1,15 +1,20 @@
+// @ts-expect-error - ES module import from esm.sh
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { EMAIL_FROM } from "../_shared/constants.ts";
 
+// @ts-expect-error - Deno is available in edge function runtime
+const Deno = globalThis.Deno;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
@@ -39,8 +44,16 @@ Deno.serve(async (req) => {
     });
 
     const { data: { user }, error: userError } = await userClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid token" }), {
+    if (userError) {
+      console.error("Auth error:", userError);
+      return new Response(JSON.stringify({ error: "Authentication failed", details: userError.message }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    if (!user) {
+      return new Response(JSON.stringify({ error: "No user found in token" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -153,7 +166,10 @@ Deno.serve(async (req) => {
     const orgName = org?.name || "the team";
     // Route existing users to /join-org, new users to /signup
     const invitePath = existingProfile ? '/join-org' : '/signup';
-    const inviteLink = `https://openplanai.lovable.app${invitePath}?invite=${token}`;
+    
+    // Use environment variable for app URL, with fallback to production URL
+    const appUrl = Deno.env.get("APP_URL") || "https://open-plan-ai.vercel.app";
+    const inviteLink = `${appUrl}${invitePath}?invite=${token}`;
 
     // Send email via Resend
     const emailRes = await fetch("https://api.resend.com/emails", {
@@ -209,7 +225,8 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error("Error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    return new Response(JSON.stringify({ error: "Internal server error", details: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
