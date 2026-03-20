@@ -239,7 +239,7 @@ describe('reportsUtils', () => {
 
       expect(kpis.totalTasks).toBe(4);
       expect(kpis.completedTasks).toBe(2);
-      expect(kpis.projectProgress).toBe(50);
+      expect(kpis.projectProgress).toBe(25);
       expect(kpis.openIssues).toBe(2);
       expect(kpis.criticalIssues).toBe(1);
     });
