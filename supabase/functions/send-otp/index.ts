@@ -30,6 +30,22 @@ interface SendOtpRequest {
   email: string;
 }
 
+function generateSixDigitOtp(): string {
+  const maxUint32 = 0x1_0000_0000;
+  const range = 900000;
+  const threshold = maxUint32 - (maxUint32 % range);
+
+  while (true) {
+    const randomBytes = new Uint32Array(1);
+    crypto.getRandomValues(randomBytes);
+    const randomValue = randomBytes[0];
+
+    if (randomValue < threshold) {
+      return (100000 + (randomValue % range)).toString();
+    }
+  }
+}
+
 // Get client IP from request headers
 function getClientIp(req: Request): string {
   return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -122,10 +138,8 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Generate a cryptographically secure 6-digit OTP.
-    const randomBytes = new Uint32Array(1);
-    crypto.getRandomValues(randomBytes);
-    const otp = (randomBytes[0] % 900000 + 100000).toString();
+    // Generate an unbiased cryptographically secure 6-digit OTP.
+    const otp = generateSixDigitOtp();
 
     // Hash the OTP for storage
     const encoder = new TextEncoder();

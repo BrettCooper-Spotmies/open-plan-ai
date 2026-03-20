@@ -178,8 +178,14 @@ Deno.serve(async (req: Request) => {
     // Route existing users to /join-org, new users to /signup
     const invitePath = existingProfile ? '/join-org' : '/signup';
     
-    // Use environment variable for app URL, with fallback to production URL
-    const appUrl = Deno.env.get("APP_URL") || "https://open-plan-ai.vercel.app";
+    // Require an explicit app URL from environment to avoid hardcoded fallbacks.
+    const appUrl = Deno.env.get("APP_URL");
+    if (!appUrl) {
+      return new Response(JSON.stringify({ error: "APP_URL is not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const inviteLink = `${appUrl}${invitePath}?invite=${invitationId}`;
 
     // Send email via Resend

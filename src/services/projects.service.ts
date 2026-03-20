@@ -12,6 +12,27 @@ const USE_SUPABASE = config.api.useSupabase;
 // Simulate network delay for mock data
 const mockDelay = (ms: number = 100) => new Promise(resolve => setTimeout(resolve, ms));
 
+const PROJECT_SELECT_COLUMNS = `
+  id,
+  name,
+  description,
+  stage,
+  progress,
+  start_date,
+  target_date,
+  type,
+  icon,
+  client_name,
+  client_organization,
+  client_contact,
+  notes,
+  departments,
+  created_at,
+  updated_at,
+  organization_id,
+  deleted_at
+`;
+
 // Map database task to frontend Task type
 // Map database task to frontend Task type
 function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
@@ -188,7 +209,7 @@ export const projectsService = {
 
     let query = supabase
       .from('projects')
-      .select('*')
+      .select(PROJECT_SELECT_COLUMNS)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
@@ -251,7 +272,7 @@ export const projectsService = {
 
     const { data: project, error } = await supabase
       .from('projects')
-      .select('*')
+      .select(PROJECT_SELECT_COLUMNS)
       .eq('id', id)
       .is('deleted_at', null)
       .maybeSingle();

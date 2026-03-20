@@ -81,7 +81,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!user.email || user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+    if (!user.email || !invitation.email) {
+      return new Response(JSON.stringify({ error: "Invitation email information is missing" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
       return new Response(JSON.stringify({ error: "This invitation is for a different email address" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
