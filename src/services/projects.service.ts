@@ -12,6 +12,27 @@ const USE_SUPABASE = config.api.useSupabase;
 // Simulate network delay for mock data
 const mockDelay = (ms: number = 100) => new Promise(resolve => setTimeout(resolve, ms));
 
+const PROJECT_SELECT_COLUMNS = `
+  id,
+  name,
+  description,
+  stage,
+  progress,
+  start_date,
+  target_date,
+  type,
+  icon,
+  client_name,
+  client_organization,
+  client_contact,
+  notes,
+  departments,
+  created_at,
+  updated_at,
+  organization_id,
+  deleted_at
+`;
+
 // Map database task to frontend Task type
 // Map database task to frontend Task type
 function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
@@ -188,7 +209,7 @@ export const projectsService = {
 
     let query = supabase
       .from('projects')
-      .select('*')
+      .select(PROJECT_SELECT_COLUMNS)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
@@ -251,7 +272,7 @@ export const projectsService = {
 
     const { data: project, error } = await supabase
       .from('projects')
-      .select('*')
+      .select(PROJECT_SELECT_COLUMNS)
       .eq('id', id)
       .is('deleted_at', null)
       .maybeSingle();
@@ -707,19 +728,33 @@ export const projectsService = {
       return mockTeamMembers.slice(0, 3);
     }
 
-    const { data, error } = await supabase
+    // Step 1: Get project members
+    const { data: projectMembers, error: pmError } = await supabase
       .from('project_members')
-      .select('role, user_id, profiles:user_id(id, name, email, avatar_url, initials, role)')
+      .select('role, user_id')
       .eq('project_id', projectId);
 
-    if (error) throw error;
+    if (pmError) throw pmError;
 
-    if (!data || data.length === 0) {
+    if (!projectMembers || projectMembers.length === 0) {
       return [];
     }
 
-    return data.map((pm: any) => {
-      const profile = Array.isArray(pm.profiles) ? pm.profiles[0] : pm.profiles;
+    // Step 2: Get profiles for these users
+    const userIds = projectMembers.map(pm => pm.user_id);
+    const { data: profiles, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, name, email, avatar_url, initials')
+      .in('id', userIds);
+
+    if (profileError) throw profileError;
+
+    // Create a map of profiles by user_id for quick lookup
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+    // Merge members with their profiles
+    return projectMembers.map((pm: any) => {
+      const profile = profileMap.get(pm.user_id);
       return {
         id: profile?.id || pm.user_id,
         name: profile?.name || 'Unknown User',

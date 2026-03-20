@@ -1,15 +1,20 @@
+// @ts-expect-error - ES module import from esm.sh
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { EMAIL_FROM } from "../_shared/constants.ts";
 
+// @ts-expect-error - Deno is available in edge function runtime
+const Deno = globalThis.Deno;
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
@@ -39,8 +44,16 @@ Deno.serve(async (req) => {
     });
 
     const { data: { user }, error: userError } = await userClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid token" }), {
+    if (userError) {
+      console.error("Auth error:", userError);
+      return new Response(JSON.stringify({ error: "Authentication failed", details: userError.message }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    if (!user) {
+      return new Response(JSON.stringify({ error: "No user found in token" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -119,11 +132,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Generate token and create invitation
+    // Generate token and create invitation. The token stays server-side and is
+    // not included in client-facing URLs.
     const token = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
-    const { error: insertError } = await adminClient
+    const { data: invitation, error: insertError } = await adminClient
       .from("team_invitations")
       .insert({
         organization_id: orgId,
@@ -133,10 +147,20 @@ Deno.serve(async (req) => {
         invited_by: user.id,
         status: "pending",
         expires_at: expiresAt,
-      });
+      })
+      .select("id")
+      .single();
 
     if (insertError) {
       console.error("Insert error:", insertError);
+      return new Response(JSON.stringify({ error: "Failed to create invitation" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const invitationId = invitation?.id;
+    if (!invitationId) {
       return new Response(JSON.stringify({ error: "Failed to create invitation" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -153,7 +177,16 @@ Deno.serve(async (req) => {
     const orgName = org?.name || "the team";
     // Route existing users to /join-org, new users to /signup
     const invitePath = existingProfile ? '/join-org' : '/signup';
-    const inviteLink = `https://openplanai.lovable.app${invitePath}?invite=${token}`;
+    
+    // Require an explicit app URL from environment to avoid hardcoded fallbacks.
+    const appUrl = Deno.env.get("APP_URL");
+    if (!appUrl) {
+      return new Response(JSON.stringify({ error: "APP_URL is not configured" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const inviteLink = `${appUrl}${invitePath}?invite=${invitationId}`;
 
     // Send email via Resend
     const emailRes = await fetch("https://api.resend.com/emails", {
@@ -181,7 +214,7 @@ Deno.serve(async (req) => {
               </a>
             </div>
             <p style="color: #6b7280; font-size: 14px;">
-              This invitation expires in 7 days. If you didn't expect this invitation, you can safely ignore this email.
+              This invitation expires in 48 hours. If you didn't expect this invitation, you can safely ignore this email.
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
             <p style="color: #9ca3af; font-size: 12px;">OpenPlan AI — Hardware Project Management</p>
@@ -203,13 +236,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, invitationId }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
     console.error("Error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error" }), {
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    return new Response(JSON.stringify({ error: "Internal server error", details: errorMessage }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

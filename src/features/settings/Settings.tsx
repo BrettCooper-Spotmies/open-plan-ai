@@ -100,8 +100,6 @@ const Settings = () => {
   const [profileForm, setProfileForm] = useState({
     name: '',
     initials: '',
-    role: '',
-    bio: '',
   });
   const [profileLoading, setProfileLoading] = useState(false);
   const [avatarLoading, setAvatarLoading] = useState(false);
@@ -145,8 +143,6 @@ const Settings = () => {
       setProfileForm({
         name: profile.name || '',
         initials: profile.initials || '',
-        role: profile.role || '',
-        bio: profile.bio || '',
       });
     }
   }, [profile]);
@@ -225,8 +221,6 @@ const Settings = () => {
       await profileService.updateProfile({
         name: profileForm.name,
         initials: profileForm.initials,
-        role: profileForm.role,
-        bio: profileForm.bio,
       });
       await refreshProfile();
       toast.success('Profile updated successfully');
@@ -695,25 +689,6 @@ const Settings = () => {
                         className="bg-muted"
                       />
                     </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role / Title</Label>
-                    <Input
-                      id="role"
-                      value={profileForm.role}
-                      onChange={(e) => setProfileForm({ ...profileForm, role: e.target.value })}
-                      placeholder="e.g. Project Manager"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="bio">Bio</Label>
-                    <Textarea
-                      id="bio"
-                      value={profileForm.bio}
-                      onChange={(e) => setProfileForm({ ...profileForm, bio: e.target.value })}
-                      rows={3}
-                      placeholder="Tell us a bit about yourself..."
-                    />
                   </div>
                   <Button onClick={handleSaveProfile} disabled={profileLoading}>
                     {profileLoading ? (

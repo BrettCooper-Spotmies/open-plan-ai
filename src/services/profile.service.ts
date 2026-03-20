@@ -6,8 +6,6 @@ export interface Profile {
   name: string;
   avatar_url: string | null;
   initials: string;
-  role: string;
-  bio: string;
 }
 
 export const profileService = {
@@ -20,7 +18,7 @@ export const profileService = {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, name, avatar_url, initials, role, bio')
+      .select('id, email, name, avatar_url, initials')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -49,7 +47,7 @@ export const profileService = {
       .from('profiles')
       .update(updates)
       .eq('id', user.id)
-      .select('id, email, name, avatar_url, initials, role, bio')
+      .select('id, email, name, avatar_url, initials')
       .single();
 
     if (error) throw error;

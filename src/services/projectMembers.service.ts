@@ -96,25 +96,47 @@ export const projectMembersService = {
   },
 
   /**
-   * Get all members for a project with their profiles
+   * Get all members for a project with their profiles.
+   * Uses a single join query to avoid multiple database round trips.
    */
   async getByProject(projectId: string): Promise<ProjectMemberWithProfile[]> {
     const { data, error } = await supabase
       .from('project_members')
       .select(`
-        *,
-        profile:profiles(id, name, email, avatar_url, initials)
+        id,
+        project_id,
+        user_id,
+        role,
+        added_at,
+        added_by,
+        profile:profiles!fk_project_members_user_id (
+          id,
+          name,
+          email,
+          avatar_url,
+          initials
+        )
       `)
       .eq('project_id', projectId);
 
     if (error) {
-      console.error('Error fetching project members:', error);
+      console.error('Error fetching project members with profiles:', error);
       throw new Error(`Failed to fetch project members: ${error.message}`);
     }
 
-    return (data || []).map((member: any) => ({
-      ...member,
-      profile: member.profile || undefined,
+    if (!data || data.length === 0) {
+      return [];
+    }
+
+    // Normalise the embedded profile (Supabase returns it as an object or null)
+    return data.map((row: any) => ({
+      id: row.id,
+      project_id: row.project_id,
+      user_id: row.user_id,
+      role: row.role,
+      added_at: row.added_at,
+      added_by: row.added_by,
+      profile: row.profile ?? undefined,
     }));
   },
 

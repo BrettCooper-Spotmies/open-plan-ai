@@ -120,18 +120,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setProfile(profileData);
           }, 0);
 
-          // Check for pending invite token after successful auth
+          // Check for pending invite after successful auth
+          const pendingInviteId = localStorage.getItem('pending_invite_id');
           const pendingToken = localStorage.getItem('pending_invite_token');
-          if (pendingToken) {
+          if (pendingInviteId || pendingToken) {
+            localStorage.removeItem('pending_invite_id');
             localStorage.removeItem('pending_invite_token');
-            // Accept the invitation in the background
-            supabase.functions.invoke('accept-invite', {
-              body: { token: pendingToken },
-            }).then(({ data, error }) => {
-              if (error) console.error('Error accepting invite:', error);
-              else if (data?.error) console.error('Invite error:', data.error);
-              else console.log('Invitation accepted successfully');
-            });
+
+            // Defense-in-depth: validate the stored identifier before sending to the backend.
+            // The backend enforces all security rules; this prevents obviously-tampered values
+            // (e.g. oversized strings) from reaching the network at all.
+            const effectiveId = pendingInviteId ?? pendingToken ?? '';
+            const isValidFormat =
+              typeof effectiveId === 'string' &&
+              effectiveId.trim().length > 0 &&
+              effectiveId.length <= 500;
+
+            if (!isValidFormat) {
+              console.warn('Pending invite identifier has an invalid format; skipping accept-invite call.');
+            } else {
+              // Accept the invitation in the background
+              supabase.functions.invoke('accept-invite', {
+                body: pendingInviteId ? { inviteId: pendingInviteId } : { token: pendingToken },
+              }).then(({ data, error }) => {
+                if (error) console.error('Error accepting invite:', error);
+                else if (data?.error) console.error('Invite error:', data.error);
+                else console.log('Invitation accepted successfully');
+              });
+            }
           }
         } else {
           setProfile(null);

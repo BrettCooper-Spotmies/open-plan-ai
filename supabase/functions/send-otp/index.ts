@@ -2,14 +2,53 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { EMAIL_FROM } from "../_shared/constants.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ||
+  "http://localhost:5173,http://localhost:3000,https://open-plan-ai.vercel.app")
+  .split(",")
+  .map((origin: string) => origin.trim())
+  .filter(Boolean);
+
+const baseCorsHeaders = {
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+};
+
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin");
+  const allowOrigin = origin && allowedOrigins.includes(origin)
+    ? origin
+    : allowedOrigins[0] || "http://localhost:5173";
+
+  return {
+    ...baseCorsHeaders,
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Vary": "Origin",
+  };
 };
 
 interface SendOtpRequest {
   email: string;
+}
+
+/** Maximum retry attempts for unbiased OTP generation. In practice converges in 1-2 tries. */
+const MAX_OTP_RETRIES = 100;
+
+function generateSixDigitOtp(): string {
+  const maxUint32 = 0x1_0000_0000;
+  const range = 900000;
+  const threshold = maxUint32 - (maxUint32 % range);
+
+  for (let attempt = 0; attempt < MAX_OTP_RETRIES; attempt++) {
+    const randomBytes = new Uint32Array(1);
+    crypto.getRandomValues(randomBytes);
+    const randomValue = randomBytes[0];
+
+    if (randomValue < threshold) {
+      return (100000 + (randomValue % range)).toString();
+    }
+  }
+
+  throw new Error("Failed to generate a secure OTP after maximum retries");
 }
 
 // Get client IP from request headers
@@ -21,9 +60,11 @@ function getClientIp(req: Request): string {
 }
 
 const handler = async (req: Request): Promise<Response> => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { status: 200, headers: corsHeaders });
   }
 
   try {
@@ -102,12 +143,14 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate an unbiased cryptographically secure 6-digit OTP.
+    const otp = generateSixDigitOtp();
 
-    // Hash the OTP for storage
+    // Hash the OTP salted with the user's email to prevent precomputed attacks.
+    // The same salted format must be used in verify-otp when verifying.
     const encoder = new TextEncoder();
-    const data = encoder.encode(otp);
+    const saltedOtp = `${email.toLowerCase()}:${otp}`;
+    const data = encoder.encode(saltedOtp);
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     const otpHash = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");

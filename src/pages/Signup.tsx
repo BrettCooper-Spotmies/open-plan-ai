@@ -34,6 +34,7 @@ const Signup = () => {
   const { createOrganization } = useOrganization();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -48,16 +49,42 @@ const Signup = () => {
   // If there's an invite token, store it and fetch the invited email
   useEffect(() => {
     if (inviteToken) {
-      localStorage.setItem("pending_invite_token", inviteToken);
       const fetchInvitation = async () => {
-        const { data } = await supabase
+        // Try match by UUID (invite ID first)
+        let { data } = await supabase
           .from('team_invitations')
           .select('email')
-          .eq('token', inviteToken)
+          .eq('id', inviteToken)
           .eq('status', 'pending')
           .maybeSingle();
+
+        if (data?.email) {
+          // Clear any stale token key before writing invite ID
+          localStorage.removeItem('pending_invite_token');
+          localStorage.setItem('pending_invite_id', inviteToken);
+        } else {
+          const fallback = await supabase
+            .from('team_invitations')
+            .select('email')
+            .eq('token', inviteToken)
+            .eq('status', 'pending')
+            .maybeSingle();
+
+          data = fallback.data;
+          if (data?.email) {
+            // Clear any stale ID key before writing invite token
+            localStorage.removeItem('pending_invite_id');
+            localStorage.setItem('pending_invite_token', inviteToken);
+          }
+        }
+
         if (data?.email) {
           setFormData(prev => ({ ...prev, email: data.email }));
+        } else {
+          // Token matched neither table — it's invalid or already used
+          setInviteError(
+            'This invitation link is invalid or has already been used. Please request a new invitation from your team admin.'
+          );
         }
       };
       fetchInvitation();
@@ -72,6 +99,11 @@ const Signup = () => {
     e.preventDefault();
     setError(null);
 
+    const reportError = (message: string, details?: unknown) => {
+      console.error("Signup error:", message, details);
+      setError(message);
+    };
+
     const unmetLabels = getUnmetRequirementLabels(formData.password);
     if (unmetLabels.length > 0) {
       setError(`Password is too weak. Missing: ${unmetLabels.join(", ")}`);
@@ -85,51 +117,81 @@ const Signup = () => {
 
     setIsLoading(true);
 
-    const result = await signUp(formData.email, formData.password, {
-      name: formData.fullName,
-      company: formData.companyName,
-      industry: formData.industry,
-    });
-
-    if (result.error) {
-      setError(result.error.message);
-      setIsLoading(false);
-      return;
-    }
-
-    // Send OTP for email verification
     try {
-      const { data, error: otpError } = await supabase.functions.invoke('send-otp', {
-        body: { email: formData.email },
-      });
+      // For invite signups, use the create-auth-user edge function to avoid anonymous sign-in issues
+      if (inviteToken) {
+        const { data, error: createError } = await supabase.functions.invoke('create-auth-user', {
+          body: {
+            invite: inviteToken,
+            email: formData.email,
+            password: formData.password,
+            metadata: {
+              name: formData.fullName,
+              company: formData.companyName,
+              industry: formData.industry,
+            },
+          },
+        });
 
-      if (otpError || data?.error) {
-        console.error('Error sending OTP:', otpError || data?.error);
+        if (createError) {
+          reportError(createError.message, createError);
+          return;
+        }
+
+        if (data?.error) {
+          reportError(data.error, data);
+          return;
+        }
+      } else {
+        // For regular signups, use the normal auth flow
+        const result = await signUp(formData.email, formData.password, {
+          name: formData.fullName,
+          company: formData.companyName,
+          industry: formData.industry,
+        });
+
+        if (result.error) {
+          reportError(result.error.message, result.error);
+          return;
+        }
+
+        // Send OTP for email verification
+        try {
+          const { data, error: otpError } = await supabase.functions.invoke('send-otp', {
+            body: { email: formData.email },
+          });
+
+          if (otpError || data?.error) {
+            console.error('Error sending OTP:', otpError || data?.error);
+          }
+        } catch (err) {
+          console.error('Error sending OTP:', err);
+        }
+
+        // Only create organization if NOT an invite signup
+        try {
+          await createOrganization(formData.companyName, `${formData.industry} company`);
+        } catch (err) {
+          console.error('Error creating organization:', err);
+        }
       }
-    } catch (err) {
-      console.error('Error sending OTP:', err);
-    }
 
-    // Only create organization if NOT an invite signup
-    if (!inviteToken) {
       try {
-        await createOrganization(formData.companyName, `${formData.industry} company`);
-      } catch (err) {
-        console.error('Error creating organization:', err);
+        sessionStorage.setItem(
+          'openplan_pending_verify',
+          JSON.stringify({ email: formData.email })
+        );
+      } catch {
+        // sessionStorage may be unavailable in restricted browser contexts.
       }
-    }
 
-    try {
-      sessionStorage.setItem(
-        'openplan_pending_verify',
-        JSON.stringify({ email: formData.email })
-      );
-    } catch {
-      // sessionStorage may be unavailable in restricted browser contexts.
+      navigate("/verify-email", { state: { email: formData.email } });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+      reportError(errorMessage, err);
+    } finally {
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
-    navigate("/verify-email", { state: { email: formData.email } });
   };
 
   const passwordsMatch = formData.password === formData.confirmPassword && formData.confirmPassword.length > 0;
@@ -220,7 +282,14 @@ const Signup = () => {
                 </Alert>
               )}
 
-              {isInviteSignup && (
+              {inviteError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{inviteError}</AlertDescription>
+                </Alert>
+              )}
+
+              {isInviteSignup && !inviteError && (
                 <Alert>
                   <Mail className="h-4 w-4" />
                   <AlertDescription>
@@ -256,11 +325,10 @@ const Signup = () => {
                     placeholder="you@company.com"
                     value={formData.email}
                     onChange={(e) => handleChange("email", e.target.value)}
-                    className={`pl-10 ${isInviteSignup ? "bg-muted cursor-not-allowed" : ""}`}
+                    className="pl-10"
                     required
-                    readOnly={isInviteSignup}
                     disabled={isLoading}
-                    autoComplete={isInviteSignup ? "off" : "email"}
+                    autoComplete="email"
                   />
                 </div>
               </div>
