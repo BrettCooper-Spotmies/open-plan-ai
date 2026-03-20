@@ -120,13 +120,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setProfile(profileData);
           }, 0);
 
-          // Check for pending invite token after successful auth
+          // Check for pending invite after successful auth
+          const pendingInviteId = localStorage.getItem('pending_invite_id');
           const pendingToken = localStorage.getItem('pending_invite_token');
-          if (pendingToken) {
+          if (pendingInviteId || pendingToken) {
+            localStorage.removeItem('pending_invite_id');
             localStorage.removeItem('pending_invite_token');
             // Accept the invitation in the background
             supabase.functions.invoke('accept-invite', {
-              body: { token: pendingToken },
+              body: pendingInviteId ? { inviteId: pendingInviteId } : { token: pendingToken },
             }).then(({ data, error }) => {
               if (error) console.error('Error accepting invite:', error);
               else if (data?.error) console.error('Invite error:', data.error);

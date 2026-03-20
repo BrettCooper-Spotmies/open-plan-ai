@@ -48,14 +48,30 @@ const Signup = () => {
   // If there's an invite token, store it and fetch the invited email
   useEffect(() => {
     if (inviteToken) {
-      localStorage.setItem("pending_invite_token", inviteToken);
       const fetchInvitation = async () => {
-        const { data } = await supabase
+        let { data } = await supabase
           .from('team_invitations')
           .select('email')
-          .eq('token', inviteToken)
+          .eq('id', inviteToken)
           .eq('status', 'pending')
           .maybeSingle();
+
+        if (data?.email) {
+          localStorage.setItem("pending_invite_id", inviteToken);
+        } else {
+          const fallback = await supabase
+            .from('team_invitations')
+            .select('email')
+            .eq('token', inviteToken)
+            .eq('status', 'pending')
+            .maybeSingle();
+
+          data = fallback.data;
+          if (data?.email) {
+            localStorage.setItem("pending_invite_token", inviteToken);
+          }
+        }
+
         if (data?.email) {
           setFormData(prev => ({ ...prev, email: data.email }));
         }
@@ -71,6 +87,11 @@ const Signup = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const reportError = (message: string, details?: unknown) => {
+      console.error("Signup error:", message, details);
+      setError(message);
+    };
 
     const unmetLabels = getUnmetRequirementLabels(formData.password);
     if (unmetLabels.length > 0) {
@@ -90,6 +111,7 @@ const Signup = () => {
       if (inviteToken) {
         const { data, error: createError } = await supabase.functions.invoke('create-auth-user', {
           body: {
+            invite: inviteToken,
             email: formData.email,
             password: formData.password,
             metadata: {
@@ -101,14 +123,12 @@ const Signup = () => {
         });
 
         if (createError) {
-          setError(createError.message);
-          setIsLoading(false);
+          reportError(createError.message, createError);
           return;
         }
 
         if (data?.error) {
-          setError(data.error);
-          setIsLoading(false);
+          reportError(data.error, data);
           return;
         }
       } else {
@@ -120,8 +140,7 @@ const Signup = () => {
         });
 
         if (result.error) {
-          setError(result.error.message);
-          setIsLoading(false);
+          reportError(result.error.message, result.error);
           return;
         }
 
@@ -155,11 +174,11 @@ const Signup = () => {
         // sessionStorage may be unavailable in restricted browser contexts.
       }
 
-      setIsLoading(false);
       navigate("/verify-email", { state: { email: formData.email } });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'An error occurred';
-      setError(errorMessage);
+      reportError(errorMessage, err);
+    } finally {
       setIsLoading(false);
     }
   };

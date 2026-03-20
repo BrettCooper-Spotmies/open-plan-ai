@@ -167,9 +167,9 @@ export const teamService = {
     return null;
   },
 
-  async acceptInvitation(token: string): Promise<void> {
+  async acceptInvitation(invitationIdentifier: string): Promise<void> {
     const { error, data } = await supabase.functions.invoke<Record<string, unknown>>('accept-invite', {
-      body: { token },
+      body: { inviteId: invitationIdentifier, token: invitationIdentifier },
     });
 
     if (error) throw error;

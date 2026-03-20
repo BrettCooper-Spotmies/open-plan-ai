@@ -2,11 +2,28 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { EMAIL_FROM } from "../_shared/constants.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ||
+  "http://localhost:5173,http://localhost:3000,https://open-plan-ai.vercel.app")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const baseCorsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+};
+
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin");
+  const allowOrigin = origin && allowedOrigins.includes(origin)
+    ? origin
+    : allowedOrigins[0] || "http://localhost:5173";
+
+  return {
+    ...baseCorsHeaders,
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Vary": "Origin",
+  };
 };
 
 interface SendOtpRequest {
@@ -22,6 +39,8 @@ function getClientIp(req: Request): string {
 }
 
 const handler = async (req: Request): Promise<Response> => {
+  const corsHeaders = getCorsHeaders(req);
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -103,8 +122,10 @@ const handler = async (req: Request): Promise<Response> => {
       );
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate a cryptographically secure 6-digit OTP.
+    const randomBytes = new Uint32Array(1);
+    crypto.getRandomValues(randomBytes);
+    const otp = (randomBytes[0] % 900000 + 100000).toString();
 
     // Hash the OTP for storage
     const encoder = new TextEncoder();

@@ -132,11 +132,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Generate token and create invitation
+    // Generate token and create invitation. The token stays server-side and is
+    // not included in client-facing URLs.
     const token = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
-    const { error: insertError } = await adminClient
+    const { data: invitation, error: insertError } = await adminClient
       .from("team_invitations")
       .insert({
         organization_id: orgId,
@@ -146,10 +147,20 @@ Deno.serve(async (req: Request) => {
         invited_by: user.id,
         status: "pending",
         expires_at: expiresAt,
-      });
+      })
+      .select("id")
+      .single();
 
     if (insertError) {
       console.error("Insert error:", insertError);
+      return new Response(JSON.stringify({ error: "Failed to create invitation" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const invitationId = invitation?.id;
+    if (!invitationId) {
       return new Response(JSON.stringify({ error: "Failed to create invitation" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -169,7 +180,7 @@ Deno.serve(async (req: Request) => {
     
     // Use environment variable for app URL, with fallback to production URL
     const appUrl = Deno.env.get("APP_URL") || "https://open-plan-ai.vercel.app";
-    const inviteLink = `${appUrl}${invitePath}?invite=${token}`;
+    const inviteLink = `${appUrl}${invitePath}?invite=${invitationId}`;
 
     // Send email via Resend
     const emailRes = await fetch("https://api.resend.com/emails", {
@@ -197,7 +208,7 @@ Deno.serve(async (req: Request) => {
               </a>
             </div>
             <p style="color: #6b7280; font-size: 14px;">
-              This invitation expires in 7 days. If you didn't expect this invitation, you can safely ignore this email.
+              This invitation expires in 48 hours. If you didn't expect this invitation, you can safely ignore this email.
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
             <p style="color: #9ca3af; font-size: 12px;">OpenPlan AI — Hardware Project Management</p>
@@ -219,7 +230,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ success: true, invitationId }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
