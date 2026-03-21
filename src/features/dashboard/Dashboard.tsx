@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { DashboardStats } from './components/DashboardStats';
 import { ActivityFeed } from './components/ActivityFeed';
 import { ProjectsOverview } from './components/ProjectsOverview';
@@ -79,6 +79,7 @@ export default function Dashboard() {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       if (sessionError) {
+        console.error("Session error during invite acceptance:", sessionError);
         throw new Error('Authentication session error');
       }
       if (!session?.access_token) {

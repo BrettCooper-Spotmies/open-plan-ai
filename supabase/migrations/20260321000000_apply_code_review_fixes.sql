@@ -55,7 +55,8 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
+		RAISE WARNING 'Session context unavailable. Cannot log activity.';
+		RETURN NEW;
 	END IF;
 
 	INSERT INTO public.activities (
@@ -100,7 +101,8 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
+		RAISE WARNING 'Session context unavailable. Cannot log activity.';
+		RETURN NEW;
 	END IF;
 
 	INSERT INTO public.activities (
@@ -144,7 +146,8 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
+		RAISE WARNING 'Session context unavailable. Cannot log activity.';
+		RETURN NEW;
 	END IF;
 
     IF OLD.status IS NULL AND NEW.status IS NULL THEN
@@ -188,7 +191,8 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
+		RAISE WARNING 'Session context unavailable. Cannot log activity.';
+		RETURN NEW;
 	END IF;
 
 	SELECT t.project_id, t.title
@@ -236,7 +240,8 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
+		RAISE WARNING 'Session context unavailable. Cannot log activity.';
+		RETURN NEW;
 	END IF;
 
     IF OLD.stage IS NULL AND NEW.stage IS NULL THEN
@@ -280,7 +285,8 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
+		RAISE WARNING 'Session context unavailable. Cannot log activity.';
+		RETURN NEW;
 	END IF;
 
 	SELECT p.name INTO v_project_name
@@ -383,3 +389,7 @@ BEGIN
 	RETURN NEW;
 END;
 $$;
+
+-- 6. Add performance indexes for NOT EXISTS clauses
+CREATE INDEX IF NOT EXISTS idx_activities_entity_type ON public.activities (project_id, entity_type, entity_id, activity_type);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_project_desc ON public.notifications (user_id, project_id, description, created_at);
