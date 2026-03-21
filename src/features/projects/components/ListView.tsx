@@ -206,15 +206,6 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
 
   return (
     <>
-      {/* Create Task Button */}
-      {onTaskCreate && (
-        <div className="flex justify-end mb-4">
-          <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Create Task
-          </Button>
-        </div>
-      )}
 
       <div className="rounded-lg border">
         <Table>

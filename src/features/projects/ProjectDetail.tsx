@@ -27,8 +27,9 @@ import { ProjectDetailSkeleton } from './components/ProjectDetailSkeleton';
 import { ProjectProgressPopover } from './components/ProjectProgressPopover';
 import { AddModuleDialog } from './components/AddModuleDialog';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
-import { useUpdateProject } from '@/hooks/useProjects';
 import { useTeamMembers } from '@/hooks/useProjectTeam';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { useUpdateProject } from '@/hooks/useProjects';
 import {
   useCreateTask,
   useUpdateTask,
@@ -77,15 +78,14 @@ function MilestoneViewControls({
 }) {
   return (
     <div className="flex items-center gap-2">
-      {/* Search Input */}
-      <div className="relative flex items-center">
+      <div className="relative flex items-center flex-1 md:flex-none">
         <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
         <Input
           type="text"
           placeholder="Search milestones..."
           value={searchQuery}
           onChange={(e) => onSearchQueryChange(e.target.value)}
-          className="pl-9 w-[200px] h-8"
+          className="pl-9 w-full md:w-[200px] h-8"
         />
         {searchQuery && (
           <Button
@@ -99,9 +99,9 @@ function MilestoneViewControls({
         )}
       </div>
 
-      <Button size="sm" className="gap-2" onClick={onAddMilestone}>
+      <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={onAddMilestone}>
         <Plus className="h-4 w-4" />
-        Add Milestone
+        <span className="hidden md:inline">Add Milestone</span>
       </Button>
     </div>
   );
@@ -132,17 +132,18 @@ function IssueViewControls({
   onReportIssue: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      {/* Search Input */}
-      <div className="relative flex items-center">
-        <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
-        <Input
-          type="text"
-          placeholder="Search issues..."
-          value={searchQuery}
-          onChange={(e) => onSearchQueryChange(e.target.value)}
-          className="pl-9 w-[200px] h-8"
-        />
+    <div className="flex items-center gap-2 w-full justify-between">
+      <div className="flex items-center gap-2 flex-1 min-w-0">
+        {/* Search Input */}
+        <div className="relative flex items-center flex-1 md:flex-none">
+          <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search issues..."
+            value={searchQuery}
+            onChange={(e) => onSearchQueryChange(e.target.value)}
+            className="pl-9 w-full md:w-[200px] h-8"
+          />
         {searchQuery && (
           <Button
             variant="ghost"
@@ -296,10 +297,11 @@ function IssueViewControls({
           </div>
         </PopoverContent>
       </Popover>
+      </div>
 
-      <Button size="sm" className="gap-2" onClick={onReportIssue}>
+      <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={onReportIssue}>
         <Plus className="h-4 w-4" />
-        Report Issue
+        <span className="hidden md:inline">Report Issue</span>
       </Button>
     </div>
   );
@@ -311,19 +313,30 @@ export default function ProjectDetail() {
   const searchParams = new URLSearchParams(location.search);
   const tabParam = searchParams.get('tab') as ProjectSection;
 
+  const isMobile = useIsMobile();
   const [section, setSection] = useState<ProjectSection>(tabParam || 'tasks');
-  const [viewMode, setViewMode] = useState<TaskViewMode>('kanban');
-  const [moduleViewMode, setModuleViewMode] = useState<ModuleViewMode>('kanban');
+  const [viewModeStr, setViewModeStr] = useState<TaskViewMode | null>(null);
+  const [moduleViewModeStr, setModuleViewModeStr] = useState<ModuleViewMode | null>(null);
+  const [issueViewModeStr, setIssueViewModeStr] = useState<'table' | 'kanban' | null>(null);
+
+  const viewMode = viewModeStr || (isMobile ? 'list' : 'kanban');
+  const moduleViewMode = moduleViewModeStr || (isMobile ? 'list' : 'kanban');
+  const issueViewMode = issueViewModeStr || (isMobile ? 'table' : 'kanban');
+
+  const setViewMode = (val: TaskViewMode) => setViewModeStr(val);
+  const setModuleViewMode = (val: ModuleViewMode) => setModuleViewModeStr(val);
+  const setIssueViewMode = (val: 'table' | 'kanban') => setIssueViewModeStr(val);
+
   const [filters, setFilters] = useState<TaskFilter>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [moduleSearchQuery, setModuleSearchQuery] = useState('');
   const [milestoneSearchQuery, setMilestoneSearchQuery] = useState('');
   const [issueSearchQuery, setIssueSearchQuery] = useState('');
   const [issueFilters, setIssueFilters] = useState<IssueFilter>({});
-  const [issueViewMode, setIssueViewMode] = useState<'table' | 'kanban'>('kanban');
   const [isAddModuleDialogOpen, setIsAddModuleDialogOpen] = useState(false);
   const [isAddMilestoneDialogOpen, setIsAddMilestoneDialogOpen] = useState(false);
   const [isAddIssueDialogOpen, setIsAddIssueDialogOpen] = useState(false);
+  const [, setIsAddTaskDialogOpen] = useState(false);
 
   // Fetch project data using React Query
   const { data: project, isLoading, error } = useProjectDetail(id);
@@ -679,17 +692,17 @@ export default function ProjectDetail() {
     <>
       <div className="grid grid-cols-1 gap-6 animate-fade-in w-full min-w-0">
         {/* Project Stats with Title */}
-        <div className="flex items-center justify-between gap-6 py-4 border-y">
+        <div className="flex flex-col justify-between gap-3 py-3 border-y">
           {/* Left: Project Title and Stage */}
-          <div className="flex items-center gap-4 min-w-0 w-full md:w-auto flex-1 pr-4">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 w-full">
             <Button variant="ghost" size="sm" asChild className="shrink-0 gap-1 -ml-2 h-8 px-2 text-muted-foreground hover:text-foreground">
               <Link to="/projects">
                 <ChevronLeft className="h-4 w-4" />
-                Back
+                <span className="hidden sm:inline">Back</span>
               </Link>
             </Button>
-            <div className="flex items-center gap-3 min-w-0">
-              <h1 className="text-2xl font-semibold tracking-tight truncate">{project.name}</h1>
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <h1 className="text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate">{project.name}</h1>
               <Badge variant="secondary" className={cn(stageColors[project.stage], "shrink-0")}>
                 {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
               </Badge>
@@ -697,63 +710,71 @@ export default function ProjectDetail() {
           </div>
 
           {/* Right: Stats */}
-          <div className="flex flex-wrap items-center gap-6">
-            <ProjectProgressPopover breakdown={progressBreakdown} />
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="h-4 w-4" />
-              <span>Due {project.targetDate ? new Date(project.targetDate).toLocaleDateString() : 'Not set'}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
-              <div className="flex -space-x-2">
-                {(project.team || []).slice(0, 5).map((member) => (
-                  <Avatar key={member.id} className="h-6 w-6 border-2 border-background">
-                    <AvatarFallback className="text-[10px] bg-muted">
-                      {member.initials}
-                    </AvatarFallback>
-                  </Avatar>
-                ))}
+          <div className="w-full md:w-auto overflow-x-auto">
+            <div className="flex items-center gap-3 sm:gap-4 md:gap-6 min-w-max text-xs sm:text-sm text-muted-foreground pb-1 md:pb-0">
+              <ProjectProgressPopover breakdown={progressBreakdown} />
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                <Calendar className="h-4 w-4 shrink-0" />
+                <span>Due {project.targetDate ? new Date(project.targetDate).toLocaleDateString() : 'Not set'}</span>
               </div>
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <div className="flex -space-x-2">
+                  {(project.team || []).slice(0, 5).map((member) => (
+                    <Avatar key={member.id} className="h-5 w-5 md:h-6 md:w-6 border-2 border-background">
+                      <AvatarFallback className="text-[10px] bg-muted">
+                        {member.initials}
+                      </AvatarFallback>
+                    </Avatar>
+                  ))}
+                </div>
+              </div>
+              {criticalIssuesCount > 0 && (
+                <Badge variant="destructive" className="gap-1 shrink-0 hidden sm:inline-flex">
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  {criticalIssuesCount} Critical Issue{criticalIssuesCount > 1 ? 's' : ''}
+                </Badge>
+              )}
             </div>
-            {criticalIssuesCount > 0 && (
-              <Badge variant="destructive" className="gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                {criticalIssuesCount} Critical Issue{criticalIssuesCount > 1 ? 's' : ''}
-              </Badge>
-            )}
           </div>
         </div>
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => setSection(v as ProjectSection)} className="w-full">
-          <div className="flex items-center justify-between gap-4">
-            <TabsList className="bg-muted/50">
-              <TabsTrigger value="tasks" className="gap-2">
-                <ListTodo className="h-4 w-4" />
-                Tasks
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                  {(project.tasks || []).length}
-                </Badge>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <TabsList className="bg-muted/50 w-full grid grid-cols-4 md:flex md:w-auto md:justify-start">
+              <TabsTrigger value="tasks" className="gap-2 shrink-0">
+                <ListTodo className="h-4 w-4 shrink-0" />
+                {(!isMobile || section === 'tasks') && <span className="whitespace-nowrap">Tasks</span>}
+                {(!isMobile || section === 'tasks') && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                    {(project.tasks || []).length}
+                  </Badge>
+                )}
               </TabsTrigger>
-              <TabsTrigger value="modules" className="gap-2">
-                <Boxes className="h-4 w-4" />
-                Modules
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                  {modules.length}
-                </Badge>
+              <TabsTrigger value="modules" className="gap-2 shrink-0">
+                <Boxes className="h-4 w-4 shrink-0" />
+                {(!isMobile || section === 'modules') && <span className="whitespace-nowrap">Modules</span>}
+                {(!isMobile || section === 'modules') && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                    {modules.length}
+                  </Badge>
+                )}
               </TabsTrigger>
-              <TabsTrigger value="milestones" className="gap-2">
-                <Flag className="h-4 w-4" />
-                Milestones
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                  {(project.milestones || []).length}
-                </Badge>
+              <TabsTrigger value="milestones" className="gap-2 shrink-0">
+                <Flag className="h-4 w-4 shrink-0" />
+                {(!isMobile || section === 'milestones') && <span className="whitespace-nowrap">Milestones</span>}
+                {(!isMobile || section === 'milestones') && (
+                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                    {(project.milestones || []).length}
+                  </Badge>
+                )}
               </TabsTrigger>
-              <TabsTrigger value="issues" className="gap-2">
-                <AlertTriangle className="h-4 w-4" />
-                Issues
-                {openIssuesCount > 0 && (
-                  <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px]">
+              <TabsTrigger value="issues" className="gap-2 shrink-0">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                {(!isMobile || section === 'issues') && <span className="whitespace-nowrap">Issues</span>}
+                {(!isMobile || section === 'issues') && openIssuesCount > 0 && (
+                  <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
                     {openIssuesCount}
                   </Badge>
                 )}
@@ -762,29 +783,35 @@ export default function ProjectDetail() {
 
             {/* View Controls - only show for tasks section */}
             {section === 'tasks' && (
-              <ViewControls
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                filters={filters}
-                onFiltersChange={setFilters}
-                milestones={project.milestones || []}
-                modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
-                teamMembers={teamMembers}
-                allTags={allTags}
-                activeFilterCount={activeFilterCount}
-                onClearFilters={clearFilters}
-                searchQuery={searchQuery}
-                onSearchQueryChange={setSearchQuery}
-              />
+              <div className="flex items-center justify-between w-full">
+                <ViewControls
+                  viewMode={viewMode}
+                  onViewModeChange={setViewMode}
+                  filters={filters}
+                  onFiltersChange={setFilters}
+                  milestones={project.milestones || []}
+                  modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+                  teamMembers={teamMembers}
+                  allTags={allTags}
+                  activeFilterCount={activeFilterCount}
+                  onClearFilters={clearFilters}
+                  searchQuery={searchQuery}
+                  onSearchQueryChange={setSearchQuery}
+                />
+                <Button size="sm" onClick={() => setIsAddTaskDialogOpen(true)} className="gap-2 shrink-0 px-2 md:px-3">
+                  <Plus className="h-4 w-4 shrink-0" />
+                  <span className="hidden md:inline">Create Task</span>
+                </Button>
+              </div>
             )}
             {/* Module View Controls - show for modules section */}
             {section === 'modules' && (
               <ModuleViewControls
                 viewMode={moduleViewMode}
                 onViewModeChange={setModuleViewMode}
-                onAddModule={handleAddModule}
                 searchQuery={moduleSearchQuery}
                 onSearchQueryChange={setModuleSearchQuery}
+                onAddModule={handleAddModule}
               />
             )}
             {/* Milestones View Controls */}

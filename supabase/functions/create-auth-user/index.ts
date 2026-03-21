@@ -91,6 +91,7 @@ async function findAuthUserByEmail(
 
 Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
+  const isProduction = Deno.env.get("ENVIRONMENT") === "production";
 
   // Handle CORS preflight
   if (req.method === "OPTIONS") {

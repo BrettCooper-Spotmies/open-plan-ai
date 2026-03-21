@@ -55,7 +55,6 @@ export default function Projects() {
   const { data: projects, isLoading, error } = useProjects();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -79,12 +78,6 @@ export default function Projects() {
       setView('list');
     }
   }, [isMobile, view]);
-
-  useEffect(() => {
-    if (!isMobile) {
-      setMobileSearchOpen(false);
-    }
-  }, [isMobile]);
 
   const filteredProjects = projectList.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -166,42 +159,18 @@ export default function Projects() {
         )}
 
         <div className="space-y-2.5 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-sm p-2.5 md:p-0 md:border-0 md:bg-transparent md:backdrop-blur-0">
-          <div className={cn('flex items-center gap-2 md:gap-4', isMobile && !mobileSearchOpen && 'justify-end')}>
+          <div className={cn('flex items-center gap-2 md:gap-4')}>
             {isMobile ? (
-              mobileSearchOpen ? (
-                <div className="relative flex-1 max-w-none">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    autoFocus
-                    placeholder="Search projects..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9 pr-9 h-10 rounded-xl bg-background/80"
-                  />
-                  <button
-                    type="button"
-                    aria-label="Close search"
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onClick={() => {
-                      setMobileSearchOpen(false);
-                      setSearch('');
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-10 w-10 rounded-xl shrink-0 border-border/70 bg-background/70"
-                  onClick={() => setMobileSearchOpen(true)}
-                  aria-label="Open search"
-                  title="Search Projects"
-                >
-                  <Search className="h-4 w-4" />
-                </Button>
-              )
+              <div className="relative flex-1 max-w-none">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  placeholder="Search projects..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9 pr-9 h-10 rounded-xl bg-background/80"
+                />
+              </div>
             ) : (
               <div className="relative flex-1 max-w-none md:max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

@@ -1,5 +1,5 @@
 import { Task, Project, TaskStatus, Issue, IssueStatus, MyDayItem, MyDayItemType } from '@/types';
-import { parse, startOfDay, isSameDay, isBefore, isAfter, addDays, endOfDay } from 'date-fns';
+import { startOfDay, isSameDay, isBefore, isAfter, addDays } from 'date-fns';
 
 export interface MyDayTask extends Task {
   projectId: string;
@@ -15,6 +15,23 @@ export interface MyDayTask extends Task {
 export type { MyDayItem, MyDayItemType } from '@/types';
 
 export type DueDateStatus = 'overdue' | 'today' | 'upcoming' | 'none';
+
+/**
+ * Parse date strings in local time when value is date-only (yyyy-MM-dd).
+ * This avoids UTC conversion drift that can move "today" to yesterday.
+ */
+function parseDueDateSafe(value?: string): Date | null {
+  if (!value) return null;
+
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  if (dateOnly) {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
 
 /**
  * Check if a task or issue was completed/resolved today.
@@ -44,7 +61,9 @@ export function getDueDateStatus(dueDate?: string): DueDateStatus {
   if (!dueDate) return 'none';
 
   const today = startOfDay(new Date());
-  const due = startOfDay(new Date(dueDate));
+  const parsedDueDate = parseDueDateSafe(dueDate);
+  if (!parsedDueDate) return 'none';
+  const due = startOfDay(parsedDueDate);
 
   if (isBefore(due, today)) return 'overdue';
   if (isSameDay(due, today)) return 'today';
@@ -82,7 +101,11 @@ export function getUserTasks(projects: Project[], userId: string): MyDayTask[] {
 
   return projects.flatMap(project =>
     project.tasks
-      .filter(task => task.assignees?.some(a => a.id === userId) && (task.status !== 'done' || isCompletedToday(task)))
+      .filter(task => {
+        const isAssignedToUser = task.assignees?.some(a => a.id === userId) ?? false;
+        const isDueToday = getDueDateStatus(task.dueDate) === 'today';
+        return (isAssignedToUser || isDueToday) && (task.status !== 'done' || isCompletedToday(task));
+      })
       .map(task => {
         const dueDateStatus = getDueDateStatus(task.dueDate);
         return {
@@ -105,7 +128,7 @@ export function getUserTasks(projects: Project[], userId: string): MyDayTask[] {
 export function getUserIssues(projects: Project[], userId: string): Issue[] {
   return projects.flatMap(project =>
     (project.issues || []).filter(issue =>
-      issue.assignees?.some(a => a.id === userId) &&
+      ((issue.assignees?.some(a => a.id === userId) ?? false) || getDueDateStatus(issue.dueDate) === 'today') &&
       ((issue.status !== 'resolved' && issue.status !== 'closed') || isCompletedToday(issue))
     )
   );
@@ -171,7 +194,11 @@ export function getUserItems(projects: Project[], userId: string): MyDayItem[] {
   // Add tasks
   projects.forEach(project => {
     project.tasks
-      .filter(task => task.assignees?.some(a => a.id === userId) && (task.status !== 'done' || isCompletedToday(task)))
+      .filter(task => {
+        const isAssignedToUser = task.assignees?.some(a => a.id === userId) ?? false;
+        const isDueToday = getDueDateStatus(task.dueDate) === 'today';
+        return (isAssignedToUser || isDueToday) && (task.status !== 'done' || isCompletedToday(task));
+      })
       .forEach(task => {
         items.push(mapTaskToMyDayItem(task, project, allTasks));
       });
@@ -181,7 +208,7 @@ export function getUserItems(projects: Project[], userId: string): MyDayItem[] {
   projects.forEach(project => {
     (project.issues || [])
       .filter(issue =>
-        issue.assignees?.some(a => a.id === userId) &&
+        ((issue.assignees?.some(a => a.id === userId) ?? false) || getDueDateStatus(issue.dueDate) === 'today') &&
         ((issue.status !== 'resolved' && issue.status !== 'closed') || isCompletedToday(issue))
       )
       .forEach(issue => {
@@ -236,8 +263,9 @@ export function categorizeMyDayTasks(tasks: MyDayTask[]): {
     if (priorityDiff !== 0) return priorityDiff;
 
     if (a.dueDate && b.dueDate) {
-      const aDate = new Date(a.dueDate);
-      const bDate = new Date(b.dueDate);
+      const aDate = parseDueDateSafe(a.dueDate);
+      const bDate = parseDueDateSafe(b.dueDate);
+      if (!aDate || !bDate) return 0;
       return aDate.getTime() - bDate.getTime();
     }
     return a.dueDate ? -1 : 1;
@@ -305,8 +333,9 @@ export function categorizeMyDayItems(items: MyDayItem[]): {
     if (priorityDiff !== 0) return priorityDiff;
 
     if (a.dueDate && b.dueDate) {
-      const aDate = new Date(a.dueDate);
-      const bDate = new Date(b.dueDate);
+      const aDate = parseDueDateSafe(a.dueDate);
+      const bDate = parseDueDateSafe(b.dueDate);
+      if (!aDate || !bDate) return 0;
       return aDate.getTime() - bDate.getTime();
     }
     return a.dueDate ? -1 : 1;
@@ -357,7 +386,8 @@ export function formatDueDate(dueDate?: string): string {
   if (!dueDate) return 'No due date';
 
   const status = getDueDateStatus(dueDate);
-  const date = new Date(dueDate);
+  const date = parseDueDateSafe(dueDate);
+  if (!date) return 'No due date';
   const formatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   switch (status) {
@@ -373,7 +403,9 @@ export function formatDueDate(dueDate?: string): string {
 export function isDueTomorrow(dueDate?: string): boolean {
   if (!dueDate) return false;
   const tomorrow = addDays(startOfDay(new Date()), 1);
-  const due = startOfDay(new Date(dueDate));
+  const parsedDueDate = parseDueDateSafe(dueDate);
+  if (!parsedDueDate) return false;
+  const due = startOfDay(parsedDueDate);
 
   return isSameDay(due, tomorrow);
 }
@@ -382,7 +414,9 @@ export function isDueThisWeek(dueDate?: string): boolean {
   if (!dueDate) return false;
   const today = startOfDay(new Date());
   const weekEnd = addDays(today, 7);
-  const due = startOfDay(new Date(dueDate));
+  const parsedDueDate = parseDueDateSafe(dueDate);
+  if (!parsedDueDate) return false;
+  const due = startOfDay(parsedDueDate);
 
   return isAfter(due, today) && (isBefore(due, weekEnd) || isSameDay(due, weekEnd));
 }
