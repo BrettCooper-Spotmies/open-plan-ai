@@ -6,9 +6,10 @@ CREATE TABLE IF NOT EXISTS public.auth_error_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Protect logs
+-- Protect logs but allow service role
 ALTER TABLE public.auth_error_logs ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Super admin read only" ON public.auth_error_logs FOR SELECT USING (false);
+DROP POLICY IF EXISTS "Super admin read only" ON public.auth_error_logs;
+CREATE POLICY "Super admin read only" ON public.auth_error_logs FOR SELECT USING (auth.jwt()->>'role' = 'service_role');
 
 -- 2. Update handle_new_user to capture errors explicitly
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -54,7 +55,7 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		v_user_id := COALESCE(NEW.created_by, '00000000-0000-0000-0000-000000000000'::uuid);
+		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
 	END IF;
 
 	INSERT INTO public.activities (
@@ -99,7 +100,7 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		v_user_id := COALESCE(NEW.created_by, '00000000-0000-0000-0000-000000000000'::uuid);
+		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
 	END IF;
 
 	INSERT INTO public.activities (
@@ -143,8 +144,13 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		v_user_id := COALESCE(NEW.created_by, '00000000-0000-0000-0000-000000000000'::uuid);
+		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
 	END IF;
+
+    IF OLD.status IS NULL AND NEW.status IS NULL THEN
+        RAISE NOTICE 'Skipping status change activity log due to null statuses on Task %', NEW.id;
+        RETURN NEW;
+    END IF;
 
 	INSERT INTO public.activities (
 		project_id,
@@ -182,7 +188,7 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		v_user_id := COALESCE(NEW.assigned_by, '00000000-0000-0000-0000-000000000000'::uuid);
+		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
 	END IF;
 
 	SELECT t.project_id, t.title
@@ -191,6 +197,7 @@ BEGIN
 	WHERE t.id = NEW.task_id;
 
 	IF v_project_id IS NULL THEN
+		RAISE NOTICE 'Task % project ID not found', NEW.task_id;
 		RETURN NEW;
 	END IF;
 
@@ -229,8 +236,13 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		v_user_id := COALESCE(NEW.created_by, '00000000-0000-0000-0000-000000000000'::uuid);
+		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
 	END IF;
+
+    IF OLD.stage IS NULL AND NEW.stage IS NULL THEN
+        RAISE NOTICE 'Skipping stage change logging due to null stages for %', NEW.id;
+        RETURN NEW;
+    END IF;
 
 	INSERT INTO public.activities (
 		project_id,
@@ -268,7 +280,7 @@ DECLARE
 	v_user_id UUID := auth.uid();
 BEGIN
 	IF v_user_id IS NULL THEN
-		v_user_id := COALESCE(NEW.added_by, '00000000-0000-0000-0000-000000000000'::uuid);
+		RAISE EXCEPTION 'Session context unavailable. Cannot log activity.';
 	END IF;
 
 	SELECT p.name INTO v_project_name
@@ -278,6 +290,11 @@ BEGIN
 	SELECT pr.name INTO v_assignee_name
 	FROM public.profiles pr
 	WHERE pr.id = NEW.user_id;
+
+    IF v_project_name IS NULL OR v_assignee_name IS NULL THEN
+        RAISE NOTICE 'Missing project or profile info. Skipping member activity attribution.';
+        RETURN NEW;
+    END IF;
 
 	INSERT INTO public.activities (
 		project_id,
@@ -361,7 +378,7 @@ BEGIN
 			AND n.description = NEW.description
 			AND n.created_at > (NOW() - INTERVAL '30 seconds')
 	)
-	LIMIT 500; -- Put a sane cap to prevent runaway memory if massive user base
+	LIMIT 1500; -- Increase cap safely over 500 without impacting DB limits severely
 
 	RETURN NEW;
 END;

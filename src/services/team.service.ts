@@ -168,8 +168,15 @@ export const teamService = {
   },
 
   async acceptInvitation(invitationIdentifier: string): Promise<void> {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('Failed to retrieve authentication session during invite acceptance');
+      throw new Error('Authentication session error');
+    }
+    
     if (!session?.access_token) {
+      console.error('Authentication session exists but access token is missing');
       throw new Error('You need to be logged in to accept an invitation');
     }
 
