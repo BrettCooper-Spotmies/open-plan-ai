@@ -85,6 +85,9 @@ export default function JoinOrganization() {
       }
 
       const res = await supabase.functions.invoke('accept-invite', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: resolvedInvite.inviteId ? { inviteId: resolvedInvite.inviteId } : { token: resolvedInvite.token },
       });
 

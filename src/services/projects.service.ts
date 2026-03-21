@@ -390,16 +390,6 @@ export const projectsService = {
 
     if (error) throw error;
 
-    // Log activity
-    activitiesService.create({
-      project_id: data.id,
-      activity_type: 'project_created',
-      description: `created project "${data.name}"`,
-      user_id: user?.id || null,
-      entity_id: data.id,
-      entity_type: 'project',
-    }).catch(() => { /* non-critical */ });
-
     // Return full project with all details
     return (await this.getById(data.id))!;
   },

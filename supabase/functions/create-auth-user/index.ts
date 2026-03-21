@@ -23,8 +23,11 @@ const baseCorsHeaders = {
 
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("origin");
+  const isLocalOrigin =
+    typeof origin === "string" &&
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
   const allowOrigin =
-    origin && allowedOrigins.includes(origin)
+    origin && (allowedOrigins.includes(origin) || isLocalOrigin)
       ? origin
       : allowedOrigins[0] || "http://localhost:5173";
   return {
@@ -36,6 +39,8 @@ function getCorsHeaders(req: Request): Record<string, string> {
 
 /** Maximum retry attempts for unbiased OTP generation. Converges in 1-2 tries in practice. */
 const MAX_OTP_RETRIES = 100;
+const AUTH_USERS_PAGE_SIZE = 1000;
+const AUTH_USERS_MAX_PAGES = 20;
 
 function generateSixDigitOtp(): string {
   const maxUint32 = 0x1_0000_0000;
@@ -53,6 +58,40 @@ function generateSixDigitOtp(): string {
   }
 
   throw new Error("Failed to generate a secure OTP after maximum retries");
+}
+
+async function findAuthUserByEmail(
+  adminClient: ReturnType<typeof createClient>,
+  email: string,
+): Promise<{ id: string; email?: string | null; email_confirmed_at?: string | null } | null> {
+  const normalizedEmail = email.toLowerCase();
+
+  for (let page = 1; page <= AUTH_USERS_MAX_PAGES; page++) {
+    const { data, error } = await adminClient.auth.admin.listUsers({
+      page,
+      perPage: AUTH_USERS_PAGE_SIZE,
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    const users = data?.users || [];
+    const found = users.find(
+      (u: { email?: string | null; id?: string; email_confirmed_at?: string | null }) =>
+        u.email?.toLowerCase() === normalizedEmail,
+    );
+
+    if (found?.id) {
+      return found;
+    }
+
+    if (users.length < AUTH_USERS_PAGE_SIZE) {
+      break;
+    }
+  }
+
+  return null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -142,19 +181,35 @@ Deno.serve(async (req: Request) => {
       user_metadata: metadata || {},
     });
 
-    if (authError) {
-      if (authError.message.includes("User already exists")) {
-        return new Response(
-          JSON.stringify({ error: "User with this email already exists" }),
-          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    let userId = authData.user?.id;
+
+    if (authError || !userId) {
+      const authMessage = authError?.message || "";
+      const isRecoverableAuthError =
+        authError?.status === 422 ||
+        /user already exists|already registered|already been registered|database error creating new user/i.test(authMessage);
+
+      if (!isRecoverableAuthError) {
+        throw authError || new Error("Unable to create auth user");
       }
-      throw authError;
+
+      // Recovery path: previous partial attempts may have already created the auth user.
+      const existingUser = await findAuthUserByEmail(adminClient, email);
+
+      if (!existingUser?.id) {
+        if (/user already exists|already registered|already been registered/i.test(authMessage)) {
+          return new Response(
+            JSON.stringify({ error: "User with this email already exists" }),
+            { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        throw authError || new Error("Unable to locate existing user after auth create failure");
+      }
+
+      userId = existingUser.id;
     }
 
-    const userId = authData.user!.id;
-
-    // Create profile record
+    // Upsert profile record. A DB trigger may already create this row on auth.users insert.
     const initials = (metadata?.name || "")
       .split(" ")
       .map((n: string) => n[0])
@@ -164,18 +219,46 @@ Deno.serve(async (req: Request) => {
 
     const { error: profileError } = await adminClient
       .from("profiles")
-      .insert({
+      .upsert({
         id: userId,
         email,
         name: metadata?.name || "",
         initials,
         avatar_url: null,
-      });
+      }, { onConflict: "id" });
 
     if (profileError) {
-      // Clean up user if profile creation fails
-      await adminClient.auth.admin.deleteUser(userId);
-      throw profileError;
+      const isDuplicateEmailProfile =
+        profileError.code === "23505" &&
+        /profiles_email_key/i.test(profileError.message || "");
+
+      if (isDuplicateEmailProfile) {
+        // Recovery path for stale profile rows that already hold this email.
+        const { error: relinkError } = await adminClient
+          .from("profiles")
+          .update({
+            id: userId,
+            name: metadata?.name || "",
+            initials,
+            avatar_url: null,
+          })
+          .eq("email", email);
+
+        if (!relinkError) {
+          console.warn("Recovered from duplicate profiles.email by relinking profile", {
+            email,
+            userId,
+          });
+        } else {
+          // Clean up user if profile reconciliation fails
+          await adminClient.auth.admin.deleteUser(userId);
+          throw relinkError;
+        }
+      } else {
+        // Clean up user if profile creation fails for any other reason
+        await adminClient.auth.admin.deleteUser(userId);
+        throw profileError;
+      }
     }
 
     // Generate an unbiased cryptographically secure 6-digit OTP.
@@ -256,10 +339,19 @@ Deno.serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    const errorDetails =
+      error instanceof Error
+        ? error.message
+        : (() => {
+            try {
+              return JSON.stringify(error);
+            } catch {
+              return String(error);
+            }
+          })();
     console.error("Error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: "Internal server error", details: errorMessage }),
+      JSON.stringify({ error: "Internal server error", details: errorDetails }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
