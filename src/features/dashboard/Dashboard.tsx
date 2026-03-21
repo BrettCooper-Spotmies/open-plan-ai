@@ -77,7 +77,10 @@ export default function Dashboard() {
   const handleAcceptInvite = async (invitation: { id: string; token?: string | null }) => {
     setAcceptingInvite(invitation.id);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) {
+        throw new Error('Authentication session error');
+      }
       if (!session?.access_token) {
         throw new Error('You need to be logged in to accept the invitation.');
       }
@@ -98,8 +101,6 @@ export default function Dashboard() {
       setAcceptingInvite(null);
     }
   };
-
-  const hasAutoAcceptedInviteRef = useRef(false);
 
   // Transform data for DashboardStats component
   const dashboardStats = stats ? {

@@ -5,11 +5,19 @@ import { EMAIL_FROM } from "../_shared/constants.ts";
 // @ts-expect-error - Deno is available in edge function runtime
 const Deno = globalThis.Deno;
 
+const isProduction = Deno.env.get("ENVIRONMENT") === "production";
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ||
   "http://localhost:5173,http://localhost:3000,https://open-plan-ai.vercel.app")
   .split(",")
   .map((origin: string) => origin.trim())
-  .filter(Boolean);
+  .filter((origin: string) => {
+    try {
+      new URL(origin);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 
 const baseCorsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -20,11 +28,12 @@ const baseCorsHeaders = {
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("origin");
   const isLocalOrigin =
+    !isProduction &&
     typeof origin === "string" &&
-    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+    /^https?:\/\/(localhost|127\.0\.0\.1):(5173|3000)$/i.test(origin);
   const allowOrigin = origin && (allowedOrigins.includes(origin) || isLocalOrigin)
     ? origin
-    : allowedOrigins[0] || "http://localhost:5173";
+    : allowedOrigins[0] || Deno.env.get("DEFAULT_ORIGIN") || "http://localhost:5173";
 
   return {
     ...baseCorsHeaders,

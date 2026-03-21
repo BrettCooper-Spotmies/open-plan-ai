@@ -5,6 +5,35 @@ import { format } from 'date-fns';
 export type Activity = Tables<'activities'>;
 export type Milestone = Tables<'milestones'>;
 
+async function fetchFallbackActivities(orgId: string, limit: number): Promise<Activity[]> {
+  const { data: recentProjects, error: projectsError } = await supabase
+    .from('projects')
+    .select('id, name, created_at, created_by')
+    .eq('organization_id', orgId)
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (projectsError) throw projectsError;
+
+  return (recentProjects || []).map((project: any) => ({
+    id: crypto.randomUUID(),
+    project_id: project.id,
+    user_id: project.created_by || null,
+    activity_type: 'project_created',
+    entity_type: 'project',
+    entity_id: project.id,
+    description: `created project "${project.name}"`,
+    metadata: null,
+    created_at: project.created_at,
+    projects: {
+      id: project.id,
+      name: project.name,
+    },
+    profiles: null,
+  })) as unknown as Activity[];
+}
+
 export interface DashboardStats {
   activeProjects: number;
   totalTasks: number;
@@ -175,32 +204,7 @@ export const dashboardService = {
     }
 
     // Fallback for environments where historical activity rows are missing.
-    const { data: recentProjects, error: projectsError } = await supabase
-      .from('projects')
-      .select('id, name, created_at, created_by')
-      .eq('organization_id', orgId)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false })
-      .limit(limit);
-
-    if (projectsError) throw projectsError;
-
-    return (recentProjects || []).map((project: any) => ({
-      id: `project-fallback-${project.id}`,
-      project_id: project.id,
-      user_id: project.created_by || null,
-      activity_type: 'project_created',
-      entity_type: 'project',
-      entity_id: project.id,
-      description: `created project "${project.name}"`,
-      metadata: null,
-      created_at: project.created_at,
-      projects: {
-        id: project.id,
-        name: project.name,
-      },
-      profiles: null,
-    })) as any;
+    return fetchFallbackActivities(orgId, limit);
   },
 
   async getUpcomingMilestones(orgId: string, limit: number = 5): Promise<Milestone[]> {

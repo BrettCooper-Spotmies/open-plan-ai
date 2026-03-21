@@ -138,6 +138,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (!isValidFormat) {
               console.warn('Pending invite identifier has an invalid format; skipping accept-invite call.');
+            } else if (!newSession.access_token) {
+              console.error('Missing access token, cannot accept invite');
             } else {
               // Accept the invitation in the background
               supabase.functions.invoke('accept-invite', {

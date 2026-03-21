@@ -58,6 +58,11 @@ function generateSixDigitOtp(): string {
   throw new Error("Failed to generate a secure OTP after maximum retries");
 }
 
+/**
+ * Bypasses standard pagination to perform an O(1) indexed lookup directly against the 
+ * internal auth schema structure. This lookup method scales effectively on massive arrays
+ * safely avoiding edge timeouts.
+ */
 async function findAuthUserByEmail(
   adminClient: ReturnType<typeof createClient>,
   email: string,
