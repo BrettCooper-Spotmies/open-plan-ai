@@ -101,18 +101,6 @@ export default function Dashboard() {
 
   const hasAutoAcceptedInviteRef = useRef(false);
 
-  useEffect(() => {
-    if (hasAutoAcceptedInviteRef.current) return;
-    if (!pendingInvitations || pendingInvitations.length === 0) return;
-    if (acceptingInvite) return;
-
-    const firstInvite = pendingInvitations[0];
-    if (!firstInvite?.id) return;
-
-    hasAutoAcceptedInviteRef.current = true;
-    handleAcceptInvite({ id: firstInvite.id, token: firstInvite.token });
-  }, [pendingInvitations, acceptingInvite]);
-
   // Transform data for DashboardStats component
   const dashboardStats = stats ? {
     totalProjects: stats.activeProjects,

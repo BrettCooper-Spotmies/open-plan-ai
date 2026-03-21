@@ -39,8 +39,6 @@ function getCorsHeaders(req: Request): Record<string, string> {
 
 /** Maximum retry attempts for unbiased OTP generation. Converges in 1-2 tries in practice. */
 const MAX_OTP_RETRIES = 100;
-const AUTH_USERS_PAGE_SIZE = 1000;
-const AUTH_USERS_MAX_PAGES = 20;
 
 function generateSixDigitOtp(): string {
   const maxUint32 = 0x1_0000_0000;
@@ -64,31 +62,23 @@ async function findAuthUserByEmail(
   adminClient: ReturnType<typeof createClient>,
   email: string,
 ): Promise<{ id: string; email?: string | null; email_confirmed_at?: string | null } | null> {
-  const normalizedEmail = email.toLowerCase();
+  const { data, error } = await adminClient
+    .schema("auth")
+    .from("users")
+    .select("id, email, email_confirmed_at")
+    .eq("email", email)
+    .maybeSingle();
 
-  for (let page = 1; page <= AUTH_USERS_MAX_PAGES; page++) {
-    const { data, error } = await adminClient.auth.admin.listUsers({
-      page,
-      perPage: AUTH_USERS_PAGE_SIZE,
-    });
+  if (error) {
+    console.warn("Failed direct query to auth.users:", error);
+  }
 
-    if (error) {
-      throw error;
-    }
-
-    const users = data?.users || [];
-    const found = users.find(
-      (u: { email?: string | null; id?: string; email_confirmed_at?: string | null }) =>
-        u.email?.toLowerCase() === normalizedEmail,
-    );
-
-    if (found?.id) {
-      return found;
-    }
-
-    if (users.length < AUTH_USERS_PAGE_SIZE) {
-      break;
-    }
+  if (data) {
+    return {
+      id: data.id,
+      email: data.email,
+      email_confirmed_at: data.email_confirmed_at,
+    };
   }
 
   return null;
@@ -339,19 +329,9 @@ Deno.serve(async (req: Request) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    const errorDetails =
-      error instanceof Error
-        ? error.message
-        : (() => {
-            try {
-              return JSON.stringify(error);
-            } catch {
-              return String(error);
-            }
-          })();
     console.error("Error:", error);
     return new Response(
-      JSON.stringify({ error: "Internal server error", details: errorDetails }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
