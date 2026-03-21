@@ -168,7 +168,15 @@ export const teamService = {
   },
 
   async acceptInvitation(invitationIdentifier: string): Promise<void> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      throw new Error('You need to be logged in to accept an invitation');
+    }
+
     const { error, data } = await supabase.functions.invoke<Record<string, unknown>>('accept-invite', {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
       body: { inviteId: invitationIdentifier, token: invitationIdentifier },
     });
 

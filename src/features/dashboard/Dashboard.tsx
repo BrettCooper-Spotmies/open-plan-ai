@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DashboardStats } from './components/DashboardStats';
 import { ActivityFeed } from './components/ActivityFeed';
 import { ProjectsOverview } from './components/ProjectsOverview';
@@ -74,10 +74,20 @@ export default function Dashboard() {
 
   const [acceptingInvite, setAcceptingInvite] = useState<string | null>(null);
 
-  const handleAcceptInvite = async (token: string) => {
-    setAcceptingInvite(token);
+  const handleAcceptInvite = async (invitation: { id: string; token?: string | null }) => {
+    setAcceptingInvite(invitation.id);
     try {
-      const res = await supabase.functions.invoke('accept-invite', { body: { token } });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('You need to be logged in to accept the invitation.');
+      }
+
+      const res = await supabase.functions.invoke('accept-invite', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: { inviteId: invitation.id, token: invitation.token },
+      });
       if (res.error) throw res.error;
       toast.success('Successfully joined the organization!');
       await refreshOrganizations();
@@ -88,6 +98,20 @@ export default function Dashboard() {
       setAcceptingInvite(null);
     }
   };
+
+  const hasAutoAcceptedInviteRef = useRef(false);
+
+  useEffect(() => {
+    if (hasAutoAcceptedInviteRef.current) return;
+    if (!pendingInvitations || pendingInvitations.length === 0) return;
+    if (acceptingInvite) return;
+
+    const firstInvite = pendingInvitations[0];
+    if (!firstInvite?.id) return;
+
+    hasAutoAcceptedInviteRef.current = true;
+    handleAcceptInvite({ id: firstInvite.id, token: firstInvite.token });
+  }, [pendingInvitations, acceptingInvite]);
 
   // Transform data for DashboardStats component
   const dashboardStats = stats ? {
@@ -218,12 +242,12 @@ export default function Dashboard() {
                 </p>
               </div>
               <Button
-                onClick={() => handleAcceptInvite(inv.token)}
+                onClick={() => handleAcceptInvite({ id: inv.id, token: inv.token })}
                 size="sm"
                 className="gap-1.5 shrink-0 w-full sm:w-auto"
-                disabled={acceptingInvite === inv.token}
+                disabled={acceptingInvite === inv.id}
               >
-                {acceptingInvite === inv.token ? (
+                {acceptingInvite === inv.id ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
                   <Building2 className="h-3.5 w-3.5" />

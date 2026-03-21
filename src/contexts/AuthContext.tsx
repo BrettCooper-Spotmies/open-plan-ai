@@ -141,6 +141,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else {
               // Accept the invitation in the background
               supabase.functions.invoke('accept-invite', {
+                headers: {
+                  Authorization: `Bearer ${newSession.access_token}`,
+                },
                 body: pendingInviteId ? { inviteId: pendingInviteId } : { token: pendingToken },
               }).then(({ data, error }) => {
                 if (error) console.error('Error accepting invite:', error);

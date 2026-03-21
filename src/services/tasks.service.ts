@@ -316,16 +316,6 @@ export const tasksService = {
       await supabase.from('attachments').insert(attachmentInserts);
     }
 
-    // Log activity
-    activitiesService.create({
-      project_id: projectId,
-      activity_type: 'task_created',
-      description: `created task "${newTask.title}"`,
-      user_id: user?.id || null,
-      entity_id: newTask.id,
-      entity_type: 'task',
-    }).catch(() => { /* non-critical */ });
-
     return this.getById(newTask.id) as Promise<Task>;
   },
 
@@ -385,19 +375,6 @@ export const tasksService = {
         .single();
       if (error) throw error;
       data = currentData;
-    }
-
-    // Log activity if status changed
-    if (updates.status !== undefined) {
-      const { data: { user } } = await supabase.auth.getUser();
-      activitiesService.create({
-        project_id: projectId,
-        activity_type: 'status_changed',
-        description: `changed task "${data.title}" status to ${updates.status}`,
-        user_id: user?.id || null,
-        entity_id: taskId,
-        entity_type: 'task',
-      }).catch(() => { /* non-critical */ });
     }
 
     // Update assignees if provided
