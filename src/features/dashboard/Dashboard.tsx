@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { teamService } from '@/services/team.service';
 
 export default function Dashboard() {
   const isMobile = useIsMobile();
@@ -55,20 +56,10 @@ export default function Dashboard() {
     }
   };
 
-  // Fetch pending invitations for current user
+  // Fetch pending invitations for current user — via service layer, not inline Supabase.
   const { data: pendingInvitations } = useQuery({
     queryKey: ['pending-invitations', user?.email],
-    queryFn: async () => {
-      if (!user?.email) return [];
-      const { data, error } = await supabase
-        .from('team_invitations')
-        .select('*, organizations(name)')
-        .eq('email', user.email)
-        .eq('status', 'pending')
-        .gt('expires_at', new Date().toISOString());
-      if (error) throw error;
-      return data || [];
-    },
+    queryFn: () => teamService.getPendingInvitationsForUser(user!.email!),
     enabled: !!user?.email,
   });
 

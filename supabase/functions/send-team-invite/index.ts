@@ -275,7 +275,9 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     console.error("Error:", err);
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    return new Response(JSON.stringify({ error: "Internal server error", details: errorMessage }), {
+    // Log details server-side only; don't expose internal error messages to clients.
+    console.error("Internal error details:", errorMessage);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

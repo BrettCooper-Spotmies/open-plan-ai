@@ -118,23 +118,28 @@ export const chatService = {
 
     const profileMap = new Map((allProfiles).map((p: any) => [p.id, p]));
 
-    // 5. Get last message for each conversation
+    // 5. Get last message for each conversation (single bulk query, no N+1)
     const lastMessages: Record<string, any> = {};
-    for (const convId of convIds) {
-      const { data: msgs } = await supabase
+    if (convIds.length > 0) {
+      const { data: allLastMsgs } = await supabase
         .from('chat_messages')
-        .select('content, sender_id, created_at')
-        .eq('conversation_id', convId)
+        .select('conversation_id, content, sender_id, created_at')
+        .in('conversation_id', convIds)
         .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (msgs?.[0]) {
-        const sender = profileMap.get(msgs[0].sender_id);
-        lastMessages[convId] = {
-          content: msgs[0].content,
-          senderName: sender?.name ?? 'Unknown',
-          createdAt: msgs[0].created_at,
-        };
+        .order('created_at', { ascending: false });
+
+      // Keep only the first (latest) message per conversation
+      if (allLastMsgs) {
+        for (const msg of allLastMsgs) {
+          if (!lastMessages[msg.conversation_id]) {
+            const sender = profileMap.get(msg.sender_id);
+            lastMessages[msg.conversation_id] = {
+              content: msg.content,
+              senderName: sender?.name ?? 'Unknown',
+              createdAt: msg.created_at,
+            };
+          }
+        }
       }
     }
 
@@ -188,21 +193,27 @@ export const chatService = {
   },
 
   async editMessage(messageId: string, newContent: string): Promise<void> {
+    // Defence-in-depth: only allow editing your own messages (RLS also enforces this)
+    const userId = await getCurrentUserId();
     const { error } = await supabase
       .from('chat_messages')
       .update({ content: newContent, updated_at: new Date().toISOString() })
-      .eq('id', messageId);
+      .eq('id', messageId)
+      .eq('sender_id', userId);
     if (error) throw error;
   },
 
   async deleteMessage(messageId: string, senderName: string): Promise<void> {
+    // Defence-in-depth: only allow deleting your own messages (RLS also enforces this)
+    const userId = await getCurrentUserId();
     const { error } = await supabase
       .from('chat_messages')
       .update({
         deleted_at: new Date().toISOString(),
         deleted_by_name: senderName,
       } as any)
-      .eq('id', messageId);
+      .eq('id', messageId)
+      .eq('sender_id', userId);
     if (error) throw error;
   },
 

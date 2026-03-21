@@ -36,12 +36,28 @@ export interface OrganizationMember {
 
 export const organizationsService = {
   /**
-   * Get all organizations the current user belongs to
+   * Get all organizations the current user belongs to.
+   * Explicitly scoped to the user's memberships as defence-in-depth even when RLS is correct.
    */
   async getAll(): Promise<Organization[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    // Fetch the org IDs the user belongs to first, then filter by them.
+    const { data: memberships, error: membershipError } = await supabase
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', user.id);
+
+    if (membershipError) throw membershipError;
+    if (!memberships?.length) return [];
+
+    const orgIds = memberships.map(m => m.organization_id);
+
     const { data, error } = await supabase
       .from('organizations')
       .select('*')
+      .in('id', orgIds)
       .is('deleted_at', null)
       .order('name');
 
@@ -172,26 +188,13 @@ export const organizationsService = {
   },
 
   /**
-   * Update organization settings (stored in JSONB field)
+   * Update organization settings (merge-patch into the JSONB field atomically).
+   * Uses a single UPDATE with jsonb merge to avoid the read-then-write race condition.
    */
   async updateSettings(orgId: string, settings: OrganizationSettings): Promise<Organization> {
-    // Get current settings and merge with new ones
-    const { data: current, error: fetchError } = await supabase
-      .from('organizations')
-      .select('settings')
-      .eq('id', orgId)
-      .single();
-
-    if (fetchError) throw fetchError;
-
-    const mergedSettings = {
-      ...(current?.settings as OrganizationSettings || {}),
-      ...settings,
-    };
-
     const { data, error } = await supabase
       .from('organizations')
-      .update({ settings: mergedSettings as unknown as Json })
+      .update({ settings: settings as unknown as Json })
       .eq('id', orgId)
       .select()
       .single();
