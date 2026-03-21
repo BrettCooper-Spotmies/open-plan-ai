@@ -26,7 +26,10 @@ export interface TeamInvitation {
 }
 
 export const teamService = {
-  async getAll(): Promise<TeamMember[]> {
+  async getAll(orgId?: string): Promise<TeamMember[]> {
+    if (orgId) {
+      return this.getByOrganization(orgId);
+    }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
@@ -39,8 +42,7 @@ export const teamService = {
     if (membershipError) throw membershipError;
     if (!memberships?.length) return [];
 
-    const orgId = memberships[0].organization_id;
-    return this.getByOrganization(orgId);
+    return this.getByOrganization(memberships[0].organization_id);
   },
 
   async getByOrganization(orgId: string): Promise<TeamMember[]> {
@@ -68,23 +70,29 @@ export const teamService = {
       }
     }
 
+    // Fetch all project_member counts in one query instead of one per user (N+1 fix).
+    const { data: projectMemberRows } = await supabase
+      .from('project_members')
+      .select('user_id')
+      .in('user_id', userIds);
+
+    const projectCountMap = new Map<string, number>();
+    for (const row of (projectMemberRows || [])) {
+      projectCountMap.set(row.user_id, (projectCountMap.get(row.user_id) ?? 0) + 1);
+    }
+
     const teamMembers: TeamMember[] = [];
 
     for (const member of members) {
       const profile = profileMap.get(member.user_id);
       if (!profile) continue;
 
-      const { count } = await supabase
-        .from('project_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', member.user_id);
-
       teamMembers.push({
         ...profile,
         role: member.role,
         status: 'active' as const,
         department: (member as Record<string, unknown>).department as string | undefined || undefined,
-        projectCount: count || 0,
+        projectCount: projectCountMap.get(member.user_id) ?? 0,
         joinedAt: member.joined_at,
       });
     }
@@ -158,17 +166,45 @@ export const teamService = {
     if (error) throw error;
   },
 
-  async getInvitationByToken(token: string): Promise<TeamInvitation | null> {
-    await supabase.functions.invoke('accept-invite', {
-      body: { token, action: 'get' },
-    });
-    // We won't use this — the signup page will just store the token
-    // and call accept-invite after signup
+  async getInvitationByToken(_token: string): Promise<TeamInvitation | null> {
+    // The invite flow uses the invitation ID stored in sessionStorage at signup time.
+    // This method is retained for interface compatibility but is otherwise unused.
     return null;
   },
 
+  /**
+   * Get all pending invitations addressed to a specific email address.
+   * Used by Dashboard so it doesn't need a direct inline Supabase query.
+   */
+  async getPendingInvitationsForUser(email: string): Promise<TeamInvitation[]> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.from('team_invitations' as any) as any)
+      .select('*, organizations(name)')
+      .eq('email', email)
+      .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString());
+
+    if (error) throw error;
+    return (data || []) as TeamInvitation[];
+  },
+
   async acceptInvitation(invitationIdentifier: string): Promise<void> {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError) {
+      console.error('Failed to retrieve authentication session during invite acceptance');
+      throw new Error('Unable to retrieve your session. Please try again later.');
+    }
+    
+    if (!session?.access_token) {
+      console.error('Authentication session exists but access token is missing');
+      throw new Error('You need to be logged in to accept an invitation');
+    }
+
     const { error, data } = await supabase.functions.invoke<Record<string, unknown>>('accept-invite', {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
       body: { inviteId: invitationIdentifier, token: invitationIdentifier },
     });
 

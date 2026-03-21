@@ -8,10 +8,19 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-  auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-  }
-});
+// Singleton guard: ensures only one GoTrueClient instance exists even when Vite HMR
+// re-evaluates this module. Without this, each hot-reload creates a second client
+// sharing the same localStorage key, causing "Multiple GoTrueClient instances" warnings
+// and competing auth state listeners that can incorrectly sign users out.
+type SupabaseClient = ReturnType<typeof createClient<Database>>;
+declare global { var __supabaseClient: SupabaseClient | undefined; }
+
+export const supabase: SupabaseClient = globalThis.__supabaseClient ?? (
+  globalThis.__supabaseClient = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
+    auth: {
+      storage: localStorage,
+      persistSession: true,
+      autoRefreshToken: true,
+    },
+  })
+);

@@ -98,18 +98,32 @@ export const tasksService = {
       supabase.from('attachments').select('*').in('entity_id', taskIds).eq('entity_type', 'task'),
     ]);
 
-    // Step 3: Fetch profiles for all referenced user IDs
+    // Step 3: Fetch profiles for all referenced user IDs (Bypassing URI Limits via Chunking)
+    // BATCH_SIZE=150 keeps each request well below PostgREST's URI length limit.
     const allUserIds = [...new Set([
       ...(assigneesResult.data || []).map(a => a.user_id),
       ...(attachmentsResult.data || []).filter(a => a.uploaded_by).map(a => a.uploaded_by!),
     ])];
+    
+    const BATCH_SIZE = 150;
     let profilesMap: Record<string, any> = {};
     if (allUserIds.length > 0) {
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('id, name, email, avatar_url, initials')
-        .in('id', allUserIds);
-      profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
+      for (let i = 0; i < allUserIds.length; i += BATCH_SIZE) {
+        const chunk = allUserIds.slice(i, i + BATCH_SIZE);
+        try {
+          const { data: chunkProfiles, error: chunkError } = await supabase
+            .from('profiles')
+            .select('id, name, email, avatar_url, initials')
+            .in('id', chunk);
+          if (chunkError) {
+            console.warn('[tasks.service] Profile batch fetch failed (batch starting at', i, '):', chunkError.message);
+          } else if (chunkProfiles) {
+            chunkProfiles.forEach(p => { profilesMap[p.id] = p; });
+          }
+        } catch (err) {
+          console.warn('[tasks.service] Unexpected error in profile batch at index', i, err);
+        }
+      }
     }
 
     // Step 4: Map everything together client-side
@@ -316,16 +330,6 @@ export const tasksService = {
       await supabase.from('attachments').insert(attachmentInserts);
     }
 
-    // Log activity
-    activitiesService.create({
-      project_id: projectId,
-      activity_type: 'task_created',
-      description: `created task "${newTask.title}"`,
-      user_id: user?.id || null,
-      entity_id: newTask.id,
-      entity_type: 'task',
-    }).catch(() => { /* non-critical */ });
-
     return this.getById(newTask.id) as Promise<Task>;
   },
 
@@ -385,19 +389,6 @@ export const tasksService = {
         .single();
       if (error) throw error;
       data = currentData;
-    }
-
-    // Log activity if status changed
-    if (updates.status !== undefined) {
-      const { data: { user } } = await supabase.auth.getUser();
-      activitiesService.create({
-        project_id: projectId,
-        activity_type: 'status_changed',
-        description: `changed task "${data.title}" status to ${updates.status}`,
-        user_id: user?.id || null,
-        entity_id: taskId,
-        entity_type: 'task',
-      }).catch(() => { /* non-critical */ });
     }
 
     // Update assignees if provided

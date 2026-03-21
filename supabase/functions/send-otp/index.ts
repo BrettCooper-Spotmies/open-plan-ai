@@ -15,7 +15,10 @@ const baseCorsHeaders = {
 
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("origin");
-  const allowOrigin = origin && allowedOrigins.includes(origin)
+  const isLocalOrigin =
+    typeof origin === "string" &&
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+  const allowOrigin = origin && (allowedOrigins.includes(origin) || isLocalOrigin)
     ? origin
     : allowedOrigins[0] || "http://localhost:5173";
 

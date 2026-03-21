@@ -7,12 +7,12 @@ import { toast } from 'sonner';
 
 import { formatDistanceToNow } from 'date-fns';
 
-export interface AppNotification extends Omit<Notification, 'type'> {
+export interface AppNotification extends Omit<Notification, 'type' | 'conversation_id'> {
     type: Notification['type'] | 'message';
     time: string;
     initials?: string;
     project: string;
-    conversation_id?: string;
+    conversation_id?: string | null;
 }
 
 export function useNotifications() {
@@ -29,9 +29,16 @@ export function useNotifications() {
     const notifications: AppNotification[] = rawNotifications.map(n => ({
         ...n,
         time: formatDistanceToNow(new Date(n.created_at), { addSuffix: true }),
-        initials: n.actor?.full_name
-            ? n.actor.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase()
-            : n.actor?.email?.substring(0, 2).toUpperCase(),
+        // actor is not joined on the notification row — derive initials from title as a best-effort fallback
+        initials: (() => {
+            const title: string = n.title || '';
+            // Try to extract first 2 chars of initials from the title words (e.g. "John Doe assigned…" → "JD")
+            const words = title.trim().split(/\s+/);
+            if (words.length >= 2) {
+                return (words[0][0] + words[1][0]).toUpperCase();
+            }
+            return words[0]?.substring(0, 2).toUpperCase() || '??';
+        })(),
         project: n.type === 'message' ? 'Chat' : (n.projects?.name || 'Project'),
     }));
 

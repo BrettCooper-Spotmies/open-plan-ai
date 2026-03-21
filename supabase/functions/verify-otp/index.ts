@@ -5,11 +5,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 // CORS – restrict to known origins via ALLOWED_ORIGINS env var.
 // Never use "*" on an authenticated endpoint.
 // ------------------------------------------------------------------
+const isProduction = Deno.env.get("ENVIRONMENT") === "production";
 const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ||
   "http://localhost:5173,http://localhost:3000,https://open-plan-ai.vercel.app")
   .split(",")
   .map((origin) => origin.trim())
-  .filter(Boolean);
+  .filter((origin: string) => {
+    try {
+      new URL(origin);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 
 const baseCorsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -19,10 +27,14 @@ const baseCorsHeaders = {
 
 function getCorsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("origin");
+  const isLocalOrigin =
+    !isProduction &&
+    typeof origin === "string" &&
+    /^https?:\/\/(localhost|127\.0\.0\.1):(5173|3000)$/i.test(origin);
   const allowOrigin =
-    origin && allowedOrigins.includes(origin)
+    origin && (allowedOrigins.includes(origin) || isLocalOrigin)
       ? origin
-      : allowedOrigins[0] || "http://localhost:5173";
+      : allowedOrigins[0] || Deno.env.get("DEFAULT_ORIGIN") || "http://localhost:5173";
 
   return {
     ...baseCorsHeaders,
@@ -192,67 +204,35 @@ const handler = async (req: Request): Promise<Response> => {
       throw new Error("Failed to verify code");
     }
 
-    // Update the user's email_confirmed_at in auth.users
+    // Update the user's email_confirmed_at in auth.users.
+    // Look up the user via the profiles table (single indexed query) to avoid
+    // scanning all users with admin.listUsers which is O(N) and leaks metadata.
     try {
-      // Use the admin API to list users filtered by email
-      const { data: usersData, error: listError } = await supabase.auth.admin.listUsers({
-        page: 1,
-        perPage: 1,
-      });
+      const { data: profileRow, error: profileLookupErr } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", email.toLowerCase())
+        .maybeSingle();
 
-      if (listError) {
-        console.error("Error listing users:", listError);
-      }
-
-      // Find the specific user by email
-      const user = usersData?.users?.find(
-        (u) => u.email?.toLowerCase() === email.toLowerCase()
-      );
-
-      if (user && !user.email_confirmed_at) {
-        console.log(`Updating email_confirmed_at for user ${user.id}`);
-
-        const { error: updateUserError } = await supabase.auth.admin.updateUserById(user.id, {
-          email_confirm: true,
-        });
-
-        if (updateUserError) {
-          console.error("Error updating user email_confirmed_at:", updateUserError);
-          // Don't throw - the verification itself succeeded, this is just a secondary update
-        } else {
-          console.log(`Successfully updated email_confirmed_at for user ${user.id}`);
-        }
-      } else if (user) {
-        console.log(`User ${user.id} already has email_confirmed_at set`);
-      } else {
-        // Search additional pages if not found in the first page
-        console.log(`User not found in first page, searching all users for email: ${email}`);
-
-        const { data: allUsersData } = await supabase.auth.admin.listUsers({
-          page: 1,
-          perPage: 1000,
-        });
-
-        const foundUser = allUsersData?.users?.find(
-          (u) => u.email?.toLowerCase() === email.toLowerCase()
+      if (profileLookupErr) {
+        console.error("Error looking up profile by email:", profileLookupErr);
+      } else if (profileRow?.id) {
+        const { error: updateUserError } = await supabase.auth.admin.updateUserById(
+          profileRow.id,
+          { email_confirm: true }
         );
-
-        if (foundUser && !foundUser.email_confirmed_at) {
-          const { error: updateFoundUserError } = await supabase.auth.admin.updateUserById(
-            foundUser.id,
-            { email_confirm: true }
-          );
-
-          if (updateFoundUserError) {
-            console.error("Error updating user email_confirmed_at:", updateFoundUserError);
-          } else {
-            console.log(`Successfully updated email_confirmed_at for user ${foundUser.id}`);
-          }
+        if (updateUserError) {
+          console.error("Error confirming email for user:", updateUserError);
+          // Non-fatal — verification record is already marked verified_at
+        } else {
+          console.log(`Successfully confirmed email for user ${profileRow.id}`);
         }
+      } else {
+        console.warn(`No profile found for email: ${email} — email_confirmed_at not updated`);
       }
     } catch (authError) {
       console.error("Error updating auth user:", authError);
-      // Don't throw - the verification record was updated successfully
+      // Non-fatal — the OTP verification record was already saved above
     }
 
     console.log("Email verified successfully for:", email);

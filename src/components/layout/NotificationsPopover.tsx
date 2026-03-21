@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageSquare, CheckCircle2, AlertCircle, Users, FolderKanban, Clock } from 'lucide-react';
+import { Bell, MessageSquare, CheckCircle2, AlertCircle, Users, FolderKanban, Clock, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -13,6 +13,8 @@ import { useNotifications, AppNotification } from '@/hooks/useNotifications';
 
 const getNotificationIcon = (type: AppNotification['type']) => {
     switch (type) {
+        case 'activity':
+            return <Activity className="h-4 w-4 text-blue-500" />;
         case 'mention':
             return <Users className="h-4 w-4 text-blue-500" />;
         case 'assignment':

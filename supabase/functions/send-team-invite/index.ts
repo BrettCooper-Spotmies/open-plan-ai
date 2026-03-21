@@ -5,14 +5,46 @@ import { EMAIL_FROM } from "../_shared/constants.ts";
 // @ts-expect-error - Deno is available in edge function runtime
 const Deno = globalThis.Deno;
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+const isProduction = Deno.env.get("ENVIRONMENT") === "production";
+const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ||
+  "http://localhost:5173,http://localhost:3000,https://open-plan-ai.vercel.app")
+  .split(",")
+  .map((origin: string) => origin.trim())
+  .filter((origin: string) => {
+    try {
+      new URL(origin);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+
+const baseCorsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin");
+  const isLocalOrigin =
+    !isProduction &&
+    typeof origin === "string" &&
+    /^https?:\/\/(localhost|127\.0\.0\.1):(5173|3000)$/i.test(origin);
+  const allowOrigin = origin && (allowedOrigins.includes(origin) || isLocalOrigin)
+    ? origin
+    : allowedOrigins[0] || Deno.env.get("DEFAULT_ORIGIN") || "http://localhost:5173";
+
+  return {
+    ...baseCorsHeaders,
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Vary": "Origin",
+  };
+}
+
 Deno.serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
@@ -243,7 +275,9 @@ Deno.serve(async (req: Request) => {
   } catch (err) {
     console.error("Error:", err);
     const errorMessage = err instanceof Error ? err.message : "Unknown error";
-    return new Response(JSON.stringify({ error: "Internal server error", details: errorMessage }), {
+    // Log details server-side only; don't expose internal error messages to clients.
+    console.error("Internal error details:", errorMessage);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

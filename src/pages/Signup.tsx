@@ -168,11 +168,15 @@ const Signup = () => {
           console.error('Error sending OTP:', err);
         }
 
-        // Only create organization if NOT an invite signup
+        // Organization is created AFTER email verification succeeds.
+        // Store the intended org name/description so VerifyEmail can create it post-OTP.
         try {
-          await createOrganization(formData.companyName, `${formData.industry} company`);
-        } catch (err) {
-          console.error('Error creating organization:', err);
+          sessionStorage.setItem(
+            'openplan_pending_org',
+            JSON.stringify({ name: formData.companyName, description: formData.industry })
+          );
+        } catch {
+          // sessionStorage may be unavailable; org creation will fall back to Dashboard prompt.
         }
       }
 
@@ -475,9 +479,10 @@ const Signup = () => {
               </Button>
               <p className="text-xs text-muted-foreground text-center">
                 By creating an account, you agree to our{" "}
-                <a href="#" className="text-primary hover:underline">Terms of Service</a>
+                <span className="text-primary">Terms of Service</span>
                 {" "}and{" "}
-                <a href="#" className="text-primary hover:underline">Privacy Policy</a>
+                <span className="text-primary">Privacy Policy</span>
+                {" "}(coming soon)
               </p>
               <p className="text-sm text-muted-foreground text-center">
                 Already have an account?{" "}

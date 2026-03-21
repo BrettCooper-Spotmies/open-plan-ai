@@ -1361,6 +1361,7 @@ export type Database = {
       | "completed"
       | "comment"
       | "deadline"
+      | "activity"
       org_role: "owner" | "admin" | "member"
       priority: "critical" | "high" | "medium" | "low"
       project_role: "owner" | "admin" | "member" | "viewer"

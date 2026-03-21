@@ -22,6 +22,8 @@ export function useGlobalChatRealtime() {
   // We use refs for state that we need inside the subscription callback
   // to avoid re-subscribing on every state change.
   const activeConversationIdRef = useRef(useChatStore.getState().activeConversationId);
+  const pathnameRef = useRef(location.pathname);
+  const navigateRef = useRef(navigate);
   
   // Keep the ref in sync with the actual store state
   useEffect(() => {
@@ -29,6 +31,12 @@ export function useGlobalChatRealtime() {
       activeConversationIdRef.current = state.activeConversationId;
     });
   }, []);
+
+  // Sync pathname and navigate refs so the socket listener has fresh values without reloading
+  useEffect(() => {
+    pathnameRef.current = location.pathname;
+    navigateRef.current = navigate;
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -49,9 +57,9 @@ export function useGlobalChatRealtime() {
           // Don't notify for our own messages
           if (newMsg.sender_id === user.id) return;
 
-          // Check if we are currently looking at this conversation
+          // Check if we are currently looking at this conversation via stable ref
           const isChattingInThisConv = 
-            location.pathname.startsWith('/chat') && 
+            pathnameRef.current.startsWith('/chat') && 
             activeConversationIdRef.current === newMsg.conversation_id;
 
           if (!isChattingInThisConv) {
@@ -108,7 +116,7 @@ export function useGlobalChatRealtime() {
                       className="inline-flex items-center justify-center rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 h-8 px-3 transition-colors"
                       onClick={() => {
                         toast.dismiss(t);
-                        navigate(`/chat/${newMsg.conversation_id}`);
+                        navigateRef.current(`/chat/${newMsg.conversation_id}`);
                       }}
                     >
                       View
@@ -135,5 +143,5 @@ export function useGlobalChatRealtime() {
         supabase.removeChannel(channelRef.current);
       }
     };
-  }, [user?.id, location.pathname, navigate]);
+  }, [user?.id]); // Only rebuild socket if the active logged in user fundamentally changes
 }

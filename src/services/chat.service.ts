@@ -105,30 +105,41 @@ export const chatService = {
 
     // 4. Get profiles for all member user IDs
     const memberUserIds = [...new Set((allMembers || []).map((m: any) => m.user_id))];
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, name, email, avatar_url, initials, role, last_seen_at')
-      .in('id', memberUserIds);
+    const allProfiles: any[] = [];
+    const BATCH_SIZE = 150;
+    for (let i = 0; i < memberUserIds.length; i += BATCH_SIZE) {
+      const chunk = memberUserIds.slice(i, i + BATCH_SIZE);
+      const { data: chunkProfiles } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials, role, last_seen_at')
+        .in('id', chunk);
+      if (chunkProfiles) allProfiles.push(...chunkProfiles);
+    }
 
-    const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+    const profileMap = new Map((allProfiles).map((p: any) => [p.id, p]));
 
-    // 5. Get last message for each conversation
+    // 5. Get last message for each conversation (single bulk query, no N+1)
     const lastMessages: Record<string, any> = {};
-    for (const convId of convIds) {
-      const { data: msgs } = await supabase
+    if (convIds.length > 0) {
+      const { data: allLastMsgs } = await supabase
         .from('chat_messages')
-        .select('content, sender_id, created_at')
-        .eq('conversation_id', convId)
+        .select('conversation_id, content, sender_id, created_at')
+        .in('conversation_id', convIds)
         .is('deleted_at', null)
-        .order('created_at', { ascending: false })
-        .limit(1);
-      if (msgs?.[0]) {
-        const sender = profileMap.get(msgs[0].sender_id);
-        lastMessages[convId] = {
-          content: msgs[0].content,
-          senderName: sender?.name ?? 'Unknown',
-          createdAt: msgs[0].created_at,
-        };
+        .order('created_at', { ascending: false });
+
+      // Keep only the first (latest) message per conversation
+      if (allLastMsgs) {
+        for (const msg of allLastMsgs) {
+          if (!lastMessages[msg.conversation_id]) {
+            const sender = profileMap.get(msg.sender_id);
+            lastMessages[msg.conversation_id] = {
+              content: msg.content,
+              senderName: sender?.name ?? 'Unknown',
+              createdAt: msg.created_at,
+            };
+          }
+        }
       }
     }
 
@@ -163,12 +174,18 @@ export const chatService = {
 
     // Get sender profiles
     const senderIds = [...new Set((messages || []).map((m: any) => m.sender_id))];
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, name, email, avatar_url, initials, role')
-      .in('id', senderIds);
+    const allProfiles = [];
+    const BATCH_SIZE = 150;
+    for (let i = 0; i < senderIds.length; i += BATCH_SIZE) {
+      const chunk = senderIds.slice(i, i + BATCH_SIZE);
+      const { data: chunkProfiles } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials, role')
+        .in('id', chunk);
+      if (chunkProfiles) allProfiles.push(...chunkProfiles);
+    }
 
-    const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+    const profileMap = new Map((allProfiles).map((p: any) => [p.id, p]));
 
     return (messages || [])
       .map((m: any) => mapMessage(m, profileMap.get(m.sender_id)))
@@ -176,21 +193,27 @@ export const chatService = {
   },
 
   async editMessage(messageId: string, newContent: string): Promise<void> {
+    // Defence-in-depth: only allow editing your own messages (RLS also enforces this)
+    const userId = await getCurrentUserId();
     const { error } = await supabase
       .from('chat_messages')
       .update({ content: newContent, updated_at: new Date().toISOString() })
-      .eq('id', messageId);
+      .eq('id', messageId)
+      .eq('sender_id', userId);
     if (error) throw error;
   },
 
   async deleteMessage(messageId: string, senderName: string): Promise<void> {
+    // Defence-in-depth: only allow deleting your own messages (RLS also enforces this)
+    const userId = await getCurrentUserId();
     const { error } = await supabase
       .from('chat_messages')
       .update({
         deleted_at: new Date().toISOString(),
         deleted_by_name: senderName,
       } as any)
-      .eq('id', messageId);
+      .eq('id', messageId)
+      .eq('sender_id', userId);
     if (error) throw error;
   },
 
@@ -397,12 +420,18 @@ export const chatService = {
 
     const userIds = [...new Set(orgMembers.map((m: any) => m.user_id))];
 
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, name, email, avatar_url, initials, role')
-      .in('id', userIds);
+    const allProfiles: any[] = [];
+    const BATCH_SIZE = 150;
+    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+      const chunk = userIds.slice(i, i + BATCH_SIZE);
+      const { data: chunkProfiles } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials, role')
+        .in('id', chunk);
+      if (chunkProfiles) allProfiles.push(...chunkProfiles);
+    }
 
-    return (profiles || []).map((p: any) => ({
+    return (allProfiles).map((p: any) => ({
       id: p.id,
       name: p.name,
       email: p.email,
