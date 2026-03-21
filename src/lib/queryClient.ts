@@ -1,18 +1,42 @@
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryCache, MutationCache } from '@tanstack/react-query';
+import { logger } from '@/services/monitoring/logger';
 
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({
+    // Route ALL React Query errors through the structured logger.
+    // In production this means every failed query is recorded in client_error_logs.
+    onError: (error, query) => {
+      const queryKey = JSON.stringify(query.queryKey);
+      logger.error(`Query failed: ${queryKey}`, {
+        error: error instanceof Error ? error.message : String(error),
+        queryKey,
+      });
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      logger.error('Mutation failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    },
+  }),
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
-      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
-      retry: 3,
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      staleTime: 60 * 1000, // 1 minute
+      gcTime: 5 * 60 * 1000, // 5 minutes
       refetchOnWindowFocus: false,
       refetchOnReconnect: true,
+      // Never retry on client errors (4xx) — auth failures should fail immediately.
+      retry: (failureCount, error) => {
+        if (error instanceof Error && 'status' in error) {
+          const status = (error as Error & { status?: number }).status;
+          if (status !== undefined && status >= 400 && status < 500) return false;
+        }
+        return failureCount < 2;
+      },
     },
     mutations: {
-      retry: 1,
-      retryDelay: 1000,
+      retry: false,
     },
   },
 });

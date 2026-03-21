@@ -63,6 +63,7 @@ import { organizationsService, OrganizationSettings } from '@/services/organizat
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useUserStore } from '@/stores/useUserStore';
+import { getPasswordRequirements } from '@/lib/passwordValidation';
 
 type ThemePreference = 'light' | 'dark' | 'system';
 
@@ -314,8 +315,11 @@ const Settings = () => {
       return;
     }
 
-    if (passwordForm.newPassword.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    // Enforce the same strong password policy as the signup page.
+    const requirements = getPasswordRequirements(passwordForm.newPassword);
+    const unmet = requirements.filter(r => !r.met);
+    if (unmet.length > 0) {
+      toast.error(`Password too weak: ${unmet.map(r => r.label).join(', ')}`);
       return;
     }
 
@@ -649,7 +653,7 @@ const Settings = () => {
                         type="file"
                         ref={fileInputRef}
                         className="hidden"
-                        accept="image/png, image/jpeg, image/gif"
+                      accept="image/png, image/jpeg, image/webp"
                         onChange={handleAvatarChange}
                       />
                       <Button variant="outline" size="sm" onClick={handleAvatarClick} disabled={avatarLoading}>

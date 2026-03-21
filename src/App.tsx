@@ -189,7 +189,7 @@ const App = () => {
               </TooltipProvider>
             </OrganizationProvider>
           </AuthProvider>
-          <ReactQueryDevtools initialIsOpen={false} />
+          {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
         </QueryClientProvider>
       </ErrorBoundary>
     </ThemeProvider>

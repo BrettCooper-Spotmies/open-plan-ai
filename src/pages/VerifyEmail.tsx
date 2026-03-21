@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,8 +6,10 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Layers, Mail, AlertCircle, CheckCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useOrganization } from "@/contexts/OrganizationContext";
 
 const VerifyEmail = () => {
+  const { createOrganization } = useOrganization();
   const navigate = useNavigate();
   const location = useLocation();
   const locationState = (location.state ?? {}) as {
@@ -62,14 +64,7 @@ const VerifyEmail = () => {
     }
   }, [countdown]);
 
-  // Auto-submit when OTP is complete
-  useEffect(() => {
-    if (otp.length === 6) {
-      handleVerify();
-    }
-  }, [otp]);
-
-  const handleVerify = async () => {
+  const handleVerify = useCallback(async () => {
     if (otp.length !== 6) return;
 
     setIsLoading(true);
@@ -117,6 +112,20 @@ const VerifyEmail = () => {
 
       sessionStorage.removeItem('openplan_pending_verify');
 
+      // If signup stored a pending org, create it now that email is verified.
+      try {
+        const raw = sessionStorage.getItem('openplan_pending_org');
+        if (raw) {
+          const parsed = JSON.parse(raw) as { name?: string; description?: string };
+          if (typeof parsed?.name === 'string' && parsed.name.trim()) {
+            await createOrganization(parsed.name.trim(), parsed.description || '');
+          }
+          sessionStorage.removeItem('openplan_pending_org');
+        }
+      } catch {
+        // Non-fatal — Dashboard will prompt user to create org if none exists.
+      }
+
       setTimeout(() => {
         navigate("/login", {
           state: {
@@ -132,7 +141,14 @@ const VerifyEmail = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [email, otp, navigate, createOrganization]);
+
+  // Auto-submit when OTP reaches 6 digits — handleVerify is stable via useCallback.
+  useEffect(() => {
+    if (otp.length === 6) {
+      handleVerify();
+    }
+  }, [otp, handleVerify]);
 
   const handleResend = async () => {
     setIsResending(true);

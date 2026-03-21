@@ -99,22 +99,29 @@ export const tasksService = {
     ]);
 
     // Step 3: Fetch profiles for all referenced user IDs (Bypassing URI Limits via Chunking)
+    // BATCH_SIZE=150 keeps each request well below PostgREST's URI length limit.
     const allUserIds = [...new Set([
       ...(assigneesResult.data || []).map(a => a.user_id),
       ...(attachmentsResult.data || []).filter(a => a.uploaded_by).map(a => a.uploaded_by!),
     ])];
     
+    const BATCH_SIZE = 150;
     let profilesMap: Record<string, any> = {};
     if (allUserIds.length > 0) {
-      const BATCH_SIZE = 150;
       for (let i = 0; i < allUserIds.length; i += BATCH_SIZE) {
         const chunk = allUserIds.slice(i, i + BATCH_SIZE);
-        const { data: chunkProfiles } = await supabase
-          .from('profiles')
-          .select('id, name, email, avatar_url, initials')
-          .in('id', chunk);
-        if (chunkProfiles) {
-          chunkProfiles.forEach(p => { profilesMap[p.id] = p; });
+        try {
+          const { data: chunkProfiles, error: chunkError } = await supabase
+            .from('profiles')
+            .select('id, name, email, avatar_url, initials')
+            .in('id', chunk);
+          if (chunkError) {
+            console.warn('[tasks.service] Profile batch fetch failed (batch starting at', i, '):', chunkError.message);
+          } else if (chunkProfiles) {
+            chunkProfiles.forEach(p => { profilesMap[p.id] = p; });
+          }
+        } catch (err) {
+          console.warn('[tasks.service] Unexpected error in profile batch at index', i, err);
         }
       }
     }

@@ -80,17 +80,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
 
   useEffect(() => {
+    let mounted = true; // Guard against state updates after unmount (fixes AbortError)
+
     // Set up auth state listener BEFORE checking session
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
-        console.log('Auth state changed:', newSession?.user);
+        if (!mounted) return;
 
-        // Check if user has verified email before setting auth state
-        if (newSession?.user && !newSession.user.email_confirmed_at) {
-          // User is not verified - don't set them as authenticated
+        // ─── Email-verification gate ───────────────────────────────────────────
+        // ONLY enforce this on the initial sign-in events.
+        // TOKEN_REFRESHED, USER_UPDATED, etc. must NOT trigger a sign-out because
+        // the refreshed JWT may not include `email_confirmed_at` in its payload,
+        // which would incorrectly log out a fully verified user every few minutes.
+        const isInitialSignIn = event === 'SIGNED_IN' || event === 'INITIAL_SESSION';
+        if (isInitialSignIn && newSession?.user && !newSession.user.email_confirmed_at) {
           console.log('User email not verified, blocking auth state');
           const userEmail = newSession.user.email;
-          setPendingVerificationEmail(userEmail || null);
+          if (mounted) setPendingVerificationEmail(userEmail || null);
 
           // Sign them out immediately
           await supabase.auth.signOut();
@@ -101,12 +107,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             await authService.sendOtp(userEmail);
           }
 
-          setSession(null);
-          setUser(null);
-          setProfile(null);
+          if (mounted) {
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+          }
           return;
         }
 
+        if (!mounted) return;
         setSession(newSession);
         setUser(newSession?.user ?? null);
 
@@ -114,11 +123,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Clear pending verification since user is verified
           setPendingVerificationEmail(null);
 
-          // Defer profile fetch to avoid blocking
-          setTimeout(async () => {
-            const profileData = await fetchProfile(newSession.user.id);
-            setProfile(profileData);
-          }, 0);
+          // ─── Non-blocking profile fetch ───────────────────────────────────────
+          // Do NOT await here: this makes the auth state change fast and prevents
+          // AbortError from React Strict Mode cleanup interrupting a pending await.
+          fetchProfile(newSession.user.id).then(profileData => {
+            if (mounted) setProfile(profileData);
+          }).catch(err => {
+            if (mounted) console.error('Error fetching profile after auth change:', err);
+          });
 
           // Check for pending invite after successful auth
           const pendingInviteId = localStorage.getItem('pending_invite_id');
@@ -127,9 +139,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             localStorage.removeItem('pending_invite_id');
             localStorage.removeItem('pending_invite_token');
 
-            // Defense-in-depth: validate the stored identifier before sending to the backend.
-            // The backend enforces all security rules; this prevents obviously-tampered values
-            // (e.g. oversized strings) from reaching the network at all.
             const effectiveId = pendingInviteId ?? pendingToken ?? '';
             const isValidFormat =
               typeof effectiveId === 'string' &&
@@ -141,7 +150,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else if (!newSession.access_token) {
               console.error('Access token is missing. Unable to accept the invite.');
             } else {
-              // Accept the invitation in the background
               supabase.functions.invoke('accept-invite', {
                 headers: {
                   Authorization: `Bearer ${newSession.access_token}`,
@@ -168,44 +176,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initializeAuth = async () => {
       try {
         const { session: existingSession } = await authService.getSession();
+        if (!mounted) return;
 
         // Check if user has verified email before restoring session
         if (existingSession?.user && !existingSession.user.email_confirmed_at) {
           console.log('Existing session has unverified email, signing out');
           const userEmail = existingSession.user.email;
-          setPendingVerificationEmail(userEmail || null);
+          if (mounted) setPendingVerificationEmail(userEmail || null);
           await supabase.auth.signOut();
 
           // Send OTP for verification
-          if (userEmail) {
+          if (userEmail && mounted) {
             console.log('Sending OTP to:', userEmail);
             await authService.sendOtp(userEmail);
           }
 
-          setSession(null);
-          setUser(null);
-          setProfile(null);
-          setIsLoading(false);
+          if (mounted) {
+            setSession(null);
+            setUser(null);
+            setProfile(null);
+            setIsLoading(false);
+          }
           return;
         }
 
+        if (!mounted) return;
         setSession(existingSession);
         setUser(existingSession?.user ?? null);
 
         if (existingSession?.user) {
           const profileData = await fetchProfile(existingSession.user.id);
-          setProfile(profileData);
+          if (mounted) setProfile(profileData);
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
+        if (mounted) console.error('Error initializing auth:', error);
       } finally {
-        setIsLoading(false);
+        if (mounted) setIsLoading(false);
       }
     };
 
     initializeAuth();
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, [fetchProfile]);
@@ -275,7 +288,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return { error: new Error('Not authenticated') };
 
     try {
-      // Soft delete the profile
+      // Soft delete the profile row first so RLS still applies during the call.
       const { error } = await supabase
         .from('profiles')
         .update({ deleted_at: new Date().toISOString() })
@@ -285,7 +298,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: new Error(error.message) };
       }
 
-      // Sign out
+      // Permanently delete the auth user via a SECURITY DEFINER edge function.
+      // This removes the user from auth.users so the email can be re-used
+      // and the account is truly gone.
+      const { data: { session: currentSession } } = await supabase.auth.getSession();
+      if (currentSession?.access_token) {
+        const { error: deleteAuthErr } = await supabase.functions.invoke('delete-auth-user', {
+          headers: { Authorization: `Bearer ${currentSession.access_token}` },
+        });
+        if (deleteAuthErr) {
+          console.error('Failed to delete auth user — profile is soft-deleted:', deleteAuthErr);
+          // Non-fatal: profile is inaccessible; proceed with sign-out.
+        }
+      }
+
+      // Sign out locally.
       await authService.signOut();
       setUser(null);
       setProfile(null);

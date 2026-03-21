@@ -31,6 +31,8 @@ export function useCreateTask(projectId: string) {
             project_id: projectId,
             entity_id: newTask.id,
             entity_type: 'task',
+          }, {
+            onError: (err) => console.error('Failed to send task-assignment notification:', err),
           });
         }
       });
@@ -102,6 +104,8 @@ export function useUpdateTask(projectId: string) {
               project_id: projectId,
               entity_id: variables.taskId,
               entity_type: 'task',
+            }, {
+              onError: (err) => console.error('Failed to send task-update notification:', err),
             });
           }
         });
@@ -125,6 +129,8 @@ export function useUpdateTask(projectId: string) {
                 project_id: projectId || undefined,
                 entity_id: variables.taskId || undefined,
                 entity_type: 'task',
+              }, {
+                onError: (err) => console.error('Failed to send task-completed notification:', err),
               });
             }
           });

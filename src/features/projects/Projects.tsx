@@ -325,7 +325,7 @@ export default function Projects() {
                       <Users className="h-4 w-4 text-muted-foreground" />
                     </div>
                     <span className="text-[11px] text-muted-foreground">
-                      Updated {project.updatedAt ? new Date(project.updatedAt).toLocaleDateString() : 'N/A'}
+                      Updated {project.updatedAt ? new Date(project.updatedAt).toISOString().slice(0, 10) : 'N/A'}
                     </span>
                   </div>
                 </Card>
