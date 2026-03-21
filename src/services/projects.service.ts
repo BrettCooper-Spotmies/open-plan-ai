@@ -217,47 +217,163 @@ export const projectsService = {
       query = query.eq('organization_id', organizationId);
     }
 
-    const { data, error } = await query;
+    const { data: projectsData, error: projectsError } = await query;
 
-    if (error) throw error;
+    if (projectsError) throw projectsError;
+    if (!projectsData || projectsData.length === 0) return [];
 
-    // Fetch tasks, milestones, and issues for each project
-    // Use resilient fetching - if sub-queries fail, still show projects with empty data
-    const projectsWithDetails = await Promise.all(
-      (data || []).map(async (project) => {
-        let tasksResult: Task[] = [];
-        let milestonesResult: Milestone[] = [];
-        let issuesResult: Issue[] = [];
-        let modulesResult: any[] = [];
+    const projectIds = projectsData.map(p => p.id);
 
-        try {
-          [tasksResult, milestonesResult, issuesResult, modulesResult] = await Promise.all([
-            this.getTasks(project.id).catch(err => {
-              console.error(`Failed to load tasks for project ${project.id}:`, err);
-              return [] as Task[];
-            }),
-            this.getMilestones(project.id).catch(err => {
-              console.error(`Failed to load milestones for project ${project.id}:`, err);
-              return [] as Milestone[];
-            }),
-            this.getIssues(project.id).catch(err => {
-              console.error(`Failed to load issues for project ${project.id}:`, err);
-              return [] as Issue[];
-            }),
-            modulesService.getByProjectId(project.id).catch(err => {
-              console.error(`Failed to load modules for project ${project.id}:`, err);
-              return [];
-            }),
-          ]);
-        } catch (err) {
-          console.error(`Failed to load details for project ${project.id}:`, err);
+    try {
+      // 1. Bulk Fetch Core Entities
+      const [
+        { data: tasksData },
+        { data: milestonesData },
+        { data: issuesData },
+        { data: modulesData },
+        { data: memberRolesData }
+      ] = await Promise.all([
+        supabase.from('tasks').select('*, checklists(*)').in('project_id', projectIds).is('deleted_at', null).order('created_at', { ascending: false }),
+        supabase.from('milestones').select('*').in('project_id', projectIds).is('deleted_at', null).order('due_date', { ascending: true }),
+        supabase.from('issues').select('*').in('project_id', projectIds).is('deleted_at', null).order('created_at', { ascending: false }),
+        supabase.from('modules').select('*').in('project_id', projectIds).is('deleted_at', null).order('name', { ascending: true }),
+        supabase.from('project_members').select('user_id, role, project_id').in('project_id', projectIds)
+      ]);
+
+      const taskIds = (tasksData || []).map(t => t.id);
+      const issueIds = (issuesData || []).map(i => i.id);
+
+      // 2. Bulk Fetch Secondary Relationships
+      const [
+        { data: taskAssignees },
+        { data: taskDeps },
+        { data: taskAttachments },
+        { data: issueAssignees },
+        { data: issueAttachments },
+        { data: issueComments }
+      ] = await Promise.all([
+        taskIds.length ? supabase.from('task_assignees').select('task_id, user_id').in('task_id', taskIds) : Promise.resolve({ data: [] }),
+        taskIds.length ? supabase.from('task_dependencies').select('task_id, depends_on_id').in('task_id', taskIds) : Promise.resolve({ data: [] }),
+        taskIds.length ? supabase.from('attachments').select('*').in('entity_id', taskIds).eq('entity_type', 'task') : Promise.resolve({ data: [] }),
+        issueIds.length ? supabase.from('issue_assignees').select('issue_id, user_id').in('issue_id', issueIds) : Promise.resolve({ data: [] }),
+        issueIds.length ? supabase.from('attachments').select('*').in('entity_id', issueIds).eq('entity_type', 'issue') : Promise.resolve({ data: [] }),
+        issueIds.length ? supabase.from('comments').select('id, content, created_at, author_id, entity_id, profiles:author_id(id, name, email, initials, avatar_url)').in('entity_id', issueIds).eq('entity_type', 'issue').is('deleted_at', null).order('created_at', { ascending: true }) : Promise.resolve({ data: [] })
+      ]);
+
+      // 3. Collect Unique Profiles
+      const allUserIds = [...new Set([
+        ...(taskAssignees || []).map(a => a.user_id),
+        ...(taskAttachments || []).filter(a => a.uploaded_by).map(a => a.uploaded_by!),
+        ...(issuesData || []).filter(i => i.reported_by).map(i => i.reported_by!),
+        ...(issueAssignees || []).map(a => a.user_id),
+        ...(issueAttachments || []).filter(a => a.uploaded_by).map(a => a.uploaded_by!),
+        ...(memberRolesData || []).map(m => m.user_id)
+      ])];
+
+      let profilesMap: Record<string, any> = {};
+      if (allUserIds.length > 0) {
+        const chunkedUsers = [];
+        for (let i = 0; i < allUserIds.length; i += 150) chunkedUsers.push(allUserIds.slice(i, i + 150));
+        
+        for (const chunk of chunkedUsers) {
+          const { data: profilesData } = await supabase.from('profiles').select('id, name, email, avatar_url, initials').in('id', chunk);
+          if (profilesData) {
+            profilesData.forEach(p => profilesMap[p.id] = p);
+          }
         }
+      }
 
-        return mapDbProjectToProject(project, tasksResult, milestonesResult, issuesResult, [], modulesResult);
-      })
-    );
+      // Group Helper
+      const groupBy = <T extends Record<string, any>>(array: T[], key: string) => {
+        return array.reduce((acc, item) => {
+          (acc[item[key]] = acc[item[key]] || []).push(item);
+          return acc;
+        }, {} as Record<string, T[]>);
+      };
 
-    return projectsWithDetails;
+      const tasksByProject = groupBy(tasksData || [], 'project_id');
+      const milestonesByProject = groupBy(milestonesData || [], 'project_id');
+      const issuesByProject = groupBy(issuesData || [], 'project_id');
+      const modulesByProject = groupBy(modulesData || [], 'project_id');
+
+      const taskAssigneesByTask = groupBy(taskAssignees || [], 'task_id');
+      const taskDepsByTask = groupBy(taskDeps || [], 'task_id');
+      const taskAttByTask = groupBy(taskAttachments || [], 'entity_id');
+
+      const issueAssigneesByIssue = groupBy(issueAssignees || [], 'issue_id');
+      const issueAttByIssue = groupBy(issueAttachments || [], 'entity_id');
+      const issueCommByIssue = groupBy(issueComments || [], 'entity_id');
+
+      // 4. Client-side Assembly
+      return projectsData.map(project => {
+        // Build Member Roles for this project
+        const projectMembers = (memberRolesData || []).filter(m => m.project_id === project.id);
+        const memberRoles = Object.fromEntries(projectMembers.map(pm => [pm.user_id, pm.role]));
+
+        const projectMilestonesData = milestonesByProject[project.id] || [];
+        const projectTasksData = tasksByProject[project.id] || [];
+        const projectModulesData = modulesByProject[project.id] || [];
+        
+        // Map Tasks before milestones
+        const mappedTasks: Task[] = projectTasksData.map(task => {
+          const tAssigneesData = taskAssigneesByTask[task.id] || [];
+          const tDeps = taskDepsByTask[task.id] || [];
+          const tAtt = taskAttByTask[task.id] || [];
+
+          const enrichedAtt = tAtt.map(a => ({ ...a, profiles: a.uploaded_by ? profilesMap[a.uploaded_by] || null : null }));
+          const tAssignees: TeamMember[] = tAssigneesData.map(ta => {
+            const profile = profilesMap[ta.user_id];
+            return {
+              id: profile?.id || ta.user_id,
+              name: profile?.name || 'Unknown',
+              role: memberRoles[ta.user_id] || profile?.role || '',
+              avatar: profile?.avatar_url || undefined,
+              initials: profile?.initials || 'UN',
+              email: profile?.email || '',
+            };
+          });
+
+          return mapDbTaskToTask({ ...task, task_dependencies: tDeps, attachments: enrichedAtt }, tAssignees);
+        });
+
+        // Map Milestones (requires mappedTasks)
+        const mappedMilestones: Milestone[] = projectMilestonesData.map(m => mapDbMilestoneToMilestone(m, mappedTasks, projectModulesData));
+
+        // Map Issues
+        const mappedIssues: Issue[] = (issuesByProject[project.id] || []).map(issue => {
+          const iAssigneesData = issueAssigneesByIssue[issue.id] || [];
+          const iAttData = issueAttByIssue[issue.id] || [];
+          const iCommData = issueCommByIssue[issue.id] || [];
+
+          const enrichedAtt = iAttData.map(a => ({ ...a, profiles: a.uploaded_by ? profilesMap[a.uploaded_by] || null : null }));
+          const iComments = iCommData.map(c => mapDbCommentToComment(c));
+
+          const rProfile = issue.reported_by ? profilesMap[issue.reported_by] : null;
+          const reporter = rProfile ? { id: rProfile.id, name: rProfile.name, email: rProfile.email, role: 'member', avatar: rProfile.avatar_url, initials: rProfile.initials } as TeamMember : undefined;
+
+          const iAssignees: TeamMember[] = iAssigneesData.map(ia => {
+            const profile = profilesMap[ia.user_id];
+            return {
+              id: profile?.id || ia.user_id,
+              name: profile?.name || 'Unknown',
+              role: 'member',
+              avatar: profile?.avatar_url,
+              initials: profile?.initials || 'UN',
+              email: profile?.email || '',
+            };
+          });
+
+          return mapDbIssueToIssue({ ...issue, attachments: enrichedAtt, comments: iComments }, iAssignees, reporter);
+        });
+
+        return mapDbProjectToProject(project, mappedTasks, mappedMilestones, mappedIssues, [], projectModulesData);
+      });
+
+    } catch (err) {
+      console.error('Failed to load project details via bulk mapping:', err);
+      // Fallback: return projects with empty relations if bulk fails
+      return projectsData.map(project => mapDbProjectToProject(project, [], [], [], [], []));
+    }
   },
 
   /**

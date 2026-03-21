@@ -105,12 +105,18 @@ export const chatService = {
 
     // 4. Get profiles for all member user IDs
     const memberUserIds = [...new Set((allMembers || []).map((m: any) => m.user_id))];
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, name, email, avatar_url, initials, role, last_seen_at')
-      .in('id', memberUserIds);
+    const allProfiles: any[] = [];
+    const BATCH_SIZE = 150;
+    for (let i = 0; i < memberUserIds.length; i += BATCH_SIZE) {
+      const chunk = memberUserIds.slice(i, i + BATCH_SIZE);
+      const { data: chunkProfiles } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials, role, last_seen_at')
+        .in('id', chunk);
+      if (chunkProfiles) allProfiles.push(...chunkProfiles);
+    }
 
-    const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+    const profileMap = new Map((allProfiles).map((p: any) => [p.id, p]));
 
     // 5. Get last message for each conversation
     const lastMessages: Record<string, any> = {};
@@ -163,12 +169,18 @@ export const chatService = {
 
     // Get sender profiles
     const senderIds = [...new Set((messages || []).map((m: any) => m.sender_id))];
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, name, email, avatar_url, initials, role')
-      .in('id', senderIds);
+    const allProfiles = [];
+    const BATCH_SIZE = 150;
+    for (let i = 0; i < senderIds.length; i += BATCH_SIZE) {
+      const chunk = senderIds.slice(i, i + BATCH_SIZE);
+      const { data: chunkProfiles } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials, role')
+        .in('id', chunk);
+      if (chunkProfiles) allProfiles.push(...chunkProfiles);
+    }
 
-    const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+    const profileMap = new Map((allProfiles).map((p: any) => [p.id, p]));
 
     return (messages || [])
       .map((m: any) => mapMessage(m, profileMap.get(m.sender_id)))
@@ -397,12 +409,18 @@ export const chatService = {
 
     const userIds = [...new Set(orgMembers.map((m: any) => m.user_id))];
 
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, name, email, avatar_url, initials, role')
-      .in('id', userIds);
+    const allProfiles: any[] = [];
+    const BATCH_SIZE = 150;
+    for (let i = 0; i < userIds.length; i += BATCH_SIZE) {
+      const chunk = userIds.slice(i, i + BATCH_SIZE);
+      const { data: chunkProfiles } = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, initials, role')
+        .in('id', chunk);
+      if (chunkProfiles) allProfiles.push(...chunkProfiles);
+    }
 
-    return (profiles || []).map((p: any) => ({
+    return (allProfiles).map((p: any) => ({
       id: p.id,
       name: p.name,
       email: p.email,

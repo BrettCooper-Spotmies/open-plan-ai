@@ -57,16 +57,13 @@ export interface ProjectSummary {
 
 export const dashboardService = {
   async getStats(orgId: string): Promise<DashboardStats> {
-    // Get project IDs for this org
-    const { data: orgProjects } = await supabase
-      .from('projects')
-      .select('id')
-      .eq('organization_id', orgId)
-      .is('deleted_at', null);
+    const { data, error } = await (supabase.rpc as any)('get_dashboard_stats', {
+      p_org_id: orgId
+    });
 
-    const projectIds = (orgProjects || []).map(p => p.id);
-
-    if (projectIds.length === 0) {
+    if (error) {
+      console.error('Failed to get dashboard stats via RPC:', error);
+      // Fallback to zeroes if RPC fails completely
       return {
         activeProjects: 0,
         totalTasks: 0,
@@ -78,59 +75,14 @@ export const dashboardService = {
       };
     }
 
-    // Run all queries in parallel
-    const [
-      tasksResult,
-      completedTasksResult,
-      issuesResult,
-      teamResult,
-      overdueResult,
-      inProgressResult,
-    ] = await Promise.all([
-      supabase
-        .from('tasks')
-        .select('*', { count: 'exact', head: true })
-        .in('project_id', projectIds)
-        .is('deleted_at', null),
-      supabase
-        .from('tasks')
-        .select('*', { count: 'exact', head: true })
-        .in('project_id', projectIds)
-        .eq('status', 'done')
-        .is('deleted_at', null),
-      supabase
-        .from('issues')
-        .select('*', { count: 'exact', head: true })
-        .in('project_id', projectIds)
-        .in('status', ['open', 'investigating'])
-        .is('deleted_at', null),
-      supabase
-        .from('organization_members')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', orgId),
-      supabase
-        .from('tasks')
-        .select('*', { count: 'exact', head: true })
-        .in('project_id', projectIds)
-        .lt('due_date', format(new Date(), 'yyyy-MM-dd'))
-        .neq('status', 'done')
-        .is('deleted_at', null),
-      supabase
-        .from('tasks')
-        .select('*', { count: 'exact', head: true })
-        .in('project_id', projectIds)
-        .eq('status', 'in-progress')
-        .is('deleted_at', null),
-    ]);
-
     return {
-      activeProjects: projectIds.length,
-      totalTasks: tasksResult.count || 0,
-      completedTasks: completedTasksResult.count || 0,
-      openIssues: issuesResult.count || 0,
-      teamMembers: teamResult.count || 0,
-      overdueItems: overdueResult.count || 0,
-      inProgressTasks: inProgressResult.count || 0,
+      activeProjects: data.activeProjects || 0,
+      totalTasks: data.totalTasks || 0,
+      completedTasks: data.completedTasks || 0,
+      openIssues: data.openIssues || 0,
+      teamMembers: data.teamMembers || 0,
+      overdueItems: data.overdueItems || 0,
+      inProgressTasks: data.inProgressTasks || 0,
     };
   },
 

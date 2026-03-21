@@ -98,18 +98,25 @@ export const tasksService = {
       supabase.from('attachments').select('*').in('entity_id', taskIds).eq('entity_type', 'task'),
     ]);
 
-    // Step 3: Fetch profiles for all referenced user IDs
+    // Step 3: Fetch profiles for all referenced user IDs (Bypassing URI Limits via Chunking)
     const allUserIds = [...new Set([
       ...(assigneesResult.data || []).map(a => a.user_id),
       ...(attachmentsResult.data || []).filter(a => a.uploaded_by).map(a => a.uploaded_by!),
     ])];
+    
     let profilesMap: Record<string, any> = {};
     if (allUserIds.length > 0) {
-      const { data: profilesData } = await supabase
-        .from('profiles')
-        .select('id, name, email, avatar_url, initials')
-        .in('id', allUserIds);
-      profilesMap = Object.fromEntries((profilesData || []).map(p => [p.id, p]));
+      const BATCH_SIZE = 150;
+      for (let i = 0; i < allUserIds.length; i += BATCH_SIZE) {
+        const chunk = allUserIds.slice(i, i + BATCH_SIZE);
+        const { data: chunkProfiles } = await supabase
+          .from('profiles')
+          .select('id, name, email, avatar_url, initials')
+          .in('id', chunk);
+        if (chunkProfiles) {
+          chunkProfiles.forEach(p => { profilesMap[p.id] = p; });
+        }
+      }
     }
 
     // Step 4: Map everything together client-side

@@ -172,7 +172,7 @@ export const teamService = {
     
     if (sessionError) {
       console.error('Failed to retrieve authentication session during invite acceptance');
-      throw new Error('Authentication session error');
+      throw new Error('Unable to retrieve your session. Please try again later.');
     }
     
     if (!session?.access_token) {

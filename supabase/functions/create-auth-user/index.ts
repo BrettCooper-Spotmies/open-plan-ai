@@ -246,11 +246,13 @@ Deno.serve(async (req: Request) => {
           });
         } else {
           // Clean up user if profile reconciliation fails
+          console.warn("Rolling back created user due to relink failure", { userId, relinkError });
           await adminClient.auth.admin.deleteUser(userId);
           throw relinkError;
         }
       } else {
         // Clean up user if profile creation fails for any other reason
+        console.warn("Rolling back created user due to unrecoverable profile error", { userId, profileError });
         await adminClient.auth.admin.deleteUser(userId);
         throw profileError;
       }
@@ -336,7 +338,10 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("Error:", error);
     return new Response(
-      JSON.stringify({ error: "Internal server error" }),
+      JSON.stringify({ 
+        error: "Internal server error", 
+        details: isProduction ? undefined : (error instanceof Error ? error.message : "Unknown error")
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
