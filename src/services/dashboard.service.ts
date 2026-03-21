@@ -122,7 +122,8 @@ export const dashboardService = {
         .from('projects')
         .select('id')
         .eq('organization_id', orgId)
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .limit(20);
 
       if (orgProjectsError) throw orgProjectsError;
 
