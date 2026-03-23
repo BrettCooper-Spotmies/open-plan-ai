@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { LayoutGrid, List, X, Search } from 'lucide-react';
+import { LayoutGrid, List, X, Search, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -35,40 +35,52 @@ interface TasksSectionProps {
 export function ViewControls({
   viewMode,
   onViewModeChange,
-  filters,
-  onFiltersChange,
-  milestones,
-  modules,
-  teamMembers,
-  allTags,
-  activeFilterCount,
-  onClearFilters,
+  onTaskCreate,
   searchQuery,
   onSearchQueryChange,
 }: {
   viewMode: TaskViewMode;
   onViewModeChange: (mode: TaskViewMode) => void;
-  filters: TaskFilter;
-  onFiltersChange: (filters: TaskFilter) => void;
-  milestones: Milestone[];
-  modules: { id: string; name: string; type: ModuleType }[];
-  teamMembers: { id: string; name: string; initials: string }[];
-  allTags: string[];
-  activeFilterCount: number;
-  onClearFilters: () => void;
+  onTaskCreate?: () => void;
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-2 flex-1 min-w-0">
+    <div className="flex items-center gap-3 flex-1 min-w-0">
+      {/* View Toggle */}
+      <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
+        <Button
+          variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => onViewModeChange('kanban')}
+          className={cn(
+            "h-8 w-8 p-0",
+            viewMode === 'kanban' && "bg-background shadow-sm"
+          )}
+        >
+          <LayoutGrid className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => onViewModeChange('list')}
+          className={cn(
+            "h-8 w-8 p-0",
+            viewMode === 'list' && "bg-background shadow-sm"
+          )}
+        >
+          <List className="h-4 w-4" />
+        </Button>
+      </div>
+
       {/* Search Input */}
-      <div className="relative flex items-center flex-1 md:flex-none min-w-0">
+      <div className="relative flex items-center flex-1 md:flex-none min-w-0 max-w-[240px]">
         <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
         <Input
           placeholder="Search tasks..."
           value={searchQuery || ''}
           onChange={(e) => onSearchQueryChange?.(e.target.value)}
-          className="pl-9 w-full md:w-[200px] h-8 min-w-0"
+          className="pl-9 w-full md:w-[200px] h-9 bg-background focus-visible:ring-1 focus-visible:ring-primary/20 transition-all"
         />
         {searchQuery && (
           <Button
@@ -77,7 +89,6 @@ export function ViewControls({
             className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
             onClick={() => {
               if (onSearchQueryChange) onSearchQueryChange('');
-              else if (import.meta.env.DEV) console.warn('[TasksSection] onSearchQueryChange undefined');
             }}
           >
             <X className="h-4 w-4" />
@@ -85,42 +96,15 @@ export function ViewControls({
         )}
       </div>
 
-      {/* View Toggle */}
-      <ToggleGroup
-        type="single"
-        value={viewMode}
-        onValueChange={(value) => value && onViewModeChange(value as TaskViewMode)}
-        className="bg-muted/50 p-1 rounded-lg"
-      >
-        <ToggleGroupItem value="kanban" aria-label="Kanban view" className="px-2 data-[state=on]:bg-background">
-          <LayoutGrid className="h-4 w-4" />
-        </ToggleGroupItem>
-        <ToggleGroupItem value="list" aria-label="List view" className="px-2 data-[state=on]:bg-background">
-          <List className="h-4 w-4" />
-        </ToggleGroupItem>
-      </ToggleGroup>
-
-      {/* Filter Dropdown */}
-      <TaskFiltersDropdown
-        filters={filters}
-        onFiltersChange={onFiltersChange}
-        milestones={milestones}
-        modules={modules}
-        teamMembers={teamMembers}
-        allTags={allTags}
-        activeFilterCount={activeFilterCount}
-      />
-
-      {/* Clear Filters */}
-      {activeFilterCount > 0 && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onClearFilters}
-          className="gap-1 text-muted-foreground hover:text-foreground"
+      {/* Create Task Button */}
+      {onTaskCreate && (
+        <Button 
+          size="sm" 
+          onClick={onTaskCreate} 
+          className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 ml-2"
         >
-          <X className="h-4 w-4" />
-          Clear
+          <Plus className="h-4 w-4" />
+          <span>Create Task</span>
         </Button>
       )}
     </div>
@@ -146,7 +130,7 @@ export function TasksSection({
   onTaskDelete,
   onAddModule,
 }: TasksSectionProps) {
-    const dependencyTasks = allTasks ?? tasks;
+  const dependencyTasks = allTasks ?? tasks;
 
   const [internalViewMode, setInternalViewMode] = useState<TaskViewMode>('kanban');
   const [internalFilters, setInternalFilters] = useState<TaskFilter>({});

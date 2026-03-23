@@ -91,7 +91,15 @@ async function findAuthUserByEmail(
 
 Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
-  const isProduction = Deno.env.get("ENVIRONMENT") === "production";
+  const env = Deno.env.get("ENVIRONMENT")?.toLowerCase() || "development";
+  const isProduction = env === "production" || env === "staging";
+  
+  if (env === "development") {
+    console.log("Running in development mode");
+  } else if (!["production", "staging"].includes(env)) {
+    console.warn(`Unknown environment: ${env}. Defaulting to non-production mode for safety.`);
+  }
+
 
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
