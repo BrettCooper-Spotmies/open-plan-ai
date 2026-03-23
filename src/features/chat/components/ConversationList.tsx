@@ -11,6 +11,7 @@ import { EmptyState } from './EmptyState';
 import { PeopleList } from './PeopleList';
 import { useChatStore } from '../stores/useChatStore';
 import { useReachableUsers } from '../hooks/useReachableUsers';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { chatService } from '@/services/chat.service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
@@ -25,6 +26,7 @@ interface ConversationListProps {
 }
 
 export function ConversationList({ conversations, loading, onSelect, onConversationCreated, onlineUserIds }: ConversationListProps) {
+  const isMobile = useIsMobile();
   const { activeConversationId, conversationFilter, setConversationFilter, searchQuery, setSearchQuery, unreadCounts } = useChatStore();
   const [dmDialogOpen, setDmDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
@@ -72,19 +74,36 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
 
   return (
     <div className="flex flex-col h-full border-r border-border">
-      <div className="flex items-center justify-between px-3 py-3 border-b border-border">
-        <h2 className="font-semibold text-sm">Messages</h2>
-        <div className="flex gap-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDmDialogOpen(true)} title="New Message">
-            <Plus className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setGroupDialogOpen(true)} title="New Group">
-            <Users className="h-4 w-4" />
-          </Button>
+      {isMobile ? (
+        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border">
+          <div className="flex-1 min-w-0">
+            <ConversationSearch isMobileHeader />
+          </div>
+          <div className="flex gap-1 shrink-0">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDmDialogOpen(true)} title="New Message">
+              <Plus className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setGroupDialogOpen(true)} title="New Group">
+              <Users className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-      </div>
-
-      <ConversationSearch />
+      ) : (
+        <>
+          <div className="flex items-center justify-between px-3 py-3 border-b border-border">
+            <h2 className="font-semibold text-sm">Messages</h2>
+            <div className="flex gap-1">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDmDialogOpen(true)} title="New Message">
+                <Plus className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setGroupDialogOpen(true)} title="New Group">
+                <Users className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <ConversationSearch />
+        </>
+      )}
 
       <div className="px-3 pb-2">
         <Tabs value={conversationFilter} onValueChange={(v) => setConversationFilter(v as 'all' | 'dms' | 'groups')}>

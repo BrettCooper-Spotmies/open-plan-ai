@@ -60,15 +60,15 @@ export function ViewControls({
   onSearchQueryChange?: (query: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 flex-1 min-w-0">
       {/* Search Input */}
-      <div className="relative flex items-center">
-        <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+      <div className="relative flex items-center flex-1 md:flex-none min-w-0">
+        <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
         <Input
           placeholder="Search tasks..."
           value={searchQuery || ''}
           onChange={(e) => onSearchQueryChange?.(e.target.value)}
-          className="pl-9 w-[200px] h-8"
+          className="pl-9 w-full md:w-[200px] h-8 min-w-0"
         />
         {searchQuery && (
           <Button

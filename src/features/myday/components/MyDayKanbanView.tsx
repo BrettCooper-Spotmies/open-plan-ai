@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { format, parse } from 'date-fns';
+import { format } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -199,10 +199,10 @@ export function MyDayKanbanView({
             <div
               ref={provided.innerRef}
               {...provided.droppableProps}
-              className="w-full pb-4"
+              className="w-full pb-4 overflow-x-auto md:overflow-visible touch-pan-x"
             >
               <div
-                className="grid gap-4"
+                className="flex gap-3 min-w-max snap-x snap-mandatory md:grid md:gap-4 md:min-w-0"
                 style={{
                   gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
                 }}
@@ -215,7 +215,7 @@ export function MyDayKanbanView({
                         {...provided.draggableProps}
                         style={provided.draggableProps.style}
                         className={cn(
-                          'flex-1 min-w-0 space-y-3',
+                          'w-[250px] min-w-[250px] space-y-3 snap-start md:w-auto md:min-w-0 md:flex-1',
                           snapshot.isDragging && 'shadow-lg'
                         )}
                       >
