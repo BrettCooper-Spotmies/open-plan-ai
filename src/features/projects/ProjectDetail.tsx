@@ -27,6 +27,7 @@ import { ProjectDetailSkeleton } from './components/ProjectDetailSkeleton';
 import { ProjectProgressPopover } from './components/ProjectProgressPopover';
 import { AddModuleDialog } from './components/AddModuleDialog';
 import { TaskDetailModal } from './components/TaskDetailModal';
+import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
 import { useTeamMembers } from '@/hooks/useProjectTeam';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -742,99 +743,116 @@ export default function ProjectDetail() {
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => setSection(v as ProjectSection)} className="w-full">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <TabsList className="bg-muted/50 w-full grid grid-cols-4 md:flex md:w-auto md:justify-start">
-              <TabsTrigger value="tasks" className="gap-2 shrink-0">
-                <ListTodo className="h-4 w-4 shrink-0" />
-                {(!isMobile || section === 'tasks') && <span className="whitespace-nowrap">Tasks</span>}
-                {(!isMobile || section === 'tasks') && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                    {(project.tasks || []).length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="modules" className="gap-2 shrink-0">
-                <Boxes className="h-4 w-4 shrink-0" />
-                {(!isMobile || section === 'modules') && <span className="whitespace-nowrap">Modules</span>}
-                {(!isMobile || section === 'modules') && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                    {modules.length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="milestones" className="gap-2 shrink-0">
-                <Flag className="h-4 w-4 shrink-0" />
-                {(!isMobile || section === 'milestones') && <span className="whitespace-nowrap">Milestones</span>}
-                {(!isMobile || section === 'milestones') && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                    {(project.milestones || []).length}
-                  </Badge>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="issues" className="gap-2 shrink-0">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                {(!isMobile || section === 'issues') && <span className="whitespace-nowrap">Issues</span>}
-                {(!isMobile || section === 'issues') && openIssuesCount > 0 && (
-                  <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                    {openIssuesCount}
-                  </Badge>
-                )}
-              </TabsTrigger>
-            </TabsList>
-
-            {/* View Controls - only show for tasks section */}
-            {section === 'tasks' && (
-              <div className="flex items-center justify-between w-full">
+          <div className="flex flex-col-reverse md:flex-row md:items-center justify-between gap-4">
+            {/* Left Side: View Controls */}
+            <div className="flex-1 min-w-0">
+              {section === 'tasks' && (
                 <ViewControls
                   viewMode={viewMode}
                   onViewModeChange={setViewMode}
-                  filters={filters}
-                  onFiltersChange={setFilters}
-                  milestones={project.milestones || []}
-                  modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
-                  teamMembers={teamMembers}
-                  allTags={allTags}
-                  activeFilterCount={activeFilterCount}
-                  onClearFilters={clearFilters}
+                  onTaskCreate={() => setIsAddTaskDialogOpen(true)}
                   searchQuery={searchQuery}
                   onSearchQueryChange={setSearchQuery}
-                  onTaskCreate={() => setIsAddTaskDialogOpen(true)}
                 />
-              </div>
-            )}
-            {/* Module View Controls - show for modules section */}
-            {section === 'modules' && (
-              <ModuleViewControls
-                viewMode={moduleViewMode}
-                onViewModeChange={setModuleViewMode}
-                searchQuery={moduleSearchQuery}
-                onSearchQueryChange={setModuleSearchQuery}
-                onAddModule={handleAddModule}
-              />
-            )}
-            {/* Milestones View Controls */}
-            {section === 'milestones' && (
-              <MilestoneViewControls
-                searchQuery={milestoneSearchQuery}
-                onSearchQueryChange={setMilestoneSearchQuery}
-                onAddMilestone={() => setIsAddMilestoneDialogOpen(true)}
-              />
-            )}
-            {/* Issues View Controls */}
-            {section === 'issues' && (
-              <IssueViewControls
-                viewMode={issueViewMode}
-                onViewModeChange={setIssueViewMode}
-                searchQuery={issueSearchQuery}
-                onSearchQueryChange={setIssueSearchQuery}
-                filters={issueFilters}
-                onFiltersChange={setIssueFilters}
-                teamMembers={allTeamMembers}
-                activeFilterCount={activeIssueFilterCount}
-                onClearFilters={clearIssueFilters}
-                onReportIssue={() => setIsAddIssueDialogOpen(true)}
-              />
-            )}
+              )}
+              {section === 'modules' && (
+                <ModuleViewControls
+                  viewMode={moduleViewMode}
+                  onViewModeChange={setModuleViewMode}
+                  searchQuery={moduleSearchQuery}
+                  onSearchQueryChange={setModuleSearchQuery}
+                  onAddModule={handleAddModule}
+                />
+              )}
+              {section === 'milestones' && (
+                <MilestoneViewControls
+                  searchQuery={milestoneSearchQuery}
+                  onSearchQueryChange={setMilestoneSearchQuery}
+                  onAddMilestone={() => setIsAddMilestoneDialogOpen(true)}
+                />
+              )}
+              {section === 'issues' && (
+                <IssueViewControls
+                  viewMode={issueViewMode}
+                  onViewModeChange={setIssueViewMode}
+                  searchQuery={issueSearchQuery}
+                  onSearchQueryChange={setIssueSearchQuery}
+                  filters={issueFilters}
+                  onFiltersChange={setIssueFilters}
+                  teamMembers={allTeamMembers}
+                  activeFilterCount={activeIssueFilterCount}
+                  onClearFilters={clearIssueFilters}
+                  onReportIssue={() => setIsAddIssueDialogOpen(true)}
+                />
+              )}
+            </div>
+
+            {/* Right Side: Tabs and Filters */}
+            <div className="flex items-center gap-2 shrink-0 ml-auto overflow-x-auto no-scrollbar py-1">
+              <TabsList className="bg-muted/50 w-auto flex shrink-0 h-9">
+                <TabsTrigger value="tasks" className="gap-2 shrink-0">
+                  <ListTodo className="h-4 w-4 shrink-0" />
+                  {(!isMobile || section === 'tasks') && <span className="whitespace-nowrap">Tasks</span>}
+                  {(!isMobile || section === 'tasks') && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {(project.tasks || []).length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="modules" className="gap-2 shrink-0">
+                  <Boxes className="h-4 w-4 shrink-0" />
+                  {(!isMobile || section === 'modules') && <span className="whitespace-nowrap">Modules</span>}
+                  {(!isMobile || section === 'modules') && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {modules.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="milestones" className="gap-2 shrink-0">
+                  <Flag className="h-4 w-4 shrink-0" />
+                  {(!isMobile || section === 'milestones') && <span className="whitespace-nowrap">Milestones</span>}
+                  {(!isMobile || section === 'milestones') && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {(project.milestones || []).length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="issues" className="gap-2 shrink-0">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  {(!isMobile || section === 'issues') && <span className="whitespace-nowrap">Issues</span>}
+                  {(!isMobile || section === 'issues') && openIssuesCount > 0 && (
+                    <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {openIssuesCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+
+              {section === 'tasks' && (
+                <div className="flex items-center gap-2">
+                  <TaskFiltersDropdown
+                    milestones={project.milestones || []}
+                    modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+                    teamMembers={teamMembers}
+                    allTags={allTags}
+                    filters={filters}
+                    onFiltersChange={setFilters}
+                    activeFilterCount={activeFilterCount}
+                  />
+                  {activeFilterCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="gap-1 text-muted-foreground hover:text-foreground h-9 px-2"
+                    >
+                      <X className="h-4 w-4" />
+                      <span className="hidden sm:inline">Clear</span>
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           <TabsContent value="tasks" className="mt-6">
