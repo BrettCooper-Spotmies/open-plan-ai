@@ -16,6 +16,8 @@ export type { MyDayItem, MyDayItemType } from '@/types';
 
 export type DueDateStatus = 'overdue' | 'today' | 'upcoming' | 'none';
 
+import { parseISO, isValid } from 'date-fns';
+
 /**
  * Parse date strings in local time when value is date-only (yyyy-MM-dd).
  * This avoids UTC conversion drift that can move "today" to yesterday.
@@ -23,15 +25,22 @@ export type DueDateStatus = 'overdue' | 'today' | 'upcoming' | 'none';
 function parseDueDateSafe(value?: string): Date | null {
   if (!value) return null;
 
-  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
-  if (dateOnly) {
+  // For yyyy-MM-dd format, use manual parsing to ensure local time
+  const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (dateOnlyRegex.test(value)) {
     const [year, month, day] = value.split('-').map(Number);
-    return new Date(year, month - 1, day);
+    const date = new Date(year, month - 1, day);
+    return isValid(date) ? date : null;
   }
 
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  const parsed = parseISO(value);
+  return isValid(parsed) ? parsed : null;
 }
+
+// Simple memoization cache for due date status
+const dueDateStatusCache = new Map<string, { status: DueDateStatus; timestamp: number }>();
+const CACHE_TTL = 30000; // 30 seconds
+
 
 /**
  * Check if a task or issue was completed/resolved today.
@@ -60,14 +69,31 @@ export function isCompletedToday(item: any): boolean {
 export function getDueDateStatus(dueDate?: string): DueDateStatus {
   if (!dueDate) return 'none';
 
+  // Check cache first
+  const cached = dueDateStatusCache.get(dueDate);
+  const now = Date.now();
+  if (cached && now - cached.timestamp < CACHE_TTL) {
+    return cached.status;
+  }
+
   const today = startOfDay(new Date());
   const parsedDueDate = parseDueDateSafe(dueDate);
-  if (!parsedDueDate) return 'none';
+  if (!parsedDueDate) {
+    dueDateStatusCache.set(dueDate, { status: 'none', timestamp: now });
+    return 'none';
+  }
+  
   const due = startOfDay(parsedDueDate);
+  let status: DueDateStatus = 'upcoming';
 
-  if (isBefore(due, today)) return 'overdue';
-  if (isSameDay(due, today)) return 'today';
-  return 'upcoming';
+  if (isBefore(due, today)) {
+    status = 'overdue';
+  } else if (isSameDay(due, today)) {
+    status = 'today';
+  }
+
+  dueDateStatusCache.set(dueDate, { status, timestamp: now });
+  return status;
 }
 
 /**

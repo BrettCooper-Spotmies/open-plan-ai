@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { LayoutGrid, List, X, Search } from 'lucide-react';
+import { LayoutGrid, List, X, Search, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -45,6 +45,7 @@ export function ViewControls({
   onClearFilters,
   searchQuery,
   onSearchQueryChange,
+  onTaskCreate,
 }: {
   viewMode: TaskViewMode;
   onViewModeChange: (mode: TaskViewMode) => void;
@@ -58,6 +59,7 @@ export function ViewControls({
   onClearFilters: () => void;
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
+  onTaskCreate?: () => void;
 }) {
   return (
     <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -73,11 +75,9 @@ export function ViewControls({
         {searchQuery && (
           <Button
             variant="ghost"
-            size="icon"
             className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
             onClick={() => {
               if (onSearchQueryChange) onSearchQueryChange('');
-              else if (import.meta.env.DEV) console.warn('[TasksSection] onSearchQueryChange undefined');
             }}
           >
             <X className="h-4 w-4" />
@@ -86,28 +86,39 @@ export function ViewControls({
       </div>
 
       {/* View Toggle */}
-      <ToggleGroup
-        type="single"
-        value={viewMode}
-        onValueChange={(value) => value && onViewModeChange(value as TaskViewMode)}
-        className="bg-muted/50 p-1 rounded-lg"
-      >
-        <ToggleGroupItem value="kanban" aria-label="Kanban view" className="px-2 data-[state=on]:bg-background">
+      <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
+        <Button
+          variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => onViewModeChange('kanban')}
+          className={cn(
+            "h-8 w-8 p-0",
+            viewMode === 'kanban' && "bg-background shadow-sm"
+          )}
+        >
           <LayoutGrid className="h-4 w-4" />
-        </ToggleGroupItem>
-        <ToggleGroupItem value="list" aria-label="List view" className="px-2 data-[state=on]:bg-background">
+        </Button>
+        <Button
+          variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => onViewModeChange('list')}
+          className={cn(
+            "h-8 w-8 p-0",
+            viewMode === 'list' && "bg-background shadow-sm"
+          )}
+        >
           <List className="h-4 w-4" />
-        </ToggleGroupItem>
-      </ToggleGroup>
+        </Button>
+      </div>
 
       {/* Filter Dropdown */}
       <TaskFiltersDropdown
-        filters={filters}
-        onFiltersChange={onFiltersChange}
         milestones={milestones}
         modules={modules}
         teamMembers={teamMembers}
         allTags={allTags}
+        filters={filters}
+        onFiltersChange={onFiltersChange}
         activeFilterCount={activeFilterCount}
       />
 
@@ -121,6 +132,18 @@ export function ViewControls({
         >
           <X className="h-4 w-4" />
           Clear
+        </Button>
+      )}
+
+      {/* Create Task Button */}
+      {onTaskCreate && (
+        <Button
+          size="sm"
+          onClick={onTaskCreate}
+          className="gap-2 ml-auto shrink-0 bg-[#1A1F2C] hover:bg-[#2A2F3C] text-white border-none"
+        >
+          <Plus className="h-4 w-4" />
+          <span>Create Task</span>
         </Button>
       )}
     </div>
@@ -146,7 +169,7 @@ export function TasksSection({
   onTaskDelete,
   onAddModule,
 }: TasksSectionProps) {
-    const dependencyTasks = allTasks ?? tasks;
+  const dependencyTasks = allTasks ?? tasks;
 
   const [internalViewMode, setInternalViewMode] = useState<TaskViewMode>('kanban');
   const [internalFilters, setInternalFilters] = useState<TaskFilter>({});
