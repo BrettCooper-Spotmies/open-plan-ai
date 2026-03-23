@@ -57,7 +57,7 @@ export function AppHeader() {
   return (
     <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-4">
-        <SidebarTrigger className="-ml-1" />
+        {!isMobile && <SidebarTrigger className="-ml-1" />}
 
         {isMobile && (
           <h1 className="text-base font-semibold text-foreground leading-none">
