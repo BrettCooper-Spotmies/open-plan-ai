@@ -79,8 +79,8 @@ function MilestoneViewControls({
   onAddMilestone: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="relative flex items-center flex-1 md:flex-none">
+    <div className="flex items-center gap-2 w-full md:justify-end">
+      <div className="relative flex items-center flex-1 md:flex-none min-w-0">
         <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
         <Input
           type="text"
@@ -134,8 +134,8 @@ function IssueViewControls({
   onReportIssue: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 w-full justify-between">
-      <div className="flex items-center gap-2 flex-1 min-w-0">
+    <div className="flex items-center gap-2 w-full justify-between md:justify-end">
+      <div className="flex items-center gap-2 flex-1 min-w-0 md:flex-none">
         {/* Search Input */}
         <div className="relative flex items-center flex-1 md:flex-none">
           <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
@@ -713,8 +713,9 @@ export default function ProjectDetail() {
 
           {/* Right: Stats */}
           <div className="w-full md:w-auto overflow-x-auto">
-            <div className="flex items-center gap-3 sm:gap-4 md:gap-6 min-w-max text-xs sm:text-sm text-muted-foreground pb-1 md:pb-0">
+            <div className="flex items-center gap-3 sm:gap-4 md:gap-6 w-full min-w-max text-xs sm:text-sm text-muted-foreground pb-1 md:pb-0">
               <ProjectProgressPopover breakdown={progressBreakdown} />
+              <div className="ml-auto flex items-center gap-3 sm:gap-4 md:gap-6">
               <div className="flex items-center gap-2 whitespace-nowrap">
                 <Calendar className="h-4 w-4 shrink-0" />
                 <span>Due {project.targetDate ? new Date(project.targetDate).toLocaleDateString() : 'Not set'}</span>
@@ -731,6 +732,7 @@ export default function ProjectDetail() {
                   ))}
                 </div>
               </div>
+              </div>
               {criticalIssuesCount > 0 && (
                 <Badge variant="destructive" className="gap-1 shrink-0 hidden sm:inline-flex">
                   <AlertTriangle className="h-3 w-3 shrink-0" />
@@ -743,17 +745,81 @@ export default function ProjectDetail() {
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => setSection(v as ProjectSection)} className="w-full">
-          <div className="flex flex-col-reverse md:flex-row md:items-center justify-between gap-4">
-            {/* Left Side: View Controls */}
-            <div className="flex-1 min-w-0">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            {/* Left Side: Tabs and Filters */}
+            <div className="w-full py-1 md:mr-auto md:w-auto">
+              <TabsList className="bg-muted/50 grid grid-cols-4 w-full h-9 md:w-auto md:flex md:shrink-0">
+                <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden">
+                  <ListTodo className="h-4 w-4 shrink-0" />
+                  {(!isMobile || section === 'tasks') && <span className="truncate">Tasks</span>}
+                  {(!isMobile || section === 'tasks') && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {(project.tasks || []).length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="modules" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden">
+                  <Boxes className="h-4 w-4 shrink-0" />
+                  {(!isMobile || section === 'modules') && <span className="truncate">Modules</span>}
+                  {(!isMobile || section === 'modules') && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {modules.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="milestones" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden">
+                  <Flag className="h-4 w-4 shrink-0" />
+                  {(!isMobile || section === 'milestones') && <span className="truncate">Milestones</span>}
+                  {(!isMobile || section === 'milestones') && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {(project.milestones || []).length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="issues" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  {(!isMobile || section === 'issues') && <span className="truncate">Issues</span>}
+                  {(!isMobile || section === 'issues') && openIssuesCount > 0 && (
+                    <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {openIssuesCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            {/* Right Side: View Controls */}
+            <div className="flex-1 min-w-0 md:max-w-[60%]">
               {section === 'tasks' && (
-                <ViewControls
-                  viewMode={viewMode}
-                  onViewModeChange={setViewMode}
-                  onTaskCreate={() => setIsAddTaskDialogOpen(true)}
-                  searchQuery={searchQuery}
-                  onSearchQueryChange={setSearchQuery}
-                />
+                <div className="flex items-center gap-1.5 sm:gap-2 justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
+                  {activeFilterCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="gap-1 text-muted-foreground hover:text-foreground h-9 px-2 shrink-0"
+                    >
+                      <X className="h-4 w-4" />
+                      <span className="hidden sm:inline">Clear</span>
+                    </Button>
+                  )}
+                  <TaskFiltersDropdown
+                    milestones={project.milestones || []}
+                    modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+                    teamMembers={teamMembers}
+                    allTags={allTags}
+                    filters={filters}
+                    onFiltersChange={setFilters}
+                    activeFilterCount={activeFilterCount}
+                  />
+                  <ViewControls
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    onTaskCreate={() => setIsAddTaskDialogOpen(true)}
+                    searchQuery={searchQuery}
+                    onSearchQueryChange={setSearchQuery}
+                  />
+                </div>
               )}
               {section === 'modules' && (
                 <ModuleViewControls
@@ -784,73 +850,6 @@ export default function ProjectDetail() {
                   onClearFilters={clearIssueFilters}
                   onReportIssue={() => setIsAddIssueDialogOpen(true)}
                 />
-              )}
-            </div>
-
-            {/* Right Side: Tabs and Filters */}
-            <div className="flex items-center gap-2 shrink-0 ml-auto overflow-x-auto no-scrollbar py-1">
-              <TabsList className="bg-muted/50 w-auto flex shrink-0 h-9">
-                <TabsTrigger value="tasks" className="gap-2 shrink-0">
-                  <ListTodo className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'tasks') && <span className="whitespace-nowrap">Tasks</span>}
-                  {(!isMobile || section === 'tasks') && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {(project.tasks || []).length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="modules" className="gap-2 shrink-0">
-                  <Boxes className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'modules') && <span className="whitespace-nowrap">Modules</span>}
-                  {(!isMobile || section === 'modules') && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {modules.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="milestones" className="gap-2 shrink-0">
-                  <Flag className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'milestones') && <span className="whitespace-nowrap">Milestones</span>}
-                  {(!isMobile || section === 'milestones') && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {(project.milestones || []).length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="issues" className="gap-2 shrink-0">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'issues') && <span className="whitespace-nowrap">Issues</span>}
-                  {(!isMobile || section === 'issues') && openIssuesCount > 0 && (
-                    <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {openIssuesCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              </TabsList>
-
-              {section === 'tasks' && (
-                <div className="flex items-center gap-2">
-                  <TaskFiltersDropdown
-                    milestones={project.milestones || []}
-                    modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
-                    teamMembers={teamMembers}
-                    allTags={allTags}
-                    filters={filters}
-                    onFiltersChange={setFilters}
-                    activeFilterCount={activeFilterCount}
-                  />
-                  {activeFilterCount > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="gap-1 text-muted-foreground hover:text-foreground h-9 px-2"
-                    >
-                      <X className="h-4 w-4" />
-                      <span className="hidden sm:inline">Clear</span>
-                    </Button>
-                  )}
-                </div>
               )}
             </div>
           </div>
