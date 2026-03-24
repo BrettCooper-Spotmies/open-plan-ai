@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout base repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           fetch-depth: 0
@@ -38,6 +38,7 @@ jobs:
 
       - name: Send chunks to Azure AI
         run: |
+          set -euo pipefail
           cat <<'PROMPT' > prompt.txt
           You are a senior software engineer acting as an automated code reviewer
           similar to CodeRabbit.
@@ -83,14 +84,32 @@ jobs:
           echo "" >> combined_review.md
 
           for CHUNK in chunks/*; do
-            RESPONSE=$(curl -s -X POST https://coderabbit-production.up.railway.app/review \
-              -H "Content-Type: application/json" \
-              -d "$(jq -n \
-                --arg diff "$(cat "$CHUNK")" \
-                --arg prompt "$(cat prompt.txt)" \
-                '{diff: $diff, prompt: $prompt}')")
+            if [ ! -s "$CHUNK" ]; then
+              continue
+            fi
 
-            echo "$RESPONSE" | jq -r '.review // .choices[0].message.content' >> combined_review.md
+            PAYLOAD="$(jq -n \
+              --arg diff "$(cat "$CHUNK")" \
+              --arg prompt "$(cat prompt.txt)" \
+              '{diff: $diff, prompt: $prompt}')"
+
+            if ! RESPONSE="$(curl --silent --show-error --location \
+              --retry 3 --retry-delay 2 --retry-all-errors \
+              --connect-timeout 20 --max-time 120 \
+              -X POST https://coderabbit-production.up.railway.app/review \
+              -H "Content-Type: application/json" \
+              -d "$PAYLOAD")"; then
+              echo "⚠️ Failed to review chunk \`$CHUNK\`: request error." >> combined_review.md
+              echo -e "\n---\n" >> combined_review.md
+              continue
+            fi
+
+            REVIEW_TEXT="$(echo "$RESPONSE" | jq -r '.review // .choices[0].message.content // empty')"
+            if [ -z "$REVIEW_TEXT" ]; then
+              echo "⚠️ No review content returned for chunk \`$CHUNK\`." >> combined_review.md
+            else
+              echo "$REVIEW_TEXT" >> combined_review.md
+            fi
             echo -e "\n---\n" >> combined_review.md
           done
 
