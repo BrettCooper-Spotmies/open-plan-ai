@@ -39,6 +39,7 @@ jobs:
       - name: Send chunks to Azure AI
         run: |
           set -euo pipefail
+          shopt -s nullglob
           cat <<'PROMPT' > prompt.txt
           You are a senior software engineer acting as an automated code reviewer
           similar to CodeRabbit.
@@ -83,7 +84,13 @@ jobs:
           echo "## 🤖 AI Code Review" > combined_review.md
           echo "" >> combined_review.md
 
-          for CHUNK in chunks/*; do
+          CHUNKS=(chunks/*)
+          if [ "${#CHUNKS[@]}" -eq 0 ]; then
+            echo "No code diff chunks found for this PR." >> combined_review.md
+            echo -e "\n---\n" >> combined_review.md
+          fi
+
+          for CHUNK in "${CHUNKS[@]}"; do
             if [ ! -s "$CHUNK" ]; then
               continue
             fi
@@ -104,9 +111,9 @@ jobs:
               continue
             fi
 
-            REVIEW_TEXT="$(echo "$RESPONSE" | jq -r '.review // .choices[0].message.content // empty')"
+            REVIEW_TEXT="$(echo "$RESPONSE" | jq -r '.review // .choices[0].message.content // empty' 2>/dev/null || true)"
             if [ -z "$REVIEW_TEXT" ]; then
-              echo "⚠️ No review content returned for chunk \`$CHUNK\`." >> combined_review.md
+              echo "⚠️ No parseable review content returned for chunk \`$CHUNK\`." >> combined_review.md
             else
               echo "$REVIEW_TEXT" >> combined_review.md
             fi
@@ -117,13 +124,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           BODY="$(cat combined_review.md)"
 
           if [ -z "$BODY" ]; then
             BODY="⚠️ AI review failed or returned empty response."
           fi
 
-          curl -s -X POST \
+          curl --silent --show-error --fail-with-body -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments \
@@ -133,7 +141,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          curl -s -X POST \
+          set -euo pipefail
+          curl --silent --show-error --fail-with-body -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
             https://api.github.com/repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/labels \
