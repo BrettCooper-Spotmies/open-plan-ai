@@ -111,7 +111,15 @@ jobs:
               continue
             fi
 
-            REVIEW_TEXT="$(echo "$RESPONSE" | jq -r '.review // .choices[0].message.content // empty' 2>/dev/null || true)"
+            REVIEW_TEXT="$(echo "$RESPONSE" | jq -r '
+              if type == "string" then .
+              elif type == "object" then (.review // .choices[0].message.content // empty)
+              else empty
+              end
+            ' 2>/dev/null || true)"
+            if [ -z "$REVIEW_TEXT" ]; then
+              REVIEW_TEXT="$(printf '%s' "$RESPONSE" | tr -d '\000' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+            fi
             if [ -z "$REVIEW_TEXT" ]; then
               echo "⚠️ No parseable review content returned for chunk \`$CHUNK\`." >> combined_review.md
             else
