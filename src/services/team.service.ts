@@ -25,7 +25,83 @@ export interface TeamInvitation {
   created_at: string;
 }
 
+export type InviteOutcome = 'sent' | 'already_pending' | 'created_without_email';
+
+export interface InviteResult {
+  outcome: InviteOutcome;
+  message?: string;
+}
+
 export const teamService = {
+  async acceptInvitationDirectFallback(invitationIdentifier: string): Promise<void> {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      throw new Error('You need to be logged in to accept an invitation');
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const invitationsTable = supabase.from('team_invitations' as any) as any;
+    const byId = await invitationsTable
+      .select('*')
+      .eq('id', invitationIdentifier)
+      .eq('status', 'pending')
+      .maybeSingle();
+
+    let invitation = byId.data;
+    if (!invitation) {
+      const byToken = await invitationsTable
+        .select('*')
+        .eq('token', invitationIdentifier)
+        .eq('status', 'pending')
+        .maybeSingle();
+      invitation = byToken.data;
+    }
+
+    if (!invitation) {
+      throw new Error('Invalid or expired invitation');
+    }
+
+    if (new Date(invitation.expires_at) < new Date()) {
+      throw new Error('Invitation has expired');
+    }
+
+    if (!user.email || !invitation.email || user.email.toLowerCase() !== String(invitation.email).toLowerCase()) {
+      throw new Error('This invitation is for a different email address');
+    }
+
+    const { data: existingMember } = await supabase
+      .from('organization_members')
+      .select('id')
+      .eq('organization_id', invitation.organization_id)
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (!existingMember) {
+      const { error: insertError } = await supabase
+        .from('organization_members')
+        .insert({
+          organization_id: invitation.organization_id,
+          user_id: user.id,
+          role: invitation.role || 'member',
+          invited_by: invitation.invited_by || null,
+        });
+
+      if (insertError) {
+        throw new Error(insertError.message || 'Failed to join organization');
+      }
+    }
+  },
+
+  async acceptInvitationViaRpc(invitationIdentifier: string): Promise<void> {
+    const { error } = await supabase.rpc('accept_team_invitation', {
+      p_invitation_identifier: invitationIdentifier,
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Failed to accept invitation');
+    }
+  },
+
   async getAll(orgId?: string): Promise<TeamMember[]> {
     if (orgId) {
       return this.getByOrganization(orgId);
@@ -133,16 +209,57 @@ export const teamService = {
     };
   },
 
-  async invite(email: string, role: string, orgId: string): Promise<void> {
+  async invite(email: string, role: string, orgId: string): Promise<InviteResult> {
     const { data, error } = await supabase.functions.invoke<Record<string, unknown>>('send-team-invite', {
       body: { email, role, orgId },
     });
 
-    if (error) throw error;
-    if ((data as Record<string, unknown>)?.error) throw new Error((data as Record<string, unknown>).error as string);
+    if (error) {
+      // Supabase wraps non-2xx responses in FunctionsHttpError. Try to extract a user-facing server message.
+      const errorWithContext = error as { context?: { json?: () => Promise<Record<string, unknown>>; text?: () => Promise<string> } };
+      let serverMessage: string | null = null;
+      try {
+        if (errorWithContext.context?.json) {
+          const parsed = await errorWithContext.context.json();
+          if (parsed && typeof parsed.error === 'string') {
+            serverMessage = parsed.error;
+          }
+        } else if (errorWithContext.context?.text) {
+          const raw = await errorWithContext.context.text();
+          if (raw) {
+            serverMessage = raw;
+          }
+        }
+      } catch {
+        // Fallback to generic error message below.
+      }
+      const resolvedMessage = (serverMessage || error.message || '').toLowerCase();
+      if (resolvedMessage.includes('already pending')) {
+        return { outcome: 'already_pending', message: serverMessage || error.message };
+      }
+      if (resolvedMessage.includes('app_url is not configured')) {
+        return { outcome: 'created_without_email', message: serverMessage || error.message };
+      }
+      throw new Error(serverMessage || error.message || 'Failed to send invitation');
+    }
+
+    if ((data as Record<string, unknown>)?.error) {
+      const dataError = String((data as Record<string, unknown>).error || '');
+      const lowered = dataError.toLowerCase();
+      if (lowered.includes('already pending')) {
+        return { outcome: 'already_pending', message: dataError };
+      }
+      if (lowered.includes('app_url is not configured')) {
+        return { outcome: 'created_without_email', message: dataError };
+      }
+      throw new Error(dataError);
+    }
     if ((data as Record<string, unknown>)?.warning) {
       console.warn('Invite warning:', (data as Record<string, unknown>).warning);
+      return { outcome: 'created_without_email', message: String((data as Record<string, unknown>).warning) };
     }
+
+    return { outcome: 'sent' };
   },
 
   async getPendingInvitations(orgId: string): Promise<TeamInvitation[]> {
@@ -177,6 +294,8 @@ export const teamService = {
    * Used by Dashboard so it doesn't need a direct inline Supabase query.
    */
   async getPendingInvitationsForUser(email: string): Promise<TeamInvitation[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase.from('team_invitations' as any) as any)
       .select('*, organizations(name)')
@@ -185,7 +304,21 @@ export const teamService = {
       .gt('expires_at', new Date().toISOString());
 
     if (error) throw error;
-    return (data || []) as TeamInvitation[];
+
+    const pending = (data || []) as TeamInvitation[];
+    if (!user || pending.length === 0) return pending;
+
+    const orgIds = Array.from(new Set(pending.map((inv) => inv.organization_id)));
+    if (orgIds.length === 0) return pending;
+
+    const { data: memberships } = await supabase
+      .from('organization_members')
+      .select('organization_id')
+      .eq('user_id', user.id)
+      .in('organization_id', orgIds);
+
+    const memberOrgIds = new Set((memberships || []).map((m) => m.organization_id));
+    return pending.filter((inv) => !memberOrgIds.has(inv.organization_id));
   },
 
   async acceptInvitation(invitationIdentifier: string): Promise<void> {
@@ -201,15 +334,41 @@ export const teamService = {
       throw new Error('You need to be logged in to accept an invitation');
     }
 
-    const { error, data } = await supabase.functions.invoke<Record<string, unknown>>('accept-invite', {
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-      body: { inviteId: invitationIdentifier, token: invitationIdentifier },
-    });
+    const invokeAccept = () =>
+      supabase.functions.invoke<Record<string, unknown>>('accept-invite', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: { inviteId: invitationIdentifier, token: invitationIdentifier },
+      });
 
-    if (error) throw error;
-    if ((data as Record<string, unknown>)?.error) throw new Error((data as Record<string, unknown>).error as string);
+    let response = await invokeAccept();
+
+    // Handle short deployment propagation windows where first call may still see 404.
+    if (response.error && /404|not found/i.test(response.error.message || '')) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      response = await invokeAccept();
+    }
+
+    if (response.error) {
+      try {
+        await this.acceptInvitationViaRpc(invitationIdentifier);
+        return;
+      } catch {
+        // Final fallback: handle acceptance directly through table operations.
+        await this.acceptInvitationDirectFallback(invitationIdentifier);
+        return;
+      }
+    }
+    if ((response.data as Record<string, unknown>)?.error) {
+      try {
+        await this.acceptInvitationViaRpc(invitationIdentifier);
+        return;
+      } catch {
+        await this.acceptInvitationDirectFallback(invitationIdentifier);
+        return;
+      }
+    }
   },
 
   async updateRole(memberId: string, role: string, orgId: string): Promise<void> {

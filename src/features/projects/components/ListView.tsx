@@ -199,6 +199,8 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
           mode="create"
           onCreate={handleTaskCreate}
           modules={modules}
+          projectId={projectId}
+          onAddModule={onAddModule}
         />
       </div>
     );

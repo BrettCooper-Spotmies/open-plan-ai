@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Layers, Mail, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { teamService } from "@/services/team.service";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -86,6 +87,21 @@ const Login = () => {
         }
       });
     } else {
+      try {
+        const pendingInviteId = localStorage.getItem('pending_invite_id');
+        const pendingInviteToken = localStorage.getItem('pending_invite_token');
+        const inviteIdentifier = pendingInviteId || pendingInviteToken;
+
+        if (inviteIdentifier) {
+          await teamService.acceptInvitation(inviteIdentifier);
+          localStorage.removeItem('pending_invite_id');
+          localStorage.removeItem('pending_invite_token');
+        }
+      } catch (inviteAcceptError) {
+        // Non-fatal: user still logs in and can accept manually from Dashboard banner.
+        console.warn('Auto-accept invitation after login failed:', inviteAcceptError);
+      }
+
       navigate(from, { replace: true });
     }
   };

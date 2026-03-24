@@ -21,6 +21,8 @@ interface MessageInputProps {
   onTyping?: () => void;
   members?: ConversationMember[];
   sendMessage?: (content: string, type?: 'text' | 'file', fileData?: any) => Promise<void>;
+  readOnly?: boolean;
+  readOnlyNotice?: string | null;
 }
 
 const MAX_CHARS = 4000;
@@ -52,7 +54,7 @@ function buildFileContent(payload: {
   };
 }
 
-export function MessageInput({ conversationId, onMessageSent, onTyping, members, sendMessage }: MessageInputProps) {
+export function MessageInput({ conversationId, onMessageSent, onTyping, members, sendMessage, readOnly = false, readOnlyNotice = null }: MessageInputProps) {
   const isMobile = useIsMobile();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -231,6 +233,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   };
 
   const handleSend = async () => {
+    if (readOnly) return;
     const trimmed = value.trim();
     if ((!trimmed && pendingFiles.length === 0) || isSending) return;
     if (pendingFiles.length > MAX_FILES) {
@@ -351,6 +354,12 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
               {pendingCount} queued
             </span>
           )}
+        </div>
+      )}
+
+      {readOnly && readOnlyNotice && (
+        <div className="mb-2 px-3 py-2 rounded-lg border border-amber-300/30 bg-amber-500/10 text-amber-700 text-xs">
+          {readOnlyNotice}
         </div>
       )}
 
@@ -481,6 +490,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
             className="h-7 w-7 md:h-8 md:w-8 shrink-0 rounded-full text-muted-foreground hover:text-blue-500 hover:bg-accent/70 transition-colors"
             title="Send photos or videos"
             onClick={() => mediaInputRef.current?.click()}
+            disabled={readOnly}
           >
             <ImageIcon className="h-4 w-4" />
           </Button>
@@ -491,6 +501,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
             className="h-7 w-7 md:h-8 md:w-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-colors"
             title="Attach files"
             onClick={() => fileInputRef.current?.click()}
+            disabled={readOnly}
           >
             <Paperclip className="h-4 w-4" />
           </Button>
@@ -505,6 +516,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
               placeholder={isMobile ? 'Type a message...' : 'Type a message... Use @ to mention'}
               rows={1}
               className="w-full resize-none bg-transparent py-1.5 text-sm leading-5 min-h-[32px] max-h-[140px] placeholder:text-muted-foreground/90 focus-visible:outline-none"
+              disabled={readOnly}
             />
             {showCharCount && (
               <span className="absolute bottom-0.5 right-1 text-[10px] text-muted-foreground">
@@ -517,7 +529,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
           <Button
             size="icon" type="button"
             className="h-8 w-8 shrink-0 rounded-full bg-primary text-primary-foreground shadow-[0_3px_10px_rgba(0,0,0,0.22)] hover:bg-primary/90"
-            disabled={(!value.trim() && pendingFiles.length === 0) || isSending}
+            disabled={readOnly || ((!value.trim() && pendingFiles.length === 0) || isSending)}
             onClick={handleSend}
           >
             {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
