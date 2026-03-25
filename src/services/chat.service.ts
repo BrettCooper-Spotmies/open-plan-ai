@@ -65,6 +65,8 @@ async function getCurrentUserId(): Promise<string> {
   return data.user.id;
 }
 
+const conversationsCache = new Map<string, { expiresAt: number; value: Conversation[] }>();
+
 export const chatService = {
   async getConversationAccessState(conversationId: string): Promise<{ readOnly: boolean; leftAt: string | null }> {
     const timeoutMs = Number(import.meta.env.VITE_CHAT_CONVERSATION_ACCESS_TIMEOUT_MS ?? 2500);
@@ -114,6 +116,17 @@ export const chatService = {
       }
 
       const leftAt = (accessRows?.[0]?.left_at as ProjectChatMemberAccessRow['left_at'] | undefined) ?? null;
+
+      // Defensive parsing: avoid propagating invalid timestamps into query filters/UI comparisons.
+      if (leftAt) {
+        const leftAtTs = new Date(leftAt).getTime();
+        if (!Number.isFinite(leftAtTs)) {
+          console.warn('[chatService.getConversationAccessState] invalid left_at timestamp; treating as null', {
+            conversationId,
+          });
+          return { readOnly: false, leftAt: null };
+        }
+      }
 
       // If a user is intentionally kept in the group chat after project removal,
       // they should remain able to participate.
@@ -171,6 +184,12 @@ export const chatService = {
 
   async getConversations(): Promise<Conversation[]> {
     const userId = await getCurrentUserId();
+
+    const cacheTtlMs = Number(import.meta.env.VITE_CHAT_CONVERSATIONS_CACHE_TTL_MS ?? 5000);
+    const cached = conversationsCache.get(userId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.value;
+    }
 
     // 1. Get conversation IDs for this user
     const { data: memberships, error: memErr } = await supabase
@@ -266,7 +285,7 @@ export const chatService = {
     }
 
     // 6. Map everything (drop stale members with missing profile rows)
-    return (conversations || []).map((conv: any) => {
+    const mapped = (conversations || []).map((conv: any) => {
       const convMembers = (allMembers || [])
         .filter((m: any) => m.conversation_id === conv.id)
         .map((m: any) => {
@@ -277,6 +296,9 @@ export const chatService = {
         .filter((m: any) => m !== null);
       return mapConversation(conv, convMembers, lastMessages[conv.id], userId);
     });
+
+    conversationsCache.set(userId, { expiresAt: Date.now() + cacheTtlMs, value: mapped });
+    return mapped;
   },
 
   async getMessages(
@@ -736,9 +758,10 @@ export const chatService = {
   },
 
   async ensureProjectGroup(projectId: string): Promise<string> {
-    const { data, error } = await (supabase.rpc as any)('ensure_project_chat_group', {
+    type EnsureProjectChatGroupArgs = { p_project_id: string };
+    const { data, error } = await supabase.rpc<string>('ensure_project_chat_group', {
       p_project_id: projectId,
-    });
+    } satisfies EnsureProjectChatGroupArgs);
     if (error) throw error;
     return data as string;
   },
@@ -766,18 +789,18 @@ export const chatService = {
   },
 
   async syncProjectGroupMembers(projectId: string): Promise<void> {
-    const { error } = await (supabase.rpc as any)('sync_project_chat_group_members', {
+    const { error } = await supabase.rpc('sync_project_chat_group_members', {
       p_project_id: projectId,
-    });
+    } as { p_project_id: string });
     if (error) throw error;
   },
 
   async forceRemoveProjectChatMembers(projectId: string, userIds: string[]): Promise<void> {
     if (userIds.length === 0) return;
-    const { error } = await (supabase.rpc as any)('force_remove_project_chat_members', {
+    const { error } = await supabase.rpc('force_remove_project_chat_members', {
       p_project_id: projectId,
       p_user_ids: userIds,
-    });
+    } as { p_project_id: string; p_user_ids: string[] });
     if (error) throw error;
   },
 

@@ -615,13 +615,29 @@ const EditProject = () => {
             });
 
             // Sync team members (authorization must be enforced server-side)
-            const currentInDbIds = project.team?.map((m: any) => m.id) || [];
-            const assignedIds = assignedMembers.map(m => m.memberId);
+            const isValidUuidLike = (value: unknown): value is string => {
+                if (typeof value !== 'string') return false;
+                return (
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ||
+                    /^[0-9a-f]{32}$/i.test(value)
+                );
+            };
+
+            // Guard against invalid/empty IDs reaching the backend mutation calls.
+            if (!isValidUuidLike(project.id)) {
+                toast.error('Invalid project id');
+                return;
+            }
+
+            const currentInDbIds = (project.team?.map((m: any) => m.id) ?? []).filter(isValidUuidLike);
+            const assignedIds = assignedMembers.map((m) => m.memberId).filter(isValidUuidLike);
 
             // Members to add
-            const newMembers = assignedMembers.filter((m) => !currentInDbIds.includes(m.memberId));
+            const newMembers = assignedMembers.filter(
+                (m) => isValidUuidLike(m.memberId) && !currentInDbIds.includes(m.memberId)
+            );
             // Members to remove
-            const removedMemberIds = currentInDbIds.filter(memberId => !assignedIds.includes(memberId));
+            const removedMemberIds = currentInDbIds.filter((memberId) => !assignedIds.includes(memberId));
 
             if (newMembers.length > 0) {
                 try {

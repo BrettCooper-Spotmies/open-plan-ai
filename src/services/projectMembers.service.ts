@@ -35,36 +35,15 @@ export const projectMembersService = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('Not authenticated');
 
-    const { data: project, error } = await supabase
-      .from('projects')
-      .select('id, created_by, deleted_at')
-      .eq('id', projectId)
-      .maybeSingle();
+    // Atomic authorization check via DB helper (also used by RLS policies).
+    // This avoids “stale role” issues from separate read-then-write flows.
+    const { data: canManage, error } = await supabase.rpc('can_manage_project_members', {
+      p_project_id: projectId,
+    });
 
-    if (error) {
-      throw new Error(`Failed to validate project access: ${error.message}`);
-    }
+    if (error) throw new Error(`Failed to validate project role: ${error.message}`);
 
-    if (!project || project.deleted_at) {
-      throw new Error('Project not found');
-    }
-
-    const isCreator = !!project.created_by && project.created_by === user.id;
-    if (isCreator) return;
-
-    const { data: membership, error: membershipError } = await supabase
-      .from('project_members')
-      .select('role')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (membershipError) {
-      throw new Error(`Failed to validate project role: ${membershipError.message}`);
-    }
-
-    const isAdmin = (membership?.role || '').toLowerCase() === 'admin';
-    if (!isAdmin) {
+    if (!canManage) {
       throw new Error('Only the project creator or an Admin can manage project members');
     }
   },

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -394,6 +394,11 @@ export default function ProjectDetail() {
     memberName: string;
   }>(DEFAULT_MEMBER_REMOVAL_PROMPT);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
+  const isRemovingMemberRef = useRef(isRemovingMember);
+
+  useEffect(() => {
+    isRemovingMemberRef.current = isRemovingMember;
+  }, [isRemovingMember]);
 
   // Fetch project data using React Query
   const { data: project, isLoading, error } = useProjectDetail(id);
@@ -685,7 +690,19 @@ export default function ProjectDetail() {
       return;
     }
 
+    const isValidUuidLike = (value: unknown): value is string => {
+      if (typeof value !== 'string') return false;
+      return (
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ||
+        /^[0-9a-f]{32}$/i.test(value)
+      );
+    };
+
     const memberId = memberRemovalPrompt.memberId;
+    if (!isValidUuidLike(project.id) || !isValidUuidLike(memberId)) {
+      toast.error('Invalid member selection');
+      return;
+    }
     const isMemberInProject = (project.team || []).some((m) => m.id === memberId);
     if (!isMemberInProject) {
       toast.error('That member is not part of this project anymore');
@@ -698,13 +715,26 @@ export default function ProjectDetail() {
 
       if (removeFromChatToo) {
         // Only attempt chat cleanup if the project chat mapping exists.
-        const conversationId = await chatService.getProjectGroupConversationId(project.id);
-        if (conversationId) {
-          await chatService.forceRemoveProjectChatMembers(project.id, [memberId]);
+        // Member removal from the project should not fail due to chat cleanup issues.
+        try {
+          const conversationId = await chatService.getProjectGroupConversationId(project.id);
+          if (conversationId) {
+            await chatService.forceRemoveProjectChatMembers(project.id, [memberId]);
+          }
+        } catch (chatErr) {
+          console.warn('[ProjectDetail] chat cleanup failed during member removal', {
+            projectId: project.id,
+            memberId,
+            error: chatErr instanceof Error ? chatErr.message : String(chatErr),
+          });
+          toast.warning(
+            'Member removed from project, but could not update project group chat',
+            { description: chatErr instanceof Error ? chatErr.message : undefined }
+          );
         }
       }
 
-      await Promise.all([
+      await Promise.allSettled([
         queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) }),
         queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(currentOrganization?.id) }),
         queryClient.invalidateQueries({ queryKey: ['project-members', project.id] }),
@@ -1342,7 +1372,7 @@ export default function ProjectDetail() {
       <Dialog
         open={memberRemovalPrompt.open}
         onOpenChange={(open) => {
-          if (!open && !isRemovingMember) {
+          if (!open && !isRemovingMemberRef.current) {
             setMemberRemovalPrompt(DEFAULT_MEMBER_REMOVAL_PROMPT);
           }
         }}

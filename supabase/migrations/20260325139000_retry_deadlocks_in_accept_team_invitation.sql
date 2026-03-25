@@ -23,6 +23,17 @@ BEGIN
     RAISE EXCEPTION '%', v_generic_error;
   END IF;
 
+  -- Validate caller against an existing, non-deleted profile.
+  -- This prevents malformed/compromised auth contexts from bypassing email checks.
+  IF NOT EXISTS (
+    SELECT 1
+    FROM public.profiles pr
+    WHERE pr.id = v_user_id
+      AND pr.deleted_at IS NULL
+  ) THEN
+    RAISE EXCEPTION '%', v_generic_error;
+  END IF;
+
   IF p_invitation_identifier IS NULL OR btrim(p_invitation_identifier) = '' THEN
     RAISE EXCEPTION '%', v_generic_error;
   END IF;

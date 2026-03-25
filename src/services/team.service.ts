@@ -82,6 +82,13 @@ export const teamService = {
       throw new Error('Invitation has expired');
     }
 
+    if (!user.email) {
+      throw new Error('Your account does not have an email address set');
+    }
+    if (!invitation.email) {
+      throw new Error('Invitation is missing an email address');
+    }
+
     const userEmail = normalizeEmail(user.email);
     const invitationEmail = normalizeEmail(invitation.email);
     if (!userEmail || !invitationEmail || userEmail !== invitationEmail) {
