@@ -35,6 +35,8 @@ AS $$
 DECLARE
   v_conversation_id uuid;
   v_project_creator uuid;
+  v_deleted_rows int := 0;
+  v_inserted_rows int := 0;
 BEGIN
   SELECT created_by
   INTO v_project_creator
@@ -43,6 +45,7 @@ BEGIN
     AND deleted_at IS NULL;
 
   IF NOT FOUND THEN
+    RAISE NOTICE '[sync_project_chat_group_members_internal] project not found or soft-deleted. project_id=%', p_project_id;
     RETURN;
   END IF;
 
@@ -54,6 +57,7 @@ BEGIN
   WHERE pcg.project_id = p_project_id;
 
   IF v_conversation_id IS NULL THEN
+    RAISE NOTICE '[sync_project_chat_group_members_internal] project has no chat mapping yet. project_id=%', p_project_id;
     RETURN;
   END IF;
 
@@ -112,6 +116,9 @@ BEGIN
         AND p.deleted_at IS NULL
     );
 
+  GET DIAGNOSTICS v_deleted_rows = ROW_COUNT;
+  RAISE NOTICE '[sync_project_chat_group_members_internal] project_id=% conversation_id=% stale-members-removed=%', p_project_id, v_conversation_id, v_deleted_rows;
+
   -- Ensure conversation includes everyone who has ever had access history for this project.
   INSERT INTO public.conversation_members (conversation_id, user_id, role)
   SELECT
@@ -128,6 +135,9 @@ BEGIN
     WHEN EXCLUDED.user_id = v_project_creator THEN 'owner'
     ELSE 'member'
   END;
+
+  GET DIAGNOSTICS v_inserted_rows = ROW_COUNT;
+  RAISE NOTICE '[sync_project_chat_group_members_internal] project_id=% conversation_id=% conversation-members-upserted=%', p_project_id, v_conversation_id, v_inserted_rows;
 END;
 $$;
 

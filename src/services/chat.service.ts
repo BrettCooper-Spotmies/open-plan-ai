@@ -52,13 +52,25 @@ export const chatService = {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: accessRow } = await (supabase.from('project_chat_member_access' as any) as any)
+    const { data: accessRows, error: accessError } = await (supabase.from('project_chat_member_access' as any) as any)
       .select('left_at')
       .eq('project_id', mapping.project_id)
       .eq('user_id', userId)
-      .maybeSingle();
+      .limit(2);
 
-    const leftAt = (accessRow?.left_at as string | null) ?? null;
+    if (accessError) throw accessError;
+
+    if (accessRows && accessRows.length > 1) {
+      // Defence-in-depth: project_chat_member_access should be unique per (project_id, user_id).
+      // If data corruption/replication issues introduce duplicates, fall back to the first row.
+      console.warn('[chatService.getConversationAccessState] multiple access rows found', {
+        projectId: mapping.project_id,
+        userId,
+        rows: accessRows.length,
+      });
+    }
+
+    const leftAt = (accessRows?.[0]?.left_at as string | null) ?? null;
 
     // If a user is intentionally kept in the group chat after project removal,
     // they should remain able to participate.

@@ -1,13 +1,22 @@
 -- Remove stale conversation members with missing/deleted profiles
 -- and ensure project chat sync only includes valid profiles.
 
-DELETE FROM public.conversation_members cm
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM public.profiles p
-  WHERE p.id = cm.user_id
-    AND p.deleted_at IS NULL
-);
+DO $$
+DECLARE
+  v_deleted_rows int := 0;
+BEGIN
+  DELETE FROM public.conversation_members cm
+  WHERE NOT EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    WHERE p.id = cm.user_id
+      AND p.deleted_at IS NULL
+  );
+
+  GET DIAGNOSTICS v_deleted_rows = ROW_COUNT;
+  RAISE NOTICE '[cleanup_invalid_conversation_members] deleted % stale conversation_members', v_deleted_rows;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.sync_project_chat_group_members_internal(p_project_id uuid)
 RETURNS void
@@ -19,6 +28,7 @@ DECLARE
   v_conversation_id uuid;
   v_project_creator uuid;
   v_organization_id uuid;
+  v_deleted_rows int := 0;
 BEGIN
   SELECT created_by, organization_id
   INTO v_project_creator, v_organization_id
@@ -52,6 +62,9 @@ BEGIN
           OR p.id = v_project_creator
         )
     );
+
+  GET DIAGNOSTICS v_deleted_rows = ROW_COUNT;
+  RAISE NOTICE '[sync_project_chat_group_members_internal] project_id=% conversation_id=% deleted % eligible-mismatch conversation_members', p_project_id, v_conversation_id, v_deleted_rows;
 
   INSERT INTO public.conversation_members (conversation_id, user_id, role)
   SELECT

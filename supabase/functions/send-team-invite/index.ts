@@ -92,6 +92,15 @@ function getCorsHeaders(req: Request): Record<string, string> {
   };
 }
 
+function getClientIp(req: Request): string {
+  return (
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    req.headers.get("cf-connecting-ip") ||
+    "unknown"
+  );
+}
+
 Deno.serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -153,6 +162,32 @@ Deno.serve(async (req: Request) => {
 
     // Use service role client for DB operations
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
+
+    // Basic IP-based rate limiting to reduce invitation spam/abuse.
+    // We reuse the existing `ip_rate_limits` table already used by other functions.
+    const clientIp = getClientIp(req);
+    const endpoint = "send-team-invite";
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: ipCount } = await adminClient
+      .from("ip_rate_limits")
+      .select("*", { count: "exact", head: true })
+      .eq("ip_address", clientIp)
+      .eq("endpoint", endpoint)
+      .gte("created_at", oneHourAgo);
+
+    if (ipCount && ipCount >= 10) {
+      console.warn("IP rate limit exceeded", { clientIp, endpoint, ipCount });
+      return new Response(JSON.stringify({ error: "Too many requests. Please try again later." }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Record this request (even if it later fails validation) to deter brute-force spam.
+    await adminClient.from("ip_rate_limits").insert({
+      ip_address: clientIp,
+      endpoint,
+    });
 
     // Verify caller is admin/owner
     const { data: callerMembership, error: memberError } = await adminClient
@@ -271,6 +306,33 @@ Deno.serve(async (req: Request) => {
     };
 
     if (existingPending?.id) {
+      // Throttle re-sends for an existing pending invitation to prevent email spamming.
+      const resendEndpoint = `send-team-invite-resend:${existingPending.id}`;
+      const oneHourAgoForResend = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { count: resendCount } = await adminClient
+        .from("ip_rate_limits")
+        .select("*", { count: "exact", head: true })
+        .eq("ip_address", clientIp)
+        .eq("endpoint", resendEndpoint)
+        .gte("created_at", oneHourAgoForResend);
+
+      if (resendCount && resendCount >= 2) {
+        console.warn("Invitation re-send rate limit exceeded", {
+          clientIp,
+          resendEndpoint,
+          resendCount,
+        });
+        return new Response(JSON.stringify({ error: "Too many invitation re-send attempts. Please try later." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      await adminClient.from("ip_rate_limits").insert({
+        ip_address: clientIp,
+        endpoint: resendEndpoint,
+      });
+
       const { sendResult, inviteLink } = await sendEmailWithFallback(existingPending.id, existingPending.role || role || "member");
 
       if (!sendResult.ok) {

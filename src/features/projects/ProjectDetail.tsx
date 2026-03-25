@@ -99,6 +99,16 @@ const projectTeamRoles = [
   'Consultant',
 ];
 
+const DEFAULT_MEMBER_REMOVAL_PROMPT: {
+  open: boolean;
+  memberId: string | null;
+  memberName: string;
+} = {
+  open: false,
+  memberId: null,
+  memberName: '',
+};
+
 // Milestone View Controls Component
 function MilestoneViewControls({
   searchQuery,
@@ -382,11 +392,7 @@ export default function ProjectDetail() {
     open: boolean;
     memberId: string | null;
     memberName: string;
-  }>({
-    open: false,
-    memberId: null,
-    memberName: '',
-  });
+  }>(DEFAULT_MEMBER_REMOVAL_PROMPT);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   // Fetch project data using React Query
@@ -553,6 +559,11 @@ export default function ProjectDetail() {
       return;
     }
 
+    if (!projectTeamRoles.includes(selectedMemberRole)) {
+      toast.error('Invalid member role selected');
+      return;
+    }
+
     setIsAddingProjectMember(true);
     try {
       await projectMembersService.addMember({
@@ -585,14 +596,38 @@ export default function ProjectDetail() {
 
     setIsStartingChat(true);
     try {
+      const isNetworkError = (message: string) => {
+        const m = message.toLowerCase();
+        return (
+          m.includes('network') ||
+          m.includes('timeout') ||
+          m.includes('failed to fetch') ||
+          m.includes('fetch') ||
+          m.includes('unavailable')
+        );
+      };
+
       let conversationId = await chatService.getProjectGroupConversationId(project.id);
       if (!conversationId) {
-        conversationId = await chatService.ensureProjectGroup(project.id);
+        // Retry once for transient network issues.
+        try {
+          conversationId = await chatService.ensureProjectGroup(project.id);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to start project chat';
+          if (!isNetworkError(message)) throw err;
+          conversationId = await chatService.ensureProjectGroup(project.id);
+        }
       }
       navigate(`/chat/${conversationId}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start project chat';
-      toast.error(message);
+      if (message && message.toLowerCase().includes('access denied')) {
+        toast.error('You no longer have access to start this project chat');
+      } else if (message) {
+        toast.error(message);
+      } else {
+        toast.error('Failed to start project chat. Please try again.');
+      }
     } finally {
       setIsStartingChat(false);
     }
@@ -613,12 +648,14 @@ export default function ProjectDetail() {
         await chatService.forceRemoveProjectChatMembers(project.id, [memberRemovalPrompt.memberId]);
       }
 
-      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(currentOrganization?.id) });
-      await queryClient.invalidateQueries({ queryKey: ['project-members', project.id] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(currentOrganization?.id) }),
+        queryClient.invalidateQueries({ queryKey: ['project-members', project.id] }),
+      ]);
 
       toast.success('Member removed from project');
-      setMemberRemovalPrompt({ open: false, memberId: null, memberName: '' });
+      setMemberRemovalPrompt(DEFAULT_MEMBER_REMOVAL_PROMPT);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to remove member';
       toast.error(message);
@@ -1239,7 +1276,7 @@ export default function ProjectDetail() {
         open={memberRemovalPrompt.open}
         onOpenChange={(open) => {
           if (!open && !isRemovingMember) {
-            setMemberRemovalPrompt({ open: false, memberId: null, memberName: '' });
+            setMemberRemovalPrompt(DEFAULT_MEMBER_REMOVAL_PROMPT);
           }
         }}
       >
@@ -1255,7 +1292,7 @@ export default function ProjectDetail() {
           <DialogFooter>
             <Button
               variant="outline"
-              onClick={() => setMemberRemovalPrompt({ open: false, memberId: null, memberName: '' })}
+              onClick={() => setMemberRemovalPrompt(DEFAULT_MEMBER_REMOVAL_PROMPT)}
               disabled={isRemovingMember}
             >
               Cancel

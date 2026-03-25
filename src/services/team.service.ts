@@ -3,6 +3,7 @@ import type { Tables } from '@/integrations/supabase/types';
 
 export type Profile = Tables<'profiles'>;
 export type OrganizationMember = Tables<'organization_members'>;
+export type TeamInvitationRow = Tables<'team_invitations'>;
 
 export interface TeamMember extends Profile {
   role: string;
@@ -22,7 +23,9 @@ export interface TeamInvitation {
   status: string;
   expires_at: string;
   accepted_at: string | null;
-  created_at: string;
+  created_at: string | null;
+  // Included when selecting `organizations(name)` in queries.
+  organizations?: { name?: string | null };
 }
 
 export type InviteOutcome = 'sent' | 'already_pending' | 'created_without_email';
@@ -39,22 +42,27 @@ export const teamService = {
       throw new Error('You need to be logged in to accept an invitation');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const invitationsTable = supabase.from('team_invitations' as any) as any;
-    const byId = await invitationsTable
+    const byIdRes = await supabase
+      .from('team_invitations')
       .select('*')
       .eq('id', invitationIdentifier)
       .eq('status', 'pending')
       .maybeSingle();
 
-    let invitation = byId.data;
+    if (byIdRes.error) throw new Error(byIdRes.error.message);
+
+    let invitation: TeamInvitationRow | null = byIdRes.data;
     if (!invitation) {
-      const byToken = await invitationsTable
+      const byTokenRes = await supabase
+        .from('team_invitations')
         .select('*')
         .eq('token', invitationIdentifier)
         .eq('status', 'pending')
         .maybeSingle();
-      invitation = byToken.data;
+
+      if (byTokenRes.error) throw new Error(byTokenRes.error.message);
+
+      invitation = byTokenRes.data;
     }
 
     if (!invitation) {
@@ -65,7 +73,9 @@ export const teamService = {
       throw new Error('Invitation has expired');
     }
 
-    if (!user.email || !invitation.email || user.email.toLowerCase() !== String(invitation.email).toLowerCase()) {
+    const userEmail = user.email?.trim().toLowerCase();
+    const invitationEmail = invitation.email?.trim().toLowerCase();
+    if (!userEmail || !invitationEmail || userEmail !== invitationEmail) {
       throw new Error('This invitation is for a different email address');
     }
 
@@ -263,8 +273,8 @@ export const teamService = {
   },
 
   async getPendingInvitations(orgId: string): Promise<TeamInvitation[]> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase.from('team_invitations' as any) as any)
+    const { data, error } = await supabase
+      .from('team_invitations')
       .select('*')
       .eq('organization_id', orgId)
       .eq('status', 'pending')
@@ -275,8 +285,8 @@ export const teamService = {
   },
 
   async cancelInvitation(invitationId: string): Promise<void> {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase.from('team_invitations' as any) as any)
+    const { error } = await supabase
+      .from('team_invitations')
       .update({ status: 'cancelled' })
       .eq('id', invitationId);
 
@@ -296,10 +306,11 @@ export const teamService = {
   async getPendingInvitationsForUser(email: string): Promise<TeamInvitation[]> {
     const { data: { user } } = await supabase.auth.getUser();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase.from('team_invitations' as any) as any)
+    const normalizedEmail = email.trim().toLowerCase();
+    const { data, error } = await supabase
+      .from('team_invitations')
       .select('*, organizations(name)')
-      .eq('email', email)
+      .eq('email', normalizedEmail)
       .eq('status', 'pending')
       .gt('expires_at', new Date().toISOString());
 
@@ -342,10 +353,17 @@ export const teamService = {
         body: { inviteId: invitationIdentifier, token: invitationIdentifier },
       });
 
-    let response = await invokeAccept();
-
     // Handle short deployment propagation windows where first call may still see 404.
-    if (response.error && /404|not found/i.test(response.error.message || '')) {
+    // Explicit retry cap prevents pathological retry loops.
+    const MAX_404_RETRIES = 1;
+    const shouldRetry404 = (message: string | undefined) =>
+      !!message && /404|not found/i.test(message);
+
+    let response = await invokeAccept();
+    for (let i = 0; i < MAX_404_RETRIES; i++) {
+      const msg = response.error?.message || '';
+      if (!response.error || !shouldRetry404(msg)) break;
+      console.warn('[teamService.acceptInvitation] retrying accept-invite after 404', { attempt: i + 1 });
       await new Promise((resolve) => setTimeout(resolve, 1200));
       response = await invokeAccept();
     }
