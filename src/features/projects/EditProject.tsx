@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -306,12 +306,12 @@ const EditProject = () => {
     const [isDragOver, setIsDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const canManageProjectMembers = (() => {
+    const canManageProjectMembers = useMemo(() => {
         if (!project || !user?.id) return false;
         if (project.createdBy === user.id) return true;
         const myMembership = (project.team || []).find((member) => member.id === user.id);
         return (myMembership?.role || '').toLowerCase() === 'admin';
-    })();
+    }, [project?.createdBy, project?.team, user?.id]);
 
     const handleAddModule = () => {
         if (newModuleName.trim()) {
@@ -614,40 +614,61 @@ const EditProject = () => {
                 },
             });
 
-            if (canManageProjectMembers) {
-                // Sync team members
-                const currentInDbIds = project.team?.map((m: any) => m.id) || [];
-                const assignedIds = assignedMembers.map(m => m.memberId);
+            // Sync team members (authorization must be enforced server-side)
+            const currentInDbIds = project.team?.map((m: any) => m.id) || [];
+            const assignedIds = assignedMembers.map(m => m.memberId);
 
-                // Members to add
-                const newMembers = assignedMembers.filter((m) => !currentInDbIds.includes(m.memberId));
-                // Members to remove
-                const removedMemberIds = currentInDbIds.filter(id => !assignedIds.includes(id));
+            // Members to add
+            const newMembers = assignedMembers.filter((m) => !currentInDbIds.includes(m.memberId));
+            // Members to remove
+            const removedMemberIds = currentInDbIds.filter(memberId => !assignedIds.includes(memberId));
 
-                if (newMembers.length > 0) {
-                    try {
-                        const memberData = newMembers.map(m => ({
-                            userId: m.memberId,
-                            role: m.role,
-                        }));
-                        await projectMembersService.addMembers(project.id, memberData);
-                    } catch (memberError) {
-                        console.error('Error adding team members:', memberError);
-                        toast.warning('Project updated but some new team members could not be added');
-                    }
+            if (newMembers.length > 0) {
+                try {
+                    const memberData = newMembers.map(m => ({
+                        userId: m.memberId,
+                        role: m.role,
+                    }));
+                    await projectMembersService.addMembers(project.id, memberData);
+                } catch (memberError) {
+                    console.error('[executeSave] Error adding team members', {
+                        projectId: id,
+                        userIds: newMembers.map(m => m.memberId),
+                        error: memberError,
+                    });
+                    const message = memberError instanceof Error ? memberError.message : 'Failed to add project members';
+                    toast.warning(`Project updated, but failed to add ${newMembers.length} member(s)`, { description: message });
                 }
+            }
 
-                if (removedMemberIds.length > 0) {
-                    try {
-                        await projectMembersService.removeMembers(project.id, removedMemberIds);
+            if (removedMemberIds.length > 0) {
+                try {
+                    await projectMembersService.removeMembers(project.id, removedMemberIds);
 
-                        if (removeFromChatToo) {
+                    if (removeFromChatToo) {
+                        try {
                             await chatService.forceRemoveProjectChatMembers(project.id, removedMemberIds);
+                        } catch (chatError) {
+                            console.error('[executeSave] Chat member removal failed', {
+                                projectId: id,
+                                userIds: removedMemberIds,
+                                error: chatError,
+                            });
+                            const message = chatError instanceof Error ? chatError.message : 'Failed to remove members from project chat';
+                            toast.warning(
+                                `Removed ${removedMemberIds.length} member(s) from project, but could not update project chat`,
+                                { description: message }
+                            );
                         }
-                    } catch (memberError) {
-                        console.error('Error removing team members:', memberError);
-                        toast.warning('Project updated but some team members could not be removed');
                     }
+                } catch (memberError) {
+                    console.error('[executeSave] Error removing team members', {
+                        projectId: id,
+                        userIds: removedMemberIds,
+                        error: memberError,
+                    });
+                    const message = memberError instanceof Error ? memberError.message : 'Failed to remove project members';
+                    toast.warning(`Project updated, but failed to remove ${removedMemberIds.length} member(s)`, { description: message });
                 }
             }
 

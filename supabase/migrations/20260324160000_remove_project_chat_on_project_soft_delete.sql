@@ -9,6 +9,9 @@ SET search_path = public
 AS $$
 DECLARE
   v_conversation_id uuid;
+  v_deleted_member_access_rows int := 0;
+  v_deleted_mapping_rows int := 0;
+  v_deleted_conversation_rows int := 0;
 BEGIN
   -- Only act when deleted_at changes.
   IF TG_OP = 'UPDATE' AND OLD.deleted_at IS DISTINCT FROM NEW.deleted_at THEN
@@ -23,15 +26,25 @@ BEGIN
       DELETE FROM public.project_chat_member_access
       WHERE project_id = NEW.id;
 
+      GET DIAGNOSTICS v_deleted_member_access_rows = ROW_COUNT;
+
       -- Remove mapping row (if present).
       DELETE FROM public.project_chat_groups
       WHERE project_id = NEW.id;
 
+      GET DIAGNOSTICS v_deleted_mapping_rows = ROW_COUNT;
+
       -- Remove conversation to fully hide from chat lists and clear memberships/messages.
       IF v_conversation_id IS NOT NULL THEN
         DELETE FROM public.conversations
-        WHERE id = v_conversation_id;
+        WHERE id = v_conversation_id
+          AND type = 'group';
+
+        GET DIAGNOSTICS v_deleted_conversation_rows = ROW_COUNT;
       END IF;
+
+      RAISE NOTICE '[handle_project_chat_on_soft_delete] project_id=% conversation_id=% deleted_member_access_rows=% deleted_mapping_rows=% deleted_conversations_rows=%',
+        NEW.id, v_conversation_id, v_deleted_member_access_rows, v_deleted_mapping_rows, v_deleted_conversation_rows;
     ELSE
       -- Project restored -> rebuild chat group and members.
       PERFORM public.sync_project_chat_group_members_internal(NEW.id);
@@ -72,7 +85,8 @@ BEGIN
 
     IF v_conversation_id IS NOT NULL THEN
       DELETE FROM public.conversations
-      WHERE id = v_conversation_id;
+      WHERE id = v_conversation_id
+        AND type = 'group';
     END IF;
   END LOOP;
 END;

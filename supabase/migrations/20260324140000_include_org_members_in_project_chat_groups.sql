@@ -11,6 +11,7 @@ DECLARE
   v_conversation_id uuid;
   v_project_creator uuid;
   v_organization_id uuid;
+  v_deleted_rows int := 0;
 BEGIN
   SELECT created_by, organization_id
   INTO v_project_creator, v_organization_id
@@ -38,6 +39,9 @@ BEGIN
       SELECT v_project_creator
       WHERE v_project_creator IS NOT NULL
     );
+
+  GET DIAGNOSTICS v_deleted_rows = ROW_COUNT;
+  RAISE NOTICE '[include_org_members_in_project_chat_groups] project_id=% conversation_id=% deleted % conversation_members', p_project_id, v_conversation_id, v_deleted_rows;
 
   INSERT INTO public.conversation_members (conversation_id, user_id, role)
   SELECT

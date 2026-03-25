@@ -3,6 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { projectsService } from '@/services/projects.service';
 import { queryKeys } from '@/lib/queryClient';
 import { TeamMember } from '@/types';
+import { config } from '@/config';
+
+const isValidUuid = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+  // Accept canonical UUID format; avoids inserting obviously-invalid IDs into Set-based dedup.
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+};
 
 /**
  * Fetch all team members (profiles) - for assignment dropdowns
@@ -34,12 +41,22 @@ export function useOrganizationMembers(orgId: string | undefined) {
 
       // Deduplicate to avoid repeated users in assignment dropdowns.
       const seenUserIds = new Set<string>();
+      let invalidUserIdCount = 0;
       const uniqueMembers = members.filter((m) => {
-        if (seenUserIds.has(m.user_id)) return false;
-        seenUserIds.add(m.user_id);
+        const userId = (m as any)?.user_id;
+        if (!isValidUuid(userId)) {
+          invalidUserIdCount++;
+          return false;
+        }
+        if (seenUserIds.has(userId)) return false;
+        seenUserIds.add(userId);
         return true;
       });
-      const userIds = uniqueMembers.map(m => m.user_id);
+      const userIds = uniqueMembers.map(m => (m as any).user_id).filter(isValidUuid);
+
+      if (!config.isProduction && invalidUserIdCount > 0) {
+        console.warn('[useOrganizationMembers] filtered invalid organization_members.user_id', { invalidUserIdCount });
+      }
 
       // Fetch profiles separately to avoid ambiguous FK join
       const { data: profiles, error: profilesError } = await supabase
@@ -50,8 +67,8 @@ export function useOrganizationMembers(orgId: string | undefined) {
       if (profilesError) throw profilesError;
 
       const validProfiles = (profiles || []).filter((p) =>
-        !p.deleted_at &&
-        !!p.id &&
+        (p.deleted_at ?? null) === null &&
+        isValidUuid(p.id) &&
         !!p.name &&
         !!String(p.name).trim()
       );
@@ -67,7 +84,7 @@ export function useOrganizationMembers(orgId: string | undefined) {
           email: profile.email || '',
           role: m.role || 'member',
           avatar: profile.avatar_url || undefined,
-          initials: profile.initials || profile.name.slice(0, 2).toUpperCase(),
+          initials: profile.initials || String(profile.name).slice(0, 2).toUpperCase(),
         };
       })
         .filter((member): member is TeamMember => member !== null);
@@ -97,22 +114,35 @@ export function useProjectMembers(projectId: string | undefined) {
       if (error) throw error;
 
       const seen = new Set<string>();
-      return (data || [])
+      let invalidProfileIdCount = 0;
+      const mappedMembers = (data || [])
         .map((m: any) => {
           const profile = m.profile;
-          if (!profile || profile.deleted_at || !profile.id || !profile.name) return null;
-          if (seen.has(profile.id)) return null;
-          seen.add(profile.id);
+          const profileId = profile?.id;
+          const deletedAt = profile?.deleted_at ?? null;
+          if (!profile || deletedAt !== null) return null;
+          if (!isValidUuid(profileId) || !profile?.name) {
+            if (!isValidUuid(profileId)) invalidProfileIdCount++;
+            return null;
+          }
+          if (seen.has(profileId)) return null;
+          seen.add(profileId);
           return {
-            id: profile.id,
+            id: profileId,
             name: profile.name,
             email: profile.email || '',
             role: m.role || 'member',
             avatar: profile.avatar_url || undefined,
-            initials: profile.initials || profile.name.slice(0, 2).toUpperCase(),
+            initials: profile.initials || String(profile.name).slice(0, 2).toUpperCase(),
           };
         })
         .filter((member): member is TeamMember => member !== null);
+
+      if (!config.isProduction && invalidProfileIdCount > 0) {
+        console.warn('[useProjectMembers] filtered invalid project_members.profile.id', { invalidProfileIdCount });
+      }
+
+      return mappedMembers;
     },
     enabled: !!projectId,
   });
