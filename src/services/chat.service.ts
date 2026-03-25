@@ -23,6 +23,42 @@ function extractStoragePathFromPublicUrl(url: string): string | null {
   }
 }
 
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  fallback: T,
+  logContext: string
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let settled = false;
+
+  return new Promise<T>((resolve) => {
+    timeoutId = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      console.warn(`[chatService] ${logContext} timed out after ${timeoutMs}ms`);
+      resolve(fallback);
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((err) => {
+        if (settled) return;
+        settled = true;
+        if (timeoutId) clearTimeout(timeoutId);
+        console.warn(`[chatService] ${logContext} failed, using fallback`, {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        resolve(fallback);
+      });
+  });
+}
+
 async function getCurrentUserId(): Promise<string> {
   const { data } = await supabase.auth.getUser();
   if (!data.user) throw new Error('Not authenticated');
@@ -31,51 +67,61 @@ async function getCurrentUserId(): Promise<string> {
 
 export const chatService = {
   async getConversationAccessState(conversationId: string): Promise<{ readOnly: boolean; leftAt: string | null }> {
-    const userId = await getCurrentUserId();
-    const { data: membership } = await supabase
-      .from('conversation_members')
-      .select('user_id')
-      .eq('conversation_id', conversationId)
-      .eq('user_id', userId)
-      .maybeSingle();
+    const timeoutMs = Number(import.meta.env.VITE_CHAT_CONVERSATION_ACCESS_TIMEOUT_MS ?? 2500);
+    const fallback = { readOnly: true, leftAt: null };
 
-    const isConversationMember = !!membership;
+    const internal = (async () => {
+      const userId = await getCurrentUserId();
+      const { data: membership } = await supabase
+        .from('conversation_members')
+        .select('user_id')
+        .eq('conversation_id', conversationId)
+        .eq('user_id', userId)
+        .maybeSingle();
 
-    const { data: mapping } = await supabase
-      .from('project_chat_groups')
-      .select('project_id')
-      .eq('conversation_id', conversationId)
-      .maybeSingle();
+      const isConversationMember = !!membership;
 
-    if (!mapping?.project_id) {
-      return { readOnly: false, leftAt: null };
-    }
+      type ProjectChatGroupRow = { project_id: string | null };
+      type ProjectChatMemberAccessRow = { left_at: string | null };
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: accessRows, error: accessError } = await (supabase.from('project_chat_member_access' as any) as any)
-      .select('left_at')
-      .eq('project_id', mapping.project_id)
-      .eq('user_id', userId)
-      .limit(2);
+      const { data: mapping } = await supabase
+        .from('project_chat_groups')
+        .select('project_id')
+        .eq('conversation_id', conversationId)
+        .maybeSingle() as unknown as { data: ProjectChatGroupRow | null };
 
-    if (accessError) throw accessError;
+      if (!mapping?.project_id) {
+        return { readOnly: false, leftAt: null };
+      }
 
-    if (accessRows && accessRows.length > 1) {
-      // Defence-in-depth: project_chat_member_access should be unique per (project_id, user_id).
-      // If data corruption/replication issues introduce duplicates, fall back to the first row.
-      console.warn('[chatService.getConversationAccessState] multiple access rows found', {
-        projectId: mapping.project_id,
-        userId,
-        rows: accessRows.length,
-      });
-    }
+      const { data: accessRows, error: accessError } = await supabase
+        .from('project_chat_member_access')
+        .select('left_at')
+        .eq('project_id', mapping.project_id)
+        .eq('user_id', userId)
+        .limit(2);
 
-    const leftAt = (accessRows?.[0]?.left_at as string | null) ?? null;
+      if (accessError) throw accessError;
 
-    // If a user is intentionally kept in the group chat after project removal,
-    // they should remain able to participate.
-    const readOnly = !!leftAt && !isConversationMember;
-    return { readOnly, leftAt };
+      if (accessRows && accessRows.length > 1) {
+        // Defence-in-depth: project_chat_member_access should be unique per (project_id, user_id).
+        // If data corruption/replication issues introduce duplicates, fall back to the first row.
+        console.warn('[chatService.getConversationAccessState] multiple access rows found', {
+          projectId: mapping.project_id,
+          userId,
+          rows: accessRows.length,
+        });
+      }
+
+      const leftAt = (accessRows?.[0]?.left_at as ProjectChatMemberAccessRow['left_at'] | undefined) ?? null;
+
+      // If a user is intentionally kept in the group chat after project removal,
+      // they should remain able to participate.
+      const readOnly = !!leftAt && !isConversationMember;
+      return { readOnly, leftAt };
+    })();
+
+    return withTimeout(internal, timeoutMs, fallback, 'getConversationAccessState');
   },
 
   async getChatAttachmentDownloadUrl(file: { storagePath?: string; url?: string; fileName?: string }): Promise<string> {
@@ -250,8 +296,12 @@ export const chatService = {
     if (options?.before) {
       query = query.lt('created_at', options.before);
     }
-    if (access.readOnly && access.leftAt) {
-      query = query.lte('created_at', access.leftAt);
+    if (access.readOnly) {
+      const leftAtTs = access.leftAt ? new Date(access.leftAt).getTime() : NaN;
+      // Only apply the leftAt cutoff when it's a valid timestamp string.
+      if (access.leftAt && Number.isFinite(leftAtTs)) {
+        query = query.lte('created_at', access.leftAt);
+      }
     }
 
     const { data: messages, error } = await query;

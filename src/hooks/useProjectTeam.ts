@@ -42,10 +42,15 @@ export function useOrganizationMembers(orgId: string | undefined) {
       // Deduplicate to avoid repeated users in assignment dropdowns.
       const seenUserIds = new Set<string>();
       let invalidUserIdCount = 0;
+      const invalidUserIdSamples: string[] = [];
       const uniqueMembers = members.filter((m) => {
         const userId = (m as any)?.user_id;
         if (!isValidUuid(userId)) {
           invalidUserIdCount++;
+          if (typeof userId === 'string' && invalidUserIdSamples.length < 5) {
+            // Mask to reduce log-sensitivity while still helping debugging.
+            invalidUserIdSamples.push(userId.slice(-8));
+          }
           return false;
         }
         if (seenUserIds.has(userId)) return false;
@@ -54,8 +59,12 @@ export function useOrganizationMembers(orgId: string | undefined) {
       });
       const userIds = uniqueMembers.map(m => (m as any).user_id).filter(isValidUuid);
 
-      if (!config.isProduction && invalidUserIdCount > 0) {
-        console.warn('[useOrganizationMembers] filtered invalid organization_members.user_id', { invalidUserIdCount });
+      if (invalidUserIdCount > 0) {
+        const details = {
+          invalidUserIdCount,
+          ...(invalidUserIdSamples.length > 0 ? { samplesLast8: invalidUserIdSamples } : null),
+        };
+        if (!config.isProduction) console.warn('[useOrganizationMembers] filtered invalid organization_members.user_id', details);
       }
 
       // Fetch profiles separately to avoid ambiguous FK join
@@ -115,6 +124,7 @@ export function useProjectMembers(projectId: string | undefined) {
 
       const seen = new Set<string>();
       let invalidProfileIdCount = 0;
+      const invalidProfileIdSamples: string[] = [];
       const mappedMembers = (data || [])
         .map((m: any) => {
           const profile = m.profile;
@@ -122,7 +132,12 @@ export function useProjectMembers(projectId: string | undefined) {
           const deletedAt = profile?.deleted_at ?? null;
           if (!profile || deletedAt !== null) return null;
           if (!isValidUuid(profileId) || !profile?.name) {
-            if (!isValidUuid(profileId)) invalidProfileIdCount++;
+            if (!isValidUuid(profileId)) {
+              invalidProfileIdCount++;
+              if (typeof profileId === 'string' && invalidProfileIdSamples.length < 5) {
+                invalidProfileIdSamples.push(profileId.slice(-8));
+              }
+            }
             return null;
           }
           if (seen.has(profileId)) return null;
@@ -139,7 +154,10 @@ export function useProjectMembers(projectId: string | undefined) {
         .filter((member): member is TeamMember => member !== null);
 
       if (!config.isProduction && invalidProfileIdCount > 0) {
-        console.warn('[useProjectMembers] filtered invalid project_members.profile.id', { invalidProfileIdCount });
+        console.warn('[useProjectMembers] filtered invalid project_members.profile.id', {
+          invalidProfileIdCount,
+          ...(invalidProfileIdSamples.length > 0 ? { samplesLast8: invalidProfileIdSamples } : null),
+        });
       }
 
       return mappedMembers;

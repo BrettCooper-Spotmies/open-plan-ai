@@ -390,7 +390,7 @@ Deno.serve(async (req: Request) => {
           warning: "Pending invitation exists, but re-send email delivery failed. Check RESEND_API_KEY, sender domain verification, and recipient restrictions.",
           inviteLink,
         }), {
-          status: 200,
+          status: 202,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -446,7 +446,7 @@ Deno.serve(async (req: Request) => {
         warning: "Invitation created, but email delivery failed. Check RESEND_API_KEY, sender domain verification, and recipient restrictions.",
         inviteLink,
       }), {
-        status: 200,
+        status: 202,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

@@ -564,6 +564,20 @@ export default function ProjectDetail() {
       return;
     }
 
+    const isMemberAlreadyInProject = (project.team || []).some((m) => m.id === selectedMemberToAdd);
+    if (isMemberAlreadyInProject) {
+      toast.error('Member is already in this project');
+      return;
+    }
+
+    const isMemberInOrganization = availableOrganizationMembers.some(
+      (m) => m.id === selectedMemberToAdd
+    );
+    if (!isMemberInOrganization) {
+      toast.error('Selected member is no longer available');
+      return;
+    }
+
     setIsAddingProjectMember(true);
     try {
       await projectMembersService.addMember({
@@ -596,6 +610,14 @@ export default function ProjectDetail() {
 
     setIsStartingChat(true);
     try {
+      const timeoutMs = Number(import.meta.env.VITE_CHAT_START_PROJECT_TIMEOUT_MS ?? 6000);
+      const maxAttempts = Number(import.meta.env.VITE_CHAT_START_PROJECT_MAX_ATTEMPTS ?? 2);
+      const withTimeout = async <T,>(p: Promise<T>, ms: number, timeoutMessage: string): Promise<T> =>
+        Promise.race([
+          p,
+          new Promise<T>((_, reject) => setTimeout(() => reject(new Error(timeoutMessage)), ms)),
+        ]);
+
       const isNetworkError = (message: string) => {
         const m = message.toLowerCase();
         return (
@@ -607,17 +629,40 @@ export default function ProjectDetail() {
         );
       };
 
-      let conversationId = await chatService.getProjectGroupConversationId(project.id);
-      if (!conversationId) {
-        // Retry once for transient network issues.
+      let conversationId: string | null = null;
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
         try {
-          conversationId = await chatService.ensureProjectGroup(project.id);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to start project chat';
-          if (!isNetworkError(message)) throw err;
-          conversationId = await chatService.ensureProjectGroup(project.id);
+          if (attempt === 0) {
+            conversationId = await withTimeout(
+              chatService.getProjectGroupConversationId(project.id),
+              timeoutMs,
+              'Project chat lookup timed out'
+            );
+          }
+
+          if (!conversationId) {
+            // Ensure RPC is idempotent; we only do this when conversation mapping isn't present.
+            conversationId = await withTimeout(
+              chatService.ensureProjectGroup(project.id),
+              timeoutMs,
+              'Project chat start timed out'
+            );
+          }
+        } catch (attemptErr) {
+          const message = attemptErr instanceof Error ? attemptErr.message : 'Failed to start project chat';
+          if (attempt >= maxAttempts - 1 || !isNetworkError(message)) throw attemptErr;
+          conversationId = null;
+          continue;
         }
+
+        if (conversationId) break;
       }
+
+      if (!conversationId) {
+        throw new Error('Failed to start project chat. Please try again.');
+      }
+
       navigate(`/chat/${conversationId}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start project chat';
@@ -640,12 +685,23 @@ export default function ProjectDetail() {
       return;
     }
 
+    const memberId = memberRemovalPrompt.memberId;
+    const isMemberInProject = (project.team || []).some((m) => m.id === memberId);
+    if (!isMemberInProject) {
+      toast.error('That member is not part of this project anymore');
+      return;
+    }
+
     setIsRemovingMember(true);
     try {
-      await projectMembersService.removeMember(project.id, memberRemovalPrompt.memberId);
+      await projectMembersService.removeMember(project.id, memberId);
 
       if (removeFromChatToo) {
-        await chatService.forceRemoveProjectChatMembers(project.id, [memberRemovalPrompt.memberId]);
+        // Only attempt chat cleanup if the project chat mapping exists.
+        const conversationId = await chatService.getProjectGroupConversationId(project.id);
+        if (conversationId) {
+          await chatService.forceRemoveProjectChatMembers(project.id, [memberId]);
+        }
       }
 
       await Promise.all([
@@ -980,11 +1036,17 @@ export default function ProjectDetail() {
                                 variant="ghost"
                                 size="icon"
                                 className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                onClick={() => setMemberRemovalPrompt({
-                                  open: true,
-                                  memberId: member.id,
-                                  memberName: member.name,
-                                })}
+                                onClick={() => {
+                                  const memberId = member.id;
+                                  const memberName = typeof member.name === 'string' ? member.name : '';
+                                  if (!memberId) return;
+                                  if (!project.team?.some((m) => m.id === memberId)) return;
+                                  setMemberRemovalPrompt({
+                                    open: true,
+                                    memberId,
+                                    memberName,
+                                  });
+                                }}
                                 title="Remove member"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -1034,6 +1096,11 @@ export default function ProjectDetail() {
                               !selectedMemberToAdd ||
                               !selectedMemberRole ||
                               availableOrganizationMembers.length === 0
+                            }
+                            title={
+                              availableOrganizationMembers.length === 0
+                                ? 'All organization members are already in this project'
+                                : undefined
                             }
                           >
                             {isAddingProjectMember && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

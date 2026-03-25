@@ -60,13 +60,26 @@ export default function Chat() {
     refetch().catch(() => {
       // Non-blocking: ConversationList handles fetch errors internally.
     });
-    const retryTimer = window.setTimeout(() => {
-      refetch().catch(() => {
-        // Non-blocking retry.
-      });
-    }, 600);
+    const baseDelayMs = Number(import.meta.env.VITE_CHAT_CONVERSATION_REFETCH_BASE_DELAY_MS ?? 600);
+    const maxRetries = Number(import.meta.env.VITE_CHAT_CONVERSATION_REFETCH_MAX_RETRIES ?? 1);
 
-    return () => window.clearTimeout(retryTimer);
+    // Exponential backoff to avoid hardcoding a single delay under varying latency/load.
+    const retryDelaysMs = Array.from({ length: maxRetries }, (_, i) => baseDelayMs * (2 ** i));
+    let isCancelled = false;
+
+    const retryTimers = retryDelaysMs.map((delayMs) =>
+      window.setTimeout(() => {
+        if (isCancelled) return;
+        refetch().catch(() => {
+          // Non-blocking retry.
+        });
+      }, delayMs)
+    );
+
+    return () => {
+      isCancelled = true;
+      retryTimers.forEach((t) => window.clearTimeout(t));
+    };
   }, [conversationId, convsLoading, conversations, refetch]);
 
   useEffect(() => {
