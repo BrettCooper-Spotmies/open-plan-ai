@@ -157,13 +157,16 @@ export function useMessages(conversationId: string | null) {
         setLeftAt(state.leftAt);
         setReadOnlyNotice(
           state.readOnly
-            ? 'You have been removed from this project. You can view previous messages, but you cannot send new ones in this group.'
+            ? state.leftAt
+              ? 'You have been removed from this project. You can view previous messages, but you cannot send new ones in this group.'
+              : 'Unable to verify your access right now. Messages may be read-only.'
             : null
         );
       })
       .catch(() => {
-        setReadOnly(false);
-        setReadOnlyNotice(null);
+        // Fail closed: if we cannot verify access, treat the user as read-only.
+        setReadOnly(true);
+        setReadOnlyNotice('Unable to verify your access right now. Messages may be read-only.');
         setLeftAt(null);
       });
 
@@ -209,7 +212,14 @@ export function useMessages(conversationId: string | null) {
       conversationId,
       async (payload) => {
         const newMsg = payload.new;
-        if (leftAt && new Date(newMsg.created_at).getTime() > new Date(leftAt).getTime()) {
+        const newMsgCreatedAtTs = new Date((newMsg as any)?.created_at).getTime();
+        const leftAtTs = leftAt ? new Date(leftAt).getTime() : NaN;
+
+        if (
+          Number.isFinite(leftAtTs) &&
+          Number.isFinite(newMsgCreatedAtTs) &&
+          newMsgCreatedAtTs > leftAtTs
+        ) {
           return;
         }
         const { data: profile } = await supabase

@@ -311,7 +311,7 @@ export default function Projects() {
                             <div className="flex items-center -space-x-2">
                               {project.team.slice(0, 3).map((member) => (
                                 <Avatar key={member.id} className="h-5 w-5 border border-background">
-                                  <AvatarImage src={member.avatar} alt={member.name} />
+                                  <AvatarImage src={member.avatar || undefined} alt={member.name} />
                                   <AvatarFallback className="text-[10px]">
                                     {member.initials || member.name.slice(0, 2).toUpperCase()}
                                   </AvatarFallback>
@@ -337,7 +337,7 @@ export default function Projects() {
                                 <div key={member.id} className="flex items-center justify-between gap-3">
                                   <div className="flex items-center gap-2 min-w-0">
                                     <Avatar className="h-7 w-7">
-                                      <AvatarImage src={member.avatar} alt={member.name} />
+                                      <AvatarImage src={member.avatar || undefined} alt={member.name} />
                                       <AvatarFallback className="text-[11px]">{member.initials}</AvatarFallback>
                                     </Avatar>
                                     <p className="text-sm truncate">{member.name}</p>

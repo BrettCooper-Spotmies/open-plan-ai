@@ -90,7 +90,12 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
     setFilesLoading(true);
     chatService.getSharedFiles(conversation.id)
       .then(setSharedFiles)
-      .catch(() => { })
+      .catch((err) => {
+        console.warn('[DetailPanel] Failed to load shared files', {
+          conversationId: conversation.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      })
       .finally(() => setFilesLoading(false));
   }, [conversation.id, conversation.name, conversation.description, conversation.avatarUrl]);
 
@@ -101,16 +106,31 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
       return;
     }
 
+    const timeoutMs = Number(
+      import.meta.env.VITE_CHAT_PROJECT_ID_LOOKUP_TIMEOUT_MS ?? 2500
+    );
+
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled) return;
+      setLinkedProjectId(null);
+    }, timeoutMs);
+
     chatService.getProjectIdForConversation(conversation.id)
       .then((projectId) => {
-        if (!cancelled) setLinkedProjectId(projectId);
+        if (cancelled) return;
+        setLinkedProjectId(projectId);
       })
       .catch(() => {
-        if (!cancelled) setLinkedProjectId(null);
+        if (cancelled) return;
+        setLinkedProjectId(null);
+      })
+      .finally(() => {
+        window.clearTimeout(timeoutId);
       });
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timeoutId);
     };
   }, [conversation.id, isGroup]);
 

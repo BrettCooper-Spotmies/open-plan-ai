@@ -124,10 +124,20 @@ export const projectMembersService = {
       user_id: user.id,
       entity_id: input.user_id,
       entity_type: 'user',
-    }).catch(() => { /* non-critical */ });
+    }).catch((err) => {
+      console.warn('[projectMembersService] activity log failed', {
+        projectId: input.project_id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     // Keep project chat membership in sync.
-    chatService.syncProjectGroupMembers(input.project_id).catch(() => { /* non-critical */ });
+    chatService.syncProjectGroupMembers(input.project_id).catch((err) => {
+      console.warn('[projectMembersService] syncProjectGroupMembers failed', {
+        projectId: input.project_id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     return data;
   },
@@ -204,7 +214,12 @@ export const projectMembersService = {
       console.warn(`Skipped ${invalidCount} invalid project member(s) without profile rows`);
     }
 
-    chatService.syncProjectGroupMembers(projectId).catch(() => { /* non-critical */ });
+    chatService.syncProjectGroupMembers(projectId).catch((err) => {
+      console.warn('[projectMembersService] syncProjectGroupMembers failed', {
+        projectId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
 
     return data || [];
   },
@@ -289,7 +304,12 @@ export const projectMembersService = {
       throw new Error(`Failed to remove project member: ${error.message}`);
     }
 
-    chatService.syncProjectGroupMembers(projectId).catch(() => { /* non-critical */ });
+    chatService.syncProjectGroupMembers(projectId).catch((err) => {
+      console.warn('[projectMembersService] syncProjectGroupMembers failed', {
+        projectId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
   },
 
   /**

@@ -88,26 +88,37 @@ export const teamService = {
       throw new Error('This invitation is for a different email address');
     }
 
-    const { data: existingMember } = await supabase
-      .from('organization_members')
-      .select('id')
-      .eq('organization_id', invitation.organization_id)
-      .eq('user_id', user.id)
-      .maybeSingle();
+    // Try to mark the invitation as accepted. This reduces concurrency issues,
+    // but we intentionally keep membership insertion idempotent below.
+    const nowIso = new Date().toISOString();
+    const { error: acceptError } = await supabase
+      .from('team_invitations')
+      .update({ status: 'accepted', accepted_at: nowIso })
+      .eq('id', invitation.id)
+      .eq('status', 'pending')
+      .gte('expires_at', nowIso);
 
-    if (!existingMember) {
-      const { error: insertError } = await supabase
-        .from('organization_members')
-        .insert({
+    if (acceptError) {
+      // If someone else accepted concurrently, the update might affect 0 rows;
+      // Supabase returns null data + null error in that case.
+      throw new Error(acceptError.message || 'Failed to accept invitation');
+    }
+
+    // Idempotent membership insert to handle concurrent accepts.
+    const { error: upsertError } = await supabase
+      .from('organization_members')
+      .upsert(
+        {
           organization_id: invitation.organization_id,
           user_id: user.id,
           role: invitation.role || 'member',
           invited_by: invitation.invited_by || null,
-        });
+        },
+        { onConflict: 'organization_id,user_id', ignoreDuplicates: true }
+      );
 
-      if (insertError) {
-        throw new Error(insertError.message || 'Failed to join organization');
-      }
+    if (upsertError) {
+      throw new Error(upsertError.message || 'Failed to join organization');
     }
   },
 

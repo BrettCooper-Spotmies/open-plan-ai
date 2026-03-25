@@ -77,6 +77,11 @@ const Team = () => {
 
   const { data: pendingInvitations, refetch: refetchPendingInvitations } = usePendingInvitations(currentOrganization?.id || '');
 
+  const normalizeRole = (role: string | undefined | null): string => {
+    if (typeof role !== 'string') return '';
+    return role.trim().toLowerCase();
+  };
+
   const handleMessageClick = async (memberId: string) => {
     if (memberId === user?.id) return;
     try {
@@ -93,7 +98,10 @@ const Team = () => {
 
   // Check if current user is admin/owner
   const currentMember = teamMembers?.find(m => m.id === user?.id);
-  const isAdminOrOwner = currentMember?.role === 'admin' || currentMember?.role === 'owner';
+  const isAdminOrOwner = (() => {
+    const role = normalizeRole(currentMember?.role);
+    return role === 'admin' || role === 'owner';
+  })();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -246,7 +254,7 @@ const Team = () => {
               <p className="text-sm text-muted-foreground">{member.role}</p>
             </div>
           </div>
-          {isAdminOrOwner && member.role !== 'owner' && (
+          {isAdminOrOwner && normalizeRole(member.role) !== 'owner' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
