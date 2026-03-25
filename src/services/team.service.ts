@@ -35,7 +35,7 @@ export interface InviteResult {
   message?: string;
 }
 
-const normalizeEmail = (value: unknown): string => {
+export const normalizeEmail = (value: unknown): string => {
   if (typeof value !== 'string') return '';
   return value.trim().toLowerCase();
 };
@@ -54,7 +54,11 @@ export const teamService = {
       .eq('status', 'pending')
       .maybeSingle();
 
-    if (byIdRes.error) throw new Error(byIdRes.error.message);
+    if (byIdRes.error) {
+      throw new Error(
+        `Failed to load invitation (id=${invitationIdentifier}): ${byIdRes.error.message}`
+      );
+    }
 
     let invitation: TeamInvitationRow | null = byIdRes.data;
     if (!invitation) {
@@ -372,6 +376,16 @@ export const teamService = {
       console.warn('[teamService.acceptInvitation] retrying accept-invite after 404', { attempt: i + 1 });
       await new Promise((resolve) => setTimeout(resolve, 1200));
       response = await invokeAccept();
+    }
+
+    const maskedInvitationId = invitationIdentifier.length > 8
+      ? `${invitationIdentifier.slice(0, 6)}...${invitationIdentifier.slice(-2)}`
+      : invitationIdentifier;
+    const finalMsg = response.error?.message || '';
+    if (response.error && shouldRetry404(finalMsg) && MAX_404_RETRIES >= 1) {
+      console.warn('[teamService.acceptInvitation] accept-invite still returning 404 after retries', {
+        invitationId: maskedInvitationId,
+      });
     }
 
     if (response.error) {

@@ -180,7 +180,14 @@ Deno.serve(async (req: Request) => {
         .gte("created_at", oneHourAgo);
       ipCount = count ?? null;
     } catch (e) {
-      if (!isProduction) console.warn("IP rate limiting disabled (count failed)");
+      console.error("IP rate limiting read failed", { endpoint });
+      if (isProduction) {
+        return new Response(JSON.stringify({ error: "Service temporarily unavailable" }), {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      console.warn("IP rate limiting disabled (count failed)");
     }
 
     if (ipCount !== null && ipCount >= 10) {
@@ -198,7 +205,14 @@ Deno.serve(async (req: Request) => {
         endpoint,
       });
     } catch (e) {
-      if (!isProduction) console.warn("IP rate limiting disabled (insert failed)");
+      console.error("IP rate limiting insert failed", { endpoint });
+      if (isProduction) {
+        return new Response(JSON.stringify({ error: "Service temporarily unavailable" }), {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      console.warn("IP rate limiting disabled (insert failed)");
     }
 
     // Verify caller is admin/owner
@@ -319,7 +333,7 @@ Deno.serve(async (req: Request) => {
 
     if (existingPending?.id) {
       // Throttle re-sends for an existing pending invitation to prevent email spamming.
-      const resendEndpoint = `send-team-invite-resend:${existingPending.id}`;
+      const resendEndpoint = `send-team-invite-resend-${existingPending.id}`;
       const oneHourAgoForResend = new Date(Date.now() - 60 * 60 * 1000).toISOString();
       let resendCount: number | null = null;
       try {
@@ -331,7 +345,14 @@ Deno.serve(async (req: Request) => {
           .gte("created_at", oneHourAgoForResend);
         resendCount = count ?? null;
       } catch (e) {
-        if (!isProduction) console.warn("IP rate limiting disabled (resend count failed)");
+        console.error("IP rate limiting resend count failed", { resendEndpoint });
+        if (isProduction) {
+          return new Response(JSON.stringify({ error: "Service temporarily unavailable" }), {
+            status: 503,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        console.warn("IP rate limiting disabled (resend count failed)");
       }
 
       if (resendCount !== null && resendCount >= 2) {
@@ -348,7 +369,14 @@ Deno.serve(async (req: Request) => {
           endpoint: resendEndpoint,
         });
       } catch (e) {
-        if (!isProduction) console.warn("IP rate limiting disabled (resend insert failed)");
+        console.error("IP rate limiting resend insert failed", { resendEndpoint });
+        if (isProduction) {
+          return new Response(JSON.stringify({ error: "Service temporarily unavailable" }), {
+            status: 503,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        console.warn("IP rate limiting disabled (resend insert failed)");
       }
 
       const { sendResult, inviteLink } = await sendEmailWithFallback(existingPending.id, existingPending.role || role || "member");
