@@ -75,7 +75,7 @@ const Team = () => {
   const updateMemberMutation = useUpdateTeamMemberDetails();
   const [isStartingChat, setIsStartingChat] = useState<string | null>(null);
 
-  const { data: pendingInvitations } = usePendingInvitations(currentOrganization?.id || '');
+  const { data: pendingInvitations, refetch: refetchPendingInvitations } = usePendingInvitations(currentOrganization?.id || '');
 
   const handleMessageClick = async (memberId: string) => {
     if (memberId === user?.id) return;
@@ -138,18 +138,41 @@ const Team = () => {
     }
 
     try {
-      await inviteMutation.mutateAsync({
+      const result = await inviteMutation.mutateAsync({
         email: inviteEmail,
         role: inviteRole,
         orgId: currentOrganization.id,
       });
+      await refetchPendingInvitations();
+
+      if (result.outcome === 'already_pending') {
+        toast.info('Invitation is already pending for this email.');
+        setIsInviteDialogOpen(false);
+        return;
+      }
+
+      if (result.outcome === 'created_without_email') {
+        toast.warning(
+          result.message || 'Invitation was created, but email delivery could not be confirmed.'
+        );
+        setIsInviteDialogOpen(false);
+        setInviteEmail('');
+        setInviteRole('');
+        setInviteDepartment('');
+        return;
+      }
+
       toast.success(`Invitation sent to ${inviteEmail}`);
       setIsInviteDialogOpen(false);
       setInviteEmail('');
       setInviteRole('');
       setInviteDepartment('');
-    } catch (err: any) {
-      toast.error(err?.message || 'Failed to send invitation');
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error && err.message
+          ? err.message
+          : 'Failed to send invitation';
+      toast.error(message);
     }
   };
 
@@ -223,13 +246,13 @@ const Team = () => {
               <p className="text-sm text-muted-foreground">{member.role}</p>
             </div>
           </div>
-          {isAdminOrOwner && (
+          {isAdminOrOwner && member.role !== 'owner' && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                 >
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
@@ -561,7 +584,7 @@ const Team = () => {
                             <MessageSquare className="h-4 w-4" />
                           </Button>
                         )}
-                        {isAdminOrOwner && (
+                        {isAdminOrOwner && member.role !== 'owner' && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8">

@@ -1,12 +1,21 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useParams, Link, useLocation } from 'react-router-dom';
-import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List } from 'lucide-react';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
+import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Popover,
   PopoverContent,
@@ -29,7 +38,7 @@ import { AddModuleDialog } from './components/AddModuleDialog';
 import { TaskDetailModal } from './components/TaskDetailModal';
 import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
-import { useTeamMembers } from '@/hooks/useProjectTeam';
+import { useOrganizationMembers, useTeamMembers } from '@/hooks/useProjectTeam';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useUpdateProject } from '@/hooks/useProjects';
 import {
@@ -49,6 +58,13 @@ import {
   useBatchUpdateModules,
 } from '@/hooks/useProjectMutations';
 import { cn } from '@/lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryClient';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { projectMembersService } from '@/services/projectMembers.service';
+import { chatService } from '@/services/chat.service';
+import { toast } from 'sonner';
 import { calculateProjectProgress } from './utils/projectUtils';
 import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember } from '@/types';
 
@@ -67,6 +83,21 @@ const stageColors = {
   testing: 'bg-chart-4/10 text-chart-4',
   production: 'bg-chart-3/10 text-chart-3',
 };
+
+const projectTeamRoles = [
+  'Admin',
+  'Member',
+  'Project Lead',
+  'Developer',
+  'Designer',
+  'Hardware Engineer',
+  'Software Engineer',
+  'Mechanical Engineer',
+  'Electrical Engineer',
+  'QA Engineer',
+  'Technical Writer',
+  'Consultant',
+];
 
 // Milestone View Controls Component
 function MilestoneViewControls({
@@ -310,6 +341,10 @@ function IssueViewControls({
 }
 
 export default function ProjectDetail() {
+  const queryClient = useQueryClient();
+  const { currentOrganization } = useOrganization();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const { id } = useParams();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
@@ -339,11 +374,26 @@ export default function ProjectDetail() {
   const [isAddMilestoneDialogOpen, setIsAddMilestoneDialogOpen] = useState(false);
   const [isAddIssueDialogOpen, setIsAddIssueDialogOpen] = useState(false);
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
+  const [selectedMemberToAdd, setSelectedMemberToAdd] = useState('');
+  const [selectedMemberRole, setSelectedMemberRole] = useState('');
+  const [isAddingProjectMember, setIsAddingProjectMember] = useState(false);
+  const [isStartingChat, setIsStartingChat] = useState(false);
+  const [memberRemovalPrompt, setMemberRemovalPrompt] = useState<{
+    open: boolean;
+    memberId: string | null;
+    memberName: string;
+  }>({
+    open: false,
+    memberId: null,
+    memberName: '',
+  });
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   // Fetch project data using React Query
   const { data: project, isLoading, error } = useProjectDetail(id);
   const { data: projectModules = [] } = useProjectModules(id);
   const { data: allTeamMembers = [] } = useTeamMembers();
+  const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
 
   // Mutation hooks
   const createTaskMutation = useCreateTask(id || '');
@@ -476,6 +526,105 @@ export default function ProjectDetail() {
 
   const clearIssueFilters = () => {
     setIssueFilters({});
+  };
+
+  const canManageProjectMembers = useMemo(() => {
+    if (!project || !user?.id) return false;
+    if (project.createdBy === user.id) return true;
+    const myMembership = (project.team || []).find((member) => member.id === user.id);
+    return (myMembership?.role || '').toLowerCase() === 'admin';
+  }, [project, user?.id]);
+
+  const canStartProjectChat = useMemo(() => {
+    if (!project || !user?.id) return false;
+    if (project.createdBy === user.id) return true;
+    return (project.team || []).some((member) => member.id === user.id);
+  }, [project, user?.id]);
+
+  const availableOrganizationMembers = useMemo(() => {
+    const projectMemberIds = new Set((project?.team || []).map((member) => member.id));
+    return organizationMembers.filter((member) => !projectMemberIds.has(member.id));
+  }, [organizationMembers, project?.team]);
+
+  const handleAddProjectMember = async () => {
+    if (!project || !selectedMemberToAdd || !selectedMemberRole) return;
+    if (!canManageProjectMembers) {
+      toast.error('Only the project creator or an Admin can add or remove members');
+      return;
+    }
+
+    setIsAddingProjectMember(true);
+    try {
+      await projectMembersService.addMember({
+        project_id: project.id,
+        user_id: selectedMemberToAdd,
+        role: selectedMemberRole,
+      });
+
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(currentOrganization?.id) });
+      await queryClient.invalidateQueries({ queryKey: ['project-members', project.id] });
+
+      toast.success('Member added to project');
+      setSelectedMemberToAdd('');
+      setSelectedMemberRole('');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to add member to project';
+      toast.error(message);
+    } finally {
+      setIsAddingProjectMember(false);
+    }
+  };
+
+  const handleStartProjectChat = async () => {
+    if (!project) return;
+    if (!canStartProjectChat) {
+      toast.error('Only project team members can start this project chat');
+      return;
+    }
+
+    setIsStartingChat(true);
+    try {
+      let conversationId = await chatService.getProjectGroupConversationId(project.id);
+      if (!conversationId) {
+        conversationId = await chatService.ensureProjectGroup(project.id);
+      }
+      navigate(`/chat/${conversationId}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start project chat';
+      toast.error(message);
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
+
+  const handleRemoveProjectMember = async (removeFromChatToo: boolean) => {
+    if (!project || !memberRemovalPrompt.memberId) return;
+    if (!canManageProjectMembers) {
+      toast.error('Only the project creator or an Admin can add or remove members');
+      return;
+    }
+
+    setIsRemovingMember(true);
+    try {
+      await projectMembersService.removeMember(project.id, memberRemovalPrompt.memberId);
+
+      if (removeFromChatToo) {
+        await chatService.forceRemoveProjectChatMembers(project.id, [memberRemovalPrompt.memberId]);
+      }
+
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(currentOrganization?.id) });
+      await queryClient.invalidateQueries({ queryKey: ['project-members', project.id] });
+
+      toast.success('Member removed from project');
+      setMemberRemovalPrompt({ open: false, memberId: null, memberName: '' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to remove member';
+      toast.error(message);
+    } finally {
+      setIsRemovingMember(false);
+    }
   };
 
   const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
@@ -694,9 +843,12 @@ export default function ProjectDetail() {
     <>
       <div className="grid grid-cols-1 gap-6 animate-fade-in w-full min-w-0">
         {/* Project Stats with Title */}
-        <div className="flex flex-col justify-between gap-3 py-3 border-y">
+        <div className={cn(
+          "flex flex-col md:flex-row md:items-center md:justify-between gap-3 py-3 border-y",
+          isMobile && "rounded-xl border bg-card/60 px-3 py-3"
+        )}>
           {/* Left: Project Title and Stage */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 w-full">
+          <div className={cn("flex items-center gap-2 sm:gap-3 min-w-0 w-full md:w-auto md:flex-1", isMobile && "pb-1")}>
             <Button variant="ghost" size="sm" asChild className="shrink-0 gap-1 -ml-2 h-8 px-2 text-muted-foreground hover:text-foreground">
               <Link to="/projects">
                 <ChevronLeft className="h-4 w-4" />
@@ -709,29 +861,164 @@ export default function ProjectDetail() {
                 {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
               </Badge>
             </div>
+            {isMobile && (
+              <div className="ml-1 flex items-center justify-end gap-2 shrink-0 rounded-lg border border-border/70 bg-background/80 px-2 py-1.5">
+                <Progress value={progressBreakdown.overallProgress} className="w-16 h-2" />
+                <span className="text-xs font-semibold text-muted-foreground leading-none">
+                  {progressBreakdown.overallProgress}%
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Right: Stats */}
-          <div className="w-full md:w-auto overflow-x-auto">
-            <div className="flex items-center gap-3 sm:gap-4 md:gap-6 w-full min-w-max text-xs sm:text-sm text-muted-foreground pb-1 md:pb-0">
-              <ProjectProgressPopover breakdown={progressBreakdown} />
-              <div className="ml-auto flex items-center gap-3 sm:gap-4 md:gap-6">
+          <div className="w-full md:w-auto overflow-visible md:overflow-x-auto md:pl-4">
+            <div className={cn(
+              "flex flex-wrap md:flex-nowrap items-center gap-3 sm:gap-4 md:gap-6 w-full text-xs sm:text-sm text-muted-foreground pb-1 md:pb-0",
+              isMobile && "gap-2"
+            )}>
+              <div className={cn(
+                "flex flex-wrap items-center gap-2 sm:gap-4 md:gap-6 w-full md:w-auto md:ml-auto",
+                isMobile && "order-1 rounded-lg border bg-background/70 px-2 py-2"
+              )}>
+              {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
               <div className="flex items-center gap-2 whitespace-nowrap">
                 <Calendar className="h-4 w-4 shrink-0" />
                 <span>Due {project.targetDate ? new Date(project.targetDate).toLocaleDateString() : 'Not set'}</span>
               </div>
-              <div className="flex items-center gap-2 whitespace-nowrap">
-                <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="flex -space-x-2">
-                  {(project.team || []).slice(0, 5).map((member) => (
-                    <Avatar key={member.id} className="h-5 w-5 md:h-6 md:w-6 border-2 border-background">
-                      <AvatarFallback className="text-[10px] bg-muted">
-                        {member.initials}
-                      </AvatarFallback>
-                    </Avatar>
-                  ))}
-                </div>
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn("h-8 gap-1.5 whitespace-nowrap", isMobile && "h-9 rounded-lg")}
+                onClick={handleStartProjectChat}
+                disabled={isStartingChat || !canStartProjectChat}
+              >
+                {isStartingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                <span>Start Chat</span>
+              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex items-center gap-2 whitespace-nowrap cursor-pointer rounded-md border border-foreground/50 px-2 py-1 text-foreground hover:bg-muted transition-colors",
+                      isMobile && "h-9 rounded-lg border-border px-2.5"
+                    )}
+                  >
+                    <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-xs font-medium">Team</span>
+                    <span className="text-xs">{project.team?.length || 0}</span>
+                    <div className="hidden md:flex -space-x-2">
+                      {(project.team || []).slice(0, 5).map((member) => (
+                        <Avatar key={member.id} className="h-5 w-5 md:h-6 md:w-6 border-2 border-background">
+                          <AvatarFallback className="text-[10px] bg-muted">
+                            {member.initials}
+                          </AvatarFallback>
+                        </Avatar>
+                      ))}
+                    </div>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80" align="end">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Project Team</p>
+                    {project.team && project.team.length > 0 ? (
+                      <div className="space-y-2 max-h-52 overflow-y-auto">
+                        {project.team.map((member) => (
+                          <div key={member.id} className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Avatar className="h-7 w-7">
+                                <AvatarFallback className="text-[11px]">
+                                  {member.initials}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm truncate">{member.name}</span>
+                            </div>
+                            <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
+                              {member.role || 'Member'}
+                            </Badge>
+                            {canManageProjectMembers && member.role?.toLowerCase() !== 'admin' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                onClick={() => setMemberRemovalPrompt({
+                                  open: true,
+                                  memberId: member.id,
+                                  memberName: member.name,
+                                })}
+                                title="Remove member"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No team members assigned yet.</p>
+                    )}
+
+                    {canManageProjectMembers ? (
+                      <div className="pt-3 mt-2 border-t space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground">Add Member</p>
+                        <div className="space-y-2">
+                          <Select value={selectedMemberToAdd} onValueChange={setSelectedMemberToAdd}>
+                            <SelectTrigger className="h-8">
+                              <SelectValue placeholder="Select organization member" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableOrganizationMembers.map((member) => (
+                                <SelectItem key={member.id} value={member.id}>
+                                  {member.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select value={selectedMemberRole} onValueChange={setSelectedMemberRole}>
+                            <SelectTrigger className="h-8">
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {projectTeamRoles.map((role) => (
+                                <SelectItem key={role} value={role}>
+                                  {role}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            className="w-full"
+                            onClick={handleAddProjectMember}
+                            disabled={
+                              isAddingProjectMember ||
+                              !selectedMemberToAdd ||
+                              !selectedMemberRole ||
+                              availableOrganizationMembers.length === 0
+                            }
+                          >
+                            {isAddingProjectMember && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Add Member
+                          </Button>
+                          {availableOrganizationMembers.length === 0 && (
+                            <p className="text-[11px] text-muted-foreground">
+                              All organization members are already in this project.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="pt-3 mt-2 border-t">
+                        <p className="text-[11px] text-muted-foreground">
+                          Only the project creator or an Admin can add or remove project members.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
               </div>
               {criticalIssuesCount > 0 && (
                 <Badge variant="destructive" className="gap-1 shrink-0 hidden sm:inline-flex">
@@ -749,37 +1036,37 @@ export default function ProjectDetail() {
             {/* Left Side: Tabs and Filters */}
             <div className="w-full py-1 md:mr-auto md:w-auto">
               <TabsList className="bg-muted/50 grid grid-cols-4 w-full h-9 md:w-auto md:flex md:shrink-0">
-                <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden">
+                <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Tasks">
                   <ListTodo className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'tasks') && <span className="truncate">Tasks</span>}
-                  {(!isMobile || section === 'tasks') && (
+                  {!isMobile && <span className="truncate">Tasks</span>}
+                  {!isMobile && (
                     <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
                       {(project.tasks || []).length}
                     </Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="modules" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden">
+                <TabsTrigger value="modules" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Modules">
                   <Boxes className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'modules') && <span className="truncate">Modules</span>}
-                  {(!isMobile || section === 'modules') && (
+                  {!isMobile && <span className="truncate">Modules</span>}
+                  {!isMobile && (
                     <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
                       {modules.length}
                     </Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="milestones" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden">
+                <TabsTrigger value="milestones" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Milestones">
                   <Flag className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'milestones') && <span className="truncate">Milestones</span>}
-                  {(!isMobile || section === 'milestones') && (
+                  {!isMobile && <span className="truncate">Milestones</span>}
+                  {!isMobile && (
                     <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
                       {(project.milestones || []).length}
                     </Badge>
                   )}
                 </TabsTrigger>
-                <TabsTrigger value="issues" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden">
+                <TabsTrigger value="issues" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Issues">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'issues') && <span className="truncate">Issues</span>}
-                  {(!isMobile || section === 'issues') && openIssuesCount > 0 && (
+                  {!isMobile && <span className="truncate">Issues</span>}
+                  {!isMobile && openIssuesCount > 0 && (
                     <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
                       {openIssuesCount}
                     </Badge>
@@ -947,6 +1234,49 @@ export default function ProjectDetail() {
         projectId={id}
         onAddModule={handleAddModule}
       />
+
+      <Dialog
+        open={memberRemovalPrompt.open}
+        onOpenChange={(open) => {
+          if (!open && !isRemovingMember) {
+            setMemberRemovalPrompt({ open: false, memberId: null, memberName: '' });
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove member from project?</DialogTitle>
+            <DialogDescription>
+              {memberRemovalPrompt.memberName
+                ? `${memberRemovalPrompt.memberName} will be removed from the project. Do you also want to remove this person from the project group chat?`
+                : 'This member will be removed from the project. Do you also want to remove this person from the project group chat?'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setMemberRemovalPrompt({ open: false, memberId: null, memberName: '' })}
+              disabled={isRemovingMember}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => handleRemoveProjectMember(false)}
+              disabled={isRemovingMember}
+            >
+              No, keep in chat
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => handleRemoveProjectMember(true)}
+              disabled={isRemovingMember}
+            >
+              {isRemovingMember ? 'Removing...' : 'Yes, remove from chat'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

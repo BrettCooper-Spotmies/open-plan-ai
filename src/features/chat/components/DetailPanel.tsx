@@ -51,7 +51,10 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
   const currentMember = conversation.members.find((m) => m.id === currentUserId);
   const isOwner = currentMember?.role === 'owner';
   const isAdmin = currentMember?.role === 'admin';
-  const canManageGroup = isOwner || isAdmin;
+  const [linkedProjectId, setLinkedProjectId] = useState<string | null>(null);
+  const isProjectGroup = isGroup && !!linkedProjectId;
+  const canManageMembers = isOwner || isAdmin;
+  const canEditGroupInfo = isOwner || isAdmin || isProjectGroup;
 
   // Shared files
   const [sharedFiles, setSharedFiles] = useState<SharedFile[]>([]);
@@ -90,6 +93,26 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
       .catch(() => { })
       .finally(() => setFilesLoading(false));
   }, [conversation.id, conversation.name, conversation.description, conversation.avatarUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isGroup) {
+      setLinkedProjectId(null);
+      return;
+    }
+
+    chatService.getProjectIdForConversation(conversation.id)
+      .then((projectId) => {
+        if (!cancelled) setLinkedProjectId(projectId);
+      })
+      .catch(() => {
+        if (!cancelled) setLinkedProjectId(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation.id, isGroup]);
 
   const handleUpdateGroupInfo = async () => {
     if (!editName.trim()) {
@@ -310,7 +333,7 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
         <div className="p-4 space-y-4">
           {/* Info */}
           <div className="text-center relative group/info">
-            {isGroup && canManageGroup && !isEditing && (
+            {isGroup && canEditGroupInfo && !isEditing && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -440,7 +463,7 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
               <h5 className="text-xs font-medium text-muted-foreground">
                 Members ({conversation.members.length})
               </h5>
-              {isGroup && canManageGroup && (
+              {isGroup && canManageMembers && (
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={openAddDialog} title="Add member">
                   <UserPlus className="h-3.5 w-3.5" />
                 </Button>
@@ -466,7 +489,7 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
                   {isGroup && member.role?.toLowerCase() === 'admin' && (
                     <Badge variant="secondary" className="text-[10px] h-5 bg-blue-500/10 text-blue-600 border-none">admin</Badge>
                   )}
-                  {isGroup && canManageGroup && member.id !== currentUserId && member.role !== 'owner' && (
+                  {isGroup && canManageMembers && member.id !== currentUserId && member.role !== 'owner' && (
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       {isOwner && member.role !== 'admin' && (
                         <Button

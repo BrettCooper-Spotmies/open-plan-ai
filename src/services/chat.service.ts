@@ -30,6 +30,42 @@ async function getCurrentUserId(): Promise<string> {
 }
 
 export const chatService = {
+  async getConversationAccessState(conversationId: string): Promise<{ readOnly: boolean; leftAt: string | null }> {
+    const userId = await getCurrentUserId();
+    const { data: membership } = await supabase
+      .from('conversation_members')
+      .select('user_id')
+      .eq('conversation_id', conversationId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const isConversationMember = !!membership;
+
+    const { data: mapping } = await supabase
+      .from('project_chat_groups')
+      .select('project_id')
+      .eq('conversation_id', conversationId)
+      .maybeSingle();
+
+    if (!mapping?.project_id) {
+      return { readOnly: false, leftAt: null };
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: accessRow } = await (supabase.from('project_chat_member_access' as any) as any)
+      .select('left_at')
+      .eq('project_id', mapping.project_id)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    const leftAt = (accessRow?.left_at as string | null) ?? null;
+
+    // If a user is intentionally kept in the group chat after project removal,
+    // they should remain able to participate.
+    const readOnly = !!leftAt && !isConversationMember;
+    return { readOnly, leftAt };
+  },
+
   async getChatAttachmentDownloadUrl(file: { storagePath?: string; url?: string; fileName?: string }): Promise<string> {
     const resolvedPath = file.storagePath || (file.url ? extractStoragePathFromPublicUrl(file.url) : null);
 
@@ -86,7 +122,35 @@ export const chatService = {
     if (memErr) throw memErr;
     if (!memberships?.length) return [];
 
-    const convIds = memberships.map((m: any) => m.conversation_id);
+    let convIds = memberships.map((m: any) => m.conversation_id);
+
+    // Safety filter: hide project-chat conversations for soft-deleted projects.
+    // DB trigger should clean these, but this prevents stale UI if data lags.
+    if (convIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: mappings } = await (supabase.from('project_chat_groups' as any) as any)
+        .select('conversation_id, project_id')
+        .in('conversation_id', convIds);
+
+      if (mappings?.length) {
+        const projectIds = mappings.map((m: any) => m.project_id);
+        const { data: activeProjects } = await supabase
+          .from('projects')
+          .select('id')
+          .in('id', projectIds)
+          .is('deleted_at', null);
+
+        const activeProjectIds = new Set((activeProjects || []).map((p: any) => p.id));
+        const deletedConversationIds = new Set(
+          mappings
+            .filter((m: any) => !activeProjectIds.has(m.project_id))
+            .map((m: any) => m.conversation_id)
+        );
+
+        convIds = convIds.filter((id: string) => !deletedConversationIds.has(id));
+        if (convIds.length === 0) return [];
+      }
+    }
 
     // 2. Get conversations
     const { data: conversations, error: convErr } = await supabase
@@ -143,11 +207,16 @@ export const chatService = {
       }
     }
 
-    // 6. Map everything
+    // 6. Map everything (drop stale members with missing profile rows)
     return (conversations || []).map((conv: any) => {
       const convMembers = (allMembers || [])
         .filter((m: any) => m.conversation_id === conv.id)
-        .map((m: any) => mapMember(m, profileMap.get(m.user_id)));
+        .map((m: any) => {
+          const profile = profileMap.get(m.user_id);
+          if (!profile || !profile.name || !String(profile.name).trim()) return null;
+          return mapMember(m, profile);
+        })
+        .filter((m: any) => m !== null);
       return mapConversation(conv, convMembers, lastMessages[conv.id], userId);
     });
   },
@@ -157,6 +226,7 @@ export const chatService = {
     options?: { before?: string; limit?: number }
   ): Promise<ChatMessage[]> {
     const limit = options?.limit ?? 50;
+    const access = await this.getConversationAccessState(conversationId);
 
     let query = supabase
       .from('chat_messages')
@@ -167,6 +237,9 @@ export const chatService = {
 
     if (options?.before) {
       query = query.lt('created_at', options.before);
+    }
+    if (access.readOnly && access.leftAt) {
+      query = query.lte('created_at', access.leftAt);
     }
 
     const { data: messages, error } = await query;
@@ -218,6 +291,11 @@ export const chatService = {
   },
 
   async sendMessage(conversationId: string, content: string, userId?: string): Promise<ChatMessage> {
+    const access = await this.getConversationAccessState(conversationId);
+    if (access.readOnly) {
+      throw new Error('You have been removed from this project and cannot send new messages in this group.');
+    }
+
     const finalUserId = userId || await getCurrentUserId();
 
     const { data, error } = await supabase
@@ -593,6 +671,52 @@ export const chatService = {
     if (!data || data.length === 0) {
       throw new Error('Failed to update member role: No matching membership found');
     }
+  },
+
+  async ensureProjectGroup(projectId: string): Promise<string> {
+    const { data, error } = await (supabase.rpc as any)('ensure_project_chat_group', {
+      p_project_id: projectId,
+    });
+    if (error) throw error;
+    return data as string;
+  },
+
+  async getProjectGroupConversationId(projectId: string): Promise<string | null> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.from('project_chat_groups' as any) as any)
+      .select('conversation_id')
+      .eq('project_id', projectId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return (data?.conversation_id as string | undefined) ?? null;
+  },
+
+  async getProjectIdForConversation(conversationId: string): Promise<string | null> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.from('project_chat_groups' as any) as any)
+      .select('project_id')
+      .eq('conversation_id', conversationId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return (data?.project_id as string | undefined) ?? null;
+  },
+
+  async syncProjectGroupMembers(projectId: string): Promise<void> {
+    const { error } = await (supabase.rpc as any)('sync_project_chat_group_members', {
+      p_project_id: projectId,
+    });
+    if (error) throw error;
+  },
+
+  async forceRemoveProjectChatMembers(projectId: string, userIds: string[]): Promise<void> {
+    if (userIds.length === 0) return;
+    const { error } = await (supabase.rpc as any)('force_remove_project_chat_members', {
+      p_project_id: projectId,
+      p_user_ids: userIds,
+    });
+    if (error) throw error;
   },
 
   async sendSystemMessage(conversationId: string, content: string): Promise<void> {

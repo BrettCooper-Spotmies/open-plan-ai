@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { authService, SignUpMetadata } from '@/services/auth.service';
+import { teamService } from '@/services/team.service';
 import { supabase } from '@/integrations/supabase/client';
 
 interface Profile {
@@ -150,16 +151,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else if (!newSession.access_token) {
               console.error('Access token is missing. Unable to accept the invite.');
             } else {
-              supabase.functions.invoke('accept-invite', {
-                headers: {
-                  Authorization: `Bearer ${newSession.access_token}`,
-                },
-                body: pendingInviteId ? { inviteId: pendingInviteId } : { token: pendingToken },
-              }).then(({ data, error }) => {
-                if (error) console.error('Error accepting invite:', error);
-                else if (data?.error) console.error('Invite error:', data.error);
-                else console.log('Invitation accepted successfully');
-              });
+              teamService.acceptInvitation(effectiveId)
+                .then(() => {
+                  console.log('Invitation accepted successfully');
+                })
+                .catch((inviteError) => {
+                  console.error('Error accepting invite:', inviteError);
+                });
             }
           }
         } else {

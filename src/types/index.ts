@@ -214,6 +214,7 @@ export interface Project {
   clientContact?: string;
   notes?: string;
   departments?: string[];
+  createdBy?: string;
   createdAt: string;
   updatedAt: string;
 }

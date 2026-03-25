@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { teamService } from '@/services/team.service';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Building2, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -84,14 +85,7 @@ export default function JoinOrganization() {
         return;
       }
 
-      const res = await supabase.functions.invoke('accept-invite', {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: resolvedInvite.inviteId ? { inviteId: resolvedInvite.inviteId } : { token: resolvedInvite.token },
-      });
-
-      if (res.error) throw res.error;
+      await teamService.acceptInvitation(resolvedInvite.inviteId || resolvedInvite.token || '');
       setSuccess(true);
       setTimeout(() => navigate('/'), 1500);
     } catch (err: any) {
