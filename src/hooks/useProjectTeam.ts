@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { projectsService } from '@/services/projects.service';
 import { queryKeys } from '@/lib/queryClient';
 import { TeamMember } from '@/types';
+import { config } from '@/config';
 
 const isValidUuid = (value: unknown): value is string => {
   if (typeof value !== 'string') return false;
@@ -40,14 +41,22 @@ export function useOrganizationMembers(orgId: string | undefined) {
 
       // Deduplicate to avoid repeated users in assignment dropdowns.
       const seenUserIds = new Set<string>();
+      let invalidUserIdCount = 0;
       const uniqueMembers = members.filter((m) => {
         const userId = (m as any)?.user_id;
-        if (!isValidUuid(userId)) return false;
+        if (!isValidUuid(userId)) {
+          invalidUserIdCount++;
+          return false;
+        }
         if (seenUserIds.has(userId)) return false;
         seenUserIds.add(userId);
         return true;
       });
       const userIds = uniqueMembers.map(m => (m as any).user_id).filter(isValidUuid);
+
+      if (!config.isProduction && invalidUserIdCount > 0) {
+        console.warn('[useOrganizationMembers] filtered invalid organization_members.user_id', { invalidUserIdCount });
+      }
 
       // Fetch profiles separately to avoid ambiguous FK join
       const { data: profiles, error: profilesError } = await supabase
@@ -105,13 +114,17 @@ export function useProjectMembers(projectId: string | undefined) {
       if (error) throw error;
 
       const seen = new Set<string>();
-      return (data || [])
+      let invalidProfileIdCount = 0;
+      const mappedMembers = (data || [])
         .map((m: any) => {
           const profile = m.profile;
           const profileId = profile?.id;
           const deletedAt = profile?.deleted_at ?? null;
           if (!profile || deletedAt !== null) return null;
-          if (!isValidUuid(profileId) || !profile?.name) return null;
+          if (!isValidUuid(profileId) || !profile?.name) {
+            if (!isValidUuid(profileId)) invalidProfileIdCount++;
+            return null;
+          }
           if (seen.has(profileId)) return null;
           seen.add(profileId);
           return {
@@ -124,6 +137,12 @@ export function useProjectMembers(projectId: string | undefined) {
           };
         })
         .filter((member): member is TeamMember => member !== null);
+
+      if (!config.isProduction && invalidProfileIdCount > 0) {
+        console.warn('[useProjectMembers] filtered invalid project_members.profile.id', { invalidProfileIdCount });
+      }
+
+      return mappedMembers;
     },
     enabled: !!projectId,
   });

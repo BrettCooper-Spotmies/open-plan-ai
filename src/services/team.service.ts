@@ -35,6 +35,11 @@ export interface InviteResult {
   message?: string;
 }
 
+const normalizeEmail = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+};
+
 export const teamService = {
   async acceptInvitationDirectFallback(invitationIdentifier: string): Promise<void> {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -73,8 +78,8 @@ export const teamService = {
       throw new Error('Invitation has expired');
     }
 
-    const userEmail = user.email?.trim().toLowerCase();
-    const invitationEmail = invitation.email?.trim().toLowerCase();
+    const userEmail = normalizeEmail(user.email);
+    const invitationEmail = normalizeEmail(invitation.email);
     if (!userEmail || !invitationEmail || userEmail !== invitationEmail) {
       throw new Error('This invitation is for a different email address');
     }
@@ -306,7 +311,8 @@ export const teamService = {
   async getPendingInvitationsForUser(email: string): Promise<TeamInvitation[]> {
     const { data: { user } } = await supabase.auth.getUser();
 
-    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedEmail = normalizeEmail(email);
+    if (!normalizedEmail) return [];
     const { data, error } = await supabase
       .from('team_invitations')
       .select('*, organizations(name)')
