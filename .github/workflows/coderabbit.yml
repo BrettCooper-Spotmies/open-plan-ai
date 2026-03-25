@@ -54,17 +54,13 @@ jobs:
           - Ignore formatting-only or whitespace-only changes
           - Reference filenames and approximate line numbers when possible
           - Suggest fixes or alternatives, not just problems
+          - IMPORTANT: Only report issues that are directly supported by the provided diff chunk.
+            If you cannot confirm an issue from the diff, do not list it as a high-risk issue.
+            For high-risk issues, be conservative: if not certain, move it to suggestions or omit it.
 
           Output MUST be valid GitHub-flavored Markdown.
 
           Output format:
-
-          ## 🤖 AI Code Review
-
-          ### 📌 Summary
-          - Short bullet summary of overall findings
-
-          ---
 
           ### 💬 Inline Comments (File-wise)
           For each file:
@@ -76,7 +72,7 @@ jobs:
 
           ### ⚠️ High-Risk Issues
           - List only serious issues (security, data loss, crashes)
-          - If none, say: "No high-risk issues found."
+          - If none in this chunk, say: "No high-risk issues found."
 
           Keep it concise and developer-friendly.
           PROMPT
@@ -120,6 +116,12 @@ jobs:
             if [ -z "$REVIEW_TEXT" ]; then
               REVIEW_TEXT="$(printf '%s' "$RESPONSE" | tr -d '\000' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
             fi
+            # Providers sometimes return literal "null" or repeat headers.
+            # Keep the combined output clean and developer-friendly.
+            REVIEW_TEXT="$(printf '%s\n' "$REVIEW_TEXT" \
+              | sed -e '/^[[:space:]]*null[[:space:]]*$/Id' \
+                    -e '/^[[:space:]]*#*[[:space:]]*🤖[[:space:]]*AI[[:space:]]*Code[[:space:]]*Review[[:space:]]*$/Id' \
+                    -e '/^[[:space:]]*🤖[[:space:]]*AI[[:space:]]*Code[[:space:]]*Review[[:space:]]*$/Id')"
             if [ -z "$REVIEW_TEXT" ]; then
               echo "⚠️ No parseable review content returned for chunk \`$CHUNK\`." >> combined_review.md
             else
