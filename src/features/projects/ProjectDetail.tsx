@@ -1,12 +1,21 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useParams, Link, useLocation } from 'react-router-dom';
-import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List } from 'lucide-react';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
+import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Popover,
   PopoverContent,
@@ -29,7 +38,7 @@ import { AddModuleDialog } from './components/AddModuleDialog';
 import { TaskDetailModal } from './components/TaskDetailModal';
 import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
-import { useTeamMembers } from '@/hooks/useProjectTeam';
+import { useOrganizationMembers, useTeamMembers } from '@/hooks/useProjectTeam';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useUpdateProject } from '@/hooks/useProjects';
 import {
@@ -49,6 +58,13 @@ import {
   useBatchUpdateModules,
 } from '@/hooks/useProjectMutations';
 import { cn } from '@/lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/queryClient';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { projectMembersService } from '@/services/projectMembers.service';
+import { chatService } from '@/services/chat.service';
+import { toast } from 'sonner';
 import { calculateProjectProgress } from './utils/projectUtils';
 import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember } from '@/types';
 
@@ -68,6 +84,31 @@ const stageColors = {
   production: 'bg-chart-3/10 text-chart-3',
 };
 
+const projectTeamRoles = [
+  'Admin',
+  'Member',
+  'Project Lead',
+  'Developer',
+  'Designer',
+  'Hardware Engineer',
+  'Software Engineer',
+  'Mechanical Engineer',
+  'Electrical Engineer',
+  'QA Engineer',
+  'Technical Writer',
+  'Consultant',
+];
+
+const DEFAULT_MEMBER_REMOVAL_PROMPT: {
+  open: boolean;
+  memberId: string | null;
+  memberName: string;
+} = {
+  open: false,
+  memberId: null,
+  memberName: '',
+};
+
 // Milestone View Controls Component
 function MilestoneViewControls({
   searchQuery,
@@ -79,8 +120,8 @@ function MilestoneViewControls({
   onAddMilestone: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2">
-      <div className="relative flex items-center flex-1 md:flex-none">
+    <div className="flex items-center gap-2 w-full md:justify-end">
+      <div className="relative flex items-center flex-1 md:flex-none min-w-0">
         <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
         <Input
           type="text"
@@ -134,8 +175,8 @@ function IssueViewControls({
   onReportIssue: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 w-full justify-between">
-      <div className="flex items-center gap-2 flex-1 min-w-0">
+    <div className="flex items-center gap-2 w-full justify-between md:justify-end">
+      <div className="flex items-center gap-2 flex-1 min-w-0 md:flex-none">
         {/* Search Input */}
         <div className="relative flex items-center flex-1 md:flex-none">
           <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
@@ -310,6 +351,10 @@ function IssueViewControls({
 }
 
 export default function ProjectDetail() {
+  const queryClient = useQueryClient();
+  const { currentOrganization } = useOrganization();
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const { id } = useParams();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
@@ -339,11 +384,22 @@ export default function ProjectDetail() {
   const [isAddMilestoneDialogOpen, setIsAddMilestoneDialogOpen] = useState(false);
   const [isAddIssueDialogOpen, setIsAddIssueDialogOpen] = useState(false);
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
+  const [selectedMemberToAdd, setSelectedMemberToAdd] = useState('');
+  const [selectedMemberRole, setSelectedMemberRole] = useState('');
+  const [isAddingProjectMember, setIsAddingProjectMember] = useState(false);
+  const [isStartingChat, setIsStartingChat] = useState(false);
+  const [memberRemovalPrompt, setMemberRemovalPrompt] = useState<{
+    open: boolean;
+    memberId: string | null;
+    memberName: string;
+  }>(DEFAULT_MEMBER_REMOVAL_PROMPT);
+  const [isRemovingMember, setIsRemovingMember] = useState(false);
 
   // Fetch project data using React Query
   const { data: project, isLoading, error } = useProjectDetail(id);
   const { data: projectModules = [] } = useProjectModules(id);
   const { data: allTeamMembers = [] } = useTeamMembers();
+  const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
 
   // Mutation hooks
   const createTaskMutation = useCreateTask(id || '');
@@ -476,6 +532,192 @@ export default function ProjectDetail() {
 
   const clearIssueFilters = () => {
     setIssueFilters({});
+  };
+
+  const canManageProjectMembers = useMemo(() => {
+    if (!project || !user?.id) return false;
+    if (project.createdBy === user.id) return true;
+    const myMembership = (project.team || []).find((member) => member.id === user.id);
+    return (myMembership?.role || '').toLowerCase() === 'admin';
+  }, [project, user?.id]);
+
+  const canStartProjectChat = useMemo(() => {
+    if (!project || !user?.id) return false;
+    if (project.createdBy === user.id) return true;
+    return (project.team || []).some((member) => member.id === user.id);
+  }, [project, user?.id]);
+
+  const availableOrganizationMembers = useMemo(() => {
+    const projectMemberIds = new Set((project?.team || []).map((member) => member.id));
+    return organizationMembers.filter((member) => !projectMemberIds.has(member.id));
+  }, [organizationMembers, project?.team]);
+
+  const handleAddProjectMember = async () => {
+    if (!project || !selectedMemberToAdd || !selectedMemberRole) return;
+    if (!canManageProjectMembers) {
+      toast.error('Only the project creator or an Admin can add or remove members');
+      return;
+    }
+
+    if (!projectTeamRoles.includes(selectedMemberRole)) {
+      toast.error('Invalid member role selected');
+      return;
+    }
+
+    const isMemberAlreadyInProject = (project.team || []).some((m) => m.id === selectedMemberToAdd);
+    if (isMemberAlreadyInProject) {
+      toast.error('Member is already in this project');
+      return;
+    }
+
+    const isMemberInOrganization = availableOrganizationMembers.some(
+      (m) => m.id === selectedMemberToAdd
+    );
+    if (!isMemberInOrganization) {
+      toast.error('Selected member is no longer available');
+      return;
+    }
+
+    setIsAddingProjectMember(true);
+    try {
+      await projectMembersService.addMember({
+        project_id: project.id,
+        user_id: selectedMemberToAdd,
+        role: selectedMemberRole,
+      });
+
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(currentOrganization?.id) });
+      await queryClient.invalidateQueries({ queryKey: ['project-members', project.id] });
+
+      toast.success('Member added to project');
+      setSelectedMemberToAdd('');
+      setSelectedMemberRole('');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to add member to project';
+      toast.error(message);
+    } finally {
+      setIsAddingProjectMember(false);
+    }
+  };
+
+  const handleStartProjectChat = async () => {
+    if (!project) return;
+    if (!canStartProjectChat) {
+      toast.error('Only project team members can start this project chat');
+      return;
+    }
+
+    setIsStartingChat(true);
+    try {
+      const timeoutMs = Number(import.meta.env.VITE_CHAT_START_PROJECT_TIMEOUT_MS ?? 6000);
+      const maxAttempts = Number(import.meta.env.VITE_CHAT_START_PROJECT_MAX_ATTEMPTS ?? 2);
+      const withTimeout = async <T,>(p: Promise<T>, ms: number, timeoutMessage: string): Promise<T> =>
+        Promise.race([
+          p,
+          new Promise<T>((_, reject) => setTimeout(() => reject(new Error(timeoutMessage)), ms)),
+        ]);
+
+      const isNetworkError = (message: string) => {
+        const m = message.toLowerCase();
+        return (
+          m.includes('network') ||
+          m.includes('timeout') ||
+          m.includes('failed to fetch') ||
+          m.includes('fetch') ||
+          m.includes('unavailable')
+        );
+      };
+
+      let conversationId: string | null = null;
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          if (attempt === 0) {
+            conversationId = await withTimeout(
+              chatService.getProjectGroupConversationId(project.id),
+              timeoutMs,
+              'Project chat lookup timed out'
+            );
+          }
+
+          if (!conversationId) {
+            // Ensure RPC is idempotent; we only do this when conversation mapping isn't present.
+            conversationId = await withTimeout(
+              chatService.ensureProjectGroup(project.id),
+              timeoutMs,
+              'Project chat start timed out'
+            );
+          }
+        } catch (attemptErr) {
+          const message = attemptErr instanceof Error ? attemptErr.message : 'Failed to start project chat';
+          if (attempt >= maxAttempts - 1 || !isNetworkError(message)) throw attemptErr;
+          conversationId = null;
+          continue;
+        }
+
+        if (conversationId) break;
+      }
+
+      if (!conversationId) {
+        throw new Error('Failed to start project chat. Please try again.');
+      }
+
+      navigate(`/chat/${conversationId}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start project chat';
+      if (message && message.toLowerCase().includes('access denied')) {
+        toast.error('You no longer have access to start this project chat');
+      } else if (message) {
+        toast.error(message);
+      } else {
+        toast.error('Failed to start project chat. Please try again.');
+      }
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
+
+  const handleRemoveProjectMember = async (removeFromChatToo: boolean) => {
+    if (!project || !memberRemovalPrompt.memberId) return;
+    if (!canManageProjectMembers) {
+      toast.error('Only the project creator or an Admin can add or remove members');
+      return;
+    }
+
+    const memberId = memberRemovalPrompt.memberId;
+    const isMemberInProject = (project.team || []).some((m) => m.id === memberId);
+    if (!isMemberInProject) {
+      toast.error('That member is not part of this project anymore');
+      return;
+    }
+
+    setIsRemovingMember(true);
+    try {
+      await projectMembersService.removeMember(project.id, memberId);
+
+      if (removeFromChatToo) {
+        // Only attempt chat cleanup if the project chat mapping exists.
+        const conversationId = await chatService.getProjectGroupConversationId(project.id);
+        if (conversationId) {
+          await chatService.forceRemoveProjectChatMembers(project.id, [memberId]);
+        }
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.all(currentOrganization?.id) }),
+        queryClient.invalidateQueries({ queryKey: ['project-members', project.id] }),
+      ]);
+
+      toast.success('Member removed from project');
+      setMemberRemovalPrompt(DEFAULT_MEMBER_REMOVAL_PROMPT);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to remove member';
+      toast.error(message);
+    } finally {
+      setIsRemovingMember(false);
+    }
   };
 
   const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
@@ -694,9 +936,12 @@ export default function ProjectDetail() {
     <>
       <div className="grid grid-cols-1 gap-6 animate-fade-in w-full min-w-0">
         {/* Project Stats with Title */}
-        <div className="flex flex-col justify-between gap-3 py-3 border-y">
+        <div className={cn(
+          "flex flex-col md:flex-row md:items-center md:justify-between gap-3 py-3 border-y",
+          isMobile && "rounded-xl border bg-card/60 px-3 py-3"
+        )}>
           {/* Left: Project Title and Stage */}
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0 w-full">
+          <div className={cn("flex items-center gap-2 sm:gap-3 min-w-0 w-full md:w-auto md:flex-1", isMobile && "pb-1")}>
             <Button variant="ghost" size="sm" asChild className="shrink-0 gap-1 -ml-2 h-8 px-2 text-muted-foreground hover:text-foreground">
               <Link to="/projects">
                 <ChevronLeft className="h-4 w-4" />
@@ -709,27 +954,175 @@ export default function ProjectDetail() {
                 {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
               </Badge>
             </div>
+            {isMobile && (
+              <div className="ml-1 flex items-center justify-end gap-2 shrink-0 rounded-lg border border-border/70 bg-background/80 px-2 py-1.5">
+                <Progress value={progressBreakdown.overallProgress} className="w-16 h-2" />
+                <span className="text-xs font-semibold text-muted-foreground leading-none">
+                  {progressBreakdown.overallProgress}%
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Right: Stats */}
-          <div className="w-full md:w-auto overflow-x-auto">
-            <div className="flex items-center gap-3 sm:gap-4 md:gap-6 min-w-max text-xs sm:text-sm text-muted-foreground pb-1 md:pb-0">
-              <ProjectProgressPopover breakdown={progressBreakdown} />
+          <div className="w-full md:w-auto overflow-visible md:overflow-x-auto md:pl-4">
+            <div className={cn(
+              "flex flex-wrap md:flex-nowrap items-center gap-3 sm:gap-4 md:gap-6 w-full text-xs sm:text-sm text-muted-foreground pb-1 md:pb-0",
+              isMobile && "gap-2"
+            )}>
+              <div className={cn(
+                "flex flex-wrap items-center gap-2 sm:gap-4 md:gap-6 w-full md:w-auto md:ml-auto",
+                isMobile && "order-1 rounded-lg border bg-background/70 px-2 py-2"
+              )}>
+              {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
               <div className="flex items-center gap-2 whitespace-nowrap">
                 <Calendar className="h-4 w-4 shrink-0" />
                 <span>Due {project.targetDate ? new Date(project.targetDate).toLocaleDateString() : 'Not set'}</span>
               </div>
-              <div className="flex items-center gap-2 whitespace-nowrap">
-                <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="flex -space-x-2">
-                  {(project.team || []).slice(0, 5).map((member) => (
-                    <Avatar key={member.id} className="h-5 w-5 md:h-6 md:w-6 border-2 border-background">
-                      <AvatarFallback className="text-[10px] bg-muted">
-                        {member.initials}
-                      </AvatarFallback>
-                    </Avatar>
-                  ))}
-                </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={cn("h-8 gap-1.5 whitespace-nowrap", isMobile && "h-9 rounded-lg")}
+                onClick={handleStartProjectChat}
+                disabled={isStartingChat || !canStartProjectChat}
+              >
+                {isStartingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                <span>Start Chat</span>
+              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex items-center gap-2 whitespace-nowrap cursor-pointer rounded-md border border-foreground/50 px-2 py-1 text-foreground hover:bg-muted transition-colors",
+                      isMobile && "h-9 rounded-lg border-border px-2.5"
+                    )}
+                  >
+                    <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-xs font-medium">Team</span>
+                    <span className="text-xs">{project.team?.length || 0}</span>
+                    <div className="hidden md:flex -space-x-2">
+                      {(project.team || []).slice(0, 5).map((member) => (
+                        <Avatar key={member.id} className="h-5 w-5 md:h-6 md:w-6 border-2 border-background">
+                          <AvatarFallback className="text-[10px] bg-muted">
+                            {member.initials}
+                          </AvatarFallback>
+                        </Avatar>
+                      ))}
+                    </div>
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80" align="end">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Project Team</p>
+                    {project.team && project.team.length > 0 ? (
+                      <div className="space-y-2 max-h-52 overflow-y-auto">
+                        {project.team.map((member) => (
+                          <div key={member.id} className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Avatar className="h-7 w-7">
+                                <AvatarFallback className="text-[11px]">
+                                  {member.initials}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm truncate">{member.name}</span>
+                            </div>
+                            <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
+                              {member.role || 'Member'}
+                            </Badge>
+                            {canManageProjectMembers && member.role?.toLowerCase() !== 'admin' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                onClick={() => {
+                                  const memberId = member.id;
+                                  const memberName = typeof member.name === 'string' ? member.name : '';
+                                  if (!memberId) return;
+                                  if (!project.team?.some((m) => m.id === memberId)) return;
+                                  setMemberRemovalPrompt({
+                                    open: true,
+                                    memberId,
+                                    memberName,
+                                  });
+                                }}
+                                title="Remove member"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No team members assigned yet.</p>
+                    )}
+
+                    {canManageProjectMembers ? (
+                      <div className="pt-3 mt-2 border-t space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground">Add Member</p>
+                        <div className="space-y-2">
+                          <Select value={selectedMemberToAdd} onValueChange={setSelectedMemberToAdd}>
+                            <SelectTrigger className="h-8">
+                              <SelectValue placeholder="Select organization member" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableOrganizationMembers.map((member) => (
+                                <SelectItem key={member.id} value={member.id}>
+                                  {member.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Select value={selectedMemberRole} onValueChange={setSelectedMemberRole}>
+                            <SelectTrigger className="h-8">
+                              <SelectValue placeholder="Select role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {projectTeamRoles.map((role) => (
+                                <SelectItem key={role} value={role}>
+                                  {role}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            size="sm"
+                            className="w-full"
+                            onClick={handleAddProjectMember}
+                            disabled={
+                              isAddingProjectMember ||
+                              !selectedMemberToAdd ||
+                              !selectedMemberRole ||
+                              availableOrganizationMembers.length === 0
+                            }
+                            title={
+                              availableOrganizationMembers.length === 0
+                                ? 'All organization members are already in this project'
+                                : undefined
+                            }
+                          >
+                            {isAddingProjectMember && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Add Member
+                          </Button>
+                          {availableOrganizationMembers.length === 0 && (
+                            <p className="text-[11px] text-muted-foreground">
+                              All organization members are already in this project.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="pt-3 mt-2 border-t">
+                        <p className="text-[11px] text-muted-foreground">
+                          Only the project creator or an Admin can add or remove project members.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
               </div>
               {criticalIssuesCount > 0 && (
                 <Badge variant="destructive" className="gap-1 shrink-0 hidden sm:inline-flex">
@@ -743,17 +1136,81 @@ export default function ProjectDetail() {
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => setSection(v as ProjectSection)} className="w-full">
-          <div className="flex flex-col-reverse md:flex-row md:items-center justify-between gap-4">
-            {/* Left Side: View Controls */}
-            <div className="flex-1 min-w-0">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            {/* Left Side: Tabs and Filters */}
+            <div className="w-full py-1 md:mr-auto md:w-auto">
+              <TabsList className="bg-muted/50 grid grid-cols-4 w-full h-9 md:w-auto md:flex md:shrink-0">
+                <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Tasks">
+                  <ListTodo className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">Tasks</span>}
+                  {!isMobile && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {(project.tasks || []).length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="modules" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Modules">
+                  <Boxes className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">Modules</span>}
+                  {!isMobile && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {modules.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="milestones" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Milestones">
+                  <Flag className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">Milestones</span>}
+                  {!isMobile && (
+                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {(project.milestones || []).length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger value="issues" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Issues">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">Issues</span>}
+                  {!isMobile && openIssuesCount > 0 && (
+                    <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                      {openIssuesCount}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            {/* Right Side: View Controls */}
+            <div className="flex-1 min-w-0 md:max-w-[60%]">
               {section === 'tasks' && (
-                <ViewControls
-                  viewMode={viewMode}
-                  onViewModeChange={setViewMode}
-                  onTaskCreate={() => setIsAddTaskDialogOpen(true)}
-                  searchQuery={searchQuery}
-                  onSearchQueryChange={setSearchQuery}
-                />
+                <div className="flex items-center gap-1.5 sm:gap-2 justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
+                  {activeFilterCount > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearFilters}
+                      className="gap-1 text-muted-foreground hover:text-foreground h-9 px-2 shrink-0"
+                    >
+                      <X className="h-4 w-4" />
+                      <span className="hidden sm:inline">Clear</span>
+                    </Button>
+                  )}
+                  <TaskFiltersDropdown
+                    milestones={project.milestones || []}
+                    modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+                    teamMembers={teamMembers}
+                    allTags={allTags}
+                    filters={filters}
+                    onFiltersChange={setFilters}
+                    activeFilterCount={activeFilterCount}
+                  />
+                  <ViewControls
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    onTaskCreate={() => setIsAddTaskDialogOpen(true)}
+                    searchQuery={searchQuery}
+                    onSearchQueryChange={setSearchQuery}
+                  />
+                </div>
               )}
               {section === 'modules' && (
                 <ModuleViewControls
@@ -784,73 +1241,6 @@ export default function ProjectDetail() {
                   onClearFilters={clearIssueFilters}
                   onReportIssue={() => setIsAddIssueDialogOpen(true)}
                 />
-              )}
-            </div>
-
-            {/* Right Side: Tabs and Filters */}
-            <div className="flex items-center gap-2 shrink-0 ml-auto overflow-x-auto no-scrollbar py-1">
-              <TabsList className="bg-muted/50 w-auto flex shrink-0 h-9">
-                <TabsTrigger value="tasks" className="gap-2 shrink-0">
-                  <ListTodo className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'tasks') && <span className="whitespace-nowrap">Tasks</span>}
-                  {(!isMobile || section === 'tasks') && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {(project.tasks || []).length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="modules" className="gap-2 shrink-0">
-                  <Boxes className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'modules') && <span className="whitespace-nowrap">Modules</span>}
-                  {(!isMobile || section === 'modules') && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {modules.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="milestones" className="gap-2 shrink-0">
-                  <Flag className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'milestones') && <span className="whitespace-nowrap">Milestones</span>}
-                  {(!isMobile || section === 'milestones') && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {(project.milestones || []).length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="issues" className="gap-2 shrink-0">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  {(!isMobile || section === 'issues') && <span className="whitespace-nowrap">Issues</span>}
-                  {(!isMobile || section === 'issues') && openIssuesCount > 0 && (
-                    <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {openIssuesCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-              </TabsList>
-
-              {section === 'tasks' && (
-                <div className="flex items-center gap-2">
-                  <TaskFiltersDropdown
-                    milestones={project.milestones || []}
-                    modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
-                    teamMembers={teamMembers}
-                    allTags={allTags}
-                    filters={filters}
-                    onFiltersChange={setFilters}
-                    activeFilterCount={activeFilterCount}
-                  />
-                  {activeFilterCount > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="gap-1 text-muted-foreground hover:text-foreground h-9 px-2"
-                    >
-                      <X className="h-4 w-4" />
-                      <span className="hidden sm:inline">Clear</span>
-                    </Button>
-                  )}
-                </div>
               )}
             </div>
           </div>
@@ -948,6 +1338,49 @@ export default function ProjectDetail() {
         projectId={id}
         onAddModule={handleAddModule}
       />
+
+      <Dialog
+        open={memberRemovalPrompt.open}
+        onOpenChange={(open) => {
+          if (!open && !isRemovingMember) {
+            setMemberRemovalPrompt(DEFAULT_MEMBER_REMOVAL_PROMPT);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove member from project?</DialogTitle>
+            <DialogDescription>
+              {memberRemovalPrompt.memberName
+                ? `${memberRemovalPrompt.memberName} will be removed from the project. Do you also want to remove this person from the project group chat?`
+                : 'This member will be removed from the project. Do you also want to remove this person from the project group chat?'}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setMemberRemovalPrompt(DEFAULT_MEMBER_REMOVAL_PROMPT)}
+              disabled={isRemovingMember}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => handleRemoveProjectMember(false)}
+              disabled={isRemovingMember}
+            >
+              No, keep in chat
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => handleRemoveProjectMember(true)}
+              disabled={isRemovingMember}
+            >
+              {isRemovingMember ? 'Removing...' : 'Yes, remove from chat'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -29,7 +29,7 @@ export default function Chat() {
 
   const { conversations, loading: convsLoading, refetch } = useConversations();
   const activeId = conversationId || (isMobile ? null : activeConversationId);
-  const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages, sendMessage } = useMessages(activeId ?? null);
+  const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages, sendMessage, readOnly, readOnlyNotice } = useMessages(activeId ?? null);
   const { reactionMap, handleToggleReaction } = useReactions(messages, user?.id);
   const { data: reachableUsers = [] } = useReachableUsers();
   const onlineUserIds = useChatStore((s) => s.onlineUserIds);
@@ -49,6 +49,38 @@ export default function Chat() {
       setActiveConversation(conversationId);
     }
   }, [conversationId, activeConversationId, setActiveConversation]);
+
+  useEffect(() => {
+    if (!conversationId || convsLoading) return;
+    const existsInList = conversations.some((c) => c.id === conversationId);
+    if (existsInList) return;
+
+    // Newly-created project chats can lag briefly in local conversation state.
+    // Refetch immediately (and once shortly after) so route-opened chats render without manual refresh.
+    refetch().catch(() => {
+      // Non-blocking: ConversationList handles fetch errors internally.
+    });
+    const baseDelayMs = Number(import.meta.env.VITE_CHAT_CONVERSATION_REFETCH_BASE_DELAY_MS ?? 600);
+    const maxRetries = Number(import.meta.env.VITE_CHAT_CONVERSATION_REFETCH_MAX_RETRIES ?? 1);
+
+    // Exponential backoff to avoid hardcoding a single delay under varying latency/load.
+    const retryDelaysMs = Array.from({ length: maxRetries }, (_, i) => baseDelayMs * (2 ** i));
+    let isCancelled = false;
+
+    const retryTimers = retryDelaysMs.map((delayMs) =>
+      window.setTimeout(() => {
+        if (isCancelled) return;
+        refetch().catch(() => {
+          // Non-blocking retry.
+        });
+      }, delayMs)
+    );
+
+    return () => {
+      isCancelled = true;
+      retryTimers.forEach((t) => window.clearTimeout(t));
+    };
+  }, [conversationId, convsLoading, conversations, refetch]);
 
   useEffect(() => {
     // On mobile /chat route, do not auto-open a stale cached conversation.
@@ -145,6 +177,8 @@ export default function Chat() {
                   onTyping={broadcastTyping}
                   members={activeConv.members}
                   sendMessage={sendMessage}
+                  readOnly={readOnly}
+                  readOnlyNotice={readOnlyNotice}
                 />
               </>
             ) : (

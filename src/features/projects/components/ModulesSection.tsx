@@ -50,8 +50,8 @@ export function ModuleViewControls({
   onSearchQueryChange?: (query: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-2 w-full justify-between">
-      <div className="flex items-center gap-2 flex-1 min-w-0">
+    <div className="flex items-center gap-2 w-full justify-between md:justify-end">
+      <div className="flex items-center gap-2 flex-1 min-w-0 md:flex-none">
         {/* Search Input */}
         <div className="relative flex items-center flex-1 md:flex-none min-w-0">
           <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />

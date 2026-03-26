@@ -124,6 +124,9 @@ export function useMessages(conversationId: string | null) {
   const [messages, setMessages] = useState<ChatMessage[]>(cached?.messages ?? []);
   const [loading, setLoading] = useState(!hasCachedData && !!conversationId);
   const [hasMore, setHasMore] = useState(cached?.hasMore ?? true);
+  const [readOnly, setReadOnly] = useState(false);
+  const [readOnlyNotice, setReadOnlyNotice] = useState<string | null>(null);
+  const [leftAt, setLeftAt] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const updateChannelRef = useRef<RealtimeChannel | null>(null);
   const PAGE_SIZE = 50;
@@ -142,8 +145,30 @@ export function useMessages(conversationId: string | null) {
       setMessages([]);
       setHasMore(true);
       setLoading(false);
+      setReadOnly(false);
+      setReadOnlyNotice(null);
+      setLeftAt(null);
       return;
     }
+
+    chatService.getConversationAccessState(conversationId)
+      .then((state) => {
+        setReadOnly(state.readOnly);
+        setLeftAt(state.leftAt);
+        setReadOnlyNotice(
+          state.readOnly
+            ? state.leftAt
+              ? 'You have been removed from this project. You can view previous messages, but you cannot send new ones in this group.'
+              : 'Unable to verify your access right now. Messages may be read-only.'
+            : null
+        );
+      })
+      .catch(() => {
+        // Fail closed: if we cannot verify access, treat the user as read-only.
+        setReadOnly(true);
+        setReadOnlyNotice('Unable to verify your access right now. Messages may be read-only.');
+        setLeftAt(null);
+      });
 
     const cachedEntry = getCachedMessages(conversationId);
     if (cachedEntry) {
@@ -187,6 +212,16 @@ export function useMessages(conversationId: string | null) {
       conversationId,
       async (payload) => {
         const newMsg = payload.new;
+        const newMsgCreatedAtTs = new Date((newMsg as any)?.created_at).getTime();
+        const leftAtTs = leftAt ? new Date(leftAt).getTime() : NaN;
+
+        if (
+          Number.isFinite(leftAtTs) &&
+          Number.isFinite(newMsgCreatedAtTs) &&
+          newMsgCreatedAtTs > leftAtTs
+        ) {
+          return;
+        }
         const { data: profile } = await supabase
           .from('profiles')
           .select('id, name, email, avatar_url, initials, role')
@@ -201,7 +236,7 @@ export function useMessages(conversationId: string | null) {
       }
     );
     return () => { if (channelRef.current) chatTransport.unsubscribe(channelRef.current); };
-  }, [conversationId, storeAddMessage]);
+  }, [conversationId, storeAddMessage, leftAt]);
 
   const sendMessage = useCallback(async (content: string, type: 'text' | 'file' = 'text', fileData?: any) => {
     if (!conversationId || !user) return;
@@ -420,7 +455,7 @@ export function useMessages(conversationId: string | null) {
     return result.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [messages, pendingMessages, conversationId]);
 
-  return { messages: combinedMessages, loading, hasMore, loadMore, refetchMessages, sendMessage };
+  return { messages: combinedMessages, loading, hasMore, loadMore, refetchMessages, sendMessage, readOnly, readOnlyNotice };
 }
 
 export function useReactions(messages: ChatMessage[], currentUserId?: string) {

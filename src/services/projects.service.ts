@@ -27,6 +27,7 @@ const PROJECT_SELECT_COLUMNS = `
   client_contact,
   notes,
   departments,
+  created_by,
   created_at,
   updated_at,
   organization_id,
@@ -114,6 +115,7 @@ function mapDbProjectToProject(dbProject: any, tasks: Task[] = [], milestones: M
     clientContact: dbProject.client_contact || '',
     notes: dbProject.notes || '',
     departments: dbProject.departments || [],
+    createdBy: dbProject.created_by || undefined,
     tasks,
     milestones: enrichedMilestones,
     issues,
@@ -309,6 +311,17 @@ export const projectsService = {
         // Build Member Roles for this project
         const projectMembers = (memberRolesData || []).filter(m => m.project_id === project.id);
         const memberRoles = Object.fromEntries(projectMembers.map(pm => [pm.user_id, pm.role]));
+        const mappedTeamMembers: TeamMember[] = projectMembers.map(pm => {
+          const profile = profilesMap[pm.user_id];
+          return {
+            id: profile?.id || pm.user_id,
+            name: profile?.name || 'Unknown',
+            role: pm.role || profile?.role || '',
+            avatar: profile?.avatar_url || undefined,
+            initials: profile?.initials || 'UN',
+            email: profile?.email || '',
+          };
+        });
 
         const projectMilestonesData = milestonesByProject[project.id] || [];
         const projectTasksData = tasksByProject[project.id] || [];
@@ -366,7 +379,7 @@ export const projectsService = {
           return mapDbIssueToIssue({ ...issue, attachments: enrichedAtt, comments: iComments }, iAssignees, reporter);
         });
 
-        return mapDbProjectToProject(project, mappedTasks, mappedMilestones, mappedIssues, [], projectModulesData);
+        return mapDbProjectToProject(project, mappedTasks, mappedMilestones, mappedIssues, mappedTeamMembers, projectModulesData);
       });
 
     } catch (err) {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,7 @@ import { format, isBefore, startOfToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDetail } from "@/hooks/useProjectDetail";
 import { useUpdateProject, useProject } from "@/hooks/useProjects";
 import { useOrganizationMembers } from "@/hooks/useProjectTeam";
@@ -64,6 +65,7 @@ import { projectStorageService } from "@/services/projectStorage.service";
 import { modulesService } from "@/services/modules.service";
 import { milestonesService } from "@/services/milestones.service";
 import { projectMembersService } from "@/services/projectMembers.service";
+import { chatService } from "@/services/chat.service";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryClient";
 
@@ -162,6 +164,7 @@ const EditProject = () => {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
     const { id } = useParams();
+    const { user } = useAuth();
     const { currentOrganization } = useOrganization();
     const updateProjectMutation = useUpdateProject();
     const { data: orgMembers = [] } = useOrganizationMembers(currentOrganization?.id);
@@ -233,6 +236,13 @@ const EditProject = () => {
         id: null
     });
     const [deleteInProgress, setDeleteInProgress] = useState(false);
+    const [chatRemovalPrompt, setChatRemovalPrompt] = useState<{
+        open: boolean;
+        memberIds: string[];
+    }>({
+        open: false,
+        memberIds: [],
+    });
 
     const confirmDelete = async () => {
         const { type, id } = deleteConfirmation;
@@ -296,6 +306,13 @@ const EditProject = () => {
     const [isDragOver, setIsDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
+    const canManageProjectMembers = useMemo(() => {
+        if (!project || !user?.id) return false;
+        if (project.createdBy === user.id) return true;
+        const myMembership = (project.team || []).find((member) => member.id === user.id);
+        return (myMembership?.role || '').toLowerCase() === 'admin';
+    }, [project?.createdBy, project?.team, user?.id]);
+
     const handleAddModule = () => {
         if (newModuleName.trim()) {
             if (editingModuleId) {
@@ -356,6 +373,11 @@ const EditProject = () => {
     };
 
     const handleAddTeamMember = () => {
+        if (!canManageProjectMembers) {
+            toast.error('Only the project creator or an Admin can add or remove members');
+            return;
+        }
+
         if (selectedMember && selectedRole) {
             const exists = assignedMembers.find(m => m.memberId === selectedMember);
             if (!exists) {
@@ -375,6 +397,11 @@ const EditProject = () => {
     };
 
     const handleRemoveTeamMember = (memberId: string) => {
+        if (!canManageProjectMembers) {
+            toast.error('Only the project creator or an Admin can add or remove members');
+            return;
+        }
+
         setAssignedMembers(assignedMembers.filter(m => m.memberId !== memberId));
     };
 
@@ -564,26 +591,10 @@ const EditProject = () => {
         setDeleteConfirmation({ isOpen: true, type: 'link', id: linkId });
     };
 
-    const handleSave = async () => {
-        if (!id) return;
-
-        if (!projectName.trim()) {
-            toast.error('Project name is required');
-            return;
-        }
-
-        if (!startDate) {
-            toast.error('Start date is required');
-            return;
-        }
-
-        if (!targetDate) {
-            toast.error('Target date is required');
-            return;
-        }
+    const executeSave = async (removeFromChatToo: boolean) => {
+        if (!id || !project) return;
 
         setIsSaving(true);
-
         try {
             await updateProjectMutation.mutateAsync({
                 id,
@@ -603,14 +614,14 @@ const EditProject = () => {
                 },
             });
 
-            // Sync team members
+            // Sync team members (authorization must be enforced server-side)
             const currentInDbIds = project.team?.map((m: any) => m.id) || [];
             const assignedIds = assignedMembers.map(m => m.memberId);
 
             // Members to add
             const newMembers = assignedMembers.filter((m) => !currentInDbIds.includes(m.memberId));
             // Members to remove
-            const removedMemberIds = currentInDbIds.filter(id => !assignedIds.includes(id));
+            const removedMemberIds = currentInDbIds.filter(memberId => !assignedIds.includes(memberId));
 
             if (newMembers.length > 0) {
                 try {
@@ -620,17 +631,44 @@ const EditProject = () => {
                     }));
                     await projectMembersService.addMembers(project.id, memberData);
                 } catch (memberError) {
-                    console.error('Error adding team members:', memberError);
-                    toast.warning('Project updated but some new team members could not be added');
+                    console.error('[executeSave] Error adding team members', {
+                        projectId: id,
+                        userIds: newMembers.map(m => m.memberId),
+                        error: memberError,
+                    });
+                    const message = memberError instanceof Error ? memberError.message : 'Failed to add project members';
+                    toast.warning(`Project updated, but failed to add ${newMembers.length} member(s)`, { description: message });
                 }
             }
 
             if (removedMemberIds.length > 0) {
                 try {
                     await projectMembersService.removeMembers(project.id, removedMemberIds);
+
+                    if (removeFromChatToo) {
+                        try {
+                            await chatService.forceRemoveProjectChatMembers(project.id, removedMemberIds);
+                        } catch (chatError) {
+                            console.error('[executeSave] Chat member removal failed', {
+                                projectId: id,
+                                userIds: removedMemberIds,
+                                error: chatError,
+                            });
+                            const message = chatError instanceof Error ? chatError.message : 'Failed to remove members from project chat';
+                            toast.warning(
+                                `Removed ${removedMemberIds.length} member(s) from project, but could not update project chat`,
+                                { description: message }
+                            );
+                        }
+                    }
                 } catch (memberError) {
-                    console.error('Error removing team members:', memberError);
-                    toast.warning('Project updated but some team members could not be removed');
+                    console.error('[executeSave] Error removing team members', {
+                        projectId: id,
+                        userIds: removedMemberIds,
+                        error: memberError,
+                    });
+                    const message = memberError instanceof Error ? memberError.message : 'Failed to remove project members';
+                    toast.warning(`Project updated, but failed to remove ${removedMemberIds.length} member(s)`, { description: message });
                 }
             }
 
@@ -732,6 +770,39 @@ const EditProject = () => {
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleSave = async () => {
+        if (!id || !project) return;
+
+        if (!projectName.trim()) {
+            toast.error('Project name is required');
+            return;
+        }
+
+        if (!startDate) {
+            toast.error('Start date is required');
+            return;
+        }
+
+        if (!targetDate) {
+            toast.error('Target date is required');
+            return;
+        }
+
+        const currentInDbIds = project.team?.map((m: any) => m.id) || [];
+        const assignedIds = assignedMembers.map(m => m.memberId);
+        const removedMemberIds = currentInDbIds.filter(memberId => !assignedIds.includes(memberId));
+
+        if (canManageProjectMembers && removedMemberIds.length > 0) {
+            setChatRemovalPrompt({
+                open: true,
+                memberIds: removedMemberIds,
+            });
+            return;
+        }
+
+        await executeSave(false);
     };
 
     if (isLoading) {
@@ -1183,13 +1254,17 @@ const EditProject = () => {
                             <Users className="h-5 w-5 text-primary" />
                             Project Team
                         </CardTitle>
-                        <CardDescription>Assign team members and roles to this project</CardDescription>
+                        <CardDescription>
+                            {canManageProjectMembers
+                                ? 'Assign team members and roles to this project'
+                                : 'Only the project creator or an Admin can manage team members'}
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="flex flex-col md:flex-row gap-3">
                             <div className="flex-1 space-y-2">
                                 <Label>Member</Label>
-                                <Select value={selectedMember} onValueChange={setSelectedMember}>
+                                <Select value={selectedMember} onValueChange={setSelectedMember} disabled={!canManageProjectMembers}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select member" />
                                     </SelectTrigger>
@@ -1210,7 +1285,7 @@ const EditProject = () => {
                             </div>
                             <div className="flex-1 space-y-2">
                                 <Label>Role</Label>
-                                <Select value={selectedRole} onValueChange={setSelectedRole}>
+                                <Select value={selectedRole} onValueChange={setSelectedRole} disabled={!canManageProjectMembers}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select role" />
                                     </SelectTrigger>
@@ -1224,7 +1299,7 @@ const EditProject = () => {
                             <Button
                                 className="md:mt-8"
                                 onClick={handleAddTeamMember}
-                                disabled={!selectedMember || !selectedRole}
+                                disabled={!canManageProjectMembers || !selectedMember || !selectedRole}
                             >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add
@@ -1255,13 +1330,15 @@ const EditProject = () => {
                                                         )}
                                                     </div>
                                                 </div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => handleRemoveTeamMember(assignment.memberId)}
-                                                >
-                                                    <X className="h-4 w-4" />
-                                                </Button>
+                                                {canManageProjectMembers && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={() => handleRemoveTeamMember(assignment.memberId)}
+                                                    >
+                                                        <X className="h-4 w-4" />
+                                                    </Button>
+                                                )}
                                             </div>
                                         );
                                     })}
@@ -1585,6 +1662,56 @@ const EditProject = () => {
                                 ) : (
                                     'Delete'
                                 )}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Project member removal chat prompt */}
+                <Dialog
+                    open={chatRemovalPrompt.open}
+                    onOpenChange={(open) => {
+                        if (!open && !isSaving) {
+                            setChatRemovalPrompt({ open: false, memberIds: [] });
+                        }
+                    }}
+                >
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Remove from group chat too?</DialogTitle>
+                            <DialogDescription>
+                                {chatRemovalPrompt.memberIds.length === 1
+                                    ? 'This member will be removed from the project. Do you also want to remove them from the project group chat?'
+                                    : 'These members will be removed from the project. Do you also want to remove them from the project group chat?'}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter>
+                            <Button
+                                variant="outline"
+                                onClick={() => setChatRemovalPrompt({ open: false, memberIds: [] })}
+                                disabled={isSaving}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="secondary"
+                                onClick={async () => {
+                                    setChatRemovalPrompt({ open: false, memberIds: [] });
+                                    await executeSave(false);
+                                }}
+                                disabled={isSaving}
+                            >
+                                No, keep in chat
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={async () => {
+                                    setChatRemovalPrompt({ open: false, memberIds: [] });
+                                    await executeSave(true);
+                                }}
+                                disabled={isSaving}
+                            >
+                                Yes, remove from chat
                             </Button>
                         </DialogFooter>
                     </DialogContent>

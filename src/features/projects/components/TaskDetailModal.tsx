@@ -820,8 +820,8 @@ export const TaskDetailModal = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] p-0 gap-0" onOpenAutoFocus={(e) => e.preventDefault()}>
-        <DialogHeader className="px-6 py-4 border-b">
+      <DialogContent className="max-w-3xl max-h-[90vh] w-[95vw] sm:w-full p-0 gap-0" onOpenAutoFocus={(e) => e.preventDefault()}>
+        <DialogHeader className="px-4 sm:px-6 py-4 border-b">
           <DialogTitle>{mode === 'create' ? 'Add New Task' : 'Task Details'}</DialogTitle>
         </DialogHeader>
         <DialogDescription className="sr-only">
@@ -829,7 +829,7 @@ export const TaskDetailModal = ({
         </DialogDescription>
 
         <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
-          <div className="p-6 space-y-6">
+          <div className="p-4 sm:p-6 space-y-6">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Task Title <span className="text-destructive" aria-hidden="true">*</span></Label>
               <Input
@@ -848,7 +848,7 @@ export const TaskDetailModal = ({
                 Task Overview
               </h3>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Assignees */}
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -1029,7 +1029,23 @@ export const TaskDetailModal = ({
                         <Command>
                           <CommandInput placeholder="Search modules..." />
                           <CommandList>
-                            <CommandEmpty>No modules found.</CommandEmpty>
+                            <CommandEmpty className="py-2 px-2">
+                              <div className="text-sm text-center py-2 text-muted-foreground">
+                                No modules found.
+                              </div>
+                              {onAddModule && (
+                                <button
+                                  className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                                  onClick={() => {
+                                    onAddModule();
+                                    setIsModulePopoverOpen(false);
+                                  }}
+                                >
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Create New Module
+                                </button>
+                              )}
+                            </CommandEmpty>
                             <CommandGroup heading="Available Modules">
                               {modules
                                 .filter(m => !(editedTask.moduleIds || []).includes(m.id))
@@ -1478,7 +1494,7 @@ export const TaskDetailModal = ({
                 Dependencies
               </h3>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {/* Blocking To */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
@@ -1649,7 +1665,7 @@ export const TaskDetailModal = ({
           </div>
         </ScrollArea>
         {mode === 'create' && (
-          <div className="px-6 py-4 border-t flex justify-end gap-2 bg-background">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-t flex justify-end gap-2 bg-background">
             <Button variant="outline" onClick={onClose}>
               Cancel
             </Button>
@@ -1659,7 +1675,7 @@ export const TaskDetailModal = ({
           </div>
         )}
         {mode === 'view' && (
-          <div className="px-6 py-4 border-t flex items-center justify-between gap-2 bg-background">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-t flex items-center justify-between gap-2 bg-background">
             {/* Delete button on the bottom left */}
             {onDelete ? (
               <Button

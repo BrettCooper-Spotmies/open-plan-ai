@@ -46,7 +46,7 @@ export function ViewControls({
   onSearchQueryChange?: (query: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-3 flex-1 min-w-0">
+    <div className="flex items-center gap-2 sm:gap-3 min-w-0 justify-end shrink-0 max-w-full w-full">
       {/* View Toggle */}
       <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
         <Button
@@ -74,13 +74,13 @@ export function ViewControls({
       </div>
 
       {/* Search Input */}
-      <div className="relative flex items-center flex-1 md:flex-none min-w-0 max-w-[240px]">
+      <div className="relative flex items-center flex-1 md:flex-none min-w-0 max-w-none sm:max-w-[240px]">
         <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
         <Input
           placeholder="Search tasks..."
           value={searchQuery || ''}
           onChange={(e) => onSearchQueryChange?.(e.target.value)}
-          className="pl-9 w-full md:w-[200px] h-9 bg-background focus-visible:ring-1 focus-visible:ring-primary/20 transition-all"
+          className="pl-9 w-full md:w-[200px] h-9 bg-background focus-visible:ring-1 focus-visible:ring-primary/20 transition-all rounded-lg"
         />
         {searchQuery && (
           <Button
@@ -101,10 +101,10 @@ export function ViewControls({
         <Button 
           size="sm" 
           onClick={onTaskCreate} 
-          className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 ml-2"
+          className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 ml-1 sm:ml-2 px-0 w-9 sm:w-auto sm:px-3 rounded-lg"
         >
           <Plus className="h-4 w-4" />
-          <span>Create Task</span>
+          <span className="hidden sm:inline">Create Task</span>
         </Button>
       )}
     </div>

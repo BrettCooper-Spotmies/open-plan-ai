@@ -3,6 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { projectsService } from '@/services/projects.service';
 import { queryKeys } from '@/lib/queryClient';
 import { TeamMember } from '@/types';
+import { config } from '@/config';
+
+const isValidUuid = (value: unknown): value is string => {
+  if (typeof value !== 'string') return false;
+  // Accept canonical UUID format; avoids inserting obviously-invalid IDs into Set-based dedup.
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+};
 
 /**
  * Fetch all team members (profiles) - for assignment dropdowns
@@ -32,29 +39,64 @@ export function useOrganizationMembers(orgId: string | undefined) {
       if (membersError) throw membersError;
       if (!members?.length) return [];
 
-      const userIds = members.map(m => m.user_id);
+      // Deduplicate to avoid repeated users in assignment dropdowns.
+      const seenUserIds = new Set<string>();
+      let invalidUserIdCount = 0;
+      const invalidUserIdSamples: string[] = [];
+      const uniqueMembers = members.filter((m) => {
+        const userId = (m as any)?.user_id;
+        if (!isValidUuid(userId)) {
+          invalidUserIdCount++;
+          if (typeof userId === 'string' && invalidUserIdSamples.length < 5) {
+            // Mask to reduce log-sensitivity while still helping debugging.
+            invalidUserIdSamples.push(userId.slice(-8));
+          }
+          return false;
+        }
+        if (seenUserIds.has(userId)) return false;
+        seenUserIds.add(userId);
+        return true;
+      });
+      const userIds = uniqueMembers.map(m => (m as any).user_id).filter(isValidUuid);
+
+      if (invalidUserIdCount > 0) {
+        const details = {
+          invalidUserIdCount,
+          ...(invalidUserIdSamples.length > 0 ? { samplesLast8: invalidUserIdSamples } : null),
+        };
+        if (!config.isProduction) console.warn('[useOrganizationMembers] filtered invalid organization_members.user_id', details);
+      }
 
       // Fetch profiles separately to avoid ambiguous FK join
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, name, email, avatar_url, initials')
+        .select('id, name, email, avatar_url, initials, deleted_at')
         .in('id', userIds);
 
       if (profilesError) throw profilesError;
 
-      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+      const validProfiles = (profiles || []).filter((p) =>
+        (p.deleted_at ?? null) === null &&
+        isValidUuid(p.id) &&
+        !!p.name &&
+        !!String(p.name).trim()
+      );
+      const profileMap = new Map(validProfiles.map(p => [p.id, p]));
 
-      return members.map((m) => {
+      return uniqueMembers
+        .map((m) => {
         const profile = profileMap.get(m.user_id);
+        if (!profile) return null;
         return {
-          id: profile?.id || m.user_id,
-          name: profile?.name || 'Unknown',
-          email: profile?.email || '',
+          id: profile.id,
+          name: profile.name,
+          email: profile.email || '',
           role: m.role || 'member',
-          avatar: profile?.avatar_url || undefined,
-          initials: profile?.initials || 'UN',
+          avatar: profile.avatar_url || undefined,
+          initials: profile.initials || String(profile.name).slice(0, 2).toUpperCase(),
         };
-      });
+      })
+        .filter((member): member is TeamMember => member !== null);
     },
     enabled: !!orgId,
   });
@@ -74,20 +116,51 @@ export function useProjectMembers(projectId: string | undefined) {
         .select(`
           user_id,
           role,
-          profile:profiles(id, name, email, avatar_url, initials)
+          profile:profiles(id, name, email, avatar_url, initials, deleted_at)
         `)
         .eq('project_id', projectId);
 
       if (error) throw error;
 
-      return (data || []).map((m: any) => ({
-        id: m.profile?.id || m.user_id,
-        name: m.profile?.name || 'Unknown',
-        email: m.profile?.email || '',
-        role: m.role || 'member',
-        avatar: m.profile?.avatar_url || undefined,
-        initials: m.profile?.initials || 'UN',
-      }));
+      const seen = new Set<string>();
+      let invalidProfileIdCount = 0;
+      const invalidProfileIdSamples: string[] = [];
+      const mappedMembers = (data || [])
+        .map((m: any) => {
+          const profile = m.profile;
+          const profileId = profile?.id;
+          const deletedAt = profile?.deleted_at ?? null;
+          if (!profile || deletedAt !== null) return null;
+          if (!isValidUuid(profileId) || !profile?.name) {
+            if (!isValidUuid(profileId)) {
+              invalidProfileIdCount++;
+              if (typeof profileId === 'string' && invalidProfileIdSamples.length < 5) {
+                invalidProfileIdSamples.push(profileId.slice(-8));
+              }
+            }
+            return null;
+          }
+          if (seen.has(profileId)) return null;
+          seen.add(profileId);
+          return {
+            id: profileId,
+            name: profile.name,
+            email: profile.email || '',
+            role: m.role || 'member',
+            avatar: profile.avatar_url || undefined,
+            initials: profile.initials || String(profile.name).slice(0, 2).toUpperCase(),
+          };
+        })
+        .filter((member): member is TeamMember => member !== null);
+
+      if (!config.isProduction && invalidProfileIdCount > 0) {
+        console.warn('[useProjectMembers] filtered invalid project_members.profile.id', {
+          invalidProfileIdCount,
+          ...(invalidProfileIdSamples.length > 0 ? { samplesLast8: invalidProfileIdSamples } : null),
+        });
+      }
+
+      return mappedMembers;
     },
     enabled: !!projectId,
   });

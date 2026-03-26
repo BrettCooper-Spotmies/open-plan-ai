@@ -17,7 +17,6 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Building2, Loader2, Plus, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { teamService } from '@/services/team.service';
 
@@ -68,22 +67,7 @@ export default function Dashboard() {
   const handleAcceptInvite = async (invitation: { id: string; token?: string | null }) => {
     setAcceptingInvite(invitation.id);
     try {
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError) {
-        console.error("Session error during invite acceptance:", sessionError);
-        throw new Error('Authentication session error');
-      }
-      if (!session?.access_token) {
-        throw new Error('You need to be logged in to accept the invitation.');
-      }
-
-      const res = await supabase.functions.invoke('accept-invite', {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: { inviteId: invitation.id, token: invitation.token },
-      });
-      if (res.error) throw res.error;
+      await teamService.acceptInvitation(invitation.id || invitation.token || '');
       toast.success('Successfully joined the organization!');
       await refreshOrganizations();
       queryClient.invalidateQueries({ queryKey: ['pending-invitations'] });

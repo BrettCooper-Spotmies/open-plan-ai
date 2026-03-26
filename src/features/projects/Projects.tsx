@@ -32,6 +32,12 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { formatModuleType } from './utils/projectUtils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
 
 const stageColors = {
   concept: 'bg-muted text-muted-foreground',
@@ -290,9 +296,64 @@ export default function Projects() {
                   <ProjectListProgress projectId={project.id} progress={project.progress || 0} />
 
                   <div className="flex items-center justify-between pt-3 border-t border-border/60">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4 text-muted-foreground" />
-                    </div>
+                    <HoverCard openDelay={150}>
+                      <HoverCardTrigger asChild>
+                        <div
+                          className="flex items-center gap-2 text-muted-foreground cursor-help"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          <Users className="h-4 w-4" />
+                          <span className="text-xs">{project.team?.length || 0}</span>
+                          {(project.team?.length || 0) > 0 && (
+                            <div className="flex items-center -space-x-2">
+                              {project.team.slice(0, 3).map((member) => (
+                                <Avatar key={member.id} className="h-5 w-5 border border-background">
+                                  <AvatarImage src={member.avatar || undefined} alt={member.name} />
+                                  <AvatarFallback className="text-[10px]">
+                                    {member.initials || member.name.slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </HoverCardTrigger>
+                      <HoverCardContent
+                        className="w-72"
+                        align="start"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
+                        <div className="space-y-2">
+                          <p className="text-sm font-medium">Project Team</p>
+                          {project.team && project.team.length > 0 ? (
+                            <div className="space-y-2 max-h-48 overflow-y-auto">
+                              {project.team.map((member) => (
+                                <div key={member.id} className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <Avatar className="h-7 w-7">
+                                      <AvatarImage src={member.avatar || undefined} alt={member.name} />
+                                      <AvatarFallback className="text-[11px]">{member.initials}</AvatarFallback>
+                                    </Avatar>
+                                    <p className="text-sm truncate">{member.name}</p>
+                                  </div>
+                                  <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
+                                    {member.role || 'Member'}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">No team members assigned yet.</p>
+                          )}
+                        </div>
+                      </HoverCardContent>
+                    </HoverCard>
                     <span className="text-[11px] text-muted-foreground">
                       Updated {project.updatedAt ? new Date(project.updatedAt).toISOString().slice(0, 10) : 'N/A'}
                     </span>
