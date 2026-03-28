@@ -1,5 +1,10 @@
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
+import {
+  normalizeInviteEmail,
+  inviteMatchesAnyEmail,
+  candidateEmailsFromAuthUser,
+} from '@/utils/inviteEmail';
 
 export type Profile = Tables<'profiles'>;
 export type OrganizationMember = Tables<'organization_members'>;
@@ -35,10 +40,7 @@ export interface InviteResult {
   message?: string;
 }
 
-export const normalizeEmail = (value: unknown): string => {
-  if (typeof value !== 'string') return '';
-  return value.trim().toLowerCase();
-};
+export const normalizeEmail = normalizeInviteEmail;
 
 export const teamService = {
   async acceptInvitationDirectFallback(invitationIdentifier: string): Promise<void> {
@@ -82,9 +84,22 @@ export const teamService = {
       throw new Error('Invitation has expired');
     }
 
-    const userEmail = normalizeEmail(user.email);
-    const invitationEmail = normalizeEmail(invitation.email);
-    if (!userEmail || !invitationEmail || userEmail !== invitationEmail) {
+    if (!invitation.email) {
+      throw new Error('Invitation is missing an email address');
+    }
+
+    const { data: profileRow } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    const candidates = [
+      ...candidateEmailsFromAuthUser(user),
+      normalizeInviteEmail(profileRow?.email),
+    ].filter((e): e is string => Boolean(e));
+
+    if (!inviteMatchesAnyEmail(invitation.email, candidates)) {
       throw new Error('This invitation is for a different email address');
     }
 
@@ -326,7 +341,7 @@ export const teamService = {
   async getPendingInvitationsForUser(email: string): Promise<TeamInvitation[]> {
     const { data: { user } } = await supabase.auth.getUser();
 
-    const normalizedEmail = normalizeEmail(email);
+    const normalizedEmail = normalizeInviteEmail(email);
     if (!normalizedEmail) return [];
     const { data, error } = await supabase
       .from('team_invitations')

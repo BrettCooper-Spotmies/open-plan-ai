@@ -1,8 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { teamService } from '@/services/team.service';
+import {
+  normalizeInviteEmail,
+  inviteMatchesAnyEmail,
+  candidateEmailsFromAuthUser,
+} from '@/utils/inviteEmail';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Building2, CheckCircle, AlertTriangle } from 'lucide-react';
@@ -11,7 +16,7 @@ export default function JoinOrganization() {
   const [searchParams] = useSearchParams();
   const inviteParam = searchParams.get('invite');
   const navigate = useNavigate();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, profile, isLoading: authLoading, signOut } = useAuth();
 
   const [invitation, setInvitation] = useState<any>(null);
   const [resolvedInvite, setResolvedInvite] = useState<{ inviteId?: string; token?: string } | null>(null);
@@ -20,6 +25,25 @@ export default function JoinOrganization() {
   const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  const inviteEmailMismatch = useMemo(() => {
+    if (!invitation?.email || !user) return false;
+    const candidates = [
+      ...candidateEmailsFromAuthUser(user),
+      normalizeInviteEmail(profile?.email),
+    ].filter((e): e is string => Boolean(e));
+    if (candidates.length === 0) return false;
+    return !inviteMatchesAnyEmail(invitation.email, candidates);
+  }, [invitation, user, profile?.email]);
+
+  const signedInEmailHint = useMemo(() => {
+    if (!user) return '';
+    return (
+      normalizeInviteEmail(user.email) ||
+      normalizeInviteEmail(profile?.email) ||
+      'this account'
+    );
+  }, [user, profile?.email]);
 
   useEffect(() => {
     if (!inviteParam) {
@@ -96,6 +120,16 @@ export default function JoinOrganization() {
     }
   };
 
+  const handleSwitchAccount = async () => {
+    try {
+      await signOut();
+    } catch {
+      /* still navigate — stale session is confusing */
+    }
+    const redirect = `/join-org?invite=${encodeURIComponent(inviteParam || '')}`;
+    navigate(`/login?redirect=${encodeURIComponent(redirect)}`);
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -148,6 +182,29 @@ export default function JoinOrganization() {
                   Sign up
                 </Link>
               </p>
+            </div>
+          ) : inviteEmailMismatch ? (
+            <div className="flex flex-col items-center gap-4 text-center">
+              <AlertTriangle className="h-10 w-10 text-amber-600" />
+              <p className="text-sm text-muted-foreground">
+                This invitation was sent to{' '}
+                <strong className="text-foreground">{normalizeInviteEmail(invitation?.email)}</strong>.
+                You are signed in as <strong className="text-foreground">{signedInEmailHint}</strong>.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Use the account that received the email, or ask an admin to send a new invite to your
+                current address.
+              </p>
+              <div className="flex w-full flex-col gap-2 sm:flex-row sm:justify-center">
+                <Button type="button" variant="default" className="w-full sm:w-auto" onClick={handleSwitchAccount}>
+                  Switch account
+                </Button>
+                <Link to="/" className="w-full sm:w-auto">
+                  <Button type="button" variant="outline" className="w-full">
+                    Go to dashboard
+                  </Button>
+                </Link>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-4 text-center">

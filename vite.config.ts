@@ -6,8 +6,19 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
-    host: "::",
+    // Explicit localhost keeps the HMR WebSocket + HTTP ping on the same host as the page
+    // (fixes endless failed fetch() in vite/dist/client/client.mjs waitForSuccessfulPing when
+    // using host: "::" or mismatched IPv6/LAN URLs). For real-device testing via LAN IP, set
+    // host: true and configure server.hmr.host to that IP.
+    host: "localhost",
     port: 8080,
+    strictPort: true,
+    hmr: {
+      protocol: "ws",
+      host: "localhost",
+      port: 8080,
+      clientPort: 8080,
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {

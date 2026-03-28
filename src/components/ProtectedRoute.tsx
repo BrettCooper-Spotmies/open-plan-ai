@@ -5,6 +5,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useEffect, useMemo, useState } from 'react';
 import { authService } from '@/services/auth.service';
 import { getSkeletonVariant } from '@/utils/route-skeleton';
+import { mustCompletePasswordResetFlow } from '@/utils/authRecovery';
 
 interface ProtectedRouteProps {
   redirectTo?: string;
@@ -13,7 +14,7 @@ interface ProtectedRouteProps {
 
 
 export function ProtectedRoute({ redirectTo = '/login' }: ProtectedRouteProps) {
-  const { isAuthenticated, isEmailVerified, isLoading, user, signOut } = useAuth();
+  const { isAuthenticated, isEmailVerified, isLoading, user, session, signOut } = useAuth();
   const location = useLocation();
   const [isRedirecting, setIsRedirecting] = useState(false);
 
@@ -42,6 +43,10 @@ export function ProtectedRoute({ redirectTo = '/login' }: ProtectedRouteProps) {
 
   if (!isAuthenticated) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />;
+  }
+
+  if (session && mustCompletePasswordResetFlow(session)) {
+    return <Navigate to="/reset-password" replace />;
   }
 
   if (!isEmailVerified && user?.email) {

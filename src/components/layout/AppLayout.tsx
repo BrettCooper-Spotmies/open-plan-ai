@@ -6,6 +6,7 @@ import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import { useUserStore } from '@/stores/useUserStore';
 import { useGlobalChatRealtime } from '@/features/chat/hooks/useGlobalChatRealtime';
 import { usePresence } from '@/features/chat/hooks/usePresence';
+import { useProjectMembershipRealtime, useConversationMembershipRealtime } from '@/hooks/useWorkspaceMembershipRealtime';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -26,6 +27,8 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
   // Initialize global chat notifications and presence
   useGlobalChatRealtime();
   usePresence(user?.id);
+  useProjectMembershipRealtime();
+  useConversationMembershipRealtime();
 
   // Apply compact mode class to <html>
   useEffect(() => {

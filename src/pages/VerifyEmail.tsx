@@ -209,16 +209,22 @@ const VerifyEmail = () => {
             </div>
             <span className="text-xl font-bold">OpenPlan AI</span>
           </div>
-          <CardTitle className="text-2xl font-bold">Verify your email</CardTitle>
-          <CardDescription>
-            {fromLogin
-              ? "Please verify your email to access your account"
-              : "We sent a 6-digit code to"}
-          </CardDescription>
-          <div className="flex items-center justify-center gap-2 pt-2">
-            <Mail className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium text-foreground">{email}</span>
-          </div>
+          <CardTitle className="text-2xl font-bold">
+            {success ? "Email verified" : "Verify your email"}
+          </CardTitle>
+          {!success && (
+            <>
+              <CardDescription>
+                {fromLogin
+                  ? "Please verify your email to access your account"
+                  : "We sent a 6-digit code to"}
+              </CardDescription>
+              <div className="flex items-center justify-center gap-2 pt-2">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium text-foreground">{email}</span>
+              </div>
+            </>
+          )}
         </CardHeader>
         <CardContent className="space-y-6">
           {redirectMessage && !error && !success && (
@@ -246,53 +252,57 @@ const VerifyEmail = () => {
             </Alert>
           )}
 
-          <div className="flex justify-center">
-            <InputOTP
-              maxLength={6}
-              value={otp}
-              onChange={setOtp}
-              disabled={isLoading || success}
-            >
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP>
-          </div>
+          {!success && (
+            <>
+              <div className="flex justify-center">
+                <InputOTP
+                  maxLength={6}
+                  value={otp}
+                  onChange={setOtp}
+                  disabled={isLoading}
+                >
+                  <InputOTPGroup>
+                    <InputOTPSlot index={0} />
+                    <InputOTPSlot index={1} />
+                    <InputOTPSlot index={2} />
+                    <InputOTPSlot index={3} />
+                    <InputOTPSlot index={4} />
+                    <InputOTPSlot index={5} />
+                  </InputOTPGroup>
+                </InputOTP>
+              </div>
 
-          <Button
-            onClick={handleVerify}
-            disabled={otp.length !== 6 || isLoading || success}
-            className="w-full"
-          >
-            {isLoading ? "Verifying..." : "Verify Email"}
-          </Button>
+              <Button
+                onClick={handleVerify}
+                disabled={otp.length !== 6 || isLoading}
+                className="w-full"
+              >
+                {isLoading ? "Verifying..." : "Verify Email"}
+              </Button>
 
-          <div className="text-center space-y-2">
-            <p className="text-sm text-muted-foreground">
-              Didn't receive the code?
-            </p>
-            <Button
-              variant="ghost"
-              onClick={handleResend}
-              disabled={countdown > 0 || isResending || success}
-              className="text-primary"
-            >
-              {isResending
-                ? "Sending..."
-                : countdown > 0
-                  ? `Resend in ${countdown}s`
-                  : "Resend code"}
-            </Button>
-          </div>
+              <div className="text-center space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Didn't receive the code?
+                </p>
+                <Button
+                  variant="ghost"
+                  onClick={handleResend}
+                  disabled={countdown > 0 || isResending}
+                  className="text-primary"
+                >
+                  {isResending
+                    ? "Sending..."
+                    : countdown > 0
+                      ? `Resend in ${countdown}s`
+                      : "Resend code"}
+                </Button>
+              </div>
 
-          <p className="text-xs text-muted-foreground text-center">
-            The code expires in 10 minutes
-          </p>
+              <p className="text-xs text-muted-foreground text-center">
+                The code expires in 10 minutes
+              </p>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

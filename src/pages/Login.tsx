@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Layers, Mail, Lock, ArrowRight, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Layers, Mail, Lock, ArrowRight, AlertCircle, CheckCircle, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { teamService } from "@/services/team.service";
@@ -19,6 +19,7 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [resetSuccessMessage, setResetSuccessMessage] = useState<string | null>(null);
 
   // Priority: ?redirect= query param > location.state.from > "/"
   const redirectParam = searchParams.get("redirect");
@@ -36,6 +37,16 @@ const Login = () => {
       });
     }
   }, [pendingVerificationEmail, navigate]);
+
+  useEffect(() => {
+    const s = location.state as { message?: string; email?: string } | null | undefined;
+    const hasMessage = typeof s?.message === "string" && s.message.length > 0;
+    const hasEmail = typeof s?.email === "string" && s.email.trim().length > 0;
+    if (!hasMessage && !hasEmail) return;
+    if (hasMessage) setResetSuccessMessage(s!.message!);
+    if (hasEmail) setEmail(s!.email!.trim());
+    navigate({ pathname: location.pathname, search: location.search }, { replace: true, state: {} });
+  }, [location.state, location.pathname, location.search, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -159,6 +170,14 @@ const Login = () => {
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
+              {resetSuccessMessage && (
+                <Alert className="border-green-500/50 bg-green-500/10">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-700 dark:text-green-500">
+                    {resetSuccessMessage}
+                  </AlertDescription>
+                </Alert>
+              )}
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />

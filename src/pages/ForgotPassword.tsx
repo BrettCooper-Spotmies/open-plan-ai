@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,10 +10,18 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const ForgotPassword = () => {
   const { resetPassword } = useAuth();
+  const location = useLocation();
+  const linkErrorFromAuth = (location.state as { authLinkError?: string } | null)?.authLinkError;
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (linkErrorFromAuth) {
+      setError(linkErrorFromAuth);
+    }
+  }, [linkErrorFromAuth]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

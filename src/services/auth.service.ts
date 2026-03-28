@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { getAuthRedirectUrl } from '@/utils/redirectUrl';
 import type { User, Session, AuthError } from '@supabase/supabase-js';
 
 export interface SignUpMetadata {
@@ -67,7 +68,7 @@ export const authService = {
    */
   async resetPassword(email: string): Promise<{ error: AuthError | null }> {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: getAuthRedirectUrl('/reset-password'),
     });
     return { error };
   },
