@@ -75,7 +75,8 @@ import {
   Attachment,
   Comment,
 } from '@/types';
-import { useTeamMembers } from '@/hooks/useProjects';
+import { useOrganizationMembers } from '@/hooks/useProjectTeam';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -246,7 +247,8 @@ export const TaskDetailModal = ({
   onAddModule,
 }: TaskDetailModalProps) => {
   const { profile } = useAuth();
-  const { data: teamMembers = [] } = useTeamMembers();
+  const { currentOrganization } = useOrganization();
+  const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const { createNotification } = useNotifications();
   const [editedTask, setEditedTask] = useState<Task>(task || {
     id: '',
@@ -462,7 +464,13 @@ export const TaskDetailModal = ({
           initials: profile.initials,
           avatar: profile.avatar_url || undefined,
           role: profile.role || 'member'
-        } : teamMembers[0]; // Fallback to first team member
+        } : {
+          id: 'unknown',
+          name: 'Unknown',
+          email: '',
+          initials: 'UN',
+          role: 'member',
+        };
 
         if (mode !== 'create' && editedTask.id) {
           try {
@@ -891,13 +899,13 @@ export const TaskDetailModal = ({
                           <CommandInput placeholder="Search members..." />
                           <CommandList>
                             <CommandEmpty>No results found.</CommandEmpty>
-                            <CommandGroup heading="Team Members">
-                              {teamMembers
+                            <CommandGroup heading="Organization members">
+                              {organizationMembers
                                 .filter(m => !editedTask.assignees?.some(a => a.id === m.id))
                                 .map((member) => (
                                   <CommandItem
                                     key={member.id}
-                                    value={member.name}
+                                    value={`${member.id} ${member.name}`}
                                     onSelect={() => {
                                       handleFieldChange('assignees', [...(editedTask.assignees || []), member]);
                                       setIsAssigneePopoverOpen(false);

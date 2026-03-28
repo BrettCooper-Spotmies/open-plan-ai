@@ -225,17 +225,13 @@ export default function Projects() {
         {filteredProjects.length === 0 ? (
           <div className="text-center py-12">
             <h3 className="text-lg font-medium">No projects found</h3>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground mt-1 max-w-sm mx-auto">
               {projectList.length === 0
-                ? 'Create your first project to get started'
+                ? isMobile
+                  ? 'Tap the + button above to create your first project.'
+                  : 'Use the New Project button above to get started.'
                 : 'Try adjusting your search query'}
             </p>
-            {projectList.length === 0 && (
-              <Button className="mt-4" onClick={() => navigate('/projects/new')}>
-                <Plus className="h-4 w-4 mr-2" />
-                Create Project
-              </Button>
-            )}
           </div>
         ) : (
           <div className={cn(

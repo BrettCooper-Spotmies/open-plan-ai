@@ -659,6 +659,10 @@ const EditProject = () => {
 
             if (removedMemberIds.length > 0) {
                 try {
+                    if (!removeFromChatToo) {
+                        await chatService.retainProjectChatMembershipAfterRemoval(project.id, removedMemberIds);
+                    }
+
                     await projectMembersService.removeMembers(project.id, removedMemberIds);
 
                     if (removeFromChatToo) {
@@ -1697,8 +1701,8 @@ const EditProject = () => {
                             <DialogTitle>Remove from group chat too?</DialogTitle>
                             <DialogDescription>
                                 {chatRemovalPrompt.memberIds.length === 1
-                                    ? 'This member will be removed from the project. Do you also want to remove them from the project group chat?'
-                                    : 'These members will be removed from the project. Do you also want to remove them from the project group chat?'}
+                                    ? 'This member will be removed from the project. Should they also be removed from the project group chat, or kept in that chat?'
+                                    : 'These members will be removed from the project. Should they also be removed from the project group chat, or kept in that chat?'}
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>

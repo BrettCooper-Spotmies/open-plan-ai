@@ -5,6 +5,18 @@ import { chatService } from './chat.service';
 
 type ProjectRole = Database['public']['Enums']['project_role'];
 
+/** UI role labels → Postgres `project_role` enum (always lowercase). */
+function toDbProjectRole(uiRole: string | undefined | null): ProjectRole {
+  const raw = (uiRole ?? '').trim().toLowerCase();
+  if (raw === 'owner' || raw === 'admin' || raw === 'member' || raw === 'viewer') {
+    return raw;
+  }
+  if (raw.includes('admin') || raw.includes('lead')) {
+    return 'admin';
+  }
+  return 'member';
+}
+
 export interface ProjectMember {
   id: string;
   project_id: string;
@@ -84,9 +96,9 @@ export const projectMembersService = {
       .insert({
         project_id: input.project_id,
         user_id: input.user_id,
-        role: input.role || '',
+        role: toDbProjectRole(input.role),
         added_by: user.id,
-      } as any)
+      })
       .select()
       .single();
 
@@ -110,13 +122,15 @@ export const projectMembersService = {
       });
     });
 
-    // Keep project chat membership in sync.
-    chatService.syncProjectGroupMembers(input.project_id).catch((err) => {
+    // Keep project chat membership in sync when a group already exists (DB trigger also runs; await for reliability).
+    try {
+      await chatService.syncProjectGroupMembers(input.project_id);
+    } catch (err) {
       console.warn('[projectMembersService] syncProjectGroupMembers failed', {
         projectId: input.project_id,
         error: err instanceof Error ? err.message : String(err),
       });
-    });
+    }
 
     return data;
   },
@@ -175,13 +189,13 @@ export const projectMembersService = {
     const records = validMembers.map(member => ({
       project_id: projectId,
       user_id: member.userId,
-      role: member.role || '',
+      role: toDbProjectRole(member.role),
       added_by: user.id,
     }));
 
     const { data, error } = await supabase
       .from('project_members')
-      .insert(records as any)
+      .insert(records)
       .select();
 
     if (error) {
@@ -193,12 +207,14 @@ export const projectMembersService = {
       console.warn(`Skipped ${invalidCount} invalid project member(s) without profile rows`);
     }
 
-    chatService.syncProjectGroupMembers(projectId).catch((err) => {
+    try {
+      await chatService.syncProjectGroupMembers(projectId);
+    } catch (err) {
       console.warn('[projectMembersService] syncProjectGroupMembers failed', {
         projectId,
         error: err instanceof Error ? err.message : String(err),
       });
-    });
+    }
 
     return data || [];
   },
@@ -256,7 +272,7 @@ export const projectMembersService = {
 
     const { error } = await supabase
       .from('project_members')
-      .update({ role } as any)
+      .update({ role: toDbProjectRole(role) })
       .eq('project_id', projectId)
       .eq('user_id', userId);
 

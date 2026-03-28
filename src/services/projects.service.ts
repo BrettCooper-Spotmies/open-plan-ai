@@ -4,6 +4,7 @@ import { projects as mockProjects, teamMembers as mockTeamMembers, projectModule
 import { config } from '@/config';
 import { activitiesService } from './activities.service';
 import { modulesService } from './modules.service';
+import { isValidUuid, parseUuidOrThrow, sanitizeUuidCandidate } from '@/utils/uuid';
 
 // Environment flag to control data source
 const USE_MOCK_DATA = config.api.useMockData;
@@ -491,33 +492,66 @@ export const projectsService = {
       return newProject;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
+    const orgId = parseUuidOrThrow(organizationId, 'organization');
+
+    // Prefer session (local, immediate) so created_by matches JWT even if getUser() lags after refresh.
+    const { data: { session } } = await supabase.auth.getSession();
+    let uid = sanitizeUuidCandidate(session?.user?.id);
+    if (!isValidUuid(uid)) {
+      const { data: { user } } = await supabase.auth.getUser();
+      uid = sanitizeUuidCandidate(user?.id);
+    }
+    const createdBy = isValidUuid(uid) ? uid : null;
+
+    if (!createdBy) {
+      throw new Error('You must be signed in to create a project. Try refreshing the page.');
+    }
 
     const stage = (project.stage || 'concept') as 'concept' | 'design' | 'development' | 'testing' | 'production';
 
-    const { data, error } = await supabase
-      .from('projects')
-      .insert([{
-        organization_id: organizationId,
-        name: project.name,
-        description: project.description || null,
-        stage,
-        progress: project.progress || 0,
-        start_date: project.startDate || null,
-        target_date: project.targetDate || null,
-        icon: project.icon || '📁',
-        type: project.type,
-        client_name: project.clientName,
-        client_organization: project.clientOrganization,
-        client_contact: project.clientContact,
-        notes: project.notes,
-        departments: project.departments,
-        created_by: user?.id || null,
-      }])
-      .select()
-      .single();
+    const buildInsertPayload = (options?: { forceNullCreatedBy?: boolean; omitDepartments?: boolean }) => ({
+      organization_id: orgId,
+      name: project.name,
+      description: project.description || null,
+      stage,
+      progress: project.progress || 0,
+      start_date: project.startDate || null,
+      target_date: project.targetDate || null,
+      icon: project.icon || '📁',
+      type: project.type,
+      client_name: project.clientName,
+      client_organization: project.clientOrganization,
+      client_contact: project.clientContact,
+      notes: project.notes,
+      departments: options?.omitDepartments ? null : (project.departments ?? null),
+      created_by: options?.forceNullCreatedBy ? null : createdBy,
+    });
 
-    if (error) throw error;
+    const createAttempt = async (payload: ReturnType<typeof buildInsertPayload>) => {
+      return supabase
+        .from('projects')
+        .insert([payload])
+        .select()
+        .single();
+    };
+
+    let { data, error } = await createAttempt(buildInsertPayload());
+
+    // Some environments have schema/function drift that can throw 22P02 during UUID casts
+    // (often from optional UUID-related fields/triggers). Retry once with the safest payload.
+    if (error?.code === '22P02') {
+      const msg = (error.message || '').toLowerCase();
+      const looksLikeUuidHexParse = msg.includes('hexadecimal') || msg.includes('uuid');
+      if (looksLikeUuidHexParse) {
+        ({ data, error } = await createAttempt(
+          buildInsertPayload({ forceNullCreatedBy: true, omitDepartments: true })
+        ));
+      }
+    }
+
+    if (error) {
+      throw new Error(error.message || `Failed to create project (${error.code ?? 'unknown error'})`);
+    }
 
     // Return full project with all details
     return (await this.getById(data.id))!;

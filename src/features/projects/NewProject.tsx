@@ -71,6 +71,7 @@ import { attachmentsService } from "@/services/attachments.service";
 import { projectLinksService } from "@/services/projectLinks.service";
 import { projectMembersService } from "@/services/projectMembers.service";
 import type { Database } from "@/integrations/supabase/types";
+import { isValidUuid } from "@/utils/uuid";
 
 const projectTypes = [
   "Hardware Development",
@@ -517,7 +518,7 @@ const NewProject = () => {
   };
 
   const handleCreateProject = async () => {
-    if (!currentOrganization) {
+    if (!currentOrganization || !isValidUuid(currentOrganization.id)) {
       toast.error('Please select an organization first');
       return;
     }
@@ -653,7 +654,8 @@ const NewProject = () => {
       navigate(`/projects/${project.id}`);
     } catch (error) {
       console.error('Error creating project:', error);
-      toast.error('Failed to create project');
+      const message = error instanceof Error ? error.message : 'Failed to create project';
+      toast.error(message);
     } finally {
       setIsCreating(false);
     }

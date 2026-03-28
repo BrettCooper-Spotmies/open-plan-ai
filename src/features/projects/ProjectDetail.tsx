@@ -711,6 +711,10 @@ export default function ProjectDetail() {
 
     setIsRemovingMember(true);
     try {
+      if (!removeFromChatToo) {
+        await chatService.retainProjectChatMembershipAfterRemoval(project.id, [memberId]);
+      }
+
       await projectMembersService.removeMember(project.id, memberId);
 
       if (removeFromChatToo) {
@@ -1382,8 +1386,8 @@ export default function ProjectDetail() {
             <DialogTitle>Remove member from project?</DialogTitle>
             <DialogDescription>
               {memberRemovalPrompt.memberName
-                ? `${memberRemovalPrompt.memberName} will be removed from the project. Do you also want to remove this person from the project group chat?`
-                : 'This member will be removed from the project. Do you also want to remove this person from the project group chat?'}
+                ? `${memberRemovalPrompt.memberName} will be removed from this project. Should they also be removed from the project group chat, or kept in that chat?`
+                : 'This person will be removed from the project. Should they also be removed from the project group chat, or kept in that chat?'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

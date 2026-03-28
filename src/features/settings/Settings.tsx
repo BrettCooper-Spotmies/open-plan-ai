@@ -896,78 +896,115 @@ const Settings = () => {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>Change Password</CardTitle>
+                  <CardTitle>Reset Password</CardTitle>
                   <CardDescription>
-                    Update your password to keep your account secure
+                    Choose how you'd like to reset your password
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="new-password">New Password</Label>
-                      <div className="relative">
-                        <Input
-                          id="new-password"
-                          type={showNewPassword ? "text" : "password"}
-                          value={passwordForm.newPassword}
-                          onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-                          placeholder="Enter new password"
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowNewPassword(!showNewPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                          aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
-                          title={showNewPassword ? 'Hide new password' : 'Show new password'}
-                        >
-                          {showNewPassword ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
+                <CardContent className="space-y-6">
+                  {/* Option 1: Email-based reset */}
+                  <div className="p-4 border rounded-lg space-y-3">
+                    <div>
+                      <h4 className="font-medium text-sm">Send Reset Link to Email</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Get a secure password reset link sent to your email address. Safe for resetting password on other devices.
+                      </p>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="confirm-password">Confirm Password</Label>
-                      <div className="relative">
-                        <Input
-                          id="confirm-password"
-                          type={showConfirmPassword ? "text" : "password"}
-                          value={passwordForm.confirmPassword}
-                          onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-                          placeholder="Confirm new password"
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                          aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
-                          title={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
-                        >
-                          {showConfirmPassword ? (
-                            <EyeOff className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </button>
-                      </div>
+                    <Button 
+                      variant="outline"
+                      onClick={() => {
+                        navigate('/forgot-password');
+                      }}
+                      className="w-full"
+                    >
+                      Send Reset Link
+                    </Button>
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-muted"></div>
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-card px-2 text-muted-foreground">Or</span>
                     </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    onClick={handleUpdatePassword}
-                    disabled={passwordLoading || !passwordForm.newPassword || !passwordForm.confirmPassword}
-                  >
-                    {passwordLoading ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Lock className="h-4 w-4 mr-2" />
-                    )}
-                    Update Password
-                  </Button>
+
+                  {/* Option 2: Direct update */}
+                  <div className="p-4 border rounded-lg space-y-3">
+                    <div>
+                      <h4 className="font-medium text-sm">Update Password Directly</h4>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Change your password immediately without leaving this page.
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="new-password">New Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="new-password"
+                            type={showNewPassword ? "text" : "password"}
+                            value={passwordForm.newPassword}
+                            onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                            placeholder="Enter new password"
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                            aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                            title={showNewPassword ? 'Hide new password' : 'Show new password'}
+                          >
+                            {showNewPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirm-password">Confirm Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="confirm-password"
+                            type={showConfirmPassword ? "text" : "password"}
+                            value={passwordForm.confirmPassword}
+                            onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                            placeholder="Confirm new password"
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                            aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                            title={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                          >
+                            {showConfirmPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleUpdatePassword}
+                      disabled={passwordLoading || !passwordForm.newPassword || !passwordForm.confirmPassword}
+                      className="w-full"
+                    >
+                      {passwordLoading ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Lock className="h-4 w-4 mr-2" />
+                      )}
+                      Update Password
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
 

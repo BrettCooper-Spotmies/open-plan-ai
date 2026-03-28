@@ -67,32 +67,46 @@ async function getCurrentUserId(): Promise<string> {
 
 const conversationsCache = new Map<string, { expiresAt: number; value: Conversation[] }>();
 
+/** Dispatched when the current user is added to conversation_members so chat UI can re-check send access. */
+export const CHAT_ACCESS_INVALIDATE_EVENT = 'openplan-invalidate-conversation-access';
+
 export const chatService = {
   async getConversationAccessState(conversationId: string): Promise<{ readOnly: boolean; leftAt: string | null }> {
-    const timeoutMs = Number(import.meta.env.VITE_CHAT_CONVERSATION_ACCESS_TIMEOUT_MS ?? 2500);
+    const timeoutMs = Number(import.meta.env.VITE_CHAT_CONVERSATION_ACCESS_TIMEOUT_MS ?? 5000);
     const fallback = { readOnly: true, leftAt: null };
 
     const internal = (async () => {
       const userId = await getCurrentUserId();
-      const { data: membership } = await supabase
-        .from('conversation_members')
-        .select('user_id')
-        .eq('conversation_id', conversationId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      const isConversationMember = !!membership;
 
       type ProjectChatGroupRow = { project_id: string | null };
       type ProjectChatMemberAccessRow = { left_at: string | null };
 
-      const { data: mapping } = await supabase
-        .from('project_chat_groups')
-        .select('project_id')
-        .eq('conversation_id', conversationId)
-        .maybeSingle() as unknown as { data: ProjectChatGroupRow | null };
+      const [membershipRes, mappingRes] = await Promise.all([
+        supabase
+          .from('conversation_members')
+          .select('user_id')
+          .eq('conversation_id', conversationId)
+          .eq('user_id', userId)
+          .maybeSingle(),
+        supabase
+          .from('project_chat_groups')
+          .select('project_id')
+          .eq('conversation_id', conversationId)
+          .maybeSingle(),
+      ]);
+
+      const { data: membership } = membershipRes;
+      const { data: mapping } = mappingRes as { data: ProjectChatGroupRow | null };
+
+      const isConversationMember = !!membership;
 
       if (!mapping?.project_id) {
+        return { readOnly: false, leftAt: null };
+      }
+
+      // Project group: membership is authoritative for sending. Skip project_chat_member_access
+      // here so a slow/failed history row never blocks people who are already in the group.
+      if (isConversationMember) {
         return { readOnly: false, leftAt: null };
       }
 
@@ -106,8 +120,6 @@ export const chatService = {
       if (accessError) throw accessError;
 
       if (accessRows && accessRows.length > 1) {
-        // Defence-in-depth: project_chat_member_access should be unique per (project_id, user_id).
-        // If data corruption/replication issues introduce duplicates, fall back to the first row.
         console.warn('[chatService.getConversationAccessState] multiple access rows found', {
           projectId: mapping.project_id,
           userId,
@@ -117,7 +129,6 @@ export const chatService = {
 
       const leftAt = (accessRows?.[0]?.left_at as ProjectChatMemberAccessRow['left_at'] | undefined) ?? null;
 
-      // Defensive parsing: avoid propagating invalid timestamps into query filters/UI comparisons.
       if (leftAt) {
         const leftAtTs = new Date(leftAt).getTime();
         if (!Number.isFinite(leftAtTs)) {
@@ -128,8 +139,6 @@ export const chatService = {
         }
       }
 
-      // If a user is intentionally kept in the group chat after project removal,
-      // they should remain able to participate.
       const readOnly = !!leftAt && !isConversationMember;
       return { readOnly, leftAt };
     })();
@@ -792,6 +801,19 @@ export const chatService = {
     const { error } = await supabase.rpc('sync_project_chat_group_members', {
       p_project_id: projectId,
     } as { p_project_id: string });
+    if (error) throw error;
+  },
+
+  /**
+   * Call before removing users from the project when they should stay in the
+   * project group chat. No-op if the project has no group chat yet.
+   */
+  async retainProjectChatMembershipAfterRemoval(projectId: string, userIds: string[]): Promise<void> {
+    if (userIds.length === 0) return;
+    const { error } = await supabase.rpc('set_project_chat_retain_membership_batch', {
+      p_project_id: projectId,
+      p_user_ids: userIds,
+    } as { p_project_id: string; p_user_ids: string[] });
     if (error) throw error;
   },
 
