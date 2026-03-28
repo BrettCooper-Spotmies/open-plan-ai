@@ -8,19 +8,23 @@ import { Project } from '@/types';
 /**
  * Fetch all projects scoped to the current organization
  */
+/** Shorter stale window so project access changes (membership) show up without waiting on realtime alone. */
+const PROJECTS_LIST_STALE_MS = 45 * 1000;
+
 export function useProjects() {
   const { currentOrganization } = useOrganization();
-  const setProjects = useProjectStore((state) => state.setProjects);
   const orgId = currentOrganization?.id;
 
   return useQuery({
     queryKey: queryKeys.projects.all(orgId),
     queryFn: async () => {
       const projects = await projectsService.getAll(orgId);
-      setProjects(projects);
+      useProjectStore.getState().setProjects(projects);
       return projects;
     },
     enabled: !!orgId,
+    staleTime: PROJECTS_LIST_STALE_MS,
+    gcTime: 15 * 60 * 1000,
   });
 }
 

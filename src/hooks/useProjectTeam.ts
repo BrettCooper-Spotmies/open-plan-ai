@@ -7,8 +7,12 @@ import { config } from '@/config';
 
 const isValidUuid = (value: unknown): value is string => {
   if (typeof value !== 'string') return false;
-  // Accept canonical UUID format; avoids inserting obviously-invalid IDs into Set-based dedup.
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+  // Accept canonical UUID format with hyphens or non-hyphenated 32 hex format.
+  // This reduces false negatives if upstream/serialization omits hyphens.
+  return (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ||
+    /^[0-9a-f]{32}$/i.test(value)
+  );
 };
 
 /**

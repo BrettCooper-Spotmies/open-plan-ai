@@ -1,4 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  candidateEmailsFromAuthUserLike,
+  inviteMatchesAnyEmail,
+  normalizeInviteEmail,
+} from "../_shared/inviteEmail.ts";
 
 // ------------------------------------------------------------------
 // CORS – restrict to known origins via ALLOWED_ORIGINS env var.
@@ -127,8 +132,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Null-check both emails before comparison to prevent runtime errors
-    if (!user.email || !invitation.email) {
+    if (!invitation.email || !normalizeInviteEmail(invitation.email)) {
       return new Response(
         JSON.stringify({ error: "Invitation email information is missing" }),
         {
@@ -138,7 +142,38 @@ Deno.serve(async (req) => {
       );
     }
 
-    if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+    const { data: adminUserData, error: adminUserError } = await adminClient.auth.admin.getUserById(
+      user.id
+    );
+    if (adminUserError || !adminUserData?.user) {
+      return new Response(JSON.stringify({ error: "Unable to verify account email" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: profileRow } = await adminClient
+      .from("profiles")
+      .select("email")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const candidateEmails = [
+      ...candidateEmailsFromAuthUserLike(adminUserData.user),
+      normalizeInviteEmail(profileRow?.email as string | undefined),
+    ].filter(Boolean);
+
+    if (candidateEmails.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Your account does not have an email address set" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (!inviteMatchesAnyEmail(invitation.email, candidateEmails)) {
       return new Response(
         JSON.stringify({ error: "This invitation is for a different email address" }),
         {

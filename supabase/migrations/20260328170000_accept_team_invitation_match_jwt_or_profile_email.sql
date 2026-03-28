@@ -1,5 +1,6 @@
--- Deadlock/serialization retry hardening for invitation acceptance.
--- accept_team_invitation uses FOR UPDATE and may deadlock under burst traffic.
+-- Accept invite if the invitation email matches either the JWT email or the
+-- profile email for auth.uid(). OAuth / sync quirks can leave JWT != profile;
+-- both must be honored so legitimate invitees are not blocked.
 
 CREATE OR REPLACE FUNCTION public.accept_team_invitation(p_invitation_identifier text)
 RETURNS jsonb
@@ -9,11 +10,14 @@ SET search_path = public
 AS $$
 DECLARE
   v_user_id uuid := auth.uid();
-  v_user_email text := lower(coalesce(auth.jwt()->>'email', ''));
   v_invitation public.team_invitations%ROWTYPE;
   v_invitation_id uuid;
   v_updated_id uuid;
   v_generic_error text := 'Invalid or expired invitation';
+
+  v_inv_norm text;
+  v_jwt_email text;
+  v_profile_email text;
 
   v_attempt int := 0;
   v_max_attempts int := 3;
@@ -23,8 +27,6 @@ BEGIN
     RAISE EXCEPTION '%', v_generic_error;
   END IF;
 
-  -- Validate caller against an existing, non-deleted profile.
-  -- This prevents malformed/compromised auth contexts from bypassing email checks.
   IF NOT EXISTS (
     SELECT 1
     FROM public.profiles pr
@@ -45,7 +47,6 @@ BEGIN
   LOOP
     v_attempt := v_attempt + 1;
     BEGIN
-      -- Lock the invitation row to serialize concurrent accept attempts.
       SELECT id
       INTO v_invitation_id
       FROM public.team_invitations
@@ -62,29 +63,34 @@ BEGIN
       FROM public.team_invitations
       WHERE id = v_invitation_id;
 
-      -- If invitation already expired, reject immediately.
       IF v_invitation.status = 'expired' THEN
         RAISE EXCEPTION '%', v_generic_error;
       END IF;
 
-      -- Normalize email from profile if JWT doesn't include it.
-      IF v_user_email = '' THEN
-        SELECT lower(email)
-        INTO v_user_email
-        FROM public.profiles
-        WHERE id = v_user_id;
-      END IF;
-
-      IF v_user_email IS NULL OR v_user_email = '' THEN
+      v_inv_norm := lower(trim(v_invitation.email));
+      IF v_inv_norm IS NULL OR v_inv_norm = '' THEN
         RAISE EXCEPTION '%', v_generic_error;
       END IF;
 
-      -- Validate invitation is for the same email.
-      IF lower(v_invitation.email) <> v_user_email THEN
+      v_jwt_email := nullif(lower(trim(coalesce(auth.jwt()->>'email', ''))), '');
+
+      SELECT nullif(lower(trim(email)), '')
+      INTO v_profile_email
+      FROM public.profiles
+      WHERE id = v_user_id;
+
+      IF (v_jwt_email IS NULL OR v_jwt_email = '')
+         AND (v_profile_email IS NULL OR v_profile_email = '') THEN
         RAISE EXCEPTION '%', v_generic_error;
       END IF;
 
-      -- Expiry check is performed while the row is locked.
+      IF NOT (
+        (v_jwt_email IS NOT NULL AND v_inv_norm = v_jwt_email)
+        OR (v_profile_email IS NOT NULL AND v_inv_norm = v_profile_email)
+      ) THEN
+        RAISE EXCEPTION '%', v_generic_error;
+      END IF;
+
       IF v_invitation.expires_at < now() THEN
         UPDATE public.team_invitations
         SET status = 'expired'
@@ -92,7 +98,6 @@ BEGIN
         RAISE EXCEPTION '%', v_generic_error;
       END IF;
 
-      -- Ensure membership insert is idempotent under concurrent accepts.
       INSERT INTO public.organization_members (
         organization_id,
         user_id,
@@ -107,7 +112,6 @@ BEGIN
       )
       ON CONFLICT (organization_id, user_id) DO NOTHING;
 
-      -- Only transition to accepted if it's still pending.
       UPDATE public.team_invitations
       SET
         status = 'accepted',
@@ -123,7 +127,6 @@ BEGIN
       );
     EXCEPTION
       WHEN SQLSTATE '40P01' OR SQLSTATE '40001' THEN
-        -- Deadlock detected or serialization failure: retry with backoff.
         IF v_attempt >= v_max_attempts THEN
           RAISE;
         END IF;
@@ -137,4 +140,3 @@ $$;
 REVOKE ALL ON FUNCTION public.accept_team_invitation(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.accept_team_invitation(text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.accept_team_invitation(text) TO service_role;
-

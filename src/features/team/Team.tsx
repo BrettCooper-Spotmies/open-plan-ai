@@ -144,6 +144,10 @@ const Team = () => {
       toast.error('No organization selected');
       return;
     }
+    if (!currentOrganization.id) {
+      toast.error('No organization selected');
+      return;
+    }
 
     try {
       const result = await inviteMutation.mutateAsync({
@@ -195,6 +199,10 @@ const Team = () => {
 
   const handleRemove = async (memberId: string) => {
     if (!currentOrganization) return;
+    if (!currentOrganization.id) {
+      toast.error('No organization selected');
+      return;
+    }
 
     try {
       await removeMutation.mutateAsync({

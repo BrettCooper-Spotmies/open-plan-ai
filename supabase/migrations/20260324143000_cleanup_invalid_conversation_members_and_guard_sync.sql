@@ -4,16 +4,30 @@
 DO $$
 DECLARE
   v_deleted_rows int := 0;
+  v_deleted_batch_rows int := 0;
+  v_batch_size int := 2000;
 BEGIN
-  DELETE FROM public.conversation_members cm
-  WHERE NOT EXISTS (
-    SELECT 1
-    FROM public.profiles p
-    WHERE p.id = cm.user_id
-      AND p.deleted_at IS NULL
-  );
+  LOOP
+    WITH to_delete AS (
+      SELECT cm.id
+      FROM public.conversation_members cm
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM public.profiles p
+        WHERE p.id = cm.user_id
+          AND p.deleted_at IS NULL
+      )
+      LIMIT v_batch_size
+    )
+    DELETE FROM public.conversation_members cm
+    USING to_delete
+    WHERE cm.id = to_delete.id;
 
-  GET DIAGNOSTICS v_deleted_rows = ROW_COUNT;
+    GET DIAGNOSTICS v_deleted_batch_rows = ROW_COUNT;
+    EXIT WHEN v_deleted_batch_rows = 0;
+    v_deleted_rows := v_deleted_rows + v_deleted_batch_rows;
+  END LOOP;
+
   RAISE NOTICE '[cleanup_invalid_conversation_members] deleted % stale conversation_members', v_deleted_rows;
 END;
 $$;

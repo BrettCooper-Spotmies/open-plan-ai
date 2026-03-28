@@ -30,7 +30,6 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { useTeamMembers } from '@/hooks/useProjects';
 import { format } from 'date-fns';
 import { TaskDetailModal } from './TaskDetailModal';
 
@@ -145,9 +144,6 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
 
   // Initial state for new task has no module pre-selected by default
   // This allows the "Select Module" placeholder to show up
-
-  // Fetch real team members
-  const { data: teamMembers = [] } = useTeamMembers();
 
   // Determine which tasks are blocked
   const blockedTaskIds = useMemo(() => {

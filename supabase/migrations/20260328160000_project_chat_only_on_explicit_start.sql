@@ -1,7 +1,10 @@
--- Concurrency hardening for project chat sync:
--- - Prevent concurrent sync_project_chat_group_members_internal executions
---   from interleaving DELETE/UPSERT operations for the same project.
--- - Uses pg_advisory_xact_lock so the protection is scoped to the transaction.
+-- Project group chats should exist only after a team member uses "Start Chat"
+-- (RPC ensure_project_chat_group). Do not auto-create from project INSERT or
+-- project_members changes.
+--
+-- 1) sync_project_chat_group_members_internal: sync only when project_chat_groups
+--    already has a row (reverts accidental reintroduction via later migrations).
+-- 2) trg_sync_project_chat_group_on_project: run AFTER UPDATE only, not INSERT.
 
 CREATE OR REPLACE FUNCTION public.sync_project_chat_group_members_internal(p_project_id uuid)
 RETURNS void
@@ -18,15 +21,7 @@ DECLARE
   v_batch_size int := 2000;
   v_eligible_user_ids uuid[];
 BEGIN
-  -- Serialize concurrent sync calls for the same project id.
-  -- Collision-resistant lock key derived from UUID using md5->int64.
-  PERFORM pg_advisory_xact_lock(
-    hashint8(
-      (
-        ('x''' || substr(md5(p_project_id::text), 1, 16) || '''')::bit(64)::bigint
-      )
-    )
-  );
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_project_id::text, 0));
 
   SELECT created_by, organization_id
   INTO v_project_creator, v_organization_id
@@ -38,10 +33,15 @@ BEGIN
     RETURN;
   END IF;
 
-  v_conversation_id := public.ensure_project_chat_group_internal(p_project_id);
+  SELECT pcg.conversation_id
+  INTO v_conversation_id
+  FROM public.project_chat_groups pcg
+  WHERE pcg.project_id = p_project_id;
 
-  -- Precompute eligible user ids once so DELETE batching doesn't re-run
-  -- expensive eligibility checks per chunk.
+  IF v_conversation_id IS NULL THEN
+    RETURN;
+  END IF;
+
   SELECT array_agg(DISTINCT p.id)
   INTO v_eligible_user_ids
   FROM public.profiles p
@@ -102,3 +102,8 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_sync_project_chat_group_on_project ON public.projects;
+CREATE TRIGGER trg_sync_project_chat_group_on_project
+AFTER UPDATE OF name, created_by ON public.projects
+FOR EACH ROW
+EXECUTE FUNCTION public.trg_sync_project_chat_group_from_project();

@@ -41,6 +41,18 @@ BEGIN
   END IF;
 
   IF v_project_creator IS NULL THEN
+    -- Prefer a project-level admin if present; it's more likely to be the
+    -- intended creator than falling back to arbitrary organization members.
+    SELECT pm.user_id
+    INTO v_project_creator
+    FROM public.project_members pm
+    WHERE pm.project_id = p_project_id
+      AND lower(coalesce(pm.role, '')) = 'admin'
+    ORDER BY pm.added_at ASC NULLS LAST, pm.user_id ASC
+    LIMIT 1;
+  END IF;
+
+  IF v_project_creator IS NULL THEN
     SELECT om.user_id
     INTO v_project_creator
     FROM public.organization_members om
@@ -153,6 +165,18 @@ BEGIN
   INTO v_user_ids
   FROM unnest(p_user_ids) u
   WHERE u IS NOT NULL;
+
+  IF v_user_ids IS NULL OR array_length(v_user_ids, 1) IS NULL THEN
+    RETURN;
+  END IF;
+
+  -- Sanitize against existing, non-deleted profiles to avoid unintended deletions.
+  SELECT array_agg(DISTINCT p.id)
+  INTO v_user_ids
+  FROM unnest(v_user_ids) u
+  JOIN public.profiles p
+    ON p.id = u
+   AND p.deleted_at IS NULL;
 
   IF v_user_ids IS NULL OR array_length(v_user_ids, 1) IS NULL THEN
     RETURN;

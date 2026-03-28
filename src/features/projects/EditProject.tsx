@@ -615,13 +615,29 @@ const EditProject = () => {
             });
 
             // Sync team members (authorization must be enforced server-side)
-            const currentInDbIds = project.team?.map((m: any) => m.id) || [];
-            const assignedIds = assignedMembers.map(m => m.memberId);
+            const isValidUuidLike = (value: unknown): value is string => {
+                if (typeof value !== 'string') return false;
+                return (
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ||
+                    /^[0-9a-f]{32}$/i.test(value)
+                );
+            };
+
+            // Guard against invalid/empty IDs reaching the backend mutation calls.
+            if (!isValidUuidLike(project.id)) {
+                toast.error('Invalid project id');
+                return;
+            }
+
+            const currentInDbIds = (project.team?.map((m: any) => m.id) ?? []).filter(isValidUuidLike);
+            const assignedIds = assignedMembers.map((m) => m.memberId).filter(isValidUuidLike);
 
             // Members to add
-            const newMembers = assignedMembers.filter((m) => !currentInDbIds.includes(m.memberId));
+            const newMembers = assignedMembers.filter(
+                (m) => isValidUuidLike(m.memberId) && !currentInDbIds.includes(m.memberId)
+            );
             // Members to remove
-            const removedMemberIds = currentInDbIds.filter(memberId => !assignedIds.includes(memberId));
+            const removedMemberIds = currentInDbIds.filter((memberId) => !assignedIds.includes(memberId));
 
             if (newMembers.length > 0) {
                 try {
@@ -643,6 +659,10 @@ const EditProject = () => {
 
             if (removedMemberIds.length > 0) {
                 try {
+                    if (!removeFromChatToo) {
+                        await chatService.retainProjectChatMembershipAfterRemoval(project.id, removedMemberIds);
+                    }
+
                     await projectMembersService.removeMembers(project.id, removedMemberIds);
 
                     if (removeFromChatToo) {
@@ -1681,8 +1701,8 @@ const EditProject = () => {
                             <DialogTitle>Remove from group chat too?</DialogTitle>
                             <DialogDescription>
                                 {chatRemovalPrompt.memberIds.length === 1
-                                    ? 'This member will be removed from the project. Do you also want to remove them from the project group chat?'
-                                    : 'These members will be removed from the project. Do you also want to remove them from the project group chat?'}
+                                    ? 'This member will be removed from the project. Should they also be removed from the project group chat, or kept in that chat?'
+                                    : 'These members will be removed from the project. Should they also be removed from the project group chat, or kept in that chat?'}
                             </DialogDescription>
                         </DialogHeader>
                         <DialogFooter>

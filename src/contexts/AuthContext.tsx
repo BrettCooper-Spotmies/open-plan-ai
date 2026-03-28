@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useEffect, useState, useCallback, useContext, useRef, useMemo } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
+import type { PostgrestError } from '@supabase/supabase-js';
 import { authService, SignUpMetadata } from '@/services/auth.service';
 import { teamService } from '@/services/team.service';
 import { supabase } from '@/integrations/supabase/client';
+import { clearRecoveryFlowFlags } from '@/utils/recoveryFlowFlags';
 
 interface Profile {
   id: string;
@@ -33,11 +35,28 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+/** Coalesce concurrent profile loads for the same user (INITIAL_SESSION + initializeAuth, etc.). */
+function createProfileLoader(
+  fetchImpl: (userId: string) => Promise<Profile | null>
+): (userId: string) => Promise<Profile | null> {
+  const inflight = new Map<string, Promise<Profile | null>>();
+  return (userId: string) => {
+    const existing = inflight.get(userId);
+    if (existing) return existing;
+    const p = fetchImpl(userId).finally(() => {
+      inflight.delete(userId);
+    });
+    inflight.set(userId, p);
+    return p;
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const userUpdatedDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch user profile from database
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
@@ -53,11 +72,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Fallback: try by user_id column (if DB was set up with a separate user_id)
       // user_id column exists in the actual DB but not in generated types
-      const { data: data2, error: error2 } = await (supabase
-        .from('profiles') as any)
-        .select('id, email, name, avatar_url, initials, role, bio')
-        .eq('user_id', userId)
-        .maybeSingle();
+      let data2: Profile | null = null;
+      let error2: PostgrestError | null = null;
+      try {
+        // @ts-expect-error - user_id column not in generated types
+        const fallbackResult = await supabase
+          .from('profiles')
+          .select('id, email, name, avatar_url, initials, role, bio')
+          .eq('user_id', userId)
+          .maybeSingle();
+        
+        data2 = fallbackResult.data as Profile | null;
+        error2 = fallbackResult.error as PostgrestError | null;
+      } catch (err) {
+        error2 = err as PostgrestError | null;
+      }
 
       if (error2) {
         console.error('Error fetching profile:', error2);
@@ -70,12 +99,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const loadProfileDeduplicated = useMemo(() => createProfileLoader(fetchProfile), [fetchProfile]);
+
   // Refresh the current user's profile
   const refreshProfile = useCallback(async () => {
     if (!user) return;
-    const profileData = await fetchProfile(user.id);
+    const profileData = await loadProfileDeduplicated(user.id);
     setProfile(profileData);
-  }, [user, fetchProfile]);
+  }, [user, loadProfileDeduplicated]);
 
   // Track pending email verification for redirect
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState<string | null>(null);
@@ -94,8 +125,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // the refreshed JWT may not include `email_confirmed_at` in its payload,
         // which would incorrectly log out a fully verified user every few minutes.
         const isInitialSignIn = event === 'SIGNED_IN' || event === 'INITIAL_SESSION';
-        if (isInitialSignIn && newSession?.user && !newSession.user.email_confirmed_at) {
-          console.log('User email not verified, blocking auth state');
+        const onPasswordResetPage =
+          typeof globalThis.window !== 'undefined' &&
+          globalThis.window.location.pathname === '/reset-password';
+        const allowPasswordRecovery =
+          event === 'PASSWORD_RECOVERY' || (isInitialSignIn && onPasswordResetPage);
+
+        if (
+          isInitialSignIn &&
+          newSession?.user &&
+          !newSession.user.email_confirmed_at &&
+          !allowPasswordRecovery
+        ) {
+          console.warn('User email not verified, blocking auth state');
           const userEmail = newSession.user.email;
           if (mounted) setPendingVerificationEmail(userEmail || null);
 
@@ -104,7 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           // Send OTP for verification
           if (userEmail) {
-            console.log('Sending OTP to:', userEmail);
+            console.warn('Sending OTP to:', userEmail);
             await authService.sendOtp(userEmail);
           }
 
@@ -124,14 +166,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Clear pending verification since user is verified
           setPendingVerificationEmail(null);
 
-          // ─── Non-blocking profile fetch ───────────────────────────────────────
-          // Do NOT await here: this makes the auth state change fast and prevents
-          // AbortError from React Strict Mode cleanup interrupting a pending await.
-          fetchProfile(newSession.user.id).then(profileData => {
-            if (mounted) setProfile(profileData);
-          }).catch(err => {
-            if (mounted) console.error('Error fetching profile after auth change:', err);
-          });
+          // Only refetch profile when user/session meaningfully changes — not on every
+          // TOKEN_REFRESHED (fires often and caused continuous /profiles traffic).
+          const shouldRefetchProfileImmediate =
+            event === 'INITIAL_SESSION' ||
+            event === 'SIGNED_IN' ||
+            event === 'PASSWORD_RECOVERY';
+
+          const userIdForProfile = newSession.user.id;
+          const scheduleUserUpdatedProfileFetch = () => {
+            if (userUpdatedDebounceRef.current) {
+              clearTimeout(userUpdatedDebounceRef.current);
+            }
+            userUpdatedDebounceRef.current = setTimeout(() => {
+              userUpdatedDebounceRef.current = null;
+              if (!mounted) return;
+              loadProfileDeduplicated(userIdForProfile).then((profileData) => {
+                if (mounted) setProfile(profileData);
+              }).catch((err) => {
+                if (mounted) console.error('Error fetching profile after USER_UPDATED:', err);
+              });
+            }, 600);
+          };
+
+          if (shouldRefetchProfileImmediate) {
+            loadProfileDeduplicated(userIdForProfile).then((profileData) => {
+              if (mounted) setProfile(profileData);
+            }).catch((err) => {
+              if (mounted) console.error('Error fetching profile after auth change:', err);
+            });
+          } else if (event === 'USER_UPDATED') {
+            scheduleUserUpdatedProfileFetch();
+          }
 
           // Check for pending invite after successful auth
           const pendingInviteId = localStorage.getItem('pending_invite_id');
@@ -153,7 +219,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             } else {
               teamService.acceptInvitation(effectiveId)
                 .then(() => {
-                  console.log('Invitation accepted successfully');
+                  console.warn('Invitation accepted successfully');
                 })
                 .catch((inviteError) => {
                   console.error('Error accepting invite:', inviteError);
@@ -177,15 +243,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!mounted) return;
 
         // Check if user has verified email before restoring session
-        if (existingSession?.user && !existingSession.user.email_confirmed_at) {
-          console.log('Existing session has unverified email, signing out');
+        const onPasswordResetPageInit =
+          typeof globalThis.window !== 'undefined' &&
+          globalThis.window.location.pathname === '/reset-password';
+
+        if (
+          existingSession?.user &&
+          !existingSession.user.email_confirmed_at &&
+          !onPasswordResetPageInit
+        ) {
+          console.warn('Existing session has unverified email, signing out');
           const userEmail = existingSession.user.email;
           if (mounted) setPendingVerificationEmail(userEmail || null);
           await supabase.auth.signOut();
 
           // Send OTP for verification
           if (userEmail && mounted) {
-            console.log('Sending OTP to:', userEmail);
+            console.warn('Sending OTP to:', userEmail);
             await authService.sendOtp(userEmail);
           }
 
@@ -203,7 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(existingSession?.user ?? null);
 
         if (existingSession?.user) {
-          const profileData = await fetchProfile(existingSession.user.id);
+          const profileData = await loadProfileDeduplicated(existingSession.user.id);
           if (mounted) setProfile(profileData);
         }
       } catch (error) {
@@ -217,9 +291,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
+      if (userUpdatedDebounceRef.current) {
+        clearTimeout(userUpdatedDebounceRef.current);
+        userUpdatedDebounceRef.current = null;
+      }
       subscription.unsubscribe();
     };
-  }, [fetchProfile]);
+  }, [loadProfileDeduplicated]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const result = await authService.signIn(email, password);
@@ -229,6 +307,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Check if email is verified
     if (result.user && !result.user.email_confirmed_at) {
+      clearRecoveryFlowFlags();
       // Sign out the user immediately since they're not verified
       await authService.signOut();
 
@@ -242,6 +321,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       };
     }
 
+    clearRecoveryFlowFlags();
     return { error: null, requiresVerification: false };
   }, []);
 
@@ -254,6 +334,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    clearRecoveryFlowFlags();
     await authService.signOut();
     setUser(null);
     setProfile(null);
@@ -322,22 +403,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
-  const value: AuthContextValue = {
-    user,
-    profile,
-    session,
-    isLoading,
-    isAuthenticated: !!user,
-    isEmailVerified: !!user?.email_confirmed_at,
-    pendingVerificationEmail,
-    signIn,
-    signUp,
-    signOut,
-    resetPassword,
-    refreshProfile,
-    updatePassword,
-    deleteAccount,
-  };
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      user,
+      profile,
+      session,
+      isLoading,
+      isAuthenticated: !!user,
+      isEmailVerified: !!user?.email_confirmed_at,
+      pendingVerificationEmail,
+      signIn,
+      signUp,
+      signOut,
+      resetPassword,
+      refreshProfile,
+      updatePassword,
+      deleteAccount,
+    }),
+    [
+      user,
+      profile,
+      session,
+      isLoading,
+      pendingVerificationEmail,
+      signIn,
+      signUp,
+      signOut,
+      resetPassword,
+      refreshProfile,
+      updatePassword,
+      deleteAccount,
+    ]
+  );
 
   return (
     <AuthContext.Provider value={value}>
@@ -346,6 +443,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+export { AuthContext };
+
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {

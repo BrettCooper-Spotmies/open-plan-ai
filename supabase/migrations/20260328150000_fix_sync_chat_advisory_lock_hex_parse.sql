@@ -1,7 +1,11 @@
--- Concurrency hardening for project chat sync:
--- - Prevent concurrent sync_project_chat_group_members_internal executions
---   from interleaving DELETE/UPSERT operations for the same project.
--- - Uses pg_advisory_xact_lock so the protection is scoped to the transaction.
+-- Fix 22P02: "'" is not a valid hexadecimal digit
+--
+-- sync_project_chat_group_members_internal (20260325138000) derived an advisory
+-- lock key via ('x''' || md5(...) || '''')::bit(64)::bigint. That text is not a
+-- valid bit(64) literal in PostgreSQL; the cast can fail while parsing hex and
+-- surface as 22P02 on the single-quote character.
+--
+-- Use a stable bigint hash instead (PG14+; Supabase Postgres meets this).
 
 CREATE OR REPLACE FUNCTION public.sync_project_chat_group_members_internal(p_project_id uuid)
 RETURNS void
@@ -18,15 +22,7 @@ DECLARE
   v_batch_size int := 2000;
   v_eligible_user_ids uuid[];
 BEGIN
-  -- Serialize concurrent sync calls for the same project id.
-  -- Collision-resistant lock key derived from UUID using md5->int64.
-  PERFORM pg_advisory_xact_lock(
-    hashint8(
-      (
-        ('x''' || substr(md5(p_project_id::text), 1, 16) || '''')::bit(64)::bigint
-      )
-    )
-  );
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_project_id::text, 0));
 
   SELECT created_by, organization_id
   INTO v_project_creator, v_organization_id
@@ -40,8 +36,6 @@ BEGIN
 
   v_conversation_id := public.ensure_project_chat_group_internal(p_project_id);
 
-  -- Precompute eligible user ids once so DELETE batching doesn't re-run
-  -- expensive eligibility checks per chunk.
   SELECT array_agg(DISTINCT p.id)
   INTO v_eligible_user_ids
   FROM public.profiles p
@@ -101,4 +95,3 @@ BEGIN
   END;
 END;
 $$;
-

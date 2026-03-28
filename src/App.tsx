@@ -13,12 +13,14 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayoutOutlet } from "@/components/layout/AppLayoutOutlet";
+import { PasswordRecoveryRedirect } from "@/components/PasswordRecoveryRedirect";
 import { useUserStore } from "@/stores/useUserStore";
 
 // Eagerly loaded routes (initial page load)
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
 import NotFound from "./pages/NotFound";
 import JoinOrganization from "./pages/JoinOrganization";
@@ -51,11 +53,13 @@ const App = () => {
                 <Toaster />
                 <Sonner />
                 <BrowserRouter>
+                  <PasswordRecoveryRedirect />
                   <Routes>
                     {/* Public routes */}
                     <Route path="/login" element={<Login />} />
                     <Route path="/signup" element={<Signup />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
                     <Route path="/verify-email" element={<VerifyEmail />} />
                     <Route path="/join-org" element={<JoinOrganization />} />
 

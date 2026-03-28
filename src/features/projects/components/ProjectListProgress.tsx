@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Progress } from '@/components/ui/progress';
 import {
     HoverCard,
@@ -23,7 +23,7 @@ export function ProjectListProgress({ projectId, progress }: ProjectListProgress
     const { data: project, isLoading: isLoadingProject } = useProjectDetail(projectId, { enabled: isOpen });
     const { data: projectModules = [], isLoading: isLoadingModules } = useProjectModules(projectId, { enabled: isOpen });
 
-    const updateProjectMutation = useUpdateProject();
+    const { mutate, isPending } = useUpdateProject();
 
     const isLoading = isLoadingProject || isLoadingModules;
 
@@ -52,14 +52,13 @@ export function ProjectListProgress({ projectId, progress }: ProjectListProgress
     // This happens when user hovers and we discover a mismatch
     const displayProgress = breakdown ? breakdown.overallProgress : progress || 0;
 
-    useMemo(() => {
-        if (breakdown && project && breakdown.overallProgress !== project.progress && !updateProjectMutation.isPending) {
-            updateProjectMutation.mutate({
-                id: projectId,
-                updates: { progress: breakdown.overallProgress }
-            });
-        }
-    }, [breakdown, project, updateProjectMutation, projectId]);
+    useEffect(() => {
+        if (!breakdown || !project || isPending) return;
+        const next = breakdown.overallProgress;
+        const stored = project.progress ?? 0;
+        if (next === stored) return;
+        mutate({ id: projectId, updates: { progress: next } });
+    }, [breakdown, project, projectId, mutate, isPending]);
 
     return (
         <HoverCard open={isOpen} onOpenChange={setIsOpen}>

@@ -6,18 +6,25 @@ import { EMAIL_FROM } from "../_shared/constants.ts";
 const Deno = globalThis.Deno;
 
 const isProduction = Deno.env.get("ENVIRONMENT") === "production";
-const allowedOrigins = (Deno.env.get("ALLOWED_ORIGINS") ||
-  "http://localhost:8080,http://localhost:5173,http://localhost:3000,https://open-plan-ai.vercel.app,https://app.openplanai.com")
-  .split(",")
-  .map((origin: string) => origin.trim())
-  .filter((origin: string) => {
-    try {
-      new URL(origin);
-      return true;
-    } catch {
-      return false;
-    }
-  });
+const allowedOrigins = Array.from(
+  new Set(
+    (Deno.env.get("ALLOWED_ORIGINS") ||
+      "http://localhost:8080,http://localhost:5173,http://localhost:3000,https://open-plan-ai.vercel.app,https://app.openplanai.com")
+      .split(",")
+      .map((candidate: string) => candidate.trim())
+      .map((candidate: string) => {
+        try {
+          const url = new URL(candidate);
+          // Only accept explicit http/https origins to avoid protocol smuggling.
+          if (!["http:", "https:"].includes(url.protocol)) return null;
+          return url.origin;
+        } catch {
+          return null;
+        }
+      })
+      .filter((v: string | null): v is string => !!v)
+  )
+);
 
 const baseCorsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -81,15 +88,18 @@ function getCorsHeaders(req: Request): Record<string, string> {
   const isLocalOrigin =
     typeof origin === "string" &&
     /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
-  const allowOrigin = origin && (allowedOrigins.includes(origin) || isLocalOrigin)
+  const allowOrigin = typeof origin === "string" && (allowedOrigins.includes(origin) || isLocalOrigin)
     ? origin
-    : allowedOrigins[0] || Deno.env.get("DEFAULT_ORIGIN") || "http://localhost:5173";
+    : null;
 
-  return {
+  const headers: Record<string, string> = {
     ...baseCorsHeaders,
-    "Access-Control-Allow-Origin": allowOrigin,
     "Vary": "Origin",
   };
+
+  // Security posture: do not reflect arbitrary origins.
+  if (allowOrigin) headers["Access-Control-Allow-Origin"] = allowOrigin;
+  return headers;
 }
 
 function getClientIp(req: Request): string {
@@ -99,6 +109,25 @@ function getClientIp(req: Request): string {
     req.headers.get("cf-connecting-ip") ||
     "unknown"
   );
+}
+
+let ipRateLimitsHealth: { checked: boolean; healthy: boolean } = {
+  checked: false,
+  healthy: false,
+};
+
+async function isIpRateLimitsHealthy(adminClient: any): Promise<boolean> {
+  if (ipRateLimitsHealth.checked) return ipRateLimitsHealth.healthy;
+
+  try {
+    // Lightweight existence check. If the table/policy is broken this should throw.
+    await adminClient.from("ip_rate_limits").select("ip_address").limit(1);
+    ipRateLimitsHealth = { checked: true, healthy: true };
+    return true;
+  } catch {
+    ipRateLimitsHealth = { checked: true, healthy: false };
+    return false;
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -168,17 +197,26 @@ Deno.serve(async (req: Request) => {
     const clientIp = getClientIp(req);
     const endpoint = "send-team-invite";
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    // Rate limiting can fail if the `ip_rate_limits` table is missing/misconfigured.
-    // In that case we skip rate limiting rather than failing the invite flow.
+    // Production safety: if rate limiting is unavailable, fail fast instead of letting abuse through.
+    const rateLimitHealthy = await isIpRateLimitsHealthy(adminClient);
+    if (!rateLimitHealthy && isProduction) {
+      return new Response(JSON.stringify({ error: "Service temporarily unavailable" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     let ipCount: number | null = null;
     try {
-      const { count } = await adminClient
-        .from("ip_rate_limits")
-        .select("*", { count: "exact", head: true })
-        .eq("ip_address", clientIp)
-        .eq("endpoint", endpoint)
-        .gte("created_at", oneHourAgo);
-      ipCount = count ?? null;
+      if (rateLimitHealthy) {
+        const { count } = await adminClient
+          .from("ip_rate_limits")
+          .select("*", { count: "exact", head: true })
+          .eq("ip_address", clientIp)
+          .eq("endpoint", endpoint)
+          .gte("created_at", oneHourAgo);
+        ipCount = count ?? null;
+      }
     } catch (e) {
       console.error("IP rate limiting read failed", { endpoint });
       if (isProduction) {
@@ -200,10 +238,12 @@ Deno.serve(async (req: Request) => {
 
     // Record this request (even if it later fails validation) to deter brute-force spam.
     try {
-      await adminClient.from("ip_rate_limits").insert({
-        ip_address: clientIp,
-        endpoint,
-      });
+      if (rateLimitHealthy) {
+        await adminClient.from("ip_rate_limits").insert({
+          ip_address: clientIp,
+          endpoint,
+        });
+      }
     } catch (e) {
       console.error("IP rate limiting insert failed", { endpoint });
       if (isProduction) {
@@ -306,7 +346,10 @@ Deno.serve(async (req: Request) => {
     const sendEmailWithFallback = async (invitationId: string, effectiveRole: string) => {
       const inviteLink = `${appUrl}${invitePath}?invite=${invitationId}`;
 
-      let sendResult = await sendInviteEmailViaResend({
+      const maskEmail = (value: string) =>
+        value.length > 6 ? `${value.slice(0, 2)}***${value.slice(-2)}` : "***";
+
+      const primarySendResult = await sendInviteEmailViaResend({
         resendApiKey,
         from: primaryFrom,
         to: normalizedEmail,
@@ -315,16 +358,33 @@ Deno.serve(async (req: Request) => {
         inviteLink,
       });
 
-      if (!sendResult.ok && primaryFrom !== fallbackFrom) {
+      let sendResult = primarySendResult;
+
+      if (!primarySendResult.ok && primaryFrom !== fallbackFrom) {
         console.warn("Primary sender failed, retrying with Resend fallback sender");
-        console.warn("Primary sender error:", sendResult.errorText);
-        sendResult = await sendInviteEmailViaResend({
+        console.warn("Primary sender error:", primarySendResult.errorText);
+
+        const fallbackSendResult = await sendInviteEmailViaResend({
           resendApiKey,
           from: fallbackFrom,
           to: normalizedEmail,
           orgName,
           role: effectiveRole,
           inviteLink,
+        });
+
+        sendResult = fallbackSendResult;
+      }
+
+      if (!sendResult.ok) {
+        console.error("Email delivery failed for invitation", {
+          to: maskEmail(normalizedEmail),
+          fromPrimary: primaryFrom,
+          fromFallback: fallbackFrom,
+          role: effectiveRole,
+          inviteLink,
+          primaryError: primarySendResult.errorText,
+          fallbackError: sendResult.errorText,
         });
       }
 

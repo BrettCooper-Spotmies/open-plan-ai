@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { chatService } from '@/services/chat.service';
+import { chatService, CHAT_ACCESS_INVALIDATE_EVENT } from '@/services/chat.service';
 import { toast } from 'sonner';
 import { chatTransport } from '../transport';
 import { mapMessage } from '../chat.mappers';
@@ -8,6 +8,20 @@ import type { Conversation, ChatMessage, MessageReaction } from '../types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+
+type ConversationAccessState = { readOnly: boolean; leftAt: string | null };
+
+/** Transient errors/timeouts use readOnly + leftAt null; do not cache those so we retry on next open. */
+function shouldCacheAccessState(state: ConversationAccessState): boolean {
+  return !(state.readOnly && state.leftAt === null);
+}
+
+function readOnlyNoticeFromState(state: ConversationAccessState): string | null {
+  if (!state.readOnly) return null;
+  return state.leftAt
+    ? 'You have been removed from this project. You can view previous messages, but you cannot send new ones in this group.'
+    : 'Unable to verify your access right now. This may be temporary; messages may be read-only until verification succeeds.';
+}
 
 const generateId = () => {
   try {
@@ -131,6 +145,10 @@ export function useMessages(conversationId: string | null) {
   const updateChannelRef = useRef<RealtimeChannel | null>(null);
   const PAGE_SIZE = 50;
 
+  const accessStateCacheRef = useRef(new Map<string, { expiresAt: number; state: { readOnly: boolean; leftAt: string | null } }>());
+  const accessCacheTtlMs = Number(import.meta.env.VITE_CHAT_ACCESS_STATE_CACHE_TTL_MS ?? 5000);
+  const accessRetryScheduledRef = useRef(new Map<string, boolean>());
+
   const updatePreview = useCallback((convId: string, lastMsg: any) => {
     const store = useChatStore.getState();
     store.setConversations(
@@ -150,25 +168,73 @@ export function useMessages(conversationId: string | null) {
       setLeftAt(null);
       return;
     }
+    let cancelled = false;
 
-    chatService.getConversationAccessState(conversationId)
-      .then((state) => {
-        setReadOnly(state.readOnly);
-        setLeftAt(state.leftAt);
-        setReadOnlyNotice(
-          state.readOnly
-            ? state.leftAt
-              ? 'You have been removed from this project. You can view previous messages, but you cannot send new ones in this group.'
-              : 'Unable to verify your access right now. Messages may be read-only.'
-            : null
-        );
-      })
-      .catch(() => {
-        // Fail closed: if we cannot verify access, treat the user as read-only.
-        setReadOnly(true);
-        setReadOnlyNotice('Unable to verify your access right now. Messages may be read-only.');
-        setLeftAt(null);
-      });
+    const setFromAccessState = (state: ConversationAccessState) => {
+      if (cancelled) return;
+      setReadOnly(state.readOnly);
+      setLeftAt(state.leftAt);
+      setReadOnlyNotice(readOnlyNoticeFromState(state));
+
+      // If we got an "unverified" fallback, schedule a single retry (temporary nature).
+      if (state.readOnly && state.leftAt === null) {
+        const alreadyScheduled = accessRetryScheduledRef.current.get(conversationId) ?? false;
+        if (!alreadyScheduled) {
+          accessRetryScheduledRef.current.set(conversationId, true);
+          window.setTimeout(() => {
+            if (cancelled) return;
+            chatService
+              .getConversationAccessState(conversationId)
+              .then((retryState) => {
+                if (cancelled) return;
+                if (shouldCacheAccessState(retryState)) {
+                  accessStateCacheRef.current.set(conversationId, {
+                    expiresAt: Date.now() + accessCacheTtlMs,
+                    state: retryState,
+                  });
+                }
+                setFromAccessState(retryState);
+              })
+              .catch(() => {
+                // Keep the existing read-only fallback.
+              })
+              .finally(() => {
+                accessRetryScheduledRef.current.set(conversationId, false);
+              });
+          }, 1000);
+        }
+      }
+    };
+
+    const cachedAccess = accessStateCacheRef.current.get(conversationId);
+    const now = Date.now();
+    let usedCachedAccess = false;
+    if (cachedAccess && cachedAccess.expiresAt > now && shouldCacheAccessState(cachedAccess.state)) {
+      setFromAccessState(cachedAccess.state);
+      usedCachedAccess = true;
+    } else if (cachedAccess && !shouldCacheAccessState(cachedAccess.state)) {
+      accessStateCacheRef.current.delete(conversationId);
+    }
+
+    if (!usedCachedAccess) {
+      chatService
+        .getConversationAccessState(conversationId)
+        .then((state) => {
+          if (cancelled) return;
+          if (shouldCacheAccessState(state)) {
+            accessStateCacheRef.current.set(conversationId, {
+              expiresAt: Date.now() + accessCacheTtlMs,
+              state,
+            });
+          }
+          setFromAccessState(state);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          const fallbackState: ConversationAccessState = { readOnly: true, leftAt: null };
+          setFromAccessState(fallbackState);
+        });
+    }
 
     const cachedEntry = getCachedMessages(conversationId);
     if (cachedEntry) {
@@ -179,32 +245,72 @@ export function useMessages(conversationId: string | null) {
         chatService
           .getMessages(conversationId, { limit: PAGE_SIZE })
           .then((data) => {
+            if (cancelled) return;
             setMessages(data);
             setHasMore(data.length === PAGE_SIZE);
             setCachedMessages(conversationId, data, data.length === PAGE_SIZE);
           })
-          .catch((err) => console.error('Background message revalidation failed:', err));
+          .catch((err) => {
+            if (!cancelled) console.error('Background message revalidation failed:', err);
+          });
       }
     } else {
-      let cancelled = false;
       setLoading(true);
       chatService
         .getMessages(conversationId, { limit: PAGE_SIZE })
         .then((data) => {
-          if (!cancelled) {
-            setMessages(data);
-            setHasMore(data.length === PAGE_SIZE);
-            setLoading(false);
-            setCachedMessages(conversationId, data, data.length === PAGE_SIZE);
-          }
+          if (cancelled) return;
+          setMessages(data);
+          setHasMore(data.length === PAGE_SIZE);
+          setLoading(false);
+          setCachedMessages(conversationId, data, data.length === PAGE_SIZE);
         })
         .catch((err) => {
           console.error('Failed to fetch messages:', err);
           if (!cancelled) setLoading(false);
         });
-      return () => { cancelled = true; };
     }
+
+    return () => {
+      cancelled = true;
+      accessRetryScheduledRef.current.delete(conversationId);
+    };
   }, [conversationId]);
+
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const onInvalidate = (e: Event) => {
+      const detail = (e as CustomEvent<{ conversationId?: string }>).detail;
+      if (detail?.conversationId !== conversationId) return;
+
+      accessStateCacheRef.current.delete(conversationId);
+      accessRetryScheduledRef.current.delete(conversationId);
+
+      chatService
+        .getConversationAccessState(conversationId)
+        .then((state) => {
+          if (shouldCacheAccessState(state)) {
+            accessStateCacheRef.current.set(conversationId, {
+              expiresAt: Date.now() + accessCacheTtlMs,
+              state,
+            });
+          }
+          setReadOnly(state.readOnly);
+          setLeftAt(state.leftAt);
+          setReadOnlyNotice(readOnlyNoticeFromState(state));
+        })
+        .catch(() => {
+          const fallbackState: ConversationAccessState = { readOnly: true, leftAt: null };
+          setReadOnly(fallbackState.readOnly);
+          setLeftAt(fallbackState.leftAt);
+          setReadOnlyNotice(readOnlyNoticeFromState(fallbackState));
+        });
+    };
+
+    window.addEventListener(CHAT_ACCESS_INVALIDATE_EVENT, onInvalidate);
+    return () => window.removeEventListener(CHAT_ACCESS_INVALIDATE_EVENT, onInvalidate);
+  }, [conversationId, accessCacheTtlMs]);
 
   useEffect(() => {
     if (!conversationId) return;
