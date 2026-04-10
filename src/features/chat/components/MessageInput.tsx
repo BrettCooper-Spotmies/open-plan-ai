@@ -1,5 +1,5 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
-import { Send, Paperclip, Loader2, X, Smile, Image as ImageIcon, File as FileIcon } from 'lucide-react';
+import { Send, Paperclip, Loader2, X, Smile, File as FileIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useChatStore } from '../stores/useChatStore';
 import { chatService } from '@/services/chat.service';
@@ -60,7 +60,6 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   const isMobile = useIsMobile();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const mediaInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -510,7 +509,6 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
 
         {/* Hidden inputs — both support multiple */}
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
-        <input ref={mediaInputRef} type="file" accept="image/*,video/*" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
 
         {/* Input bar */}
         <div className="mx-auto w-full max-w-[860px] flex items-center gap-1 rounded-2xl border border-input/80 bg-background/85 backdrop-blur-md px-2 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] focus-within:ring-2 focus-within:ring-ring/70 focus-within:ring-offset-2 ring-offset-background transition-all">
@@ -528,17 +526,6 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
             onClick={() => setShowEmojiPicker(v => !v)}
           >
             <Smile className="h-4 w-4" />
-          </Button>
-
-          {/* 📷 Media */}
-          <Button
-            variant="ghost" size="icon" type="button"
-            className="h-7 w-7 md:h-8 md:w-8 shrink-0 rounded-full text-muted-foreground hover:text-blue-500 hover:bg-accent/70 transition-colors"
-            title="Send photos or videos"
-            onClick={() => mediaInputRef.current?.click()}
-            disabled={readOnly}
-          >
-            <ImageIcon className="h-4 w-4" />
           </Button>
 
           {/* 📎 File */}
