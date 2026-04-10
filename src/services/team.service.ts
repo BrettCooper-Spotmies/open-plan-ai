@@ -317,7 +317,59 @@ export const teamService = {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return (data || []) as TeamInvitation[];
+
+    const pending = (data || []) as TeamInvitation[];
+    if (pending.length === 0) return pending;
+
+    // Backend-side hygiene: if invite email is already an organization member,
+    // mark stale pending invites as accepted and hide them from UI results.
+    const { data: memberRows, error: memberRowsError } = await supabase
+      .from('organization_members')
+      .select('user_id')
+      .eq('organization_id', orgId);
+
+    if (memberRowsError || !memberRows?.length) {
+      return pending;
+    }
+
+    const memberIds = Array.from(new Set(memberRows.map((row) => row.user_id)));
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('email')
+      .in('id', memberIds);
+
+    if (profilesError) {
+      return pending;
+    }
+
+    const memberEmailSet = new Set(
+      (profiles || [])
+        .map((profile) => normalizeInviteEmail(profile.email))
+        .filter((email): email is string => Boolean(email))
+    );
+
+    const stalePendingInvites = pending.filter((invitation) =>
+      memberEmailSet.has(normalizeInviteEmail(invitation.email))
+    );
+
+    if (stalePendingInvites.length > 0) {
+      const staleIds = stalePendingInvites.map((invitation) => invitation.id);
+      const nowIso = new Date().toISOString();
+      const { error: staleUpdateError } = await supabase
+        .from('team_invitations')
+        .update({ status: 'accepted', accepted_at: nowIso })
+        .in('id', staleIds)
+        .eq('organization_id', orgId)
+        .eq('status', 'pending');
+
+      if (staleUpdateError) {
+        console.warn('Failed to auto-resolve stale pending invitations:', staleUpdateError);
+      }
+    }
+
+    return pending.filter(
+      (invitation) => !memberEmailSet.has(normalizeInviteEmail(invitation.email))
+    );
   },
 
   async cancelInvitation(invitationId: string): Promise<void> {
