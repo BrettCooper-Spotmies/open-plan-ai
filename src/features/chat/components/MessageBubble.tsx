@@ -515,7 +515,7 @@ export function MessageBubble({
               className={cn(
                 'rounded-2xl px-3 py-2 text-sm leading-relaxed max-w-full overflow-hidden',
                 isOwn
-                  ? 'bg-primary text-primary-foreground rounded-br-md border border-primary/20'
+                  ? 'bg-primary text-white rounded-br-md border border-primary/20'
                   : 'bg-muted text-foreground rounded-bl-md border border-border'
               )}
             >
