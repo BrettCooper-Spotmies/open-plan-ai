@@ -105,21 +105,6 @@ const departments = [
   { id: "documentation", name: "Documentation", icon: BookOpen },
 ];
 
-const roles = [
-  "Admin",
-  "Member",
-  "Project Lead",
-  "Developer",
-  "Designer",
-  "Hardware Engineer",
-  "Software Engineer",
-  "Mechanical Engineer",
-  "Electrical Engineer",
-  "QA Engineer",
-  "Technical Writer",
-  "Consultant",
-];
-
 interface TeamMemberAssignment {
   memberId: string;
   role: string;
@@ -216,7 +201,6 @@ const NewProject = () => {
   // Team Members
   const [assignedMembers, setAssignedMembers] = useState<TeamMemberAssignment[]>([]);
   const [selectedMember, setSelectedMember] = useState("");
-  const [selectedRole, setSelectedRole] = useState("");
 
   // Departments
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
@@ -348,13 +332,14 @@ const NewProject = () => {
   };
 
   const handleAddTeamMember = () => {
-    if (selectedMember && selectedRole) {
+    if (selectedMember) {
       const exists = assignedMembers.find(m => m.memberId === selectedMember);
-      if (!exists) {
-        setAssignedMembers([...assignedMembers, { memberId: selectedMember, role: selectedRole }]);
-        setSelectedMember("");
-        setSelectedRole("");
-      }
+      if (exists) return;
+
+      const member = getMemberById(selectedMember);
+      const inheritedRole = member?.role || 'member';
+      setAssignedMembers([...assignedMembers, { memberId: selectedMember, role: inheritedRole }]);
+      setSelectedMember("");
     }
   };
 
@@ -940,7 +925,7 @@ const NewProject = () => {
               <Users className="h-5 w-5 text-primary" />
               Team Members
             </CardTitle>
-            <CardDescription>Add team members and assign their roles for this project</CardDescription>
+            <CardDescription>Add team members to this project (their organization role is used automatically)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-3">
@@ -966,19 +951,7 @@ const NewProject = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex-1">
-                <Select value={selectedRole} onValueChange={setSelectedRole}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Assign role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map((role) => (
-                      <SelectItem key={role} value={role}>{role}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handleAddTeamMember} disabled={!selectedMember || !selectedRole}>
+              <Button onClick={handleAddTeamMember} disabled={!selectedMember}>
                 <Plus className="h-4 w-4 mr-1" />
                 Add
               </Button>
@@ -1025,7 +998,7 @@ const NewProject = () => {
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
                 <p>No team members added yet</p>
-                <p className="text-sm">Select a team member and assign a role to add them</p>
+                <p className="text-sm">Select a team member to add them to this project</p>
               </div>
             )}
           </CardContent>
