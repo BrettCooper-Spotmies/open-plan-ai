@@ -71,9 +71,9 @@ const conversationsCache = new Map<string, { expiresAt: number; value: Conversat
 export const CHAT_ACCESS_INVALIDATE_EVENT = 'openplan-invalidate-conversation-access';
 
 export const chatService = {
-  async getConversationAccessState(conversationId: string): Promise<{ readOnly: boolean; leftAt: string | null }> {
+  async getConversationAccessState(conversationId: string): Promise<{ readOnly: boolean; leftAt: string | null; joinedAt: string | null }> {
     const timeoutMs = Number(import.meta.env.VITE_CHAT_CONVERSATION_ACCESS_TIMEOUT_MS ?? 5000);
-    const fallback = { readOnly: true, leftAt: null };
+    const fallback = { readOnly: true, leftAt: null, joinedAt: null };
 
     const internal = (async () => {
       const userId = await getCurrentUserId();
@@ -84,7 +84,7 @@ export const chatService = {
       const [membershipRes, mappingRes] = await Promise.all([
         supabase
           .from('conversation_members')
-          .select('user_id')
+          .select('user_id, joined_at')
           .eq('conversation_id', conversationId)
           .eq('user_id', userId)
           .maybeSingle(),
@@ -99,15 +99,19 @@ export const chatService = {
       const { data: mapping } = mappingRes as { data: ProjectChatGroupRow | null };
 
       const isConversationMember = !!membership;
+      const joinedAt =
+        membership && typeof (membership as { joined_at?: string | null }).joined_at === 'string'
+          ? (membership as { joined_at?: string | null }).joined_at ?? null
+          : null;
 
       if (!mapping?.project_id) {
-        return { readOnly: false, leftAt: null };
+        return { readOnly: false, leftAt: null, joinedAt };
       }
 
       // Project group: membership is authoritative for sending. Skip project_chat_member_access
       // here so a slow/failed history row never blocks people who are already in the group.
       if (isConversationMember) {
-        return { readOnly: false, leftAt: null };
+        return { readOnly: false, leftAt: null, joinedAt };
       }
 
       const { data: accessRows, error: accessError } = await supabase
@@ -135,12 +139,12 @@ export const chatService = {
           console.warn('[chatService.getConversationAccessState] invalid left_at timestamp; treating as null', {
             conversationId,
           });
-          return { readOnly: false, leftAt: null };
+          return { readOnly: false, leftAt: null, joinedAt: null };
         }
       }
 
       const readOnly = !!leftAt && !isConversationMember;
-      return { readOnly, leftAt };
+      return { readOnly, leftAt, joinedAt };
     })();
 
     return withTimeout(internal, timeoutMs, fallback, 'getConversationAccessState');
@@ -326,6 +330,11 @@ export const chatService = {
 
     if (options?.before) {
       query = query.lt('created_at', options.before);
+    }
+    const joinedAtTs = access.joinedAt ? new Date(access.joinedAt).getTime() : NaN;
+    // New members can only see messages from their join time onward.
+    if (access.joinedAt && Number.isFinite(joinedAtTs)) {
+      query = query.gte('created_at', access.joinedAt);
     }
     if (access.readOnly) {
       const leftAtTs = access.leftAt ? new Date(access.leftAt).getTime() : NaN;
@@ -726,6 +735,7 @@ export const chatService = {
   },
 
   async getSharedFiles(conversationId: string): Promise<{ fileName: string; fileSize: number; mimeType: string; url?: string; storagePath?: string; createdAt: string }[]> {
+    const access = await this.getConversationAccessState(conversationId);
     const { data, error } = await supabase
       .from('chat_messages')
       .select('content, created_at')
@@ -736,7 +746,18 @@ export const chatService = {
       .limit(20);
     if (error) throw error;
 
-    return (data || []).map((msg: any) => {
+    const joinedAtTs = access.joinedAt ? new Date(access.joinedAt).getTime() : NaN;
+    const leftAtTs = access.leftAt ? new Date(access.leftAt).getTime() : NaN;
+
+    const visibilityFiltered = (data || []).filter((msg: any) => {
+      const createdAtTs = new Date(msg.created_at).getTime();
+      if (!Number.isFinite(createdAtTs)) return false;
+      if (Number.isFinite(joinedAtTs) && createdAtTs < joinedAtTs) return false;
+      if (access.readOnly && Number.isFinite(leftAtTs) && createdAtTs > leftAtTs) return false;
+      return true;
+    });
+
+    return visibilityFiltered.map((msg: any) => {
       try {
         const parsed = JSON.parse(msg.content);
         if (!parsed.fileName || (!parsed.storagePath && !parsed.url)) {

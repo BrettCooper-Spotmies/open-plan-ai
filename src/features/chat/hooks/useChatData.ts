@@ -9,7 +9,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
-type ConversationAccessState = { readOnly: boolean; leftAt: string | null };
+type ConversationAccessState = { readOnly: boolean; leftAt: string | null; joinedAt: string | null };
 
 /** Transient errors/timeouts use readOnly + leftAt null; do not cache those so we retry on next open. */
 function shouldCacheAccessState(state: ConversationAccessState): boolean {
@@ -141,11 +141,12 @@ export function useMessages(conversationId: string | null) {
   const [readOnly, setReadOnly] = useState(false);
   const [readOnlyNotice, setReadOnlyNotice] = useState<string | null>(null);
   const [leftAt, setLeftAt] = useState<string | null>(null);
+  const [joinedAt, setJoinedAt] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const updateChannelRef = useRef<RealtimeChannel | null>(null);
   const PAGE_SIZE = 50;
 
-  const accessStateCacheRef = useRef(new Map<string, { expiresAt: number; state: { readOnly: boolean; leftAt: string | null } }>());
+  const accessStateCacheRef = useRef(new Map<string, { expiresAt: number; state: ConversationAccessState }>());
   const accessCacheTtlMs = Number(import.meta.env.VITE_CHAT_ACCESS_STATE_CACHE_TTL_MS ?? 5000);
   const accessRetryScheduledRef = useRef(new Map<string, boolean>());
 
@@ -166,6 +167,7 @@ export function useMessages(conversationId: string | null) {
       setReadOnly(false);
       setReadOnlyNotice(null);
       setLeftAt(null);
+      setJoinedAt(null);
       return;
     }
     let cancelled = false;
@@ -174,6 +176,7 @@ export function useMessages(conversationId: string | null) {
       if (cancelled) return;
       setReadOnly(state.readOnly);
       setLeftAt(state.leftAt);
+      setJoinedAt(state.joinedAt);
       setReadOnlyNotice(readOnlyNoticeFromState(state));
 
       // If we got an "unverified" fallback, schedule a single retry (temporary nature).
@@ -231,7 +234,7 @@ export function useMessages(conversationId: string | null) {
         })
         .catch(() => {
           if (cancelled) return;
-          const fallbackState: ConversationAccessState = { readOnly: true, leftAt: null };
+          const fallbackState: ConversationAccessState = { readOnly: true, leftAt: null, joinedAt: null };
           setFromAccessState(fallbackState);
         });
     }
@@ -298,12 +301,14 @@ export function useMessages(conversationId: string | null) {
           }
           setReadOnly(state.readOnly);
           setLeftAt(state.leftAt);
+          setJoinedAt(state.joinedAt);
           setReadOnlyNotice(readOnlyNoticeFromState(state));
         })
         .catch(() => {
-          const fallbackState: ConversationAccessState = { readOnly: true, leftAt: null };
+          const fallbackState: ConversationAccessState = { readOnly: true, leftAt: null, joinedAt: null };
           setReadOnly(fallbackState.readOnly);
           setLeftAt(fallbackState.leftAt);
+          setJoinedAt(fallbackState.joinedAt);
           setReadOnlyNotice(readOnlyNoticeFromState(fallbackState));
         });
     };
@@ -328,6 +333,14 @@ export function useMessages(conversationId: string | null) {
         ) {
           return;
         }
+        const joinedAtTs = joinedAt ? new Date(joinedAt).getTime() : NaN;
+        if (
+          Number.isFinite(joinedAtTs) &&
+          Number.isFinite(newMsgCreatedAtTs) &&
+          newMsgCreatedAtTs < joinedAtTs
+        ) {
+          return;
+        }
         const { data: profile } = await supabase
           .from('profiles')
           .select('id, name, email, avatar_url, initials, role')
@@ -342,7 +355,7 @@ export function useMessages(conversationId: string | null) {
       }
     );
     return () => { if (channelRef.current) chatTransport.unsubscribe(channelRef.current); };
-  }, [conversationId, storeAddMessage, leftAt]);
+  }, [conversationId, storeAddMessage, leftAt, joinedAt]);
 
   const sendMessage = useCallback(async (content: string, type: 'text' | 'file' = 'text', fileData?: any, replyToMessageId?: string) => {
     if (!conversationId || !user) return;
