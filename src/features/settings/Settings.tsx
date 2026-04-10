@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { defaultUserSettings } from '@/data/mockData';
 import { UserSettings } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,6 +77,7 @@ function normalizeTheme(value: unknown): ThemePreference {
 
 const Settings = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, profile, refreshProfile, updatePassword, deleteAccount } = useAuth();
   const { currentOrganization, refreshOrganizations, createOrganization, isLoading: orgContextLoading } = useOrganization();
   const { theme, changeTheme } = useAppTheme();
@@ -135,6 +136,16 @@ const Settings = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const validTabs = ['general', 'profile', 'notifications', 'appearance', 'danger'] as const;
+  type SettingsTab = typeof validTabs[number];
+  const getTabFromParams = (): SettingsTab => {
+    const tab = searchParams.get('tab');
+    if (tab && validTabs.includes(tab as SettingsTab)) {
+      return tab as SettingsTab;
+    }
+    return 'general';
+  };
+  const [activeTab, setActiveTab] = useState<SettingsTab>(getTabFromParams);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -148,6 +159,10 @@ const Settings = () => {
       });
     }
   }, [profile]);
+
+  useEffect(() => {
+    setActiveTab(getTabFromParams());
+  }, [searchParams]);
 
   // Sync organization data to form - preserve local logoUrl if server hasn't updated yet
   useEffect(() => {
@@ -423,7 +438,19 @@ const Settings = () => {
       <div className="space-y-6">
       
         {/* Tabs */}
-        <Tabs defaultValue="general" className="space-y-6">
+        <Tabs
+          value={activeTab}
+          onValueChange={(value) => {
+            const selected = validTabs.includes(value as SettingsTab) ? (value as SettingsTab) : 'general';
+            setActiveTab(selected);
+            setSearchParams((prev) => {
+              const next = new URLSearchParams(prev);
+              next.set('tab', selected);
+              return next;
+            }, { replace: true });
+          }}
+          className="space-y-6"
+        >
           <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
             <TabsTrigger value="general" className="gap-1 px-0 sm:px-3" title="General">
               <SettingsIcon className="h-4 w-4" />

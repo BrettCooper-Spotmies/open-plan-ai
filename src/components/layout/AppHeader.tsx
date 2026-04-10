@@ -110,8 +110,8 @@ export function AppHeader() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/settings')}>Profile</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/settings')}>Settings</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings?tab=profile')}>Profile</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => navigate('/settings?tab=general')}>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleSignOut}>Log out</DropdownMenuItem>
           </DropdownMenuContent>
