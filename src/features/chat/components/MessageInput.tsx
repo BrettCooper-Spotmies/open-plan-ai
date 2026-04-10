@@ -89,8 +89,13 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   const filteredMentions = useMemo(() => {
     if (mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
-    return otherMembers.filter((m) => m.name.toLowerCase().includes(q));
-  }, [mentionQuery, otherMembers]);
+    const draftLower = value.toLowerCase();
+    return otherMembers.filter((m) => {
+      const alreadyMentioned = draftLower.includes(`@${m.name.toLowerCase()}`);
+      if (alreadyMentioned) return false;
+      return m.name.toLowerCase().includes(q);
+    });
+  }, [mentionQuery, otherMembers, value]);
 
   const resize = useCallback(() => {
     const el = textareaRef.current;

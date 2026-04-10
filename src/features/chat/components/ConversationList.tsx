@@ -131,7 +131,7 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
               </div>
             ))
           ) : filtered.length === 0 && filteredPeople.length === 0 ? (
-            <EmptyState type="no-conversations" />
+            <EmptyState type="no-conversations" onCreateGroup={() => setGroupDialogOpen(true)} />
           ) : (
             <>
               {filtered.map((conv) => (
