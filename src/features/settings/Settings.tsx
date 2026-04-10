@@ -212,6 +212,7 @@ const Settings = () => {
   }, [user?.id, currentOrganization?.id]);
 
   const canEditOrganizationSettings = currentOrgRole === 'owner' || currentOrgRole === 'admin';
+  const roleLabel = currentOrgRole ? currentOrgRole.charAt(0).toUpperCase() + currentOrgRole.slice(1) : 'Member';
 
   const handleCreateOrganization = async () => {
     if (!newOrgForm.name.trim()) {
@@ -234,7 +235,7 @@ const Settings = () => {
 
   const handleSaveGeneral = async () => {
     if (!canEditOrganizationSettings) {
-      toast.error('Only admins and owners can edit organization settings');
+      toast.error(`Access denied: ${roleLabel} role cannot edit organization settings. Contact an admin.`);
       return;
     }
 
@@ -263,7 +264,18 @@ const Settings = () => {
       toast.success('Workspace settings saved');
     } catch (error) {
       console.error('Error saving workspace settings:', error);
-      toast.error('Failed to save workspace settings');
+      const maybe = error as { code?: string; message?: string; details?: string };
+      const isPermissionLikeError =
+        maybe?.code === 'PGRST116' ||
+        (typeof maybe?.message === 'string' &&
+          (maybe.message.includes('0 rows') || maybe.message.toLowerCase().includes('not acceptable'))) ||
+        (typeof maybe?.details === 'string' && maybe.details.includes('0 rows'));
+
+      if (isPermissionLikeError) {
+        toast.error(`Access denied: ${roleLabel} role cannot update organization settings.`);
+      } else {
+        toast.error('Failed to save workspace settings');
+      }
     } finally {
       setOrgLoading(false);
     }
