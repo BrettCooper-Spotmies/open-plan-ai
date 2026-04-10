@@ -54,6 +54,14 @@ export interface ChatMessage {
   reactions?: MessageReaction[];
   status?: 'pending' | 'sending' | 'sent' | 'delivered' | 'read';
   isOptimistic?: boolean;
+  replyToMessageId?: string;
+  replyToMessage?: {
+    id: string;
+    senderName: string;
+    content: string;
+    contentType: MessageContentType;
+    deletedAt?: string;
+  };
 }
 
 export interface Conversation {

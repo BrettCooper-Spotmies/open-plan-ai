@@ -20,9 +20,10 @@ interface MessageAreaProps {
   onEditMessage?: (messageId: string, newContent: string) => void;
   onDeleteMessage?: (messageId: string, senderName: string) => void;
   onToggleReaction?: (messageId: string, emoji: string) => void | Promise<void>;
+  onReplyMessage?: (message: ChatMessage) => void;
 }
 
-export function MessageArea({ messages, conversation, hasMore, onLoadMore, readReceiptMap, reactionMap, onEditMessage, onDeleteMessage, onToggleReaction }: MessageAreaProps) {
+export function MessageArea({ messages, conversation, hasMore, onLoadMore, readReceiptMap, reactionMap, onEditMessage, onDeleteMessage, onToggleReaction, onReplyMessage }: MessageAreaProps) {
   const { user } = useAuth();
   const bottomRef = useRef<HTMLDivElement>(null);
   const isGroup = conversation.type === 'group';
@@ -37,6 +38,9 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore, readR
     const q = searchQuery.toLowerCase();
     return messages.filter((m) => m.content.toLowerCase().includes(q));
   }, [messages, searchQuery]);
+  const messageById = useMemo(() => {
+    return new Map(messages.map((message) => [message.id, message]));
+  }, [messages]);
 
   if (messages.length === 0) {
     return <EmptyState type="no-messages" />;
@@ -83,7 +87,10 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore, readR
               {showDateDivider && <MessageDateDivider date={msgDate} />}
               <div className={showSenderInfo && i > 0 ? 'mt-3' : 'mt-0.5'}>
                 <MessageBubble
-                  message={msg}
+                  message={{
+                    ...msg,
+                    replyToMessage: msg.replyToMessageId ? messageById.get(msg.replyToMessageId) : undefined,
+                  }}
                   showSenderInfo={showSenderInfo}
                   showTimestamp={showTimestamp}
                   isGroupChat={isGroup}
@@ -94,6 +101,7 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore, readR
                   onEdit={onEditMessage}
                   onDelete={onDeleteMessage}
                   onToggleReaction={onToggleReaction}
+                  onReply={onReplyMessage}
                 />
               </div>
             </div>

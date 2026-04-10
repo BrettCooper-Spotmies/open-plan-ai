@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,6 +19,7 @@ import { useReadReceipts } from './hooks/useReadReceipts';
 import { chatService } from '@/services/chat.service';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
+import { ChatMessage } from './types';
 
 export default function Chat() {
   const { conversationId } = useParams<{ conversationId?: string }>();
@@ -28,6 +29,7 @@ export default function Chat() {
   const { activeConversationId, setActiveConversation, isDetailPanelOpen, isMessageSearchOpen } = useChatStore();
 
   const { conversations, loading: convsLoading, refetch } = useConversations();
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const activeId = conversationId || (isMobile ? null : activeConversationId);
   const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages, sendMessage, readOnly, readOnlyNotice } = useMessages(activeId ?? null);
   const { reactionMap, handleToggleReaction } = useReactions(messages, user?.id);
@@ -49,6 +51,10 @@ export default function Chat() {
       setActiveConversation(conversationId);
     }
   }, [conversationId, activeConversationId, setActiveConversation]);
+
+  useEffect(() => {
+    setReplyingTo(null);
+  }, [activeId]);
 
   useEffect(() => {
     if (!conversationId || convsLoading) return;
@@ -119,6 +125,14 @@ export default function Chat() {
     }
   }, [refetchMessages]);
 
+  const handleReplyMessage = useCallback((message: ChatMessage) => {
+    setReplyingTo(message);
+  }, []);
+
+  const handleCancelReply = useCallback(() => {
+    setReplyingTo(null);
+  }, []);
+
   const routeHasConversation = Boolean(conversationId);
   const showConversationList = isMobile ? !routeHasConversation : true;
   const showMessageArea = isMobile ? routeHasConversation : true;
@@ -168,6 +182,7 @@ export default function Chat() {
                     onEditMessage={handleEditMessage}
                     onDeleteMessage={handleDeleteMessage}
                     onToggleReaction={handleToggleReaction}
+                    onReplyMessage={handleReplyMessage}
                   />
                 )}
                 <TypingIndicator typingNames={typingNames} />
@@ -179,6 +194,8 @@ export default function Chat() {
                   sendMessage={sendMessage}
                   readOnly={readOnly}
                   readOnlyNotice={readOnlyNotice}
+                  replyingTo={replyingTo}
+                  onCancelReply={handleCancelReply}
                 />
               </>
             ) : (

@@ -6,7 +6,7 @@ import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { ConversationMember } from '../types';
+import { ConversationMember, ChatMessage } from '../types';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/hooks/useNotifications';
 import Picker from '@emoji-mart/react';
@@ -20,9 +20,11 @@ interface MessageInputProps {
   onMessageSent?: () => void;
   onTyping?: () => void;
   members?: ConversationMember[];
-  sendMessage?: (content: string, type?: 'text' | 'file', fileData?: any) => Promise<void>;
+  sendMessage?: (content: string, type?: 'text' | 'file', fileData?: any, replyToMessageId?: string) => Promise<void>;
   readOnly?: boolean;
   readOnlyNotice?: string | null;
+  replyingTo?: ChatMessage | null;
+  onCancelReply?: () => void;
 }
 
 const MAX_CHARS = 4000;
@@ -54,7 +56,7 @@ function buildFileContent(payload: {
   };
 }
 
-export function MessageInput({ conversationId, onMessageSent, onTyping, members, sendMessage, readOnly = false, readOnlyNotice = null }: MessageInputProps) {
+export function MessageInput({ conversationId, onMessageSent, onTyping, members, sendMessage, readOnly = false, readOnlyNotice = null, replyingTo = null, onCancelReply }: MessageInputProps) {
   const isMobile = useIsMobile();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -216,18 +218,32 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     });
 
     if (sendMessage) {
-      await sendMessage('', 'file', fileData);
+      await sendMessage('', 'file', fileData, replyingTo?.id);
     } else {
       const userId = user?.id;
       if (!userId) throw new Error('Not authenticated');
-      const { error } = await supabase
+      let error: any = null;
+      ({ error } = await supabase
         .from('chat_messages')
         .insert({
           conversation_id: conversationId,
           sender_id: userId,
           content: JSON.stringify(fileData),
           content_type: 'file',
-        });
+          reply_to_message_id: replyingTo?.id || null,
+        } as any));
+      const missingReplyColumn =
+        !!error && typeof error.message === 'string' && /reply_to_message_id|column .* does not exist/i.test(error.message);
+      if (missingReplyColumn) {
+        ({ error } = await supabase
+          .from('chat_messages')
+          .insert({
+            conversation_id: conversationId,
+            sender_id: userId,
+            content: JSON.stringify(fileData),
+            content_type: 'file',
+          }));
+      }
       if (error) throw error;
     }
   };
@@ -265,16 +281,16 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     try {
       if (pendingFiles.length > 0) {
         if (trimmed) {
-          if (sendMessage) await sendMessage(trimmed);
-          else await chatService.sendMessage(conversationId, trimmed);
+          if (sendMessage) await sendMessage(trimmed, 'text', undefined, replyingTo?.id);
+          else await chatService.sendMessage(conversationId, trimmed, undefined, replyingTo?.id);
         }
         for (const file of pendingFiles) {
           await sendFileMessage(file);
         }
         setPendingFiles([]);
       } else {
-        if (sendMessage) await sendMessage(trimmed);
-        else await chatService.sendMessage(conversationId, trimmed);
+        if (sendMessage) await sendMessage(trimmed, 'text', undefined, replyingTo?.id);
+        else await chatService.sendMessage(conversationId, trimmed, undefined, replyingTo?.id);
       }
 
       otherMembers.forEach((member) => {
@@ -294,6 +310,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
       });
 
       onMessageSent?.();
+      onCancelReply?.();
     } catch (err) {
       console.error('Failed to send message:', err);
       toast.error('Failed to send message');
@@ -360,6 +377,35 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
       {readOnly && readOnlyNotice && (
         <div className="mb-2 px-3 py-2 rounded-lg border border-amber-300/30 bg-amber-500/10 text-amber-700 text-xs">
           {readOnlyNotice}
+        </div>
+      )}
+
+      {replyingTo && (
+        <div className="mb-2 px-3 py-2 rounded-lg border border-border/60 bg-muted/40">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-muted-foreground">
+                Replying to {replyingTo.senderName}
+              </p>
+              <p className="text-xs truncate">
+                {replyingTo.deletedAt
+                  ? 'Message deleted'
+                  : replyingTo.contentType === 'file'
+                    ? 'Attachment'
+                    : replyingTo.content}
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 shrink-0"
+              onClick={onCancelReply}
+              aria-label="Cancel reply"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
       )}
 

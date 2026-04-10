@@ -1,0 +1,35 @@
+# Cursor Rules for OpenPlan AI
+
+You are an expert AI developer working on the OpenPlan AI project. Always follow these rules to ensure consistency and quality.
+
+## General Instructions
+1. **Context First**: Always read `REPO_CONTEXT.md` and `PRD.md` before making significant changes.
+2. **Techno-Stack**: 
+   - React 18, TypeScript, Tailwind CSS, shadcn/ui.
+   - Zustand for UI state, React Query for server state.
+   - Supabase for backend.
+3. **Directory Structure**:
+   - New feature logic goes into `src/features/[feature_name]`.
+   - Shared UI primitives go into `src/components/ui/`.
+   - Custom hooks go into `src/hooks/`.
+
+## Coding Standards
+- Use functional components with arrow functions.
+- Ensure strict TypeScript typing. No `any`.
+- Use the `cn()` utility for conditional Tailwind classes.
+- Follow the accessibility patterns provided by Radix UI/shadcn.
+
+## Data Fetching
+- Never use `useEffect` for data fetching. Use `useQuery` or `useMutation` from `@tanstack/react-query`.
+- Define API calls in `src/services/`.
+
+## Styling
+- Use Tailwind CSS exclusively.
+- Avoid inline styles.
+- Follow the color palette defined in `tailwind.config.ts`.
+
+## Reference Files
+- Main Context: `REPO_CONTEXT.md`
+- Product Requirements: `PRD.md`
+- Types: `src/types/index.ts`
+- Global Utils: `src/lib/utils.ts`

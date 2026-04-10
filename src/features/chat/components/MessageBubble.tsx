@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2 } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -37,6 +37,7 @@ interface MessageBubbleProps {
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string, senderName: string) => void;
   onToggleReaction?: (messageId: string, emoji: string) => void | Promise<void>;
+  onReply?: (message: ChatMessage) => void;
 }
 
 interface FileContent {
@@ -268,7 +269,7 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
 
 export function MessageBubble({
   message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
-  searchQuery, readReceipts, reactions, onEdit, onDelete, onToggleReaction,
+  searchQuery, readReceipts, reactions, onEdit, onDelete, onToggleReaction, onReply,
 }: MessageBubbleProps) {
   const isOwn = message.senderId === currentUserId;
   const isFile = message.contentType === 'file';
@@ -459,6 +460,12 @@ export function MessageBubble({
                   <Copy className="h-4 w-4 mr-2" />
                   Copy
                 </DropdownMenuItem>
+                {!isDeleted && (
+                  <DropdownMenuItem onClick={() => onReply?.(message)} className="cursor-pointer">
+                    <Reply className="h-4 w-4 mr-2" />
+                    Reply
+                  </DropdownMenuItem>
+                )}
                 {canModify && !isFile && (
                   <>
                     <DropdownMenuSeparator />
@@ -512,6 +519,25 @@ export function MessageBubble({
                   : 'bg-muted text-foreground rounded-bl-md border border-border'
               )}
             >
+              {message.replyToMessage && (
+                <div
+                  className={cn(
+                    'mb-2 rounded-md border-l-2 px-2 py-1 text-xs',
+                    isOwn
+                      ? 'border-primary-foreground/50 bg-primary-foreground/10'
+                      : 'border-primary/40 bg-primary/10'
+                  )}
+                >
+                  <div className="font-medium opacity-90">{message.replyToMessage.senderName}</div>
+                  <div className="opacity-80 truncate">
+                    {message.replyToMessage.deletedAt
+                      ? 'Message deleted'
+                      : message.replyToMessage.contentType === 'file'
+                        ? 'Attachment'
+                        : message.replyToMessage.content}
+                  </div>
+                </div>
+              )}
               {isFile && fileData ? (
                 <FileAttachment file={fileData} isOwn={isOwn} />
               ) : (

@@ -383,7 +383,7 @@ export const chatService = {
     if (error) throw error;
   },
 
-  async sendMessage(conversationId: string, content: string, userId?: string): Promise<ChatMessage> {
+  async sendMessage(conversationId: string, content: string, userId?: string, replyToMessageId?: string): Promise<ChatMessage> {
     const access = await this.getConversationAccessState(conversationId);
     if (access.readOnly) {
       throw new Error('You have been removed from this project and cannot send new messages in this group.');
@@ -391,16 +391,38 @@ export const chatService = {
 
     const finalUserId = userId || await getCurrentUserId();
 
-    const { data, error } = await supabase
+    let data: any = null;
+    let error: any = null;
+    const payloadWithReply = {
+      conversation_id: conversationId,
+      sender_id: finalUserId,
+      content,
+      content_type: 'text',
+      reply_to_message_id: replyToMessageId || null,
+    } as any;
+
+    ({ data, error } = await supabase
       .from('chat_messages')
-      .insert({
-        conversation_id: conversationId,
-        sender_id: finalUserId,
-        content,
-        content_type: 'text',
-      })
+      .insert(payloadWithReply)
       .select()
-      .single();
+      .single());
+
+    // Backward compatibility: allow sending even if DB migration for replies
+    // has not been applied yet (column reply_to_message_id missing).
+    const missingReplyColumn =
+      !!error && typeof error.message === 'string' && /reply_to_message_id|column .* does not exist/i.test(error.message);
+    if (missingReplyColumn) {
+      ({ data, error } = await supabase
+        .from('chat_messages')
+        .insert({
+          conversation_id: conversationId,
+          sender_id: finalUserId,
+          content,
+          content_type: 'text',
+        })
+        .select()
+        .single());
+    }
     if (error) throw error;
 
     const { data: profile } = await supabase

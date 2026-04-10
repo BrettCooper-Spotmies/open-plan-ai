@@ -344,7 +344,7 @@ export function useMessages(conversationId: string | null) {
     return () => { if (channelRef.current) chatTransport.unsubscribe(channelRef.current); };
   }, [conversationId, storeAddMessage, leftAt]);
 
-  const sendMessage = useCallback(async (content: string, type: 'text' | 'file' = 'text', fileData?: any) => {
+  const sendMessage = useCallback(async (content: string, type: 'text' | 'file' = 'text', fileData?: any, replyToMessageId?: string) => {
     if (!conversationId || !user) return;
 
     const tempId = `temp-${generateId()}`;
@@ -361,6 +361,7 @@ export function useMessages(conversationId: string | null) {
       isEdited: false,
       isOptimistic: true,
       status: 'sending',
+      replyToMessageId,
     };
 
     // 1. Add optimistically to local state and store
@@ -389,16 +390,33 @@ export function useMessages(conversationId: string | null) {
     try {
       let realMsg: ChatMessage;
       if (type === 'file') {
-        const { data, error } = await supabase
+        let data: any = null;
+        let error: any = null;
+        ({ data, error } = await supabase
           .from('chat_messages')
           .insert({
             conversation_id: conversationId,
             sender_id: user.id,
             content: optimisticMsg.content,
             content_type: 'file',
-          })
+            reply_to_message_id: replyToMessageId || null,
+          } as any)
           .select()
-          .single();
+          .single());
+        const missingReplyColumn =
+          !!error && typeof error.message === 'string' && /reply_to_message_id|column .* does not exist/i.test(error.message);
+        if (missingReplyColumn) {
+          ({ data, error } = await supabase
+            .from('chat_messages')
+            .insert({
+              conversation_id: conversationId,
+              sender_id: user.id,
+              content: optimisticMsg.content,
+              content_type: 'file',
+            })
+            .select()
+            .single());
+        }
         if (error) throw error;
         const { data: senderProfile } = await supabase
           .from('profiles')
@@ -407,7 +425,7 @@ export function useMessages(conversationId: string | null) {
           .single();
         realMsg = mapMessage(data as any, senderProfile as any);
       } else {
-        realMsg = await chatService.sendMessage(conversationId, content);
+        realMsg = await chatService.sendMessage(conversationId, content, user.id, replyToMessageId);
       }
       realMsg.status = 'sent';
       setMessages((prev) => {
