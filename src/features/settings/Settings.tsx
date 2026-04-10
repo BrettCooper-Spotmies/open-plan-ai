@@ -77,7 +77,7 @@ function normalizeTheme(value: unknown): ThemePreference {
 
 const Settings = () => {
   const navigate = useNavigate();
-  const { profile, refreshProfile, updatePassword, deleteAccount } = useAuth();
+  const { user, profile, refreshProfile, updatePassword, deleteAccount } = useAuth();
   const { currentOrganization, refreshOrganizations, createOrganization, isLoading: orgContextLoading } = useOrganization();
   const { theme, changeTheme } = useAppTheme();
   const preferences = useUserStore((s) => s.preferences);
@@ -117,6 +117,7 @@ const Settings = () => {
   });
   const [orgLoading, setOrgLoading] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
+  const [currentOrgRole, setCurrentOrgRole] = useState<'owner' | 'admin' | 'member' | null>(null);
 
   // New organization creation state
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
@@ -165,6 +166,38 @@ const Settings = () => {
     }
   }, [currentOrganization]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCurrentOrgRole = async () => {
+      if (!user?.id || !currentOrganization?.id) {
+        if (mounted) setCurrentOrgRole(null);
+        return;
+      }
+
+      try {
+        const memberships = await organizationsService.getMemberOrganizations(user.id);
+        const membership = memberships.find((m) => m.organization_id === currentOrganization.id);
+        const resolvedRole =
+          membership?.role === 'owner' || membership?.role === 'admin' || membership?.role === 'member'
+            ? membership.role
+            : null;
+        if (mounted) setCurrentOrgRole(resolvedRole);
+      } catch (error) {
+        console.error('Error loading organization role:', error);
+        if (mounted) setCurrentOrgRole(null);
+      }
+    };
+
+    void loadCurrentOrgRole();
+
+    return () => {
+      mounted = false;
+    };
+  }, [user?.id, currentOrganization?.id]);
+
+  const canEditOrganizationSettings = currentOrgRole === 'owner' || currentOrgRole === 'admin';
+
   const handleCreateOrganization = async () => {
     if (!newOrgForm.name.trim()) {
       toast.error('Workspace name is required');
@@ -185,6 +218,11 @@ const Settings = () => {
   };
 
   const handleSaveGeneral = async () => {
+    if (!canEditOrganizationSettings) {
+      toast.error('Only admins and owners can edit organization settings');
+      return;
+    }
+
     if (!currentOrganization) {
       toast.error('No organization selected');
       return;
@@ -238,6 +276,7 @@ const Settings = () => {
   };
 
   const handleLogoClick = () => {
+    if (!canEditOrganizationSettings) return;
     logoInputRef.current?.click();
   };
 
@@ -264,6 +303,11 @@ const Settings = () => {
   };
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEditOrganizationSettings) {
+      toast.error('Only admins and owners can change the organization logo');
+      return;
+    }
+
     if (!currentOrganization) return;
 
     if (e.target.files && e.target.files[0]) {
@@ -293,6 +337,11 @@ const Settings = () => {
   };
 
   const handleRemoveLogo = async () => {
+    if (!canEditOrganizationSettings) {
+      toast.error('Only admins and owners can remove the organization logo');
+      return;
+    }
+
     if (!currentOrganization) return;
 
     setLogoLoading(true);
@@ -474,6 +523,11 @@ const Settings = () => {
                 ) : (
                   /* Existing Workspace Settings */
                   <>
+                    {!canEditOrganizationSettings && (
+                      <div className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                        You have view-only access. Only organization admins and owners can edit these settings.
+                      </div>
+                    )}
                     {/* Organization Logo */}
                     <div className="space-y-2">
                       <Label>Organization Logo</Label>
@@ -503,12 +557,12 @@ const Settings = () => {
                             onChange={handleLogoChange}
                           />
                           <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={handleLogoClick} disabled={logoLoading}>
+                            <Button variant="outline" size="sm" onClick={handleLogoClick} disabled={logoLoading || !canEditOrganizationSettings}>
                               <Upload className="h-4 w-4 mr-2" />
                               {orgForm.logoUrl ? 'Change Logo' : 'Upload Logo'}
                             </Button>
                             {orgForm.logoUrl && (
-                              <Button variant="outline" size="sm" onClick={handleRemoveLogo} disabled={logoLoading}>
+                              <Button variant="outline" size="sm" onClick={handleRemoveLogo} disabled={logoLoading || !canEditOrganizationSettings}>
                                 <Trash2 className="h-4 w-4 mr-2" />
                                 Remove
                               </Button>
@@ -529,6 +583,7 @@ const Settings = () => {
                         id="workspace-name"
                         value={orgForm.name}
                         onChange={(e) => setOrgForm({ ...orgForm, name: e.target.value })}
+                        disabled={!canEditOrganizationSettings}
                       />
                     </div>
                     <div className="space-y-2">
@@ -538,6 +593,7 @@ const Settings = () => {
                         value={orgForm.description}
                         onChange={(e) => setOrgForm({ ...orgForm, description: e.target.value })}
                         rows={3}
+                        disabled={!canEditOrganizationSettings}
                       />
                     </div>
 
@@ -549,6 +605,7 @@ const Settings = () => {
                           value={orgForm.companyName}
                           onChange={(e) => setOrgForm({ ...orgForm, companyName: e.target.value })}
                           placeholder="e.g. Acme Corp"
+                          disabled={!canEditOrganizationSettings}
                         />
                       </div>
                       <div className="space-y-2">
@@ -556,6 +613,7 @@ const Settings = () => {
                         <Select
                           value={orgForm.companySize}
                           onValueChange={(value) => setOrgForm({ ...orgForm, companySize: value })}
+                          disabled={!canEditOrganizationSettings}
                         >
                           <SelectTrigger id="company-size">
                             <SelectValue placeholder="Select size" />
@@ -577,6 +635,7 @@ const Settings = () => {
                         <Select
                           value={orgForm.timezone}
                           onValueChange={(value) => setOrgForm({ ...orgForm, timezone: value })}
+                          disabled={!canEditOrganizationSettings}
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -597,6 +656,7 @@ const Settings = () => {
                         <Select
                           value={orgForm.dateFormat}
                           onValueChange={(value) => setOrgForm({ ...orgForm, dateFormat: value })}
+                          disabled={!canEditOrganizationSettings}
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -609,7 +669,7 @@ const Settings = () => {
                         </Select>
                       </div>
                     </div>
-                    <Button onClick={handleSaveGeneral} disabled={orgLoading}>
+                    <Button onClick={handleSaveGeneral} disabled={orgLoading || !canEditOrganizationSettings}>
                       {orgLoading ? (
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       ) : (
