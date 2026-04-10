@@ -57,11 +57,19 @@ import {
   XCircle,
   MessageSquare,
 } from 'lucide-react';
+import { format } from 'date-fns';
   import { LayoutGrid, List } from 'lucide-react';
   import { toast } from 'sonner';
   import { useIsMobile } from '@/hooks/use-mobile';
 
 const DEPARTMENTS = ['Engineering', 'Design', 'Management', 'Quality Assurance', 'Operations', 'Sales', 'Marketing', 'Support'];
+
+const formatUiDate = (value?: string | null) => {
+  if (!value) return 'N/A';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'N/A';
+  return format(parsed, 'dd-MM-yyyy');
+};
 
 const Team = () => {
   const { currentOrganization } = useOrganization();
@@ -487,7 +495,7 @@ const Team = () => {
                       <div>
                         <p className="text-sm font-medium">{inv.email}</p>
                         <p className="text-xs text-muted-foreground">
-                          Invited as {inv.role} • Expires {new Date(inv.expires_at).toLocaleDateString()}
+                          Invited as {inv.role} • Expires on {formatUiDate(inv.expires_at)}
                         </p>
                       </div>
                     </div>
