@@ -235,6 +235,8 @@ const NewProject = () => {
   const [newMilestoneStart, setNewMilestoneStart] = useState<Date>();
   const [newMilestoneEnd, setNewMilestoneEnd] = useState<Date>();
   const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+  const [isMilestoneStartOpen, setIsMilestoneStartOpen] = useState(false);
+  const [isMilestoneEndOpen, setIsMilestoneEndOpen] = useState(false);
 
   // Deletion Confirmation State
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -296,6 +298,14 @@ const NewProject = () => {
   };
 
   const handleAddMilestone = () => {
+    if (startDate && newMilestoneStart && isBefore(newMilestoneStart, startDate)) {
+      toast.error("Milestone start date cannot be earlier than project start date");
+      return;
+    }
+    if (expectedEndDate && newMilestoneEnd && isBefore(expectedEndDate, newMilestoneEnd)) {
+      toast.error("Milestone end date cannot be later than project expected completion date");
+      return;
+    }
     if (newMilestoneName.trim() && newMilestoneStart && newMilestoneEnd) {
       if (editingMilestoneId) {
         setMilestones(milestones.map(m => m.id === editingMilestoneId ? {
@@ -1200,7 +1210,7 @@ const NewProject = () => {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Start Date</Label>
-                <Popover>
+                <Popover open={isMilestoneStartOpen} onOpenChange={setIsMilestoneStartOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -1217,8 +1227,15 @@ const NewProject = () => {
                     <Calendar
                       mode="single"
                       selected={newMilestoneStart}
-                      onSelect={setNewMilestoneStart}
-                      disabled={{ before: startOfToday() }}
+                      onSelect={(date) => {
+                        setNewMilestoneStart(date);
+                        setIsMilestoneStartOpen(false);
+                      }}
+                      disabled={(date) =>
+                        isBefore(date, startOfToday()) ||
+                        (startDate ? isBefore(date, startDate) : false) ||
+                        (expectedEndDate ? isBefore(expectedEndDate, date) : false)
+                      }
                       initialFocus
                     />
                   </PopoverContent>
@@ -1226,7 +1243,7 @@ const NewProject = () => {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">End Date</Label>
-                <Popover>
+                <Popover open={isMilestoneEndOpen} onOpenChange={setIsMilestoneEndOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -1243,8 +1260,16 @@ const NewProject = () => {
                     <Calendar
                       mode="single"
                       selected={newMilestoneEnd}
-                      onSelect={setNewMilestoneEnd}
-                      disabled={(date) => isBefore(date, startOfToday()) || (newMilestoneStart ? isBefore(date, newMilestoneStart) : false)}
+                      onSelect={(date) => {
+                        setNewMilestoneEnd(date);
+                        setIsMilestoneEndOpen(false);
+                      }}
+                      disabled={(date) =>
+                        isBefore(date, startOfToday()) ||
+                        (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) ||
+                        (startDate ? isBefore(date, startDate) : false) ||
+                        (expectedEndDate ? isBefore(expectedEndDate, date) : false)
+                      }
                       initialFocus
                     />
                   </PopoverContent>

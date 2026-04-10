@@ -206,6 +206,8 @@ const EditProject = () => {
     const [newMilestoneStart, setNewMilestoneStart] = useState<Date>();
     const [newMilestoneEnd, setNewMilestoneEnd] = useState<Date>();
     const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+    const [isMilestoneStartOpen, setIsMilestoneStartOpen] = useState(false);
+    const [isMilestoneEndOpen, setIsMilestoneEndOpen] = useState(false);
 
     // Links state
     const [newLinkName, setNewLinkName] = useState("");
@@ -326,6 +328,14 @@ const EditProject = () => {
     };
 
     const handleAddMilestone = () => {
+        if (startDate && newMilestoneStart && isBefore(newMilestoneStart, startDate)) {
+            toast.error("Milestone start date cannot be earlier than project start date");
+            return;
+        }
+        if (targetDate && newMilestoneEnd && isBefore(targetDate, newMilestoneEnd)) {
+            toast.error("Milestone end date cannot be later than project target date");
+            return;
+        }
         if (newMilestoneName.trim() && newMilestoneStart && newMilestoneEnd) {
             if (editingMilestoneId) {
                 setMilestones(milestones.map(m => m.id === editingMilestoneId ? {
@@ -1436,23 +1446,23 @@ const EditProject = () => {
                                 onChange={(e) => setNewMilestoneName(e.target.value)}
                             />
                             <div className="grid grid-cols-2 gap-2">
-                                <Popover>
+                                <Popover open={isMilestoneStartOpen} onOpenChange={setIsMilestoneStartOpen}>
                                     <PopoverTrigger asChild>
                                         <Button variant="outline" className={cn("w-full justify-start text-left font-normal text-xs", !newMilestoneStart && "text-muted-foreground")}>
                                             <CalendarIcon className="mr-2 h-3 w-3" />
                                             {newMilestoneStart ? format(newMilestoneStart, "PP") : "Start"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneStart} onSelect={setNewMilestoneStart} disabled={{ before: startOfToday() }} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneStart} onSelect={(date) => { setNewMilestoneStart(date); setIsMilestoneStartOpen(false); }} disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false) || (targetDate ? isBefore(targetDate, date) : false)} /></PopoverContent>
                                 </Popover>
-                                <Popover>
+                                <Popover open={isMilestoneEndOpen} onOpenChange={setIsMilestoneEndOpen}>
                                     <PopoverTrigger asChild>
                                         <Button variant="outline" className={cn("w-full justify-start text-left font-normal text-xs", !newMilestoneEnd && "text-muted-foreground")}>
                                             <CalendarIcon className="mr-2 h-3 w-3" />
                                             {newMilestoneEnd ? format(newMilestoneEnd, "PP") : "End"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneEnd} onSelect={setNewMilestoneEnd} disabled={(date) => isBefore(date, startOfToday()) || (newMilestoneStart ? isBefore(date, newMilestoneStart) : false)} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneEnd} onSelect={(date) => { setNewMilestoneEnd(date); setIsMilestoneEndOpen(false); }} disabled={(date) => isBefore(date, startOfToday()) || (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) || (startDate ? isBefore(date, startDate) : false) || (targetDate ? isBefore(targetDate, date) : false)} /></PopoverContent>
                                 </Popover>
                             </div>
                             <div className="flex gap-2">
