@@ -1094,7 +1094,7 @@ export default function ProjectDetail() {
                           </Select>
                           {selectedOrganizationMember && (
                             <p className="text-[11px] text-muted-foreground">
-                              Role will be inherited from organization:{" "}
+                              Role will be inherited automatically from organization:{" "}
                               <span className="font-medium text-foreground capitalize">
                                 {selectedOrganizationMember.role || 'member'}
                               </span>

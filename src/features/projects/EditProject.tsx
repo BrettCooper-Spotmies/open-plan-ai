@@ -100,21 +100,6 @@ const departmentsList = [
     { id: "documentation", name: "Documentation", icon: BookOpen },
 ];
 
-const rolesList = [
-    "Admin",
-    "Member",
-    "Project Lead",
-    "Developer",
-    "Designer",
-    "Hardware Engineer",
-    "Software Engineer",
-    "Mechanical Engineer",
-    "Electrical Engineer",
-    "QA Engineer",
-    "Technical Writer",
-    "Consultant",
-];
-
 interface ProjectLink {
     id: string;
     name: string;
@@ -201,7 +186,6 @@ const EditProject = () => {
     // Team Members
     const [assignedMembers, setAssignedMembers] = useState<TeamMemberAssignment[]>([]);
     const [selectedMember, setSelectedMember] = useState("");
-    const [selectedRole, setSelectedRole] = useState("");
 
     // Departments
     const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
@@ -313,6 +297,11 @@ const EditProject = () => {
         return (myMembership?.role || '').toLowerCase() === 'admin';
     }, [project?.createdBy, project?.team, user?.id]);
 
+    const selectedOrgMember = useMemo(
+        () => orgMembers.find((member: any) => member.id === selectedMember),
+        [orgMembers, selectedMember]
+    );
+
     const handleAddModule = () => {
         if (newModuleName.trim()) {
             if (editingModuleId) {
@@ -378,18 +367,18 @@ const EditProject = () => {
             return;
         }
 
-        if (selectedMember && selectedRole) {
+        if (selectedMember) {
             const exists = assignedMembers.find(m => m.memberId === selectedMember);
             if (!exists) {
                 const memberObj = orgMembers.find(m => m.id === selectedMember);
+                const inheritedRole = memberObj?.role || "member";
                 setAssignedMembers([...assignedMembers, {
                     memberId: selectedMember,
-                    role: selectedRole,
+                    role: inheritedRole,
                     name: memberObj?.name,
                     avatar: memberObj?.avatar
                 }]);
                 setSelectedMember("");
-                setSelectedRole("");
             } else {
                 toast.error("Member already assigned");
             }
@@ -1276,7 +1265,7 @@ const EditProject = () => {
                         </CardTitle>
                         <CardDescription>
                             {canManageProjectMembers
-                                ? 'Assign team members and roles to this project'
+                                ? 'Assign team members to this project (organization role is inherited automatically)'
                                 : 'Only the project creator or an Admin can manage team members'}
                         </CardDescription>
                     </CardHeader>
@@ -1303,28 +1292,23 @@ const EditProject = () => {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="flex-1 space-y-2">
-                                <Label>Role</Label>
-                                <Select value={selectedRole} onValueChange={setSelectedRole} disabled={!canManageProjectMembers}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select role" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {rolesList.map((role) => (
-                                            <SelectItem key={role} value={role}>{role}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
                             <Button
                                 className="md:mt-8"
                                 onClick={handleAddTeamMember}
-                                disabled={!canManageProjectMembers || !selectedMember || !selectedRole}
+                                disabled={!canManageProjectMembers || !selectedMember}
                             >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add
                             </Button>
                         </div>
+                        {selectedOrgMember && (
+                            <p className="text-[11px] text-muted-foreground">
+                                Role will be inherited automatically from organization:{" "}
+                                <span className="font-medium text-foreground capitalize">
+                                    {selectedOrgMember.role || 'member'}
+                                </span>
+                            </p>
+                        )}
 
                         {assignedMembers.length > 0 && (
                             <div className="space-y-3 pt-4 border-t">

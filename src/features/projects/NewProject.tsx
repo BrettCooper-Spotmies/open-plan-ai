@@ -925,7 +925,7 @@ const NewProject = () => {
               <Users className="h-5 w-5 text-primary" />
               Team Members
             </CardTitle>
-            <CardDescription>Add team members to this project (their organization role is used automatically)</CardDescription>
+            <CardDescription>Assign team members to this project (organization role is inherited automatically)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-3">
@@ -956,6 +956,14 @@ const NewProject = () => {
                 Add
               </Button>
             </div>
+            {getMemberById(selectedMember) && (
+              <p className="text-[11px] text-muted-foreground">
+                Role will be inherited automatically from organization:{" "}
+                <span className="font-medium text-foreground capitalize">
+                  {getMemberById(selectedMember)?.role || 'member'}
+                </span>
+              </p>
+            )}
 
             {assignedMembers.length > 0 && (
               <div className="space-y-2">
