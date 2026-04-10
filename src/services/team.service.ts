@@ -254,9 +254,10 @@ export const teamService = {
     };
   },
 
-  async invite(email: string, role: string, orgId: string): Promise<InviteResult> {
+  async invite(email: string, role: string, orgId: string, department?: string): Promise<InviteResult> {
+    const normalizedDepartment = department?.trim();
     const { data, error } = await supabase.functions.invoke<Record<string, unknown>>('send-team-invite', {
-      body: { email, role, orgId },
+      body: { email, role, orgId, department: normalizedDepartment || undefined },
     });
 
     if (error) {

@@ -154,6 +154,7 @@ const Team = () => {
         email: inviteEmail,
         role: inviteRole,
         orgId: currentOrganization.id,
+        department: inviteDepartment || undefined,
       });
       await refetchPendingInvitations();
 
