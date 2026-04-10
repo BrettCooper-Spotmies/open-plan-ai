@@ -1265,6 +1265,7 @@ export default function ProjectDetail() {
               milestones={project.milestones || []}
               issues={project.issues || []}
               modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+              assignableMembers={project.team || []}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               filters={filters}
@@ -1349,6 +1350,7 @@ export default function ProjectDetail() {
         modules={modules}
         projectId={id}
         onAddModule={handleAddModule}
+        assignableMembers={project.team || []}
       />
 
       <Dialog
