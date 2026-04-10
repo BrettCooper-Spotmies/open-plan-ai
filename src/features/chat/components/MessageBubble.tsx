@@ -65,7 +65,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-function ExpandableText({ text, query }: { text: string; query?: string }) {
+function ExpandableText({ text, query, isOwn = false }: { text: string; query?: string; isOwn?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isLong = text.length > 300 || (text.match(/\n/g) || []).length > 5;
@@ -77,7 +77,7 @@ function ExpandableText({ text, query }: { text: string; query?: string }) {
   const renderText = (content: string) => {
     return content.split('\n').map((line, i) => (
       <span key={i}>
-        <MentionHighlightedText text={line} query={query} />
+        <MentionHighlightedText text={line} query={query} isOwn={isOwn} />
         {i < content.split('\n').length - 1 && <br />}
       </span>
     ));
@@ -100,7 +100,7 @@ function ExpandableText({ text, query }: { text: string; query?: string }) {
   );
 }
 
-function MentionHighlightedText({ text, query }: { text: string; query?: string }) {
+function MentionHighlightedText({ text, query, isOwn = false }: { text: string; query?: string; isOwn?: boolean }) {
   // Split on @mentions first, then apply search highlighting
   const mentionRegex = /(@\w[\w\s]*?\w)(?=\s|$|[.,!?])/g;
   const parts: { text: string; isMention: boolean }[] = [];
@@ -123,7 +123,15 @@ function MentionHighlightedText({ text, query }: { text: string; query?: string 
     <>
       {parts.map((part, i) =>
         part.isMention ? (
-          <span key={i} className="bg-primary/20 text-primary font-medium rounded px-0.5">
+          <span
+            key={i}
+            className={cn(
+              'font-medium rounded px-0.5',
+              isOwn
+                ? 'bg-primary-foreground/20 text-primary-foreground'
+                : 'bg-primary/20 text-primary'
+            )}
+          >
             <HighlightedText text={part.text} query={query} />
           </span>
         ) : (
@@ -141,7 +149,7 @@ function HighlightedText({ text, query }: { text: string; query?: string }) {
   return (
     <>
       {parts.map((part, i) =>
-        regex.test(part) ? (
+        part.toLowerCase() === query.toLowerCase() ? (
           <mark key={i} className="bg-yellow-300/60 dark:bg-yellow-500/40 rounded-sm px-0.5">{part}</mark>
         ) : (
           <span key={i}>{part}</span>
@@ -515,7 +523,7 @@ export function MessageBubble({
               className={cn(
                 'rounded-2xl px-3 py-2 text-sm leading-relaxed max-w-full overflow-hidden',
                 isOwn
-                  ? 'bg-primary text-white rounded-br-md border border-primary/20'
+                  ? 'bg-primary text-primary-foreground rounded-br-md border border-primary/20'
                   : 'bg-muted text-foreground rounded-bl-md border border-border'
               )}
             >
@@ -541,7 +549,7 @@ export function MessageBubble({
               {isFile && fileData ? (
                 <FileAttachment file={fileData} isOwn={isOwn} />
               ) : (
-                <ExpandableText text={message.content} query={searchQuery} />
+                <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} />
               )}
             </div>
           )}
