@@ -329,12 +329,18 @@ const Signup = () => {
                     placeholder="you@company.com"
                     value={formData.email}
                     onChange={(e) => handleChange("email", e.target.value)}
-                    className="pl-10"
+                    className={cn("pl-10", isInviteSignup && "bg-muted cursor-not-allowed")}
                     required
-                    disabled={isLoading}
+                    disabled={isLoading || isInviteSignup}
+                    readOnly={isInviteSignup}
                     autoComplete="email"
                   />
                 </div>
+                {isInviteSignup && (
+                  <p className="text-xs text-muted-foreground">
+                    Email is locked to the invited address.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
