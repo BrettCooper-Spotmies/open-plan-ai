@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { Task, TaskViewMode, TaskFilter, Milestone, Issue, ModuleType } from '@/types';
+import { Task, TaskViewMode, TaskFilter, Milestone, Issue, ModuleType, TeamMember } from '@/types';
 import { KanbanView } from './KanbanView';
 import { ListView } from './ListView';
 import { TaskFilters } from './TaskFilters';
@@ -18,6 +18,7 @@ interface TasksSectionProps {
   milestones: Milestone[];
   issues: Issue[];
   modules: { id: string; name: string; type: ModuleType }[];
+  assignableMembers?: TeamMember[];
   viewMode?: TaskViewMode;
   onViewModeChange?: (mode: TaskViewMode) => void;
   isFiltersOpen?: boolean;
@@ -118,6 +119,7 @@ export function TasksSection({
   milestones,
   issues,
   modules,
+  assignableMembers,
   viewMode: externalViewMode,
   onViewModeChange: externalOnViewModeChange,
   isFiltersOpen: externalIsFiltersOpen,
@@ -320,6 +322,7 @@ export function TasksSection({
             tasks={filteredTasks}
             allTasks={dependencyTasks}
             issues={issues}
+            assignableMembers={assignableMembers}
             onTaskCreate={onTaskCreate}
             onTaskUpdate={onTaskUpdate}
             onBatchTaskUpdate={onBatchTaskUpdate}
@@ -334,6 +337,7 @@ export function TasksSection({
             allTasks={dependencyTasks}
             milestones={milestones}
             modules={modules}
+            assignableMembers={assignableMembers}
             onTaskCreate={onTaskCreate}
             onTaskUpdate={onTaskUpdate}
             onBatchTaskUpdate={onBatchTaskUpdate}

@@ -57,11 +57,20 @@ import {
   XCircle,
   MessageSquare,
 } from 'lucide-react';
+import { format } from 'date-fns';
   import { LayoutGrid, List } from 'lucide-react';
   import { toast } from 'sonner';
   import { useIsMobile } from '@/hooks/use-mobile';
 
 const DEPARTMENTS = ['Engineering', 'Design', 'Management', 'Quality Assurance', 'Operations', 'Sales', 'Marketing', 'Support'];
+
+const formatUiDate = (value?: string | null) => {
+  if (!value) return 'N/A';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'N/A';
+  return format(parsed, 'dd-MM-yyyy');
+};
+const normalizeEmail = (value?: string | null) => (value || '').trim().toLowerCase();
 
 const Team = () => {
   const { currentOrganization } = useOrganization();
@@ -118,6 +127,8 @@ const Team = () => {
 
   const members = teamMembers || [];
   const invitations = pendingInvitations || [];
+  const memberEmailSet = new Set(members.map((member) => normalizeEmail(member.email)).filter(Boolean));
+  const visiblePendingInvitations = invitations.filter((inv) => !memberEmailSet.has(normalizeEmail(inv.email)));
 
   const filteredMembers = members.filter(
     (member) =>
@@ -130,7 +141,7 @@ const Team = () => {
   const stats = {
     total: members.length,
     active: members.filter((m) => m.status === 'active').length,
-    pending: invitations.length,
+    pending: visiblePendingInvitations.length,
     departments: [...new Set(members.map((m) => m.department).filter(Boolean))].length,
   };
 
@@ -154,6 +165,7 @@ const Team = () => {
         email: inviteEmail,
         role: inviteRole,
         orgId: currentOrganization.id,
+        department: inviteDepartment || undefined,
       });
       await refetchPendingInvitations();
 
@@ -467,15 +479,15 @@ const Team = () => {
         </div>
 
         {/* Pending Invitations */}
-        {isAdminOrOwner && invitations.length > 0 && (
+        {isAdminOrOwner && visiblePendingInvitations.length > 0 && (
           <Card>
             <CardContent className="p-4">
               <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
                 <Clock className="h-4 w-4" />
-                Pending Invitations ({invitations.length})
+                Pending Invitations ({visiblePendingInvitations.length})
               </h3>
               <div className="space-y-2">
-                {invitations.map((inv) => (
+                {visiblePendingInvitations.map((inv) => (
                   <div key={inv.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
@@ -486,7 +498,7 @@ const Team = () => {
                       <div>
                         <p className="text-sm font-medium">{inv.email}</p>
                         <p className="text-xs text-muted-foreground">
-                          Invited as {inv.role} • Expires {new Date(inv.expires_at).toLocaleDateString()}
+                          Invited as {inv.role} • Expires on {formatUiDate(inv.expires_at)}
                         </p>
                       </div>
                     </div>

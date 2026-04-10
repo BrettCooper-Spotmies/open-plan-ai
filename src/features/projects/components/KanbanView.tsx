@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { Task, TaskStatus, Priority, ModuleType, Issue } from '@/types';
+import { Task, TaskStatus, Priority, ModuleType, Issue, TeamMember } from '@/types';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -55,6 +55,7 @@ interface KanbanViewProps {
   tasks: Task[];
   allTasks?: Task[]; // All tasks for dependency resolution
   issues?: Issue[]; // Issues for blocking indicator
+  assignableMembers?: TeamMember[];
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onTaskUpdate?: (task: Task, onError?: () => void) => void;
   onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
@@ -103,7 +104,7 @@ const columnColorOptions = [
   { value: 'bg-chart-4', label: 'Yellow' },
 ];
 
-export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskCreate,
+export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assignableMembers, onTaskCreate,
   onTaskUpdate,
   onBatchTaskUpdate,
   onTaskDelete,
@@ -789,6 +790,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}
+        assignableMembers={assignableMembers}
       />
 
       {/* Task Detail Modal (Creating Maximized) */}
@@ -808,6 +810,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], onTaskC
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}
+        assignableMembers={assignableMembers}
       />
     </div>
   );

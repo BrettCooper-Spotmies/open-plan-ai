@@ -121,6 +121,7 @@ export type Database = {
           deleted_at: string | null
           deleted_by_name: string | null
           id: string
+          reply_to_message_id: string | null
           sender_id: string
           updated_at: string
         }
@@ -132,6 +133,7 @@ export type Database = {
           deleted_at?: string | null
           deleted_by_name?: string | null
           id?: string
+          reply_to_message_id?: string | null
           sender_id: string
           updated_at?: string
         }
@@ -143,6 +145,7 @@ export type Database = {
           deleted_at?: string | null
           deleted_by_name?: string | null
           id?: string
+          reply_to_message_id?: string | null
           sender_id?: string
           updated_at?: string
         }
@@ -152,6 +155,13 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "chat_messages"
             referencedColumns: ["id"]
           },
         ]

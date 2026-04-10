@@ -226,6 +226,59 @@ const handler = async (req: Request): Promise<Response> => {
           // Non-fatal — verification record is already marked verified_at
         } else {
           console.log(`Successfully confirmed email for user ${profileRow.id}`);
+
+          // Auto-accept pending invitations tied to this email so invite signup
+          // always lands the user in the target organization.
+          try {
+            const normalizedEmail = email.toLowerCase().trim();
+            const nowIso = new Date().toISOString();
+
+            const { data: pendingInvites, error: pendingInvitesError } = await supabase
+              .from("team_invitations")
+              .select("id, organization_id, role, invited_by")
+              .eq("email", normalizedEmail)
+              .eq("status", "pending")
+              .gt("expires_at", nowIso);
+
+            if (pendingInvitesError) {
+              console.error("Failed to load pending invitations after OTP verification:", pendingInvitesError);
+            } else if (pendingInvites && pendingInvites.length > 0) {
+              const memberships = pendingInvites.map((invite) => ({
+                organization_id: invite.organization_id,
+                user_id: profileRow.id,
+                role: invite.role || "member",
+                invited_by: invite.invited_by ?? null,
+                joined_at: nowIso,
+                status: "active",
+              }));
+
+              const { error: membershipUpsertError } = await supabase
+                .from("organization_members")
+                .upsert(memberships, { onConflict: "organization_id,user_id", ignoreDuplicates: true });
+
+              if (membershipUpsertError) {
+                console.error("Failed to upsert organization memberships after OTP verification:", membershipUpsertError);
+              } else {
+                const inviteIds = pendingInvites.map((invite) => invite.id);
+                const { error: markAcceptedError } = await supabase
+                  .from("team_invitations")
+                  .update({
+                    status: "accepted",
+                    accepted_at: nowIso,
+                  })
+                  .in("id", inviteIds)
+                  .eq("status", "pending");
+
+                if (markAcceptedError) {
+                  console.error("Failed to mark invitations accepted after OTP verification:", markAcceptedError);
+                } else {
+                  console.log(`Accepted ${inviteIds.length} invitation(s) for verified email ${normalizedEmail}`);
+                }
+              }
+            }
+          } catch (inviteAutoAcceptError) {
+            console.error("Unexpected error while auto-accepting invitations:", inviteAutoAcceptError);
+          }
         }
       } else {
         console.warn(`No profile found for email: ${email} — email_confirmed_at not updated`);

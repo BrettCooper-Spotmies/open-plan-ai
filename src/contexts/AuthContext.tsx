@@ -203,9 +203,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const pendingInviteId = localStorage.getItem('pending_invite_id');
           const pendingToken = localStorage.getItem('pending_invite_token');
           if (pendingInviteId || pendingToken) {
-            localStorage.removeItem('pending_invite_id');
-            localStorage.removeItem('pending_invite_token');
-
             const effectiveId = pendingInviteId ?? pendingToken ?? '';
             const isValidFormat =
               typeof effectiveId === 'string' &&
@@ -214,12 +211,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             if (!isValidFormat) {
               console.warn('Pending invite identifier has an invalid format; skipping accept-invite call.');
+              localStorage.removeItem('pending_invite_id');
+              localStorage.removeItem('pending_invite_token');
             } else if (!newSession.access_token) {
               console.error('Access token is missing. Unable to accept the invite.');
             } else {
               teamService.acceptInvitation(effectiveId)
                 .then(() => {
                   console.warn('Invitation accepted successfully');
+                  localStorage.removeItem('pending_invite_id');
+                  localStorage.removeItem('pending_invite_token');
                 })
                 .catch((inviteError) => {
                   console.error('Error accepting invite:', inviteError);

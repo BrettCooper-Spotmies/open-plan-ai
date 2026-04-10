@@ -1,10 +1,12 @@
 import { MessageSquare, MessagesSquare } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface EmptyStateProps {
   type: 'no-selection' | 'no-conversations' | 'no-messages';
+  onCreateGroup?: () => void;
 }
 
-export function EmptyState({ type }: EmptyStateProps) {
+export function EmptyState({ type, onCreateGroup }: EmptyStateProps) {
   const config = {
     'no-selection': {
       icon: MessageSquare,
@@ -33,6 +35,17 @@ export function EmptyState({ type }: EmptyStateProps) {
       <div>
         <h3 className="font-semibold text-foreground">{config.title}</h3>
         <p className="text-sm text-muted-foreground mt-1">{config.description}</p>
+        {type === 'no-conversations' && onCreateGroup && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={onCreateGroup}
+          >
+            + Create new Group
+          </Button>
+        )}
       </div>
     </div>
   );

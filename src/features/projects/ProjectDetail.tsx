@@ -38,7 +38,7 @@ import { AddModuleDialog } from './components/AddModuleDialog';
 import { TaskDetailModal } from './components/TaskDetailModal';
 import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
-import { useOrganizationMembers, useTeamMembers } from '@/hooks/useProjectTeam';
+import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useUpdateProject } from '@/hooks/useProjects';
 import {
@@ -83,21 +83,6 @@ const stageColors = {
   testing: 'bg-chart-4/10 text-chart-4',
   production: 'bg-chart-3/10 text-chart-3',
 };
-
-const projectTeamRoles = [
-  'Admin',
-  'Member',
-  'Project Lead',
-  'Developer',
-  'Designer',
-  'Hardware Engineer',
-  'Software Engineer',
-  'Mechanical Engineer',
-  'Electrical Engineer',
-  'QA Engineer',
-  'Technical Writer',
-  'Consultant',
-];
 
 const DEFAULT_MEMBER_REMOVAL_PROMPT: {
   open: boolean;
@@ -385,7 +370,6 @@ export default function ProjectDetail() {
   const [isAddIssueDialogOpen, setIsAddIssueDialogOpen] = useState(false);
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
   const [selectedMemberToAdd, setSelectedMemberToAdd] = useState('');
-  const [selectedMemberRole, setSelectedMemberRole] = useState('');
   const [isAddingProjectMember, setIsAddingProjectMember] = useState(false);
   const [isStartingChat, setIsStartingChat] = useState(false);
   const [memberRemovalPrompt, setMemberRemovalPrompt] = useState<{
@@ -403,7 +387,6 @@ export default function ProjectDetail() {
   // Fetch project data using React Query
   const { data: project, isLoading, error } = useProjectDetail(id);
   const { data: projectModules = [] } = useProjectModules(id);
-  const { data: allTeamMembers = [] } = useTeamMembers();
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
 
   // Mutation hooks
@@ -557,15 +540,15 @@ export default function ProjectDetail() {
     return organizationMembers.filter((member) => !projectMemberIds.has(member.id));
   }, [organizationMembers, project?.team]);
 
+  const selectedOrganizationMember = useMemo(
+    () => availableOrganizationMembers.find((member) => member.id === selectedMemberToAdd),
+    [availableOrganizationMembers, selectedMemberToAdd]
+  );
+
   const handleAddProjectMember = async () => {
-    if (!project || !selectedMemberToAdd || !selectedMemberRole) return;
+    if (!project || !selectedMemberToAdd) return;
     if (!canManageProjectMembers) {
       toast.error('Only the project creator or an Admin can add or remove members');
-      return;
-    }
-
-    if (!projectTeamRoles.includes(selectedMemberRole)) {
-      toast.error('Invalid member role selected');
       return;
     }
 
@@ -588,7 +571,7 @@ export default function ProjectDetail() {
       await projectMembersService.addMember({
         project_id: project.id,
         user_id: selectedMemberToAdd,
-        role: selectedMemberRole,
+        role: selectedOrganizationMember?.role || 'member',
       });
 
       await queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
@@ -597,7 +580,6 @@ export default function ProjectDetail() {
 
       toast.success('Member added to project');
       setSelectedMemberToAdd('');
-      setSelectedMemberRole('');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add member to project';
       toast.error(message);
@@ -1109,18 +1091,14 @@ export default function ProjectDetail() {
                               ))}
                             </SelectContent>
                           </Select>
-                          <Select value={selectedMemberRole} onValueChange={setSelectedMemberRole}>
-                            <SelectTrigger className="h-8">
-                              <SelectValue placeholder="Select role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {projectTeamRoles.map((role) => (
-                                <SelectItem key={role} value={role}>
-                                  {role}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          {selectedOrganizationMember && (
+                            <p className="text-[11px] text-muted-foreground">
+                              Role will be inherited automatically from organization:{" "}
+                              <span className="font-medium text-foreground capitalize">
+                                {selectedOrganizationMember.role || 'member'}
+                              </span>
+                            </p>
+                          )}
                           <Button
                             size="sm"
                             className="w-full"
@@ -1128,7 +1106,6 @@ export default function ProjectDetail() {
                             disabled={
                               isAddingProjectMember ||
                               !selectedMemberToAdd ||
-                              !selectedMemberRole ||
                               availableOrganizationMembers.length === 0
                             }
                             title={
@@ -1270,7 +1247,7 @@ export default function ProjectDetail() {
                   onSearchQueryChange={setIssueSearchQuery}
                   filters={issueFilters}
                   onFiltersChange={setIssueFilters}
-                  teamMembers={allTeamMembers}
+                  teamMembers={organizationMembers}
                   activeFilterCount={activeIssueFilterCount}
                   onClearFilters={clearIssueFilters}
                   onReportIssue={() => setIsAddIssueDialogOpen(true)}
@@ -1287,6 +1264,7 @@ export default function ProjectDetail() {
               milestones={project.milestones || []}
               issues={project.issues || []}
               modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+              assignableMembers={project.team || []}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               filters={filters}
@@ -1303,7 +1281,7 @@ export default function ProjectDetail() {
               modules={modules}
               tasks={project.tasks || []}
               issues={project.issues || []}
-              teamMembers={allTeamMembers}
+              teamMembers={organizationMembers}
               viewMode={moduleViewMode}
               onViewModeChange={setModuleViewMode}
               searchQuery={moduleSearchQuery}
@@ -1336,7 +1314,7 @@ export default function ProjectDetail() {
               issues={project.issues || []}
               viewMode={issueViewMode}
               tasks={project.tasks || []}
-              teamMembers={allTeamMembers}
+              teamMembers={organizationMembers}
               searchQuery={issueSearchQuery}
               severityFilter={issueFilters.severity}
               statusFilter={issueFilters.status}
@@ -1356,7 +1334,7 @@ export default function ProjectDetail() {
         isOpen={isAddModuleDialogOpen}
         onClose={() => setIsAddModuleDialogOpen(false)}
         onAdd={handleModuleAdd}
-        teamMembers={allTeamMembers}
+        teamMembers={organizationMembers}
         existingModuleNames={existingModuleNames}
       />
 
@@ -1371,6 +1349,7 @@ export default function ProjectDetail() {
         modules={modules}
         projectId={id}
         onAddModule={handleAddModule}
+        assignableMembers={project.team || []}
       />
 
       <Dialog

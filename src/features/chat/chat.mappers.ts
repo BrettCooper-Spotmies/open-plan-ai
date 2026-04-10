@@ -34,6 +34,7 @@ interface DbMessage {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  reply_to_message_id?: string | null;
 }
 
 interface DbConversation {
@@ -83,6 +84,7 @@ export function mapMessage(
     isEdited: dbMsg.updated_at !== dbMsg.created_at && !dbMsg.deleted_at,
     deletedAt: dbMsg.deleted_at ?? undefined,
     deletedByName: dbMsg.deleted_by_name ?? undefined,
+    replyToMessageId: dbMsg.reply_to_message_id ?? undefined,
   };
 }
 

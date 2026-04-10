@@ -5,11 +5,13 @@ import { IssueDetailContent } from './components/IssueDetailContent';
 import { Issue } from '@/types';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useIssue, useUpdateIssue, useDeleteIssue } from '@/hooks/useIssues';
-import { useTeamMembers } from '@/hooks/useProjectTeam';
+import { useOrganizationMembers } from '@/hooks/useProjectTeam';
+import { useOrganization } from '@/contexts/OrganizationContext';
 
 export default function IssuePage() {
   const { projectId, issueId } = useParams();
   const navigate = useNavigate();
+  const { currentOrganization } = useOrganization();
 
   const {
     data: project,
@@ -23,7 +25,7 @@ export default function IssuePage() {
     error: issueError
   } = useIssue(issueId);
 
-  const { data: teamMembers = [], isLoading: isTeamLoading } = useTeamMembers();
+  const { data: teamMembers = [], isLoading: isTeamLoading } = useOrganizationMembers(currentOrganization?.id);
   const updateIssueMutation = useUpdateIssue();
   const deleteIssueMutation = useDeleteIssue();
 

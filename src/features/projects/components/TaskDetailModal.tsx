@@ -103,6 +103,7 @@ interface TaskDetailModalProps {
   modules?: { id: string; name: string; type: ModuleType }[];
   projectId?: string;
   onAddModule?: () => void;
+  assignableMembers?: TeamMember[];
 }
 
 const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
@@ -245,11 +246,13 @@ export const TaskDetailModal = ({
   modules = [],
   projectId,
   onAddModule,
+  assignableMembers,
 }: TaskDetailModalProps) => {
   const { profile } = useAuth();
   const { currentOrganization } = useOrganization();
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const { createNotification } = useNotifications();
+  const availableAssignees = assignableMembers ?? organizationMembers;
   const [editedTask, setEditedTask] = useState<Task>(task || {
     id: '',
     title: '',
@@ -382,7 +385,7 @@ export const TaskDetailModal = ({
   };
 
   const handleCreate = () => {
-    if (!editedTask.moduleIds || editedTask.moduleIds.length === 0 || !isFormDirty) {
+    if (!editedTask.moduleIds || editedTask.moduleIds.length === 0) {
       return;
     }
 
@@ -553,7 +556,11 @@ export const TaskDetailModal = ({
   const isTaskDirty = initialTaskSnapshot !== '' && normalizedEditedTaskSnapshot !== initialTaskSnapshot;
   const isFormDirty = isTaskDirty || hasBlockingToChanges || hasBlockedByChanges;
   const canSubmitTask = Boolean(
-    editedTask.title && editedTask.dueDate && hasSelectedModules && isFormDirty && !isBlockedWithoutDependencies
+    editedTask.title &&
+      editedTask.dueDate &&
+      hasSelectedModules &&
+      !isBlockedWithoutDependencies &&
+      (mode === 'create' || isFormDirty)
   );
 
   // Comments handlers
@@ -899,8 +906,8 @@ export const TaskDetailModal = ({
                           <CommandInput placeholder="Search members..." />
                           <CommandList>
                             <CommandEmpty>No results found.</CommandEmpty>
-                            <CommandGroup heading="Organization members">
-                              {organizationMembers
+                            <CommandGroup heading="Members">
+                              {availableAssignees
                                 .filter(m => !editedTask.assignees?.some(a => a.id === m.id))
                                 .map((member) => (
                                   <CommandItem

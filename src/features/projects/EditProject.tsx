@@ -100,21 +100,6 @@ const departmentsList = [
     { id: "documentation", name: "Documentation", icon: BookOpen },
 ];
 
-const rolesList = [
-    "Admin",
-    "Member",
-    "Project Lead",
-    "Developer",
-    "Designer",
-    "Hardware Engineer",
-    "Software Engineer",
-    "Mechanical Engineer",
-    "Electrical Engineer",
-    "QA Engineer",
-    "Technical Writer",
-    "Consultant",
-];
-
 interface ProjectLink {
     id: string;
     name: string;
@@ -189,6 +174,8 @@ const EditProject = () => {
     const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
     const [startDate, setStartDate] = useState<Date>();
     const [targetDate, setTargetDate] = useState<Date>();
+    const [isStartDateOpen, setIsStartDateOpen] = useState(false);
+    const [isTargetDateOpen, setIsTargetDateOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
     // Optional Details
@@ -201,7 +188,6 @@ const EditProject = () => {
     // Team Members
     const [assignedMembers, setAssignedMembers] = useState<TeamMemberAssignment[]>([]);
     const [selectedMember, setSelectedMember] = useState("");
-    const [selectedRole, setSelectedRole] = useState("");
 
     // Departments
     const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
@@ -220,6 +206,8 @@ const EditProject = () => {
     const [newMilestoneStart, setNewMilestoneStart] = useState<Date>();
     const [newMilestoneEnd, setNewMilestoneEnd] = useState<Date>();
     const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+    const [isMilestoneStartOpen, setIsMilestoneStartOpen] = useState(false);
+    const [isMilestoneEndOpen, setIsMilestoneEndOpen] = useState(false);
 
     // Links state
     const [newLinkName, setNewLinkName] = useState("");
@@ -313,6 +301,11 @@ const EditProject = () => {
         return (myMembership?.role || '').toLowerCase() === 'admin';
     }, [project?.createdBy, project?.team, user?.id]);
 
+    const selectedOrgMember = useMemo(
+        () => orgMembers.find((member: any) => member.id === selectedMember),
+        [orgMembers, selectedMember]
+    );
+
     const handleAddModule = () => {
         if (newModuleName.trim()) {
             if (editingModuleId) {
@@ -335,6 +328,14 @@ const EditProject = () => {
     };
 
     const handleAddMilestone = () => {
+        if (startDate && newMilestoneStart && isBefore(newMilestoneStart, startDate)) {
+            toast.error("Milestone start date cannot be earlier than project start date");
+            return;
+        }
+        if (targetDate && newMilestoneEnd && isBefore(targetDate, newMilestoneEnd)) {
+            toast.error("Milestone end date cannot be later than project target date");
+            return;
+        }
         if (newMilestoneName.trim() && newMilestoneStart && newMilestoneEnd) {
             if (editingMilestoneId) {
                 setMilestones(milestones.map(m => m.id === editingMilestoneId ? {
@@ -378,18 +379,18 @@ const EditProject = () => {
             return;
         }
 
-        if (selectedMember && selectedRole) {
+        if (selectedMember) {
             const exists = assignedMembers.find(m => m.memberId === selectedMember);
             if (!exists) {
                 const memberObj = orgMembers.find(m => m.id === selectedMember);
+                const inheritedRole = memberObj?.role || "member";
                 setAssignedMembers([...assignedMembers, {
                     memberId: selectedMember,
-                    role: selectedRole,
+                    role: inheritedRole,
                     name: memberObj?.name,
                     avatar: memberObj?.avatar
                 }]);
                 setSelectedMember("");
-                setSelectedRole("");
             } else {
                 toast.error("Member already assigned");
             }
@@ -1021,7 +1022,7 @@ const EditProject = () => {
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
                                 <Label>Start Date <span className="text-destructive">*</span></Label>
-                                <Popover>
+                                <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen}>
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant="outline"
@@ -1038,7 +1039,10 @@ const EditProject = () => {
                                         <Calendar
                                             mode="single"
                                             selected={startDate}
-                                            onSelect={setStartDate}
+                                            onSelect={(date) => {
+                                                setStartDate(date);
+                                                setIsStartDateOpen(false);
+                                            }}
                                             disabled={{ before: startOfToday() }}
                                             initialFocus
                                         />
@@ -1047,7 +1051,7 @@ const EditProject = () => {
                             </div>
                             <div className="space-y-2">
                                 <Label>Target Date <span className="text-destructive">*</span></Label>
-                                <Popover>
+                                <Popover open={isTargetDateOpen} onOpenChange={setIsTargetDateOpen}>
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant="outline"
@@ -1064,7 +1068,10 @@ const EditProject = () => {
                                         <Calendar
                                             mode="single"
                                             selected={targetDate}
-                                            onSelect={setTargetDate}
+                                            onSelect={(date) => {
+                                                setTargetDate(date);
+                                                setIsTargetDateOpen(false);
+                                            }}
                                             disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false)}
                                             initialFocus
                                         />
@@ -1276,7 +1283,7 @@ const EditProject = () => {
                         </CardTitle>
                         <CardDescription>
                             {canManageProjectMembers
-                                ? 'Assign team members and roles to this project'
+                                ? 'Assign team members to this project (organization role is inherited automatically)'
                                 : 'Only the project creator or an Admin can manage team members'}
                         </CardDescription>
                     </CardHeader>
@@ -1303,28 +1310,23 @@ const EditProject = () => {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="flex-1 space-y-2">
-                                <Label>Role</Label>
-                                <Select value={selectedRole} onValueChange={setSelectedRole} disabled={!canManageProjectMembers}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select role" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {rolesList.map((role) => (
-                                            <SelectItem key={role} value={role}>{role}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
                             <Button
                                 className="md:mt-8"
                                 onClick={handleAddTeamMember}
-                                disabled={!canManageProjectMembers || !selectedMember || !selectedRole}
+                                disabled={!canManageProjectMembers || !selectedMember}
                             >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add
                             </Button>
                         </div>
+                        {selectedOrgMember && (
+                            <p className="text-[11px] text-muted-foreground">
+                                Role will be inherited automatically from organization:{" "}
+                                <span className="font-medium text-foreground capitalize">
+                                    {selectedOrgMember.role || 'member'}
+                                </span>
+                            </p>
+                        )}
 
                         {assignedMembers.length > 0 && (
                             <div className="space-y-3 pt-4 border-t">
@@ -1444,23 +1446,23 @@ const EditProject = () => {
                                 onChange={(e) => setNewMilestoneName(e.target.value)}
                             />
                             <div className="grid grid-cols-2 gap-2">
-                                <Popover>
+                                <Popover open={isMilestoneStartOpen} onOpenChange={setIsMilestoneStartOpen}>
                                     <PopoverTrigger asChild>
                                         <Button variant="outline" className={cn("w-full justify-start text-left font-normal text-xs", !newMilestoneStart && "text-muted-foreground")}>
                                             <CalendarIcon className="mr-2 h-3 w-3" />
                                             {newMilestoneStart ? format(newMilestoneStart, "PP") : "Start"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneStart} onSelect={setNewMilestoneStart} disabled={{ before: startOfToday() }} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneStart} onSelect={(date) => { setNewMilestoneStart(date); setIsMilestoneStartOpen(false); }} disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false) || (targetDate ? isBefore(targetDate, date) : false)} /></PopoverContent>
                                 </Popover>
-                                <Popover>
+                                <Popover open={isMilestoneEndOpen} onOpenChange={setIsMilestoneEndOpen}>
                                     <PopoverTrigger asChild>
                                         <Button variant="outline" className={cn("w-full justify-start text-left font-normal text-xs", !newMilestoneEnd && "text-muted-foreground")}>
                                             <CalendarIcon className="mr-2 h-3 w-3" />
                                             {newMilestoneEnd ? format(newMilestoneEnd, "PP") : "End"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneEnd} onSelect={setNewMilestoneEnd} disabled={(date) => isBefore(date, startOfToday()) || (newMilestoneStart ? isBefore(date, newMilestoneStart) : false)} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneEnd} onSelect={(date) => { setNewMilestoneEnd(date); setIsMilestoneEndOpen(false); }} disabled={(date) => isBefore(date, startOfToday()) || (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) || (startDate ? isBefore(date, startDate) : false) || (targetDate ? isBefore(targetDate, date) : false)} /></PopoverContent>
                                 </Popover>
                             </div>
                             <div className="flex gap-2">

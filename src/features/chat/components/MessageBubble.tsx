@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2 } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -37,6 +37,7 @@ interface MessageBubbleProps {
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string, senderName: string) => void;
   onToggleReaction?: (messageId: string, emoji: string) => void | Promise<void>;
+  onReply?: (message: ChatMessage) => void;
 }
 
 interface FileContent {
@@ -64,7 +65,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-function ExpandableText({ text, query }: { text: string; query?: string }) {
+function ExpandableText({ text, query, isOwn = false }: { text: string; query?: string; isOwn?: boolean }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isLong = text.length > 300 || (text.match(/\n/g) || []).length > 5;
@@ -76,7 +77,7 @@ function ExpandableText({ text, query }: { text: string; query?: string }) {
   const renderText = (content: string) => {
     return content.split('\n').map((line, i) => (
       <span key={i}>
-        <MentionHighlightedText text={line} query={query} />
+        <MentionHighlightedText text={line} query={query} isOwn={isOwn} />
         {i < content.split('\n').length - 1 && <br />}
       </span>
     ));
@@ -99,7 +100,7 @@ function ExpandableText({ text, query }: { text: string; query?: string }) {
   );
 }
 
-function MentionHighlightedText({ text, query }: { text: string; query?: string }) {
+function MentionHighlightedText({ text, query, isOwn = false }: { text: string; query?: string; isOwn?: boolean }) {
   // Split on @mentions first, then apply search highlighting
   const mentionRegex = /(@\w[\w\s]*?\w)(?=\s|$|[.,!?])/g;
   const parts: { text: string; isMention: boolean }[] = [];
@@ -122,7 +123,15 @@ function MentionHighlightedText({ text, query }: { text: string; query?: string 
     <>
       {parts.map((part, i) =>
         part.isMention ? (
-          <span key={i} className="bg-primary/20 text-primary font-medium rounded px-0.5">
+          <span
+            key={i}
+            className={cn(
+              'font-medium rounded px-0.5',
+              isOwn
+                ? 'bg-primary-foreground/20 text-primary-foreground'
+                : 'bg-primary/20 text-primary'
+            )}
+          >
             <HighlightedText text={part.text} query={query} />
           </span>
         ) : (
@@ -140,7 +149,7 @@ function HighlightedText({ text, query }: { text: string; query?: string }) {
   return (
     <>
       {parts.map((part, i) =>
-        regex.test(part) ? (
+        part.toLowerCase() === query.toLowerCase() ? (
           <mark key={i} className="bg-yellow-300/60 dark:bg-yellow-500/40 rounded-sm px-0.5">{part}</mark>
         ) : (
           <span key={i}>{part}</span>
@@ -268,7 +277,7 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
 
 export function MessageBubble({
   message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
-  searchQuery, readReceipts, reactions, onEdit, onDelete, onToggleReaction,
+  searchQuery, readReceipts, reactions, onEdit, onDelete, onToggleReaction, onReply,
 }: MessageBubbleProps) {
   const isOwn = message.senderId === currentUserId;
   const isFile = message.contentType === 'file';
@@ -459,6 +468,12 @@ export function MessageBubble({
                   <Copy className="h-4 w-4 mr-2" />
                   Copy
                 </DropdownMenuItem>
+                {!isDeleted && (
+                  <DropdownMenuItem onClick={() => onReply?.(message)} className="cursor-pointer">
+                    <Reply className="h-4 w-4 mr-2" />
+                    Reply
+                  </DropdownMenuItem>
+                )}
                 {canModify && !isFile && (
                   <>
                     <DropdownMenuSeparator />
@@ -512,10 +527,29 @@ export function MessageBubble({
                   : 'bg-muted text-foreground rounded-bl-md border border-border'
               )}
             >
+              {message.replyToMessage && (
+                <div
+                  className={cn(
+                    'mb-2 rounded-md border-l-2 px-2 py-1 text-xs',
+                    isOwn
+                      ? 'border-primary-foreground/50 bg-primary-foreground/10'
+                      : 'border-primary/40 bg-primary/10'
+                  )}
+                >
+                  <div className="font-medium opacity-90">{message.replyToMessage.senderName}</div>
+                  <div className="opacity-80 truncate">
+                    {message.replyToMessage.deletedAt
+                      ? 'Message deleted'
+                      : message.replyToMessage.contentType === 'file'
+                        ? 'Attachment'
+                        : message.replyToMessage.content}
+                  </div>
+                </div>
+              )}
               {isFile && fileData ? (
                 <FileAttachment file={fileData} isOwn={isOwn} />
               ) : (
-                <ExpandableText text={message.content} query={searchQuery} />
+                <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} />
               )}
             </div>
           )}

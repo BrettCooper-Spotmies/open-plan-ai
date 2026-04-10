@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Task, Milestone, ModuleType } from '@/types';
+import { Task, Milestone, ModuleType, TeamMember } from '@/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -15,6 +15,7 @@ interface ListViewProps {
   allTasks?: Task[]; // All tasks for dependency resolution
   milestones?: Milestone[];
   modules?: { id: string; name: string; type: ModuleType }[];
+  assignableMembers?: TeamMember[];
   onTaskClick?: (task: Task) => void;
   onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
   onTaskUpdate?: (task: Task) => void;
@@ -41,7 +42,7 @@ const priorityColors = {
 type SortField = 'title' | 'status' | 'priority' | 'module' | 'dueDate' | 'assignee';
 type SortDirection = 'asc' | 'desc';
 
-export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modules = [], onTaskClick, onTaskCreate, onTaskUpdate, onBatchTaskUpdate, onTaskDelete, projectId, onAddModule }: ListViewProps) {
+export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modules = [], assignableMembers, onTaskClick, onTaskCreate, onTaskUpdate, onBatchTaskUpdate, onTaskDelete, projectId, onAddModule }: ListViewProps) {
   // Use allTasks prop if provided, otherwise fallback to tasks
   const allTasksForDependencies = allTasksProp || tasks;
   const [sortField, setSortField] = useState<SortField>('priority');
@@ -201,6 +202,7 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
           modules={modules}
           projectId={projectId}
           onAddModule={onAddModule}
+          assignableMembers={assignableMembers}
         />
       </div>
     );
@@ -366,6 +368,7 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}
+        assignableMembers={assignableMembers}
       />
 
       {/* Create Task Modal */}
@@ -381,6 +384,7 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}
+        assignableMembers={assignableMembers}
       />
     </>
   );

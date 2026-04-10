@@ -38,8 +38,8 @@ export function useInviteTeamMember() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ email, role, orgId }: { email: string; role: string; orgId: string }) =>
-      teamService.invite(email, role, orgId),
+    mutationFn: ({ email, role, orgId, department }: { email: string; role: string; orgId: string; department?: string }) =>
+      teamService.invite(email, role, orgId, department),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.team.all });
     },
