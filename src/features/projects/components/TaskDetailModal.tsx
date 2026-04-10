@@ -385,7 +385,7 @@ export const TaskDetailModal = ({
   };
 
   const handleCreate = () => {
-    if (!editedTask.moduleIds || editedTask.moduleIds.length === 0 || !isFormDirty) {
+    if (!editedTask.moduleIds || editedTask.moduleIds.length === 0) {
       return;
     }
 
@@ -556,7 +556,11 @@ export const TaskDetailModal = ({
   const isTaskDirty = initialTaskSnapshot !== '' && normalizedEditedTaskSnapshot !== initialTaskSnapshot;
   const isFormDirty = isTaskDirty || hasBlockingToChanges || hasBlockedByChanges;
   const canSubmitTask = Boolean(
-    editedTask.title && editedTask.dueDate && hasSelectedModules && isFormDirty && !isBlockedWithoutDependencies
+    editedTask.title &&
+      editedTask.dueDate &&
+      hasSelectedModules &&
+      !isBlockedWithoutDependencies &&
+      (mode === 'create' || isFormDirty)
   );
 
   // Comments handlers

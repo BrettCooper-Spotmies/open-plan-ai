@@ -38,7 +38,7 @@ import { AddModuleDialog } from './components/AddModuleDialog';
 import { TaskDetailModal } from './components/TaskDetailModal';
 import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
-import { useOrganizationMembers, useTeamMembers } from '@/hooks/useProjectTeam';
+import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useUpdateProject } from '@/hooks/useProjects';
 import {
@@ -387,7 +387,6 @@ export default function ProjectDetail() {
   // Fetch project data using React Query
   const { data: project, isLoading, error } = useProjectDetail(id);
   const { data: projectModules = [] } = useProjectModules(id);
-  const { data: allTeamMembers = [] } = useTeamMembers();
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
 
   // Mutation hooks
@@ -1248,7 +1247,7 @@ export default function ProjectDetail() {
                   onSearchQueryChange={setIssueSearchQuery}
                   filters={issueFilters}
                   onFiltersChange={setIssueFilters}
-                  teamMembers={allTeamMembers}
+                  teamMembers={organizationMembers}
                   activeFilterCount={activeIssueFilterCount}
                   onClearFilters={clearIssueFilters}
                   onReportIssue={() => setIsAddIssueDialogOpen(true)}
@@ -1282,7 +1281,7 @@ export default function ProjectDetail() {
               modules={modules}
               tasks={project.tasks || []}
               issues={project.issues || []}
-              teamMembers={allTeamMembers}
+              teamMembers={organizationMembers}
               viewMode={moduleViewMode}
               onViewModeChange={setModuleViewMode}
               searchQuery={moduleSearchQuery}
@@ -1315,7 +1314,7 @@ export default function ProjectDetail() {
               issues={project.issues || []}
               viewMode={issueViewMode}
               tasks={project.tasks || []}
-              teamMembers={allTeamMembers}
+              teamMembers={organizationMembers}
               searchQuery={issueSearchQuery}
               severityFilter={issueFilters.severity}
               statusFilter={issueFilters.status}
@@ -1335,7 +1334,7 @@ export default function ProjectDetail() {
         isOpen={isAddModuleDialogOpen}
         onClose={() => setIsAddModuleDialogOpen(false)}
         onAdd={handleModuleAdd}
-        teamMembers={allTeamMembers}
+        teamMembers={organizationMembers}
         existingModuleNames={existingModuleNames}
       />
 
