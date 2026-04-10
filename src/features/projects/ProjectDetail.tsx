@@ -84,21 +84,6 @@ const stageColors = {
   production: 'bg-chart-3/10 text-chart-3',
 };
 
-const projectTeamRoles = [
-  'Admin',
-  'Member',
-  'Project Lead',
-  'Developer',
-  'Designer',
-  'Hardware Engineer',
-  'Software Engineer',
-  'Mechanical Engineer',
-  'Electrical Engineer',
-  'QA Engineer',
-  'Technical Writer',
-  'Consultant',
-];
-
 const DEFAULT_MEMBER_REMOVAL_PROMPT: {
   open: boolean;
   memberId: string | null;
@@ -385,7 +370,6 @@ export default function ProjectDetail() {
   const [isAddIssueDialogOpen, setIsAddIssueDialogOpen] = useState(false);
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
   const [selectedMemberToAdd, setSelectedMemberToAdd] = useState('');
-  const [selectedMemberRole, setSelectedMemberRole] = useState('');
   const [isAddingProjectMember, setIsAddingProjectMember] = useState(false);
   const [isStartingChat, setIsStartingChat] = useState(false);
   const [memberRemovalPrompt, setMemberRemovalPrompt] = useState<{
@@ -557,15 +541,15 @@ export default function ProjectDetail() {
     return organizationMembers.filter((member) => !projectMemberIds.has(member.id));
   }, [organizationMembers, project?.team]);
 
+  const selectedOrganizationMember = useMemo(
+    () => availableOrganizationMembers.find((member) => member.id === selectedMemberToAdd),
+    [availableOrganizationMembers, selectedMemberToAdd]
+  );
+
   const handleAddProjectMember = async () => {
-    if (!project || !selectedMemberToAdd || !selectedMemberRole) return;
+    if (!project || !selectedMemberToAdd) return;
     if (!canManageProjectMembers) {
       toast.error('Only the project creator or an Admin can add or remove members');
-      return;
-    }
-
-    if (!projectTeamRoles.includes(selectedMemberRole)) {
-      toast.error('Invalid member role selected');
       return;
     }
 
@@ -588,7 +572,7 @@ export default function ProjectDetail() {
       await projectMembersService.addMember({
         project_id: project.id,
         user_id: selectedMemberToAdd,
-        role: selectedMemberRole,
+        role: selectedOrganizationMember?.role || 'member',
       });
 
       await queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
@@ -597,7 +581,6 @@ export default function ProjectDetail() {
 
       toast.success('Member added to project');
       setSelectedMemberToAdd('');
-      setSelectedMemberRole('');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add member to project';
       toast.error(message);
@@ -1109,18 +1092,14 @@ export default function ProjectDetail() {
                               ))}
                             </SelectContent>
                           </Select>
-                          <Select value={selectedMemberRole} onValueChange={setSelectedMemberRole}>
-                            <SelectTrigger className="h-8">
-                              <SelectValue placeholder="Select role" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {projectTeamRoles.map((role) => (
-                                <SelectItem key={role} value={role}>
-                                  {role}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          {selectedOrganizationMember && (
+                            <p className="text-[11px] text-muted-foreground">
+                              Role will be inherited from organization:{" "}
+                              <span className="font-medium text-foreground capitalize">
+                                {selectedOrganizationMember.role || 'member'}
+                              </span>
+                            </p>
+                          )}
                           <Button
                             size="sm"
                             className="w-full"
@@ -1128,7 +1107,6 @@ export default function ProjectDetail() {
                             disabled={
                               isAddingProjectMember ||
                               !selectedMemberToAdd ||
-                              !selectedMemberRole ||
                               availableOrganizationMembers.length === 0
                             }
                             title={
