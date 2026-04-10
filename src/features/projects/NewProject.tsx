@@ -168,6 +168,8 @@ const NewProject = () => {
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [startDate, setStartDate] = useState<Date>();
   const [expectedEndDate, setExpectedEndDate] = useState<Date>();
+  const [isStartDateOpen, setIsStartDateOpen] = useState(false);
+  const [isExpectedEndDateOpen, setIsExpectedEndDateOpen] = useState(false);
 
   // Common project emojis
   const projectEmojis = [
@@ -792,7 +794,7 @@ const NewProject = () => {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label>Start Date <span className="text-destructive">*</span></Label>
-                <Popover>
+                <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -809,7 +811,10 @@ const NewProject = () => {
                     <Calendar
                       mode="single"
                       selected={startDate}
-                      onSelect={setStartDate}
+                      onSelect={(date) => {
+                        setStartDate(date);
+                        setIsStartDateOpen(false);
+                      }}
                       disabled={{ before: startOfToday() }}
                       initialFocus
                     />
@@ -818,7 +823,7 @@ const NewProject = () => {
               </div>
               <div className="space-y-2">
                 <Label>Expected Completion Date <span className="text-destructive">*</span></Label>
-                <Popover>
+                <Popover open={isExpectedEndDateOpen} onOpenChange={setIsExpectedEndDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -835,7 +840,10 @@ const NewProject = () => {
                     <Calendar
                       mode="single"
                       selected={expectedEndDate}
-                      onSelect={setExpectedEndDate}
+                      onSelect={(date) => {
+                        setExpectedEndDate(date);
+                        setIsExpectedEndDateOpen(false);
+                      }}
                       disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false)}
                       initialFocus
                     />

@@ -174,6 +174,8 @@ const EditProject = () => {
     const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
     const [startDate, setStartDate] = useState<Date>();
     const [targetDate, setTargetDate] = useState<Date>();
+    const [isStartDateOpen, setIsStartDateOpen] = useState(false);
+    const [isTargetDateOpen, setIsTargetDateOpen] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
     // Optional Details
@@ -1010,7 +1012,7 @@ const EditProject = () => {
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
                                 <Label>Start Date <span className="text-destructive">*</span></Label>
-                                <Popover>
+                                <Popover open={isStartDateOpen} onOpenChange={setIsStartDateOpen}>
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant="outline"
@@ -1027,7 +1029,10 @@ const EditProject = () => {
                                         <Calendar
                                             mode="single"
                                             selected={startDate}
-                                            onSelect={setStartDate}
+                                            onSelect={(date) => {
+                                                setStartDate(date);
+                                                setIsStartDateOpen(false);
+                                            }}
                                             disabled={{ before: startOfToday() }}
                                             initialFocus
                                         />
@@ -1036,7 +1041,7 @@ const EditProject = () => {
                             </div>
                             <div className="space-y-2">
                                 <Label>Target Date <span className="text-destructive">*</span></Label>
-                                <Popover>
+                                <Popover open={isTargetDateOpen} onOpenChange={setIsTargetDateOpen}>
                                     <PopoverTrigger asChild>
                                         <Button
                                             variant="outline"
@@ -1053,7 +1058,10 @@ const EditProject = () => {
                                         <Calendar
                                             mode="single"
                                             selected={targetDate}
-                                            onSelect={setTargetDate}
+                                            onSelect={(date) => {
+                                                setTargetDate(date);
+                                                setIsTargetDateOpen(false);
+                                            }}
                                             disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false)}
                                             initialFocus
                                         />
