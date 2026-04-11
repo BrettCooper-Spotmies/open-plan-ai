@@ -1224,20 +1224,23 @@ const NewProject = () => {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={newMilestoneStart}
-                      onSelect={(date) => {
-                        setNewMilestoneStart(date);
-                        setIsMilestoneStartOpen(false);
-                      }}
-                      disabled={(date) =>
-                        isBefore(date, startOfToday()) ||
-                        (startDate ? isBefore(date, startDate) : false) ||
-                        (expectedEndDate ? isBefore(expectedEndDate, date) : false)
-                      }
-                      initialFocus
-                    />
+                    {isMilestoneStartOpen && (
+                      <Calendar
+                        mode="single"
+                        selected={newMilestoneStart}
+                        defaultMonth={newMilestoneStart ?? startDate ?? new Date()}
+                        onSelect={(date) => {
+                          setNewMilestoneStart(date);
+                          setIsMilestoneStartOpen(false);
+                        }}
+                        disabled={(date) =>
+                          isBefore(date, startOfToday()) ||
+                          (startDate ? isBefore(date, startDate) : false) ||
+                          (expectedEndDate ? isBefore(expectedEndDate, date) : false)
+                        }
+                        initialFocus
+                      />
+                    )}
                   </PopoverContent>
                 </Popover>
               </div>
@@ -1257,21 +1260,26 @@ const NewProject = () => {
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={newMilestoneEnd}
-                      onSelect={(date) => {
-                        setNewMilestoneEnd(date);
-                        setIsMilestoneEndOpen(false);
-                      }}
-                      disabled={(date) =>
-                        isBefore(date, startOfToday()) ||
-                        (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) ||
-                        (startDate ? isBefore(date, startDate) : false) ||
-                        (expectedEndDate ? isBefore(expectedEndDate, date) : false)
-                      }
-                      initialFocus
-                    />
+                    {isMilestoneEndOpen && (
+                      <Calendar
+                        mode="single"
+                        selected={newMilestoneEnd}
+                        defaultMonth={
+                          newMilestoneEnd ?? newMilestoneStart ?? startDate ?? new Date()
+                        }
+                        onSelect={(date) => {
+                          setNewMilestoneEnd(date);
+                          setIsMilestoneEndOpen(false);
+                        }}
+                        disabled={(date) =>
+                          isBefore(date, startOfToday()) ||
+                          (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) ||
+                          (startDate ? isBefore(date, startDate) : false) ||
+                          (expectedEndDate ? isBefore(expectedEndDate, date) : false)
+                        }
+                        initialFocus
+                      />
+                    )}
                   </PopoverContent>
                 </Popover>
               </div>

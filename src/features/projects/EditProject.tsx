@@ -1453,7 +1453,24 @@ const EditProject = () => {
                                             {newMilestoneStart ? format(newMilestoneStart, "PP") : "Start"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneStart} onSelect={(date) => { setNewMilestoneStart(date); setIsMilestoneStartOpen(false); }} disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false) || (targetDate ? isBefore(targetDate, date) : false)} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0">
+                                        {isMilestoneStartOpen && (
+                                            <Calendar
+                                                mode="single"
+                                                selected={newMilestoneStart}
+                                                defaultMonth={newMilestoneStart ?? startDate ?? new Date()}
+                                                onSelect={(date) => {
+                                                    setNewMilestoneStart(date);
+                                                    setIsMilestoneStartOpen(false);
+                                                }}
+                                                disabled={(date) =>
+                                                    isBefore(date, startOfToday()) ||
+                                                    (startDate ? isBefore(date, startDate) : false) ||
+                                                    (targetDate ? isBefore(targetDate, date) : false)
+                                                }
+                                            />
+                                        )}
+                                    </PopoverContent>
                                 </Popover>
                                 <Popover open={isMilestoneEndOpen} onOpenChange={setIsMilestoneEndOpen}>
                                     <PopoverTrigger asChild>
@@ -1462,7 +1479,27 @@ const EditProject = () => {
                                             {newMilestoneEnd ? format(newMilestoneEnd, "PP") : "End"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneEnd} onSelect={(date) => { setNewMilestoneEnd(date); setIsMilestoneEndOpen(false); }} disabled={(date) => isBefore(date, startOfToday()) || (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) || (startDate ? isBefore(date, startDate) : false) || (targetDate ? isBefore(targetDate, date) : false)} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0">
+                                        {isMilestoneEndOpen && (
+                                            <Calendar
+                                                mode="single"
+                                                selected={newMilestoneEnd}
+                                                defaultMonth={
+                                                    newMilestoneEnd ?? newMilestoneStart ?? startDate ?? new Date()
+                                                }
+                                                onSelect={(date) => {
+                                                    setNewMilestoneEnd(date);
+                                                    setIsMilestoneEndOpen(false);
+                                                }}
+                                                disabled={(date) =>
+                                                    isBefore(date, startOfToday()) ||
+                                                    (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) ||
+                                                    (startDate ? isBefore(date, startDate) : false) ||
+                                                    (targetDate ? isBefore(targetDate, date) : false)
+                                                }
+                                            />
+                                        )}
+                                    </PopoverContent>
                                 </Popover>
                             </div>
                             <div className="flex gap-2">
