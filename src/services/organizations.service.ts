@@ -188,13 +188,32 @@ export const organizationsService = {
   },
 
   /**
-   * Update organization settings (merge-patch into the JSONB field atomically).
-   * Uses a single UPDATE with jsonb merge to avoid the read-then-write race condition.
+   * Merge-patch organization `settings` JSONB (preserves keys not in `patch`).
+   * Pass `logoUrl: undefined` to remove the logo URL from settings.
    */
-  async updateSettings(orgId: string, settings: OrganizationSettings): Promise<Organization> {
+  async updateSettings(orgId: string, patch: Partial<OrganizationSettings>): Promise<Organization> {
+    const existing = await this.getById(orgId);
+    if (!existing) {
+      throw new Error('Organization not found');
+    }
+
+    const raw = existing.settings;
+    const base: Record<string, unknown> =
+      raw !== null && typeof raw === 'object' && !Array.isArray(raw)
+        ? { ...(raw as Record<string, unknown>) }
+        : {};
+
+    for (const [key, value] of Object.entries(patch) as [keyof OrganizationSettings, unknown][]) {
+      if (value === undefined) {
+        delete base[key as string];
+      } else {
+        base[key as string] = value;
+      }
+    }
+
     const { data, error } = await supabase
       .from('organizations')
-      .update({ settings: settings as unknown as Json })
+      .update({ settings: base as unknown as Json })
       .eq('id', orgId)
       .select()
       .single();
