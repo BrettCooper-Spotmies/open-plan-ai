@@ -1,7 +1,6 @@
 import { Task, Issue, Milestone, TeamMember, Module, Priority, TaskStatus, Project } from '@/types';
 import {
   subDays,
-  isAfter,
   isBefore,
   parse,
   parseISO,
@@ -102,16 +101,34 @@ export function getDateRangeFromTimeRange(
   }
 }
 
-// Filter tasks by time range
+/**
+ * Filter tasks for the selected reporting window.
+ *
+ * Previously this used **due dates only**, which dropped active tasks whose due date was
+ * in the future (or otherwise outside the window), so KPIs and charts showed empty data
+ * while "Project Progress" still counted tasks from unfiltered totals.
+ *
+ * Rules now:
+ * - **Non-done** tasks: always included (current backlog / in-flight work for the org/project).
+ * - **Done** tasks: included only if completion time (`updatedAt`) falls within the range
+ *   (typical for "Last 30 days" velocity / cycle metrics).
+ */
 export function filterTasksByTimeRange(
   tasks: Task[],
   dateRange: { start: Date; end: Date }
 ): Task[] {
-  return tasks.filter(task => {
-    if (!task.dueDate) return true;
-    const dueDate = parse(task.dueDate, 'yyyy-MM-dd', new Date());
-    return isWithinInterval(dueDate, { start: dateRange.start, end: dateRange.end }) ||
-      isBefore(dueDate, dateRange.start);
+  const rangeStart = startOfDay(dateRange.start);
+  const rangeEnd = startOfDay(dateRange.end);
+
+  return tasks.filter((task) => {
+    if (task.status !== 'done') {
+      return true;
+    }
+    if (!task.updatedAt) {
+      return false;
+    }
+    const completedDay = startOfDay(parseISO(task.updatedAt));
+    return isWithinInterval(completedDay, { start: rangeStart, end: rangeEnd });
   });
 }
 

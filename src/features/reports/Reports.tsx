@@ -142,25 +142,19 @@ export default function Reports() {
     [filter.timeRange, filter.customDateRange]
   );
 
-  // ─── Apply task filters (time range first, then other filters) ───────────
-  const filteredTasks = useMemo(() => {
-    const timeFiltered = filterTasksByTimeRange(tasks, dateRange);
-    return applyFilters(timeFiltered, filter);
-  }, [tasks, filter, dateRange]);
+  // ─── Task list: project/module/etc. filters first, then time window ────────
+  const scopedTasks = useMemo(() => applyFilters(tasks, filter), [tasks, filter]);
 
-  // ─── KPIs (synchronous) ───────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    const result = calculateKPIs(filteredTasks, issues, dateRange, milestones, modules);
+  const filteredTasks = useMemo(
+    () => filterTasksByTimeRange(scopedTasks, dateRange),
+    [scopedTasks, dateRange]
+  );
 
-    // Sync overall progress and task counts with the Projects dashboard
-    // by calculating it from unfiltered project data (cumulative)
-    const { progress: unfilteredProgress, completed, total } = calculateProjectProgress(tasks, milestones, modules, issues);
-    result.projectProgress = unfilteredProgress;
-    result.completedTasks = completed;
-    result.totalTasks = total;
-
-    return result;
-  }, [filteredTasks, tasks, issues, dateRange, milestones, modules]);
+  // ─── KPIs (same task set as charts — no mixed filtered vs unfiltered totals) ─
+  const kpis = useMemo(
+    () => calculateKPIs(filteredTasks, issues, dateRange, milestones, modules),
+    [filteredTasks, issues, dateRange, milestones, modules]
+  );
 
   // ─── Chart data ───────────────────────────────────────────────────────────
   const statusBreakdown = useMemo(() => getTaskStatusBreakdown(filteredTasks), [filteredTasks]);
