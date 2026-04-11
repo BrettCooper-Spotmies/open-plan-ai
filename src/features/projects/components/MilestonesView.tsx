@@ -43,6 +43,8 @@ interface MilestonesViewProps {
   tasks: Task[];
   issues?: Issue[];
   modules?: Module[];
+  /** Used to open the add-milestone calendar on the project’s start month/year */
+  projectStartDate?: Date;
   searchQuery?: string;
   isAddDialogOpen?: boolean;
   onAddDialogClose?: () => void;
@@ -64,6 +66,7 @@ export function MilestonesView({
   tasks,
   issues = [],
   modules = [],
+  projectStartDate,
   searchQuery = '',
   isAddDialogOpen: externalIsAddDialogOpen,
   onAddDialogClose,
@@ -376,6 +379,7 @@ export function MilestonesView({
             tasks={tasks}
             modules={modules}
             issues={issues}
+            projectStartDate={projectStartDate}
           />
         )
       }

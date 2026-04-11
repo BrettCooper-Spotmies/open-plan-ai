@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,7 +51,7 @@ import {
     ChevronUp,
     Palette
 } from "lucide-react";
-import { format, isBefore, startOfToday } from "date-fns";
+import { format, isBefore, startOfMonth, startOfToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -208,6 +208,28 @@ const EditProject = () => {
     const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
     const [isMilestoneStartOpen, setIsMilestoneStartOpen] = useState(false);
     const [isMilestoneEndOpen, setIsMilestoneEndOpen] = useState(false);
+    const [milestoneStartCalendarMonth, setMilestoneStartCalendarMonth] = useState<Date>(() =>
+        startOfMonth(new Date())
+    );
+    const [milestoneEndCalendarMonth, setMilestoneEndCalendarMonth] = useState<Date>(() =>
+        startOfMonth(new Date())
+    );
+
+    useLayoutEffect(() => {
+        if (isMilestoneStartOpen) {
+            setMilestoneStartCalendarMonth(
+                startOfMonth(newMilestoneStart ?? startDate ?? new Date())
+            );
+        }
+    }, [isMilestoneStartOpen, newMilestoneStart, startDate]);
+
+    useLayoutEffect(() => {
+        if (isMilestoneEndOpen) {
+            setMilestoneEndCalendarMonth(
+                startOfMonth(newMilestoneEnd ?? newMilestoneStart ?? startDate ?? new Date())
+            );
+        }
+    }, [isMilestoneEndOpen, newMilestoneEnd, newMilestoneStart, startDate]);
 
     // Links state
     const [newLinkName, setNewLinkName] = useState("");
@@ -1457,8 +1479,9 @@ const EditProject = () => {
                                         {isMilestoneStartOpen && (
                                             <Calendar
                                                 mode="single"
+                                                month={milestoneStartCalendarMonth}
+                                                onMonthChange={setMilestoneStartCalendarMonth}
                                                 selected={newMilestoneStart}
-                                                defaultMonth={newMilestoneStart ?? startDate ?? new Date()}
                                                 onSelect={(date) => {
                                                     setNewMilestoneStart(date);
                                                     setIsMilestoneStartOpen(false);
@@ -1483,10 +1506,9 @@ const EditProject = () => {
                                         {isMilestoneEndOpen && (
                                             <Calendar
                                                 mode="single"
+                                                month={milestoneEndCalendarMonth}
+                                                onMonthChange={setMilestoneEndCalendarMonth}
                                                 selected={newMilestoneEnd}
-                                                defaultMonth={
-                                                    newMilestoneEnd ?? newMilestoneStart ?? startDate ?? new Date()
-                                                }
                                                 onSelect={(date) => {
                                                     setNewMilestoneEnd(date);
                                                     setIsMilestoneEndOpen(false);

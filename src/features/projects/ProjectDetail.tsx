@@ -1300,6 +1300,7 @@ export default function ProjectDetail() {
               tasks={project.tasks || []}
               issues={project.issues || []}
               modules={modules}
+              projectStartDate={project.startDate ? new Date(project.startDate) : undefined}
               searchQuery={milestoneSearchQuery}
               isAddDialogOpen={isAddMilestoneDialogOpen}
               onAddDialogClose={() => setIsAddMilestoneDialogOpen(false)}

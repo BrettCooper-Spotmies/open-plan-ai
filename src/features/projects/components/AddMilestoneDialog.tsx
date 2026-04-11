@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useLayoutEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { format, isBefore, startOfToday } from 'date-fns';
+import { format, isBefore, startOfMonth, startOfToday } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -61,6 +61,8 @@ interface AddMilestoneDialogProps {
   tasks: Task[];
   modules: Module[];
   issues: Issue[];
+  /** Aligns the calendar with the project schedule when picking a target date */
+  projectStartDate?: Date;
 }
 
 export function AddMilestoneDialog({
@@ -70,6 +72,7 @@ export function AddMilestoneDialog({
   tasks,
   modules,
   issues,
+  projectStartDate,
 }: AddMilestoneDialogProps) {
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
@@ -77,6 +80,9 @@ export function AddMilestoneDialog({
   const [taskSearch, setTaskSearch] = useState('');
   const [moduleSearch, setModuleSearch] = useState('');
   const [issueSearch, setIssueSearch] = useState('');
+  const [targetDateCalendarMonth, setTargetDateCalendarMonth] = useState<Date>(() =>
+    startOfMonth(new Date())
+  );
 
   const form = useForm<MilestoneFormData>({
     resolver: zodResolver(milestoneSchema),
@@ -89,7 +95,11 @@ export function AddMilestoneDialog({
     },
   });
 
-
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const picked = form.getValues('date');
+    setTargetDateCalendarMonth(startOfMonth(picked ?? projectStartDate ?? new Date()));
+  }, [isOpen, projectStartDate, form]);
 
   const handleSubmit = (data: MilestoneFormData) => {
     if (isBefore(data.date, startOfToday())) {
@@ -235,6 +245,8 @@ export function AddMilestoneDialog({
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
+                            month={targetDateCalendarMonth}
+                            onMonthChange={setTargetDateCalendarMonth}
                             selected={field.value}
                             onSelect={field.onChange}
                             disabled={(date) => isBefore(date, startOfToday())}
