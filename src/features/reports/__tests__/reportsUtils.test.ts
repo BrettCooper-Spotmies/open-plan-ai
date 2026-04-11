@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { format } from 'date-fns';
+import { format, subDays } from 'date-fns';
 import {
   calculateKPIs,
   getTaskStatusBreakdown,
@@ -10,6 +10,7 @@ import {
   getTeamWorkload,
   getModuleProgress,
   getDateRangeFromTimeRange,
+  filterTasksByTimeRange,
 } from '../utils/reportsUtils';
 import { Task, Issue, Milestone, TeamMember, Module, ModuleType } from '@/types';
 
@@ -217,6 +218,28 @@ describe('reportsUtils', () => {
 
       expect(formatLocalDate(start)).toBe('2024-01-01');
       expect(formatLocalDate(end)).toBe('2024-01-15');
+    });
+  });
+
+  describe('filterTasksByTimeRange', () => {
+    it('includes non-done tasks even when due date is in the future', () => {
+      const futureDue = format(new Date(Date.now() + 86400000 * 60), 'yyyy-MM-dd');
+      const tasks = [
+        createTask({ status: 'todo', dueDate: futureDue }),
+      ];
+      const range = { start: subDays(new Date(), 30), end: new Date() };
+      const filtered = filterTasksByTimeRange(tasks, range);
+      expect(filtered).toHaveLength(1);
+    });
+
+    it('excludes done tasks completed before the reporting window', () => {
+      const oldDone = '2020-01-15T12:00:00.000Z';
+      const tasks = [
+        createTask({ status: 'done', updatedAt: oldDone, startDate: '2020-01-10' }),
+      ];
+      const range = { start: subDays(new Date(), 30), end: new Date() };
+      const filtered = filterTasksByTimeRange(tasks, range);
+      expect(filtered).toHaveLength(0);
     });
   });
 
