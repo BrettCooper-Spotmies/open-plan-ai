@@ -28,6 +28,9 @@ import { useProjects, useDeleteProject } from '@/hooks/useProjects';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useProjectAttachments } from '@/hooks/useProjectAttachments';
 import { useProjectLinks } from '@/hooks/useProjectLinks';
+import { useOrganizationMembers } from '@/hooks/useProjectTeam';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { formatModuleType } from './utils/projectUtils';
@@ -58,7 +61,10 @@ const stageLabels = {
 export default function Projects() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
   const { data: projects, isLoading, error } = useProjects();
+  const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -78,6 +84,8 @@ export default function Projects() {
   const { data: projectFiles = [], isLoading: isLoadingFiles } = useProjectAttachments(selectedFilesProjectId || undefined);
 
   const projectList = projects || [];
+  const currentMembership = organizationMembers.find((member) => member.id === user?.id);
+  const canCreateProject = (currentMembership?.role || '').toLowerCase() === 'owner';
 
   useEffect(() => {
     if (isMobile && view !== 'list') {
@@ -157,10 +165,12 @@ export default function Projects() {
                 Manage and track all your hardware projects.
               </p>
             </div>
-            <Button className="gap-2 shrink-0" onClick={() => navigate('/projects/new')}>
-              <Plus className="h-4 w-4" />
-              New Project
-            </Button>
+            {canCreateProject && (
+              <Button className="gap-2 shrink-0" onClick={() => navigate('/projects/new')}>
+                <Plus className="h-4 w-4" />
+                New Project
+              </Button>
+            )}
           </div>
         )}
 
@@ -190,15 +200,17 @@ export default function Projects() {
             )}
 
             {isMobile ? (
-              <Button
-                size="icon"
-                className="h-10 w-10 rounded-xl shrink-0 bg-primary text-primary-foreground shadow-[0_8px_24px_rgba(0,0,0,0.18)] hover:bg-primary/90"
-                onClick={() => navigate('/projects/new')}
-                aria-label="Create project"
-                title="New Project"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
+              canCreateProject ? (
+                <Button
+                  size="icon"
+                  className="h-10 w-10 rounded-xl shrink-0 bg-primary text-primary-foreground shadow-[0_8px_24px_rgba(0,0,0,0.18)] hover:bg-primary/90"
+                  onClick={() => navigate('/projects/new')}
+                  aria-label="Create project"
+                  title="New Project"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              ) : null
             ) : (
               <div className="flex border border-border/70 rounded-xl md:rounded-lg bg-background/60 shrink-0">
                 <Button
@@ -227,9 +239,11 @@ export default function Projects() {
             <h3 className="text-lg font-medium">No projects found</h3>
             <p className="text-muted-foreground mt-1 max-w-sm mx-auto">
               {projectList.length === 0
-                ? isMobile
-                  ? 'Tap the + button above to create your first project.'
-                  : 'Use the New Project button above to get started.'
+                ? canCreateProject
+                  ? isMobile
+                    ? 'Tap the + button above to create your first project.'
+                    : 'Use the New Project button above to get started.'
+                  : 'Only organization owners can create projects.'
                 : 'Try adjusting your search query'}
             </p>
           </div>
