@@ -253,6 +253,9 @@ export const TaskDetailModal = ({
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const { createNotification } = useNotifications();
   const availableAssignees = assignableMembers ?? organizationMembers;
+  const currentOrganizationMembership = organizationMembers.find((m) => m.id === profile?.id);
+  const currentOrganizationRole = (currentOrganizationMembership?.role || '').toLowerCase();
+  const canCreateModule = currentOrganizationRole === 'owner' || currentOrganizationRole === 'admin';
   const [editedTask, setEditedTask] = useState<Task>(task || {
     id: '',
     title: '',
@@ -1048,7 +1051,7 @@ export const TaskDetailModal = ({
                               <div className="text-sm text-center py-2 text-muted-foreground">
                                 No modules found.
                               </div>
-                              {onAddModule && (
+                              {onAddModule && canCreateModule && (
                                 <button
                                   className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
                                   onClick={() => {
@@ -1095,7 +1098,7 @@ export const TaskDetailModal = ({
                                   </CommandItem>
                                 ))}
                             </CommandGroup>
-                            {onAddModule && (
+                            {onAddModule && canCreateModule && (
                               <>
                                 <Separator />
                                 <CommandGroup>
