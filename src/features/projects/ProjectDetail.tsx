@@ -106,7 +106,7 @@ function MilestoneViewControls({
   onViewModeChange: (mode: 'list' | 'kanban') => void;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
-  onAddMilestone: () => void;
+  onAddMilestone?: () => void;
 }) {
   return (
     <div className="flex items-center gap-2 w-full justify-between md:justify-end">
@@ -152,10 +152,12 @@ function MilestoneViewControls({
         </div>
       </div>
 
-      <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={onAddMilestone}>
-        <Plus className="h-4 w-4" />
-        <span className="hidden md:inline">Add Milestone</span>
-      </Button>
+      {onAddMilestone && (
+        <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={onAddMilestone}>
+          <Plus className="h-4 w-4" />
+          <span className="hidden md:inline">Add Milestone</span>
+        </Button>
+      )}
     </div>
   );
 }
@@ -556,6 +558,13 @@ export default function ProjectDetail() {
     const myMembership = (project.team || []).find((member) => member.id === user.id);
     return (myMembership?.role || '').toLowerCase() === 'admin';
   }, [project, user?.id]);
+
+  const canAddModulesAndMilestones = useMemo(() => {
+    if (!user?.id) return false;
+    const membership = organizationMembers.find((member) => member.id === user.id);
+    const role = (membership?.role || '').toLowerCase();
+    return role === 'owner' || role === 'admin';
+  }, [organizationMembers, user?.id]);
 
   const canStartProjectChat = useMemo(() => {
     if (!project || !user?.id) return false;
@@ -1257,7 +1266,7 @@ export default function ProjectDetail() {
                   onViewModeChange={setModuleViewMode}
                   searchQuery={moduleSearchQuery}
                   onSearchQueryChange={setModuleSearchQuery}
-                  onAddModule={handleAddModule}
+                  onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
                 />
               )}
               {section === 'milestones' && (
@@ -1266,7 +1275,7 @@ export default function ProjectDetail() {
                   onViewModeChange={setMilestoneViewMode}
                   searchQuery={milestoneSearchQuery}
                   onSearchQueryChange={setMilestoneSearchQuery}
-                  onAddMilestone={() => setIsAddMilestoneDialogOpen(true)}
+                  onAddMilestone={canAddModulesAndMilestones ? () => setIsAddMilestoneDialogOpen(true) : undefined}
                 />
               )}
               {section === 'issues' && (
