@@ -119,7 +119,6 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   useEffect(() => {
     setTasks(initialTasks);
   }, [initialTasks]);
-  const [hoveredTask, setHoveredTask] = useState<string | null>(null);
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [addTaskToColumn, setAddTaskToColumn] = useState<string | null>(null);
@@ -561,8 +560,6 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                       : (moduleColors[task.module] || 'border-l-muted'),
                                                     snapshot.isDragging && 'shadow-lg rotate-2'
                                                   )}
-                                                  onMouseEnter={() => setHoveredTask(task.id)}
-                                                  onMouseLeave={() => setHoveredTask(null)}
                                                   onClick={() => handleTaskClick(task)}
                                                 >
 
@@ -604,8 +601,9 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                                 handleCompleteTask(task.id);
                                                               }}
                                                               className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
+                                                              aria-label="Mark task complete"
                                                             >
-                                                              <Check className="h-3 w-3 text-foreground" />
+                                                              <span className="sr-only">Mark complete</span>
                                                             </button>
                                                           </div>
                                                         )}
