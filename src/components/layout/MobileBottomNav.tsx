@@ -13,6 +13,9 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface NavItem {
   title: string;
@@ -39,8 +42,15 @@ const moreNavItems: NavItem[] = [
 export function MobileBottomNav() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const canViewTeamSection = currentUserRole === 'owner' || currentUserRole === 'admin';
+  const visibleMoreNavItems = moreNavItems.filter((item) =>
+    item.url === '/team' ? canViewTeamSection : true
+  );
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -53,7 +63,22 @@ export function MobileBottomNav() {
     );
   };
 
-  const isMoreActive = moreNavItems.some((item) => isActive(item.url));
+  const isMoreActive = visibleMoreNavItems.some((item) => isActive(item.url));
+
+  useEffect(() => {
+    if (!user?.id || !currentOrganization?.id) {
+      setCurrentUserRole(null);
+      return;
+    }
+
+    supabase
+      .from('organization_members')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('organization_id', currentOrganization.id)
+      .single()
+      .then(({ data }) => setCurrentUserRole(data?.role || null));
+  }, [user?.id, currentOrganization?.id]);
 
   // Close sheet on outside click
   useEffect(() => {
@@ -115,7 +140,7 @@ export function MobileBottomNav() {
 
         {/* Sheet items */}
         <div className="grid grid-cols-4 gap-1 px-3 py-4">
-          {moreNavItems.map((item) => {
+          {visibleMoreNavItems.map((item) => {
             const active = isActive(item.url);
             return (
               <button

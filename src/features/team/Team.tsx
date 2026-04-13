@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { ManageOrgAccessDialog } from './components/ManageOrgAccessDialog';
 import { useTeamMembers, useInviteTeamMember, useRemoveTeamMember, usePendingInvitations, useCancelInvitation, useUpdateTeamMemberDetails, type TeamMember, type TeamInvitation } from '@/hooks/useTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -346,6 +346,10 @@ const Team = () => {
 
   if (isLoading) {
     return <AppLayoutSkeleton variant="team" />;
+  }
+
+  if (!currentMember || !isAdminOrOwner) {
+    return <Navigate to="/projects" replace />;
   }
 
   if (error) {
