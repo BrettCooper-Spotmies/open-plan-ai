@@ -43,6 +43,35 @@ const toDateOnly = (date: Date | undefined | null): string | undefined => {
   return `${year}-${month}-${day}`;
 };
 
+const parseDateForDisplay = (value?: string): Date | null => {
+  if (!value) return null;
+  const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (dateOnlyRegex.test(value)) {
+    const [y, m, d] = value.split('-').map(Number);
+    const localDate = new Date(y, m - 1, d);
+    return Number.isNaN(localDate.getTime()) ? null : localDate;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatTaskDateRange = (startDate?: string, dueDate?: string): string => {
+  const start = parseDateForDisplay(startDate);
+  const due = parseDateForDisplay(dueDate);
+  if (!start && !due) return '';
+  if (!start && due) return format(due, 'MMM d');
+  if (start && !due) return format(start, 'MMM d');
+  if (!start || !due) return '';
+
+  if (start.getFullYear() === due.getFullYear() && start.getMonth() === due.getMonth()) {
+    return `${format(start, 'd')}–${format(due, 'd MMM')}`;
+  }
+  if (start.getFullYear() === due.getFullYear()) {
+    return `${format(start, 'd MMM')}–${format(due, 'd MMM')}`;
+  }
+  return `${format(start, 'd MMM yyyy')}–${format(due, 'd MMM yyyy')}`;
+};
+
 interface KanbanColumn {
   id: string;
   status: TaskStatus | string;
@@ -649,10 +678,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                       </div>
                                                       {task.dueDate && (
                                                         <span className="text-[10px] text-muted-foreground">
-                                                          {new Date(task.dueDate).toLocaleDateString('en-US', {
-                                                            month: 'short',
-                                                            day: 'numeric',
-                                                          })}
+                                                          {formatTaskDateRange(task.startDate, task.dueDate)}
                                                         </span>
                                                       )}
                                                     </div>
