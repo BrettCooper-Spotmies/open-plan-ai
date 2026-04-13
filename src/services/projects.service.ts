@@ -210,6 +210,37 @@ export const projectsService = {
       return [...mockProjects];
     }
 
+    let scopedProjectIds: string[] | null = null;
+    if (organizationId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      const userId = sanitizeUuidCandidate(user?.id);
+
+      if (isValidUuid(userId)) {
+        const { data: orgMembership } = await supabase
+          .from('organization_members')
+          .select('role')
+          .eq('organization_id', organizationId)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        const orgRole = (orgMembership?.role || '').toLowerCase();
+        const isOwner = orgRole === 'owner';
+
+        // Non-owners should only see projects they are explicitly a member of.
+        if (!isOwner) {
+          const { data: projectMemberships, error: projectMembershipsError } = await supabase
+            .from('project_members')
+            .select('project_id')
+            .eq('user_id', userId);
+
+          if (projectMembershipsError) throw projectMembershipsError;
+
+          scopedProjectIds = [...new Set((projectMemberships || []).map((m) => m.project_id).filter(Boolean))];
+          if (scopedProjectIds.length === 0) return [];
+        }
+      }
+    }
+
     let query = supabase
       .from('projects')
       .select(PROJECT_SELECT_COLUMNS)
@@ -218,6 +249,9 @@ export const projectsService = {
 
     if (organizationId) {
       query = query.eq('organization_id', organizationId);
+    }
+    if (scopedProjectIds && scopedProjectIds.length > 0) {
+      query = query.in('id', scopedProjectIds);
     }
 
     const { data: projectsData, error: projectsError } = await query;
