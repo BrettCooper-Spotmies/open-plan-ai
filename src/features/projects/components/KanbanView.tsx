@@ -43,6 +43,19 @@ const toDateOnly = (date: Date | undefined | null): string | undefined => {
   return `${year}-${month}-${day}`;
 };
 
+const createEmptyTaskDraft = (status: TaskStatus = 'todo'): Partial<Task> => ({
+  title: '',
+  description: '',
+  priority: 'medium' as Priority,
+  module: 'software' as ModuleType,
+  assignees: [],
+  startDate: toDateOnly(new Date()),
+  tags: [],
+  status,
+  blockedBy: [],
+  moduleIds: [],
+});
+
 const parseDateForDisplay = (value?: string): Date | null => {
   if (!value) return null;
   const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
@@ -158,18 +171,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   const [isMaximizedAddTask, setIsMaximizedAddTask] = useState(false);
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
   const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false);
-  const [newTask, setNewTask] = useState<Partial<Task>>({
-    title: '',
-    description: '',
-    priority: 'medium' as Priority,
-    module: 'software' as ModuleType,
-    assignees: [],
-    startDate: toDateOnly(new Date()),
-    tags: [],
-    status: 'todo',
-    blockedBy: [],
-    moduleIds: [],
-  });
+  const [newTask, setNewTask] = useState<Partial<Task>>(createEmptyTaskDraft());
 
   // Initial state for new task has no module pre-selected by default
   // This allows the "Select Module" placeholder to show up
@@ -409,18 +411,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     }
 
     // Reset form state
-    setNewTask({
-      title: '',
-      description: '',
-      priority: 'medium',
-      module: 'software',
-      assignees: [],
-      startDate: toDateOnly(new Date()),
-      tags: [],
-      status: 'todo',
-      blockedBy: [],
-      moduleIds: [],
-    });
+    setNewTask(createEmptyTaskDraft());
     setIsAddTaskOpen(false);
     setIsMaximizedAddTask(false);
     setAddTaskToColumn(null);
@@ -436,7 +427,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     const column = columns.find(c => c.id === columnId);
     if (column?.isSpecial) return; // Can't add tasks to Dependencies bucket
     setAddTaskToColumn(columnId);
-    setNewTask(prev => ({ ...prev, status: column?.status as TaskStatus || 'todo' }));
+    setNewTask(createEmptyTaskDraft(column?.status as TaskStatus || 'todo'));
     setIsAddTaskOpen(true);
   };
 
@@ -536,7 +527,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                   className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
                                   onClick={() => {
                                     setAddTaskToColumn(column.id);
-                                    setNewTask(prev => ({ ...prev, status: column?.status as TaskStatus || 'todo' }));
+                                    setNewTask(createEmptyTaskDraft(column?.status as TaskStatus || 'todo'));
                                     setIsMaximizedAddTask(true);
                                   }}
                                 >
@@ -822,14 +813,20 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         task={newTask as Task} // Cast for template
         allTasks={allTasks || tasks}
         isOpen={isMaximizedAddTask}
-        onClose={() => setIsMaximizedAddTask(false)}
+        onClose={() => {
+          setIsMaximizedAddTask(false);
+          setNewTask(createEmptyTaskDraft());
+          setAddTaskToColumn(null);
+        }}
         onUpdate={(updated) => setNewTask(updated as unknown as Partial<Task>)}
         onBatchUpdate={onBatchTaskUpdate}
         mode="create"
         onCreate={(newTask) => {
           onTaskCreate?.(newTask as Omit<Task, 'id' | 'createdAt' | 'updatedAt'>);
-          // Just close the maximized view
+          // Close and reset draft so next task starts empty
           setIsMaximizedAddTask(false);
+          setNewTask(createEmptyTaskDraft());
+          setAddTaskToColumn(null);
         }}
         modules={modules}
         projectId={projectId}
