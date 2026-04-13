@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import { format } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +10,8 @@ import {
   groupTasksByProject,
   groupTasksByProgress,
   groupTasksByDueDate,
-  groupTasksByPriority
+  groupTasksByPriority,
+  formatTaskDateRange
 } from '../utils/myDayUtils';
 import { MyDayGroupBy, TaskStatus } from '@/types';
 import { toast } from 'sonner';
@@ -354,7 +354,7 @@ export function MyDayKanbanView({
                                           )}
                                           {task.dueDate && (
                                             <span className="text-[10px] text-muted-foreground">
-                                              {format(new Date(task.dueDate), 'MMM d')}
+                                              {formatTaskDateRange(task.originalTask?.startDate, task.dueDate)}
                                             </span>
                                           )}
                                         </div>
