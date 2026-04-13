@@ -1525,11 +1525,17 @@ export const TaskDetailModal = ({
                           <SelectValue placeholder="Select task..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {availableTasksForBlocking.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.title}
+                          {availableTasksForBlocking.length === 0 ? (
+                            <SelectItem value="__no_tasks_blocking__" disabled>
+                              No tasks registered yet.
                             </SelectItem>
-                          ))}
+                          ) : (
+                            availableTasksForBlocking.map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.title}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                       <Button size="icon" variant="outline" onClick={handleAddBlockingTask}>
@@ -1581,11 +1587,17 @@ export const TaskDetailModal = ({
                           <SelectValue placeholder="Select task..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {availableTasksForBlockedBy.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.title}
+                          {availableTasksForBlockedBy.length === 0 ? (
+                            <SelectItem value="__no_tasks_blocked_by__" disabled>
+                              No tasks registered yet.
                             </SelectItem>
-                          ))}
+                          ) : (
+                            availableTasksForBlockedBy.map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.title}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                       <Button size="icon" variant="outline" onClick={handleAddBlockedByTask}>
