@@ -96,35 +96,60 @@ const DEFAULT_MEMBER_REMOVAL_PROMPT: {
 
 // Milestone View Controls Component
 function MilestoneViewControls({
+  viewMode,
+  onViewModeChange,
   searchQuery,
   onSearchQueryChange,
   onAddMilestone,
 }: {
+  viewMode: 'list' | 'kanban';
+  onViewModeChange: (mode: 'list' | 'kanban') => void;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
   onAddMilestone: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 w-full md:justify-end">
-      <div className="relative flex items-center flex-1 md:flex-none min-w-0">
-        <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
-        <Input
-          type="text"
-          placeholder="Search milestones..."
-          value={searchQuery}
-          onChange={(e) => onSearchQueryChange(e.target.value)}
-          className="pl-9 w-full md:w-[200px] h-8"
-        />
-        {searchQuery && (
+    <div className="flex items-center gap-2 w-full justify-between md:justify-end">
+      <div className="flex items-center gap-2 flex-1 min-w-0 md:flex-none">
+        <div className="relative flex items-center flex-1 md:flex-none min-w-0">
+          <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search milestones..."
+            value={searchQuery}
+            onChange={(e) => onSearchQueryChange(e.target.value)}
+            className="pl-9 w-full md:w-[200px] h-8"
+          />
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={() => onSearchQueryChange('')}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+
+        <div className="flex items-center rounded-md border p-1">
           <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={() => onSearchQueryChange('')}
+            variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 px-2"
+            onClick={() => onViewModeChange('kanban')}
           >
-            <X className="h-4 w-4" />
+            <LayoutGrid className="h-4 w-4" />
           </Button>
-        )}
+          <Button
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 px-2"
+            onClick={() => onViewModeChange('list')}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
       <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={onAddMilestone}>
@@ -350,14 +375,17 @@ export default function ProjectDetail() {
   const [viewModeStr, setViewModeStr] = useState<TaskViewMode | null>(null);
   const [moduleViewModeStr, setModuleViewModeStr] = useState<ModuleViewMode | null>(null);
   const [issueViewModeStr, setIssueViewModeStr] = useState<'table' | 'kanban' | null>(null);
+  const [milestoneViewModeStr, setMilestoneViewModeStr] = useState<'list' | 'kanban' | null>(null);
 
   const viewMode = viewModeStr || (isMobile ? 'list' : 'kanban');
   const moduleViewMode = moduleViewModeStr || (isMobile ? 'list' : 'kanban');
   const issueViewMode = issueViewModeStr || (isMobile ? 'table' : 'kanban');
+  const milestoneViewMode = milestoneViewModeStr || (isMobile ? 'list' : 'kanban');
 
   const setViewMode = (val: TaskViewMode) => setViewModeStr(val);
   const setModuleViewMode = (val: ModuleViewMode) => setModuleViewModeStr(val);
   const setIssueViewMode = (val: 'table' | 'kanban') => setIssueViewModeStr(val);
+  const setMilestoneViewMode = (val: 'list' | 'kanban') => setMilestoneViewModeStr(val);
 
   const [filters, setFilters] = useState<TaskFilter>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -1234,6 +1262,8 @@ export default function ProjectDetail() {
               )}
               {section === 'milestones' && (
                 <MilestoneViewControls
+                  viewMode={milestoneViewMode}
+                  onViewModeChange={setMilestoneViewMode}
                   searchQuery={milestoneSearchQuery}
                   onSearchQueryChange={setMilestoneSearchQuery}
                   onAddMilestone={() => setIsAddMilestoneDialogOpen(true)}
@@ -1300,6 +1330,7 @@ export default function ProjectDetail() {
               tasks={project.tasks || []}
               issues={project.issues || []}
               modules={modules}
+              viewMode={milestoneViewMode}
               projectStartDate={project.startDate ? new Date(project.startDate) : undefined}
               searchQuery={milestoneSearchQuery}
               isAddDialogOpen={isAddMilestoneDialogOpen}
