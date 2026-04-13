@@ -227,6 +227,7 @@ const serializeTaskForDirtyCheck = (task: Task): string => {
       id: item.id,
       text: item.text,
       completed: item.completed,
+      showInBoardView: item.showInBoardView ?? false,
     })),
     blockedBy: [...(task.blockedBy || [])].sort(),
     attachments: attachmentSnapshot,
@@ -407,6 +408,7 @@ export const TaskDetailModal = ({
   const checklist = editedTask.checklist || [];
   const completedItems = checklist.filter(item => item.completed).length;
   const checklistProgress = checklist.length > 0 ? (completedItems / checklist.length) * 100 : 0;
+  const showChecklistInBoardView = checklist.length > 0 && checklist.every((item) => item.showInBoardView === true);
 
   const handleAddChecklistItem = () => {
     if (!newChecklistItem.trim()) return;
@@ -414,6 +416,7 @@ export const TaskDetailModal = ({
       id: `checklist-${Date.now()}`,
       text: newChecklistItem,
       completed: false,
+      showInBoardView: showChecklistInBoardView,
     };
     handleFieldChange('checklist', [...checklist, newItem]);
     setNewChecklistItem('');
@@ -423,6 +426,11 @@ export const TaskDetailModal = ({
     const updated = checklist.map(item =>
       item.id === itemId ? { ...item, completed: !item.completed } : item
     );
+    handleFieldChange('checklist', updated);
+  };
+
+  const handleToggleChecklistBoardViewForAll = (showInBoardView: boolean) => {
+    const updated = checklist.map(item => ({ ...item, showInBoardView }));
     handleFieldChange('checklist', updated);
   };
 
@@ -1391,6 +1399,23 @@ export const TaskDetailModal = ({
                     <span className="text-xs">({completedItems}/{checklist.length})</span>
                   )}
                 </h3>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="show-checklist-in-board-view"
+                    checked={showChecklistInBoardView}
+                    onCheckedChange={(checked) => handleToggleChecklistBoardViewForAll(checked === true)}
+                    disabled={checklist.length === 0}
+                  />
+                  <Label
+                    htmlFor="show-checklist-in-board-view"
+                    className={cn(
+                      "text-sm font-normal",
+                      checklist.length === 0 ? "text-muted-foreground/60 cursor-not-allowed" : "cursor-pointer"
+                    )}
+                  >
+                    Show in board view
+                  </Label>
+                </div>
               </div>
 
               {checklist.length > 0 && (

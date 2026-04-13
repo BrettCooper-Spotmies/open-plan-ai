@@ -172,6 +172,7 @@ export type Database = {
           created_at: string | null
           id: string
           position: number | null
+          show_in_board_view: boolean | null
           task_id: string
           text: string
         }
@@ -180,6 +181,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           position?: number | null
+          show_in_board_view?: boolean | null
           task_id: string
           text: string
         }
@@ -188,6 +190,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           position?: number | null
+          show_in_board_view?: boolean | null
           task_id?: string
           text?: string
         }

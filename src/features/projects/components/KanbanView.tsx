@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -121,6 +122,7 @@ const priorityColors = {
   medium: 'bg-priority-medium text-white',
   low: 'bg-priority-low text-white',
 };
+const BOARD_CHECKLIST_PREVIEW_COUNT = 2;
 
 const moduleColors: Record<string, string> = {
   hardware: 'border-l-module-hardware',
@@ -168,6 +170,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   const [newColumnColor, setNewColumnColor] = useState('bg-status-todo');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [expandedChecklistPreview, setExpandedChecklistPreview] = useState<Record<string, boolean>>({});
   const [isMaximizedAddTask, setIsMaximizedAddTask] = useState(false);
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
   const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false);
@@ -332,6 +335,27 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       onTaskUpdate(updatedTask, () => setTasks(prevTasks));
     } else {
       setTasks(tasks.map(t => t.id === taskId ? updatedTask : t));
+    }
+  };
+
+  const handleToggleChecklistItemOnCard = (taskId: string, checklistItemId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    const updatedChecklist = (task.checklist || []).map((item) =>
+      item.id === checklistItemId ? { ...item, completed: !item.completed } : item
+    );
+    const updatedTask: Task = { ...task, checklist: updatedChecklist };
+
+    const prevTasks = [...tasks];
+    setTasks(tasks.map((t) => (t.id === taskId ? updatedTask : t)));
+
+    if (onTaskUpdate) {
+      onTaskUpdate(updatedTask, () => setTasks(prevTasks));
+    }
+
+    if (selectedTask && selectedTask.id === updatedTask.id) {
+      setSelectedTask(updatedTask);
     }
   };
 
@@ -649,6 +673,65 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                         {task.description}
                                                       </p>
                                                     )}
+
+                                                    {(() => {
+                                                      const boardChecklistItems = (task.checklist || []).filter(
+                                                        (item) => item.showInBoardView === true
+                                                      );
+                                                      if (boardChecklistItems.length === 0) return null;
+
+                                                      const isExpanded = expandedChecklistPreview[task.id] === true;
+                                                      const visibleItems = isExpanded
+                                                        ? boardChecklistItems
+                                                        : boardChecklistItems.slice(0, BOARD_CHECKLIST_PREVIEW_COUNT);
+                                                      const hasMore = boardChecklistItems.length > BOARD_CHECKLIST_PREVIEW_COUNT;
+
+                                                      return (
+                                                        <div className="space-y-1.5 pt-1">
+                                                          {visibleItems.map((item) => (
+                                                            <div key={item.id} className="flex items-center gap-2">
+                                                              <Checkbox
+                                                                checked={item.completed}
+                                                                onCheckedChange={(checked) => {
+                                                                  if (checked === 'indeterminate') return;
+                                                                  handleToggleChecklistItemOnCard(task.id, item.id);
+                                                                }}
+                                                                className="h-3.5 w-3.5 rounded-[3px]"
+                                                                onClick={(event) => event.stopPropagation()}
+                                                              />
+                                                              <button
+                                                                type="button"
+                                                                onClick={(event) => {
+                                                                  event.stopPropagation();
+                                                                  handleToggleChecklistItemOnCard(task.id, item.id);
+                                                                }}
+                                                                className={cn(
+                                                                  'min-w-0 flex-1 text-left text-[11px] text-muted-foreground truncate',
+                                                                  item.completed && 'line-through'
+                                                                )}
+                                                              >
+                                                                {item.text}
+                                                              </button>
+                                                            </div>
+                                                          ))}
+                                                          {hasMore && (
+                                                            <button
+                                                              type="button"
+                                                              className="text-[11px] text-primary hover:underline"
+                                                              onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                setExpandedChecklistPreview((prev) => ({
+                                                                  ...prev,
+                                                                  [task.id]: !isExpanded,
+                                                                }));
+                                                              }}
+                                                            >
+                                                              {isExpanded ? 'View less' : `View more (${boardChecklistItems.length - BOARD_CHECKLIST_PREVIEW_COUNT})`}
+                                                            </button>
+                                                          )}
+                                                        </div>
+                                                      );
+                                                    })()}
 
                                                     <div className="flex items-center justify-between pt-2">
                                                       <div className="flex -space-x-2">
