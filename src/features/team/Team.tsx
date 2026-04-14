@@ -104,6 +104,7 @@ const Team = () => {
 
   // Check if current user is admin/owner
   const currentMember = teamMembers?.find(m => m.id === user?.id);
+  const isOwner = normalizeRole(currentMember?.role) === 'owner';
   const isAdminOrOwner = (() => {
     const role = normalizeRole(currentMember?.role);
     return role === 'admin' || role === 'owner';
@@ -492,7 +493,7 @@ const Team = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {member.id !== user?.id && (
+                      {!isOwner && member.id !== user?.id && (
                         <Button
                           variant="ghost"
                           size="icon"
