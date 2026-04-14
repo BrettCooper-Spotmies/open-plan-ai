@@ -699,11 +699,11 @@ export const TaskDetailModal = ({
 
 
   // Adding to "Blocking To" - update the OTHER task's blockedBy and update local state
-  const handleAddBlockingTask = () => {
-    if (!selectedBlockingTask) return;
-    const taskToUpdate = allTasks.find(t => t.id === selectedBlockingTask);
-    if (taskToUpdate && !dependencyExcludedTaskIds.has(selectedBlockingTask)) {
-      setLocalBlockingToIds(prev => [...prev, selectedBlockingTask]);
+  const handleAddBlockingTask = (taskId: string) => {
+    if (!taskId) return;
+    const taskToUpdate = allTasks.find(t => t.id === taskId);
+    if (taskToUpdate && !dependencyExcludedTaskIds.has(taskId)) {
+      setLocalBlockingToIds(prev => [...prev, taskId]);
     }
     setSelectedBlockingTask('');
   };
@@ -878,15 +878,15 @@ export const TaskDetailModal = ({
   };
 
   // Adding to "Blocked By" - update THIS task's blockedBy
-  const handleAddBlockedByTask = () => {
-    if (!selectedBlockedByTask) return;
+  const handleAddBlockedByTask = (taskId: string) => {
+    if (!taskId) return;
     setEditedTask(prev => {
       // Prevent duplicates
-      if (dependencyExcludedTaskIds.has(selectedBlockedByTask)) return prev;
+      if (dependencyExcludedTaskIds.has(taskId)) return prev;
 
       const updated = {
         ...prev,
-        blockedBy: [...prev.blockedBy, selectedBlockedByTask],
+        blockedBy: [...prev.blockedBy, taskId],
         updatedAt: new Date().toISOString()
       };
       return updated;
@@ -1616,7 +1616,13 @@ export const TaskDetailModal = ({
 
                   <div className="space-y-2">
                     <div className="flex gap-2">
-                      <Select value={selectedBlockingTask} onValueChange={setSelectedBlockingTask}>
+                      <Select
+                        value={selectedBlockingTask}
+                        onValueChange={(value) => {
+                          setSelectedBlockingTask(value);
+                          handleAddBlockingTask(value);
+                        }}
+                      >
                         <SelectTrigger className="flex-1">
                           <SelectValue placeholder="Select task..." />
                         </SelectTrigger>
@@ -1634,9 +1640,6 @@ export const TaskDetailModal = ({
                           )}
                         </SelectContent>
                       </Select>
-                      <Button size="icon" variant="outline" onClick={handleAddBlockingTask}>
-                        <Plus className="h-4 w-4" />
-                      </Button>
                     </div>
 
                     {blockingToTaskIds.map((taskId) => {
@@ -1678,7 +1681,13 @@ export const TaskDetailModal = ({
 
                   <div className="space-y-2">
                     <div className="flex gap-2">
-                      <Select value={selectedBlockedByTask} onValueChange={setSelectedBlockedByTask}>
+                      <Select
+                        value={selectedBlockedByTask}
+                        onValueChange={(value) => {
+                          setSelectedBlockedByTask(value);
+                          handleAddBlockedByTask(value);
+                        }}
+                      >
                         <SelectTrigger className="flex-1">
                           <SelectValue placeholder="Select task..." />
                         </SelectTrigger>
@@ -1696,9 +1705,6 @@ export const TaskDetailModal = ({
                           )}
                         </SelectContent>
                       </Select>
-                      <Button size="icon" variant="outline" onClick={handleAddBlockedByTask}>
-                        <Plus className="h-4 w-4" />
-                      </Button>
                     </div>
 
                     {editedTask.blockedBy.map((taskId) => {

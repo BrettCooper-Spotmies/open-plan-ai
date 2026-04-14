@@ -158,6 +158,19 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
 }: KanbanViewProps) {
   const [columns, setColumns] = useState<KanbanColumn[]>(defaultColumns);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const effectiveAllTasks = useMemo(() => {
+    const byId = new Map<string, Task>();
+
+    (allTasks || []).forEach((task) => {
+      byId.set(task.id, task);
+    });
+
+    tasks.forEach((task) => {
+      byId.set(task.id, task);
+    });
+
+    return Array.from(byId.values());
+  }, [allTasks, tasks]);
 
   // Sync local state with props when they change
   useEffect(() => {
@@ -926,10 +939,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       {/* Task Detail Modal (Viewing/Editing) */}
       <TaskDetailModal
         task={selectedTask}
-        allTasks={
-          // Include current task if not in allTasks to verify dependencies
-          allTasks || (selectedTask ? [selectedTask, ...tasks.filter(t => t.id !== selectedTask.id)] : tasks)
-        }
+        allTasks={effectiveAllTasks}
         isOpen={isTaskModalOpen}
         onClose={() => {
           setIsTaskModalOpen(false);
@@ -948,7 +958,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       {/* Task Detail Modal (Creating Maximized) */}
       <TaskDetailModal
         task={newTask as Task} // Cast for template
-        allTasks={allTasks || tasks}
+        allTasks={effectiveAllTasks}
         isOpen={isMaximizedAddTask}
         onClose={() => {
           setIsMaximizedAddTask(false);
