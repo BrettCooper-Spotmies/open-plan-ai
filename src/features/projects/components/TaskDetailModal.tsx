@@ -1184,7 +1184,6 @@ export const TaskDetailModal = ({
                                   >
                                     <div className="flex flex-col min-w-0 w-full">
                                       <span className="truncate block">{module.name}</span>
-                                      <span className="text-[10px] text-muted-foreground uppercase truncate block">{module.type}</span>
                                     </div>
                                   </CommandItem>
                                 ))}

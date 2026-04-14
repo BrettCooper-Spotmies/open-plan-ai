@@ -47,7 +47,7 @@ export function ViewControls({
   onSearchQueryChange?: (query: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-2 sm:gap-3 min-w-0 justify-end shrink-0 max-w-full w-full">
+    <div className="flex items-center gap-2 sm:gap-3 min-w-0 justify-end shrink-0">
       {/* View Toggle */}
       <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
         <Button

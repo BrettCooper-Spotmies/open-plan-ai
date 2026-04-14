@@ -33,7 +33,6 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { formatModuleType } from './utils/projectUtils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -546,8 +545,7 @@ export default function Projects() {
                     <div className="flex flex-wrap gap-2">
                       {selectedProjectDetails.projectModules.map((module) => (
                         <Badge key={module.id} variant="outline" className="text-xs font-normal">
-                          <span className="font-semibold mr-1">{module.name}</span>
-                          <span className="text-muted-foreground">({formatModuleType(module.type)})</span>
+                          <span className="font-semibold">{module.name}</span>
                         </Badge>
                       ))}
                     </div>
