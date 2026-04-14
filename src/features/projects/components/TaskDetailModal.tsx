@@ -104,9 +104,10 @@ interface TaskDetailModalProps {
   projectId?: string;
   onAddModule?: () => void;
   assignableMembers?: TeamMember[];
+  statusOptions?: Array<{ value: string; label: string; color?: string }>;
 }
 
-const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
+const DEFAULT_STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
   { value: 'todo', label: 'Not Started', color: 'bg-status-todo' },
   { value: 'in-progress', label: 'In Progress', color: 'bg-status-in-progress' },
   { value: 'review', label: 'In Review', color: 'bg-status-review' },
@@ -120,73 +121,6 @@ const priorityOptions: { value: Priority; label: string; color: string }[] = [
   { value: 'medium', label: 'Medium', color: 'bg-priority-medium text-white' },
   { value: 'low', label: 'Low', color: 'bg-priority-low text-white' },
 ];
-
-// 30 Colors: 15 Primary (Hard) + 15 Light
-const TAG_PALETTE = [
-  // Red
-  { name: 'Red', color: 'bg-red-500 text-white hover:bg-red-600' },
-  { name: 'Light Red', color: 'bg-red-100 text-red-700 hover:bg-red-200' },
-  // Orange
-  { name: 'Orange', color: 'bg-orange-500 text-white hover:bg-orange-600' },
-  { name: 'Light Orange', color: 'bg-orange-100 text-orange-700 hover:bg-orange-200' },
-  // Amber
-  { name: 'Amber', color: 'bg-amber-500 text-white hover:bg-amber-600' },
-  { name: 'Light Amber', color: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
-  // Yellow
-  { name: 'Yellow', color: 'bg-yellow-500 text-white hover:bg-yellow-600' },
-  { name: 'Light Yellow', color: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
-  // Lime
-  { name: 'Lime', color: 'bg-lime-500 text-white hover:bg-lime-600' },
-  { name: 'Light Lime', color: 'bg-lime-100 text-lime-700 hover:bg-lime-200' },
-  // Green
-  { name: 'Green', color: 'bg-green-500 text-white hover:bg-green-600' },
-  { name: 'Light Green', color: 'bg-green-100 text-green-700 hover:bg-green-200' },
-  // Emerald
-  { name: 'Emerald', color: 'bg-emerald-500 text-white hover:bg-emerald-600' },
-  { name: 'Light Emerald', color: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
-  // Teal
-  { name: 'Teal', color: 'bg-teal-500 text-white hover:bg-teal-600' },
-  { name: 'Light Teal', color: 'bg-teal-100 text-teal-700 hover:bg-teal-200' },
-  // Cyan
-  { name: 'Cyan', color: 'bg-cyan-500 text-white hover:bg-cyan-600' },
-  { name: 'Light Cyan', color: 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200' },
-  // Sky
-  { name: 'Sky', color: 'bg-sky-500 text-white hover:bg-sky-600' },
-  { name: 'Light Sky', color: 'bg-sky-100 text-sky-700 hover:bg-sky-200' },
-  // Blue
-  { name: 'Blue', color: 'bg-blue-500 text-white hover:bg-blue-600' },
-  { name: 'Light Blue', color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
-  // Indigo
-  { name: 'Indigo', color: 'bg-indigo-500 text-white hover:bg-indigo-600' },
-  { name: 'Light Indigo', color: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' },
-  // Violet
-  { name: 'Violet', color: 'bg-violet-500 text-white hover:bg-violet-600' },
-  { name: 'Light Violet', color: 'bg-violet-100 text-violet-700 hover:bg-violet-200' },
-  // Purple
-  { name: 'Purple', color: 'bg-purple-500 text-white hover:bg-purple-600' },
-  { name: 'Light Purple', color: 'bg-purple-100 text-purple-700 hover:bg-purple-200' },
-  // Fuchsia
-  { name: 'Fuchsia', color: 'bg-fuchsia-500 text-white hover:bg-fuchsia-600' },
-  { name: 'Light Fuchsia', color: 'bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-200' },
-];
-
-// Helper to determine color based on tag name
-// If the tag name matches (or was renamed from) a default color, we try to keep it.
-// Since we don't store the metadata, we match by exact name first.
-// If it's a custom name, we hash it to one of the palette colors.
-const getTagColor = (tag: string) => {
-  // Check if it matches a default name directly
-  const directMatch = TAG_PALETTE.find(p => p.name.toLowerCase() === tag.toLowerCase());
-  if (directMatch) return directMatch.color;
-
-  // Otherwise hash to a stable color
-  let hash = 0;
-  for (let i = 0; i < tag.length; i++) {
-    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % TAG_PALETTE.length;
-  return TAG_PALETTE[index].color;
-};
 
 const getFileIcon = (fileType: string) => {
   if (fileType.startsWith('image/')) return ImageIcon;
@@ -227,6 +161,7 @@ const serializeTaskForDirtyCheck = (task: Task): string => {
       id: item.id,
       text: item.text,
       completed: item.completed,
+      showInBoardView: item.showInBoardView ?? false,
     })),
     blockedBy: [...(task.blockedBy || [])].sort(),
     attachments: attachmentSnapshot,
@@ -247,12 +182,16 @@ export const TaskDetailModal = ({
   projectId,
   onAddModule,
   assignableMembers,
+  statusOptions: providedStatusOptions,
 }: TaskDetailModalProps) => {
   const { profile } = useAuth();
   const { currentOrganization } = useOrganization();
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const { createNotification } = useNotifications();
   const availableAssignees = assignableMembers ?? organizationMembers;
+  const currentOrganizationMembership = organizationMembers.find((m) => m.id === profile?.id);
+  const currentOrganizationRole = (currentOrganizationMembership?.role || '').toLowerCase();
+  const canCreateModule = currentOrganizationRole === 'owner' || currentOrganizationRole === 'admin';
   const [editedTask, setEditedTask] = useState<Task>(task || {
     id: '',
     title: '',
@@ -281,6 +220,8 @@ export const TaskDetailModal = ({
   const [tagSearch, setTagSearch] = useState('');
   const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
   const [editingTagValue, setEditingTagValue] = useState('');
+  const [editingTagOriginal, setEditingTagOriginal] = useState<string | null>(null);
+  const [pendingTagRenames, setPendingTagRenames] = useState<Array<{ from: string; to: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -289,6 +230,106 @@ export const TaskDetailModal = ({
   const [initialBlockingToIds, setInitialBlockingToIds] = useState<string[]>([]);
   const [initializedForKey, setInitializedForKey] = useState<string | null>(null);
   const formSessionKey = `${mode}:${task?.id || 'create'}`;
+  const statusOptions = useMemo(() => {
+    if (!providedStatusOptions || providedStatusOptions.length === 0) {
+      return DEFAULT_STATUS_OPTIONS;
+    }
+
+    const deduped = new Map<string, { value: string; label: string; color: string }>();
+    providedStatusOptions.forEach((option) => {
+      if (!option.value) return;
+      deduped.set(option.value, {
+        value: option.value,
+        label: option.label || option.value,
+        color: option.color || 'bg-muted-foreground/60',
+      });
+    });
+
+    return Array.from(deduped.values());
+  }, [providedStatusOptions]);
+  const currentStatusOption = statusOptions.find((s) => s.value === editedTask.status);
+  const currentStatusLabel =
+    currentStatusOption?.label ||
+    editedTask.status.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+  const currentStatusColor = currentStatusOption?.color || 'bg-muted-foreground/60';
+  const tagSuggestions = useMemo(() => {
+    const pool = new Set<string>();
+    allTasks.forEach((t) => {
+      (t.tags || []).forEach((tag) => {
+        const normalized = tag.trim();
+        if (normalized) pool.add(normalized);
+      });
+    });
+    (editedTask.tags || []).forEach((tag) => {
+      const normalized = tag.trim();
+      if (normalized) pool.add(normalized);
+    });
+    return Array.from(pool).sort((a, b) => a.localeCompare(b));
+  }, [allTasks, editedTask.tags]);
+  const availableTagSuggestions = useMemo(
+    () =>
+      tagSuggestions.filter(
+        (tag) => !editedTask.tags.some((existingTag) => existingTag.toLowerCase() === tag.toLowerCase())
+      ),
+    [editedTask.tags, tagSuggestions]
+  );
+
+  const addTag = (rawValue: string) => {
+    const value = rawValue.trim();
+    if (!value) return;
+
+    const exists = editedTask.tags.some((tag) => tag.toLowerCase() === value.toLowerCase());
+    if (!exists) {
+      handleFieldChange('tags', [...editedTask.tags, value]);
+    }
+    setTagSearch('');
+    setIsTagPopoverOpen(false);
+  };
+
+  const saveEditedTag = () => {
+    if (editingTagIndex === null && !editingTagOriginal) return;
+    const value = editingTagValue.trim();
+
+    const nextTags = [...editedTask.tags];
+    const targetIndex =
+      editingTagOriginal !== null
+        ? nextTags.findIndex((tag) => tag === editingTagOriginal)
+        : editingTagIndex;
+
+    if (targetIndex === null || targetIndex < 0) {
+      setEditingTagIndex(null);
+      setEditingTagValue('');
+      setEditingTagOriginal(null);
+      return;
+    }
+
+    if (!value) {
+      nextTags.splice(targetIndex, 1);
+    } else {
+      nextTags[targetIndex] = value;
+    }
+
+    if (editingTagOriginal && value && editingTagOriginal.toLowerCase() !== value.toLowerCase()) {
+      setPendingTagRenames((prev) => {
+        const withoutSource = prev.filter((rename) => rename.from.toLowerCase() !== editingTagOriginal.toLowerCase());
+        return [...withoutSource, { from: editingTagOriginal, to: value }];
+      });
+    }
+
+    const deduped: string[] = [];
+    nextTags.forEach((tag) => {
+      const normalized = tag.trim();
+      if (!normalized) return;
+      if (!deduped.some((existingTag) => existingTag.toLowerCase() === normalized.toLowerCase())) {
+        deduped.push(normalized);
+      }
+    });
+
+    handleFieldChange('tags', deduped);
+    setEditingTagIndex(null);
+    setEditingTagValue('');
+    setEditingTagOriginal(null);
+  };
 
   // Fetch real comments when task changes
   useEffect(() => {
@@ -381,6 +422,7 @@ export const TaskDetailModal = ({
     if (task) {
       setEditedTask(task);
     }
+    setPendingTagRenames([]);
     onClose();
   };
 
@@ -404,6 +446,7 @@ export const TaskDetailModal = ({
   const checklist = editedTask.checklist || [];
   const completedItems = checklist.filter(item => item.completed).length;
   const checklistProgress = checklist.length > 0 ? (completedItems / checklist.length) * 100 : 0;
+  const showChecklistInBoardView = checklist.length > 0 && checklist.every((item) => item.showInBoardView === true);
 
   const handleAddChecklistItem = () => {
     if (!newChecklistItem.trim()) return;
@@ -411,6 +454,7 @@ export const TaskDetailModal = ({
       id: `checklist-${Date.now()}`,
       text: newChecklistItem,
       completed: false,
+      showInBoardView: showChecklistInBoardView,
     };
     handleFieldChange('checklist', [...checklist, newItem]);
     setNewChecklistItem('');
@@ -420,6 +464,11 @@ export const TaskDetailModal = ({
     const updated = checklist.map(item =>
       item.id === itemId ? { ...item, completed: !item.completed } : item
     );
+    handleFieldChange('checklist', updated);
+  };
+
+  const handleToggleChecklistBoardViewForAll = (showInBoardView: boolean) => {
+    const updated = checklist.map(item => ({ ...item, showInBoardView }));
     handleFieldChange('checklist', updated);
   };
 
@@ -650,11 +699,11 @@ export const TaskDetailModal = ({
 
 
   // Adding to "Blocking To" - update the OTHER task's blockedBy and update local state
-  const handleAddBlockingTask = () => {
-    if (!selectedBlockingTask) return;
-    const taskToUpdate = allTasks.find(t => t.id === selectedBlockingTask);
-    if (taskToUpdate && !dependencyExcludedTaskIds.has(selectedBlockingTask)) {
-      setLocalBlockingToIds(prev => [...prev, selectedBlockingTask]);
+  const handleAddBlockingTask = (taskId: string) => {
+    if (!taskId) return;
+    const taskToUpdate = allTasks.find(t => t.id === taskId);
+    if (taskToUpdate && !dependencyExcludedTaskIds.has(taskId)) {
+      setLocalBlockingToIds(prev => [...prev, taskId]);
     }
     setSelectedBlockingTask('');
   };
@@ -682,19 +731,30 @@ export const TaskDetailModal = ({
 
       // addedIds/removedIds logic...
       const batchUpdates: Array<{ id: string; updates: Partial<Task> }> = [];
+      const mergeBatchUpdate = (id: string, updates: Partial<Task>) => {
+        const existing = batchUpdates.find((item) => item.id === id);
+        if (existing) {
+          existing.updates = {
+            ...existing.updates,
+            ...updates,
+          };
+          return;
+        }
+        batchUpdates.push({ id, updates });
+      };
 
       // Added blocking-to relationships
       const addedIds = localBlockingToIds.filter(id => !originalBlockingToIds.includes(id));
       for (const id of addedIds) {
         const other = allTasks.find(t => t.id === id);
         if (other && !other.blockedBy.includes(editedTask.id)) {
-          batchUpdates.push({
+          mergeBatchUpdate(id, {
             id,
             updates: { 
               blockedBy: [...other.blockedBy, editedTask.id],
               status: other.status === 'blocked' ? other.status : 'blocked'
             }
-          });
+          }.updates);
         }
       }
 
@@ -704,14 +764,14 @@ export const TaskDetailModal = ({
         const other = allTasks.find(t => t.id === id);
         if (other) {
           const newBlockedBy = other.blockedBy.filter(bid => bid !== editedTask.id);
-          batchUpdates.push({
+          mergeBatchUpdate(id, {
             id,
             updates: { 
               blockedBy: newBlockedBy,
               // If no more blockers, change status back to 'todo'
               status: newBlockedBy.length === 0 && other.status === 'blocked' ? 'todo' : other.status
             }
-          });
+          }.updates);
         }
       }
 
@@ -720,12 +780,12 @@ export const TaskDetailModal = ({
       for (const id of addedBlockedByIds) {
         const blocker = allTasks.find(t => t.id === id);
         if (blocker) {
-          batchUpdates.push({
+          mergeBatchUpdate(id, {
             id,
             updates: { 
               status: blocker.status === 'blocked' ? blocker.status : 'blocked'
             }
-          });
+          }.updates);
         }
       }
 
@@ -737,12 +797,45 @@ export const TaskDetailModal = ({
           // Only change status if this blocker doesn't block anything else
           const blockingOthers = allTasks.some(t => t.blockedBy.includes(id));
           if (!blockingOthers) {
-            batchUpdates.push({
+            mergeBatchUpdate(id, {
               id,
-              updates: { status: 'todo' }
-            });
+              updates: { status: 'todo' as TaskStatus }
+            }.updates);
           }
         }
+      }
+
+      // Propagate edited tag names across tasks in the same project
+      if (pendingTagRenames.length > 0) {
+        allTasks.forEach((taskItem) => {
+          if (taskItem.id === editedTask.id) return;
+          const currentTags = taskItem.tags || [];
+          if (currentTags.length === 0) return;
+
+          let changed = false;
+          let nextTags = [...currentTags];
+
+          pendingTagRenames.forEach(({ from, to }) => {
+            const hasSourceTag = nextTags.some((tag) => tag.toLowerCase() === from.toLowerCase());
+            if (!hasSourceTag) return;
+
+            changed = true;
+            nextTags = nextTags.map((tag) => (tag.toLowerCase() === from.toLowerCase() ? to : tag));
+          });
+
+          if (!changed) return;
+
+          const deduped: string[] = [];
+          nextTags.forEach((tag) => {
+            const normalized = tag.trim();
+            if (!normalized) return;
+            if (!deduped.some((existingTag) => existingTag.toLowerCase() === normalized.toLowerCase())) {
+              deduped.push(normalized);
+            }
+          });
+
+          mergeBatchUpdate(taskItem.id, { tags: deduped });
+        });
       }
 
       if (batchUpdates.length > 0) {
@@ -759,6 +852,7 @@ export const TaskDetailModal = ({
         }
       }
 
+      setPendingTagRenames([]);
       onClose();
     } catch (error) {
       console.error('Failed to update task:', error);
@@ -784,15 +878,15 @@ export const TaskDetailModal = ({
   };
 
   // Adding to "Blocked By" - update THIS task's blockedBy
-  const handleAddBlockedByTask = () => {
-    if (!selectedBlockedByTask) return;
+  const handleAddBlockedByTask = (taskId: string) => {
+    if (!taskId) return;
     setEditedTask(prev => {
       // Prevent duplicates
-      if (dependencyExcludedTaskIds.has(selectedBlockedByTask)) return prev;
+      if (dependencyExcludedTaskIds.has(taskId)) return prev;
 
       const updated = {
         ...prev,
-        blockedBy: [...prev.blockedBy, selectedBlockedByTask],
+        blockedBy: [...prev.blockedBy, taskId],
         updatedAt: new Date().toISOString()
       };
       return updated;
@@ -950,8 +1044,8 @@ export const TaskDetailModal = ({
                     <SelectTrigger aria-required="true">
                       <SelectValue>
                         <div className="flex items-center gap-2">
-                          <div className={cn('w-2 h-2 rounded-full', statusOptions.find(s => s.value === editedTask.status)?.color)} />
-                          {statusOptions.find(s => s.value === editedTask.status)?.label}
+                          <div className={cn('w-2 h-2 rounded-full', currentStatusColor)} />
+                          {currentStatusLabel}
                         </div>
                       </SelectValue>
                     </SelectTrigger>
@@ -1048,7 +1142,7 @@ export const TaskDetailModal = ({
                               <div className="text-sm text-center py-2 text-muted-foreground">
                                 No modules found.
                               </div>
-                              {onAddModule && (
+                              {onAddModule && canCreateModule && (
                                 <button
                                   className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
                                   onClick={() => {
@@ -1090,12 +1184,11 @@ export const TaskDetailModal = ({
                                   >
                                     <div className="flex flex-col min-w-0 w-full">
                                       <span className="truncate block">{module.name}</span>
-                                      <span className="text-[10px] text-muted-foreground uppercase truncate block">{module.type}</span>
                                     </div>
                                   </CommandItem>
                                 ))}
                             </CommandGroup>
-                            {onAddModule && (
+                            {onAddModule && canCreateModule && (
                               <>
                                 <Separator />
                                 <CommandGroup>
@@ -1221,141 +1314,126 @@ export const TaskDetailModal = ({
                   <Tag className="h-3 w-3" />
                   Tags
                 </Label>
-                <div
-                  className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
-                  onClick={() => setIsTagPopoverOpen(true)}
-                >
-                  {editedTask.tags.map((tag) => (
-                    <Badge
-                      key={tag}
-                      className={cn("text-xs font-normal pointer-events-none pl-2 pr-1 gap-1", getTagColor(tag))}
-                    >
-                      {tag}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFieldChange('tags', editedTask.tags.filter(t => t !== tag));
-                        }}
-                        className="pointer-events-auto hover:bg-black/10 rounded-full p-0.5 transition-colors"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
+                <div className="space-y-2 rounded-md border border-input px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {editedTask.tags.map((tag, index) => (
+                      <Badge key={`${tag}-${index}`} variant="secondary" className="gap-1 pr-1.5">
+                        {editingTagIndex === index ? (
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Input
+                              autoFocus
+                              value={editingTagValue}
+                              onChange={(e) => setEditingTagValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  saveEditedTag();
+                                }
+                              }}
+                              className="h-6 w-28 bg-background px-2 text-xs"
+                            />
+                            <Button type="button" size="icon" variant="ghost" className="h-5 w-5" onClick={saveEditedTag}>
+                              <Check className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <span>{tag}</span>
+                            <button
+                              type="button"
+                              className="rounded p-0.5 hover:bg-muted-foreground/20"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingTagIndex(index);
+                                setEditingTagValue(tag);
+                                setEditingTagOriginal(tag);
+                              }}
+                              aria-label={`Edit tag ${tag}`}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded p-0.5 hover:bg-muted-foreground/20"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFieldChange('tags', editedTask.tags.filter((_, tagIndex) => tagIndex !== index));
+                              }}
+                              aria-label={`Remove tag ${tag}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </>
+                        )}
+                      </Badge>
+                    ))}
 
-                  <Popover
-                    open={isTagPopoverOpen}
-                    onOpenChange={(open) => {
-                      setIsTagPopoverOpen(open);
-                      if (!open) setEditingTagIndex(null);
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 flex items-center justify-center group relative">
-                        <div className="absolute inset-0 rounded-full border border-muted-foreground/30 group-hover:border-primary transition-colors" />
-                        <Plus className="h-3 w-3 z-10" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="p-0 w-[240px]" align="start" onWheel={(e) => e.stopPropagation()}>
-                      <Command>
-                        <CommandInput
-                          placeholder="Search tags..."
-                          value={tagSearch}
-                          onValueChange={setTagSearch}
-                        />
-                        <CommandList>
-                          <CommandEmpty className="py-2 px-2">
-                            <div className="text-sm text-center py-2 text-muted-foreground">
-                              No matching tags.
-                            </div>
-                            {tagSearch.trim() && (
-                              <button
-                                className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                                onClick={() => {
-                                  handleFieldChange('tags', [...editedTask.tags, tagSearch.trim()]);
-                                  setTagSearch('');
-                                  setIsTagPopoverOpen(false);
-                                }}
-                              >
-                                <Plus className="h-3 w-3" />
-                                Create "{tagSearch}"
-                              </button>
-                            )}
-                          </CommandEmpty>
-                          {TAG_PALETTE
-                            .filter(item => !editedTask.tags.includes(item.name)) // Simple filter by name
-                            .map((item, index) => (
-                              <CommandItem
-                                key={index}
-                                value={item.name}
-                                onSelect={() => {
-                                  if (editingTagIndex !== index) {
-                                    handleFieldChange('tags', [...editedTask.tags, item.name]);
-                                    setIsTagPopoverOpen(false);
+                    <Popover
+                      open={isTagPopoverOpen}
+                      onOpenChange={(open) => {
+                        setIsTagPopoverOpen(open);
+                        if (!open) {
+                          setTagSearch('');
+                          setEditingTagIndex(null);
+                          setEditingTagValue('');
+                          setEditingTagOriginal(null);
+                        }
+                      }}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant="outline" size="sm" className="h-7 gap-1 border-dashed">
+                          <Plus className="h-3 w-3" />
+                          Add tag
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[280px] p-3" align="start">
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <Label className="text-xs text-muted-foreground">Tag name</Label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                placeholder="Enter tag name"
+                                value={tagSearch}
+                                onChange={(e) => setTagSearch(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    addTag(tagSearch);
                                   }
                                 }}
-                                className="cursor-pointer group flex items-center justify-between"
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => addTag(tagSearch)}
+                                disabled={!tagSearch.trim()}
                               >
-                                {editingTagIndex === index ? (
-                                  <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
-                                    <div className={cn("w-3 h-3 rounded-full shrink-0", item.color.split(' ')[0])} />
-                                    <Input
-                                      autoFocus
-                                      value={editingTagValue}
-                                      onChange={(e) => setEditingTagValue(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.stopPropagation();
-                                          if (editingTagValue.trim()) {
-                                            handleFieldChange('tags', [...editedTask.tags, editingTagValue.trim()]);
-                                            setIsTagPopoverOpen(false);
-                                            setEditingTagIndex(null);
-                                          }
-                                        }
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="h-6 w-full text-xs px-1 py-0 min-w-0"
-                                    />
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-6 w-6 mt-0"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (editingTagValue.trim()) {
-                                          handleFieldChange('tags', [...editedTask.tags, editingTagValue.trim()]);
-                                          setIsTagPopoverOpen(false);
-                                          setEditingTagIndex(null);
-                                        }
-                                      }}
-                                    >
-                                      <Check className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <div className="flex items-center gap-2">
-                                      <div className={cn("w-3 h-3 rounded-full shrink-0", item.color.split(' ')[0])} />
-                                      <span>{item.name}</span>
-                                    </div>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingTagIndex(index);
-                                        setEditingTagValue(item.name);
-                                      }}
-                                      className="opacity-0 group-hover:opacity-100 hover:bg-muted p-1 rounded-sm transition-all"
-                                    >
-                                      <Pencil className="h-3 w-3 text-muted-foreground" />
-                                    </button>
-                                  </>
-                                )}
-                              </CommandItem>
-                            ))}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                                Add
+                              </Button>
+                            </div>
+                          </div>
+
+                          {availableTagSuggestions.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Existing tags</p>
+                              <div className="max-h-32 overflow-y-auto space-y-1">
+                                {availableTagSuggestions.map((tag) => (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    className="w-full rounded px-2 py-1 text-left text-sm hover:bg-accent"
+                                    onClick={() => addTag(tag)}
+                                  >
+                                    {tag}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
               </div>
             </section>
@@ -1388,6 +1466,23 @@ export const TaskDetailModal = ({
                     <span className="text-xs">({completedItems}/{checklist.length})</span>
                   )}
                 </h3>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="show-checklist-in-board-view"
+                    checked={showChecklistInBoardView}
+                    onCheckedChange={(checked) => handleToggleChecklistBoardViewForAll(checked === true)}
+                    disabled={checklist.length === 0}
+                  />
+                  <Label
+                    htmlFor="show-checklist-in-board-view"
+                    className={cn(
+                      "text-sm font-normal",
+                      checklist.length === 0 ? "text-muted-foreground/60 cursor-not-allowed" : "cursor-pointer"
+                    )}
+                  >
+                    Show in board view
+                  </Label>
+                </div>
               </div>
 
               {checklist.length > 0 && (
@@ -1520,21 +1615,30 @@ export const TaskDetailModal = ({
 
                   <div className="space-y-2">
                     <div className="flex gap-2">
-                      <Select value={selectedBlockingTask} onValueChange={setSelectedBlockingTask}>
+                      <Select
+                        value={selectedBlockingTask}
+                        onValueChange={(value) => {
+                          setSelectedBlockingTask(value);
+                          handleAddBlockingTask(value);
+                        }}
+                      >
                         <SelectTrigger className="flex-1">
                           <SelectValue placeholder="Select task..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {availableTasksForBlocking.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.title}
+                          {availableTasksForBlocking.length === 0 ? (
+                            <SelectItem value="__no_tasks_blocking__" disabled>
+                              No tasks registered yet.
                             </SelectItem>
-                          ))}
+                          ) : (
+                            availableTasksForBlocking.map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.title}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
-                      <Button size="icon" variant="outline" onClick={handleAddBlockingTask}>
-                        <Plus className="h-4 w-4" />
-                      </Button>
                     </div>
 
                     {blockingToTaskIds.map((taskId) => {
@@ -1548,7 +1652,7 @@ export const TaskDetailModal = ({
                           <div className="flex items-center gap-2 min-w-0">
                             <div className={cn(
                               'w-2 h-2 rounded-full',
-                              statusOptions.find(s => s.value === depTask.status)?.color
+                              statusOptions.find(s => s.value === depTask.status)?.color || 'bg-muted-foreground/60'
                             )} />
                             <span className="text-sm truncate">{depTask.title}</span>
                           </div>
@@ -1576,21 +1680,30 @@ export const TaskDetailModal = ({
 
                   <div className="space-y-2">
                     <div className="flex gap-2">
-                      <Select value={selectedBlockedByTask} onValueChange={setSelectedBlockedByTask}>
+                      <Select
+                        value={selectedBlockedByTask}
+                        onValueChange={(value) => {
+                          setSelectedBlockedByTask(value);
+                          handleAddBlockedByTask(value);
+                        }}
+                      >
                         <SelectTrigger className="flex-1">
                           <SelectValue placeholder="Select task..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {availableTasksForBlockedBy.map((t) => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.title}
+                          {availableTasksForBlockedBy.length === 0 ? (
+                            <SelectItem value="__no_tasks_blocked_by__" disabled>
+                              No tasks registered yet.
                             </SelectItem>
-                          ))}
+                          ) : (
+                            availableTasksForBlockedBy.map((t) => (
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.title}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
-                      <Button size="icon" variant="outline" onClick={handleAddBlockedByTask}>
-                        <Plus className="h-4 w-4" />
-                      </Button>
                     </div>
 
                     {editedTask.blockedBy.map((taskId) => {
@@ -1604,7 +1717,7 @@ export const TaskDetailModal = ({
                           <div className="flex items-center gap-2 min-w-0">
                             <div className={cn(
                               'w-2 h-2 rounded-full',
-                              statusOptions.find(s => s.value === depTask.status)?.color
+                              statusOptions.find(s => s.value === depTask.status)?.color || 'bg-muted-foreground/60'
                             )} />
                             <span className="text-sm truncate">{depTask.title}</span>
                           </div>

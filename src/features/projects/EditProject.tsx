@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,7 +51,7 @@ import {
     ChevronUp,
     Palette
 } from "lucide-react";
-import { format, isBefore, startOfToday } from "date-fns";
+import { format, isBefore, startOfMonth, startOfToday } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -208,6 +208,28 @@ const EditProject = () => {
     const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
     const [isMilestoneStartOpen, setIsMilestoneStartOpen] = useState(false);
     const [isMilestoneEndOpen, setIsMilestoneEndOpen] = useState(false);
+    const [milestoneStartCalendarMonth, setMilestoneStartCalendarMonth] = useState<Date>(() =>
+        startOfMonth(new Date())
+    );
+    const [milestoneEndCalendarMonth, setMilestoneEndCalendarMonth] = useState<Date>(() =>
+        startOfMonth(new Date())
+    );
+
+    useLayoutEffect(() => {
+        if (isMilestoneStartOpen) {
+            setMilestoneStartCalendarMonth(
+                startOfMonth(newMilestoneStart ?? startDate ?? new Date())
+            );
+        }
+    }, [isMilestoneStartOpen, newMilestoneStart, startDate]);
+
+    useLayoutEffect(() => {
+        if (isMilestoneEndOpen) {
+            setMilestoneEndCalendarMonth(
+                startOfMonth(newMilestoneEnd ?? newMilestoneStart ?? startDate ?? new Date())
+            );
+        }
+    }, [isMilestoneEndOpen, newMilestoneEnd, newMilestoneStart, startDate]);
 
     // Links state
     const [newLinkName, setNewLinkName] = useState("");
@@ -231,6 +253,11 @@ const EditProject = () => {
         open: false,
         memberIds: [],
     });
+    const [hiddenAttachmentIds, setHiddenAttachmentIds] = useState<Set<string>>(new Set());
+    const visibleProjectAttachments = useMemo(
+        () => projectAttachments.filter((attachment: any) => !hiddenAttachmentIds.has(attachment.id)),
+        [projectAttachments, hiddenAttachmentIds]
+    );
 
     const confirmDelete = async () => {
         const { type, id } = deleteConfirmation;
@@ -267,8 +294,11 @@ const EditProject = () => {
         } else if (type === 'attachment') {
             try {
                 await deleteAttachmentMutation.mutateAsync(id);
-                // Also remove it from local state to trigger rerender if it was an unsaved local file
-                // But typically it relies on the query invalidation.
+                setHiddenAttachmentIds((prev) => {
+                    const next = new Set(prev);
+                    next.add(id);
+                    return next;
+                });
             } catch (err) {
                 toast.error('Failed to delete attachment');
             }
@@ -1453,7 +1483,25 @@ const EditProject = () => {
                                             {newMilestoneStart ? format(newMilestoneStart, "PP") : "Start"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneStart} onSelect={(date) => { setNewMilestoneStart(date); setIsMilestoneStartOpen(false); }} disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false) || (targetDate ? isBefore(targetDate, date) : false)} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0">
+                                        {isMilestoneStartOpen && (
+                                            <Calendar
+                                                mode="single"
+                                                month={milestoneStartCalendarMonth}
+                                                onMonthChange={setMilestoneStartCalendarMonth}
+                                                selected={newMilestoneStart}
+                                                onSelect={(date) => {
+                                                    setNewMilestoneStart(date);
+                                                    setIsMilestoneStartOpen(false);
+                                                }}
+                                                disabled={(date) =>
+                                                    isBefore(date, startOfToday()) ||
+                                                    (startDate ? isBefore(date, startDate) : false) ||
+                                                    (targetDate ? isBefore(targetDate, date) : false)
+                                                }
+                                            />
+                                        )}
+                                    </PopoverContent>
                                 </Popover>
                                 <Popover open={isMilestoneEndOpen} onOpenChange={setIsMilestoneEndOpen}>
                                     <PopoverTrigger asChild>
@@ -1462,7 +1510,26 @@ const EditProject = () => {
                                             {newMilestoneEnd ? format(newMilestoneEnd, "PP") : "End"}
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMilestoneEnd} onSelect={(date) => { setNewMilestoneEnd(date); setIsMilestoneEndOpen(false); }} disabled={(date) => isBefore(date, startOfToday()) || (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) || (startDate ? isBefore(date, startDate) : false) || (targetDate ? isBefore(targetDate, date) : false)} /></PopoverContent>
+                                    <PopoverContent className="w-auto p-0">
+                                        {isMilestoneEndOpen && (
+                                            <Calendar
+                                                mode="single"
+                                                month={milestoneEndCalendarMonth}
+                                                onMonthChange={setMilestoneEndCalendarMonth}
+                                                selected={newMilestoneEnd}
+                                                onSelect={(date) => {
+                                                    setNewMilestoneEnd(date);
+                                                    setIsMilestoneEndOpen(false);
+                                                }}
+                                                disabled={(date) =>
+                                                    isBefore(date, startOfToday()) ||
+                                                    (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) ||
+                                                    (startDate ? isBefore(date, startDate) : false) ||
+                                                    (targetDate ? isBefore(targetDate, date) : false)
+                                                }
+                                            />
+                                        )}
+                                    </PopoverContent>
                                 </Popover>
                             </div>
                             <div className="flex gap-2">
@@ -1521,11 +1588,21 @@ const EditProject = () => {
                     <CardContent className="space-y-4">
                         {/* File Upload Zone */}
                         <div
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Upload attachments"
                             className={cn(
                                 "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
                                 isDragOver ? "border-primary bg-primary/5" : "border-muted-foreground/25",
                                 isUploading && "opacity-50 pointer-events-none"
                             )}
+                            onClick={() => fileInputRef.current?.click()}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    fileInputRef.current?.click();
+                                }
+                            }}
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
@@ -1552,11 +1629,11 @@ const EditProject = () => {
                         </div>
 
                         {/* Existing Attachments */}
-                        {projectAttachments.length > 0 && (
+                        {visibleProjectAttachments.length > 0 && (
                             <div className="space-y-2">
                                 <Label>Current Attachments</Label>
                                 <div className="space-y-2">
-                                    {projectAttachments.map((attachment: any) => (
+                                    {visibleProjectAttachments.map((attachment: any) => (
                                         <div
                                             key={attachment.id}
                                             className="flex items-center justify-between p-3 rounded-md bg-muted/50"

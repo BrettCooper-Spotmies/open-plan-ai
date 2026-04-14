@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import { format } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,7 +10,8 @@ import {
   groupTasksByProject,
   groupTasksByProgress,
   groupTasksByDueDate,
-  groupTasksByPriority
+  groupTasksByPriority,
+  formatTaskDateRange
 } from '../utils/myDayUtils';
 import { MyDayGroupBy, TaskStatus } from '@/types';
 import { toast } from 'sonner';
@@ -78,7 +78,6 @@ export function MyDayKanbanView({
   useEffect(() => {
     setLocalTasks(initialTasks);
   }, [initialTasks]);
-  const [hoveredTask, setHoveredTask] = useState<string | null>(null);
 
   const columns = useMemo((): KanbanColumn[] => {
     switch (groupBy) {
@@ -267,8 +266,6 @@ export function MyDayKanbanView({
                                           : 'border-l-muted',
                                         snapshot.isDragging && 'shadow-lg'
                                       )}
-                                      onMouseEnter={() => setHoveredTask(task.id)}
-                                      onMouseLeave={() => setHoveredTask(null)}
                                       onClick={() => onTaskClick(task)}
                                     >
                                       <div className="space-y-2">
@@ -282,24 +279,19 @@ export function MyDayKanbanView({
                                               </div>
                                             ) : (
                                               <div
-                                                className={cn(
-                                                  "absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4 transition-all duration-300 ease-out",
-                                                  hoveredTask === task.id ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full"
-                                                )}
+                                                className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4"
                                               >
                                                 <button
                                                   onClick={(e) => handleCompleteTask(task.id, e)}
                                                   className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
+                                                  aria-label="Mark task complete"
                                                 >
-                                                  <Check className="h-3 w-3 text-foreground" />
+                                                  <span className="sr-only">Mark complete</span>
                                                 </button>
                                               </div>
                                             )}
                                             <h4
-                                              className={cn(
-                                                "text-sm font-medium leading-tight truncate transition-all duration-300 ease-out",
-                                                (task.status === 'done' || task.status === 'resolved' || task.status === 'closed') || hoveredTask === task.id ? "translate-x-6" : "translate-x-0"
-                                              )}
+                                              className="text-sm font-medium leading-tight truncate transition-all duration-300 ease-out translate-x-6"
                                             >
                                               {task.title}
                                             </h4>
@@ -354,7 +346,7 @@ export function MyDayKanbanView({
                                           )}
                                           {task.dueDate && (
                                             <span className="text-[10px] text-muted-foreground">
-                                              {format(new Date(task.dueDate), 'MMM d')}
+                                              {formatTaskDateRange(task.originalTask?.startDate, task.dueDate)}
                                             </span>
                                           )}
                                         </div>

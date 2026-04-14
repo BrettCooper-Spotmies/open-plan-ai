@@ -1,5 +1,5 @@
 import { Task, Project, TaskStatus, Issue, IssueStatus, MyDayItem, MyDayItemType } from '@/types';
-import { startOfDay, isSameDay, isBefore, isAfter, addDays } from 'date-fns';
+import { startOfDay, isSameDay, isBefore, isAfter, addDays, format as formatDate } from 'date-fns';
 
 export interface MyDayTask extends Task {
   projectId: string;
@@ -424,6 +424,42 @@ export function formatDueDate(dueDate?: string): string {
     default:
       return `Due ${formatted}`;
   }
+}
+
+/**
+ * Format task date window for compact cards.
+ * Examples:
+ * - start+due in same month/year: "13–14 Apr"
+ * - different month same year: "30 Apr – 2 May"
+ * - different years: "30 Dec 2026 – 2 Jan 2027"
+ * - only one date: "14 Apr"
+ */
+export function formatTaskDateRange(startDate?: string, dueDate?: string): string {
+  const start = parseDueDateSafe(startDate);
+  const due = parseDueDateSafe(dueDate);
+
+  if (!start && !due) return 'No date';
+  if (!start && due) return formatDate(due, 'd MMM');
+  if (start && !due) return formatDate(start, 'd MMM');
+
+  if (!start || !due) return 'No date';
+
+  if (isSameDay(start, due)) {
+    return formatDate(due, 'd MMM');
+  }
+
+  const sameYear = start.getFullYear() === due.getFullYear();
+  const sameMonth = sameYear && start.getMonth() === due.getMonth();
+
+  if (sameMonth) {
+    return `${formatDate(start, 'd')}–${formatDate(due, 'd MMM')}`;
+  }
+
+  if (sameYear) {
+    return `${formatDate(start, 'd MMM')} – ${formatDate(due, 'd MMM')}`;
+  }
+
+  return `${formatDate(start, 'd MMM yyyy')} – ${formatDate(due, 'd MMM yyyy')}`;
 }
 
 export function isDueTomorrow(dueDate?: string): boolean {

@@ -53,7 +53,8 @@ function mapDbTaskToTask(dbTask: any, assignees: TeamMember[] = []): Task {
     checklist: (dbTask.checklists || []).map((c: any) => ({
       id: c.id,
       text: c.text,
-      completed: c.completed
+      completed: c.completed,
+      showInBoardView: c.show_in_board_view ?? false,
     })),
     // blockedBy = tasks this task depends on (from task_dependencies where task_id = this task)
     blockedBy: (dbTask.task_dependencies || []).map((d: any) => d.depends_on_id),
@@ -293,6 +294,7 @@ export const tasksService = {
         task_id: newTask.id,
         text: item.text,
         completed: item.completed,
+        show_in_board_view: item.showInBoardView ?? false,
         position: index
       }));
       await supabase.from('checklists').insert(checklistInserts);
@@ -413,6 +415,7 @@ export const tasksService = {
           task_id: taskId,
           text: item.text,
           completed: item.completed,
+          show_in_board_view: item.showInBoardView ?? false,
           position: index
         }));
         await supabase.from('checklists').insert(checklistInserts);

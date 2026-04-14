@@ -43,6 +43,9 @@ interface MilestonesViewProps {
   tasks: Task[];
   issues?: Issue[];
   modules?: Module[];
+  viewMode?: 'list' | 'kanban';
+  /** Used to open the add-milestone calendar on the project’s start month/year */
+  projectStartDate?: Date;
   searchQuery?: string;
   isAddDialogOpen?: boolean;
   onAddDialogClose?: () => void;
@@ -64,6 +67,8 @@ export function MilestonesView({
   tasks,
   issues = [],
   modules = [],
+  viewMode = 'list',
+  projectStartDate,
   searchQuery = '',
   isAddDialogOpen: externalIsAddDialogOpen,
   onAddDialogClose,
@@ -88,6 +93,16 @@ export function MilestonesView({
     : milestones;
 
   const sortedMilestones = sortMilestonesByDate(filteredMilestones);
+  const milestoneKanbanColumns: Array<{
+    key: 'on-track' | 'at-risk' | 'blocked' | 'completed';
+    label: string;
+    color: string;
+  }> = [
+    { key: 'on-track', label: 'On Track', color: 'bg-chart-2' },
+    { key: 'at-risk', label: 'At Risk', color: 'bg-orange-500' },
+    { key: 'blocked', label: 'Blocked', color: 'bg-destructive' },
+    { key: 'completed', label: 'Completed', color: 'bg-status-done' },
+  ];
 
   const toggleExpanded = (milestoneId: string) => {
     setExpandedMilestones(prev =>
@@ -137,6 +152,95 @@ export function MilestonesView({
             No milestones match your search query.
           </p>
         </Card>
+      ) : viewMode === 'kanban' ? (
+        <div className="w-full overflow-x-auto pb-4">
+          <div className="inline-flex gap-4 min-w-full" style={{ width: 'max-content' }}>
+            {milestoneKanbanColumns.map((column) => {
+              const columnMilestones = sortedMilestones.filter(
+                (milestone) => getMilestoneStatus(milestone, tasks, issues) === column.key
+              );
+
+              return (
+                <div key={column.key} className="w-[300px] flex-shrink-0">
+                  <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
+                    <div className="flex items-center gap-2 px-1">
+                      <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                      <h3 className="font-medium text-sm">{column.label}</h3>
+                      <span className="text-xs text-muted-foreground">{columnMilestones.length}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {columnMilestones.length === 0 ? (
+                      <Card className="p-4 border-dashed">
+                        <p className="text-xs text-muted-foreground">No milestones</p>
+                      </Card>
+                    ) : (
+                      columnMilestones.map((milestone) => {
+                        const progress = getMilestoneProgress(milestone, tasks);
+                        const milestoneTasks = getMilestoneTasks(milestone, tasks);
+                        const milestoneIssues = getMilestoneIssues(milestone.id, issues);
+                        const daysUntil = Math.ceil((new Date(milestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                        const isOverdue = !milestone.completed && daysUntil < 0;
+
+                        return (
+                          <Card
+                            key={milestone.id}
+                            className={cn(
+                              'p-3 cursor-pointer transition-all hover:shadow-md border-l-2 border-l-primary/70',
+                              milestone.completed && 'opacity-75'
+                            )}
+                            onClick={() => handleMilestoneClick(milestone)}
+                          >
+                            <div className="space-y-2.5">
+                              <div className="flex items-start justify-between gap-2">
+                                <h4 className={cn('text-sm font-medium leading-tight', milestone.completed && 'line-through text-muted-foreground')}>
+                                  {milestone.title}
+                                </h4>
+                                <Badge variant="outline" className="text-[10px] shrink-0">
+                                  {progress}%
+                                </Badge>
+                              </div>
+
+                              {milestone.description && (
+                                <p className="text-xs text-muted-foreground line-clamp-2">{milestone.description}</p>
+                              )}
+
+                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                <Calendar className="h-3 w-3" />
+                                <span>
+                                  {new Date(milestone.date).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric',
+                                  })}
+                                </span>
+                                {!milestone.completed && (
+                                  <span className={cn(isOverdue ? 'text-destructive' : 'text-muted-foreground')}>
+                                    {isOverdue ? `• ${Math.abs(daysUntil)}d overdue` : daysUntil === 0 ? '• Due today' : `• ${daysUntil}d left`}
+                                  </span>
+                                )}
+                              </div>
+
+                              <Progress value={progress} className="h-1.5" />
+
+                              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                <span>{milestoneTasks.filter(t => t.status === 'done').length}/{milestoneTasks.length} tasks</span>
+                                {milestoneIssues.length > 0 && (
+                                  <span className="text-destructive">{milestoneIssues.length} issues</span>
+                                )}
+                              </div>
+                            </div>
+                          </Card>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       ) : (
         /* Timeline View */
         <Card className="p-6">
@@ -376,6 +480,7 @@ export function MilestonesView({
             tasks={tasks}
             modules={modules}
             issues={issues}
+            projectStartDate={projectStartDate}
           />
         )
       }

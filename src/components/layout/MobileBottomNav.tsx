@@ -41,6 +41,7 @@ export function MobileBottomNav() {
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
+  const visibleMoreNavItems = moreNavItems;
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -53,7 +54,7 @@ export function MobileBottomNav() {
     );
   };
 
-  const isMoreActive = moreNavItems.some((item) => isActive(item.url));
+  const isMoreActive = visibleMoreNavItems.some((item) => isActive(item.url));
 
   // Close sheet on outside click
   useEffect(() => {
@@ -115,7 +116,7 @@ export function MobileBottomNav() {
 
         {/* Sheet items */}
         <div className="grid grid-cols-4 gap-1 px-3 py-4">
-          {moreNavItems.map((item) => {
+          {visibleMoreNavItems.map((item) => {
             const active = isActive(item.url);
             return (
               <button

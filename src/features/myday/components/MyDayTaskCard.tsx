@@ -26,6 +26,7 @@ import {
   getModuleInfo, 
   getPriorityInfo, 
   formatDueDate,
+  formatTaskDateRange,
   getDueDateStatus 
 } from '../utils/myDayUtils';
 import { TaskStatus, ChecklistItem } from '@/types';
@@ -123,7 +124,11 @@ export const MyDayTaskCard = memo(function MyDayTaskCard({
           )}>
             {dueDateStatus === 'overdue' && <AlertTriangle className="h-3 w-3" />}
             {dueDateStatus !== 'overdue' && <Calendar className="h-3 w-3" />}
-            <span>{formatDueDate(task.dueDate)}</span>
+            <span>
+              {task.startDate && task.dueDate
+                ? formatTaskDateRange(task.startDate, task.dueDate)
+                : formatDueDate(task.dueDate)}
+            </span>
           </div>
 
           {/* Dependency Status */}

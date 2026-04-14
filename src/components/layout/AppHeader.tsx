@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Search, Sun, Moon, Monitor } from 'lucide-react';
+import { Sun, Moon, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -65,13 +64,6 @@ export function AppHeader() {
           </h1>
         )}
 
-        <div className="relative hidden md:flex">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search projects, tasks..."
-            className="w-64 pl-9 h-9 bg-muted/50 border-0 focus-visible:ring-1"
-          />
-        </div>
       </div>
 
       <div className="flex items-center gap-2">

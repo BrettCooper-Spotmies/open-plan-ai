@@ -45,7 +45,7 @@ export function ModuleViewControls({
 }: {
   viewMode: ModuleViewMode;
   onViewModeChange: (mode: ModuleViewMode) => void;
-  onAddModule: () => void;
+  onAddModule?: () => void;
   searchQuery?: string;
   onSearchQueryChange?: (query: string) => void;
 }) {
@@ -92,10 +92,12 @@ export function ModuleViewControls({
       </ToggleGroup>
       </div>
 
-      <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={onAddModule}>
-        <Plus className="h-4 w-4 shrink-0" />
-        <span className="hidden md:inline">Add Module</span>
-      </Button>
+      {onAddModule && (
+        <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={onAddModule}>
+          <Plus className="h-4 w-4 shrink-0" />
+          <span className="hidden md:inline">Add Module</span>
+        </Button>
+      )}
     </div>
   );
 }

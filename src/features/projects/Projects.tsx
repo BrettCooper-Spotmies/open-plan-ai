@@ -28,9 +28,11 @@ import { useProjects, useDeleteProject } from '@/hooks/useProjects';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useProjectAttachments } from '@/hooks/useProjectAttachments';
 import { useProjectLinks } from '@/hooks/useProjectLinks';
+import { useOrganizationMembers } from '@/hooks/useProjectTeam';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { formatModuleType } from './utils/projectUtils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -58,7 +60,10 @@ const stageLabels = {
 export default function Projects() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
   const { data: projects, isLoading, error } = useProjects();
+  const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -78,6 +83,8 @@ export default function Projects() {
   const { data: projectFiles = [], isLoading: isLoadingFiles } = useProjectAttachments(selectedFilesProjectId || undefined);
 
   const projectList = projects || [];
+  const currentMembership = organizationMembers.find((member) => member.id === user?.id);
+  const canCreateProject = (currentMembership?.role || '').toLowerCase() === 'owner';
 
   useEffect(() => {
     if (isMobile && view !== 'list') {
@@ -157,10 +164,12 @@ export default function Projects() {
                 Manage and track all your hardware projects.
               </p>
             </div>
-            <Button className="gap-2 shrink-0" onClick={() => navigate('/projects/new')}>
-              <Plus className="h-4 w-4" />
-              New Project
-            </Button>
+            {canCreateProject && (
+              <Button className="gap-2 shrink-0" onClick={() => navigate('/projects/new')}>
+                <Plus className="h-4 w-4" />
+                New Project
+              </Button>
+            )}
           </div>
         )}
 
@@ -190,15 +199,17 @@ export default function Projects() {
             )}
 
             {isMobile ? (
-              <Button
-                size="icon"
-                className="h-10 w-10 rounded-xl shrink-0 bg-primary text-primary-foreground shadow-[0_8px_24px_rgba(0,0,0,0.18)] hover:bg-primary/90"
-                onClick={() => navigate('/projects/new')}
-                aria-label="Create project"
-                title="New Project"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
+              canCreateProject ? (
+                <Button
+                  size="icon"
+                  className="h-10 w-10 rounded-xl shrink-0 bg-primary text-primary-foreground shadow-[0_8px_24px_rgba(0,0,0,0.18)] hover:bg-primary/90"
+                  onClick={() => navigate('/projects/new')}
+                  aria-label="Create project"
+                  title="New Project"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              ) : null
             ) : (
               <div className="flex border border-border/70 rounded-xl md:rounded-lg bg-background/60 shrink-0">
                 <Button
@@ -227,9 +238,11 @@ export default function Projects() {
             <h3 className="text-lg font-medium">No projects found</h3>
             <p className="text-muted-foreground mt-1 max-w-sm mx-auto">
               {projectList.length === 0
-                ? isMobile
-                  ? 'Tap the + button above to create your first project.'
-                  : 'Use the New Project button above to get started.'
+                ? canCreateProject
+                  ? isMobile
+                    ? 'Tap the + button above to create your first project.'
+                    : 'Use the New Project button above to get started.'
+                  : 'Only organization owners can create projects.'
                 : 'Try adjusting your search query'}
             </p>
           </div>
@@ -363,8 +376,8 @@ export default function Projects() {
 
       {/* Project Details Dialog */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl h-[85vh] w-[min(95vw,42rem)] overflow-hidden p-0 gap-0 flex flex-col">
+          <DialogHeader className="px-6 py-4 border-b bg-background shrink-0">
             <DialogTitle className="flex items-center gap-2">
               {selectedProjectDetails?.name || 'Project Details'}
               {selectedProjectDetails?.stage && (
@@ -375,200 +388,208 @@ export default function Projects() {
             </DialogTitle>
           </DialogHeader>
 
-          {isLoadingDetails ? (
-            <div className="space-y-4">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-20 w-full" />
-            </div>
-          ) : selectedProjectDetails ? (
-            <div className="space-y-6">
-              {/* Description */}
-              {selectedProjectDetails.description && (
-                <div>
-                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Description
-                  </h4>
-                  <p className="text-sm text-muted-foreground">{selectedProjectDetails.description}</p>
-                </div>
-              )}
-
-              {/* Progress */}
-              <div>
-                <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                  <Target className="h-4 w-4" />
-                  Progress
-                </h4>
-                <div className="flex items-center gap-3">
-                  <Progress value={selectedProjectDetails.progress || 0} className="flex-1" />
-                  <span className="text-sm font-medium">{selectedProjectDetails.progress || 0}%</span>
-                </div>
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            {isLoadingDetails ? (
+              <div className="space-y-4">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-20 w-full" />
               </div>
+            ) : selectedProjectDetails ? (
+              <div className="space-y-6">
+                {/* Description */}
+                {selectedProjectDetails.description && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Description
+                    </h4>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                      {selectedProjectDetails.description}
+                    </p>
+                  </div>
+                )}
 
-              {/* Dates */}
-              <div className="grid grid-cols-2 gap-4">
+                {/* Progress */}
                 <div>
                   <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Start Date
+                    <Target className="h-4 w-4" />
+                    Progress
                   </h4>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedProjectDetails.startDate ? new Date(selectedProjectDetails.startDate).toLocaleDateString() : 'Not set'}
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <Progress value={selectedProjectDetails.progress || 0} className="flex-1" />
+                    <span className="text-sm font-medium">{selectedProjectDetails.progress || 0}%</span>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                    <Flag className="h-4 w-4" />
-                    Target Date
-                  </h4>
-                  <p className="text-sm text-muted-foreground">
-                    {selectedProjectDetails.targetDate ? new Date(selectedProjectDetails.targetDate).toLocaleDateString() : 'Not set'}
-                  </p>
-                </div>
-              </div>
 
-              {/* Team Members */}
-              {selectedProjectDetails.team && selectedProjectDetails.team.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Team Members ({selectedProjectDetails.team.length})
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {selectedProjectDetails.team.map((member) => (
-                      <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg border bg-muted/30">
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                          {member.initials}
+                {/* Dates */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Start Date
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedProjectDetails.startDate ? new Date(selectedProjectDetails.startDate).toLocaleDateString() : 'Not set'}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                      <Flag className="h-4 w-4" />
+                      Target Date
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedProjectDetails.targetDate ? new Date(selectedProjectDetails.targetDate).toLocaleDateString() : 'Not set'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Team Members */}
+                {selectedProjectDetails.team && selectedProjectDetails.team.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Team Members ({selectedProjectDetails.team.length})
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {selectedProjectDetails.team.map((member) => (
+                        <div key={member.id} className="flex items-center gap-3 p-2 rounded-lg border bg-muted/30">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                            {member.initials}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium truncate">{member.name}</p>
+                            {member.role && (
+                              <p className="text-[11px] text-muted-foreground capitalize flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary/40" />
+                                {member.role.replace('_', ' ')}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{member.name}</p>
-                          {member.role && (
-                            <p className="text-[11px] text-muted-foreground capitalize flex items-center gap-1">
-                              <span className="w-1.5 h-1.5 rounded-full bg-primary/40" />
-                              {member.role.replace('_', ' ')}
-                            </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Attachments */}
+                {projectAttachments.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                      <Paperclip className="h-4 w-4" />
+                      Attachments ({projectAttachments.length})
+                    </h4>
+                    <div className="space-y-2">
+                      {projectAttachments.map((attachment: any) => (
+                        <a
+                          key={attachment.id}
+                          href={attachment.url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={cn(
+                            "flex items-center gap-2 p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors",
+                            attachment.url ? "cursor-pointer" : "cursor-default"
+                          )}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!attachment.url) {
+                              e.preventDefault();
+                            }
+                          }}
+                        >
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm flex-1 truncate">{attachment.name || attachment.file_name}</span>
+                          {attachment.url && (
+                            <span className="text-xs text-primary">Open ↗</span>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Links */}
+                {projectLinks.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                      <LinkIcon className="h-4 w-4" />
+                      Links ({projectLinks.length})
+                    </h4>
+                    <div className="space-y-2">
+                      {projectLinks.map((link: any) => (
+                        <div key={link.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
+                          <LinkIcon className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm flex-1">{link.name || link.title}</span>
+                          {link.url && (
+                            <a
+                              href={link.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline truncate max-w-[200px]"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {link.url}
+                            </a>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Attachments */}
-              {projectAttachments.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                    <Paperclip className="h-4 w-4" />
-                    Attachments ({projectAttachments.length})
-                  </h4>
-                  <div className="space-y-2">
-                    {projectAttachments.map((attachment: any) => (
-                      <a
-                        key={attachment.id}
-                        href={attachment.url || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={cn(
-                          "flex items-center gap-2 p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors",
-                          attachment.url ? "cursor-pointer" : "cursor-default"
-                        )}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (!attachment.url) {
-                            e.preventDefault();
-                          }
-                        }}
-                      >
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm flex-1 truncate">{attachment.name || attachment.file_name}</span>
-                        {attachment.url && (
-                          <span className="text-xs text-primary">Open ↗</span>
-                        )}
-                      </a>
-                    ))}
+                {/* Modules List */}
+                {selectedProjectDetails.projectModules && selectedProjectDetails.projectModules.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Modules ({selectedProjectDetails.projectModules.length})
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedProjectDetails.projectModules.map((module) => (
+                        <Badge key={module.id} variant="outline" className="text-xs font-normal">
+                          <span className="font-semibold">{module.name}</span>
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {/* Links */}
-              {projectLinks.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                    <LinkIcon className="h-4 w-4" />
-                    Links ({projectLinks.length})
-                  </h4>
-                  <div className="space-y-2">
-                    {projectLinks.map((link: any) => (
-                      <div key={link.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
-                        <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm flex-1">{link.name || link.title}</span>
-                        {link.url && (
-                          <a
-                            href={link.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary hover:underline truncate max-w-[200px]"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            {link.url}
-                          </a>
-                        )}
-                      </div>
-                    ))}
+                {/* Milestones count */}
+                {selectedProjectDetails.milestones && selectedProjectDetails.milestones.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                      <Flag className="h-4 w-4" />
+                      Milestones ({selectedProjectDetails.milestones.length})
+                    </h4>
+                    <div className="space-y-1">
+                      {selectedProjectDetails.milestones.slice(0, 3).map((milestone) => (
+                        <div key={milestone.id} className="flex items-center gap-2 text-sm">
+                          <div className={cn(
+                            "w-2 h-2 rounded-full",
+                            milestone.completed ? "bg-green-500" : "bg-muted-foreground"
+                          )} />
+                          <span className={milestone.completed ? "line-through text-muted-foreground" : ""}>
+                            {milestone.title}
+                          </span>
+                        </div>
+                      ))}
+                      {selectedProjectDetails.milestones.length > 3 && (
+                        <p className="text-xs text-muted-foreground">
+                          +{selectedProjectDetails.milestones.length - 3} more
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            ) : (
+              <p className="text-muted-foreground">No project details available.</p>
+            )}
+          </div>
 
-              {/* Modules List */}
-              {selectedProjectDetails.projectModules && selectedProjectDetails.projectModules.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                    <Package className="h-4 w-4" />
-                    Modules ({selectedProjectDetails.projectModules.length})
-                  </h4>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedProjectDetails.projectModules.map((module) => (
-                      <Badge key={module.id} variant="outline" className="text-xs font-normal">
-                        <span className="font-semibold mr-1">{module.name}</span>
-                        <span className="text-muted-foreground">({formatModuleType(module.type)})</span>
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Milestones count */}
-              {selectedProjectDetails.milestones && selectedProjectDetails.milestones.length > 0 && (
-                <div>
-                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
-                    <Flag className="h-4 w-4" />
-                    Milestones ({selectedProjectDetails.milestones.length})
-                  </h4>
-                  <div className="space-y-1">
-                    {selectedProjectDetails.milestones.slice(0, 3).map((milestone) => (
-                      <div key={milestone.id} className="flex items-center gap-2 text-sm">
-                        <div className={cn(
-                          "w-2 h-2 rounded-full",
-                          milestone.completed ? "bg-green-500" : "bg-muted-foreground"
-                        )} />
-                        <span className={milestone.completed ? "line-through text-muted-foreground" : ""}>
-                          {milestone.title}
-                        </span>
-                      </div>
-                    ))}
-                    {selectedProjectDetails.milestones.length > 3 && (
-                      <p className="text-xs text-muted-foreground">
-                        +{selectedProjectDetails.milestones.length - 3} more
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Action buttons */}
-              <div className="flex gap-2 pt-4 border-t">
+          {selectedProjectDetails && !isLoadingDetails && (
+            <div className="px-6 py-4 border-t bg-background shrink-0">
+              <div className="flex gap-2">
                 <Button
                   variant="outline"
                   className="flex-1"
@@ -592,8 +613,6 @@ export default function Projects() {
                 </Button>
               </div>
             </div>
-          ) : (
-            <p className="text-muted-foreground">No project details available.</p>
           )}
         </DialogContent>
       </Dialog>

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { format, parseISO, startOfToday } from 'date-fns';
+import { useState, useEffect, useLayoutEffect } from 'react';
+import { format, parseISO, startOfMonth, startOfToday } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -70,6 +70,15 @@ export function MilestoneDetailModal({
 }: MilestoneDetailModalProps) {
   const [editedMilestone, setEditedMilestone] = useState<Milestone | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isMilestoneDateOpen, setIsMilestoneDateOpen] = useState(false);
+  const [milestoneDateCalendarMonth, setMilestoneDateCalendarMonth] = useState<Date>(() =>
+    startOfMonth(new Date())
+  );
+
+  useLayoutEffect(() => {
+    if (!editedMilestone?.date) return;
+    setMilestoneDateCalendarMonth(startOfMonth(parseISO(editedMilestone.date)));
+  }, [editedMilestone?.id, editedMilestone?.date, isMilestoneDateOpen]);
 
   useEffect(() => {
     // Only set initial state when opening modal with a new milestone
@@ -270,7 +279,7 @@ export function MilestoneDetailModal({
                   <CalendarIcon className="h-3 w-3" />
                   Target Date <span className="text-destructive">*</span>
                 </Label>
-                <Popover>
+                <Popover open={isMilestoneDateOpen} onOpenChange={setIsMilestoneDateOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -286,6 +295,8 @@ export function MilestoneDetailModal({
                   <PopoverContent className="w-auto p-0" align="start">
                     <Calendar
                       mode="single"
+                      month={milestoneDateCalendarMonth}
+                      onMonthChange={setMilestoneDateCalendarMonth}
                       selected={parseISO(editedMilestone.date)}
                       onSelect={(date) => date && handleFieldChange('date', format(date, 'yyyy-MM-dd'))}
                       disabled={{ before: startOfToday() }}

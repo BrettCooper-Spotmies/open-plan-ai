@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { TaskDetailModal } from './TaskDetailModal';
+import { useProjectTaskColumns, useSaveProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
 
 // Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
 const toDateOnly = (date: Date | undefined | null): string | undefined => {
@@ -41,6 +43,48 @@ const toDateOnly = (date: Date | undefined | null): string | undefined => {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+};
+
+const createEmptyTaskDraft = (status: TaskStatus = 'todo'): Partial<Task> => ({
+  title: '',
+  description: '',
+  priority: 'medium' as Priority,
+  module: 'software' as ModuleType,
+  assignees: [],
+  startDate: toDateOnly(new Date()),
+  tags: [],
+  status,
+  blockedBy: [],
+  moduleIds: [],
+});
+
+const parseDateForDisplay = (value?: string): Date | null => {
+  if (!value) return null;
+  const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (dateOnlyRegex.test(value)) {
+    const [y, m, d] = value.split('-').map(Number);
+    const localDate = new Date(y, m - 1, d);
+    return Number.isNaN(localDate.getTime()) ? null : localDate;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const formatTaskDateRange = (startDate?: string, dueDate?: string): string => {
+  const start = parseDateForDisplay(startDate);
+  const due = parseDateForDisplay(dueDate);
+  if (!start && !due) return '';
+  if (!start && due) return format(due, 'MMM d');
+  if (start && !due) return format(start, 'MMM d');
+  if (!start || !due) return '';
+
+  if (start.getFullYear() === due.getFullYear() && start.getMonth() === due.getMonth()) {
+    return `${format(start, 'd')}–${format(due, 'd MMM')}`;
+  }
+  if (start.getFullYear() === due.getFullYear()) {
+    return `${format(start, 'd MMM')}–${format(due, 'd MMM')}`;
+  }
+  return `${format(start, 'd MMM yyyy')}–${format(due, 'd MMM yyyy')}`;
 };
 
 interface KanbanColumn {
@@ -79,6 +123,7 @@ const priorityColors = {
   medium: 'bg-priority-medium text-white',
   low: 'bg-priority-low text-white',
 };
+const BOARD_CHECKLIST_PREVIEW_COUNT = 2;
 
 const moduleColors: Record<string, string> = {
   hardware: 'border-l-module-hardware',
@@ -113,13 +158,51 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   onAddModule,
 }: KanbanViewProps) {
   const [columns, setColumns] = useState<KanbanColumn[]>(defaultColumns);
+  const { data: persistedColumns } = useProjectTaskColumns(projectId);
+  const saveProjectTaskColumns = useSaveProjectTaskColumns(projectId);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const effectiveAllTasks = useMemo(() => {
+    const byId = new Map<string, Task>();
+
+    (allTasks || []).forEach((task) => {
+      byId.set(task.id, task);
+    });
+
+    tasks.forEach((task) => {
+      byId.set(task.id, task);
+    });
+
+    return Array.from(byId.values());
+  }, [allTasks, tasks]);
 
   // Sync local state with props when they change
   useEffect(() => {
     setTasks(initialTasks);
   }, [initialTasks]);
-  const [hoveredTask, setHoveredTask] = useState<string | null>(null);
+
+  // Sync board columns from shared DB state
+  useEffect(() => {
+    if (!projectId) {
+      setColumns(defaultColumns);
+      return;
+    }
+    if (!persistedColumns) return;
+    setColumns(persistedColumns.length > 0 ? persistedColumns : defaultColumns);
+  }, [projectId, persistedColumns]);
+
+  const updateColumns = (nextColumns: KanbanColumn[]) => {
+    setColumns(nextColumns);
+    if (!projectId) return;
+    saveProjectTaskColumns.mutate(
+      nextColumns.map((column) => ({
+        id: column.id,
+        status: String(column.status),
+        label: column.label,
+        color: column.color,
+        isSpecial: column.isSpecial ?? false,
+      }))
+    );
+  };
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [addTaskToColumn, setAddTaskToColumn] = useState<string | null>(null);
@@ -127,21 +210,33 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   const [newColumnColor, setNewColumnColor] = useState('bg-status-todo');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [expandedChecklistPreview, setExpandedChecklistPreview] = useState<Record<string, boolean>>({});
+  const taskModalStatusOptions = useMemo(() => {
+    const deduped = new Map<string, { value: string; label: string; color?: string }>();
+
+    columns.forEach((column) => {
+      if (column.isSpecial && column.status === 'blocked') return;
+      deduped.set(column.status, {
+        value: column.status,
+        label: column.label,
+        color: column.color,
+      });
+    });
+
+    if (!deduped.has('blocked')) {
+      deduped.set('blocked', {
+        value: 'blocked',
+        label: 'Blocked',
+        color: 'bg-status-blocked',
+      });
+    }
+
+    return Array.from(deduped.values());
+  }, [columns]);
   const [isMaximizedAddTask, setIsMaximizedAddTask] = useState(false);
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
   const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false);
-  const [newTask, setNewTask] = useState<Partial<Task>>({
-    title: '',
-    description: '',
-    priority: 'medium' as Priority,
-    module: 'software' as ModuleType,
-    assignees: [],
-    startDate: toDateOnly(new Date()),
-    tags: [],
-    status: 'todo',
-    blockedBy: [],
-    moduleIds: [],
-  });
+  const [newTask, setNewTask] = useState<Partial<Task>>(createEmptyTaskDraft());
 
   // Initial state for new task has no module pre-selected by default
   // This allows the "Select Module" placeholder to show up
@@ -240,6 +335,37 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     }
   };
 
+  const handleBatchTaskUpdateLocal = async (updates: Array<{ id: string; updates: Partial<Task> }>) => {
+    if (updates.length === 0) return;
+
+    const prevTasks = [...tasks];
+    const prevSelectedTask = selectedTask;
+    const updatesById = new Map(updates.map((item) => [item.id, item.updates]));
+
+    const optimisticallyUpdatedTasks = tasks.map((task) => {
+      const pending = updatesById.get(task.id);
+      return pending ? { ...task, ...pending } : task;
+    });
+    setTasks(optimisticallyUpdatedTasks);
+
+    if (selectedTask) {
+      const selectedUpdates = updatesById.get(selectedTask.id);
+      if (selectedUpdates) {
+        setSelectedTask({ ...selectedTask, ...selectedUpdates });
+      }
+    }
+
+    if (!onBatchTaskUpdate) return;
+
+    try {
+      await onBatchTaskUpdate(updates);
+    } catch (error) {
+      setTasks(prevTasks);
+      setSelectedTask(prevSelectedTask);
+      throw error;
+    }
+  };
+
   const handleDragEnd = (result: DropResult) => {
     const { destination, source, type, draggableId } = result;
 
@@ -255,7 +381,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       const newColumns = Array.from(columns);
       const [removed] = newColumns.splice(source.index, 1);
       newColumns.splice(destination.index, 0, removed);
-      setColumns(newColumns);
+      updateColumns(newColumns);
       return;
     }
 
@@ -305,6 +431,27 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     }
   };
 
+  const handleToggleChecklistItemOnCard = (taskId: string, checklistItemId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    const updatedChecklist = (task.checklist || []).map((item) =>
+      item.id === checklistItemId ? { ...item, completed: !item.completed } : item
+    );
+    const updatedTask: Task = { ...task, checklist: updatedChecklist };
+
+    const prevTasks = [...tasks];
+    setTasks(tasks.map((t) => (t.id === taskId ? updatedTask : t)));
+
+    if (onTaskUpdate) {
+      onTaskUpdate(updatedTask, () => setTasks(prevTasks));
+    }
+
+    if (selectedTask && selectedTask.id === updatedTask.id) {
+      setSelectedTask(updatedTask);
+    }
+  };
+
   const handleAddColumn = () => {
     if (!newColumnName.trim()) return;
 
@@ -315,7 +462,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       color: newColumnColor,
     };
 
-    setColumns([...columns, newColumn]);
+    updateColumns([...columns, newColumn]);
     setNewColumnName('');
     setNewColumnColor('bg-status-todo');
     setIsAddColumnOpen(false);
@@ -328,7 +475,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     if (column && tasks.some(t => t.status === column.status)) {
       return;
     }
-    setColumns(columns.filter(c => c.id !== columnId));
+    updateColumns(columns.filter(c => c.id !== columnId));
   };
 
   const handleAddTask = (taskOverride?: Partial<Task>) => {
@@ -381,18 +528,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     }
 
     // Reset form state
-    setNewTask({
-      title: '',
-      description: '',
-      priority: 'medium',
-      module: 'software',
-      assignees: [],
-      startDate: toDateOnly(new Date()),
-      tags: [],
-      status: 'todo',
-      blockedBy: [],
-      moduleIds: [],
-    });
+    setNewTask(createEmptyTaskDraft());
     setIsAddTaskOpen(false);
     setIsMaximizedAddTask(false);
     setAddTaskToColumn(null);
@@ -408,7 +544,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     const column = columns.find(c => c.id === columnId);
     if (column?.isSpecial) return; // Can't add tasks to Dependencies bucket
     setAddTaskToColumn(columnId);
-    setNewTask(prev => ({ ...prev, status: column?.status as TaskStatus || 'todo' }));
+    setNewTask(createEmptyTaskDraft(column?.status as TaskStatus || 'todo'));
     setIsAddTaskOpen(true);
   };
 
@@ -508,7 +644,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                   className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
                                   onClick={() => {
                                     setAddTaskToColumn(column.id);
-                                    setNewTask(prev => ({ ...prev, status: column?.status as TaskStatus || 'todo' }));
+                                    setNewTask(createEmptyTaskDraft(column?.status as TaskStatus || 'todo'));
                                     setIsMaximizedAddTask(true);
                                   }}
                                 >
@@ -561,8 +697,6 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                       : (moduleColors[task.module] || 'border-l-muted'),
                                                     snapshot.isDragging && 'shadow-lg rotate-2'
                                                   )}
-                                                  onMouseEnter={() => setHoveredTask(task.id)}
-                                                  onMouseLeave={() => setHoveredTask(null)}
                                                   onClick={() => handleTaskClick(task)}
                                                 >
 
@@ -604,8 +738,9 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                                 handleCompleteTask(task.id);
                                                               }}
                                                               className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
+                                                              aria-label="Mark task complete"
                                                             >
-                                                              <Check className="h-3 w-3 text-foreground" />
+                                                              <span className="sr-only">Mark complete</span>
                                                             </button>
                                                           </div>
                                                         )}
@@ -632,6 +767,65 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                       </p>
                                                     )}
 
+                                                    {(() => {
+                                                      const boardChecklistItems = (task.checklist || []).filter(
+                                                        (item) => item.showInBoardView === true
+                                                      );
+                                                      if (boardChecklistItems.length === 0) return null;
+
+                                                      const isExpanded = expandedChecklistPreview[task.id] === true;
+                                                      const visibleItems = isExpanded
+                                                        ? boardChecklistItems
+                                                        : boardChecklistItems.slice(0, BOARD_CHECKLIST_PREVIEW_COUNT);
+                                                      const hasMore = boardChecklistItems.length > BOARD_CHECKLIST_PREVIEW_COUNT;
+
+                                                      return (
+                                                        <div className="space-y-1.5 pt-1">
+                                                          {visibleItems.map((item) => (
+                                                            <div key={item.id} className="flex items-center gap-2">
+                                                              <Checkbox
+                                                                checked={item.completed}
+                                                                onCheckedChange={(checked) => {
+                                                                  if (checked === 'indeterminate') return;
+                                                                  handleToggleChecklistItemOnCard(task.id, item.id);
+                                                                }}
+                                                                className="h-3.5 w-3.5 rounded-[3px]"
+                                                                onClick={(event) => event.stopPropagation()}
+                                                              />
+                                                              <button
+                                                                type="button"
+                                                                onClick={(event) => {
+                                                                  event.stopPropagation();
+                                                                  handleToggleChecklistItemOnCard(task.id, item.id);
+                                                                }}
+                                                                className={cn(
+                                                                  'min-w-0 flex-1 text-left text-[11px] text-muted-foreground truncate',
+                                                                  item.completed && 'line-through'
+                                                                )}
+                                                              >
+                                                                {item.text}
+                                                              </button>
+                                                            </div>
+                                                          ))}
+                                                          {hasMore && (
+                                                            <button
+                                                              type="button"
+                                                              className="text-[11px] text-primary hover:underline"
+                                                              onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                setExpandedChecklistPreview((prev) => ({
+                                                                  ...prev,
+                                                                  [task.id]: !isExpanded,
+                                                                }));
+                                                              }}
+                                                            >
+                                                              {isExpanded ? 'View less' : `View more (${boardChecklistItems.length - BOARD_CHECKLIST_PREVIEW_COUNT})`}
+                                                            </button>
+                                                          )}
+                                                        </div>
+                                                      );
+                                                    })()}
+
                                                     <div className="flex items-center justify-between pt-2">
                                                       <div className="flex -space-x-2">
                                                         {(task.assignees || []).slice(0, 3).map((assignee) => (
@@ -651,10 +845,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                       </div>
                                                       {task.dueDate && (
                                                         <span className="text-[10px] text-muted-foreground">
-                                                          {new Date(task.dueDate).toLocaleDateString('en-US', {
-                                                            month: 'short',
-                                                            day: 'numeric',
-                                                          })}
+                                                          {formatTaskDateRange(task.startDate, task.dueDate)}
                                                         </span>
                                                       )}
                                                     </div>
@@ -775,42 +966,47 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       {/* Task Detail Modal (Viewing/Editing) */}
       <TaskDetailModal
         task={selectedTask}
-        allTasks={
-          // Include current task if not in allTasks to verify dependencies
-          allTasks || (selectedTask ? [selectedTask, ...tasks.filter(t => t.id !== selectedTask.id)] : tasks)
-        }
+        allTasks={effectiveAllTasks}
         isOpen={isTaskModalOpen}
         onClose={() => {
           setIsTaskModalOpen(false);
           setSelectedTask(null);
         }}
         onUpdate={handleTaskUpdate}
-        onBatchUpdate={onBatchTaskUpdate}
+        onBatchUpdate={handleBatchTaskUpdateLocal}
         onDelete={onTaskDelete}
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}
         assignableMembers={assignableMembers}
+        statusOptions={taskModalStatusOptions}
       />
 
       {/* Task Detail Modal (Creating Maximized) */}
       <TaskDetailModal
         task={newTask as Task} // Cast for template
-        allTasks={allTasks || tasks}
+        allTasks={effectiveAllTasks}
         isOpen={isMaximizedAddTask}
-        onClose={() => setIsMaximizedAddTask(false)}
+        onClose={() => {
+          setIsMaximizedAddTask(false);
+          setNewTask(createEmptyTaskDraft());
+          setAddTaskToColumn(null);
+        }}
         onUpdate={(updated) => setNewTask(updated as unknown as Partial<Task>)}
-        onBatchUpdate={onBatchTaskUpdate}
+        onBatchUpdate={handleBatchTaskUpdateLocal}
         mode="create"
         onCreate={(newTask) => {
           onTaskCreate?.(newTask as Omit<Task, 'id' | 'createdAt' | 'updatedAt'>);
-          // Just close the maximized view
+          // Close and reset draft so next task starts empty
           setIsMaximizedAddTask(false);
+          setNewTask(createEmptyTaskDraft());
+          setAddTaskToColumn(null);
         }}
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}
         assignableMembers={assignableMembers}
+        statusOptions={taskModalStatusOptions}
       />
     </div>
   );
