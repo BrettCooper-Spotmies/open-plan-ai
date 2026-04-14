@@ -953,6 +953,50 @@ export type Database = {
           },
         ]
       }
+      project_task_columns: {
+        Row: {
+          color: string
+          column_id: string
+          created_at: string
+          is_special: boolean
+          label: string
+          position: number
+          project_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          column_id: string
+          created_at?: string
+          is_special?: boolean
+          label: string
+          position?: number
+          project_id: string
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          column_id?: string
+          created_at?: string
+          is_special?: boolean
+          label?: string
+          position?: number
+          project_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_task_columns_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           client_contact: string | null

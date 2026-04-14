@@ -33,6 +33,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { TaskDetailModal } from './TaskDetailModal';
+import { useProjectTaskColumns, useSaveProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
 
 // Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
 const toDateOnly = (date: Date | undefined | null): string | undefined => {
@@ -157,6 +158,8 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   onAddModule,
 }: KanbanViewProps) {
   const [columns, setColumns] = useState<KanbanColumn[]>(defaultColumns);
+  const { data: persistedColumns } = useProjectTaskColumns(projectId);
+  const saveProjectTaskColumns = useSaveProjectTaskColumns(projectId);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const effectiveAllTasks = useMemo(() => {
     const byId = new Map<string, Task>();
@@ -176,6 +179,30 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   useEffect(() => {
     setTasks(initialTasks);
   }, [initialTasks]);
+
+  // Sync board columns from shared DB state
+  useEffect(() => {
+    if (!projectId) {
+      setColumns(defaultColumns);
+      return;
+    }
+    if (!persistedColumns) return;
+    setColumns(persistedColumns.length > 0 ? persistedColumns : defaultColumns);
+  }, [projectId, persistedColumns]);
+
+  const updateColumns = (nextColumns: KanbanColumn[]) => {
+    setColumns(nextColumns);
+    if (!projectId) return;
+    saveProjectTaskColumns.mutate(
+      nextColumns.map((column) => ({
+        id: column.id,
+        status: String(column.status),
+        label: column.label,
+        color: column.color,
+        isSpecial: column.isSpecial ?? false,
+      }))
+    );
+  };
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [addTaskToColumn, setAddTaskToColumn] = useState<string | null>(null);
@@ -354,7 +381,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       const newColumns = Array.from(columns);
       const [removed] = newColumns.splice(source.index, 1);
       newColumns.splice(destination.index, 0, removed);
-      setColumns(newColumns);
+      updateColumns(newColumns);
       return;
     }
 
@@ -435,7 +462,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       color: newColumnColor,
     };
 
-    setColumns([...columns, newColumn]);
+    updateColumns([...columns, newColumn]);
     setNewColumnName('');
     setNewColumnColor('bg-status-todo');
     setIsAddColumnOpen(false);
@@ -448,7 +475,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     if (column && tasks.some(t => t.status === column.status)) {
       return;
     }
-    setColumns(columns.filter(c => c.id !== columnId));
+    updateColumns(columns.filter(c => c.id !== columnId));
   };
 
   const handleAddTask = (taskOverride?: Partial<Task>) => {
