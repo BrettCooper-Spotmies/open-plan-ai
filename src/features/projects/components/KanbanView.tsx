@@ -171,6 +171,28 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [expandedChecklistPreview, setExpandedChecklistPreview] = useState<Record<string, boolean>>({});
+  const taskModalStatusOptions = useMemo(() => {
+    const deduped = new Map<string, { value: string; label: string; color?: string }>();
+
+    columns.forEach((column) => {
+      if (column.isSpecial && column.status === 'blocked') return;
+      deduped.set(column.status, {
+        value: column.status,
+        label: column.label,
+        color: column.color,
+      });
+    });
+
+    if (!deduped.has('blocked')) {
+      deduped.set('blocked', {
+        value: 'blocked',
+        label: 'Blocked',
+        color: 'bg-status-blocked',
+      });
+    }
+
+    return Array.from(deduped.values());
+  }, [columns]);
   const [isMaximizedAddTask, setIsMaximizedAddTask] = useState(false);
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
   const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false);
@@ -889,6 +911,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         projectId={projectId}
         onAddModule={onAddModule}
         assignableMembers={assignableMembers}
+        statusOptions={taskModalStatusOptions}
       />
 
       {/* Task Detail Modal (Creating Maximized) */}
@@ -915,6 +938,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         projectId={projectId}
         onAddModule={onAddModule}
         assignableMembers={assignableMembers}
+        statusOptions={taskModalStatusOptions}
       />
     </div>
   );

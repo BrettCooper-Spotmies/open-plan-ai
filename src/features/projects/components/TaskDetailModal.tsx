@@ -104,9 +104,10 @@ interface TaskDetailModalProps {
   projectId?: string;
   onAddModule?: () => void;
   assignableMembers?: TeamMember[];
+  statusOptions?: Array<{ value: string; label: string; color?: string }>;
 }
 
-const statusOptions: { value: TaskStatus; label: string; color: string }[] = [
+const DEFAULT_STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
   { value: 'todo', label: 'Not Started', color: 'bg-status-todo' },
   { value: 'in-progress', label: 'In Progress', color: 'bg-status-in-progress' },
   { value: 'review', label: 'In Review', color: 'bg-status-review' },
@@ -248,6 +249,7 @@ export const TaskDetailModal = ({
   projectId,
   onAddModule,
   assignableMembers,
+  statusOptions: providedStatusOptions,
 }: TaskDetailModalProps) => {
   const { profile } = useAuth();
   const { currentOrganization } = useOrganization();
@@ -293,6 +295,28 @@ export const TaskDetailModal = ({
   const [initialBlockingToIds, setInitialBlockingToIds] = useState<string[]>([]);
   const [initializedForKey, setInitializedForKey] = useState<string | null>(null);
   const formSessionKey = `${mode}:${task?.id || 'create'}`;
+  const statusOptions = useMemo(() => {
+    if (!providedStatusOptions || providedStatusOptions.length === 0) {
+      return DEFAULT_STATUS_OPTIONS;
+    }
+
+    const deduped = new Map<string, { value: string; label: string; color: string }>();
+    providedStatusOptions.forEach((option) => {
+      if (!option.value) return;
+      deduped.set(option.value, {
+        value: option.value,
+        label: option.label || option.value,
+        color: option.color || 'bg-muted-foreground/60',
+      });
+    });
+
+    return Array.from(deduped.values());
+  }, [providedStatusOptions]);
+  const currentStatusOption = statusOptions.find((s) => s.value === editedTask.status);
+  const currentStatusLabel =
+    currentStatusOption?.label ||
+    editedTask.status.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+  const currentStatusColor = currentStatusOption?.color || 'bg-muted-foreground/60';
 
   // Fetch real comments when task changes
   useEffect(() => {
@@ -961,8 +985,8 @@ export const TaskDetailModal = ({
                     <SelectTrigger aria-required="true">
                       <SelectValue>
                         <div className="flex items-center gap-2">
-                          <div className={cn('w-2 h-2 rounded-full', statusOptions.find(s => s.value === editedTask.status)?.color)} />
-                          {statusOptions.find(s => s.value === editedTask.status)?.label}
+                          <div className={cn('w-2 h-2 rounded-full', currentStatusColor)} />
+                          {currentStatusLabel}
                         </div>
                       </SelectValue>
                     </SelectTrigger>
@@ -1582,7 +1606,7 @@ export const TaskDetailModal = ({
                           <div className="flex items-center gap-2 min-w-0">
                             <div className={cn(
                               'w-2 h-2 rounded-full',
-                              statusOptions.find(s => s.value === depTask.status)?.color
+                              statusOptions.find(s => s.value === depTask.status)?.color || 'bg-muted-foreground/60'
                             )} />
                             <span className="text-sm truncate">{depTask.title}</span>
                           </div>
@@ -1644,7 +1668,7 @@ export const TaskDetailModal = ({
                           <div className="flex items-center gap-2 min-w-0">
                             <div className={cn(
                               'w-2 h-2 rounded-full',
-                              statusOptions.find(s => s.value === depTask.status)?.color
+                              statusOptions.find(s => s.value === depTask.status)?.color || 'bg-muted-foreground/60'
                             )} />
                             <span className="text-sm truncate">{depTask.title}</span>
                           </div>
