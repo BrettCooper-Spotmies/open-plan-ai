@@ -258,7 +258,7 @@ const Team = () => {
     return <AppLayoutSkeleton variant="team" />;
   }
 
-  if (!currentMember || !isAdminOrOwner) {
+  if (!currentMember) {
     return <Navigate to="/projects" replace />;
   }
 

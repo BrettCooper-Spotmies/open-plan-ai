@@ -84,10 +84,7 @@ export function AppSidebar() {
   }, [user?.id, currentOrganization?.id]);
 
   const canCreateOrg = currentUserRole === 'owner' || currentUserRole === 'admin';
-  const canViewTeamSection = currentUserRole === 'owner' || currentUserRole === 'admin';
-  const organizationNavItems = teamNavItems.filter((item) =>
-    item.url === '/team' ? canViewTeamSection : true
-  );
+  const organizationNavItems = teamNavItems;
 
   const orgSettings = (currentOrganization?.settings || {}) as OrganizationSettings;
   const orgLogo = orgSettings.logoUrl;
