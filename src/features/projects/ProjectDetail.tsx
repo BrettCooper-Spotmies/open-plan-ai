@@ -1230,7 +1230,22 @@ export default function ProjectDetail() {
             {/* Right Side: View Controls */}
             <div className="flex-1 min-w-0 md:max-w-[60%]">
               {section === 'tasks' && (
-                <div className="flex items-center gap-1.5 sm:gap-2 justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
+                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
+                  <ViewControls
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    searchQuery={searchQuery}
+                    onSearchQueryChange={setSearchQuery}
+                  />
+                  <TaskFiltersDropdown
+                    milestones={project.milestones || []}
+                    modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+                    teamMembers={teamMembers}
+                    allTags={allTags}
+                    filters={filters}
+                    onFiltersChange={setFilters}
+                    activeFilterCount={activeFilterCount}
+                  />
                   {activeFilterCount > 0 && (
                     <Button
                       variant="ghost"
@@ -1242,22 +1257,14 @@ export default function ProjectDetail() {
                       <span className="hidden sm:inline">Clear</span>
                     </Button>
                   )}
-                  <TaskFiltersDropdown
-                    milestones={project.milestones || []}
-                    modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
-                    teamMembers={teamMembers}
-                    allTags={allTags}
-                    filters={filters}
-                    onFiltersChange={setFilters}
-                    activeFilterCount={activeFilterCount}
-                  />
-                  <ViewControls
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
-                    onTaskCreate={() => setIsAddTaskDialogOpen(true)}
-                    searchQuery={searchQuery}
-                    onSearchQueryChange={setSearchQuery}
-                  />
+                  <Button
+                    size="sm"
+                    onClick={() => setIsAddTaskDialogOpen(true)}
+                    className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">Create Task</span>
+                  </Button>
                 </div>
               )}
               {section === 'modules' && (
