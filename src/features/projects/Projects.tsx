@@ -404,7 +404,9 @@ export default function Projects() {
                       <FileText className="h-4 w-4" />
                       Description
                     </h4>
-                    <p className="text-sm text-muted-foreground">{selectedProjectDetails.description}</p>
+                    <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                      {selectedProjectDetails.description}
+                    </p>
                   </div>
                 )}
 
