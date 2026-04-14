@@ -122,73 +122,6 @@ const priorityOptions: { value: Priority; label: string; color: string }[] = [
   { value: 'low', label: 'Low', color: 'bg-priority-low text-white' },
 ];
 
-// 30 Colors: 15 Primary (Hard) + 15 Light
-const TAG_PALETTE = [
-  // Red
-  { name: 'Red', color: 'bg-red-500 text-white hover:bg-red-600' },
-  { name: 'Light Red', color: 'bg-red-100 text-red-700 hover:bg-red-200' },
-  // Orange
-  { name: 'Orange', color: 'bg-orange-500 text-white hover:bg-orange-600' },
-  { name: 'Light Orange', color: 'bg-orange-100 text-orange-700 hover:bg-orange-200' },
-  // Amber
-  { name: 'Amber', color: 'bg-amber-500 text-white hover:bg-amber-600' },
-  { name: 'Light Amber', color: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
-  // Yellow
-  { name: 'Yellow', color: 'bg-yellow-500 text-white hover:bg-yellow-600' },
-  { name: 'Light Yellow', color: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
-  // Lime
-  { name: 'Lime', color: 'bg-lime-500 text-white hover:bg-lime-600' },
-  { name: 'Light Lime', color: 'bg-lime-100 text-lime-700 hover:bg-lime-200' },
-  // Green
-  { name: 'Green', color: 'bg-green-500 text-white hover:bg-green-600' },
-  { name: 'Light Green', color: 'bg-green-100 text-green-700 hover:bg-green-200' },
-  // Emerald
-  { name: 'Emerald', color: 'bg-emerald-500 text-white hover:bg-emerald-600' },
-  { name: 'Light Emerald', color: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
-  // Teal
-  { name: 'Teal', color: 'bg-teal-500 text-white hover:bg-teal-600' },
-  { name: 'Light Teal', color: 'bg-teal-100 text-teal-700 hover:bg-teal-200' },
-  // Cyan
-  { name: 'Cyan', color: 'bg-cyan-500 text-white hover:bg-cyan-600' },
-  { name: 'Light Cyan', color: 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200' },
-  // Sky
-  { name: 'Sky', color: 'bg-sky-500 text-white hover:bg-sky-600' },
-  { name: 'Light Sky', color: 'bg-sky-100 text-sky-700 hover:bg-sky-200' },
-  // Blue
-  { name: 'Blue', color: 'bg-blue-500 text-white hover:bg-blue-600' },
-  { name: 'Light Blue', color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
-  // Indigo
-  { name: 'Indigo', color: 'bg-indigo-500 text-white hover:bg-indigo-600' },
-  { name: 'Light Indigo', color: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' },
-  // Violet
-  { name: 'Violet', color: 'bg-violet-500 text-white hover:bg-violet-600' },
-  { name: 'Light Violet', color: 'bg-violet-100 text-violet-700 hover:bg-violet-200' },
-  // Purple
-  { name: 'Purple', color: 'bg-purple-500 text-white hover:bg-purple-600' },
-  { name: 'Light Purple', color: 'bg-purple-100 text-purple-700 hover:bg-purple-200' },
-  // Fuchsia
-  { name: 'Fuchsia', color: 'bg-fuchsia-500 text-white hover:bg-fuchsia-600' },
-  { name: 'Light Fuchsia', color: 'bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-200' },
-];
-
-// Helper to determine color based on tag name
-// If the tag name matches (or was renamed from) a default color, we try to keep it.
-// Since we don't store the metadata, we match by exact name first.
-// If it's a custom name, we hash it to one of the palette colors.
-const getTagColor = (tag: string) => {
-  // Check if it matches a default name directly
-  const directMatch = TAG_PALETTE.find(p => p.name.toLowerCase() === tag.toLowerCase());
-  if (directMatch) return directMatch.color;
-
-  // Otherwise hash to a stable color
-  let hash = 0;
-  for (let i = 0; i < tag.length; i++) {
-    hash = tag.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const index = Math.abs(hash) % TAG_PALETTE.length;
-  return TAG_PALETTE[index].color;
-};
-
 const getFileIcon = (fileType: string) => {
   if (fileType.startsWith('image/')) return ImageIcon;
   if (fileType.includes('pdf') || fileType.includes('document')) return FileText;
@@ -287,6 +220,8 @@ export const TaskDetailModal = ({
   const [tagSearch, setTagSearch] = useState('');
   const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
   const [editingTagValue, setEditingTagValue] = useState('');
+  const [editingTagOriginal, setEditingTagOriginal] = useState<string | null>(null);
+  const [pendingTagRenames, setPendingTagRenames] = useState<Array<{ from: string; to: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -317,6 +252,84 @@ export const TaskDetailModal = ({
     currentStatusOption?.label ||
     editedTask.status.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
   const currentStatusColor = currentStatusOption?.color || 'bg-muted-foreground/60';
+  const tagSuggestions = useMemo(() => {
+    const pool = new Set<string>();
+    allTasks.forEach((t) => {
+      (t.tags || []).forEach((tag) => {
+        const normalized = tag.trim();
+        if (normalized) pool.add(normalized);
+      });
+    });
+    (editedTask.tags || []).forEach((tag) => {
+      const normalized = tag.trim();
+      if (normalized) pool.add(normalized);
+    });
+    return Array.from(pool).sort((a, b) => a.localeCompare(b));
+  }, [allTasks, editedTask.tags]);
+  const availableTagSuggestions = useMemo(
+    () =>
+      tagSuggestions.filter(
+        (tag) => !editedTask.tags.some((existingTag) => existingTag.toLowerCase() === tag.toLowerCase())
+      ),
+    [editedTask.tags, tagSuggestions]
+  );
+
+  const addTag = (rawValue: string) => {
+    const value = rawValue.trim();
+    if (!value) return;
+
+    const exists = editedTask.tags.some((tag) => tag.toLowerCase() === value.toLowerCase());
+    if (!exists) {
+      handleFieldChange('tags', [...editedTask.tags, value]);
+    }
+    setTagSearch('');
+    setIsTagPopoverOpen(false);
+  };
+
+  const saveEditedTag = () => {
+    if (editingTagIndex === null && !editingTagOriginal) return;
+    const value = editingTagValue.trim();
+
+    const nextTags = [...editedTask.tags];
+    const targetIndex =
+      editingTagOriginal !== null
+        ? nextTags.findIndex((tag) => tag === editingTagOriginal)
+        : editingTagIndex;
+
+    if (targetIndex === null || targetIndex < 0) {
+      setEditingTagIndex(null);
+      setEditingTagValue('');
+      setEditingTagOriginal(null);
+      return;
+    }
+
+    if (!value) {
+      nextTags.splice(targetIndex, 1);
+    } else {
+      nextTags[targetIndex] = value;
+    }
+
+    if (editingTagOriginal && value && editingTagOriginal.toLowerCase() !== value.toLowerCase()) {
+      setPendingTagRenames((prev) => {
+        const withoutSource = prev.filter((rename) => rename.from.toLowerCase() !== editingTagOriginal.toLowerCase());
+        return [...withoutSource, { from: editingTagOriginal, to: value }];
+      });
+    }
+
+    const deduped: string[] = [];
+    nextTags.forEach((tag) => {
+      const normalized = tag.trim();
+      if (!normalized) return;
+      if (!deduped.some((existingTag) => existingTag.toLowerCase() === normalized.toLowerCase())) {
+        deduped.push(normalized);
+      }
+    });
+
+    handleFieldChange('tags', deduped);
+    setEditingTagIndex(null);
+    setEditingTagValue('');
+    setEditingTagOriginal(null);
+  };
 
   // Fetch real comments when task changes
   useEffect(() => {
@@ -409,6 +422,7 @@ export const TaskDetailModal = ({
     if (task) {
       setEditedTask(task);
     }
+    setPendingTagRenames([]);
     onClose();
   };
 
@@ -717,19 +731,30 @@ export const TaskDetailModal = ({
 
       // addedIds/removedIds logic...
       const batchUpdates: Array<{ id: string; updates: Partial<Task> }> = [];
+      const mergeBatchUpdate = (id: string, updates: Partial<Task>) => {
+        const existing = batchUpdates.find((item) => item.id === id);
+        if (existing) {
+          existing.updates = {
+            ...existing.updates,
+            ...updates,
+          };
+          return;
+        }
+        batchUpdates.push({ id, updates });
+      };
 
       // Added blocking-to relationships
       const addedIds = localBlockingToIds.filter(id => !originalBlockingToIds.includes(id));
       for (const id of addedIds) {
         const other = allTasks.find(t => t.id === id);
         if (other && !other.blockedBy.includes(editedTask.id)) {
-          batchUpdates.push({
+          mergeBatchUpdate(id, {
             id,
             updates: { 
               blockedBy: [...other.blockedBy, editedTask.id],
               status: other.status === 'blocked' ? other.status : 'blocked'
             }
-          });
+          }.updates);
         }
       }
 
@@ -739,14 +764,14 @@ export const TaskDetailModal = ({
         const other = allTasks.find(t => t.id === id);
         if (other) {
           const newBlockedBy = other.blockedBy.filter(bid => bid !== editedTask.id);
-          batchUpdates.push({
+          mergeBatchUpdate(id, {
             id,
             updates: { 
               blockedBy: newBlockedBy,
               // If no more blockers, change status back to 'todo'
               status: newBlockedBy.length === 0 && other.status === 'blocked' ? 'todo' : other.status
             }
-          });
+          }.updates);
         }
       }
 
@@ -755,12 +780,12 @@ export const TaskDetailModal = ({
       for (const id of addedBlockedByIds) {
         const blocker = allTasks.find(t => t.id === id);
         if (blocker) {
-          batchUpdates.push({
+          mergeBatchUpdate(id, {
             id,
             updates: { 
               status: blocker.status === 'blocked' ? blocker.status : 'blocked'
             }
-          });
+          }.updates);
         }
       }
 
@@ -772,12 +797,45 @@ export const TaskDetailModal = ({
           // Only change status if this blocker doesn't block anything else
           const blockingOthers = allTasks.some(t => t.blockedBy.includes(id));
           if (!blockingOthers) {
-            batchUpdates.push({
+            mergeBatchUpdate(id, {
               id,
-              updates: { status: 'todo' }
-            });
+              updates: { status: 'todo' as TaskStatus }
+            }.updates);
           }
         }
+      }
+
+      // Propagate edited tag names across tasks in the same project
+      if (pendingTagRenames.length > 0) {
+        allTasks.forEach((taskItem) => {
+          if (taskItem.id === editedTask.id) return;
+          const currentTags = taskItem.tags || [];
+          if (currentTags.length === 0) return;
+
+          let changed = false;
+          let nextTags = [...currentTags];
+
+          pendingTagRenames.forEach(({ from, to }) => {
+            const hasSourceTag = nextTags.some((tag) => tag.toLowerCase() === from.toLowerCase());
+            if (!hasSourceTag) return;
+
+            changed = true;
+            nextTags = nextTags.map((tag) => (tag.toLowerCase() === from.toLowerCase() ? to : tag));
+          });
+
+          if (!changed) return;
+
+          const deduped: string[] = [];
+          nextTags.forEach((tag) => {
+            const normalized = tag.trim();
+            if (!normalized) return;
+            if (!deduped.some((existingTag) => existingTag.toLowerCase() === normalized.toLowerCase())) {
+              deduped.push(normalized);
+            }
+          });
+
+          mergeBatchUpdate(taskItem.id, { tags: deduped });
+        });
       }
 
       if (batchUpdates.length > 0) {
@@ -794,6 +852,7 @@ export const TaskDetailModal = ({
         }
       }
 
+      setPendingTagRenames([]);
       onClose();
     } catch (error) {
       console.error('Failed to update task:', error);
@@ -1256,141 +1315,126 @@ export const TaskDetailModal = ({
                   <Tag className="h-3 w-3" />
                   Tags
                 </Label>
-                <div
-                  className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
-                  onClick={() => setIsTagPopoverOpen(true)}
-                >
-                  {editedTask.tags.map((tag) => (
-                    <Badge
-                      key={tag}
-                      className={cn("text-xs font-normal pointer-events-none pl-2 pr-1 gap-1", getTagColor(tag))}
-                    >
-                      {tag}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleFieldChange('tags', editedTask.tags.filter(t => t !== tag));
-                        }}
-                        className="pointer-events-auto hover:bg-black/10 rounded-full p-0.5 transition-colors"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
+                <div className="space-y-2 rounded-md border border-input px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {editedTask.tags.map((tag, index) => (
+                      <Badge key={`${tag}-${index}`} variant="secondary" className="gap-1 pr-1.5">
+                        {editingTagIndex === index ? (
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <Input
+                              autoFocus
+                              value={editingTagValue}
+                              onChange={(e) => setEditingTagValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  saveEditedTag();
+                                }
+                              }}
+                              className="h-6 w-28 bg-background px-2 text-xs"
+                            />
+                            <Button type="button" size="icon" variant="ghost" className="h-5 w-5" onClick={saveEditedTag}>
+                              <Check className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <>
+                            <span>{tag}</span>
+                            <button
+                              type="button"
+                              className="rounded p-0.5 hover:bg-muted-foreground/20"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingTagIndex(index);
+                                setEditingTagValue(tag);
+                                setEditingTagOriginal(tag);
+                              }}
+                              aria-label={`Edit tag ${tag}`}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded p-0.5 hover:bg-muted-foreground/20"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFieldChange('tags', editedTask.tags.filter((_, tagIndex) => tagIndex !== index));
+                              }}
+                              aria-label={`Remove tag ${tag}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </>
+                        )}
+                      </Badge>
+                    ))}
 
-                  <Popover
-                    open={isTagPopoverOpen}
-                    onOpenChange={(open) => {
-                      setIsTagPopoverOpen(open);
-                      if (!open) setEditingTagIndex(null);
-                    }}
-                  >
-                    <PopoverTrigger asChild>
-                      <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 flex items-center justify-center group relative">
-                        <div className="absolute inset-0 rounded-full border border-muted-foreground/30 group-hover:border-primary transition-colors" />
-                        <Plus className="h-3 w-3 z-10" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="p-0 w-[240px]" align="start" onWheel={(e) => e.stopPropagation()}>
-                      <Command>
-                        <CommandInput
-                          placeholder="Search tags..."
-                          value={tagSearch}
-                          onValueChange={setTagSearch}
-                        />
-                        <CommandList>
-                          <CommandEmpty className="py-2 px-2">
-                            <div className="text-sm text-center py-2 text-muted-foreground">
-                              No matching tags.
-                            </div>
-                            {tagSearch.trim() && (
-                              <button
-                                className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                                onClick={() => {
-                                  handleFieldChange('tags', [...editedTask.tags, tagSearch.trim()]);
-                                  setTagSearch('');
-                                  setIsTagPopoverOpen(false);
-                                }}
-                              >
-                                <Plus className="h-3 w-3" />
-                                Create "{tagSearch}"
-                              </button>
-                            )}
-                          </CommandEmpty>
-                          {TAG_PALETTE
-                            .filter(item => !editedTask.tags.includes(item.name)) // Simple filter by name
-                            .map((item, index) => (
-                              <CommandItem
-                                key={index}
-                                value={item.name}
-                                onSelect={() => {
-                                  if (editingTagIndex !== index) {
-                                    handleFieldChange('tags', [...editedTask.tags, item.name]);
-                                    setIsTagPopoverOpen(false);
+                    <Popover
+                      open={isTagPopoverOpen}
+                      onOpenChange={(open) => {
+                        setIsTagPopoverOpen(open);
+                        if (!open) {
+                          setTagSearch('');
+                          setEditingTagIndex(null);
+                          setEditingTagValue('');
+                          setEditingTagOriginal(null);
+                        }
+                      }}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button type="button" variant="outline" size="sm" className="h-7 gap-1 border-dashed">
+                          <Plus className="h-3 w-3" />
+                          Add tag
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-[280px] p-3" align="start">
+                        <div className="space-y-3">
+                          <div className="space-y-2">
+                            <Label className="text-xs text-muted-foreground">Tag name</Label>
+                            <div className="flex items-center gap-2">
+                              <Input
+                                placeholder="Enter tag name"
+                                value={tagSearch}
+                                onChange={(e) => setTagSearch(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    addTag(tagSearch);
                                   }
                                 }}
-                                className="cursor-pointer group flex items-center justify-between"
+                              />
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => addTag(tagSearch)}
+                                disabled={!tagSearch.trim()}
                               >
-                                {editingTagIndex === index ? (
-                                  <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
-                                    <div className={cn("w-3 h-3 rounded-full shrink-0", item.color.split(' ')[0])} />
-                                    <Input
-                                      autoFocus
-                                      value={editingTagValue}
-                                      onChange={(e) => setEditingTagValue(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.stopPropagation();
-                                          if (editingTagValue.trim()) {
-                                            handleFieldChange('tags', [...editedTask.tags, editingTagValue.trim()]);
-                                            setIsTagPopoverOpen(false);
-                                            setEditingTagIndex(null);
-                                          }
-                                        }
-                                      }}
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="h-6 w-full text-xs px-1 py-0 min-w-0"
-                                    />
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-6 w-6 mt-0"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (editingTagValue.trim()) {
-                                          handleFieldChange('tags', [...editedTask.tags, editingTagValue.trim()]);
-                                          setIsTagPopoverOpen(false);
-                                          setEditingTagIndex(null);
-                                        }
-                                      }}
-                                    >
-                                      <Check className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <div className="flex items-center gap-2">
-                                      <div className={cn("w-3 h-3 rounded-full shrink-0", item.color.split(' ')[0])} />
-                                      <span>{item.name}</span>
-                                    </div>
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setEditingTagIndex(index);
-                                        setEditingTagValue(item.name);
-                                      }}
-                                      className="opacity-0 group-hover:opacity-100 hover:bg-muted p-1 rounded-sm transition-all"
-                                    >
-                                      <Pencil className="h-3 w-3 text-muted-foreground" />
-                                    </button>
-                                  </>
-                                )}
-                              </CommandItem>
-                            ))}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                                Add
+                              </Button>
+                            </div>
+                          </div>
+
+                          {availableTagSuggestions.length > 0 && (
+                            <div className="space-y-1">
+                              <p className="text-xs text-muted-foreground">Existing tags</p>
+                              <div className="max-h-32 overflow-y-auto space-y-1">
+                                {availableTagSuggestions.map((tag) => (
+                                  <button
+                                    key={tag}
+                                    type="button"
+                                    className="w-full rounded px-2 py-1 text-left text-sm hover:bg-accent"
+                                    onClick={() => addTag(tag)}
+                                  >
+                                    {tag}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
               </div>
             </section>

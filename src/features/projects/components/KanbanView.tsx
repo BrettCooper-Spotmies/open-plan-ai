@@ -295,6 +295,37 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     }
   };
 
+  const handleBatchTaskUpdateLocal = async (updates: Array<{ id: string; updates: Partial<Task> }>) => {
+    if (updates.length === 0) return;
+
+    const prevTasks = [...tasks];
+    const prevSelectedTask = selectedTask;
+    const updatesById = new Map(updates.map((item) => [item.id, item.updates]));
+
+    const optimisticallyUpdatedTasks = tasks.map((task) => {
+      const pending = updatesById.get(task.id);
+      return pending ? { ...task, ...pending } : task;
+    });
+    setTasks(optimisticallyUpdatedTasks);
+
+    if (selectedTask) {
+      const selectedUpdates = updatesById.get(selectedTask.id);
+      if (selectedUpdates) {
+        setSelectedTask({ ...selectedTask, ...selectedUpdates });
+      }
+    }
+
+    if (!onBatchTaskUpdate) return;
+
+    try {
+      await onBatchTaskUpdate(updates);
+    } catch (error) {
+      setTasks(prevTasks);
+      setSelectedTask(prevSelectedTask);
+      throw error;
+    }
+  };
+
   const handleDragEnd = (result: DropResult) => {
     const { destination, source, type, draggableId } = result;
 
@@ -905,7 +936,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
           setSelectedTask(null);
         }}
         onUpdate={handleTaskUpdate}
-        onBatchUpdate={onBatchTaskUpdate}
+        onBatchUpdate={handleBatchTaskUpdateLocal}
         onDelete={onTaskDelete}
         modules={modules}
         projectId={projectId}
@@ -925,7 +956,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
           setAddTaskToColumn(null);
         }}
         onUpdate={(updated) => setNewTask(updated as unknown as Partial<Task>)}
-        onBatchUpdate={onBatchTaskUpdate}
+        onBatchUpdate={handleBatchTaskUpdateLocal}
         mode="create"
         onCreate={(newTask) => {
           onTaskCreate?.(newTask as Omit<Task, 'id' | 'createdAt' | 'updatedAt'>);
