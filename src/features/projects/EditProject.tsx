@@ -253,6 +253,11 @@ const EditProject = () => {
         open: false,
         memberIds: [],
     });
+    const [hiddenAttachmentIds, setHiddenAttachmentIds] = useState<Set<string>>(new Set());
+    const visibleProjectAttachments = useMemo(
+        () => projectAttachments.filter((attachment: any) => !hiddenAttachmentIds.has(attachment.id)),
+        [projectAttachments, hiddenAttachmentIds]
+    );
 
     const confirmDelete = async () => {
         const { type, id } = deleteConfirmation;
@@ -289,8 +294,11 @@ const EditProject = () => {
         } else if (type === 'attachment') {
             try {
                 await deleteAttachmentMutation.mutateAsync(id);
-                // Also remove it from local state to trigger rerender if it was an unsaved local file
-                // But typically it relies on the query invalidation.
+                setHiddenAttachmentIds((prev) => {
+                    const next = new Set(prev);
+                    next.add(id);
+                    return next;
+                });
             } catch (err) {
                 toast.error('Failed to delete attachment');
             }
@@ -1580,11 +1588,21 @@ const EditProject = () => {
                     <CardContent className="space-y-4">
                         {/* File Upload Zone */}
                         <div
+                            role="button"
+                            tabIndex={0}
+                            aria-label="Upload attachments"
                             className={cn(
                                 "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
                                 isDragOver ? "border-primary bg-primary/5" : "border-muted-foreground/25",
                                 isUploading && "opacity-50 pointer-events-none"
                             )}
+                            onClick={() => fileInputRef.current?.click()}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                    e.preventDefault();
+                                    fileInputRef.current?.click();
+                                }
+                            }}
                             onDragOver={handleDragOver}
                             onDragLeave={handleDragLeave}
                             onDrop={handleDrop}
@@ -1611,11 +1629,11 @@ const EditProject = () => {
                         </div>
 
                         {/* Existing Attachments */}
-                        {projectAttachments.length > 0 && (
+                        {visibleProjectAttachments.length > 0 && (
                             <div className="space-y-2">
                                 <Label>Current Attachments</Label>
                                 <div className="space-y-2">
-                                    {projectAttachments.map((attachment: any) => (
+                                    {visibleProjectAttachments.map((attachment: any) => (
                                         <div
                                             key={attachment.id}
                                             className="flex items-center justify-between p-3 rounded-md bg-muted/50"
