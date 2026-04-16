@@ -159,7 +159,7 @@ export default function Chat() {
         )}
 
         {showMessageArea && (
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
             {activeConv ? (
               <>
                 <ChatHeader
@@ -204,8 +204,18 @@ export default function Chat() {
           </div>
         )}
 
-        {!isMobile && isDetailPanelOpen && activeConv && (
-          <DetailPanel conversation={activeConv} onRefetch={refetch} />
+        {isDetailPanelOpen && activeConv && (
+          isMobile ? (
+            <div className="absolute inset-0 z-20 bg-background">
+              <DetailPanel
+                conversation={activeConv}
+                onRefetch={refetch}
+                className="w-full border-l-0"
+              />
+            </div>
+          ) : (
+            <DetailPanel conversation={activeConv} onRefetch={refetch} />
+          )
         )}
       </div>
     </>
