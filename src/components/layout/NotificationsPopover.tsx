@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const getNotificationIcon = (type: AppNotification['type']) => {
     switch (type) {
@@ -35,6 +36,7 @@ const getNotificationIcon = (type: AppNotification['type']) => {
 export function NotificationsPopover() {
     const [open, setOpen] = useState(false);
     const navigate = useNavigate();
+    const isMobile = useIsMobile();
     const { notifications, markAsRead, markAllAsRead } = useNotifications();
 
     const unreadCount = notifications.filter((n) => !n.read).length;
@@ -46,6 +48,25 @@ export function NotificationsPopover() {
     const handleMarkAllAsRead = () => {
         markAllAsRead.mutate();
     };
+
+    if (isMobile) {
+        return (
+            <Button
+                variant="ghost"
+                size="icon"
+                className="relative"
+                onClick={() => navigate('/notifications')}
+                aria-label="Open notifications"
+            >
+                <Bell className="h-4 w-4" />
+                {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 h-4 w-4 bg-status-in-progress rounded-full flex items-center justify-center">
+                        <span className="text-[10px] font-medium text-white">{unreadCount}</span>
+                    </span>
+                )}
+            </Button>
+        );
+    }
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
