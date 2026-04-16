@@ -42,6 +42,7 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
 
   const isConversationRoute = /^\/chat\/[^/]+/.test(location.pathname);
   const showAppHeader = !(isMobile && isConversationRoute);
+  const showMobileBottomNav = isMobile && !isConversationRoute;
 
   return (
     <SidebarProvider
@@ -56,7 +57,7 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
           <main
             className={[
               noPadding ? 'flex-1 overflow-hidden' : 'flex-1 p-6 overflow-y-auto',
-              isMobile ? 'pb-24' : '',
+              showMobileBottomNav ? 'pb-24' : '',
             ].join(' ')}
           >
             {children}
@@ -64,7 +65,7 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
         </div>
       </div>
       {/* Mobile bottom navigation */}
-      {isMobile && <MobileBottomNav />}
+      {showMobileBottomNav && <MobileBottomNav />}
     </SidebarProvider>
   );
 }
