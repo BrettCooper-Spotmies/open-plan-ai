@@ -57,6 +57,18 @@ const stageLabels = {
   production: 'Production',
 };
 
+const formatDisplayDate = (value?: string | number | Date | null) => {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+
+  return `${day}-${month}-${year}`;
+};
+
 export default function Projects() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -330,7 +342,7 @@ export default function Projects() {
                       </HoverCardContent>
                     </HoverCard>
                     <span className="text-[11px] text-muted-foreground">
-                      Updated {project.updatedAt ? new Date(project.updatedAt).toISOString().slice(0, 10) : 'N/A'}
+                      Updated {formatDisplayDate(project.updatedAt)}
                     </span>
                   </div>
                 </Card>
@@ -396,7 +408,7 @@ export default function Projects() {
                       Start Date
                     </h4>
                     <p className="text-sm text-muted-foreground">
-                      {selectedProjectDetails.startDate ? new Date(selectedProjectDetails.startDate).toLocaleDateString() : 'Not set'}
+                      {selectedProjectDetails.startDate ? formatDisplayDate(selectedProjectDetails.startDate) : 'Not set'}
                     </p>
                   </div>
                   <div>
@@ -405,7 +417,7 @@ export default function Projects() {
                       Target Date
                     </h4>
                     <p className="text-sm text-muted-foreground">
-                      {selectedProjectDetails.targetDate ? new Date(selectedProjectDetails.targetDate).toLocaleDateString() : 'Not set'}
+                      {selectedProjectDetails.targetDate ? formatDisplayDate(selectedProjectDetails.targetDate) : 'Not set'}
                     </p>
                   </div>
                 </div>
@@ -625,7 +637,7 @@ export default function Projects() {
                       {file.name || file.file_name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Click to view • {new Date(file.uploaded_at || Date.now()).toLocaleDateString()}
+                      Click to view • {formatDisplayDate(file.uploaded_at || Date.now())}
                     </p>
                   </div>
                   {file.url && (
