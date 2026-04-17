@@ -97,6 +97,8 @@ export default function Projects() {
     (p.description || '').toLowerCase().includes(search.toLowerCase())
   );
 
+  const canDeleteProject = (projectCreatedBy?: string) => Boolean(projectCreatedBy && user?.id && projectCreatedBy === user.id);
+
   const handleViewDetails = (projectId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -120,6 +122,13 @@ export default function Projects() {
   const handleDeleteClick = (project: { id: string; name: string }, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    const selectedProject = projectList.find((p) => p.id === project.id);
+    if (!canDeleteProject(selectedProject?.createdBy)) {
+      toast.error('Only the project owner can delete this project.');
+      return;
+    }
+
     setProjectToDelete(project);
     setDeleteDialogOpen(true);
   };
@@ -134,7 +143,12 @@ export default function Projects() {
       setProjectToDelete(null);
     } catch (error) {
       console.error('Error deleting project:', error);
-      toast.error('Failed to delete project');
+      const errorMessage = error instanceof Error ? error.message : '';
+      if (errorMessage.toLowerCase().includes('access denied')) {
+        toast.error('Only the project owner can delete this project.');
+      } else {
+        toast.error('Failed to delete project');
+      }
     }
   };
 
@@ -289,14 +303,18 @@ export default function Projects() {
                             <Pencil className="h-4 w-4 mr-2" />
                             Edit
                           </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={(e) => handleDeleteClick({ id: project.id, name: project.name }, e)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
+                          {canDeleteProject(project.createdBy) && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={(e) => handleDeleteClick({ id: project.id, name: project.name }, e)}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
