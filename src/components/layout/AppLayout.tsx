@@ -52,11 +52,11 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
       <div className="h-screen flex w-full bg-background overflow-hidden">
         {/* Sidebar hidden on mobile */}
         {!isMobile && <AppSidebar />}
-        <div className={`flex-1 flex flex-col h-full min-w-0 ${!isMobile ? 'ml-4' : ''}`}>
+        <div className={`flex-1 flex flex-col h-full min-h-0 min-w-0 ${!isMobile ? 'ml-4' : ''}`}>
           {showAppHeader && <AppHeader />}
           <main
             className={[
-              noPadding ? 'flex-1 overflow-hidden' : 'flex-1 p-6 overflow-y-auto',
+              noPadding ? 'flex-1 min-h-0 overflow-hidden' : 'flex-1 min-h-0 p-6 overflow-y-auto',
               showMobileBottomNav ? 'pb-24' : '',
             ].join(' ')}
           >
