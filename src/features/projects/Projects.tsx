@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ProjectListProgress } from './components/ProjectListProgress';
-import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, Trash2, FolderOpen, Package, X } from 'lucide-react';
+import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, FolderOpen, Package, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -24,7 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useProjects, useDeleteProject } from '@/hooks/useProjects';
+import { useProjects } from '@/hooks/useProjects';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useProjectAttachments } from '@/hooks/useProjectAttachments';
 import { useProjectLinks } from '@/hooks/useProjectLinks';
@@ -68,13 +68,8 @@ export default function Projects() {
   const [search, setSearch] = useState('');
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
   const [filesDialogOpen, setFilesDialogOpen] = useState(false);
   const [selectedFilesProjectId, setSelectedFilesProjectId] = useState<string | null>(null);
-
-  // Delete mutation
-  const deleteProjectMutation = useDeleteProject();
 
   // Fetch full project details when a project is selected for viewing details
   const { data: selectedProjectDetails, isLoading: isLoadingDetails } = useProjectDetail(selectedProjectId || undefined);
@@ -97,8 +92,6 @@ export default function Projects() {
     (p.description || '').toLowerCase().includes(search.toLowerCase())
   );
 
-  const canDeleteProject = (projectCreatedBy?: string) => Boolean(projectCreatedBy && user?.id && projectCreatedBy === user.id);
-
   const handleViewDetails = (projectId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -117,39 +110,6 @@ export default function Projects() {
     e.preventDefault();
     e.stopPropagation();
     navigate(`/projects/${projectId}/edit`);
-  };
-
-  const handleDeleteClick = (project: { id: string; name: string }, e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const selectedProject = projectList.find((p) => p.id === project.id);
-    if (!canDeleteProject(selectedProject?.createdBy)) {
-      toast.error('Only the project owner can delete this project.');
-      return;
-    }
-
-    setProjectToDelete(project);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!projectToDelete) return;
-
-    try {
-      await deleteProjectMutation.mutateAsync(projectToDelete.id);
-      toast.success('Project deleted successfully');
-      setDeleteDialogOpen(false);
-      setProjectToDelete(null);
-    } catch (error) {
-      console.error('Error deleting project:', error);
-      const errorMessage = error instanceof Error ? error.message : '';
-      if (errorMessage.toLowerCase().includes('access denied')) {
-        toast.error('Only the project owner can delete this project.');
-      } else {
-        toast.error('Failed to delete project');
-      }
-    }
   };
 
   if (isLoading) {
@@ -303,18 +263,6 @@ export default function Projects() {
                             <Pencil className="h-4 w-4 mr-2" />
                             Edit
                           </DropdownMenuItem>
-                          {canDeleteProject(project.createdBy) && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={(e) => handleDeleteClick({ id: project.id, name: project.name }, e)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </>
-                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -704,29 +652,6 @@ export default function Projects() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Project</DialogTitle>
-            <DialogDescription className="break-all">
-              Are you sure you want to delete <strong>"{projectToDelete?.name}"</strong>? This action cannot be undone and will permanently delete all associated data including tasks, milestones, and files.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmDelete}
-              disabled={deleteProjectMutation.isPending}
-            >
-              {deleteProjectMutation.isPending ? 'Deleting...' : 'Delete Project'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
