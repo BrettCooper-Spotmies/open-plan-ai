@@ -128,6 +128,9 @@ export const teamService = {
           user_id: user.id,
           role: invitation.role || 'member',
           invited_by: invitation.invited_by || null,
+          department: typeof (invitation as Record<string, unknown>).department === 'string'
+            ? ((invitation as Record<string, unknown>).department as string).trim().toLowerCase() || null
+            : null,
         },
         { onConflict: 'organization_id,user_id', ignoreDuplicates: true }
       );
