@@ -212,6 +212,10 @@ Deno.serve(async (req) => {
         user_id: user.id,
         role: invitation.role,
         invited_by: invitation.invited_by,
+        department:
+          typeof invitation.department === "string" && invitation.department.trim().length > 0
+            ? invitation.department.trim().toLowerCase()
+            : null,
       });
 
     if (memberError) {

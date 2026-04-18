@@ -23,6 +23,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
     ArrowLeft,
+    AlertTriangle,
     CalendarIcon,
     FileText,
     Loader2,
@@ -57,7 +58,7 @@ import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDetail } from "@/hooks/useProjectDetail";
-import { useUpdateProject, useProject } from "@/hooks/useProjects";
+import { useUpdateProject, useProject, useDeleteProject } from "@/hooks/useProjects";
 import { useOrganizationMembers } from "@/hooks/useProjectTeam";
 import { useProjectAttachments, useCreateAttachment, useDeleteAttachment } from "@/hooks/useProjectAttachments";
 import { useProjectLinks, useCreateProjectLink, useDeleteProjectLink } from "@/hooks/useProjectLinks";
@@ -152,6 +153,7 @@ const EditProject = () => {
     const { user } = useAuth();
     const { currentOrganization } = useOrganization();
     const updateProjectMutation = useUpdateProject();
+    const deleteProjectMutation = useDeleteProject();
     const { data: orgMembers = [] } = useOrganizationMembers(currentOrganization?.id);
 
     // Fetch project data
@@ -246,6 +248,8 @@ const EditProject = () => {
         id: null
     });
     const [deleteInProgress, setDeleteInProgress] = useState(false);
+    const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
+    const [deleteProjectConfirmText, setDeleteProjectConfirmText] = useState("");
     const [chatRemovalPrompt, setChatRemovalPrompt] = useState<{
         open: boolean;
         memberIds: string[];
@@ -330,6 +334,11 @@ const EditProject = () => {
         const myMembership = (project.team || []).find((member) => member.id === user.id);
         return (myMembership?.role || '').toLowerCase() === 'admin';
     }, [project?.createdBy, project?.team, user?.id]);
+
+    const isProjectOwner = useMemo(() => {
+        if (!project?.createdBy || !user?.id) return false;
+        return project.createdBy === user.id;
+    }, [project?.createdBy, user?.id]);
 
     const selectedOrgMember = useMemo(
         () => orgMembers.find((member: any) => member.id === selectedMember),
@@ -620,6 +629,34 @@ const EditProject = () => {
 
     const handleDeleteLink = (linkId: string) => {
         setDeleteConfirmation({ isOpen: true, type: 'link', id: linkId });
+    };
+
+    const handleDeleteProject = async () => {
+        if (!project?.id) return;
+        if (!isProjectOwner) {
+            toast.error("Only the project owner can delete this project.");
+            return;
+        }
+        if (deleteProjectConfirmText.trim() !== project.name) {
+            toast.error("Project name does not match.");
+            return;
+        }
+
+        try {
+            await deleteProjectMutation.mutateAsync(project.id);
+            toast.success("Project deleted successfully");
+            setDeleteProjectDialogOpen(false);
+            setDeleteProjectConfirmText("");
+            navigate("/projects");
+        } catch (error) {
+            console.error("Error deleting project:", error);
+            const errorMessage = error instanceof Error ? error.message : "";
+            if (errorMessage.toLowerCase().includes("access denied")) {
+                toast.error("Only the project owner can delete this project.");
+            } else {
+                toast.error("Failed to delete project");
+            }
+        }
     };
 
     const executeSave = async (removeFromChatToo: boolean) => {
@@ -1736,6 +1773,84 @@ const EditProject = () => {
                         )}
                     </CardContent>
                 </Card>
+
+                {isProjectOwner && (
+                    <Card className="border-destructive/40 bg-destructive/5">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-destructive">
+                                <AlertTriangle className="h-5 w-5" />
+                                Danger Zone
+                            </CardTitle>
+                            <CardDescription>
+                                Deleting this project permanently removes project data for everyone in the workspace.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <p className="text-sm text-muted-foreground">
+                                This action cannot be undone.
+                            </p>
+                            <Dialog
+                                open={deleteProjectDialogOpen}
+                                onOpenChange={(open) => {
+                                    setDeleteProjectDialogOpen(open);
+                                    if (!open) setDeleteProjectConfirmText("");
+                                }}
+                            >
+                                <DialogTrigger asChild>
+                                    <Button variant="destructive">
+                                        Delete Project
+                                    </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                    <DialogHeader>
+                                        <DialogTitle>Delete Project</DialogTitle>
+                                        <DialogDescription>
+                                            To confirm deletion, type <strong>{project.name}</strong> below. This permanently deletes the project and all associated data.
+                                        </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="space-y-2 py-2">
+                                        <Label htmlFor="delete-project-confirmation">Project Name</Label>
+                                        <Input
+                                            id="delete-project-confirmation"
+                                            value={deleteProjectConfirmText}
+                                            onChange={(e) => setDeleteProjectConfirmText(e.target.value)}
+                                            placeholder={project.name}
+                                            autoComplete="off"
+                                        />
+                                    </div>
+                                    <DialogFooter>
+                                        <Button
+                                            variant="outline"
+                                            onClick={() => {
+                                                setDeleteProjectDialogOpen(false);
+                                                setDeleteProjectConfirmText("");
+                                            }}
+                                        >
+                                            Cancel
+                                        </Button>
+                                        <Button
+                                            variant="destructive"
+                                            onClick={handleDeleteProject}
+                                            disabled={
+                                                deleteProjectMutation.isPending ||
+                                                deleteProjectConfirmText.trim() !== project.name
+                                            }
+                                        >
+                                            {deleteProjectMutation.isPending ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                    Deleting...
+                                                </>
+                                            ) : (
+                                                "Delete Permanently"
+                                            )}
+                                        </Button>
+                                    </DialogFooter>
+                                </DialogContent>
+                            </Dialog>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Delete Confirmation Dialog */}
                 <Dialog open={deleteConfirmation.isOpen} onOpenChange={(open) => {

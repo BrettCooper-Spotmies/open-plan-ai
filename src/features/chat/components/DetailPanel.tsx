@@ -32,6 +32,7 @@ interface SharedFile {
 interface DetailPanelProps {
   conversation: Conversation;
   onRefetch?: () => void;
+  className?: string;
 }
 
 function formatFileSize(bytes: number): string {
@@ -40,7 +41,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
+export function DetailPanel({ conversation, onRefetch, className }: DetailPanelProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const currentUserId = user?.id;
@@ -341,7 +342,7 @@ export function DetailPanel({ conversation, onRefetch }: DetailPanelProps) {
   };
 
   return (
-    <div className="flex flex-col h-full border-l border-border w-[280px] shrink-0">
+    <div className={cn("flex flex-col h-full border-l border-border w-[280px] shrink-0", className)}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <h3 className="text-sm font-semibold">Details</h3>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDetailPanelOpen(false)}>

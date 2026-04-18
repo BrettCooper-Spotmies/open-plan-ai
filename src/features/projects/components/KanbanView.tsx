@@ -570,7 +570,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
               className="w-full overflow-x-auto pb-4"
             >
               <div
-                className="inline-flex gap-4 min-w-full"
+                className="inline-flex gap-4 min-w-full md:min-h-[calc(100vh-320px)]"
                 style={{
                   width: 'max-content',
                 }}

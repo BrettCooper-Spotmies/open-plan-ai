@@ -180,7 +180,7 @@ Deno.serve(async (req: Request) => {
     }
 
     // Parse body
-    const { email, role, orgId } = await req.json();
+    const { email, role, orgId, department } = await req.json();
     if (!email || !orgId) {
       return new Response(JSON.stringify({ error: "Missing email or orgId" }), {
         status: 400,
@@ -188,6 +188,10 @@ Deno.serve(async (req: Request) => {
       });
     }
     const normalizedEmail = String(email).trim().toLowerCase();
+    const normalizedDepartment =
+      typeof department === "string" && department.trim().length > 0
+        ? department.trim().toLowerCase()
+        : null;
 
     // Use service role client for DB operations
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
@@ -392,6 +396,14 @@ Deno.serve(async (req: Request) => {
     };
 
     if (existingPending?.id) {
+      if (normalizedDepartment) {
+        await adminClient
+          .from("team_invitations")
+          .update({ department: normalizedDepartment })
+          .eq("id", existingPending.id)
+          .eq("status", "pending");
+      }
+
       // Throttle re-sends for an existing pending invitation to prevent email spamming.
       const resendEndpoint = `send-team-invite-resend-${existingPending.id}`;
       const oneHourAgoForResend = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -472,6 +484,7 @@ Deno.serve(async (req: Request) => {
         organization_id: orgId,
         email: normalizedEmail,
         role: role || "member",
+        department: normalizedDepartment,
         token,
         invited_by: user.id,
         status: "pending",

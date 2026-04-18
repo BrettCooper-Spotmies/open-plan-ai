@@ -485,6 +485,9 @@ const Team = () => {
                     {member.department && (
                       <Badge variant="secondary">{member.department}</Badge>
                     )}
+                    {!member.department && (
+                      <span className="text-xs text-muted-foreground">Not set</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {member.joinedAt

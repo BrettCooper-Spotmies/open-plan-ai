@@ -235,7 +235,7 @@ const handler = async (req: Request): Promise<Response> => {
 
             const { data: pendingInvites, error: pendingInvitesError } = await supabase
               .from("team_invitations")
-              .select("id, organization_id, role, invited_by")
+              .select("id, organization_id, role, invited_by, department")
               .eq("email", normalizedEmail)
               .eq("status", "pending")
               .gt("expires_at", nowIso);
@@ -248,6 +248,10 @@ const handler = async (req: Request): Promise<Response> => {
                 user_id: profileRow.id,
                 role: invite.role || "member",
                 invited_by: invite.invited_by ?? null,
+                department:
+                  typeof invite.department === "string" && invite.department.trim().length > 0
+                    ? invite.department.trim().toLowerCase()
+                    : null,
                 joined_at: nowIso,
                 status: "active",
               }));
