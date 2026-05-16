@@ -91,7 +91,8 @@ export default function Projects() {
 
   const projectList = projects || [];
   const currentMembership = organizationMembers.find((member) => member.id === user?.id);
-  const canCreateProject = (currentMembership?.role || '').toLowerCase() === 'owner';
+  const myRole = (currentOrganization?.myRole || currentMembership?.role || '').toLowerCase();
+  const canCreateProject = myRole === 'admin' || myRole === 'manager';
 
   useEffect(() => {
     if (isMobile && view !== 'list') {
@@ -228,7 +229,7 @@ export default function Projects() {
                   ? isMobile
                     ? 'Tap the + button above to create your first project.'
                     : 'Use the New Project button above to get started.'
-                  : 'Only organization owners can create projects.'
+                  : 'Only organization admins and managers can create projects.'
                 : 'Try adjusting your search query'}
             </p>
           </div>

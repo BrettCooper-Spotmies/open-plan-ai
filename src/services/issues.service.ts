@@ -67,10 +67,20 @@ export const issuesService = {
   },
 
   /**
-   * Get open issues count
+   * Get open issues count for an org (fan-out across projects)
    */
-  async getOpenCount(): Promise<{ total: number; critical: number }> {
-    // This will need a dedicated endpoint; for now return 0s
-    return { total: 0, critical: 0 };
+  async getOpenCount(orgId?: string): Promise<{ total: number; critical: number }> {
+    if (!orgId) return { total: 0, critical: 0 };
+    try {
+      const { projectsService } = await import('./projects.service');
+      const projects = await projectsService.getAll(orgId);
+      const allResults = await Promise.all(projects.map(p => this.getByProject(p.id).catch(() => [])));
+      const allIssues = allResults.flat();
+      const open = allIssues.filter(i => i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont_fix');
+      const critical = open.filter(i => (i as any).severity === 'critical' || (i as any).priority === 'critical');
+      return { total: open.length, critical: critical.length };
+    } catch {
+      return { total: 0, critical: 0 };
+    }
   },
 };

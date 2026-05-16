@@ -18,7 +18,8 @@ export interface Activity {
 export type ActivityInsert = Omit<Activity, 'id' | 'createdAt' | 'user'>;
 
 export const activitiesService = {
-  async getAll(): Promise<Activity[]> {
+  async getAll(orgId?: string): Promise<Activity[]> {
+    if (orgId) return apiClient.get(ENDPOINTS.ORGANIZATIONS.ACTIVITIES(orgId));
     return [];
   },
 
@@ -26,8 +27,13 @@ export const activitiesService = {
     return apiClient.get(ENDPOINTS.PROJECTS.ACTIVITIES(projectId));
   },
 
-  async getRecent(_limit = 10): Promise<Activity[]> {
-    return [];
+  async getRecent(orgId: string, limit = 10): Promise<Activity[]> {
+    try {
+      const data = await apiClient.get<Activity[]>(ENDPOINTS.ORGANIZATIONS.ACTIVITIES(orgId));
+      return (data || []).slice(0, limit);
+    } catch {
+      return [];
+    }
   },
 
   async create(_activity: ActivityInsert): Promise<Activity> {

@@ -130,9 +130,11 @@ const Settings = () => {
 
   // Password form state
   const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -371,12 +373,17 @@ const Settings = () => {
 
     setPasswordLoading(true);
     try {
-      const { error } = await updatePassword(passwordForm.newPassword);
+      if (!passwordForm.currentPassword) {
+        toast.error('Please enter your current password');
+        setPasswordLoading(false);
+        return;
+      }
+      const { error } = await updatePassword(passwordForm.currentPassword, passwordForm.newPassword);
       if (error) {
         toast.error(error.message);
       } else {
         toast.success('Password updated successfully');
-        setPasswordForm({ newPassword: '', confirmPassword: '' });
+        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       }
     } catch (error) {
       console.error('Error updating password:', error);
@@ -1008,6 +1015,27 @@ const Settings = () => {
                       </p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="current-password">Current Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="current-password"
+                            type={showCurrentPassword ? "text" : "password"}
+                            value={passwordForm.currentPassword}
+                            onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                            placeholder="Enter current password"
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                            aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                          >
+                            {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
                       <div className="space-y-2">
                         <Label htmlFor="new-password">New Password</Label>
                         <div className="relative">

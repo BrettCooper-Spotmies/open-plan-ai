@@ -12,9 +12,20 @@ export function useProjectModules(projectId: string) {
 }
 
 export function useAllModules() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: queryKeys.modules.all,
-    queryFn: () => modulesService.getAll(),
+    queryKey: [...queryKeys.modules.all, 'all', orgId],
+    queryFn: async (): Promise<Module[]> => {
+      if (!orgId) return [];
+      const { projectsService } = await import('@/services/projects.service');
+      const projects = await projectsService.getAll(orgId);
+      if (!projects.length) return [];
+      const results = await Promise.all(projects.map(p => modulesService.getByProjectId(p.id).catch(() => [])));
+      return results.flat();
+    },
+    enabled: !!orgId,
   });
 }
 
@@ -69,9 +80,13 @@ export function useOrgAllModules() {
 
   return useQuery({
     queryKey: [...queryKeys.modules.all, 'org', orgId],
-    queryFn: async () => {
-      // No org-level module endpoint yet; return empty so the UI degrades gracefully.
-      return [] as Module[];
+    queryFn: async (): Promise<Module[]> => {
+      if (!orgId) return [];
+      const { projectsService } = await import('@/services/projects.service');
+      const projects = await projectsService.getAll(orgId);
+      if (!projects.length) return [];
+      const results = await Promise.all(projects.map(p => modulesService.getByProjectId(p.id).catch(() => [])));
+      return results.flat();
     },
     enabled: !!orgId,
   });

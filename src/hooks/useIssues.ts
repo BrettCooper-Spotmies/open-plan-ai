@@ -6,17 +6,28 @@ import { Issue } from '@/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 /**
- * Fetch all issues across all projects
+ * Fetch all issues across all org projects (fan-out)
  */
 export function useAllIssues() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: queryKeys.issues.all,
-    queryFn: () => issuesService.getAll(),
+    queryKey: [...queryKeys.issues.all, 'org-all', orgId],
+    queryFn: async (): Promise<Issue[]> => {
+      if (!orgId) return [];
+      const { projectsService } = await import('@/services/projects.service');
+      const projects = await projectsService.getAll(orgId);
+      if (!projects.length) return [];
+      const results = await Promise.all(projects.map(p => issuesService.getByProject(p.id).catch(() => [])));
+      return results.flat();
+    },
+    enabled: !!orgId,
   });
 }
 
 /**
- * Fetch all issues for the current organization
+ * Fetch all issues for the current organization (fan-out across projects)
  */
 export function useOrgAllIssues() {
   const { currentOrganization } = useOrganization();
@@ -24,9 +35,13 @@ export function useOrgAllIssues() {
 
   return useQuery({
     queryKey: [...queryKeys.issues.all, 'org', orgId],
-    queryFn: async () => {
+    queryFn: async (): Promise<Issue[]> => {
       if (!orgId) return [];
-      return issuesService.getAll();
+      const { projectsService } = await import('@/services/projects.service');
+      const projects = await projectsService.getAll(orgId);
+      if (!projects.length) return [];
+      const results = await Promise.all(projects.map(p => issuesService.getByProject(p.id).catch(() => [])));
+      return results.flat();
     },
     enabled: !!orgId,
   });
@@ -58,9 +73,13 @@ export function useIssue(issueId: string | undefined) {
  * Fetch open issues count
  */
 export function useOpenIssuesCount() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: queryKeys.issues.openCount(),
-    queryFn: () => issuesService.getOpenCount(),
+    queryKey: [...queryKeys.issues.openCount(), orgId],
+    queryFn: () => issuesService.getOpenCount(orgId),
+    enabled: !!orgId,
   });
 }
 

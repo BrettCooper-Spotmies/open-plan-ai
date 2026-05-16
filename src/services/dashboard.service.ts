@@ -98,8 +98,13 @@ export const dashboardService = {
     }
   },
 
-  async getUpcomingMilestones(_orgId: string, _limit = 5): Promise<Milestone[]> {
-    return [];
+  async getUpcomingMilestones(orgId: string, limit = 5): Promise<Milestone[]> {
+    try {
+      const { milestonesService } = await import('./milestones.service');
+      return milestonesService.getUpcoming(orgId, limit);
+    } catch {
+      return [];
+    }
   },
 
   async getProjectSummaries(orgId: string): Promise<ProjectSummary[]> {

@@ -106,9 +106,16 @@ export const milestonesService = {
     return fromApi(data);
   },
 
-  async getUpcoming(limit: number = 5): Promise<Milestone[]> {
-    // The REST API doesn't have a dedicated upcoming endpoint yet;
-    // fetch all from known projects falls back gracefully to empty.
-    return [];
+  async getUpcoming(orgId: string, limit: number = 5): Promise<Milestone[]> {
+    const { projectsService } = await import('./projects.service');
+    const projects = await projectsService.getAll(orgId);
+    if (!projects.length) return [];
+    const allResults = await Promise.all(projects.map(p => this.getByProjectId(p.id).catch(() => [])));
+    const now = new Date().toISOString();
+    return allResults
+      .flat()
+      .filter(m => m.due_date && m.due_date > now && m.status !== 'completed')
+      .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? ''))
+      .slice(0, limit);
   },
 };

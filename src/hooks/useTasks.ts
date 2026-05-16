@@ -6,17 +6,28 @@ import { Task } from '@/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 /**
- * Fetch all tasks across all projects
+ * Fetch all tasks across all org projects (fan-out)
  */
 export function useAllTasks() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: queryKeys.tasks.all,
-    queryFn: () => tasksService.getAll(),
+    queryKey: [...queryKeys.tasks.all, 'org-all', orgId],
+    queryFn: async (): Promise<Task[]> => {
+      if (!orgId) return [];
+      const { projectsService } = await import('@/services/projects.service');
+      const projects = await projectsService.getAll(orgId);
+      if (!projects.length) return [];
+      const results = await Promise.all(projects.map(p => tasksService.getByProject(p.id).catch(() => [])));
+      return results.flat();
+    },
+    enabled: !!orgId,
   });
 }
 
 /**
- * Fetch all tasks for the current organization
+ * Fetch all tasks for the current organization (fan-out across projects)
  */
 export function useOrgAllTasks() {
   const { currentOrganization } = useOrganization();
@@ -24,9 +35,13 @@ export function useOrgAllTasks() {
 
   return useQuery({
     queryKey: [...queryKeys.tasks.all, 'org', orgId],
-    queryFn: async () => {
+    queryFn: async (): Promise<Task[]> => {
       if (!orgId) return [];
-      return tasksService.getAll();
+      const { projectsService } = await import('@/services/projects.service');
+      const projects = await projectsService.getAll(orgId);
+      if (!projects.length) return [];
+      const results = await Promise.all(projects.map(p => tasksService.getByProject(p.id).catch(() => [])));
+      return results.flat();
     },
     enabled: !!orgId,
   });

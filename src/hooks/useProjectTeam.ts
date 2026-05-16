@@ -3,7 +3,6 @@ import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { queryKeys } from '@/lib/queryClient';
 import { TeamMember } from '@/types';
-import { config } from '@/config';
 
 const isValidUuid = (value: unknown): value is string => {
   if (typeof value !== 'string') return false;
@@ -15,15 +14,10 @@ const isValidUuid = (value: unknown): value is string => {
 
 /**
  * Fetch all team members (profiles) - for assignment dropdowns
+ * Uses org members since there's no global users endpoint.
  */
-export function useTeamMembers() {
-  return useQuery({
-    queryKey: queryKeys.team.members(),
-    queryFn: async (): Promise<TeamMember[]> => {
-      // The REST API does not have a global "all users" endpoint; return empty.
-      return [];
-    },
-  });
+export function useTeamMembers(orgId?: string) {
+  return useOrganizationMembers(orgId);
 }
 
 /**
