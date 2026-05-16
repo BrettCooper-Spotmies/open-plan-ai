@@ -107,7 +107,7 @@ export default function Dashboard() {
     return {
       id: activity.id,
       type: activity.activity_type,
-      title: activity.description.split(' ').slice(0, 3).join(' '),
+      title: (activity.description || activity.title || 'Activity').split(' ').slice(0, 3).join(' '),
       description: activity.description,
       user: {
         id: activity.user_id || 'unknown',
