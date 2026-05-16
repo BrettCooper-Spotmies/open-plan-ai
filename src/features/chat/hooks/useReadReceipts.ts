@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { chatService } from '@/services/chat.service';
 import { chatTransport } from '../transport';
 import type { ChatMessage, ReadReceipt } from '../types';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { Unsubscribe } from '../transport/IChatTransport';
 
 /**
  * Manages read receipts for an active conversation.
@@ -18,7 +18,7 @@ export function useReadReceipts(
   currentUserId: string | undefined
 ) {
   const [readReceiptMap, setReadReceiptMap] = useState<Record<string, ReadReceipt[]>>({});
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const channelRef = useRef<Unsubscribe | null>(null);
 
   // Always-current set of message IDs – used inside the realtime callback
   // so we never filter out receipts due to a stale closure.

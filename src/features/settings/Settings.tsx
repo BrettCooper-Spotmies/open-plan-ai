@@ -78,7 +78,8 @@ function normalizeTheme(value: unknown): ThemePreference {
 const Settings = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, profile, refreshProfile, updatePassword, deleteAccount } = useAuth();
+  const { user, refreshProfile, updatePassword, deleteAccount } = useAuth();
+  const profile = user;
   const { currentOrganization, refreshOrganizations, createOrganization, isLoading: orgContextLoading } = useOrganization();
   const { theme, changeTheme } = useAppTheme();
   const preferences = useUserStore((s) => s.preferences);
@@ -118,7 +119,7 @@ const Settings = () => {
   });
   const [orgLoading, setOrgLoading] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
-  const [currentOrgRole, setCurrentOrgRole] = useState<'owner' | 'admin' | 'member' | null>(null);
+  const currentOrgRole = (currentOrganization?.myRole ?? null) as 'admin' | 'manager' | 'member' | 'viewer' | null;
 
   // New organization creation state
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
@@ -181,37 +182,8 @@ const Settings = () => {
     }
   }, [currentOrganization]);
 
-  useEffect(() => {
-    let mounted = true;
 
-    const loadCurrentOrgRole = async () => {
-      if (!user?.id || !currentOrganization?.id) {
-        if (mounted) setCurrentOrgRole(null);
-        return;
-      }
-
-      try {
-        const memberships = await organizationsService.getMemberOrganizations(user.id);
-        const membership = memberships.find((m) => m.organization_id === currentOrganization.id);
-        const resolvedRole =
-          membership?.role === 'owner' || membership?.role === 'admin' || membership?.role === 'member'
-            ? membership.role
-            : null;
-        if (mounted) setCurrentOrgRole(resolvedRole);
-      } catch (error) {
-        console.error('Error loading organization role:', error);
-        if (mounted) setCurrentOrgRole(null);
-      }
-    };
-
-    void loadCurrentOrgRole();
-
-    return () => {
-      mounted = false;
-    };
-  }, [user?.id, currentOrganization?.id]);
-
-  const canEditOrganizationSettings = currentOrgRole === 'owner' || currentOrgRole === 'admin';
+  const canEditOrganizationSettings = currentOrgRole === 'admin' || currentOrgRole === 'manager';
   const roleLabel = currentOrgRole ? currentOrgRole.charAt(0).toUpperCase() + currentOrgRole.slice(1) : 'Member';
 
   const handleCreateOrganization = async () => {
@@ -246,18 +218,16 @@ const Settings = () => {
 
     setOrgLoading(true);
     try {
-      // Update organization name and description
+      // Single PUT — name, description, and settings in one request
       await organizationsService.update(currentOrganization.id, {
         name: orgForm.name,
-        description: orgForm.description,
-      });
-
-      // Update organization settings
-      await organizationsService.updateSettings(currentOrganization.id, {
-        companyName: orgForm.companyName,
-        companySize: orgForm.companySize,
-        timezone: orgForm.timezone,
-        dateFormat: orgForm.dateFormat,
+        description: orgForm.description || null,
+        settings: {
+          companyName: orgForm.companyName,
+          companySize: orgForm.companySize,
+          timezone: orgForm.timezone,
+          dateFormat: orgForm.dateFormat,
+        },
       });
 
       await refreshOrganizations();

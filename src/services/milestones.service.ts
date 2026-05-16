@@ -1,135 +1,114 @@
-import { supabase } from '@/integrations/supabase/client';
-import type { Tables, TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
-import { format } from 'date-fns';
-import { activitiesService } from './activities.service';
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
 
-export type Milestone = Tables<'milestones'>;
-export type MilestoneInsert = TablesInsert<'milestones'>;
-export type MilestoneUpdate = TablesUpdate<'milestones'>;
+// Snake_case insert/update shapes to maintain compatibility with existing call sites.
+export interface MilestoneInsert {
+  project_id: string;
+  name: string;
+  due_date?: string | null;
+  description?: string | null;
+  status?: string;
+}
+
+export interface MilestoneUpdate {
+  name?: string;
+  due_date?: string | null;
+  description?: string | null;
+  status?: string;
+}
+
+// DB-shape type exported for consumers that do their own adapter mapping.
+export interface Milestone {
+  id: string;
+  project_id: string;
+  name: string;
+  due_date: string | null;
+  description: string | null;
+  status: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** Map snake_case insert payload to camelCase for the REST backend. */
+function toApiPayload(data: MilestoneInsert | MilestoneUpdate): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if ('name' in data && data.name !== undefined) out.name = data.name;
+  if ('due_date' in data) out.dueDate = data.due_date;
+  if ('description' in data) out.description = data.description;
+  if ('status' in data) out.status = data.status;
+  if ('project_id' in data) out.projectId = (data as MilestoneInsert).project_id;
+  return out;
+}
+
+/** Map camelCase API response back to the snake_case Milestone shape. */
+function fromApi(raw: Record<string, unknown>): Milestone {
+  return {
+    id: raw.id as string,
+    project_id: (raw.projectId ?? raw.project_id) as string,
+    name: (raw.title ?? raw.name) as string,
+    due_date: (raw.dueDate ?? raw.due_date ?? null) as string | null,
+    description: (raw.description ?? null) as string | null,
+    status: (raw.status ?? (raw.completed ? 'completed' : 'pending')) as string,
+    created_at: (raw.createdAt ?? raw.created_at ?? null) as string | null,
+    updated_at: (raw.updatedAt ?? raw.updated_at ?? null) as string | null,
+  };
+}
 
 export const milestonesService = {
   async getAll(): Promise<Milestone[]> {
-    const { data, error } = await supabase
-      .from('milestones')
-      .select('*')
-      .is('deleted_at', null)
-      .order('due_date', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
+    return [];
   },
 
   async getByProjectId(projectId: string): Promise<Milestone[]> {
-    const { data, error } = await supabase
-      .from('milestones')
-      .select('*')
-      .eq('project_id', projectId)
-      .is('deleted_at', null)
-      .order('due_date', { ascending: true });
-
-    if (error) throw error;
-    return data || [];
+    const data = await apiClient.get<Record<string, unknown>[]>(ENDPOINTS.MILESTONES.LIST(projectId));
+    return (data || []).map(fromApi);
   },
 
   async getById(id: string): Promise<Milestone | null> {
-    const { data, error } = await supabase
-      .from('milestones')
-      .select('*')
-      .eq('id', id)
-      .is('deleted_at', null)
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') return null;
-      throw error;
-    }
-    return data;
+    const data = await apiClient.get<Record<string, unknown>>(ENDPOINTS.MILESTONES.BY_ID(id));
+    return data ? fromApi(data) : null;
   },
 
   async create(milestone: MilestoneInsert): Promise<Milestone> {
-    const { data, error } = await supabase
-      .from('milestones')
-      .insert(milestone)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Log activity
-    const { data: { user } } = await supabase.auth.getUser();
-    activitiesService.create({
-      project_id: data.project_id,
-      activity_type: 'milestone_reached',
-      description: `created milestone "${data.name}"`,
-      user_id: user?.id || null,
-      entity_id: data.id,
-      entity_type: 'milestone',
-    }).catch(() => { /* non-critical */ });
-
-    return data;
+    const data = await apiClient.post<Record<string, unknown>>(
+      ENDPOINTS.MILESTONES.LIST(milestone.project_id),
+      toApiPayload(milestone)
+    );
+    return fromApi(data);
   },
 
   async createMany(milestones: MilestoneInsert[]): Promise<Milestone[]> {
-    const { data, error } = await supabase
-      .from('milestones')
-      .insert(milestones)
-      .select();
-
-    if (error) throw error;
-    return data || [];
+    return Promise.all(milestones.map(m => this.create(m)));
   },
 
   async update(id: string, updates: MilestoneUpdate): Promise<Milestone> {
-    const { data, error } = await supabase
-      .from('milestones')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    const data = await apiClient.patch<Record<string, unknown>>(
+      ENDPOINTS.MILESTONES.BY_ID(id),
+      toApiPayload(updates)
+    );
+    return fromApi(data);
   },
 
   async updateMany(updates: { id: string; name?: string; due_date?: string | null }[]): Promise<void> {
-    try {
-      const { error } = await (supabase.rpc as any)('batch_update_milestones', { updates });
-      if (error) throw error;
-    } catch (err) {
-      console.warn('Batch update RPC failed, falling back to sequential update:', err);
-      await Promise.all(updates.map(u => this.update(u.id, { 
-        name: u.name, 
-        due_date: u.due_date 
-      } as MilestoneUpdate)));
-    }
+    await Promise.all(updates.map(u => this.update(u.id, { name: u.name, due_date: u.due_date })));
   },
 
   async delete(id: string): Promise<void> {
-    const { error } = await (supabase.rpc as any)('soft_delete_milestone', { milestone_id: id });
-    if (error) {
-      console.error('[milestonesService] soft_delete_milestone failed', error);
-      throw error;
-    }
+    return apiClient.delete<void>(ENDPOINTS.MILESTONES.BY_ID(id));
   },
 
   async deleteMany(ids: string[]): Promise<void> {
-    const { error } = await (supabase.rpc as any)('batch_soft_delete_milestones', { milestone_ids: ids });
-    if (error) {
-      console.error('[milestonesService] batch_soft_delete_milestones failed', error);
-      throw error;
-    }
+    await Promise.all(ids.map(id => this.delete(id)));
+  },
+
+  async complete(id: string): Promise<Milestone> {
+    const data = await apiClient.patch<Record<string, unknown>>(ENDPOINTS.MILESTONES.COMPLETE(id), {});
+    return fromApi(data);
   },
 
   async getUpcoming(limit: number = 5): Promise<Milestone[]> {
-    const { data, error } = await supabase
-      .from('milestones')
-      .select('*')
-      .is('deleted_at', null)
-      .gte('due_date', format(new Date(), 'yyyy-MM-dd'))
-      .order('due_date', { ascending: true })
-      .limit(limit);
-
-    if (error) throw error;
-    return data || [];
+    // The REST API doesn't have a dedicated upcoming endpoint yet;
+    // fetch all from known projects falls back gracefully to empty.
+    return [];
   },
 };

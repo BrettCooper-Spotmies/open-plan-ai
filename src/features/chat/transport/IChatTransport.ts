@@ -1,42 +1,39 @@
-import type { RealtimeChannel } from '@supabase/supabase-js';
+export type Unsubscribe = () => void;
 
 export interface IChatTransport {
   subscribeToMessages(
     conversationId: string,
-    onInsert: (payload: any) => void
-  ): RealtimeChannel;
+    onInsert: (message: unknown) => void
+  ): Unsubscribe;
 
   subscribeToMessageUpdates(
     conversationId: string,
-    onUpdate: (payload: any) => void
-  ): RealtimeChannel;
+    onUpdate: (message: unknown) => void
+  ): Unsubscribe;
 
   subscribeToConversationUpdates(
     conversationIds: string[],
-    onUpdate: (payload: any) => void
-  ): RealtimeChannel;
+    onUpdate: (payload: unknown) => void
+  ): Unsubscribe;
 
   broadcastTyping(conversationId: string, userId: string): void;
 
   subscribeToTyping(
     conversationId: string,
     onTyping: (userId: string) => void
-  ): RealtimeChannel;
-
-  subscribeToMemberUpdates(
-    conversationId: string | null,
-    onUpdate: (payload: any) => void
-  ): RealtimeChannel;
+  ): Unsubscribe;
 
   subscribeToReadReceipts(
     conversationId: string,
-    onInsert: (payload: any) => void
-  ): RealtimeChannel;
+    onInsert: (payload: unknown) => void
+  ): Unsubscribe;
 
   subscribeToMemberUpdates(
     conversationId: string | null,
-    onUpdate: (payload: any) => void
-  ): RealtimeChannel;
+    onUpdate: (payload: unknown) => void
+  ): Unsubscribe;
 
-  unsubscribe(channel: RealtimeChannel): void;
+  unsubscribe(channel: Unsubscribe): void;
+
+  disconnect(): void;
 }

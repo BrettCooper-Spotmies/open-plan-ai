@@ -102,12 +102,11 @@ const Team = () => {
     }
   };
 
-  // Check if current user is admin/owner
-  const currentMember = teamMembers?.find(m => m.id === user?.id);
-  const isOwner = normalizeRole(currentMember?.role) === 'owner';
+  // Check if current user has management privileges
+  const currentMember = teamMembers?.find(m => m.userId === user?.id || m.email === user?.email);
   const isAdminOrOwner = (() => {
     const role = normalizeRole(currentMember?.role);
-    return role === 'admin' || role === 'owner';
+    return role === 'admin' || role === 'manager';
   })();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -196,8 +195,9 @@ const Team = () => {
   };
 
   const handleCancelInvite = async (invitationId: string) => {
+    if (!currentOrganization) return;
     try {
-      await cancelInviteMutation.mutateAsync(invitationId);
+      await cancelInviteMutation.mutateAsync({ invitationId, orgId: currentOrganization.id });
       toast.success('Invitation cancelled');
     } catch (err) {
       toast.error('Failed to cancel invitation');
@@ -259,7 +259,7 @@ const Team = () => {
   }
 
   if (!currentMember) {
-    return <Navigate to="/projects" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (error) {
@@ -311,8 +311,9 @@ const Team = () => {
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="manager">Manager</SelectItem>
                         <SelectItem value="member">Member</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="viewer">Viewer</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -474,7 +475,17 @@ const Team = () => {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="capitalize text-sm font-medium">{member.role}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={
+                      member.role === 'admin' ? 'border-purple-500/50 text-purple-600 bg-purple-500/10' :
+                      member.role === 'manager' ? 'border-blue-500/50 text-blue-600 bg-blue-500/10' :
+                      member.role === 'member' ? 'border-green-500/50 text-green-600 bg-green-500/10' :
+                      member.role === 'viewer' ? 'border-gray-500/50 text-gray-500 bg-gray-500/10' :
+                      ''
+                    }>
+                      {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{member.email}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={getStatusColor(member.status)}>
@@ -496,7 +507,7 @@ const Team = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {!isOwner && member.id !== user?.id && (
+                      {member.userId !== user?.id && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -508,7 +519,7 @@ const Team = () => {
                           <MessageSquare className="h-4 w-4" />
                         </Button>
                       )}
-                      {isAdminOrOwner && member.role !== 'owner' && (
+                      {isAdminOrOwner && member.userId !== user?.id && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -592,9 +603,10 @@ const Team = () => {
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="owner">Owner</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
                 </SelectContent>
               </Select>
               {editMember?.id === user?.id && (

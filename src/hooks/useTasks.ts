@@ -3,7 +3,6 @@ import { tasksService } from '@/services/tasks.service';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { queryKeys } from '@/lib/queryClient';
 import { Task } from '@/types';
-import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 /**
@@ -27,20 +26,7 @@ export function useOrgAllTasks() {
     queryKey: [...queryKeys.tasks.all, 'org', orgId],
     queryFn: async () => {
       if (!orgId) return [];
-
-      // Step 1: Get all project IDs for this organization
-      const { data: projectRows } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('organization_id', orgId)
-        .is('deleted_at', null);
-
-      const projectIds = (projectRows || []).map(p => p.id);
-      if (projectIds.length === 0) return [];
-
-      // Step 2: Get all tasks for these projects
-      const allTasks = await tasksService.getAll();
-      return allTasks.filter(t => t.projectId && projectIds.includes(t.projectId));
+      return tasksService.getAll();
     },
     enabled: !!orgId,
   });
@@ -52,13 +38,7 @@ export function useOrgAllTasks() {
 export function useProjectTasks(projectId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.tasks.list(projectId || ''),
-    queryFn: () => tasksService.getAll().then(tasks =>
-      tasks.filter(t => {
-        // Find which project this task belongs to
-        const store = useProjectStore.getState();
-        return store.projects.some(p => p.id === projectId && p.tasks.some(pt => pt.id === t.id));
-      })
-    ),
+    queryFn: () => tasksService.getByProject(projectId!),
     enabled: !!projectId,
   });
 }
@@ -149,7 +129,6 @@ export function useUpdateTask() {
       return { previousTask, projectId };
     },
     onError: (_err, { projectId, taskId }, context) => {
-      // Rollback on error - would need to restore previous task state
       console.error('Task update failed, rolling back', _err);
     },
     onSuccess: (updatedTask, { projectId }) => {
@@ -157,7 +136,6 @@ export function useUpdateTask() {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(updatedTask.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-      // Invalidate My Day queries to refresh the My Day page
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });

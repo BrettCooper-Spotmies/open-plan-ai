@@ -5,8 +5,7 @@ import { chatTransport } from '../transport';
 import { mapMessage } from '../chat.mappers';
 import { useChatStore } from '../stores/useChatStore';
 import type { Conversation, ChatMessage, MessageReaction } from '../types';
-import type { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import type { Unsubscribe } from '../transport/IChatTransport';
 import { useAuth } from '@/contexts/AuthContext';
 
 type ConversationAccessState = { readOnly: boolean; leftAt: string | null; joinedAt: string | null };
@@ -45,7 +44,7 @@ export function useConversations() {
 
   const [conversations, setLocalConversations] = useState<Conversation[]>(cachedConversations);
   const [loading, setLoading] = useState(!hasCachedData);
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const channelRef = useRef<Unsubscribe | null>(null);
   const isMountedRef = useRef(true);
 
   const fetchConversations = useCallback(async (background = false) => {
@@ -78,22 +77,6 @@ export function useConversations() {
   useEffect(() => {
     if (!conversations.length) return;
     const convIds = conversations.map((c) => c.id);
-    const msgChannel = supabase
-      .channel('global-new-messages')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
-        (payload) => {
-          const newMsg = payload.new as any;
-          const activeId = useChatStore.getState().activeConversationId;
-          if (convIds.includes(newMsg.conversation_id) && newMsg.conversation_id !== activeId) {
-            useChatStore.getState().incrementUnread(newMsg.conversation_id);
-          }
-          fetchConversations(true);
-        }
-      )
-      .subscribe();
-
     channelRef.current = chatTransport.subscribeToConversationUpdates(
       convIds,
       () => { fetchConversations(true); }
@@ -107,7 +90,6 @@ export function useConversations() {
     return () => {
       if (channelRef.current) chatTransport.unsubscribe(channelRef.current);
       chatTransport.unsubscribe(memberChannel);
-      supabase.removeChannel(msgChannel);
     };
   }, [conversations.length, fetchConversations]);
 
@@ -118,7 +100,8 @@ export function useConversations() {
  * Stale-while-revalidate hook for messages with offline support.
  */
 export function useMessages(conversationId: string | null) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
+  const profile = user;
   const {
     getCachedMessages,
     setCachedMessages,
@@ -142,8 +125,8 @@ export function useMessages(conversationId: string | null) {
   const [readOnlyNotice, setReadOnlyNotice] = useState<string | null>(null);
   const [leftAt, setLeftAt] = useState<string | null>(null);
   const [joinedAt, setJoinedAt] = useState<string | null>(null);
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const updateChannelRef = useRef<RealtimeChannel | null>(null);
+  const channelRef = useRef<Unsubscribe | null>(null);
+  const updateChannelRef = useRef<Unsubscribe | null>(null);
   const PAGE_SIZE = 50;
 
   const accessStateCacheRef = useRef(new Map<string, { expiresAt: number; state: ConversationAccessState }>());
@@ -341,12 +324,7 @@ export function useMessages(conversationId: string | null) {
         ) {
           return;
         }
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id, name, email, avatar_url, initials, role')
-          .eq('id', newMsg.sender_id)
-          .single();
-        const mapped = mapMessage(newMsg, profile as any);
+        const mapped = mapMessage(newMsg as any, null);
         setMessages((prev) => {
           if (prev.some((m) => m.id === mapped.id)) return prev;
           return [...prev, mapped];
@@ -402,44 +380,7 @@ export function useMessages(conversationId: string | null) {
 
     try {
       let realMsg: ChatMessage;
-      if (type === 'file') {
-        let data: any = null;
-        let error: any = null;
-        ({ data, error } = await supabase
-          .from('chat_messages')
-          .insert({
-            conversation_id: conversationId,
-            sender_id: user.id,
-            content: optimisticMsg.content,
-            content_type: 'file',
-            reply_to_message_id: replyToMessageId || null,
-          } as any)
-          .select()
-          .single());
-        const missingReplyColumn =
-          !!error && typeof error.message === 'string' && /reply_to_message_id|column .* does not exist/i.test(error.message);
-        if (missingReplyColumn) {
-          ({ data, error } = await supabase
-            .from('chat_messages')
-            .insert({
-              conversation_id: conversationId,
-              sender_id: user.id,
-              content: optimisticMsg.content,
-              content_type: 'file',
-            })
-            .select()
-            .single());
-        }
-        if (error) throw error;
-        const { data: senderProfile } = await supabase
-          .from('profiles')
-          .select('id, name, email, avatar_url, initials, role')
-          .eq('id', user.id)
-          .single();
-        realMsg = mapMessage(data as any, senderProfile as any);
-      } else {
-        realMsg = await chatService.sendMessage(conversationId, content, user.id, replyToMessageId);
-      }
+      realMsg = await chatService.sendMessage(conversationId, content, undefined, replyToMessageId);
       realMsg.status = 'sent';
       setMessages((prev) => {
         // If the real message was already added by realtime, just remove the temp one
@@ -597,7 +538,7 @@ export function useMessages(conversationId: string | null) {
 
 export function useReactions(messages: ChatMessage[], currentUserId?: string) {
   const [reactionMap, setReactionMap] = useState<Record<string, MessageReaction[]>>({});
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const channelRef = useRef<Unsubscribe | null>(null);
 
   const fetchReactions = useCallback(async () => {
     if (!messages.length || !currentUserId) return;
@@ -618,19 +559,7 @@ export function useReactions(messages: ChatMessage[], currentUserId?: string) {
     fetchReactions();
   }, [fetchReactions]);
 
-  useEffect(() => {
-    if (!messages.length) return;
-    const channel = supabase
-      .channel('message-reactions-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'message_reactions' },
-        () => { fetchReactions(); }
-      )
-      .subscribe();
-    channelRef.current = channel;
-    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
-  }, [messages.length, fetchReactions]);
+  // Reactions are fetched on demand; realtime updates will be added via Socket.IO in a future iteration.
 
   const handleToggleReaction = useCallback(async (messageId: string, emoji: string) => {
     try {

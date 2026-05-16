@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { useChatStore } from '../stores/useChatStore';
 import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConversationMember, ChatMessage } from '../types';
 import { cn } from '@/lib/utils';
@@ -204,52 +203,9 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     setPendingFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const sendFileMessage = async (file: File, text?: string) => {
-    const ext = file.name.split('.').pop() || 'bin';
-    const path = `${conversationId}/${crypto.randomUUID()}.${ext}`;
-
-    const { error: uploadErr } = await supabase.storage
-      .from('chat-attachments')
-      .upload(path, file);
-    if (uploadErr) throw uploadErr;
-
-    const fileData = buildFileContent({
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType: file.type,
-      storagePath: path,
-      text: text || undefined,
-    });
-
-    if (sendMessage) {
-      await sendMessage('', 'file', fileData, replyingTo?.id);
-    } else {
-      const userId = user?.id;
-      if (!userId) throw new Error('Not authenticated');
-      let error: any = null;
-      ({ error } = await supabase
-        .from('chat_messages')
-        .insert({
-          conversation_id: conversationId,
-          sender_id: userId,
-          content: JSON.stringify(fileData),
-          content_type: 'file',
-          reply_to_message_id: replyingTo?.id || null,
-        } as any));
-      const missingReplyColumn =
-        !!error && typeof error.message === 'string' && /reply_to_message_id|column .* does not exist/i.test(error.message);
-      if (missingReplyColumn) {
-        ({ error } = await supabase
-          .from('chat_messages')
-          .insert({
-            conversation_id: conversationId,
-            sender_id: userId,
-            content: JSON.stringify(fileData),
-            content_type: 'file',
-          }));
-      }
-      if (error) throw error;
-    }
+  const sendFileMessage = async (_file: File, _text?: string) => {
+    // File attachments are not yet supported in this backend version
+    toast.info('File attachments coming soon');
   };
 
   const handleSend = async () => {

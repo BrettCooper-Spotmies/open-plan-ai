@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
 
@@ -205,33 +204,9 @@ export function useOfflineQueue(userId: string | undefined) {
           return;
         }
 
-        const safeName = sanitizeFileName(item.fileName);
-        const ext = safeName.split('.').pop() || 'bin';
-        const path = `${item.conversationId}/${createUuid()}.${ext}`;
-        const file = new File([item.data], safeName, { type: item.mimeType });
-
-        const { error: uploadErr } = await supabase.storage
-          .from('chat-attachments')
-          .upload(path, file);
-        if (uploadErr) throw uploadErr;
-
-        const content = JSON.stringify({
-          fileName: item.fileName,
-          fileSize: item.fileSize,
-          mimeType: item.mimeType,
-          storagePath: path,
-          text: item.caption || undefined,
-        });
-
-        const { error } = await supabase
-          .from('chat_messages')
-          .insert({
-            conversation_id: item.conversationId,
-            sender_id: userId,
-            content,
-            content_type: 'file',
-          });
-        if (error) throw error;
+        // File attachments are not yet supported — skip silently
+        console.warn('[OfflineQueue] File attachments not yet supported, skipping item', item.id);
+        throw new Error('File attachments are not yet supported in this backend version.');
       };
 
       for (const item of validItems) {

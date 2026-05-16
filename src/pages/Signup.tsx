@@ -8,8 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Layers, Mail, Lock, User, Building2, Factory, ArrowRight, Check, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useOrganization } from "@/contexts/OrganizationContext";
-import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { getPasswordRequirements, getUnmetRequirementLabels } from "@/lib/passwordValidation";
 
@@ -31,10 +29,8 @@ const Signup = () => {
   const [searchParams] = useSearchParams();
   const inviteToken = searchParams.get("invite");
   const { signUp, isLoading: authLoading } = useAuth();
-  const { createOrganization } = useOrganization();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [inviteError, setInviteError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -46,48 +42,10 @@ const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // If there's an invite token, store it and fetch the invited email
+  // If there's an invite token, store it in localStorage
   useEffect(() => {
     if (inviteToken) {
-      const fetchInvitation = async () => {
-        // Try match by UUID (invite ID first)
-        let { data } = await supabase
-          .from('team_invitations')
-          .select('email')
-          .eq('id', inviteToken)
-          .eq('status', 'pending')
-          .maybeSingle();
-
-        if (data?.email) {
-          // Clear any stale token key before writing invite ID
-          localStorage.removeItem('pending_invite_token');
-          localStorage.setItem('pending_invite_id', inviteToken);
-        } else {
-          const fallback = await supabase
-            .from('team_invitations')
-            .select('email')
-            .eq('token', inviteToken)
-            .eq('status', 'pending')
-            .maybeSingle();
-
-          data = fallback.data;
-          if (data?.email) {
-            // Clear any stale ID key before writing invite token
-            localStorage.removeItem('pending_invite_id');
-            localStorage.setItem('pending_invite_token', inviteToken);
-          }
-        }
-
-        if (data?.email) {
-          setFormData(prev => ({ ...prev, email: data.email }));
-        } else {
-          // Token matched neither table — it's invalid or already used
-          setInviteError(
-            'This invitation link is invalid or has already been used. Please request a new invitation from your team admin.'
-          );
-        }
-      };
-      fetchInvitation();
+      localStorage.setItem('pending_invite_token', inviteToken);
     }
   }, [inviteToken]);
 
@@ -118,58 +76,20 @@ const Signup = () => {
     setIsLoading(true);
 
     try {
-      // For invite signups, use the create-auth-user edge function to avoid anonymous sign-in issues
-      if (inviteToken) {
-        const { data, error: createError } = await supabase.functions.invoke('create-auth-user', {
-          body: {
-            invite: inviteToken,
-            email: formData.email,
-            password: formData.password,
-            metadata: {
-              name: formData.fullName,
-              company: formData.companyName,
-              industry: formData.industry,
-            },
-          },
-        });
+      // Use the unified signUp for both invite and regular signups
+      const result = await signUp(formData.email, formData.password, {
+        name: formData.fullName,
+        company: formData.companyName,
+        industry: formData.industry,
+      });
 
-        if (createError) {
-          reportError(createError.message, createError);
-          return;
-        }
+      if (result.error) {
+        reportError(result.error.message, result.error);
+        return;
+      }
 
-        if (data?.error) {
-          reportError(data.error, data);
-          return;
-        }
-      } else {
-        // For regular signups, use the normal auth flow
-        const result = await signUp(formData.email, formData.password, {
-          name: formData.fullName,
-          company: formData.companyName,
-          industry: formData.industry,
-        });
-
-        if (result.error) {
-          reportError(result.error.message, result.error);
-          return;
-        }
-
-        // Send OTP for email verification
-        try {
-          const { data, error: otpError } = await supabase.functions.invoke('send-otp', {
-            body: { email: formData.email },
-          });
-
-          if (otpError || data?.error) {
-            console.error('Error sending OTP:', otpError || data?.error);
-          }
-        } catch (err) {
-          console.error('Error sending OTP:', err);
-        }
-
-        // Organization is created AFTER email verification succeeds.
-        // Store the intended org name/description so VerifyEmail can create it post-OTP.
+      // For regular signups, store org info so it can be created after email verification
+      if (!inviteToken) {
         try {
           sessionStorage.setItem(
             'openplan_pending_org',
@@ -286,14 +206,7 @@ const Signup = () => {
                 </Alert>
               )}
 
-              {inviteError && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{inviteError}</AlertDescription>
-                </Alert>
-              )}
-
-              {isInviteSignup && !inviteError && (
+              {isInviteSignup && (
                 <Alert>
                   <Mail className="h-4 w-4" />
                   <AlertDescription>
@@ -329,18 +242,12 @@ const Signup = () => {
                     placeholder="you@company.com"
                     value={formData.email}
                     onChange={(e) => handleChange("email", e.target.value)}
-                    className={cn("pl-10", isInviteSignup && "bg-muted cursor-not-allowed")}
+                    className="pl-10"
                     required
-                    disabled={isLoading || isInviteSignup}
-                    readOnly={isInviteSignup}
+                    disabled={isLoading}
                     autoComplete="email"
                   />
                 </div>
-                {isInviteSignup && (
-                  <p className="text-xs text-muted-foreground">
-                    Email is locked to the invited address.
-                  </p>
-                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">

@@ -1,6 +1,5 @@
-import { supabase } from '@/integrations/supabase/client';
-import { getAuthRedirectUrl } from '@/utils/redirectUrl';
-import type { User, Session, AuthError } from '@supabase/supabase-js';
+import { apiClient, tokenStorage } from './api/client';
+import { ENDPOINTS } from './api/endpoints';
 
 export interface SignUpMetadata {
   name?: string;
@@ -8,178 +7,83 @@ export interface SignUpMetadata {
   industry?: string;
 }
 
-export interface AuthResult {
-  user: User | null;
-  session: Session | null;
-  error: AuthError | null;
+export interface BackendUser {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  initials: string | null;
+  jobTitle: string | null;
+  timezone: string;
+  emailVerified: boolean;
+  createdAt: string;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
+}
+
+export interface AuthResponse extends AuthTokens {
+  user: BackendUser;
 }
 
 export const authService = {
-  /**
-   * Sign up a new user with email and password
-   */
-  async signUp(
-    email: string,
-    password: string,
-    metadata?: SignUpMetadata
-  ): Promise<AuthResult> {
-    const { data, error } = await supabase.auth.signUp({
+  async register(email: string, password: string, metadata?: SignUpMetadata): Promise<{ message: string; email: string }> {
+    return apiClient.post(ENDPOINTS.AUTH.REGISTER, {
       email,
       password,
-      options: {
-        data: metadata,
-        emailRedirectTo: window.location.origin,
-      },
+      name: metadata?.name || email.split('@')[0],
+      ...(metadata?.company ? { organizationName: metadata.company } : {}),
+      ...(metadata?.industry ? { industry: metadata.industry } : {}),
     });
-
-    return {
-      user: data.user,
-      session: data.session,
-      error,
-    };
   },
 
-  /**
-   * Sign in with email and password
-   */
-  async signIn(email: string, password: string): Promise<AuthResult> {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    return {
-      user: data.user,
-      session: data.session,
-      error,
-    };
+  async login(email: string, password: string): Promise<AuthResponse> {
+    const result = await apiClient.post<AuthResponse>(ENDPOINTS.AUTH.LOGIN, { email, password });
+    tokenStorage.setTokens(result.accessToken, result.refreshToken);
+    return result;
   },
 
-  /**
-   * Sign out the current user
-   */
-  async signOut(): Promise<{ error: AuthError | null }> {
-    const { error } = await supabase.auth.signOut();
-    return { error };
-  },
-
-  /**
-   * Send password reset email
-   */
-  async resetPassword(email: string): Promise<{ error: AuthError | null }> {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: getAuthRedirectUrl('/reset-password'),
-    });
-    return { error };
-  },
-
-  /**
-   * Update user password
-   */
-  async updatePassword(newPassword: string): Promise<{ error: AuthError | null }> {
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-    return { error };
-  },
-
-  /**
-   * Get current session
-   */
-  async getSession(): Promise<{ session: Session | null; error: AuthError | null }> {
-    const { data, error } = await supabase.auth.getSession();
-    return { session: data.session, error };
-  },
-
-  /**
-   * Get current user
-   */
-  async getUser(): Promise<{ user: User | null; error: AuthError | null }> {
-    const { data, error } = await supabase.auth.getUser();
-    return { user: data.user, error };
-  },
-
-  /**
-   * Subscribe to auth state changes
-   */
-  onAuthStateChange(callback: (event: string, session: Session | null) => void) {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(callback);
-    return subscription;
-  },
-
-  /**
-   * Refresh the current session
-   */
-  async refreshSession(): Promise<{ session: Session | null; error: AuthError | null }> {
-    const { data, error } = await supabase.auth.refreshSession();
-    return { session: data.session, error };
-  },
-
-  /**
-   * Send OTP for email verification
-   */
-  async sendOtp(email: string): Promise<{ success: boolean; error: string | null }> {
+  async logout(): Promise<void> {
+    const refreshToken = tokenStorage.getRefreshToken();
     try {
-      const { data, error } = await supabase.functions.invoke('send-otp', {
-        body: { email },
-      });
-
-      if (error) {
-        // Try to extract the actual error message from the response context
-        let errorMessage = 'Failed to send verification code';
-        try {
-          if (error.context && typeof error.context.json === 'function') {
-            const errorData = await error.context.json();
-            errorMessage = errorData?.error || errorMessage;
-          }
-        } catch {
-          errorMessage = error.message || errorMessage;
-        }
-        return { success: false, error: errorMessage };
+      if (refreshToken) {
+        await apiClient.post(ENDPOINTS.AUTH.LOGOUT, { refreshToken });
       }
-
-      if (data?.error) {
-        return { success: false, error: data.error };
-      }
-
-      return { success: true, error: null };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to send verification code';
-      return { success: false, error: message };
+    } finally {
+      tokenStorage.clearTokens();
     }
   },
 
-  /**
-   * Verify OTP for email verification
-   */
-  async verifyOtp(email: string, otp: string): Promise<{ success: boolean; error: string | null }> {
-    try {
-      const { data, error } = await supabase.functions.invoke('verify-otp', {
-        body: { email, otp },
-      });
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    return apiClient.post(ENDPOINTS.AUTH.FORGOT_PASSWORD, { email });
+  },
 
-      if (error) {
-        // Try to extract the actual error message from the response context
-        let errorMessage = 'Failed to verify code';
-        try {
-          if (error.context && typeof error.context.json === 'function') {
-            const errorData = await error.context.json();
-            errorMessage = errorData?.error || errorMessage;
-          }
-        } catch {
-          errorMessage = error.message || errorMessage;
-        }
-        return { success: false, error: errorMessage };
-      }
+  async resetPassword(token: string, password: string): Promise<void> {
+    await apiClient.post(ENDPOINTS.AUTH.RESET_PASSWORD, { token, password });
+  },
 
-      if (data?.error) {
-        return { success: false, error: data.error };
-      }
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await apiClient.post(ENDPOINTS.AUTH.CHANGE_PASSWORD, { currentPassword, newPassword });
+  },
 
-      return { success: true, error: null };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to verify code';
-      return { success: false, error: message };
-    }
+  async sendOtp(email: string): Promise<{ message: string }> {
+    return apiClient.post(ENDPOINTS.AUTH.SEND_OTP, { email });
+  },
+
+  async verifyOtp(email: string, otp: string): Promise<AuthResponse> {
+    const result = await apiClient.post<AuthResponse>(ENDPOINTS.AUTH.VERIFY_OTP, { email, otp });
+    tokenStorage.setTokens(result.accessToken, result.refreshToken);
+    return result;
+  },
+
+  async getMe(): Promise<BackendUser> {
+    return apiClient.get(ENDPOINTS.AUTH.ME);
+  },
+
+  isAuthenticated(): boolean {
+    return !!tokenStorage.getAccessToken();
   },
 };

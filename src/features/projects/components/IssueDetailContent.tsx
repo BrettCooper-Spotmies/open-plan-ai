@@ -74,8 +74,6 @@ import {
 } from '@/types';
 import { SlashBlockEditor, EditorBlock } from '@/components/ui/SlashBlockEditor';
 import { Switch } from '@/components/ui/switch';
-import { supabase } from '@/integrations/supabase/client';
-import { attachmentsService } from '@/services/attachments.service';
 import { toast } from 'sonner';
 import { ISSUE_SEVERITY_DISPLAY, ISSUE_SEVERITY_OPTIONS } from './issueSeverity';
 
@@ -255,75 +253,9 @@ export function IssueDetailContent({
     };
 
     const attachments = editedIssue.attachments || [];
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files || files.length === 0) return;
-
-        setIsUploading(true);
-        try {
-            const newAttachments: Attachment[] = [];
-
-            for (const file of Array.from(files)) {
-                // Generate a unique path for the file
-                const fileExt = file.name.split('.').pop();
-                const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
-                const filePath = `${editedIssue.projectId || 'issues'}/${fileName}`;
-
-                // Upload to Supabase Storage
-                const { error: uploadError } = await supabase.storage
-                    .from('project-files')
-                    .upload(filePath, file);
-
-                if (uploadError) {
-                    console.error('Error uploading file:', uploadError);
-                    toast.error(`Failed to upload ${file.name}`);
-                    continue;
-                }
-
-                // Get public URL
-                const { data: { publicUrl } } = supabase.storage
-                    .from('project-files')
-                    .getPublicUrl(filePath);
-
-                // Create attachment record in database
-                let attachmentId = `temp-${Date.now()}-${Math.random()}`;
-
-                try {
-                    const dbAttachment = await attachmentsService.create({
-                        entity_id: editedIssue.id,
-                        entity_type: 'issue',
-                        file_name: file.name,
-                        file_path: filePath,
-                        file_size: file.size,
-                        mime_type: file.type,
-                        project_id: editedIssue.projectId,
-                    });
-                    attachmentId = dbAttachment.id;
-                } catch (dbError) {
-                    console.error('Error creating attachment record:', dbError);
-                }
-
-                const attachment: Attachment = {
-                    id: attachmentId,
-                    filename: file.name,
-                    fileType: file.type,
-                    fileSize: file.size,
-                    uploadedBy: teamMembers[0] || { id: 'unknown', name: 'Unknown User', initials: 'UN', email: '', role: 'member' },
-                    uploadedAt: new Date().toISOString(),
-                    url: publicUrl,
-                };
-
-                newAttachments.push(attachment);
-            }
-
-            handleFieldChange('attachments', [...attachments, ...newAttachments]);
-            toast.success('Files uploaded successfully');
-        } catch (error) {
-            console.error('File upload error:', error);
-            toast.error('Failed to upload files');
-        } finally {
-            setIsUploading(false);
-        }
+    const handleFileUpload = async (_e: React.ChangeEvent<HTMLInputElement>) => {
+        // File uploads are not yet supported in this backend version
+        toast.info('File attachments coming soon');
     };
 
     const handleRemoveAttachment = (attachmentId: string) => {

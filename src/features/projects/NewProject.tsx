@@ -70,7 +70,6 @@ import { projectStorageService, UploadedProjectFile } from "@/services/projectSt
 import { attachmentsService } from "@/services/attachments.service";
 import { projectLinksService } from "@/services/projectLinks.service";
 import { projectMembersService } from "@/services/projectMembers.service";
-import type { Database } from "@/integrations/supabase/types";
 import { isValidUuid } from "@/utils/uuid";
 
 const projectTypes = [

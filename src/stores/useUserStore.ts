@@ -74,7 +74,7 @@ export const useUserStore = create<UserState>()(
       name: 'user-store',
       partialize: (state) => ({
         // Do NOT persist `user` — it contains PII (email, role, avatar) and is
-        // always re-populated from Supabase auth on session restore.
+        // always re-populated from the JWT auth session on restore.
         preferences: state.preferences,
         sidebarOpen: state.sidebarOpen,
       }),

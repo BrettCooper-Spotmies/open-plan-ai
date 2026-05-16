@@ -12,7 +12,8 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
 import { OrganizationSettings } from '@/services/organizations.service';
 import { toast } from 'sonner';
 
@@ -72,15 +73,13 @@ export function AppSidebar() {
       setCurrentUserRole(null);
       return;
     }
-    supabase
-      .from('organization_members')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('organization_id', currentOrganization.id)
-      .single()
-      .then(({ data }) => {
-        setCurrentUserRole(data?.role || null);
-      });
+    apiClient
+      .get<{ role: string }[]>(ENDPOINTS.ORGANIZATIONS.MEMBERS(currentOrganization.id))
+      .then((members) => {
+        const me = members.find((m: any) => m.userId === user.id || m.user_id === user.id);
+        setCurrentUserRole(me?.role || null);
+      })
+      .catch(() => setCurrentUserRole(null));
   }, [user?.id, currentOrganization?.id]);
 
   const canCreateOrg = currentUserRole === 'owner' || currentUserRole === 'admin';

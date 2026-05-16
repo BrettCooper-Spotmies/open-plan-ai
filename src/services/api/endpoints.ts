@@ -1,41 +1,133 @@
-export const API_ENDPOINTS = {
-  // Projects
-  PROJECTS: '/projects',
-  PROJECT_BY_ID: (id: string) => `/projects/${id}`,
-  
-  // Tasks
-  TASKS: '/tasks',
-  TASK_BY_ID: (id: string) => `/tasks/${id}`,
-  PROJECT_TASKS: (projectId: string) => `/projects/${projectId}/tasks`,
-  
-  // Milestones
-  MILESTONES: '/milestones',
-  MILESTONE_BY_ID: (id: string) => `/milestones/${id}`,
-  PROJECT_MILESTONES: (projectId: string) => `/projects/${projectId}/milestones`,
-  
-  // Issues
-  ISSUES: '/issues',
-  ISSUE_BY_ID: (id: string) => `/issues/${id}`,
-  PROJECT_ISSUES: (projectId: string) => `/projects/${projectId}/issues`,
-  
-  // Modules
-  MODULES: '/modules',
-  MODULE_BY_ID: (id: string) => `/modules/${id}`,
-  PROJECT_MODULES: (projectId: string) => `/projects/${projectId}/modules`,
-  
-  // Reports
-  REPORTS_KPI: '/reports/kpi',
-  REPORTS_TRENDS: '/reports/trends',
-  REPORTS_WORKLOAD: '/reports/workload',
-  
-  // Team
-  TEAM_MEMBERS: '/team/members',
-  TEAM_MEMBER_BY_ID: (id: string) => `/team/members/${id}`,
-  TEAM_WORKLOAD: '/team/workload',
-  
+// Centralized API endpoint constants
+export const ENDPOINTS = {
   // Auth
-  AUTH_LOGIN: '/auth/login',
-  AUTH_LOGOUT: '/auth/logout',
-  AUTH_REGISTER: '/auth/register',
-  AUTH_ME: '/auth/me',
-} as const;
+  AUTH: {
+    REGISTER: '/auth/register',
+    LOGIN: '/auth/login',
+    LOGOUT: '/auth/logout',
+    REFRESH: '/auth/refresh',
+    FORGOT_PASSWORD: '/auth/forgot-password',
+    RESET_PASSWORD: '/auth/reset-password',
+    CHANGE_PASSWORD: '/auth/change-password',
+    SEND_OTP: '/auth/send-otp',
+    VERIFY_OTP: '/auth/verify-otp',
+    ME: '/auth/me',
+  },
+  // Users
+  USERS: {
+    ME: '/users/me',
+    SEARCH: '/users/search',
+    BY_ID: (id: string) => `/users/${id}`,
+  },
+  // Organizations
+  ORGANIZATIONS: {
+    MY: '/organizations/my',
+    CREATE: '/organizations',
+    BY_ID: (id: string) => `/organizations/${id}`,
+    MEMBERS: (orgId: string) => `/organizations/${orgId}/members`,
+    MEMBER_ROLE: (orgId: string, userId: string) => `/organizations/${orgId}/members/${userId}/role`,
+    REMOVE_MEMBER: (orgId: string, userId: string) => `/organizations/${orgId}/members/${userId}`,
+    INVITATIONS: (orgId: string) => `/organizations/${orgId}/invitations`,
+    REVOKE_INVITATION: (orgId: string, invId: string) => `/organizations/${orgId}/invitations/${invId}`,
+    ACCEPT_INVITATION: '/invitations/accept',
+    ACTIVITIES: (orgId: string) => `/organizations/${orgId}/activities`,
+    REPORTS_OVERVIEW: (orgId: string) => `/organizations/${orgId}/reports/overview`,
+  },
+  // Projects
+  PROJECTS: {
+    LIST: (orgId: string) => `/organizations/${orgId}/projects`,
+    CREATE: (orgId: string) => `/organizations/${orgId}/projects`,
+    BY_ID: (id: string) => `/projects/${id}`,
+    UPDATE: (id: string) => `/projects/${id}`,
+    DELETE: (id: string) => `/projects/${id}`,
+    STAGE: (id: string) => `/projects/${id}/stage`,
+    MEMBERS: (id: string) => `/projects/${id}/members`,
+    MEMBER: (projectId: string, userId: string) => `/projects/${projectId}/members/${userId}`,
+    TEAM: (id: string) => `/projects/${id}/team`,
+    LINKS: (id: string) => `/projects/${id}/links`,
+    ACTIVITIES: (id: string) => `/projects/${id}/activities`,
+    REPORTS_OVERVIEW: (id: string) => `/projects/${id}/reports/overview`,
+    REPORTS_VELOCITY: (id: string) => `/projects/${id}/reports/velocity`,
+    REPORTS_TASK_DISTRIBUTION: (id: string) => `/projects/${id}/reports/task-distribution`,
+    REPORTS_TEAM_WORKLOAD: (id: string) => `/projects/${id}/reports/team-workload`,
+    REPORTS_BURNDOWN: (id: string) => `/projects/${id}/reports/burndown`,
+  },
+  // Tasks
+  TASKS: {
+    LIST: (projectId: string) => `/projects/${projectId}/tasks`,
+    CREATE: (projectId: string) => `/projects/${projectId}/tasks`,
+    BY_ID: (id: string) => `/tasks/${id}`,
+    STATUS: (id: string) => `/tasks/${id}/status`,
+    ASSIGNEES: (id: string) => `/tasks/${id}/assignees`,
+    ASSIGNEE: (taskId: string, userId: string) => `/tasks/${taskId}/assignees/${userId}`,
+    MODULES: (id: string) => `/tasks/${id}/modules`,
+    MODULE: (taskId: string, moduleId: string) => `/tasks/${taskId}/modules/${moduleId}`,
+    DEPENDENCIES: (id: string) => `/tasks/${id}/dependencies`,
+    DEPENDENCY: (taskId: string, depId: string) => `/tasks/${taskId}/dependencies/${depId}`,
+    COMMENTS: (id: string) => `/tasks/${id}/comments`,
+    ME_ALL: '/tasks/me/all',
+  },
+  // Hardware Modules
+  MODULES: {
+    LIST: (projectId: string) => `/projects/${projectId}/hardware-modules`,
+    CREATE: (projectId: string) => `/projects/${projectId}/hardware-modules`,
+    BY_ID: (id: string) => `/hardware-modules/${id}`,
+  },
+  // Milestones
+  MILESTONES: {
+    LIST: (projectId: string) => `/projects/${projectId}/milestones`,
+    CREATE: (projectId: string) => `/projects/${projectId}/milestones`,
+    BY_ID: (id: string) => `/milestones/${id}`,
+    COMPLETE: (id: string) => `/milestones/${id}/complete`,
+    TASKS: (id: string) => `/milestones/${id}/tasks`,
+    TASK: (milestoneId: string, taskId: string) => `/milestones/${milestoneId}/tasks/${taskId}`,
+    GENERATE_TASKS: (id: string) => `/milestones/${id}/generate-tasks`,
+  },
+  // Issues
+  ISSUES: {
+    LIST: (projectId: string) => `/projects/${projectId}/issues`,
+    CREATE: (projectId: string) => `/projects/${projectId}/issues`,
+    BY_ID: (id: string) => `/issues/${id}`,
+    STATUS: (id: string) => `/issues/${id}/status`,
+    ASSIGNEES: (id: string) => `/issues/${id}/assignees`,
+    ASSIGNEE: (issueId: string, userId: string) => `/issues/${issueId}/assignees/${userId}`,
+    TASK_LINKS: (id: string) => `/issues/${id}/task-links`,
+    TASK_LINK: (issueId: string, taskId: string) => `/issues/${issueId}/task-links/${taskId}`,
+    COMMENTS: (id: string) => `/issues/${id}/comments`,
+  },
+  // BOM
+  BOM: {
+    LIST: (projectId: string) => `/projects/${projectId}/bom`,
+    CREATE: (projectId: string) => `/projects/${projectId}/bom`,
+    SUMMARY: (projectId: string) => `/projects/${projectId}/bom/summary`,
+    EXPORT: (projectId: string) => `/projects/${projectId}/bom/export`,
+    BY_ID: (id: string) => `/bom/${id}`,
+  },
+  // Notifications
+  NOTIFICATIONS: {
+    LIST: '/notifications',
+    COUNT: '/notifications/count',
+    READ_ALL: '/notifications/read-all',
+    READ: (id: string) => `/notifications/${id}/read`,
+    DELETE: (id: string) => `/notifications/${id}`,
+  },
+  // Comments
+  COMMENTS: {
+    UPDATE: (id: string) => `/comments/${id}`,
+    DELETE: (id: string) => `/comments/${id}`,
+  },
+  // Chat / Conversations
+  CONVERSATIONS: {
+    LIST: '/conversations',
+    CREATE: '/conversations',
+    BY_ID: (id: string) => `/conversations/${id}`,
+    MESSAGES: (id: string) => `/conversations/${id}/messages`,
+    READ: (id: string) => `/conversations/${id}/read`,
+    MEMBERS: (id: string) => `/conversations/${id}/members`,
+    MEMBER: (conversationId: string, userId: string) => `/conversations/${conversationId}/members/${userId}`,
+  },
+  // Links
+  LINKS: {
+    DELETE: (id: string) => `/links/${id}`,
+  },
+};

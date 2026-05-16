@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/api/client';
 import { teamService } from '@/services/team.service';
 import {
   normalizeInviteEmail,
@@ -16,10 +16,9 @@ export default function JoinOrganization() {
   const [searchParams] = useSearchParams();
   const inviteParam = searchParams.get('invite');
   const navigate = useNavigate();
-  const { user, profile, isLoading: authLoading, signOut } = useAuth();
+  const { user, isLoading: authLoading, signOut } = useAuth();
 
   const [invitation, setInvitation] = useState<any>(null);
-  const [resolvedInvite, setResolvedInvite] = useState<{ inviteId?: string; token?: string } | null>(null);
   const [orgName, setOrgName] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(false);
@@ -28,22 +27,15 @@ export default function JoinOrganization() {
 
   const inviteEmailMismatch = useMemo(() => {
     if (!invitation?.email || !user) return false;
-    const candidates = [
-      ...candidateEmailsFromAuthUser(user),
-      normalizeInviteEmail(profile?.email),
-    ].filter((e): e is string => Boolean(e));
+    const candidates = candidateEmailsFromAuthUser(user).filter((e): e is string => Boolean(e));
     if (candidates.length === 0) return false;
     return !inviteMatchesAnyEmail(invitation.email, candidates);
-  }, [invitation, user, profile?.email]);
+  }, [invitation, user]);
 
   const signedInEmailHint = useMemo(() => {
     if (!user) return '';
-    return (
-      normalizeInviteEmail(user.email) ||
-      normalizeInviteEmail(profile?.email) ||
-      'this account'
-    );
-  }, [user, profile?.email]);
+    return normalizeInviteEmail(user.email) || 'this account';
+  }, [user]);
 
   useEffect(() => {
     if (!inviteParam) {
@@ -53,63 +45,25 @@ export default function JoinOrganization() {
     }
 
     const fetchInvitation = async () => {
-      const byId = await supabase
-        .from('team_invitations')
-        .select('*, organizations(name)')
-        .eq('id', inviteParam)
-        .eq('status', 'pending')
-        .maybeSingle();
-
-      let data = byId.data;
-      let fetchErr = byId.error;
-
-      if (!data) {
-        const byToken = await supabase
-          .from('team_invitations')
-          .select('*, organizations(name)')
-          .eq('token', inviteParam)
-          .eq('status', 'pending')
-          .maybeSingle();
-        data = byToken.data;
-        fetchErr = byToken.error;
-        if (data) {
-          setResolvedInvite({ token: inviteParam });
-        }
-      } else {
-        setResolvedInvite({ inviteId: inviteParam });
-      }
-
-      if (fetchErr || !data) {
+      try {
+        const data = await apiClient.get<any>(`/invitations/lookup?invite=${encodeURIComponent(inviteParam)}`);
+        setInvitation(data);
+        setOrgName(data?.organizationName || data?.organization?.name || 'the organization');
+      } catch {
         setError('This invitation is invalid or has already been used.');
+      } finally {
         setLoading(false);
-        return;
       }
-
-      if (new Date(data.expires_at) < new Date()) {
-        setError('This invitation has expired.');
-        setLoading(false);
-        return;
-      }
-
-      setInvitation(data);
-      setOrgName((data as any).organizations?.name || 'the organization');
-      setLoading(false);
     };
 
     fetchInvitation();
   }, [inviteParam]);
 
   const handleAccept = async () => {
-    if (!resolvedInvite) return;
+    if (!inviteParam) return;
     setAccepting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        setError('You need to be logged in.');
-        return;
-      }
-
-      await teamService.acceptInvitation(resolvedInvite.inviteId || resolvedInvite.token || '');
+      await teamService.acceptInvitation(inviteParam);
       setSuccess(true);
       setTimeout(() => navigate('/'), 1500);
     } catch (err: any) {

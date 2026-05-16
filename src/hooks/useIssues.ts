@@ -3,7 +3,6 @@ import { issuesService } from '@/services/issues.service';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { queryKeys } from '@/lib/queryClient';
 import { Issue } from '@/types';
-import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 /**
@@ -27,20 +26,7 @@ export function useOrgAllIssues() {
     queryKey: [...queryKeys.issues.all, 'org', orgId],
     queryFn: async () => {
       if (!orgId) return [];
-
-      // Step 1: Get all project IDs for this organization
-      const { data: projectRows } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('organization_id', orgId)
-        .is('deleted_at', null);
-
-      const projectIds = (projectRows || []).map(p => p.id);
-      if (projectIds.length === 0) return [];
-
-      // Step 2: Get all issues for these projects
-      const allIssues = await issuesService.getAll();
-      return allIssues.filter(i => i.projectId && projectIds.includes(i.projectId));
+      return issuesService.getAll();
     },
     enabled: !!orgId,
   });
@@ -52,9 +38,7 @@ export function useOrgAllIssues() {
 export function useProjectIssues(projectId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.issues.list(projectId),
-    queryFn: () => issuesService.getAll().then(issues =>
-      issues.filter(i => i.projectId === projectId)
-    ),
+    queryFn: () => issuesService.getByProject(projectId!),
     enabled: !!projectId,
   });
 }
@@ -119,7 +103,7 @@ export function useUpdateIssue() {
       // Snapshot the previous value
       const previousIssue = queryClient.getQueryData(queryKeys.issues.detail(issueId));
 
-      // Optimically update the store
+      // Optimistically update the store
       const timestamp = (updates.status === 'resolved' || updates.status === 'closed') ? new Date().toISOString() : undefined;
       const issueUpdates = { ...updates, resolvedAt: timestamp };
       updateIssue(projectId, issueId, issueUpdates);

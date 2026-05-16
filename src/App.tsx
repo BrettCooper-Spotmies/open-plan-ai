@@ -13,7 +13,6 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayoutOutlet } from "@/components/layout/AppLayoutOutlet";
-import { PasswordRecoveryRedirect } from "@/components/PasswordRecoveryRedirect";
 import { useUserStore } from "@/stores/useUserStore";
 
 // Eagerly loaded routes (initial page load)
@@ -53,7 +52,6 @@ const App = () => {
                 <Toaster />
                 <Sonner />
                 <BrowserRouter>
-                  <PasswordRecoveryRedirect />
                   <Routes>
                     {/* Public routes */}
                     <Route path="/login" element={<Login />} />

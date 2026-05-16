@@ -61,8 +61,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
-import { supabase } from '@/integrations/supabase/client';
-import { attachmentsService } from '@/services/attachments.service';
 import { commentsService } from '@/services/comments.service';
 import { useNotifications } from '@/hooks/useNotifications';
 import {
@@ -184,7 +182,7 @@ export const TaskDetailModal = ({
   assignableMembers,
   statusOptions: providedStatusOptions,
 }: TaskDetailModalProps) => {
-  const { profile } = useAuth();
+  const { user: profile } = useAuth();
   const { currentOrganization } = useOrganization();
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const { createNotification } = useNotifications();
@@ -479,89 +477,9 @@ export const TaskDetailModal = ({
   // Attachment handlers
   const attachments = editedTask.attachments || [];
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-
-    setIsUploading(true);
-    try {
-      const newAttachments: Attachment[] = [];
-
-      for (const file of Array.from(files)) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
-        const filePath = `${projectId || 'temp'}/${fileName}`;
-
-        // Upload to Supabase Storage
-        const { error: uploadError } = await supabase.storage
-          .from('project-files')
-          .upload(filePath, file);
-
-        if (uploadError) {
-          console.error('Error uploading file:', uploadError);
-          continue;
-        }
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('project-files')
-          .getPublicUrl(filePath);
-
-        // Create attachment record in the database if task exists
-        let attachmentId = `attachment-${Date.now()}-${Math.random()}`;
-        const uploadedBy: TeamMember = profile ? {
-          id: profile.id,
-          name: profile.name || profile.email,
-          email: profile.email,
-          initials: profile.initials,
-          avatar: profile.avatar_url || undefined,
-          role: profile.role || 'member'
-        } : {
-          id: 'unknown',
-          name: 'Unknown',
-          email: '',
-          initials: 'UN',
-          role: 'member',
-        };
-
-        if (mode !== 'create' && editedTask.id) {
-          try {
-            const dbAttachment = await attachmentsService.create({
-              entity_id: editedTask.id,
-              entity_type: 'task',
-              file_name: file.name,
-              file_path: filePath,
-              file_size: file.size,
-              mime_type: file.type,
-              project_id: projectId,
-            });
-            attachmentId = dbAttachment.id;
-            // Map db user to TeamMember if needed, but for now we keep the mock or use real user if we had one
-          } catch (dbError) {
-            console.error('Error creating attachment record in DB:', dbError);
-            // Even if DB fails, we have the file in storage and it will show in UI temporarily
-          }
-        }
-
-        const attachment: Attachment = {
-          id: attachmentId,
-          filename: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          uploadedBy: uploadedBy,
-          uploadedAt: new Date().toISOString(),
-          url: publicUrl,
-        };
-
-        newAttachments.push(attachment);
-      }
-
-      handleFieldChange('attachments', [...attachments, ...newAttachments]);
-    } catch (error) {
-      console.error('Error handling file upload:', error);
-    } finally {
-      setIsUploading(false);
-    }
+  const handleFileUpload = async (_e: React.ChangeEvent<HTMLInputElement>) => {
+    // File uploads are not yet supported in this backend version
+    toast.info('File attachments coming soon');
   };
 
   const handleRemoveAttachment = (attachmentId: string) => {
@@ -637,12 +555,12 @@ export const TaskDetailModal = ({
           author: {
             id: profile.id,
             name: profile.name || profile.email,
-            initials: profile.initials,
-            avatar: profile.avatar_url || undefined,
+            initials: profile.initials || '',
+            avatar: profile.avatarUrl || undefined,
             email: profile.email,
-            role: profile.role || 'member'
+            role: 'member'
           },
-          createdAt: dbComment.created_at || new Date().toISOString(),
+          createdAt: dbComment.createdAt || new Date().toISOString(),
         };
 
         setEditedTask(prev => ({

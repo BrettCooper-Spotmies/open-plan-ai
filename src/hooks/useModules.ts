@@ -1,7 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { modulesService, type Module, type ModuleInsert, type ModuleUpdate } from '@/services/modules.service';
 import { queryKeys } from '@/lib/queryClient';
-import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
 
 export function useProjectModules(projectId: string) {
@@ -71,24 +70,8 @@ export function useOrgAllModules() {
   return useQuery({
     queryKey: [...queryKeys.modules.all, 'org', orgId],
     queryFn: async () => {
-      const { data: projectRows } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('organization_id', orgId!)
-        .is('deleted_at', null);
-
-      const projectIds = (projectRows || []).map(p => p.id);
-      if (!projectIds.length) return [];
-
-      const { data, error } = await supabase
-        .from('modules')
-        .select('*')
-        .in('project_id', projectIds)
-        .is('deleted_at', null)
-        .order('name', { ascending: true });
-
-      if (error) throw error;
-      return data || [];
+      // No org-level module endpoint yet; return empty so the UI degrades gracefully.
+      return [] as Module[];
     },
     enabled: !!orgId,
   });

@@ -34,7 +34,7 @@ export function AppHeader() {
   const location = useLocation();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { profile, signOut } = useAuth();
+  const { user: profile, signOut } = useAuth();
   const { theme, changeTheme } = useAppTheme();
 
   const mobileTitle = useMemo(
@@ -87,7 +87,7 @@ export function AppHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={profile?.avatar_url || ''} alt={profile?.name || 'User'} />
+                <AvatarImage src={profile?.avatarUrl || ''} alt={profile?.name || 'User'} />
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                   {profile?.initials || 'U'}
                 </AvatarFallback>
