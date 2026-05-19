@@ -26,6 +26,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { NotificationsPopover } from './NotificationsPopover';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 function getMobileHeaderTitle(pathname: string): string {
   if (pathname === '/') return 'Dashboard';
@@ -98,7 +99,7 @@ export function AppHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
               <Avatar className="h-8 w-8">
-                {profile?.avatarUrl && <AvatarImage src={profile.avatarUrl} alt={profile?.name || 'User'} />}
+                {profile?.avatarUrl && <AvatarImage src={resolveFileUrl(profile.avatarUrl) ?? profile.avatarUrl} alt={profile?.name || 'User'} />}
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">
                   {profile?.initials || profile?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || profile?.email?.[0]?.toUpperCase() || 'U'}
                 </AvatarFallback>

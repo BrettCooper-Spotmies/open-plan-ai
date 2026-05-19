@@ -1,6 +1,7 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { attachmentsService } from './attachments.service';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 export interface OrganizationSettings {
   companyName?: string;
@@ -128,10 +129,11 @@ export const organizationsService = {
       entityType: 'organization',
       file,
     });
-    const logoUrl = record.fileUrl ?? record.url ?? '';
-    // Persist logo URL in org settings
-    await this.update(orgId, { settings: { logoUrl } });
-    return logoUrl;
+    const rawUrl = record.fileUrl ?? record.url ?? '';
+    // Persist the raw reference in org settings
+    await this.update(orgId, { settings: { logoUrl: rawUrl } });
+    // Return resolved URL for immediate display
+    return resolveFileUrl(rawUrl) ?? rawUrl;
   },
 
   /**

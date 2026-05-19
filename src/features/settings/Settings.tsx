@@ -64,6 +64,7 @@ import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useUserStore } from '@/stores/useUserStore';
 import { getPasswordRequirements } from '@/lib/passwordValidation';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 type ThemePreference = 'light' | 'dark' | 'system';
 
@@ -178,7 +179,7 @@ const Settings = () => {
         companySize: settings.companySize || '',
         timezone: settings.timezone || 'America/New_York',
         dateFormat: settings.dateFormat || 'MM/DD/YYYY',
-        logoUrl: settings.logoUrl || prev.logoUrl, // Preserve local logoUrl if server hasn't updated yet
+        logoUrl: resolveFileUrl(settings.logoUrl) ?? settings.logoUrl ?? prev.logoUrl,
       }));
     }
   }, [currentOrganization]);
@@ -567,7 +568,7 @@ const Settings = () => {
                             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                           ) : orgForm.logoUrl ? (
                             <img
-                              src={orgForm.logoUrl}
+                              src={resolveFileUrl(orgForm.logoUrl) ?? orgForm.logoUrl}
                               alt="Organization logo"
                               className="h-full w-full object-contain"
                             />
@@ -722,7 +723,7 @@ const Settings = () => {
                         </AvatarFallback>
                       ) : localAvatarPreview || profile?.avatar_url || (profile as any)?.avatarUrl ? (
                         <AvatarImage
-                          src={localAvatarPreview || profile?.avatar_url || (profile as any)?.avatarUrl}
+                          src={localAvatarPreview || resolveFileUrl(profile?.avatar_url || (profile as any)?.avatarUrl) || profile?.avatar_url || ''}
                           alt={profile?.name || 'Avatar'}
                         />
                       ) : (
