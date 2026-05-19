@@ -37,13 +37,13 @@ export function useOrganizationMembers(orgId: string | undefined) {
           const profileId = (m.userId ?? m.user_id ?? m.id) as string | undefined;
           if (!profileId || !isValidUuid(profileId)) return null;
 
-          const name = (m.name ?? '') as string;
-          if (!name.trim()) return null;
+          const email = (m.email ?? '') as string;
+          const name = ((m.name ?? '') as string).trim() || email.split('@')[0] || 'Unknown';
 
           return {
             id: profileId,
             name,
-            email: (m.email ?? '') as string,
+            email,
             role: (m.role ?? 'member') as string,
             avatar: (m.avatarUrl ?? m.avatar_url ?? undefined) as string | undefined,
             initials: ((m.initials ?? name.slice(0, 2).toUpperCase()) as string),

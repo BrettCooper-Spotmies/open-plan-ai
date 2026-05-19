@@ -185,12 +185,16 @@ const Team = () => {
       setInviteEmail('');
       setInviteRole('');
       setInviteDepartment('');
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error && err.message
-          ? err.message
-          : 'Failed to send invitation';
-      toast.error(message);
+    } catch (err: any) {
+      const apiMessage = err?.response?.data?.error?.message || err?.message || '';
+      const lower = apiMessage.toLowerCase();
+      if (lower.includes('already') || lower.includes('pending') || lower.includes('conflict')) {
+        toast.info(`An invitation has already been sent to ${inviteEmail}. Check the pending invitations list.`);
+      } else if (lower.includes('already a member')) {
+        toast.info(`${inviteEmail} is already a member of this organization.`);
+      } else {
+        toast.error(apiMessage || 'Failed to send invitation. Please try again.');
+      }
     }
   };
 

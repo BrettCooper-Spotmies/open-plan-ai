@@ -82,7 +82,7 @@ export function AppSidebar() {
       .catch(() => setCurrentUserRole(null));
   }, [user?.id, currentOrganization?.id]);
 
-  const canCreateOrg = currentUserRole === 'owner' || currentUserRole === 'admin';
+  const canCreateOrg = currentOrganization?.myRole === 'admin' || currentOrganization?.myRole === 'manager' || currentUserRole === 'admin' || currentUserRole === 'manager';
   const organizationNavItems = teamNavItems;
 
   const orgSettings = (currentOrganization?.settings || {}) as OrganizationSettings;

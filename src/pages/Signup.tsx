@@ -62,6 +62,16 @@ const Signup = () => {
       setError(message);
     };
 
+    if (formData.fullName.trim().length < 2) {
+      setError("Full name must be at least 2 characters");
+      return;
+    }
+
+    if (formData.password !== formData.password.trim()) {
+      setError("Password cannot start or end with spaces");
+      return;
+    }
+
     const unmetLabels = getUnmetRequirementLabels(formData.password);
     if (unmetLabels.length > 0) {
       setError(`Password is too weak. Missing: ${unmetLabels.join(", ")}`);
@@ -70,6 +80,11 @@ const Signup = () => {
 
     if (formData.password !== formData.confirmPassword) {
       setError("Passwords do not match");
+      return;
+    }
+
+    if (!isInviteSignup && formData.companyName.trim().length < 2) {
+      setError("Organization name must be at least 2 characters");
       return;
     }
 
@@ -84,7 +99,8 @@ const Signup = () => {
       });
 
       if (result.error) {
-        reportError(result.error.message, result.error);
+        const msg = (result.error as any)?.response?.data?.error?.message || result.error.message || 'Registration failed';
+        reportError(msg, result.error);
         return;
       }
 
@@ -110,8 +126,9 @@ const Signup = () => {
       }
 
       navigate("/verify-email", { state: { email: formData.email } });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'An error occurred';
+    } catch (err: any) {
+      const apiMessage = err?.response?.data?.error?.message || err?.response?.data?.message;
+      const errorMessage = apiMessage || (err instanceof Error ? err.message : 'An error occurred');
       reportError(errorMessage, err);
     } finally {
       setIsLoading(false);
@@ -337,7 +354,7 @@ const Signup = () => {
               {!isInviteSignup && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="companyName">Company Name</Label>
+                    <Label htmlFor="companyName">Organization Name</Label>
                     <div className="relative">
                       <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                       <Input

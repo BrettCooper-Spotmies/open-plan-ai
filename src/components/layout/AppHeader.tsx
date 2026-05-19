@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Sun, Moon, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationsPopover } from './NotificationsPopover';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -36,6 +46,7 @@ export function AppHeader() {
   const isMobile = useIsMobile();
   const { user: profile, signOut } = useAuth();
   const { theme, changeTheme } = useAppTheme();
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const mobileTitle = useMemo(
     () => getMobileHeaderTitle(location.pathname),
@@ -87,9 +98,9 @@ export function AppHeader() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="rounded-full">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={profile?.avatarUrl || ''} alt={profile?.name || 'User'} />
+                {profile?.avatarUrl && <AvatarImage src={profile.avatarUrl} alt={profile?.name || 'User'} />}
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                  {profile?.initials || 'U'}
+                  {profile?.initials || profile?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || profile?.email?.[0]?.toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -97,18 +108,33 @@ export function AppHeader() {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">{profile?.name || 'User'}</p>
-                <p className="text-xs text-muted-foreground">{profile?.email || 'user@example.com'}</p>
+                <p className="text-sm font-medium">{profile?.name || profile?.email?.split('@')[0] || 'User'}</p>
+                <p className="text-xs text-muted-foreground">{profile?.email || ''}</p>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => navigate('/settings?tab=profile')}>Profile</DropdownMenuItem>
             <DropdownMenuItem onClick={() => navigate('/settings?tab=general')}>Settings</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={handleSignOut}>Log out</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowLogoutDialog(true)}>Log out</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Log out?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You will be signed out of your account. Any unsaved changes will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleSignOut}>Log out</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </header>
   );
 }
