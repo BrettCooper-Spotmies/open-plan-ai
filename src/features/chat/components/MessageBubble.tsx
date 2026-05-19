@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, ZoomIn, ExternalLink, FileImage, File as FileIcon2 } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -159,119 +160,135 @@ function HighlightedText({ text, query }: { text: string; query?: string }) {
   );
 }
 
-function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) {
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string | null>(file.url || null);
-  const isImage = file.mimeType?.startsWith('image/');
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    let isMounted = true;
+function getFileType(mimeType: string, fileName: string): 'image' | 'pdf' | 'doc' | 'other' {
+  if (mimeType?.startsWith('image/')) return 'image';
+  if (mimeType === 'application/pdf' || fileName?.toLowerCase().endsWith('.pdf')) return 'pdf';
+  if (
+    mimeType?.includes('word') ||
+    mimeType?.includes('document') ||
+    /\.(docx?|odt)$/i.test(fileName ?? '')
+  ) return 'doc';
+  return 'other';
+}
 
-    if (!isImage) return;
-    if (file.url) {
-      setImageUrl(file.url);
-      return;
-    }
-    if (!file.storagePath) {
-      setImageUrl(null);
-      return;
-    }
+function getFileIcon(type: 'image' | 'pdf' | 'doc' | 'other') {
+  if (type === 'image') return FileImage;
+  if (type === 'pdf' || type === 'doc') return FileText;
+  return FileIcon2;
+}
 
-    chatService
-      .getChatAttachmentDownloadUrl({
-        storagePath: file.storagePath,
-        fileName: file.fileName,
-      })
-      .then((signedUrl) => {
-        if (isMounted) setImageUrl(signedUrl);
-      })
-      .catch(() => {
-        if (isMounted) setImageUrl(null);
-      });
+// ─── Image Lightbox ──────────────────────────────────────────────────────────
 
-    return () => {
-      isMounted = false;
-    };
-  }, [isImage, file.url, file.storagePath, file.fileName]);
-
-  const handleDownload = async () => {
-    if (isDownloading) return;
-
-    setIsDownloading(true);
-    try {
-      await chatService.downloadChatAttachment({
-        fileName: file.fileName,
-        fileSize: file.fileSize,
-        mimeType: file.mimeType,
-        storagePath: file.storagePath,
-        url: file.url,
-      });
-      toast.success(`Downloading ${file.fileName}`);
-    } catch (error) {
-      console.error('Failed to download file:', error);
-      toast.error('Failed to download file');
-    } finally {
-      setIsDownloading(false);
-    }
-  };
-
-  if (isImage) {
-    return (
-      <div className="space-y-1">
-        <div>
-          {imageUrl ? (
-            <img
-              src={imageUrl}
-              alt={file.fileName}
-              className="max-w-[280px] max-h-[200px] rounded-lg object-cover"
-            />
-          ) : (
-            <div className="w-[220px] h-[120px] rounded-lg bg-muted/50 flex items-center justify-center">
-              <FileText className="h-6 w-6 opacity-60" />
-            </div>
-          )}
-        </div>
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          onClick={handleDownload}
-          disabled={isDownloading}
+function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/90 border-none flex items-center justify-center overflow-hidden">
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 z-50 rounded-full bg-black/50 p-1.5 text-white hover:bg-black/80 transition-colors"
         >
-          {isDownloading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Download className="h-3 w-3 mr-1" />}
-          Download
-        </Button>
-        {file.text && <p className="text-sm">{file.text}</p>}
-      </div>
+          <X className="h-5 w-5" />
+        </button>
+        <img
+          src={src}
+          alt={alt}
+          className="max-w-full max-h-[90vh] object-contain rounded"
+          onClick={(e) => e.stopPropagation()}
+        />
+        <a
+          href={src}
+          download={alt}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="absolute bottom-3 right-3 z-50 rounded-full bg-black/50 p-1.5 text-white hover:bg-black/80 transition-colors"
+          title="Download"
+        >
+          <Download className="h-4 w-4" />
+        </a>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Main FileAttachment component ──────────────────────────────────────────
+
+function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const url = file.url ?? '';
+  const fileType = getFileType(file.mimeType ?? '', file.fileName ?? '');
+  const Icon = getFileIcon(fileType);
+
+  const handleClick = useCallback(() => {
+    if (!url) return;
+    if (fileType === 'image') {
+      setLightboxOpen(true);
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    }
+  }, [url, fileType]);
+
+  if (fileType === 'image') {
+    return (
+      <>
+        <div
+          className="group relative cursor-pointer rounded-xl overflow-hidden"
+          style={{ maxWidth: 280 }}
+          onClick={handleClick}
+          title="Click to view"
+        >
+          <img
+            src={url}
+            alt={file.fileName}
+            className="w-full max-h-[220px] object-cover rounded-xl"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+            <ZoomIn className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+          </div>
+        </div>
+        {file.text && <p className="text-sm mt-1">{file.text}</p>}
+        {lightboxOpen && url && (
+          <ImageLightbox src={url} alt={file.fileName} onClose={() => setLightboxOpen(false)} />
+        )}
+      </>
     );
   }
 
+  // PDF / DOC / other file card
+  const isPreviewable = fileType === 'pdf' || fileType === 'doc';
   return (
-    <div className="space-y-1">
-      <button
-        type="button"
-        onClick={handleDownload}
-        disabled={isDownloading}
-        className={cn(
-          'flex w-full items-center gap-2 p-2 rounded-lg border text-left transition-colors',
-          'disabled:opacity-70 disabled:cursor-not-allowed',
-          isOwn ? 'border-primary-foreground/20' : 'border-border'
-        )}
-      >
-        <FileText className="h-8 w-8 shrink-0 opacity-70" />
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium break-all whitespace-normal">{file.fileName}</p>
-          <p className="text-xs opacity-70">{formatFileSize(file.fileSize)}</p>
-        </div>
-        {isDownloading ? (
-          <Loader2 className="h-4 w-4 shrink-0 opacity-70 animate-spin" />
-        ) : (
-          <Download className="h-4 w-4 shrink-0 opacity-70" />
-        )}
-      </button>
-      {file.text && <p className="text-sm">{file.text}</p>}
-    </div>
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={!url}
+      className={cn(
+        'flex w-full items-center gap-3 p-3 rounded-xl border text-left transition-all',
+        'hover:bg-accent/60 active:scale-[0.98]',
+        'disabled:opacity-50 disabled:cursor-not-allowed',
+        isOwn ? 'border-primary-foreground/20 bg-primary-foreground/5' : 'border-border bg-muted/30'
+      )}
+      title={isPreviewable ? `Open ${fileType.toUpperCase()} preview` : 'Open file'}
+    >
+      <div className={cn(
+        'h-10 w-10 shrink-0 rounded-lg flex items-center justify-center',
+        fileType === 'pdf' ? 'bg-red-500/15 text-red-500' :
+        fileType === 'doc' ? 'bg-blue-500/15 text-blue-500' :
+        'bg-muted text-muted-foreground'
+      )}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium truncate">{file.fileName}</p>
+        <p className="text-xs opacity-60 mt-0.5">
+          {file.fileSize ? formatFileSize(file.fileSize) : ''}
+          {file.fileSize && fileType !== 'other' ? ' · ' : ''}
+          {fileType === 'pdf' ? 'PDF' : fileType === 'doc' ? 'Document' : ''}
+        </p>
+      </div>
+      <ExternalLink className="h-4 w-4 shrink-0 opacity-50" />
+    </button>
   );
 }
 
@@ -280,8 +297,28 @@ export function MessageBubble({
   searchQuery, readReceipts, reactions, onEdit, onDelete, onToggleReaction, onReply,
 }: MessageBubbleProps) {
   const isOwn = message.senderId === currentUserId;
-  const isFile = message.contentType === 'file';
-  const fileData = isFile ? parseFileContent(message.content) : null;
+  const isFile = message.contentType === 'file' || message.contentType === 'image' || (message.attachments?.length ?? 0) > 0;
+
+  // Build fileData from new attachments[] array OR legacy JSON content
+  const fileData: FileContent | null = (() => {
+    // New format: attachments array from backend
+    if (message.attachments?.length) {
+      const a = message.attachments[0] as any;
+      return {
+        fileName: a.name ?? a.fileName ?? '',
+        fileSize: a.size ?? a.fileSize ?? 0,
+        mimeType: a.mimeType ?? a.type ?? '',
+        url: a.url ?? '',
+        text: message.contentType !== 'image' && message.contentType !== 'file' ? message.content : undefined,
+      };
+    }
+    // Legacy format: JSON encoded in content
+    if (message.contentType === 'file' || message.contentType === 'image') {
+      const parsed = parseFileContent(message.content);
+      if (parsed) return parsed;
+    }
+    return null;
+  })();
   const isDeleted = !!message.deletedAt;
   const isWithin24h = differenceInHours(new Date(), new Date(message.createdAt)) < 24;
   const canModify = isOwn && isWithin24h && !isDeleted;

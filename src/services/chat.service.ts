@@ -1,9 +1,13 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import type { Conversation, ChatMessage, ReachableUser, ReadReceipt, MessageReaction } from '@/features/chat/types';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 /** Map backend MessageResponse (camelCase) to frontend ChatMessage (flat senderId). */
 function mapChatMessage(raw: any): ChatMessage {
+  const fileUrl = raw.fileUrl ?? raw.file_url ?? null;
+  const resolvedFileUrl = fileUrl ? (resolveFileUrl(fileUrl) ?? fileUrl) : undefined;
+
   return {
     id: raw.id,
     conversationId: raw.conversationId ?? raw.conversation_id ?? '',
@@ -11,9 +15,16 @@ function mapChatMessage(raw: any): ChatMessage {
     senderName: raw.senderName ?? raw.sender?.name ?? raw.sender_name ?? 'Unknown',
     senderAvatar: raw.senderAvatar ?? raw.sender?.avatarUrl ?? raw.sender?.avatar_url ?? undefined,
     senderInitials: raw.senderInitials ?? raw.sender?.initials ?? (raw.sender?.name ?? '').slice(0, 2).toUpperCase() ?? '??',
-    contentType: raw.contentType ?? raw.content_type ?? 'text',
+    contentType: (raw.contentType ?? raw.content_type ?? 'text') as any,
     content: raw.content ?? '',
-    attachments: raw.attachments ?? [],
+    attachments: resolvedFileUrl ? [{
+      id: raw.id,
+      type: (raw.contentType ?? raw.content_type ?? 'file') === 'image' ? 'image' : 'file',
+      url: resolvedFileUrl,
+      name: raw.fileName ?? raw.file_name ?? raw.content ?? 'file',
+      size: raw.fileSize ?? raw.file_size ?? 0,
+      mimeType: raw.fileMimeType ?? raw.file_mime_type ?? '',
+    }] : (raw.attachments ?? []),
     createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString(),
     updatedAt: raw.updatedAt ?? raw.updated_at ?? raw.createdAt ?? new Date().toISOString(),
     isEdited: false,

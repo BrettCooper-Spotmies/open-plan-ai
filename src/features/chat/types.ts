@@ -21,9 +21,14 @@ export interface ConversationMember {
 
 export interface MessageAttachment {
   id: string;
-  fileName: string;
-  fileSize: number;
-  mimeType: string;
+  // New backend fields
+  name?: string;
+  size?: number;
+  type?: string;
+  // Legacy fields
+  fileName?: string;
+  fileSize?: number;
+  mimeType?: string;
   storagePath?: string;
   url?: string;
 }

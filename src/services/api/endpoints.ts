@@ -124,6 +124,7 @@ export const ENDPOINTS = {
     CREATE: '/conversations',
     BY_ID: (id: string) => `/conversations/${id}`,
     MESSAGES: (id: string) => `/conversations/${id}/messages`,
+    FILE_MESSAGE: (id: string) => `/conversations/${id}/messages/file`,
     READ: (id: string) => `/conversations/${id}/read`,
     MEMBERS: (id: string) => `/conversations/${id}/members`,
     MEMBER: (conversationId: string, userId: string) => `/conversations/${conversationId}/members/${userId}`,

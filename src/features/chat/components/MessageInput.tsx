@@ -3,6 +3,8 @@ import { Send, Paperclip, Loader2, X, Smile, File as FileIcon } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { useChatStore } from '../stores/useChatStore';
 import { chatService } from '@/services/chat.service';
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConversationMember, ChatMessage } from '../types';
@@ -203,9 +205,17 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     setPendingFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const sendFileMessage = async (_file: File, _text?: string) => {
-    // File attachments are not yet supported in this backend version
-    toast.info('File attachments coming soon');
+  const sendFileMessage = async (file: File, caption?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (caption) formData.append('caption', caption);
+    if (replyingTo?.id) formData.append('replyToMessageId', replyingTo.id);
+    const res = await apiClient.raw.post<{ success: boolean; data: any }>(
+      `${ENDPOINTS.CONVERSATIONS.FILE_MESSAGE(conversationId)}`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return res.data.data;
   };
 
   const handleSend = async () => {
