@@ -477,7 +477,6 @@ export const TaskDetailModal = ({
 
   // Attachment handlers
   const attachments = editedTask.attachments || [];
-  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
