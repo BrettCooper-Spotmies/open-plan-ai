@@ -2,6 +2,56 @@ import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import type { Conversation, ChatMessage, ReachableUser, ReadReceipt, MessageReaction } from '@/features/chat/types';
 
+/** Map backend MessageResponse (camelCase) to frontend ChatMessage (flat senderId). */
+function mapChatMessage(raw: any): ChatMessage {
+  return {
+    id: raw.id,
+    conversationId: raw.conversationId ?? raw.conversation_id ?? '',
+    senderId: raw.senderId ?? raw.sender_id ?? raw.sender?.id ?? '',
+    senderName: raw.senderName ?? raw.sender?.name ?? raw.sender_name ?? 'Unknown',
+    senderAvatar: raw.senderAvatar ?? raw.sender?.avatarUrl ?? raw.sender?.avatar_url ?? undefined,
+    senderInitials: raw.senderInitials ?? raw.sender?.initials ?? (raw.sender?.name ?? '').slice(0, 2).toUpperCase() ?? '??',
+    contentType: raw.contentType ?? raw.content_type ?? 'text',
+    content: raw.content ?? '',
+    attachments: raw.attachments ?? [],
+    createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString(),
+    updatedAt: raw.updatedAt ?? raw.updated_at ?? raw.createdAt ?? new Date().toISOString(),
+    isEdited: false,
+    deletedAt: raw.deletedAt ?? raw.deleted_at ?? undefined,
+    replyToMessageId: raw.replyToMessageId ?? raw.reply_to_message_id ?? undefined,
+  };
+}
+
+/** Map the backend ConversationResponse shape to the frontend Conversation type. */
+function mapConversation(raw: any): Conversation {
+  const members = (raw.members ?? []).map((m: any) => ({
+    id: m.userId ?? m.id,
+    userId: m.userId ?? m.id,
+    name: m.name ?? '',
+    avatarUrl: m.avatarUrl ?? m.avatar_url ?? null,
+    initials: m.initials ?? (m.name ?? '').slice(0, 2).toUpperCase(),
+    role: m.role ?? 'member',
+    lastSeenAt: m.lastSeenAt ?? m.last_seen_at ?? null,
+    joinedAt: m.joinedAt ?? m.joined_at ?? null,
+    leftAt: m.leftAt ?? m.left_at ?? null,
+  }));
+
+  return {
+    id: raw.id,
+    type: raw.isGroupChat ? 'group' : 'dm',
+    name: raw.title ?? raw.name ?? '',
+    title: raw.title ?? raw.name ?? null,
+    description: raw.description ?? undefined,
+    avatarUrl: raw.avatarUrl ?? raw.avatar_url ?? undefined,
+    members,
+    lastMessage: raw.lastMessage
+      ? { content: raw.lastMessage.content, senderName: '', createdAt: raw.lastMessage.createdAt }
+      : undefined,
+    lastMessageAt: raw.updatedAt ?? raw.lastMessageAt ?? raw.createdAt ?? new Date().toISOString(),
+    createdAt: raw.createdAt ?? new Date().toISOString(),
+  };
+}
+
 /** Dispatched when the current user is added to conversation_members so chat UI can re-check send access. */
 export const CHAT_ACCESS_INVALIDATE_EVENT = 'openplan-invalidate-conversation-access';
 
@@ -13,19 +63,21 @@ export const chatService = {
   },
 
   async getConversations(): Promise<Conversation[]> {
-    return apiClient.get(ENDPOINTS.CONVERSATIONS.LIST);
+    const data = await apiClient.get<any[]>(ENDPOINTS.CONVERSATIONS.LIST);
+    return (data || []).map(mapConversation);
   },
 
   async getConversationById(conversationId: string): Promise<Conversation> {
-    return apiClient.get(ENDPOINTS.CONVERSATIONS.BY_ID(conversationId));
+    const data = await apiClient.get<any>(ENDPOINTS.CONVERSATIONS.BY_ID(conversationId));
+    return mapConversation(data);
   },
 
   async getOrCreateDM(otherUserId: string): Promise<string> {
-    const conv = await apiClient.post<Conversation>(ENDPOINTS.CONVERSATIONS.CREATE, {
-      type: 'dm',
-      userId: otherUserId,
+    const data = await apiClient.post<any>(ENDPOINTS.CONVERSATIONS.CREATE, {
+      type: 'direct',
+      memberIds: [otherUserId],
     });
-    return conv.id;
+    return mapConversation(data).id;
   },
 
   async createGroup(
@@ -34,13 +86,13 @@ export const chatService = {
     memberIds: string[],
     _avatarUrl?: string
   ): Promise<string> {
-    const conv = await apiClient.post<Conversation>(ENDPOINTS.CONVERSATIONS.CREATE, {
+    const data = await apiClient.post<any>(ENDPOINTS.CONVERSATIONS.CREATE, {
       type: 'group',
       name,
       description,
       memberIds,
     });
-    return conv.id;
+    return mapConversation(data).id;
   },
 
   async getMessages(
@@ -51,7 +103,8 @@ export const chatService = {
     if (options?.before) query.set('before', options.before);
     if (options?.limit) query.set('limit', String(options.limit));
     const qs = query.toString() ? '?' + query.toString() : '';
-    return apiClient.get(ENDPOINTS.CONVERSATIONS.MESSAGES(conversationId) + qs);
+    const data = await apiClient.get<any[]>(ENDPOINTS.CONVERSATIONS.MESSAGES(conversationId) + qs);
+    return (data || []).map(mapChatMessage);
   },
 
   async sendMessage(
@@ -60,11 +113,12 @@ export const chatService = {
     _userId?: string,
     replyToMessageId?: string
   ): Promise<ChatMessage> {
-    return apiClient.post(ENDPOINTS.CONVERSATIONS.MESSAGES(conversationId), {
+    const data = await apiClient.post<any>(ENDPOINTS.CONVERSATIONS.MESSAGES(conversationId), {
       content,
       type: 'text',
       replyToMessageId: replyToMessageId || null,
     });
+    return mapChatMessage(data);
   },
 
   async editMessage(messageId: string, newContent: string): Promise<void> {

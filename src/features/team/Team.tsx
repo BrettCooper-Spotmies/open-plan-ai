@@ -88,15 +88,14 @@ const Team = () => {
     return role.trim().toLowerCase();
   };
 
-  const handleMessageClick = async (memberId: string) => {
-    if (memberId === user?.id) return;
+  const handleMessageClick = async (targetUserId: string) => {
+    if (!targetUserId || targetUserId === user?.id) return;
     try {
-      setIsStartingChat(memberId);
-      const convId = await chatService.getOrCreateDM(memberId);
+      setIsStartingChat(targetUserId);
+      const convId = await chatService.getOrCreateDM(targetUserId);
       navigate(`/chat/${convId}`);
-    } catch (err) {
-      console.error('Failed to start chat:', err);
-      toast.error('Failed to start chat');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start chat');
     } finally {
       setIsStartingChat(null);
     }
@@ -526,8 +525,8 @@ const Team = () => {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => handleMessageClick(member.id)}
-                          disabled={isStartingChat === member.id}
+                          onClick={() => handleMessageClick(member.userId)}
+                          disabled={isStartingChat === member.userId}
                           title="Message"
                         >
                           <MessageSquare className="h-4 w-4" />

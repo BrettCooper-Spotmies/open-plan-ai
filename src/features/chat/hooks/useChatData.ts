@@ -305,25 +305,18 @@ export function useMessages(conversationId: string | null) {
     channelRef.current = chatTransport.subscribeToMessages(
       conversationId,
       async (payload) => {
-        const newMsg = payload.new;
-        const newMsgCreatedAtTs = new Date((newMsg as any)?.created_at).getTime();
+        // SocketIO backend sends MessageResponse directly;
+        // Supabase sent { new: row }. Handle both shapes.
+        const raw = payload as any;
+        const newMsg = raw?.new ?? raw;
+        const msgCreatedAt = newMsg?.createdAt ?? newMsg?.created_at;
+        const newMsgCreatedAtTs = msgCreatedAt ? new Date(msgCreatedAt).getTime() : NaN;
         const leftAtTs = leftAt ? new Date(leftAt).getTime() : NaN;
 
-        if (
-          Number.isFinite(leftAtTs) &&
-          Number.isFinite(newMsgCreatedAtTs) &&
-          newMsgCreatedAtTs > leftAtTs
-        ) {
-          return;
-        }
+        if (Number.isFinite(leftAtTs) && Number.isFinite(newMsgCreatedAtTs) && newMsgCreatedAtTs > leftAtTs) return;
         const joinedAtTs = joinedAt ? new Date(joinedAt).getTime() : NaN;
-        if (
-          Number.isFinite(joinedAtTs) &&
-          Number.isFinite(newMsgCreatedAtTs) &&
-          newMsgCreatedAtTs < joinedAtTs
-        ) {
-          return;
-        }
+        if (Number.isFinite(joinedAtTs) && Number.isFinite(newMsgCreatedAtTs) && newMsgCreatedAtTs < joinedAtTs) return;
+
         const mapped = mapMessage(newMsg as any, null);
         setMessages((prev) => {
           if (prev.some((m) => m.id === mapped.id)) return prev;
@@ -471,7 +464,8 @@ export function useMessages(conversationId: string | null) {
     updateChannelRef.current = chatTransport.subscribeToMessageUpdates(
       conversationId,
       (payload) => {
-        const updatedRow = payload.new as any;
+        const raw = payload as any;
+        const updatedRow = raw?.new ?? raw;
         setMessages((prev) =>
           prev.map((m) => {
             if (m.id !== updatedRow.id) return m;

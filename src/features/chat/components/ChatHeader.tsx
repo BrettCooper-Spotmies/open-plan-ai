@@ -35,8 +35,8 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText }: 
   };
 
   const initials = conversation.type === 'dm'
-    ? otherMember?.initials || '??'
-    : conversation.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+    ? otherMember?.initials || otherMember?.name?.slice(0, 2).toUpperCase() || '??'
+    : (conversation.name || conversation.title || 'GC').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
 
   const avatarUrl = conversation.type === 'dm' ? otherMember?.avatarUrl : conversation.avatarUrl;
 

@@ -68,6 +68,7 @@ export interface Conversation {
   id: string;
   type: ConversationType;
   name: string;
+  title?: string | null;
   description?: string;
   avatarUrl?: string;
   members: ConversationMember[];
