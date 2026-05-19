@@ -186,14 +186,21 @@ const Team = () => {
       setInviteRole('');
       setInviteDepartment('');
     } catch (err: any) {
-      const apiMessage = err?.response?.data?.error?.message || err?.message || '';
+      const apiMessage = typeof err?.response?.data?.error?.message === 'string'
+        ? err.response.data.error.message
+        : typeof err?.response?.data?.message === 'string'
+          ? err.response.data.message
+          : typeof err?.message === 'string'
+            ? err.message
+            : 'Failed to send invitation. Please try again.';
+
       const lower = apiMessage.toLowerCase();
-      if (lower.includes('already') || lower.includes('pending') || lower.includes('conflict')) {
-        toast.info(`An invitation has already been sent to ${inviteEmail}. Check the pending invitations list.`);
-      } else if (lower.includes('already a member')) {
+      if (lower.includes('already a member')) {
         toast.info(`${inviteEmail} is already a member of this organization.`);
+      } else if (lower.includes('already exists') || lower.includes('already pending') || lower.includes('conflict')) {
+        toast.info(`Invitation already sent — a pending invitation already exists for ${inviteEmail}.`);
       } else {
-        toast.error(apiMessage || 'Failed to send invitation. Please try again.');
+        toast.error(apiMessage);
       }
     }
   };
@@ -470,12 +477,15 @@ const Team = () => {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
+                        {member.avatar_url && (
+                          <img src={member.avatar_url} alt={member.name} className="h-full w-full rounded-full object-cover" />
+                        )}
                         <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">
-                          {member.initials}
+                          {member.initials || member.name?.slice(0, 2).toUpperCase() || '?'}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium text-sm">{member.name}</p>
+                        <p className="font-medium text-sm">{member.name || member.email}</p>
                       </div>
                     </div>
                   </TableCell>

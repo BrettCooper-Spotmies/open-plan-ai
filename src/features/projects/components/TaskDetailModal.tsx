@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { attachmentsService } from '@/services/attachments.service';
 import { format, isBefore, startOfToday, parseISO } from 'date-fns';
 import {
   Dialog,
@@ -476,14 +477,51 @@ export const TaskDetailModal = ({
 
   // Attachment handlers
   const attachments = editedTask.attachments || [];
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = async (_e: React.ChangeEvent<HTMLInputElement>) => {
-    // File uploads are not yet supported in this backend version
-    toast.info('File attachments coming soon');
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setIsUploading(true);
+    try {
+      const results = await Promise.all(
+        Array.from(files).map(file =>
+          attachmentsService.upload({
+            entityId: task.id,
+            entityType: 'task',
+            projectId: task.projectId,
+            file,
+          })
+        )
+      );
+      handleFieldChange('attachments', [
+        ...attachments,
+        ...results.map(r => ({
+          id: r.id,
+          name: r.fileName ?? r.file_name ?? 'file',
+          url: r.fileUrl ?? r.url ?? '',
+          size: r.fileSize ?? r.file_size ?? 0,
+          type: r.mimeType ?? r.mime_type ?? '',
+          uploadedAt: r.createdAt ?? r.uploaded_at ?? new Date().toISOString(),
+        })),
+      ]);
+      toast.success(`${results.length} file(s) uploaded`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to upload file');
+    } finally {
+      setIsUploading(false);
+      if (e.target) e.target.value = '';
+    }
   };
 
-  const handleRemoveAttachment = (attachmentId: string) => {
-    handleFieldChange('attachments', attachments.filter(a => a.id !== attachmentId));
+  const handleRemoveAttachment = async (attachmentId: string) => {
+    try {
+      await attachmentsService.delete(attachmentId);
+      handleFieldChange('attachments', attachments.filter((a: any) => a.id !== attachmentId));
+    } catch {
+      handleFieldChange('attachments', attachments.filter((a: any) => a.id !== attachmentId));
+    }
   };
 
   const hasSelectedModules = (editedTask.moduleIds || []).length > 0;

@@ -37,16 +37,20 @@ export function useOrganizationMembers(orgId: string | undefined) {
           const profileId = (m.userId ?? m.user_id ?? m.id) as string | undefined;
           if (!profileId || !isValidUuid(profileId)) return null;
 
-          const email = (m.email ?? '') as string;
-          const name = ((m.name ?? '') as string).trim() || email.split('@')[0] || 'Unknown';
+          // Backend nests profile data under `user`; also handle flat shape for flexibility
+          const u = (m.user ?? {}) as Record<string, unknown>;
+          const email = (u.email ?? m.email ?? '') as string;
+          const name = ((u.name ?? m.name ?? '') as string).trim() || email.split('@')[0] || 'Member';
+          const avatarUrl = (u.avatarUrl ?? u.avatar_url ?? m.avatarUrl ?? m.avatar_url ?? undefined) as string | undefined;
+          const initials = ((u.initials ?? m.initials ?? name.slice(0, 2).toUpperCase()) as string);
 
           return {
             id: profileId,
             name,
             email,
             role: (m.role ?? 'member') as string,
-            avatar: (m.avatarUrl ?? m.avatar_url ?? undefined) as string | undefined,
-            initials: ((m.initials ?? name.slice(0, 2).toUpperCase()) as string),
+            avatar: avatarUrl,
+            initials,
           } satisfies TeamMember;
         })
         .filter((member): member is TeamMember => member !== null);
@@ -73,19 +77,22 @@ export function useProjectMembers(projectId: string | undefined) {
           const profileId = (m.userId ?? m.user_id ?? m.id) as string | undefined;
           if (!profileId || !isValidUuid(profileId)) return null;
 
-          const name = (m.name ?? '') as string;
-          if (!name.trim()) return null;
-
           if (seen.has(profileId)) return null;
           seen.add(profileId);
+
+          const u = (m.user ?? {}) as Record<string, unknown>;
+          const email = (u.email ?? m.email ?? '') as string;
+          const name = ((u.name ?? m.name ?? '') as string).trim() || email.split('@')[0] || 'Member';
+          const avatarUrl = (u.avatarUrl ?? u.avatar_url ?? m.avatarUrl ?? m.avatar_url ?? undefined) as string | undefined;
+          const initials = ((u.initials ?? m.initials ?? name.slice(0, 2).toUpperCase()) as string);
 
           return {
             id: profileId,
             name,
-            email: (m.email ?? '') as string,
+            email,
             role: (m.role ?? 'member') as string,
-            avatar: (m.avatarUrl ?? m.avatar_url ?? undefined) as string | undefined,
-            initials: ((m.initials ?? name.slice(0, 2).toUpperCase()) as string),
+            avatar: avatarUrl,
+            initials,
           } satisfies TeamMember;
         })
         .filter((member): member is TeamMember => member !== null);

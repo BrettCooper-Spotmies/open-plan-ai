@@ -46,20 +46,28 @@ export interface InviteResult {
 
 export const normalizeEmail = normalizeInviteEmail;
 
-/** Map an API member response to the TeamMember shape. */
+/** Map an API member response to the TeamMember shape.
+ * Backend returns profile data nested under `user`; also handles flat shape. */
 function fromApi(raw: Record<string, unknown>): TeamMember {
+  const u = (raw.user ?? {}) as Record<string, unknown>;
+  const email = (u.email ?? raw.email ?? '') as string;
+  const name = ((u.name ?? raw.name ?? '') as string).trim() || email.split('@')[0] || '';
+  const avatarUrl = (u.avatarUrl ?? u.avatar_url ?? raw.avatarUrl ?? raw.avatar_url ?? null) as string | null;
+  const initials = ((u.initials ?? raw.initials ?? '') as string) ||
+    name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+
   return {
     id: raw.id as string,
     userId: (raw.userId ?? raw.user_id ?? raw.id) as string,
-    name: (raw.name ?? '') as string,
-    email: (raw.email ?? '') as string,
+    name,
+    email,
     role: (raw.role ?? 'member') as string,
     status: ((raw.status as string) ?? 'active') as 'active' | 'inactive' | 'pending',
     department: raw.department as string | undefined,
     projectCount: (raw.projectCount ?? 0) as number,
     joinedAt: (raw.joinedAt ?? raw.joined_at ?? null) as string | null,
-    avatar_url: (raw.avatarUrl ?? raw.avatar_url ?? null) as string | null,
-    initials: (raw.initials ?? '') as string,
+    avatar_url: avatarUrl,
+    initials,
   };
 }
 
@@ -88,7 +96,14 @@ export const teamService = {
       });
       return { outcome: 'sent' };
     } catch (err: any) {
-      const message: string = err?.response?.data?.error || err?.message || '';
+      const raw = err?.response?.data?.error;
+      const message: string = typeof raw?.message === 'string'
+        ? raw.message
+        : typeof raw === 'string'
+          ? raw
+          : typeof err?.message === 'string'
+            ? err.message
+            : '';
       const lowered = message.toLowerCase();
       if (lowered.includes('already pending')) {
         return { outcome: 'already_pending', message };

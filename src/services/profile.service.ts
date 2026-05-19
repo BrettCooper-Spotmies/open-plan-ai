@@ -38,12 +38,19 @@ export const profileService = {
     return mapToProfile(data);
   },
 
-  async uploadAvatar(_file: File): Promise<string> {
-    throw new Error('Avatar upload is not yet supported in this backend version.');
+  async uploadAvatar(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const res = await apiClient.raw.post<{ success: boolean; data: { avatarUrl: string } }>(
+      ENDPOINTS.UPLOADS.AVATAR,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return res.data.data.avatarUrl;
   },
 
   async deleteAvatar(): Promise<void> {
-    throw new Error('Avatar deletion is not yet supported in this backend version.');
+    await apiClient.delete<void>(ENDPOINTS.UPLOADS.AVATAR);
   },
 
   async updatePassword(_newPassword: string): Promise<void> {

@@ -112,30 +112,63 @@ axiosInstance.interceptors.response.use(
   },
 );
 
+/**
+ * Extract the most meaningful error message from an axios error response.
+ * Priority: first details[].message → error.message → generic fallback
+ */
+function extractApiError(err: unknown): Error {
+  const e = err as any;
+  const body = e?.response?.data;
+  if (body) {
+    // Pick the first field-level validation detail if present
+    const detail = body?.error?.details?.[0]?.message;
+    if (typeof detail === 'string' && detail) {
+      return Object.assign(new Error(detail), { response: e.response });
+    }
+    // Fall back to the top-level error message
+    const msg = body?.error?.message ?? body?.message;
+    if (typeof msg === 'string' && msg) {
+      return Object.assign(new Error(msg), { response: e.response });
+    }
+  }
+  // Last resort: the raw axios message
+  return err instanceof Error ? err : new Error('An unexpected error occurred');
+}
+
 class ApiClient {
   async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.get(url, config);
-    return res.data.data;
+    try {
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.get(url, config);
+      return res.data.data;
+    } catch (err) { throw extractApiError(err); }
   }
 
   async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-    const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.post(url, data, config);
-    return res.data.data;
+    try {
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.post(url, data, config);
+      return res.data.data;
+    } catch (err) { throw extractApiError(err); }
   }
 
   async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-    const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.put(url, data, config);
-    return res.data.data;
+    try {
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.put(url, data, config);
+      return res.data.data;
+    } catch (err) { throw extractApiError(err); }
   }
 
   async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-    const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.patch(url, data, config);
-    return res.data.data;
+    try {
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.patch(url, data, config);
+      return res.data.data;
+    } catch (err) { throw extractApiError(err); }
   }
 
   async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.delete(url, config);
-    return res.data.data;
+    try {
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.delete(url, config);
+      return res.data.data;
+    } catch (err) { throw extractApiError(err); }
   }
 
   // Raw axios for cases where we need full response or skip the data unwrap

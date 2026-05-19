@@ -612,27 +612,14 @@ const NewProject = () => {
         ));
       }
 
-      // Upload files to Supabase Storage and create attachment records
+      // Upload files to S3 storage
       if (attachments.length > 0) {
         const filesToUpload = attachments.filter(att => att.file);
         if (filesToUpload.length > 0) {
           try {
-            const uploadResults = await Promise.all(
-              filesToUpload.map(att => projectStorageService.uploadFile(att.file!, project.id))
+            await Promise.all(
+              filesToUpload.map(att => projectStorageService.upload(project.id, att.file!))
             );
-
-            // Create attachment records in the database
-            const attachmentRecords = uploadResults.map(result => ({
-              entity_id: project.id,
-              entity_type: 'project' as const,
-              file_name: result.name,
-              file_path: result.path,
-              file_size: result.sizeBytes,
-              mime_type: result.mimeType,
-              project_id: project.id,
-            }));
-
-            await attachmentsService.createMany(attachmentRecords);
             toast.success(`${filesToUpload.length} file(s) uploaded successfully`);
           } catch (uploadError) {
             console.error('Error uploading files:', uploadError);

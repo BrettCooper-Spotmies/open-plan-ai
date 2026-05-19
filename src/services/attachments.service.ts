@@ -1,35 +1,65 @@
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
+
 export interface AttachmentRecord {
   id: string;
-  entity_id: string;
-  entity_type: string;
-  file_name: string;
-  file_path: string;
-  file_size: number | null;
-  mime_type: string | null;
-  project_id: string | null;
-  uploaded_by: string | null;
-  uploaded_at: string | null;
+  entityId?: string;
+  entityType?: string;
+  projectId?: string | null;
+  fileName?: string;
+  fileKey?: string;
+  fileUrl?: string;
+  fileSize?: number | null;
+  mimeType?: string | null;
+  uploadedBy?: string | null;
+  createdAt?: string;
+  // Legacy snake_case aliases
+  entity_id?: string;
+  entity_type?: string;
+  file_name?: string;
+  file_path?: string;
+  file_size?: number | null;
+  mime_type?: string | null;
+  project_id?: string | null;
+  uploaded_by?: string | null;
+  uploaded_at?: string | null;
   url?: string;
 }
 
-export interface CreateAttachmentInput {
-  entity_id: string;
-  entity_type: 'project' | 'task' | 'issue' | 'milestone' | 'module';
-  file_name: string;
-  file_path: string;
-  file_size?: number;
-  mime_type?: string;
-  project_id?: string;
+export interface UploadAttachmentInput {
+  entityId: string;
+  entityType: 'project' | 'task' | 'issue' | 'milestone' | 'module';
+  projectId?: string;
+  file: File;
 }
 
 export const attachmentsService = {
-  async create(_input: CreateAttachmentInput): Promise<AttachmentRecord> {
-    throw new Error('File attachments are not yet supported');
+  async upload(input: UploadAttachmentInput): Promise<AttachmentRecord> {
+    const formData = new FormData();
+    formData.append('file', input.file);
+    formData.append('entityId', input.entityId);
+    formData.append('entityType', input.entityType);
+    if (input.projectId) formData.append('projectId', input.projectId);
+
+    const res = await apiClient.raw.post<{ success: boolean; data: AttachmentRecord }>(
+      ENDPOINTS.UPLOADS.ATTACHMENTS,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return res.data.data;
   },
-  async getByEntity(_entityId: string, _entityType: string): Promise<AttachmentRecord[]> {
-    return [];
+
+  async getByEntity(entityId: string, entityType: string): Promise<AttachmentRecord[]> {
+    try {
+      return await apiClient.get<AttachmentRecord[]>(
+        ENDPOINTS.UPLOADS.BY_ENTITY(entityType, entityId),
+      );
+    } catch {
+      return [];
+    }
   },
-  async delete(_id: string): Promise<void> {
-    throw new Error('File attachments are not yet supported');
+
+  async delete(id: string): Promise<void> {
+    await apiClient.delete<void>(ENDPOINTS.UPLOADS.ATTACHMENT(id));
   },
 };

@@ -130,4 +130,11 @@ export const ENDPOINTS = {
   LINKS: {
     DELETE: (id: string) => `/links/${id}`,
   },
+  // Uploads
+  UPLOADS: {
+    AVATAR: '/uploads/avatar',
+    ATTACHMENTS: '/uploads/attachments',
+    ATTACHMENT: (id: string) => `/uploads/attachments/${id}`,
+    BY_ENTITY: (entityType: string, entityId: string) => `/uploads/attachments/${entityType}/${entityId}`,
+  },
 };
