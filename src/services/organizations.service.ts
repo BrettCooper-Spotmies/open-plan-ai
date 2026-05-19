@@ -1,5 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
+import { attachmentsService } from './attachments.service';
 
 export interface OrganizationSettings {
   companyName?: string;
@@ -116,6 +117,28 @@ export const organizationsService = {
   async getMemberOrganizations(userId: string): Promise<{ organization_id: string; role: string }[]> {
     // No dedicated endpoint; return empty so consumers degrade gracefully.
     return [];
+  },
+
+  /**
+   * Upload organization logo to S3, then save the URL in org settings.
+   */
+  async uploadLogo(orgId: string, file: File): Promise<string> {
+    const record = await attachmentsService.upload({
+      entityId: orgId,
+      entityType: 'organization',
+      file,
+    });
+    const logoUrl = record.fileUrl ?? record.url ?? '';
+    // Persist logo URL in org settings
+    await this.update(orgId, { settings: { logoUrl } });
+    return logoUrl;
+  },
+
+  /**
+   * Remove organization logo — clear from settings.
+   */
+  async deleteLogo(orgId: string): Promise<void> {
+    await this.update(orgId, { settings: { logoUrl: '' } });
   },
 
   /**

@@ -118,6 +118,7 @@ const Settings = () => {
   });
   const [orgLoading, setOrgLoading] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
+  const [localAvatarPreview, setLocalAvatarPreview] = useState<string | null>(null);
   const currentOrgRole = (currentOrganization?.myRole ?? null) as 'admin' | 'manager' | 'member' | 'viewer' | null;
 
   // New organization creation state
@@ -284,12 +285,20 @@ const Settings = () => {
         return;
       }
 
+      // Show local preview immediately
+      const localPreview = URL.createObjectURL(file);
+      setLocalAvatarPreview(localPreview);
+
       setAvatarLoading(true);
       try {
         await profileService.uploadAvatar(file);
         await refreshProfile();
+        URL.revokeObjectURL(localPreview);
+        setLocalAvatarPreview(null);
         toast.success('Avatar updated successfully');
       } catch (error) {
+        URL.revokeObjectURL(localPreview);
+        setLocalAvatarPreview(null);
         console.error('Error uploading avatar:', error);
         toast.error('Failed to upload avatar');
       } finally {
@@ -313,18 +322,26 @@ const Settings = () => {
         return;
       }
 
+      // Show local preview immediately
+      const localPreview = URL.createObjectURL(file);
+      setOrgForm(prev => ({ ...prev, logoUrl: localPreview }));
+
       setLogoLoading(true);
       try {
         const logoUrl = await organizationsService.uploadLogo(currentOrganization.id, file);
+        // Replace local blob URL with the permanent server URL
+        URL.revokeObjectURL(localPreview);
         setOrgForm(prev => ({ ...prev, logoUrl }));
         await refreshOrganizations();
         toast.success('Organization logo updated successfully');
       } catch (error) {
+        // Revert preview on failure
+        URL.revokeObjectURL(localPreview);
+        setOrgForm(prev => ({ ...prev, logoUrl: '' }));
         console.error('Error uploading logo:', error);
         toast.error('Failed to upload logo');
       } finally {
         setLogoLoading(false);
-        // Reset file input to allow re-uploading the same file
         if (logoInputRef.current) {
           logoInputRef.current.value = '';
         }
@@ -699,15 +716,18 @@ const Settings = () => {
                 <CardContent className="space-y-6">
                   <div className="flex items-center gap-6">
                     <Avatar className="h-20 w-20">
-                      {avatarLoading ? (
+                      {avatarLoading && !localAvatarPreview ? (
                         <AvatarFallback className="bg-primary/10">
                           <Loader2 className="h-6 w-6 animate-spin" />
                         </AvatarFallback>
-                      ) : profile?.avatar_url ? (
-                        <AvatarImage src={profile.avatar_url} alt={profile.name} />
+                      ) : localAvatarPreview || profile?.avatar_url || (profile as any)?.avatarUrl ? (
+                        <AvatarImage
+                          src={localAvatarPreview || profile?.avatar_url || (profile as any)?.avatarUrl}
+                          alt={profile?.name || 'Avatar'}
+                        />
                       ) : (
                         <AvatarFallback className="bg-primary/10 text-primary text-2xl">
-                          {profileForm.initials || 'U'}
+                          {profileForm.initials || profile?.name?.slice(0, 2).toUpperCase() || 'U'}
                         </AvatarFallback>
                       )}
                     </Avatar>
