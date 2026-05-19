@@ -30,6 +30,8 @@ export const ENDPOINTS = {
     INVITATIONS: (orgId: string) => `/organizations/${orgId}/invitations`,
     REVOKE_INVITATION: (orgId: string, invId: string) => `/organizations/${orgId}/invitations/${invId}`,
     ACCEPT_INVITATION: '/invitations/accept',
+    MY_INVITATIONS: '/invitations/my',
+    ACCEPT_BY_ID: (id: string) => `/invitations/${id}/accept`,
     ACTIVITIES: (orgId: string) => `/organizations/${orgId}/activities`,
     REPORTS_OVERVIEW: (orgId: string) => `/organizations/${orgId}/reports/overview`,
   },

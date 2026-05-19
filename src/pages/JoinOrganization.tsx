@@ -64,10 +64,11 @@ export default function JoinOrganization() {
     setAccepting(true);
     try {
       await teamService.acceptInvitation(inviteParam);
+      // Clear any stored invite token now that it's been used
+      localStorage.removeItem('pending_invite_token');
       setSuccess(true);
       setTimeout(() => navigate('/'), 1500);
     } catch (err: any) {
-      console.error(err);
       setError(err.message || 'Failed to accept invitation.');
     } finally {
       setAccepting(false);
@@ -123,19 +124,24 @@ export default function JoinOrganization() {
               <p className="text-sm text-muted-foreground">You've joined {orgName}. Redirecting...</p>
             </div>
           ) : !user ? (
-            <div className="flex flex-col items-center gap-3 text-center">
+            <div className="flex flex-col items-center gap-4 text-center">
               <p className="text-sm text-muted-foreground">
-                Please log in to accept this invitation.
+                You've been invited to join <strong>{orgName}</strong> as a <strong>{invitation?.role || 'member'}</strong>.
+                Sign in or create an account to accept.
               </p>
-              <Link to={`/login?redirect=${encodeURIComponent(`/join-org?invite=${inviteParam}`)}`}>
-                <Button>Log In</Button>
-              </Link>
-              <p className="text-xs text-muted-foreground">
-                Don't have an account?{' '}
-                <Link to={`/signup?invite=${inviteParam}`} className="text-primary underline">
-                  Sign up
+              <div className="flex w-full flex-col gap-2">
+                <Link to={`/signup?invite=${inviteParam}`} className="w-full">
+                  <Button className="w-full">Create Account</Button>
                 </Link>
-              </p>
+                <Link to={`/login?redirect=${encodeURIComponent(`/join-org?invite=${inviteParam}`)}`} className="w-full">
+                  <Button variant="outline" className="w-full">I already have an account</Button>
+                </Link>
+              </div>
+              {invitation?.expiresAt && (
+                <p className="text-xs text-muted-foreground">
+                  Invitation expires {new Date(invitation.expiresAt).toLocaleDateString()}
+                </p>
+              )}
             </div>
           ) : inviteEmailMismatch ? (
             <div className="flex flex-col items-center gap-4 text-center">
@@ -163,12 +169,17 @@ export default function JoinOrganization() {
           ) : (
             <div className="flex flex-col items-center gap-4 text-center">
               <p className="text-sm text-muted-foreground">
-                Join <strong>{orgName}</strong> as a <strong>{invitation?.role || 'member'}</strong>.
+                You'll join <strong>{orgName}</strong> as a <strong>{invitation?.role || 'member'}</strong>.
               </p>
               <Button onClick={handleAccept} disabled={accepting} className="w-full">
                 {accepting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Join Organization
+                Accept & Join Organization
               </Button>
+              {invitation?.expiresAt && (
+                <p className="text-xs text-muted-foreground">
+                  Invitation expires {new Date(invitation.expiresAt).toLocaleDateString()}
+                </p>
+              )}
             </div>
           )}
         </CardContent>

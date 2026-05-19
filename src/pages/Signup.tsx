@@ -5,11 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, Mail, Lock, User, Building2, Factory, ArrowRight, Check, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Layers, Mail, Lock, User, Building2, Factory, ArrowRight, Check, AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { getPasswordRequirements, getUnmetRequirementLabels } from "@/lib/passwordValidation";
+import { apiClient } from "@/services/api/client";
 
 const industries = [
   "Medical Devices",
@@ -41,12 +42,27 @@ const Signup = () => {
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState<string>('');
+  const [inviteOrgName, setInviteOrgName] = useState<string>('');
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
 
-  // If there's an invite token, store it in localStorage
+  // Validate invite token, pre-fill and lock the email
   useEffect(() => {
-    if (inviteToken) {
-      localStorage.setItem('pending_invite_token', inviteToken);
-    }
+    if (!inviteToken) return;
+    localStorage.setItem('pending_invite_token', inviteToken);
+    setInviteLoading(true);
+    apiClient.get<any>(`/invitations/lookup?invite=${encodeURIComponent(inviteToken)}`)
+      .then((data) => {
+        setInviteEmail(data.email || '');
+        setInviteOrgName(data.organizationName || '');
+        setFormData(prev => ({ ...prev, email: data.email || '' }));
+      })
+      .catch(() => {
+        setInviteError('This invitation is invalid, expired, or already used.');
+        localStorage.removeItem('pending_invite_token');
+      })
+      .finally(() => setInviteLoading(false));
   }, [inviteToken]);
 
   const handleChange = (field: string, value: string) => {
@@ -223,11 +239,28 @@ const Signup = () => {
                 </Alert>
               )}
 
-              {isInviteSignup && (
-                <Alert>
-                  <Mail className="h-4 w-4" />
+              {isInviteSignup && inviteLoading && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Validating invitation...
+                </div>
+              )}
+
+              {isInviteSignup && !inviteLoading && !inviteError && inviteOrgName && (
+                <Alert className="border-primary/40 bg-primary/5">
+                  <Mail className="h-4 w-4 text-primary" />
                   <AlertDescription>
-                    You've been invited to join a team. Create your account to get started.
+                    You've been invited to join <strong>{inviteOrgName}</strong>. Create your account to get started.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {inviteError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    {inviteError}{' '}
+                    <Link to="/login" className="underline">Go to login</Link>
                   </AlertDescription>
                 </Alert>
               )}
@@ -250,7 +283,10 @@ const Signup = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="email">Work Email</Label>
+                <Label htmlFor="email">
+                  Work Email
+                  {inviteEmail && <span className="ml-2 text-xs text-muted-foreground font-normal">(locked to invited address)</span>}
+                </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -258,10 +294,11 @@ const Signup = () => {
                     type="email"
                     placeholder="you@company.com"
                     value={formData.email}
-                    onChange={(e) => handleChange("email", e.target.value)}
-                    className="pl-10"
+                    onChange={(e) => !inviteEmail && handleChange("email", e.target.value)}
+                    className={cn("pl-10", inviteEmail && "bg-muted cursor-not-allowed")}
                     required
-                    disabled={isLoading}
+                    readOnly={!!inviteEmail}
+                    disabled={isLoading || !!inviteEmail}
                     autoComplete="email"
                   />
                 </div>
@@ -397,7 +434,7 @@ const Signup = () => {
               )}
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={isLoading || authLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading || authLoading || inviteLoading || !!inviteError}>
                 {isLoading ? (
                   "Creating account..."
                 ) : (

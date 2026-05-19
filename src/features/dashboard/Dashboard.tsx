@@ -64,10 +64,12 @@ export default function Dashboard() {
 
   const [acceptingInvite, setAcceptingInvite] = useState<string | null>(null);
 
-  const handleAcceptInvite = async (invitation: { id: string; token?: string | null }) => {
+  const handleAcceptInvite = async (invitation: { id: string }) => {
     setAcceptingInvite(invitation.id);
     try {
-      await teamService.acceptInvitation(invitation.id || invitation.token || '');
+      const { apiClient } = await import('@/services/api/client');
+      const { ENDPOINTS } = await import('@/services/api/endpoints');
+      await apiClient.post(ENDPOINTS.ORGANIZATIONS.ACCEPT_BY_ID(invitation.id), {});
       toast.success('Successfully joined the organization!');
       await refreshOrganizations();
       queryClient.invalidateQueries({ queryKey: ['pending-invitations'] });

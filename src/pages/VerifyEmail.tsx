@@ -79,11 +79,18 @@ const VerifyEmail = () => {
 
       sessionStorage.removeItem('openplan_pending_verify');
 
-      // Refresh auth context so isEmailVerified becomes true, then go to dashboard
+      // Refresh auth context so isEmailVerified becomes true
       await refreshProfile();
 
+      // If there's a pending invite, redirect to join-org to complete the flow
+      const pendingInvite = localStorage.getItem('pending_invite_token');
       setTimeout(() => {
-        navigate("/");
+        if (pendingInvite) {
+          localStorage.removeItem('pending_invite_token');
+          navigate(`/join-org?invite=${encodeURIComponent(pendingInvite)}`);
+        } else {
+          navigate("/");
+        }
       }, 1500);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Verification failed";

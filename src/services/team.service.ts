@@ -120,9 +120,21 @@ export const teamService = {
     return (data || []) as TeamInvitation[];
   },
 
-  async getPendingInvitationsForUser(email: string): Promise<TeamInvitation[]> {
-    // This endpoint isn't yet defined in ENDPOINTS; return empty for now.
-    return [];
+  async getPendingInvitationsForUser(_email: string): Promise<TeamInvitation[]> {
+    const data = await apiClient.get<any[]>(ENDPOINTS.ORGANIZATIONS.MY_INVITATIONS);
+    return (data || []).map((inv: any) => ({
+      id: inv.id,
+      organization_id: inv.orgId,
+      email: '',
+      role: inv.role,
+      token: inv.token,
+      invited_by: null,
+      status: 'pending',
+      expires_at: inv.expiresAt,
+      accepted_at: null,
+      created_at: inv.createdAt,
+      organizations: { name: inv.organizationName },
+    }));
   },
 
   async cancelInvitation(invitationId: string, orgId: string): Promise<void> {
