@@ -530,18 +530,14 @@ export function useMessages(conversationId: string | null) {
   return { messages: combinedMessages, loading, hasMore, loadMore, refetchMessages, sendMessage, readOnly, readOnlyNotice };
 }
 
-export function useReactions(messages: ChatMessage[], currentUserId?: string) {
+export function useReactions(messages: ChatMessage[], currentUserId?: string, conversationId?: string | null) {
   const [reactionMap, setReactionMap] = useState<Record<string, MessageReaction[]>>({});
-  const channelRef = useRef<Unsubscribe | null>(null);
 
   const fetchReactions = useCallback(async () => {
     if (!messages.length || !currentUserId) return;
     try {
       const ids = messages.map((m) => m.id).filter(id => !id.startsWith('temp-'));
-      if (ids.length === 0) {
-        setReactionMap({});
-        return;
-      }
+      if (ids.length === 0) { setReactionMap({}); return; }
       const map = await chatService.getReactions(ids, currentUserId);
       setReactionMap(map);
     } catch (err) {
@@ -549,20 +545,32 @@ export function useReactions(messages: ChatMessage[], currentUserId?: string) {
     }
   }, [messages, currentUserId]);
 
-  useEffect(() => {
-    fetchReactions();
-  }, [fetchReactions]);
+  useEffect(() => { fetchReactions(); }, [fetchReactions]);
 
-  // Reactions are fetched on demand; realtime updates will be added via Socket.IO in a future iteration.
+  // Real-time: apply the full reaction state pushed by the server — no secondary API call needed
+  useEffect(() => {
+    if (!conversationId) return;
+    const unsub = chatTransport.subscribeToReactionUpdates(
+      conversationId,
+      ({ messageId, reactions }) => {
+        const mapped = reactions.map((r) => ({
+          ...r,
+          reactedByMe: r.userIds.includes(currentUserId ?? ''),
+        }));
+        setReactionMap((prev) => ({ ...prev, [messageId]: mapped }));
+      },
+    );
+    return () => unsub();
+  }, [conversationId, currentUserId]);
 
   const handleToggleReaction = useCallback(async (messageId: string, emoji: string) => {
     try {
       await chatService.toggleReaction(messageId, emoji);
-      await fetchReactions();
+      // The server broadcasts reaction-updated with full state; nothing extra needed here
     } catch (err) {
       console.error('Failed to toggle reaction:', err);
     }
-  }, [fetchReactions]);
+  }, []);
 
   return { reactionMap, handleToggleReaction };
 }

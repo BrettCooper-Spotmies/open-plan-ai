@@ -118,6 +118,11 @@ export const ENDPOINTS = {
     UPDATE: (id: string) => `/comments/${id}`,
     DELETE: (id: string) => `/comments/${id}`,
   },
+  // Message reactions
+  REACTIONS: {
+    TOGGLE: (messageId: string) => `/messages/${messageId}/reactions`,
+    BULK: '/messages/reactions',
+  },
   // Chat / Conversations
   CONVERSATIONS: {
     LIST: '/conversations',

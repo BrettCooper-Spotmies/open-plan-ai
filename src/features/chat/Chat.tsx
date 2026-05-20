@@ -32,7 +32,7 @@ export default function Chat() {
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const activeId = conversationId || (isMobile ? null : activeConversationId);
   const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages, sendMessage, readOnly, readOnlyNotice } = useMessages(activeId ?? null);
-  const { reactionMap, handleToggleReaction } = useReactions(messages, user?.id);
+  const { reactionMap, handleToggleReaction } = useReactions(messages, user?.id, activeId ?? null);
   const { data: reachableUsers = [] } = useReachableUsers();
   const onlineUserIds = useChatStore((s) => s.onlineUserIds);
 

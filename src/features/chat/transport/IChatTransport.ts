@@ -33,6 +33,15 @@ export interface IChatTransport {
     onUpdate: (payload: unknown) => void
   ): Unsubscribe;
 
+  subscribeToReactionUpdates(
+    conversationId: string,
+    onUpdate: (payload: {
+      messageId: string;
+      conversationId: string;
+      reactions: Array<{ emoji: string; count: number; userIds: string[] }>;
+    }) => void
+  ): Unsubscribe;
+
   unsubscribe(channel: Unsubscribe): void;
 
   disconnect(): void;

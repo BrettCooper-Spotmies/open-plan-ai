@@ -192,14 +192,16 @@ export const chatService = {
   },
 
   async getReactions(
-    _messageIds: string[],
+    messageIds: string[],
     _currentUserId: string
   ): Promise<Record<string, MessageReaction[]>> {
-    return {};
+    if (messageIds.length === 0) return {};
+    const ids = messageIds.join(',');
+    return apiClient.get(`${ENDPOINTS.REACTIONS.BULK}?ids=${ids}`);
   },
 
-  async toggleReaction(_messageId: string, _emoji: string): Promise<void> {
-    // Not yet implemented in backend
+  async toggleReaction(messageId: string, emoji: string): Promise<void> {
+    await apiClient.post(ENDPOINTS.REACTIONS.TOGGLE(messageId), { emoji });
   },
 
   async getSharedFiles(

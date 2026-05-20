@@ -5,10 +5,14 @@ import type { IChatTransport, Unsubscribe } from './IChatTransport';
 
 export class SocketIOChatTransport implements IChatTransport {
   private socket: Socket;
+  private activeRooms = new Set<string>();
 
   constructor() {
     this.socket = io(config.api.wsUrl, {
-      auth: { token: tokenStorage.getAccessToken() },
+      // Always read the current token so reconnects use a fresh value
+      auth: (cb: (data: object) => void) => {
+        cb({ token: tokenStorage.getAccessToken() });
+      },
       transports: ['websocket', 'polling'],
       autoConnect: true,
     });
@@ -16,13 +20,22 @@ export class SocketIOChatTransport implements IChatTransport {
     this.socket.on('connect_error', (err) => {
       console.warn('[SocketIOChatTransport] connect error', err.message);
     });
+
+    // Re-join all tracked rooms after every (re)connect
+    this.socket.on('connect', () => {
+      this.activeRooms.forEach((id) => {
+        this.socket.emit('join-conversation', id);
+      });
+    });
   }
 
   private joinRoom(conversationId: string) {
+    this.activeRooms.add(conversationId);
     this.socket.emit('join-conversation', conversationId);
   }
 
   private leaveRoom(conversationId: string) {
+    this.activeRooms.delete(conversationId);
     this.socket.emit('leave-conversation', conversationId);
   }
 
@@ -31,7 +44,11 @@ export class SocketIOChatTransport implements IChatTransport {
     onInsert: (message: unknown) => void
   ): Unsubscribe {
     this.joinRoom(conversationId);
-    const handler = (msg: unknown) => onInsert(msg);
+    // Filter by conversationId — the socket may be in multiple rooms
+    const handler = (msg: unknown) => {
+      if ((msg as any)?.conversationId !== conversationId) return;
+      onInsert(msg);
+    };
     this.socket.on('new-message', handler);
     return () => {
       this.socket.off('new-message', handler);
@@ -44,7 +61,10 @@ export class SocketIOChatTransport implements IChatTransport {
     onUpdate: (message: unknown) => void
   ): Unsubscribe {
     this.joinRoom(conversationId);
-    const handler = (msg: unknown) => onUpdate(msg);
+    const handler = (msg: unknown) => {
+      if ((msg as any)?.conversationId !== conversationId) return;
+      onUpdate(msg);
+    };
     this.socket.on('message-updated', handler);
     return () => {
       this.socket.off('message-updated', handler);
@@ -105,6 +125,23 @@ export class SocketIOChatTransport implements IChatTransport {
     return () => {
       this.socket.off('member-updated', handler);
     };
+  }
+
+  subscribeToReactionUpdates(
+    conversationId: string,
+    onUpdate: (payload: {
+      messageId: string;
+      conversationId: string;
+      reactions: Array<{ emoji: string; count: number; userIds: string[] }>;
+    }) => void
+  ): Unsubscribe {
+    const handler = (payload: unknown) => {
+      const p = payload as { messageId: string; conversationId: string; reactions: Array<{ emoji: string; count: number; userIds: string[] }> };
+      if (p?.conversationId !== conversationId) return;
+      onUpdate(p);
+    };
+    this.socket.on('reaction-updated', handler);
+    return () => { this.socket.off('reaction-updated', handler); };
   }
 
   unsubscribe(unsub: Unsubscribe): void {
