@@ -13,11 +13,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { format, differenceInHours } from 'date-fns';
+import { differenceInHours } from 'date-fns';
 import { ChatMessage, ReadReceipt, MessageReaction } from '../types';
 import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { chatService } from '@/services/chat.service';
+import { useUserTimezone } from '@/hooks/useUserTimezone';
+import { formatTimeInTimezone } from '@/utils/dateTime';
 
 const EMOJI_SET = ['👍', '❤️', '😂', '😮', '🔥', '💯'];
 const EXTENDED_EMOJI_SET = [
@@ -296,6 +298,7 @@ export function MessageBubble({
   message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
   searchQuery, readReceipts, reactions, onEdit, onDelete, onToggleReaction, onReply,
 }: MessageBubbleProps) {
+  const timezone = useUserTimezone();
   const isOwn = message.senderId === currentUserId;
   const isFile = message.contentType === 'file' || message.contentType === 'image' || (message.attachments?.length ?? 0) > 0;
 
@@ -415,7 +418,7 @@ export function MessageBubble({
           </div>
           {showTimestamp && (
             <span className="text-[10px] text-muted-foreground mt-0.5 px-1">
-              {format(new Date(message.createdAt), 'h:mm a')}
+              {formatTimeInTimezone(message.createdAt, timezone)}
             </span>
           )}
         </div>
@@ -424,11 +427,7 @@ export function MessageBubble({
   }
 
   return (
-    <div
-      className={cn('flex gap-2 px-4', isOwn ? 'flex-row-reverse' : 'flex-row')}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
+    <div className={cn('flex gap-2 px-4', isOwn ? 'flex-row-reverse' : 'flex-row')}>
       {isGroupChat && (
         <div className="w-8 shrink-0">
           {showSenderInfo && !isOwn && (
@@ -448,12 +447,20 @@ export function MessageBubble({
         )}
 
         {/* Hover toolbar: emojis + more + 3-dot menu */}
-        <div className="relative">
-          <div className={cn(
-            'absolute z-10 bottom-full mb-1 rounded-lg border border-border bg-popover shadow-md px-1 py-0.5 flex items-center gap-0.5 transition-opacity',
-            isOwn ? 'right-0' : 'left-0',
-            showToolbar ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-          )}>
+        <div
+          className="relative"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+        >
+          <div
+            className={cn(
+              'absolute z-10 top-0 rounded-lg border border-border bg-popover shadow-md px-1 py-0.5 flex items-center gap-0.5 transition-opacity',
+              isOwn ? 'right-full mr-2' : 'left-full ml-2',
+              showToolbar ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            )}
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+          >
             {/* Quick emoji reactions */}
             {EMOJI_SET.map((emoji) => (
               <button
@@ -638,7 +645,7 @@ export function MessageBubble({
 
         {showTimestamp && (
           <span className="text-[10px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1">
-            {format(new Date(message.createdAt), 'h:mm a')}
+            {formatTimeInTimezone(message.createdAt, timezone)}
             {message.isEdited && ' (edited)'}
             {isOwn && (() => {
               const otherReads = (readReceipts ?? []).filter(

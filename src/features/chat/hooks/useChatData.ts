@@ -564,13 +564,49 @@ export function useReactions(messages: ChatMessage[], currentUserId?: string, co
   }, [conversationId, currentUserId]);
 
   const handleToggleReaction = useCallback(async (messageId: string, emoji: string) => {
+    // 1. Optimistic update — instant feedback for the clicker
+    setReactionMap((prev) => {
+      const current = prev[messageId] ?? [];
+      const existing = current.find((r) => r.emoji === emoji);
+
+      if (existing?.reactedByMe) {
+        const newCount = existing.count - 1;
+        if (newCount === 0) return { ...prev, [messageId]: current.filter((r) => r.emoji !== emoji) };
+        return {
+          ...prev,
+          [messageId]: current.map((r) =>
+            r.emoji === emoji
+              ? { ...r, count: newCount, userIds: r.userIds.filter((id) => id !== currentUserId), reactedByMe: false }
+              : r,
+          ),
+        };
+      }
+      if (existing) {
+        return {
+          ...prev,
+          [messageId]: current.map((r) =>
+            r.emoji === emoji
+              ? { ...r, count: r.count + 1, userIds: [...r.userIds, currentUserId ?? ''], reactedByMe: true }
+              : r,
+          ),
+        };
+      }
+      return { ...prev, [messageId]: [...current, { emoji, count: 1, userIds: [currentUserId ?? ''], reactedByMe: true }] };
+    });
+
     try {
+      // 2. Persist + trigger socket broadcast to other users
       await chatService.toggleReaction(messageId, emoji);
-      // The server broadcasts reaction-updated with full state; nothing extra needed here
+      // 3. Reconcile with server truth (handles race conditions and socket failures)
+      const map = await chatService.getReactions([messageId], currentUserId ?? '');
+      setReactionMap((prev) => ({ ...prev, [messageId]: map[messageId] ?? [] }));
     } catch (err) {
       console.error('Failed to toggle reaction:', err);
+      // Revert optimistic update on error
+      const map = await chatService.getReactions([messageId], currentUserId ?? '').catch(() => ({}));
+      setReactionMap((prev) => ({ ...prev, [messageId]: (map as Record<string, MessageReaction[]>)[messageId] ?? prev[messageId] ?? [] }));
     }
-  }, []);
+  }, [currentUserId]);
 
   return { reactionMap, handleToggleReaction };
 }
