@@ -1,6 +1,5 @@
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { MessageBubble } from './MessageBubble';
 import { MessageDateDivider } from './MessageDateDivider';
 import { SystemMessage } from './SystemMessage';
@@ -25,19 +24,65 @@ interface MessageAreaProps {
 
 export function MessageArea({ messages, conversation, hasMore, onLoadMore, readReceiptMap, reactionMap, onEditMessage, onDeleteMessage, onToggleReaction, onReplyMessage }: MessageAreaProps) {
   const { user } = useAuth();
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevConvIdRef = useRef<string | null>(null);
+  const prevMessageCountRef = useRef(0);
+  const atBottomRef = useRef(true);
   const isGroup = conversation.type === 'group';
   const searchQuery = useChatStore((s) => s.messageSearchQuery);
 
+  const scrollToBottom = useCallback((behavior: ScrollBehavior) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    // Consider "at bottom" if within 80px of the bottom
+    atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  }, []);
+
+  // On conversation change: instant jump to bottom (sync, before paint to avoid flash)
+  useLayoutEffect(() => {
+    const convChanged = prevConvIdRef.current !== conversation.id;
+    if (convChanged) {
+      prevConvIdRef.current = conversation.id;
+      prevMessageCountRef.current = messages.length;
+      atBottomRef.current = true;
+      scrollToBottom('instant');
+    }
+  }, [conversation.id, messages.length, scrollToBottom]);
+
+  // On new messages in the same conversation: smooth scroll only if already at bottom
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
+    const isNewConv = prevConvIdRef.current !== conversation.id;
+    if (isNewConv) return; // handled by useLayoutEffect above
+
+    const prevCount = prevMessageCountRef.current;
+    const newCount = messages.length;
+
+    if (newCount <= prevCount) {
+      prevMessageCountRef.current = newCount;
+      return;
+    }
+
+    // Messages were appended (new messages, not history load)
+    // Only auto-scroll if user was already at the bottom
+    if (atBottomRef.current) {
+      scrollToBottom('smooth');
+    }
+
+    prevMessageCountRef.current = newCount;
+  }, [messages.length, conversation.id, scrollToBottom]);
 
   const filteredMessages = useMemo(() => {
     if (!searchQuery.trim()) return messages;
     const q = searchQuery.toLowerCase();
     return messages.filter((m) => m.content.toLowerCase().includes(q));
   }, [messages, searchQuery]);
+
   const messageById = useMemo(() => {
     return new Map(messages.map((message) => [message.id, message]));
   }, [messages]);
@@ -47,7 +92,11 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore, readR
   }
 
   return (
-    <ScrollArea className="flex-1">
+    <div
+      ref={scrollRef}
+      onScroll={handleScroll}
+      className="flex-1 overflow-y-auto"
+    >
       <div className="flex flex-col gap-0.5 pt-4 pb-2">
         {hasMore && onLoadMore && (
           <div className="flex justify-center py-2">
@@ -110,8 +159,7 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore, readR
         {searchQuery.trim() && filteredMessages.length === 0 && (
           <div className="text-center text-sm text-muted-foreground py-8">No messages match your search</div>
         )}
-        <div ref={bottomRef} />
       </div>
-    </ScrollArea>
+    </div>
   );
 }
