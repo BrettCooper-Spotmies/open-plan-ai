@@ -1139,7 +1139,10 @@ export const TaskDetailModal = ({
                                           module: isFirst ? module.type : prev.module,
                                           updatedAt: new Date().toISOString()
                                         };
-                                        onUpdate(updated);
+                                        // Only call onUpdate when editing an existing task, not during creation
+                                        if (mode !== 'create') {
+                                          onUpdate(updated);
+                                        }
                                         return updated;
                                       });
                                       setIsModulePopoverOpen(false);

@@ -923,7 +923,7 @@ export default function ProjectDetail() {
 
 
   const handleTaskCreate = (newTask: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
-    createTaskMutation.mutate(newTask);
+    createTaskMutation.mutate({ projectId: id!, task: newTask });
   };
 
   const handleTaskUpdate = async (updatedTask: Task, onError?: () => void) => {

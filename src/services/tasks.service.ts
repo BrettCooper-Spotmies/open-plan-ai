@@ -2,6 +2,34 @@ import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { Task } from '@/types';
 
+/** Map frontend status values (may use underscores) to backend enum values. */
+function normalizeStatus(status: string | undefined): string {
+  const map: Record<string, string> = {
+    backlog:     'todo',
+    in_progress: 'in-progress',
+    in_review:   'review',
+    in_progress_: 'in-progress',
+  };
+  return map[status ?? ''] ?? status ?? 'todo';
+}
+
+/** Build a clean payload that satisfies the backend createTaskSchema. */
+function toCreatePayload(task: Partial<Task>): Record<string, unknown> {
+  return {
+    title: task.title ?? '',
+    description: task.description || undefined,  // convert null/'' to undefined
+    status: normalizeStatus(task.status),
+    priority: task.priority ?? 'medium',
+    milestoneId: task.milestoneId ?? task.milestone?.id ?? undefined,
+    dueDate: task.dueDate ?? undefined,
+    startDate: task.startDate ?? undefined,
+    tags: task.tags ?? [],
+    assigneeIds: (task.assignees ?? []).map((a: any) => a.id ?? a).filter(Boolean),
+    moduleIds: task.moduleIds ?? [],
+    dependsOnIds: task.blockedBy ?? [],
+  };
+}
+
 export const tasksService = {
   /**
    * Get all tasks — returns empty array; use getByProject for actual data.
@@ -28,7 +56,7 @@ export const tasksService = {
    * Create new task
    */
   async create(projectId: string, task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
-    return apiClient.post<Task>(ENDPOINTS.TASKS.LIST(projectId), task);
+    return apiClient.post<Task>(ENDPOINTS.TASKS.LIST(projectId), toCreatePayload(task));
   },
 
   /**
