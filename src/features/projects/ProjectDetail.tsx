@@ -1403,7 +1403,7 @@ export default function ProjectDetail() {
         statusOptions={(boardColumns ?? []).map((c) => ({
           value: c.status,
           label: c.label,
-          color: c.color.startsWith('#') ? `bg-[${c.color}]` : c.color,
+          color: c.color,   // hex kept as-is; TaskDetailModal dot uses inline style
         }))}
       />
 

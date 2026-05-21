@@ -111,11 +111,19 @@ interface KanbanViewProps {
 
 import { DEFAULT_COLUMNS as SERVICE_DEFAULT_COLUMNS } from '@/services/projectTaskColumns.service';
 
+/** Renders a coloured dot that works with both hex colours and Tailwind classes. */
+function ColumnColorDot({ color }: { color: string }) {
+  if (color.startsWith('#') || color.startsWith('rgb')) {
+    return <span className="w-2.5 h-2.5 rounded-full shrink-0 inline-block" style={{ backgroundColor: color }} />;
+  }
+  return <span className={cn('w-2.5 h-2.5 rounded-full shrink-0 inline-block', color)} />;
+}
+
 const defaultColumns: KanbanColumn[] = SERVICE_DEFAULT_COLUMNS.map((c) => ({
   id: c.id,
   status: c.status,
   label: c.label,
-  color: c.color.startsWith('#') ? `bg-[${c.color}]` : c.color,
+  color: c.color,          // keep hex as-is; ColumnColorDot uses inline style
   isSpecial: c.isSpecial,
 }));
 
@@ -613,7 +621,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                               {isDependenciesColumn ? (
                                 <Link2 className="h-4 w-4 text-status-blocked" />
                               ) : (
-                                <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                                <ColumnColorDot color={column.color} />
                               )}
                               <h3 
                                 title={column.label}

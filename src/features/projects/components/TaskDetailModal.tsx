@@ -106,6 +106,15 @@ interface TaskDetailModalProps {
   statusOptions?: Array<{ value: string; label: string; color?: string }>;
 }
 
+/** Renders a status colour dot that works for both hex colours and Tailwind classes. */
+function StatusDot({ color }: { color: string }) {
+  if (!color) return <span className="w-2 h-2 rounded-full inline-block bg-muted-foreground/60" />;
+  if (color.startsWith('#') || color.startsWith('rgb')) {
+    return <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: color }} />;
+  }
+  return <span className={cn('w-2 h-2 rounded-full inline-block shrink-0', color)} />;
+}
+
 const DEFAULT_STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'backlog',      label: 'Backlog',      color: 'bg-[#6b7280]' },
   { value: 'todo',         label: 'To Do',        color: 'bg-[#3b82f6]' },
@@ -999,7 +1008,7 @@ export const TaskDetailModal = ({
                     <SelectTrigger aria-required="true">
                       <SelectValue>
                         <div className="flex items-center gap-2">
-                          <div className={cn('w-2 h-2 rounded-full', currentStatusColor)} />
+                          <StatusDot color={currentStatusColor} />
                           {currentStatusLabel}
                         </div>
                       </SelectValue>
@@ -1008,7 +1017,7 @@ export const TaskDetailModal = ({
                       {statusOptions.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           <div className="flex items-center gap-2">
-                            <div className={cn('w-2 h-2 rounded-full', option.color)} />
+                            <StatusDot color={option.color} />
                             {option.label}
                           </div>
                         </SelectItem>
