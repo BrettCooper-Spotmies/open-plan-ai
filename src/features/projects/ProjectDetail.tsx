@@ -815,7 +815,7 @@ export default function ProjectDetail() {
     createModuleMutation.mutate({
       name: newModule.name,
       module_type: newModule.type,
-      description: newModule.description || null,
+      description: newModule.description || undefined,
       status: 'active',
       progress: 0,
     });
