@@ -109,13 +109,15 @@ interface KanbanViewProps {
   onAddModule?: () => void;
 }
 
-const defaultColumns: KanbanColumn[] = [
-  { id: 'col-dependencies', status: 'blocked', label: 'Dependencies', color: 'bg-status-blocked', isSpecial: true },
-  { id: 'col-todo', status: 'todo', label: 'To Do', color: 'bg-status-todo' },
-  { id: 'col-in-progress', status: 'in-progress', label: 'In Progress', color: 'bg-status-in-progress' },
-  { id: 'col-review', status: 'review', label: 'Review', color: 'bg-status-review' },
-  { id: 'col-done', status: 'done', label: 'Done', color: 'bg-status-done' },
-];
+import { DEFAULT_COLUMNS as SERVICE_DEFAULT_COLUMNS } from '@/services/projectTaskColumns.service';
+
+const defaultColumns: KanbanColumn[] = SERVICE_DEFAULT_COLUMNS.map((c) => ({
+  id: c.id,
+  status: c.status,
+  label: c.label,
+  color: c.color.startsWith('#') ? `bg-[${c.color}]` : c.color,
+  isSpecial: c.isSpecial,
+}));
 
 const priorityColors = {
   critical: 'bg-priority-critical text-white',

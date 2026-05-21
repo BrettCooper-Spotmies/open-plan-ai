@@ -106,12 +106,12 @@ interface TaskDetailModalProps {
   statusOptions?: Array<{ value: string; label: string; color?: string }>;
 }
 
-const DEFAULT_STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
-  { value: 'todo', label: 'Not Started', color: 'bg-status-todo' },
-  { value: 'in-progress', label: 'In Progress', color: 'bg-status-in-progress' },
-  { value: 'review', label: 'In Review', color: 'bg-status-review' },
-  { value: 'blocked', label: 'Blocked', color: 'bg-status-blocked' },
-  { value: 'done', label: 'Completed', color: 'bg-status-done' },
+const DEFAULT_STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
+  { value: 'backlog',      label: 'Backlog',      color: 'bg-[#6b7280]' },
+  { value: 'todo',         label: 'To Do',        color: 'bg-[#3b82f6]' },
+  { value: 'in_progress',  label: 'In Progress',  color: 'bg-[#f59e0b]' },
+  { value: 'in_review',    label: 'In Review',    color: 'bg-[#8b5cf6]' },
+  { value: 'done',         label: 'Done',         color: 'bg-[#10b981]' },
 ];
 
 const priorityOptions: { value: Priority; label: string; color: string }[] = [

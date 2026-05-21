@@ -39,6 +39,7 @@ import { TaskDetailModal } from './components/TaskDetailModal';
 import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
 import { useOrganizationMembers } from '@/hooks/useProjectTeam';
+import { useProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useUpdateProject } from '@/hooks/useProjects';
 import {
@@ -368,6 +369,7 @@ export default function ProjectDetail() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { id } = useParams();
+  const { data: boardColumns } = useProjectTaskColumns(id);
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const tabParam = searchParams.get('tab') as ProjectSection;
@@ -1398,6 +1400,11 @@ export default function ProjectDetail() {
         projectId={id}
         onAddModule={handleAddModule}
         assignableMembers={project.team || []}
+        statusOptions={(boardColumns ?? []).map((c) => ({
+          value: c.status,
+          label: c.label,
+          color: c.color.startsWith('#') ? `bg-[${c.color}]` : c.color,
+        }))}
       />
 
       <Dialog
