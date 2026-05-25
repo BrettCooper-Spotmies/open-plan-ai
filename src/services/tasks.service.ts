@@ -16,7 +16,7 @@ function normalizeStatus(status: string | undefined): string {
 /** Build a clean payload that satisfies the backend createTaskSchema. */
 function toCreatePayload(task: Partial<Task>): Record<string, unknown> {
   return {
-    title: task.title ?? '',
+    title: task.title?.trim() || '',
     description: task.description || undefined,  // convert null/'' to undefined
     status: normalizeStatus(task.status),
     priority: task.priority ?? 'medium',

@@ -435,6 +435,11 @@ export const TaskDetailModal = ({
   };
 
   const handleCreate = () => {
+    if (!editedTask.title?.trim()) {
+      toast.error('Task title is required');
+      return;
+    }
+
     if (!editedTask.moduleIds || editedTask.moduleIds.length === 0) {
       return;
     }
