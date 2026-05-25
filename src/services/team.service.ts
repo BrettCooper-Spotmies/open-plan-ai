@@ -156,7 +156,7 @@ export const teamService = {
   },
 
   async updateMember(memberId: string, orgId: string, updates: { role?: string; department?: string }): Promise<void> {
-    await apiClient.patch<void>(ENDPOINTS.ORGANIZATIONS.MEMBER_ROLE(orgId, memberId), updates);
+    await apiClient.put<void>(ENDPOINTS.ORGANIZATIONS.MEMBER_ROLE(orgId, memberId), updates);
   },
 
   async remove(memberId: string, orgId: string): Promise<void> {

@@ -38,7 +38,7 @@ import { AddModuleDialog } from './components/AddModuleDialog';
 import { TaskDetailModal } from './components/TaskDetailModal';
 import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
-import { useOrganizationMembers } from '@/hooks/useProjectTeam';
+import { useOrganizationMembers, useProjectMembers } from '@/hooks/useProjectTeam';
 import { useProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useUpdateProject } from '@/hooks/useProjects';
@@ -420,6 +420,7 @@ export default function ProjectDetail() {
   const { data: project, isLoading, error } = useProjectDetail(id);
   const { data: projectModules = [] } = useProjectModules(id);
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
+  const { data: projectMembers = [] } = useProjectMembers(id);
 
   // Mutation hooks
   const createTaskMutation = useCreateTask(id || '');
@@ -557,27 +558,29 @@ export default function ProjectDetail() {
   const canManageProjectMembers = useMemo(() => {
     if (!project || !user?.id) return false;
     if (project.createdBy === user.id) return true;
-    const myMembership = (project.team || []).find((member) => member.id === user.id);
-    return (myMembership?.role || '').toLowerCase() === 'admin';
+    const projectRole = (project.myRole || '').toLowerCase();
+    return projectRole === 'admin';
   }, [project, user?.id]);
 
   const canAddModulesAndMilestones = useMemo(() => {
     if (!user?.id) return false;
     const membership = organizationMembers.find((member) => member.id === user.id);
-    const role = (membership?.role || '').toLowerCase();
-    return role === 'owner' || role === 'admin';
-  }, [organizationMembers, user?.id]);
+    const orgRole = (membership?.role || '').toLowerCase();
+    if (orgRole === 'admin' || orgRole === 'manager') return true;
+    const projectRole = (project?.myRole || '').toLowerCase();
+    return projectRole === 'admin' || projectRole === 'manager';
+  }, [organizationMembers, user?.id, project?.myRole]);
 
   const canStartProjectChat = useMemo(() => {
     if (!project || !user?.id) return false;
     if (project.createdBy === user.id) return true;
-    return (project.team || []).some((member) => member.id === user.id);
+    return !!project.myRole;
   }, [project, user?.id]);
 
   const availableOrganizationMembers = useMemo(() => {
-    const projectMemberIds = new Set((project?.team || []).map((member) => member.id));
+    const projectMemberIds = new Set(projectMembers.map((member) => member.id));
     return organizationMembers.filter((member) => !projectMemberIds.has(member.id));
-  }, [organizationMembers, project?.team]);
+  }, [organizationMembers, projectMembers]);
 
   const selectedOrganizationMember = useMemo(
     () => availableOrganizationMembers.find((member) => member.id === selectedMemberToAdd),
@@ -591,7 +594,7 @@ export default function ProjectDetail() {
       return;
     }
 
-    const isMemberAlreadyInProject = (project.team || []).some((m) => m.id === selectedMemberToAdd);
+    const isMemberAlreadyInProject = projectMembers.some((m) => m.id === selectedMemberToAdd);
     if (isMemberAlreadyInProject) {
       toast.error('Member is already in this project');
       return;
@@ -724,7 +727,7 @@ export default function ProjectDetail() {
       toast.error('Invalid member selection');
       return;
     }
-    const isMemberInProject = (project.team || []).some((m) => m.id === memberId);
+    const isMemberInProject = projectMembers.some((m) => m.id === memberId);
     if (!isMemberInProject) {
       toast.error('That member is not part of this project anymore');
       return;
@@ -1056,9 +1059,9 @@ export default function ProjectDetail() {
                   >
                     <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
                     <span className="text-xs font-medium">Team</span>
-                    <span className="text-xs">{project.team?.length || 0}</span>
+                    <span className="text-xs">{projectMembers.length}</span>
                     <div className="hidden md:flex -space-x-2">
-                      {(project.team || []).slice(0, 5).map((member) => (
+                      {projectMembers.slice(0, 5).map((member) => (
                         <Avatar key={member.id} className="h-5 w-5 md:h-6 md:w-6 border-2 border-background">
                           <AvatarFallback className="text-[10px] bg-muted">
                             {member.initials}
@@ -1071,9 +1074,9 @@ export default function ProjectDetail() {
                 <PopoverContent className="w-80" align="end">
                   <div className="space-y-2">
                     <p className="text-sm font-medium">Project Team</p>
-                    {project.team && project.team.length > 0 ? (
+                    {projectMembers.length > 0 ? (
                       <div className="space-y-2 max-h-52 overflow-y-auto">
-                        {project.team.map((member) => (
+                        {projectMembers.map((member) => (
                           <div key={member.id} className="flex items-center justify-between gap-2">
                             <div className="flex items-center gap-2 min-w-0">
                               <Avatar className="h-7 w-7">
@@ -1095,7 +1098,6 @@ export default function ProjectDetail() {
                                   const memberId = member.id;
                                   const memberName = typeof member.name === 'string' ? member.name : '';
                                   if (!memberId) return;
-                                  if (!project.team?.some((m) => m.id === memberId)) return;
                                   setMemberRemovalPrompt({
                                     open: true,
                                     memberId,
@@ -1312,7 +1314,7 @@ export default function ProjectDetail() {
               milestones={project.milestones || []}
               issues={project.issues || []}
               modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
-              assignableMembers={project.team || []}
+              assignableMembers={organizationMembers}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               filters={filters}
@@ -1399,7 +1401,7 @@ export default function ProjectDetail() {
         modules={modules}
         projectId={id}
         onAddModule={handleAddModule}
-        assignableMembers={project.team || []}
+        assignableMembers={organizationMembers}
         statusOptions={(boardColumns ?? []).map((c) => ({
           value: c.status,
           label: c.label,

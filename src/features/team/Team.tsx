@@ -242,7 +242,7 @@ const Team = () => {
     if (!editMember || !currentOrganization) return;
     try {
       await updateMemberMutation.mutateAsync({
-        memberId: editMember.id,
+        memberId: editMember.userId,
         orgId: currentOrganization.id,
         updates: { role: editRole, department: editDepartment || undefined },
       });
@@ -550,7 +550,7 @@ const Team = () => {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive"
-                              onClick={() => handleRemove(member.id)}
+                              onClick={() => handleRemove(member.userId)}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
                               Remove
@@ -610,7 +610,7 @@ const Team = () => {
               <Select
                 value={editRole}
                 onValueChange={setEditRole}
-                disabled={editMember?.id === user?.id}
+                disabled={editMember?.userId === user?.id}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select role" />
@@ -622,7 +622,7 @@ const Team = () => {
                   <SelectItem value="viewer">Viewer</SelectItem>
                 </SelectContent>
               </Select>
-              {editMember?.id === user?.id && (
+              {editMember?.userId === user?.id && (
                 <p className="text-xs text-muted-foreground">You cannot change your own role.</p>
               )}
             </div>
