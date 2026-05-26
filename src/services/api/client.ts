@@ -4,12 +4,15 @@ import { config } from '@/config';
 const ACCESS_TOKEN_KEY = 'openplan_access_token';
 const REFRESH_TOKEN_KEY = 'openplan_refresh_token';
 
+let isRedirectingToLogin = false;
+
 export const tokenStorage = {
   getAccessToken: () => localStorage.getItem(ACCESS_TOKEN_KEY),
   getRefreshToken: () => localStorage.getItem(REFRESH_TOKEN_KEY),
   setTokens: (accessToken: string, refreshToken: string) => {
     localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
     localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+    isRedirectingToLogin = false;
   },
   clearTokens: () => {
     localStorage.removeItem(ACCESS_TOKEN_KEY);
@@ -64,10 +67,13 @@ axiosInstance.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Skip refresh for auth endpoints to prevent loops
-    if (originalRequest.url?.includes('/auth/')) {
+    // Only skip refresh for endpoints that would cause infinite loops or are unauthenticated by design
+    const skipRefreshUrls = ['/auth/refresh', '/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password', '/auth/send-otp', '/auth/verify-otp'];
+    const shouldSkipRefresh = skipRefreshUrls.some((ep) => originalRequest.url?.includes(ep));
+    if (shouldSkipRefresh) {
       tokenStorage.clearTokens();
-      if (!window.location.pathname.includes('/login')) {
+      if (!isRedirectingToLogin && !window.location.pathname.includes('/login')) {
+        isRedirectingToLogin = true;
         window.location.href = '/login';
       }
       return Promise.reject(error);
@@ -104,7 +110,8 @@ axiosInstance.interceptors.response.use(
       isRefreshing = false;
       onRefreshFailed();
       tokenStorage.clearTokens();
-      if (!window.location.pathname.includes('/login')) {
+      if (!isRedirectingToLogin && !window.location.pathname.includes('/login')) {
+        isRedirectingToLogin = true;
         window.location.href = '/login';
       }
       return Promise.reject(refreshError);
