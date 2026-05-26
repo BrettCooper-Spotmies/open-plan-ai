@@ -1323,7 +1323,7 @@ export default function ProjectDetail() {
               onTaskUpdate={handleTaskUpdate}
               onBatchTaskUpdate={handleBatchTaskUpdate}
               onTaskDelete={handleTaskDelete}
-              onAddModule={handleAddModule}
+              onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
             />
           </TabsContent>
           <TabsContent value="modules" className="mt-6">
@@ -1400,7 +1400,7 @@ export default function ProjectDetail() {
         onCreate={handleTaskCreate}
         modules={modules}
         projectId={id}
-        onAddModule={handleAddModule}
+        onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
         assignableMembers={organizationMembers}
         statusOptions={(boardColumns ?? []).map((c) => ({
           value: c.status,
