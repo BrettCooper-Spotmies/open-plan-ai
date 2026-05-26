@@ -94,22 +94,22 @@ export const projectsService = {
   /**
    * Get tasks for a project
    */
-  async getTasks(projectId: string): Promise<Task[]> {
-    return apiClient.get<Task[]>(ENDPOINTS.TASKS.LIST(projectId));
+  async getTasks(projectId: string, limit = 100): Promise<Task[]> {
+    return apiClient.get<Task[]>(`${ENDPOINTS.TASKS.LIST(projectId)}?limit=${limit}`);
   },
 
   /**
    * Get milestones for a project
    */
-  async getMilestones(projectId: string): Promise<Milestone[]> {
-    return apiClient.get<Milestone[]>(ENDPOINTS.MILESTONES.LIST(projectId));
+  async getMilestones(projectId: string, limit = 100): Promise<Milestone[]> {
+    return apiClient.get<Milestone[]>(`${ENDPOINTS.MILESTONES.LIST(projectId)}?limit=${limit}`);
   },
 
   /**
    * Get issues for a project
    */
-  async getIssues(projectId: string): Promise<Issue[]> {
-    return apiClient.get<Issue[]>(ENDPOINTS.ISSUES.LIST(projectId));
+  async getIssues(projectId: string, limit = 100): Promise<Issue[]> {
+    return apiClient.get<Issue[]>(`${ENDPOINTS.ISSUES.LIST(projectId)}?limit=${limit}`);
   },
 
   /**

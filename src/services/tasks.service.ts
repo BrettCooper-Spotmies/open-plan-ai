@@ -2,12 +2,11 @@ import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { Task } from '@/types';
 
-/** Map frontend status values (may use underscores) to backend enum values. */
+/** Map legacy underscore status values to the canonical hyphenated DB values. */
 function normalizeStatus(status: string | undefined): string {
   const map: Record<string, string> = {
-    backlog:     'todo',
-    in_progress: 'in-progress',
-    in_review:   'review',
+    in_progress:  'in-progress',
+    in_review:    'review',
     in_progress_: 'in-progress',
   };
   return map[status ?? ''] ?? status ?? 'todo';

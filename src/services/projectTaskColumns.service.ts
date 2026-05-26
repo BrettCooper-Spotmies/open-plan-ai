@@ -7,15 +7,25 @@ export interface ProjectTaskColumn {
 }
 
 export const DEFAULT_COLUMNS: ProjectTaskColumn[] = [
-  { id: 'backlog',    status: 'backlog',    label: 'Backlog',      color: '#6b7280' },
-  { id: 'todo',       status: 'todo',       label: 'To Do',        color: '#3b82f6' },
-  { id: 'in_progress',status: 'in_progress',label: 'In Progress',  color: '#f59e0b' },
-  { id: 'in_review',  status: 'in_review',  label: 'In Review',    color: '#8b5cf6' },
-  { id: 'done',       status: 'done',       label: 'Done',         color: '#10b981', isSpecial: true },
+  { id: 'backlog',     status: 'backlog',     label: 'Backlog',     color: '#6b7280' },
+  { id: 'todo',        status: 'todo',        label: 'To Do',       color: '#3b82f6' },
+  { id: 'in-progress', status: 'in-progress', label: 'In Progress', color: '#f59e0b' },
+  { id: 'review',      status: 'review',      label: 'In Review',   color: '#8b5cf6' },
+  { id: 'done',        status: 'done',        label: 'Done',        color: '#10b981', isSpecial: true },
 ];
 
 function storageKey(projectId: string) {
   return `openplan_columns_${projectId}`;
+}
+
+const STATUS_ALIAS: Record<string, string> = {
+  in_progress: 'in-progress',
+  in_review:   'review',
+};
+
+function migrateColumn(col: ProjectTaskColumn): ProjectTaskColumn {
+  const normalized = STATUS_ALIAS[col.status] ?? col.status;
+  return normalized !== col.status ? { ...col, status: normalized } : col;
 }
 
 export const projectTaskColumnsService = {
@@ -24,7 +34,9 @@ export const projectTaskColumnsService = {
       const raw = localStorage.getItem(storageKey(projectId));
       if (raw) {
         const parsed = JSON.parse(raw) as ProjectTaskColumn[];
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map(migrateColumn);
+        }
       }
     } catch {
       // ignore parse errors
