@@ -18,9 +18,10 @@ interface NewGroupDialogProps {
   onOpenChange: (open: boolean) => void;
   onSelect: (conversationId: string) => void;
   onConversationCreated?: () => Promise<void>;
+  orgId?: string;
 }
 
-export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCreated }: NewGroupDialogProps) {
+export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCreated, orgId }: NewGroupDialogProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -36,7 +37,7 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
     if (!open) return;
     setLoading(true);
     chatService
-      .getReachableUsers()
+      .getReachableUsers(orgId)
       .then(setUsers)
       .catch((err) => {
         console.error('Failed to fetch users:', err);

@@ -111,6 +111,7 @@ const Team = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteEmailError, setInviteEmailError] = useState('');
   const [inviteRole, setInviteRole] = useState('');
   const [inviteDepartment, setInviteDepartment] = useState('');
   const [manageOrgMember, setManageOrgMember] = useState<TeamMember | null>(null);
@@ -138,17 +139,23 @@ const Team = () => {
     departments: [...new Set(members.map((m) => m.department).filter(Boolean))].length,
   };
 
-  const handleInvite = async () => {
-    if (!inviteEmail || !inviteRole) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
+  const validateInviteEmail = (email: string): string => {
+    if (!email) return 'Email address is required';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email address';
+    return '';
+  };
 
-    if (!currentOrganization) {
-      toast.error('No organization selected');
+  const handleInvite = async () => {
+    const emailError = validateInviteEmail(inviteEmail);
+    if (emailError) {
+      setInviteEmailError(emailError);
       return;
     }
-    if (!currentOrganization.id) {
+    if (!inviteRole) {
+      toast.error('Please select a role');
+      return;
+    }
+    if (!currentOrganization?.id) {
       toast.error('No organization selected');
       return;
     }
@@ -174,6 +181,7 @@ const Team = () => {
         );
         setIsInviteDialogOpen(false);
         setInviteEmail('');
+        setInviteEmailError('');
         setInviteRole('');
         setInviteDepartment('');
         return;
@@ -182,16 +190,14 @@ const Team = () => {
       toast.success(`Invitation sent to ${inviteEmail}`);
       setIsInviteDialogOpen(false);
       setInviteEmail('');
+      setInviteEmailError('');
       setInviteRole('');
       setInviteDepartment('');
     } catch (err: any) {
-      const apiMessage = typeof err?.response?.data?.error?.message === 'string'
-        ? err.response.data.error.message
-        : typeof err?.response?.data?.message === 'string'
-          ? err.response.data.message
-          : typeof err?.message === 'string'
-            ? err.message
-            : 'Failed to send invitation. Please try again.';
+      // err.message is already the most specific message (extracted by apiClient's extractApiError)
+      const apiMessage = typeof err?.message === 'string' && err.message
+        ? err.message
+        : 'Failed to send invitation. Please try again.';
 
       const lower = apiMessage.toLowerCase();
       if (lower.includes('already a member')) {
@@ -289,7 +295,7 @@ const Team = () => {
       <div className="space-y-6">
         {isAdminOrOwner && (
           <div className="flex justify-end">
-            <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+            <Dialog open={isInviteDialogOpen} onOpenChange={(open) => { setIsInviteDialogOpen(open); if (!open) { setInviteEmail(''); setInviteEmailError(''); setInviteRole(''); setInviteDepartment(''); } }}>
               <DialogTrigger asChild>
                 <Button>
                   <UserPlus className="h-4 w-4 mr-2" />
@@ -311,8 +317,15 @@ const Team = () => {
                       type="email"
                       placeholder="colleague@company.com"
                       value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
+                      onChange={(e) => {
+                        setInviteEmail(e.target.value);
+                        if (inviteEmailError) setInviteEmailError('');
+                      }}
+                      className={inviteEmailError ? 'border-destructive focus-visible:ring-destructive' : ''}
                     />
+                    {inviteEmailError && (
+                      <p className="text-xs text-destructive">{inviteEmailError}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="role">Role *</Label>

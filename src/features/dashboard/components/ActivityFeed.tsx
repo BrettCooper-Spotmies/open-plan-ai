@@ -13,6 +13,10 @@ import {
   UserPlus,
   RefreshCw,
   GitBranch,
+  Trash2,
+  Users,
+  Milestone,
+  Link,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Activity } from '@/types';
@@ -25,50 +29,81 @@ interface ActivityFeedProps {
   isLoading: boolean;
 }
 
-type ActivityType = Activity['type'];
-
-const activityIcons: Record<ActivityType, React.ComponentType<{ className?: string }>> = {
+const activityIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   task_created: Plus,
   task_completed: CheckCircle2,
   task_updated: ArrowRight,
+  task_assigned: UserPlus,
+  task_deleted: Trash2,
   comment_added: MessageSquare,
   milestone_reached: Flag,
+  milestone_created: Milestone,
+  milestone_updated: ArrowRight,
+  milestone_deleted: Trash2,
+  milestone_reopened: RefreshCw,
   status_changed: RefreshCw,
   issue_created: AlertTriangle,
   issue_resolved: CheckCircle,
+  issue_updated: ArrowRight,
+  issue_assigned: UserPlus,
+  issue_linked_to_task: Link,
   project_created: FolderPlus,
   project_updated: AlertCircle,
   project_assigned: UserPlus,
+  project_deleted: Trash2,
+  project_member_added: Users,
   dependency_added: GitBranch,
 };
 
-const activityColors: Record<ActivityType, string> = {
+const activityColors: Record<string, string> = {
   task_created: 'text-status-in-progress bg-status-in-progress/10',
   task_completed: 'text-status-done bg-status-done/10',
   task_updated: 'text-muted-foreground bg-muted',
+  task_assigned: 'text-chart-2 bg-chart-2/10',
+  task_deleted: 'text-destructive bg-destructive/10',
   comment_added: 'text-chart-2 bg-chart-2/10',
   milestone_reached: 'text-chart-4 bg-chart-4/10',
+  milestone_created: 'text-chart-4 bg-chart-4/10',
+  milestone_updated: 'text-muted-foreground bg-muted',
+  milestone_deleted: 'text-destructive bg-destructive/10',
+  milestone_reopened: 'text-chart-5 bg-chart-5/10',
   status_changed: 'text-chart-5 bg-chart-5/10',
   issue_created: 'text-destructive bg-destructive/10',
   issue_resolved: 'text-status-done bg-status-done/10',
+  issue_updated: 'text-muted-foreground bg-muted',
+  issue_assigned: 'text-chart-2 bg-chart-2/10',
+  issue_linked_to_task: 'text-chart-5 bg-chart-5/10',
   project_created: 'text-primary bg-primary/10',
   project_updated: 'text-chart-3 bg-chart-3/10',
   project_assigned: 'text-chart-2 bg-chart-2/10',
+  project_deleted: 'text-destructive bg-destructive/10',
+  project_member_added: 'text-chart-2 bg-chart-2/10',
   dependency_added: 'text-chart-5 bg-chart-5/10',
 };
 
-const activityLabels: Record<ActivityType, string> = {
+const activityLabels: Record<string, string> = {
   task_created: 'Task Created',
   task_completed: 'Task Completed',
   task_updated: 'Task Updated',
+  task_assigned: 'Task Assigned',
+  task_deleted: 'Task Deleted',
   comment_added: 'Comment',
-  milestone_reached: 'Milestone',
+  milestone_reached: 'Milestone Reached',
+  milestone_created: 'Milestone Created',
+  milestone_updated: 'Milestone Updated',
+  milestone_deleted: 'Milestone Deleted',
+  milestone_reopened: 'Milestone Reopened',
   status_changed: 'Status Changed',
   issue_created: 'Issue Opened',
   issue_resolved: 'Issue Resolved',
+  issue_updated: 'Issue Updated',
+  issue_assigned: 'Issue Assigned',
+  issue_linked_to_task: 'Issue Linked',
   project_created: 'New Project',
   project_updated: 'Project Updated',
   project_assigned: 'Member Assigned',
+  project_deleted: 'Project Deleted',
+  project_member_added: 'Member Added',
   dependency_added: 'Dependency Added',
 };
 

@@ -179,9 +179,10 @@ export const chatService = {
     return apiClient.get(`${ENDPOINTS.USERS.SEARCH}?q=${encodeURIComponent(query)}`);
   },
 
-  async getReachableUsers(): Promise<ReachableUser[]> {
+  async getReachableUsers(orgId?: string): Promise<ReachableUser[]> {
     try {
-      return await apiClient.get(`${ENDPOINTS.USERS.SEARCH}?q=`);
+      const params = orgId ? `?q=&orgId=${encodeURIComponent(orgId)}` : '?q=';
+      return await apiClient.get(`${ENDPOINTS.USERS.SEARCH}${params}`);
     } catch {
       return [];
     }

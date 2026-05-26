@@ -14,9 +14,10 @@ interface NewDMDialogProps {
   onOpenChange: (open: boolean) => void;
   onSelect: (conversationId: string) => void;
   onConversationCreated?: () => Promise<void>;
+  orgId?: string;
 }
 
-export function NewDMDialog({ open, onOpenChange, onSelect, onConversationCreated }: NewDMDialogProps) {
+export function NewDMDialog({ open, onOpenChange, onSelect, onConversationCreated, orgId }: NewDMDialogProps) {
   const [search, setSearch] = useState('');
   const [users, setUsers] = useState<ReachableUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -25,7 +26,7 @@ export function NewDMDialog({ open, onOpenChange, onSelect, onConversationCreate
     if (!open) return;
     setLoading(true);
     chatService
-      .getReachableUsers()
+      .getReachableUsers(orgId)
       .then(setUsers)
       .catch((err) => {
         console.error('Failed to fetch users:', err);
