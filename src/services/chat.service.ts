@@ -141,7 +141,7 @@ export const chatService = {
   },
 
   async markConversationAsRead(conversationId: string): Promise<void> {
-    await apiClient.post(ENDPOINTS.CONVERSATIONS.READ(conversationId), {});
+    await apiClient.patch(ENDPOINTS.CONVERSATIONS.READ(conversationId), {});
   },
 
   async getMembers(conversationId: string): Promise<unknown[]> {

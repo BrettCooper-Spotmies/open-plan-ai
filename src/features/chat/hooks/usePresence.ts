@@ -28,11 +28,23 @@ export function usePresence(currentUserId: string | undefined) {
       setOnlineUserIds(next);
     };
 
+    const requestOnlineUsers = () => {
+      socket.emit('get-online-users');
+    };
+
     socket.on('online-users', handleOnlineUsers);
     socket.on('user-online', handleUserOnline);
     socket.on('user-offline', handleUserOffline);
+    // Re-request the full list whenever the socket (re)connects
+    socket.on('connect', requestOnlineUsers);
 
-    // Mark self as online immediately
+    // Request immediately — if socket is already connected this fires the event;
+    // if it's still connecting, the 'connect' listener above handles it.
+    if (socket.connected) {
+      requestOnlineUsers();
+    }
+
+    // Always include self
     const current = useChatStore.getState().onlineUserIds;
     setOnlineUserIds(new Set([...current, currentUserId]));
 
@@ -40,6 +52,7 @@ export function usePresence(currentUserId: string | undefined) {
       socket.off('online-users', handleOnlineUsers);
       socket.off('user-online', handleUserOnline);
       socket.off('user-offline', handleUserOffline);
+      socket.off('connect', requestOnlineUsers);
     };
   }, [currentUserId, setOnlineUserIds]);
 }

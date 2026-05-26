@@ -42,13 +42,13 @@ export function ManageOrgAccessDialog({
     if (open && member) {
       fetchMemberOrgs();
     }
-  }, [open, member?.id]);
+  }, [open, member?.userId]);
 
   const fetchMemberOrgs = async () => {
     if (!member) return;
     setIsLoading(true);
     try {
-      const orgs = await organizationsService.getMemberOrganizations(member.id);
+      const orgs = await organizationsService.getMemberOrganizations(member.userId);
       setMemberOrgs(orgs);
     } catch (err) {
       console.error('Failed to fetch member organizations:', err);
@@ -65,7 +65,7 @@ export function ManageOrgAccessDialog({
     if (!member) return;
 
     // Prevent removing self
-    if (member.id === currentUserId && currentlyMember) {
+    if (member.userId === currentUserId && currentlyMember) {
       toast.error('You cannot remove yourself from an organization');
       return;
     }
@@ -79,11 +79,11 @@ export function ManageOrgAccessDialog({
     setTogglingOrg(orgId);
     try {
       if (currentlyMember) {
-        await organizationsService.removeMember(orgId, member.id);
+        await organizationsService.removeMember(orgId, member.userId);
         setMemberOrgs(prev => prev.filter(mo => mo.organization_id !== orgId));
         toast.success('Access removed');
       } else {
-        await organizationsService.addMember(orgId, member.id, 'member');
+        await organizationsService.addMember(orgId, member.userId, 'member');
         setMemberOrgs(prev => [...prev, { organization_id: orgId, role: 'member' }]);
         toast.success('Access granted');
       }

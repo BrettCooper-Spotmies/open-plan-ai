@@ -18,6 +18,7 @@ export const ENDPOINTS = {
     ME: '/users/me',
     SEARCH: '/users/search',
     BY_ID: (id: string) => `/users/${id}`,
+    ORGS: (id: string) => `/users/${id}/organizations`,
   },
   // Organizations
   ORGANIZATIONS: {

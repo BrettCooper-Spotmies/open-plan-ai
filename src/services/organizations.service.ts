@@ -116,8 +116,7 @@ export const organizationsService = {
    * Get all organizations a specific user belongs to
    */
   async getMemberOrganizations(userId: string): Promise<{ organization_id: string; role: string }[]> {
-    // No dedicated endpoint; return empty so consumers degrade gracefully.
-    return [];
+    return apiClient.get<{ organization_id: string; role: string }[]>(ENDPOINTS.USERS.ORGS(userId));
   },
 
   /**
