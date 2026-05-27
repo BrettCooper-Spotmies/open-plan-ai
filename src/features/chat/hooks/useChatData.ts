@@ -87,9 +87,38 @@ export function useConversations() {
       () => { fetchConversations(true); }
     );
 
+    // Subscribe to every conversation room so we can track unread counts
+    // when messages arrive for non-active conversations.
+    const unreadUnsubs = convIds.map((convId) =>
+      chatTransport.subscribeToMessages(convId, (payload) => {
+        const raw = (payload as any)?.new ?? payload as any;
+        const activeId = useChatStore.getState().activeConversationId;
+        if (convId === activeId) return; // already viewing — no unread
+        useChatStore.getState().incrementUnread(convId);
+        // Also update the sidebar preview
+        const store = useChatStore.getState();
+        store.setConversations(
+          store.conversations.map((c) =>
+            c.id === convId
+              ? {
+                  ...c,
+                  lastMessage: {
+                    content: raw.content ?? '',
+                    senderName: raw.sender?.name ?? raw.senderName ?? '',
+                    createdAt: raw.createdAt ?? new Date().toISOString(),
+                  },
+                  lastMessageAt: raw.createdAt ?? new Date().toISOString(),
+                }
+              : c
+          )
+        );
+      })
+    );
+
     return () => {
       if (channelRef.current) chatTransport.unsubscribe(channelRef.current);
       chatTransport.unsubscribe(memberChannel);
+      unreadUnsubs.forEach((unsub) => chatTransport.unsubscribe(unsub));
     };
   }, [conversations.length, fetchConversations]);
 

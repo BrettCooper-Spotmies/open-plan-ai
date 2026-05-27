@@ -6,6 +6,7 @@ import type { IChatTransport, Unsubscribe } from './IChatTransport';
 export class SocketIOChatTransport implements IChatTransport {
   private socket: Socket;
   private activeRooms = new Set<string>();
+  private roomRefCounts = new Map<string, number>();
 
   constructor() {
     this.socket = io(config.api.wsUrl, {
@@ -30,13 +31,21 @@ export class SocketIOChatTransport implements IChatTransport {
   }
 
   private joinRoom(conversationId: string) {
+    const count = (this.roomRefCounts.get(conversationId) || 0) + 1;
+    this.roomRefCounts.set(conversationId, count);
     this.activeRooms.add(conversationId);
-    this.socket.emit('join-conversation', conversationId);
+    if (count === 1) {
+      this.socket.emit('join-conversation', conversationId);
+    }
   }
 
   private leaveRoom(conversationId: string) {
-    this.activeRooms.delete(conversationId);
-    this.socket.emit('leave-conversation', conversationId);
+    const count = Math.max(0, (this.roomRefCounts.get(conversationId) || 0) - 1);
+    this.roomRefCounts.set(conversationId, count);
+    if (count === 0) {
+      this.activeRooms.delete(conversationId);
+      this.socket.emit('leave-conversation', conversationId);
+    }
   }
 
   subscribeToMessages(
