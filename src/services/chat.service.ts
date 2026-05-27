@@ -206,11 +206,19 @@ export const chatService = {
   },
 
   async getSharedFiles(
-    _conversationId: string
+    conversationId: string
   ): Promise<
     { fileName: string; fileSize: number; mimeType: string; url?: string; storagePath?: string; createdAt: string }[]
   > {
-    return [];
+    const data = await apiClient.get<any[]>(ENDPOINTS.CONVERSATIONS.FILES(conversationId));
+    return (data || []).map((f: any) => ({
+      fileName: f.fileName ?? '',
+      fileSize: f.fileSize ?? 0,
+      mimeType: f.fileMimeType ?? '',
+      url: f.fileUrl ? (resolveFileUrl(f.fileUrl) ?? f.fileUrl) : undefined,
+      storagePath: f.fileUrl ?? undefined,
+      createdAt: f.createdAt ?? '',
+    }));
   },
 
   async getChatAttachmentDownloadUrl(file: {

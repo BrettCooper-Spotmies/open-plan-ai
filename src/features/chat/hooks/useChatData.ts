@@ -323,10 +323,15 @@ export function useMessages(conversationId: string | null) {
           return [...prev, mapped];
         });
         storeAddMessage(conversationId, mapped);
+        updatePreview(conversationId, {
+          content: mapped.content,
+          senderName: mapped.senderName,
+          createdAt: mapped.createdAt,
+        });
       }
     );
     return () => { if (channelRef.current) chatTransport.unsubscribe(channelRef.current); };
-  }, [conversationId, storeAddMessage, leftAt, joinedAt]);
+  }, [conversationId, storeAddMessage, updatePreview, leftAt, joinedAt]);
 
   const sendMessage = useCallback(async (content: string, type: 'text' | 'file' = 'text', fileData?: any, replyToMessageId?: string) => {
     if (!conversationId || !user) return;

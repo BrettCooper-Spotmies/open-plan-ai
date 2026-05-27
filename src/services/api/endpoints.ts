@@ -134,6 +134,7 @@ export const ENDPOINTS = {
     READ: (id: string) => `/conversations/${id}/read`,
     MEMBERS: (id: string) => `/conversations/${id}/members`,
     MEMBER: (conversationId: string, userId: string) => `/conversations/${conversationId}/members/${userId}`,
+    FILES: (id: string) => `/conversations/${id}/files`,
   },
   // Links
   LINKS: {

@@ -425,7 +425,7 @@ const CalendarPage: React.FC = () => {
   // ── Desktop layout ─────────────────────────────────────────────────────────
   return (
     <>
-      <div className="flex flex-col h-full gap-6 animate-fade-in">
+      <div className="flex flex-col gap-6 animate-fade-in">
         {/* Page Header */}
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
@@ -470,7 +470,7 @@ const CalendarPage: React.FC = () => {
         </div>
 
         {/* Calendar View */}
-        <div className="flex-1 min-h-0 border border-border rounded-lg overflow-hidden bg-card flex flex-col">
+        <div className="border border-border rounded-lg overflow-hidden bg-card flex flex-col">
           <>
             {viewMode === 'month' && (
               <CalendarMonthView
