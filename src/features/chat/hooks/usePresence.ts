@@ -44,11 +44,18 @@ export function usePresence(currentUserId: string | undefined) {
       requestOnlineUsers();
     }
 
+    // Fallback: re-request after 2 s in case the initial online-users event
+    // fired before our listener was registered (common on fast connections).
+    const fallbackTimer = setTimeout(() => {
+      if (socket.connected) requestOnlineUsers();
+    }, 2000);
+
     // Always include self
     const current = useChatStore.getState().onlineUserIds;
     setOnlineUserIds(new Set([...current, currentUserId]));
 
     return () => {
+      clearTimeout(fallbackTimer);
       socket.off('online-users', handleOnlineUsers);
       socket.off('user-online', handleUserOnline);
       socket.off('user-offline', handleUserOffline);

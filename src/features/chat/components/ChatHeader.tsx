@@ -62,7 +62,7 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText }: 
             </AvatarFallback>
           </Avatar>
           {conversation.type === 'dm' && otherMember && (
-            <OnlineStatus isOnline={isOtherOnline} className="absolute -bottom-0.5 -right-0.5" />
+            <OnlineStatus isOnline={isOtherOnline} size="md" className="absolute -bottom-0.5 -right-0.5 z-10" />
           )}
         </div>
 
