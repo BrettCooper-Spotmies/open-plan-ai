@@ -1,6 +1,36 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
-import { Project, Task, Milestone, Issue, TeamMember } from '@/types';
+import { Project, Task, Milestone, Issue, IssueCategory, IssueSeverity, IssueStatus, TeamMember } from '@/types';
+
+function fromApiIssue(raw: Record<string, unknown>): Issue {
+  const assignees = ((raw.assignees as any[]) || []).map((a: any): TeamMember => ({
+    id: a.id,
+    name: a.name ?? '',
+    email: '',
+    role: 'Member' as const,
+    initials: a.name ? (a.name as string).split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) : '?',
+    avatar: a.avatarUrl ?? '',
+    avatarUrl: a.avatarUrl ?? null,
+  }));
+
+  return {
+    id: raw.id as string,
+    title: raw.title as string,
+    description: (raw.description as string) ?? '',
+    projectId: (raw.projectId ?? raw.project_id) as string,
+    moduleId: (raw.moduleId as string) || undefined,
+    category: raw.category as IssueCategory,
+    severity: (raw.severity as IssueSeverity) ?? 'minor',
+    status: (raw.status as IssueStatus) ?? 'open',
+    reportedAt: (raw.createdAt as string) ?? new Date().toISOString(),
+    resolvedAt: (raw.resolvedAt as string) || undefined,
+    dueDate: (raw.dueDate as string) || undefined,
+    resolution: (raw.resolution as string) || undefined,
+    reportedBy: (raw.reportedBy as TeamMember) ?? { id: '', name: 'Unknown', email: '', role: 'Member', initials: 'U', avatar: '' },
+    assignees,
+    blocksTaskIds: [],
+  } as Issue;
+}
 
 export const projectsService = {
   /**
@@ -109,7 +139,8 @@ export const projectsService = {
    * Get issues for a project
    */
   async getIssues(projectId: string, limit = 100): Promise<Issue[]> {
-    return apiClient.get<Issue[]>(`${ENDPOINTS.ISSUES.LIST(projectId)}?limit=${limit}`);
+    const data = await apiClient.get<Record<string, unknown>[]>(`${ENDPOINTS.ISSUES.LIST(projectId)}?limit=${limit}`);
+    return (data || []).map(fromApiIssue);
   },
 
   /**

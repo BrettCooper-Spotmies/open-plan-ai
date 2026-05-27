@@ -32,7 +32,7 @@ export interface Milestone {
 /** Map snake_case insert payload to camelCase for the REST backend. */
 function toApiPayload(data: MilestoneInsert | MilestoneUpdate): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  if ('name' in data && data.name !== undefined) out.name = data.name;
+  if ('name' in data && data.name !== undefined) out.title = data.name;
   if ('due_date' in data) out.dueDate = data.due_date;
   if ('description' in data) out.description = data.description;
   if ('status' in data) out.status = data.status;

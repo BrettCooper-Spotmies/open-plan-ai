@@ -28,7 +28,19 @@ export const issuesService = {
    * Create new issue
    */
   async create(projectId: string, issue: Omit<Issue, 'id' | 'reportedAt'>): Promise<Issue> {
-    return apiClient.post<Issue>(ENDPOINTS.ISSUES.LIST(projectId), issue);
+    const payload: Record<string, unknown> = {
+      title: issue.title,
+      category: issue.category,
+    };
+    if (issue.description) payload.description = issue.description;
+    if (issue.severity) payload.severity = issue.severity;
+    if ((issue as any).moduleId) payload.moduleId = (issue as any).moduleId;
+    if ((issue as any).dueDate) payload.dueDate = (issue as any).dueDate;
+    const assigneeIds = ((issue as any).assignees || []).map((a: any) => a.id).filter(Boolean);
+    if (assigneeIds.length > 0) payload.assigneeIds = assigneeIds;
+    const blocksTaskIds = (issue.blocksTaskIds || []).filter(Boolean);
+    if (blocksTaskIds.length > 0) payload.blocksTaskIds = blocksTaskIds;
+    return apiClient.post<Issue>(ENDPOINTS.ISSUES.LIST(projectId), payload);
   },
 
   /**

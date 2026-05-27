@@ -121,8 +121,8 @@ export function IssuesView({
 
 
   const filteredIssues = localIssues.filter(issue => {
-    const matchesSearch = issue.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      issue.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (issue.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (issue.description || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesSeverity = severityFilter === 'all' || issue.severity === severityFilter;
     const matchesStatus = statusFilter === 'all' || issue.status === statusFilter;
     const matchesAssignee = assigneeFilter === 'all' ||

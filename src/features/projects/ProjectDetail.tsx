@@ -781,25 +781,13 @@ export default function ProjectDetail() {
   const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
     if (!project) return;
 
-    // Strip id/reportedAt/projectId so Supabase generates a proper UUID
-    const { id: _id, reportedAt: _reportedAt, projectId: _pid, ...rest } = newIssuePartial;
-
     createIssueMutation.mutate({
-      title: rest.title || 'New Issue',
-      description: rest.description || '',
-      status: 'open',
-      severity: rest.severity || 'minor',
-      category: rest.category || 'other',
-      assignees: rest.assignees || [],
-      reportedBy: {
-        id: 'current-user',
-        name: 'Current User',
-        email: '',
-        role: 'member',
-        initials: 'CU',
-      },
-      descriptionBlocks: rest.descriptionBlocks || [],
-      ...rest,
+      title: newIssuePartial.title || 'New Issue',
+      description: newIssuePartial.description || '',
+      severity: newIssuePartial.severity || 'minor',
+      category: newIssuePartial.category || 'other',
+      assignees: newIssuePartial.assignees || [],
+      reportedBy: { id: '', name: '', email: '', role: 'Member', initials: '' },
     } as Omit<Issue, 'id' | 'reportedAt'>);
   };
 
@@ -869,8 +857,9 @@ export default function ProjectDetail() {
           newMilestonePartial.linkedModuleIds.map(moduleId => ({ id: moduleId, milestone_id: createdMilestone.id }))
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create milestone and link tasks:', error);
+      toast.error(error?.message || 'Failed to create milestone');
     }
   };
 
