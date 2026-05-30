@@ -498,7 +498,7 @@ export default function Projects() {
                       {projectLinks.map((link: any) => (
                         <div key={link.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
                           <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm flex-1">{link.name || link.title}</span>
+                          <span className="text-sm flex-1">{link.title || link.name}</span>
                           {link.url && (
                             <a
                               href={link.url}

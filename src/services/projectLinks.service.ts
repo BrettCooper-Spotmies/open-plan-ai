@@ -6,7 +6,9 @@ export interface ProjectLink {
   projectId: string;
   // Legacy snake_case compat
   project_id?: string;
-  name: string;
+  title: string;
+  /** @deprecated use title */
+  name?: string;
   url: string;
   createdBy: string | null;
   created_by?: string | null;
@@ -17,7 +19,7 @@ export interface ProjectLink {
 
 export interface CreateProjectLinkInput {
   project_id: string;
-  name: string;
+  title: string;
   url: string;
 }
 
@@ -29,14 +31,14 @@ export interface UpdateProjectLinkInput {
 export const projectLinksService = {
   async create(input: CreateProjectLinkInput): Promise<ProjectLink> {
     return apiClient.post(ENDPOINTS.PROJECTS.LINKS(input.project_id), {
-      name: input.name,
+      title: input.title,
       url: input.url,
     });
   },
 
   async createMany(
     projectId: string,
-    links: { name: string; url: string }[]
+    links: { title: string; url: string }[]
   ): Promise<ProjectLink[]> {
     if (links.length === 0) return [];
     return Promise.all(

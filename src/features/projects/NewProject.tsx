@@ -58,6 +58,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useCreateProject } from "@/hooks/useProjects";
 import { useOrganizationMembers } from "@/hooks/useProjectTeam";
 import { useCreateAttachment } from '@/hooks/useProjectAttachments';
@@ -117,7 +118,7 @@ interface Department {
 
 interface ProjectLink {
   id: string;
-  name: string;
+  title: string;
   url: string;
 }
 
@@ -154,6 +155,7 @@ const NewProject = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { currentOrganization } = useOrganization();
+  const { user: currentUser } = useAuth();
   const createProjectMutation = useCreateProject();
   const { data: teamMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const [isCreating, setIsCreating] = useState(false);
@@ -420,7 +422,7 @@ const NewProject = () => {
       toast.error('Please enter a valid URL (e.g., https://example.com)');
       return;
     }
-    setLinks([...links, { id: Math.random().toString(36).substr(2, 9), name: newLinkName, url: newLinkUrl }]);
+    setLinks([...links, { id: Math.random().toString(36).substr(2, 9), title: newLinkName, url: newLinkUrl }]);
     setNewLinkName("");
     setNewLinkUrl("");
   };
@@ -637,10 +639,11 @@ const NewProject = () => {
         }
       }
 
-      // Add team members to the project
-      if (assignedMembers.length > 0) {
+      // Add team members to the project (exclude creator — backend already adds them as admin)
+      const membersToAdd = assignedMembers.filter(m => m.memberId !== currentUser?.id);
+      if (membersToAdd.length > 0) {
         try {
-          const memberData = assignedMembers.map(m => ({
+          const memberData = membersToAdd.map(m => ({
             userId: m.memberId,
             role: m.role,
           }));
@@ -656,7 +659,7 @@ const NewProject = () => {
         try {
           await projectLinksService.createMany(
             project.id,
-            links.map(l => ({ name: l.name, url: l.url }))
+            links.map(l => ({ title: l.title, url: l.url }))
           );
         } catch (linkError) {
           console.error('Error creating project links:', linkError);
@@ -1468,7 +1471,7 @@ const NewProject = () => {
                           <Globe className="h-5 w-5 text-blue-600" />
                         </div>
                         <div>
-                          <p className="font-medium text-sm">{link.name}</p>
+                          <p className="font-medium text-sm">{link.title}</p>
                           <a
                             href={link.url}
                             target="_blank"

@@ -103,7 +103,9 @@ const departmentsList = [
 
 interface ProjectLink {
     id: string;
-    name: string;
+    title: string;
+    /** @deprecated use title */
+    name?: string;
     url: string;
 }
 
@@ -612,7 +614,7 @@ const EditProject = () => {
         try {
             await createLinkMutation.mutateAsync({
                 project_id: id,
-                name: newLinkName,
+                title: newLinkName,
                 url: newLinkUrl,
             });
             setNewLinkName("");
@@ -1749,7 +1751,7 @@ const EditProject = () => {
                                     >
                                         <div className="flex items-center gap-2 min-w-0">
                                             <LinkIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                                            <span className="text-sm font-medium">{link.name || link.title}</span>
+                                            <span className="text-sm font-medium">{link.title || link.name}</span>
                                             <a
                                                 href={link.url}
                                                 target="_blank"
