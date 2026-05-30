@@ -513,19 +513,24 @@ export default function ProjectDetail() {
     );
   }, [project?.tasks, project?.milestones, modules, project?.issues]);
 
-  // Sync calculated progress with project progress
+  // Sync calculated progress with stored project progress (runs only when project or overallProgress changes)
+  const updateProjectMutateRef = useRef(updateProjectMutation.mutate);
+  updateProjectMutateRef.current = updateProjectMutation.mutate;
+  const updateProjectIsPendingRef = useRef(updateProjectMutation.isPending);
+  updateProjectIsPendingRef.current = updateProjectMutation.isPending;
+
   useEffect(() => {
     if (
       project &&
       progressBreakdown.overallProgress !== project.progress &&
-      !updateProjectMutation.isPending
+      !updateProjectIsPendingRef.current
     ) {
-      updateProjectMutation.mutate({
+      updateProjectMutateRef.current({
         id: project.id,
         updates: { progress: progressBreakdown.overallProgress }
       });
     }
-  }, [project, progressBreakdown.overallProgress, updateProjectMutation]);
+  }, [project, progressBreakdown.overallProgress]);
 
   // Filter tasks by search query
   const filteredTasks = useMemo(() => {

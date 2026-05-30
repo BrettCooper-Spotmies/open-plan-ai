@@ -83,7 +83,7 @@ export const projectsService = {
    * Update existing project
    */
   async update(id: string, updates: Partial<Project>): Promise<Project> {
-    return apiClient.patch<Project>(ENDPOINTS.PROJECTS.BY_ID(id), updates);
+    return apiClient.put<Project>(ENDPOINTS.PROJECTS.BY_ID(id), updates);
   },
 
   /**
