@@ -319,12 +319,8 @@ const NewProject = () => {
   };
 
   const handleAddMilestone = () => {
-    if (startDate && newMilestoneStart && isBefore(newMilestoneStart, startDate)) {
-      toast.error("Milestone start date cannot be earlier than project start date");
-      return;
-    }
-    if (expectedEndDate && newMilestoneEnd && isBefore(expectedEndDate, newMilestoneEnd)) {
-      toast.error("Milestone end date cannot be later than project expected completion date");
+    if (newMilestoneStart && newMilestoneEnd && isBefore(newMilestoneEnd, newMilestoneStart)) {
+      toast.error("Milestone end date cannot be before the start date");
       return;
     }
     if (newMilestoneName.trim() && newMilestoneStart && newMilestoneEnd) {
@@ -1234,6 +1230,7 @@ const NewProject = () => {
                   <PopoverContent className="w-auto p-0" align="start">
                     {isMilestoneStartOpen && (
                       <Calendar
+                        variant="dropdown"
                         mode="single"
                         month={milestoneStartCalendarMonth}
                         onMonthChange={setMilestoneStartCalendarMonth}
@@ -1242,11 +1239,6 @@ const NewProject = () => {
                           setNewMilestoneStart(date);
                           setIsMilestoneStartOpen(false);
                         }}
-                        disabled={(date) =>
-                          isBefore(date, startOfToday()) ||
-                          (startDate ? isBefore(date, startDate) : false) ||
-                          (expectedEndDate ? isBefore(expectedEndDate, date) : false)
-                        }
                         initialFocus
                       />
                     )}
@@ -1271,6 +1263,7 @@ const NewProject = () => {
                   <PopoverContent className="w-auto p-0" align="start">
                     {isMilestoneEndOpen && (
                       <Calendar
+                        variant="dropdown"
                         mode="single"
                         month={milestoneEndCalendarMonth}
                         onMonthChange={setMilestoneEndCalendarMonth}
@@ -1280,10 +1273,7 @@ const NewProject = () => {
                           setIsMilestoneEndOpen(false);
                         }}
                         disabled={(date) =>
-                          isBefore(date, startOfToday()) ||
-                          (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) ||
-                          (startDate ? isBefore(date, startDate) : false) ||
-                          (expectedEndDate ? isBefore(expectedEndDate, date) : false)
+                          newMilestoneStart ? isBefore(date, newMilestoneStart) : false
                         }
                         initialFocus
                       />
