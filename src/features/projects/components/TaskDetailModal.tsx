@@ -912,7 +912,7 @@ export const TaskDetailModal = ({
               <Input
                 value={editedTask.title}
                 onChange={(e) => handleFieldChange('title', e.target.value)}
-                className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0 bg-transparent"
+                className="text-base font-medium h-10"
                 placeholder="Task title..."
                 aria-required="true"
               />
