@@ -25,7 +25,7 @@ interface TasksSectionProps {
   onFiltersOpenChange?: (open: boolean) => void;
   filters?: TaskFilter;
   onFiltersChange?: (filters: TaskFilter) => void;
-  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>, files?: File[]) => void;
   onTaskUpdate?: (task: Task, onError?: () => void) => void;
   onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;

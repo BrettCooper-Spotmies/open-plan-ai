@@ -98,7 +98,7 @@ interface TaskDetailModalProps {
   onBatchUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => Promise<void> | void;
   onDelete?: (taskId: string) => void;
   mode?: 'view' | 'create';
-  onCreate?: (task: Task) => void;
+  onCreate?: (task: Task, pendingFiles?: File[]) => void;
   modules?: { id: string; name: string; type: ModuleType }[];
   projectId?: string;
   onAddModule?: () => void;
@@ -230,6 +230,7 @@ export const TaskDetailModal = ({
   const [editingTagOriginal, setEditingTagOriginal] = useState<string | null>(null);
   const [pendingTagRenames, setPendingTagRenames] = useState<Array<{ from: string; to: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [initialTaskSnapshot, setInitialTaskSnapshot] = useState('');
@@ -449,7 +450,8 @@ export const TaskDetailModal = ({
     }
 
     if (editedTask && onCreate) {
-      onCreate(editedTask);
+      onCreate(editedTask, pendingFiles.length > 0 ? pendingFiles : undefined);
+      setPendingFiles([]);
       onClose();
     }
   };
@@ -495,14 +497,20 @@ export const TaskDetailModal = ({
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    // In create mode queue files locally; they are uploaded after the task is saved
+    if (mode === 'create') {
+      setPendingFiles(prev => [...prev, ...Array.from(files)]);
+      if (e.target) e.target.value = '';
+      return;
+    }
     setIsUploading(true);
     try {
       const results = await Promise.all(
         Array.from(files).map(file =>
           attachmentsService.upload({
-            entityId: task.id,
+            entityId: editedTask.id,
             entityType: 'task',
-            projectId: task.projectId,
+            projectId: editedTask.projectId ?? projectId,
             file,
           })
         )
@@ -1548,6 +1556,29 @@ export const TaskDetailModal = ({
                     </div>
                   );
                 })}
+
+                {/* Pending files (create mode only) */}
+                {mode === 'create' && pendingFiles.length > 0 && (
+                  <div className="space-y-1">
+                    {pendingFiles.map((f, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{f.name}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <label className={cn(
                   "flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors",

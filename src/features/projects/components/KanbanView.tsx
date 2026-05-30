@@ -100,7 +100,7 @@ interface KanbanViewProps {
   allTasks?: Task[]; // All tasks for dependency resolution
   issues?: Issue[]; // Issues for blocking indicator
   assignableMembers?: TeamMember[];
-  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>, files?: File[]) => void;
   onTaskUpdate?: (task: Task, onError?: () => void) => void;
   onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
@@ -1005,8 +1005,8 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         onUpdate={(updated) => setNewTask(updated as unknown as Partial<Task>)}
         onBatchUpdate={handleBatchTaskUpdateLocal}
         mode="create"
-        onCreate={(newTask) => {
-          onTaskCreate?.(newTask as Omit<Task, 'id' | 'createdAt' | 'updatedAt'>);
+        onCreate={(newTask, pendingFiles) => {
+          onTaskCreate?.(newTask as Omit<Task, 'id' | 'createdAt' | 'updatedAt'>, pendingFiles);
           // Close and reset draft so next task starts empty
           setIsMaximizedAddTask(false);
           setNewTask(createEmptyTaskDraft());

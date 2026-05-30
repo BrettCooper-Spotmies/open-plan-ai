@@ -64,6 +64,7 @@ import { queryKeys } from '@/lib/queryClient';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { projectMembersService } from '@/services/projectMembers.service';
+import { attachmentsService } from '@/services/attachments.service';
 import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
 import { calculateProjectProgress } from './utils/projectUtils';
@@ -914,8 +915,24 @@ export default function ProjectDetail() {
   };
 
 
-  const handleTaskCreate = (newTask: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => {
-    createTaskMutation.mutate(newTask);
+  const handleTaskCreate = async (newTask: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>, pendingFiles?: File[]) => {
+    const created = await createTaskMutation.mutateAsync(newTask);
+    if (pendingFiles && pendingFiles.length > 0 && created?.id) {
+      try {
+        await Promise.all(
+          pendingFiles.map(file =>
+            attachmentsService.upload({
+              entityId: created.id,
+              entityType: 'task',
+              projectId: id!,
+              file,
+            })
+          )
+        );
+      } catch {
+        toast.warning('Task created but some attachments failed to upload');
+      }
+    }
   };
 
   const handleTaskUpdate = async (updatedTask: Task, onError?: () => void) => {

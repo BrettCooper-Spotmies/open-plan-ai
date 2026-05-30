@@ -17,7 +17,7 @@ interface ListViewProps {
   modules?: { id: string; name: string; type: ModuleType }[];
   assignableMembers?: TeamMember[];
   onTaskClick?: (task: Task) => void;
-  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>, files?: File[]) => void;
   onTaskUpdate?: (task: Task) => void;
   onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
@@ -171,11 +171,11 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
     }
   };
 
-  const handleTaskCreate = (newTask: Task) => {
+  const handleTaskCreate = (newTask: Task, pendingFiles?: File[]) => {
     if (onTaskCreate) {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, createdAt, updatedAt, ...taskWithoutIds } = newTask;
-      onTaskCreate(taskWithoutIds);
+      onTaskCreate(taskWithoutIds, pendingFiles);
     }
     setIsCreateModalOpen(false);
   };
