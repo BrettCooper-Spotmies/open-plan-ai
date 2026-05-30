@@ -33,9 +33,9 @@ export interface Milestone {
 function toApiPayload(data: MilestoneInsert | MilestoneUpdate): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if ('name' in data && data.name !== undefined) out.title = data.name;
-  if ('due_date' in data) out.dueDate = data.due_date;
-  if ('description' in data) out.description = data.description;
-  if ('status' in data) out.status = data.status;
+  if ('due_date' in data && data.due_date != null) out.dueDate = data.due_date;
+  if ('description' in data && data.description != null) out.description = data.description;
+  if ('status' in data && data.status != null) out.status = data.status;
   if ('project_id' in data) out.projectId = (data as MilestoneInsert).project_id;
   return out;
 }
