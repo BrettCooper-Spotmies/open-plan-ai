@@ -425,9 +425,9 @@ const CalendarPage: React.FC = () => {
   // ── Desktop layout ─────────────────────────────────────────────────────────
   return (
     <>
-      <div className="flex flex-col gap-6 animate-fade-in">
+      <div className="h-full flex flex-col gap-4 animate-fade-in">
         {/* Page Header */}
-        <div>
+        <div className="shrink-0">
           <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
           <p className="text-muted-foreground text-sm mt-1">
             View and manage project timelines, milestones, and tasks.
@@ -435,7 +435,7 @@ const CalendarPage: React.FC = () => {
         </div>
 
         {/* Controls Layout */}
-        <div className="flex flex-col">
+        <div className="flex flex-col shrink-0">
           {/* Header */}
           <CalendarHeader
             currentDate={currentDate}
@@ -470,7 +470,7 @@ const CalendarPage: React.FC = () => {
         </div>
 
         {/* Calendar View */}
-        <div className="border border-border rounded-lg overflow-hidden bg-card flex flex-col">
+        <div className="flex-1 min-h-0 border border-border rounded-lg overflow-hidden bg-card flex flex-col">
           <>
             {viewMode === 'month' && (
               <CalendarMonthView
