@@ -213,6 +213,10 @@ const NewProject = () => {
   const [links, setLinks] = useState<ProjectLink[]>([]);
   const [newLinkName, setNewLinkName] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
+  const isLinkUrlValid = !newLinkUrl || (() => {
+    try { const p = new URL(newLinkUrl); return p.protocol === 'https:' || p.protocol === 'http:'; }
+    catch { return false; }
+  })();
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -405,11 +409,20 @@ const NewProject = () => {
   };
 
   const handleAddLink = () => {
-    if (newLinkName && newLinkUrl) {
-      setLinks([...links, { id: Math.random().toString(36).substr(2, 9), name: newLinkName, url: newLinkUrl }]);
-      setNewLinkName("");
-      setNewLinkUrl("");
+    if (!newLinkName || !newLinkUrl) return;
+    try {
+      const parsed = new URL(newLinkUrl);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        toast.error('URL must start with https:// or http://');
+        return;
+      }
+    } catch {
+      toast.error('Please enter a valid URL (e.g., https://example.com)');
+      return;
     }
+    setLinks([...links, { id: Math.random().toString(36).substr(2, 9), name: newLinkName, url: newLinkUrl }]);
+    setNewLinkName("");
+    setNewLinkUrl("");
   };
 
   const handleRemoveLink = (linkId: string) => {
@@ -1434,9 +1447,10 @@ const NewProject = () => {
                     placeholder="URL (e.g., https://...)"
                     value={newLinkUrl}
                     onChange={(e) => setNewLinkUrl(e.target.value)}
+                    className={cn(newLinkUrl && !isLinkUrlValid && "border-destructive focus-visible:ring-destructive")}
                   />
                 </div>
-                <Button onClick={handleAddLink} disabled={!newLinkName || !newLinkUrl}>
+                <Button onClick={handleAddLink} disabled={!newLinkName || !newLinkUrl || !isLinkUrlValid}>
                   <Plus className="h-4 w-4 mr-1" />
                   Add Link
                 </Button>
