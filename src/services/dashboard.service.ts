@@ -66,14 +66,17 @@ export const dashboardService = {
       const data = await apiClient.get<DashboardStats>(
         ENDPOINTS.ORGANIZATIONS.REPORTS_OVERVIEW(orgId)
       );
+      const raw = data as any;
       return {
-        activeProjects: data.activeProjects || 0,
-        totalTasks: data.totalTasks || 0,
-        completedTasks: data.completedTasks || 0,
-        openIssues: data.openIssues || 0,
-        teamMembers: data.teamMembers || 0,
-        overdueItems: data.overdueItems || 0,
-        inProgressTasks: data.inProgressTasks || 0,
+        activeProjects: raw.activeProjects || 0,
+        totalTasks: raw.totalTasks || 0,
+        completedTasks: raw.completedTasks || 0,
+        inProgressTasks: raw.inProgressTasks || 0,
+        openIssues: raw.openIssues || 0,
+        // backend returns teamSize, not teamMembers
+        teamMembers: raw.teamMembers ?? raw.teamSize ?? 0,
+        // backend returns overdueTasks, not overdueItems
+        overdueItems: raw.overdueItems ?? raw.overdueTasks ?? 0,
       };
     } catch (err) {
       console.error('[dashboardService] getStats failed:', err);
