@@ -12,6 +12,25 @@ function normalizeStatus(status: string | undefined): string {
   return map[status ?? ''] ?? status ?? 'todo';
 }
 
+/**
+ * Normalize a raw API task response so that `moduleIds` is always populated
+ * from the `modules` array the backend returns.
+ */
+function fromApi(raw: any): Task {
+  const apiModules: { id: string }[] = raw.modules || [];
+  const moduleIds: string[] =
+    raw.moduleIds?.length > 0
+      ? raw.moduleIds
+      : apiModules.map((m) => m.id);
+
+  return {
+    ...raw,
+    moduleIds,
+    // Normalise blockedBy — the API may return it as dependsOn/blockedBy arrays of objects
+    blockedBy: (raw.blockedBy || []).map((d: any) => (typeof d === 'string' ? d : d.id)),
+  };
+}
+
 /** Build a clean payload that satisfies the backend createTaskSchema. */
 function toCreatePayload(task: Partial<Task>): Record<string, unknown> {
   return {
@@ -41,28 +60,32 @@ export const tasksService = {
    * Get tasks for a specific project
    */
   async getByProject(projectId: string): Promise<Task[]> {
-    return apiClient.get<Task[]>(ENDPOINTS.TASKS.LIST(projectId));
+    const data = await apiClient.get<any[]>(ENDPOINTS.TASKS.LIST(projectId));
+    return (data || []).map(fromApi);
   },
 
   /**
    * Get task by ID
    */
   async getById(taskId: string): Promise<Task | null> {
-    return apiClient.get<Task>(ENDPOINTS.TASKS.BY_ID(taskId));
+    const data = await apiClient.get<any>(ENDPOINTS.TASKS.BY_ID(taskId));
+    return data ? fromApi(data) : null;
   },
 
   /**
    * Create new task
    */
   async create(projectId: string, task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
-    return apiClient.post<Task>(ENDPOINTS.TASKS.LIST(projectId), toCreatePayload(task));
+    const data = await apiClient.post<any>(ENDPOINTS.TASKS.LIST(projectId), toCreatePayload(task));
+    return fromApi(data);
   },
 
   /**
    * Update existing task
    */
   async update(projectId: string, taskId: string, updates: Partial<Task>): Promise<Task> {
-    return apiClient.patch<Task>(ENDPOINTS.TASKS.BY_ID(taskId), updates);
+    const data = await apiClient.patch<any>(ENDPOINTS.TASKS.BY_ID(taskId), updates);
+    return fromApi(data);
   },
 
   /**
