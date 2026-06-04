@@ -59,8 +59,11 @@ export const tasksService = {
   /**
    * Get tasks for a specific project
    */
-  async getByProject(projectId: string): Promise<Task[]> {
-    const data = await apiClient.get<any[]>(ENDPOINTS.TASKS.LIST(projectId));
+  async getByProject(projectId: string, limit?: number): Promise<Task[]> {
+    const url = limit
+      ? `${ENDPOINTS.TASKS.LIST(projectId)}?limit=${limit}`
+      : ENDPOINTS.TASKS.LIST(projectId);
+    const data = await apiClient.get<any[]>(url);
     return (data || []).map(fromApi);
   },
 

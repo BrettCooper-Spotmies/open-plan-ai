@@ -1,6 +1,7 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { Project, Task, Milestone, Issue, IssueCategory, IssueSeverity, IssueStatus, TeamMember } from '@/types';
+import { tasksService } from '@/services/tasks.service';
 
 function fromApiIssue(raw: Record<string, unknown>): Issue {
   const assignees = ((raw.assignees as any[]) || []).map((a: any): TeamMember => ({
@@ -125,7 +126,7 @@ export const projectsService = {
    * Get tasks for a project
    */
   async getTasks(projectId: string, limit = 100): Promise<Task[]> {
-    return apiClient.get<Task[]>(`${ENDPOINTS.TASKS.LIST(projectId)}?limit=${limit}`);
+    return tasksService.getByProject(projectId, limit);
   },
 
   /**
