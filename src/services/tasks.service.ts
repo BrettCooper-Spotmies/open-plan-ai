@@ -57,6 +57,15 @@ function toCreatePayload(task: Partial<Task>): Record<string, unknown> {
 
 export const tasksService = {
   /**
+   * Get all tasks assigned to the current user across all projects.
+   */
+  async getMyTasks(): Promise<(Task & { projectName?: string })[]> {
+    const data = await apiClient.get<any>(ENDPOINTS.TASKS.ME_ALL);
+    const rows: any[] = data?.data ?? data ?? [];
+    return rows.map((raw: any) => ({ ...fromApi(raw), projectName: raw.projectName ?? raw.project_name ?? '' }));
+  },
+
+  /**
    * Get all tasks — returns empty array; use getByProject for actual data.
    */
   async getAll(): Promise<Task[]> {
