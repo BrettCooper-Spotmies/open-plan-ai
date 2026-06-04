@@ -28,6 +28,7 @@ function fromApi(raw: any): Task {
     moduleIds,
     // Normalise blockedBy — the API may return it as dependsOn/blockedBy arrays of objects
     blockedBy: (raw.blockedBy || []).map((d: any) => (typeof d === 'string' ? d : d.id)),
+    checklist: Array.isArray(raw.checklist) ? raw.checklist : [],
   };
 }
 
@@ -45,6 +46,12 @@ function toCreatePayload(task: Partial<Task>): Record<string, unknown> {
     assigneeIds: (task.assignees ?? []).map((a: any) => a.id ?? a).filter(Boolean),
     moduleIds: task.moduleIds ?? [],
     dependsOnIds: task.blockedBy ?? [],
+    checklist: (task.checklist ?? []).map((item: any) => ({
+      id: item.id,
+      text: item.text,
+      completed: item.completed,
+      showInBoardView: item.showInBoardView ?? false,
+    })),
   };
 }
 
