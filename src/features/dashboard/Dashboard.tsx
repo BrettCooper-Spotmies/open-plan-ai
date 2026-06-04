@@ -71,11 +71,23 @@ export default function Dashboard() {
       const { ENDPOINTS } = await import('@/services/api/endpoints');
       await apiClient.post(ENDPOINTS.ORGANIZATIONS.ACCEPT_BY_ID(invitation.id), {});
       toast.success('Successfully joined the organization!');
+    } catch (err: any) {
+      // 409 means the user is already a member — treat as success and dismiss
+      const isAlreadyMember =
+        err?.response?.status === 409 ||
+        err?.status === 409 ||
+        (err?.message || '').toLowerCase().includes('already') ||
+        (err?.code || '').toUpperCase() === 'CONFLICT';
+
+      if (!isAlreadyMember) {
+        toast.error(err.message || 'Failed to accept invitation');
+        setAcceptingInvite(null);
+        return;
+      }
+      // Already a member — just dismiss the banner silently
+    } finally {
       await refreshOrganizations();
       queryClient.invalidateQueries({ queryKey: ['pending-invitations'] });
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to accept invitation');
-    } finally {
       setAcceptingInvite(null);
     }
   };
