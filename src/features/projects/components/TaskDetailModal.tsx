@@ -375,8 +375,24 @@ export const TaskDetailModal = ({
       return;
     }
 
-    const baseTask = task || editedTask;
+    const baseTask = task || (mode === 'create' ? {
+      id: '',
+      title: '',
+      description: '',
+      status: 'todo' as const,
+      priority: 'medium' as const,
+      module: '' as ModuleType,
+      assignees: [],
+      tags: [],
+      checklist: [],
+      blockedBy: [],
+      comments: [],
+      attachments: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } : editedTask);
     setEditedTask(baseTask);
+    setPendingFiles([]);
     setInitialTaskSnapshot(serializeTaskForDirtyCheck(baseTask));
     
     // Track initial blocked by items
