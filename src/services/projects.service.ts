@@ -3,6 +3,22 @@ import { ENDPOINTS } from '@/services/api/endpoints';
 import { Project, Task, Milestone, Issue, IssueCategory, IssueSeverity, IssueStatus, TeamMember } from '@/types';
 import { tasksService } from '@/services/tasks.service';
 
+const VALID_ISSUE_STATUSES: IssueStatus[] = ['open', 'investigating', 'resolved', 'closed', 'wont-fix'];
+
+/** Map legacy or unknown status values to a safe default. */
+function normaliseIssueStatus(raw: unknown): IssueStatus {
+  const legacy: Record<string, IssueStatus> = {
+    'in-progress': 'investigating',
+    'in_progress': 'investigating',
+    'pending':     'investigating',
+  };
+  if (typeof raw === 'string') {
+    if ((VALID_ISSUE_STATUSES as string[]).includes(raw)) return raw as IssueStatus;
+    if (legacy[raw]) return legacy[raw];
+  }
+  return 'open';
+}
+
 function fromApiIssue(raw: Record<string, unknown>): Issue {
   const assignees = ((raw.assignees as any[]) || []).map((a: any): TeamMember => ({
     id: a.id,
@@ -22,7 +38,7 @@ function fromApiIssue(raw: Record<string, unknown>): Issue {
     moduleId: (raw.moduleId as string) || undefined,
     category: raw.category as IssueCategory,
     severity: (raw.severity as IssueSeverity) ?? 'minor',
-    status: (raw.status as IssueStatus) ?? 'open',
+    status: normaliseIssueStatus(raw.status),
     reportedAt: (raw.createdAt as string) ?? new Date().toISOString(),
     resolvedAt: (raw.resolvedAt as string) || undefined,
     dueDate: (raw.dueDate as string) || undefined,
@@ -113,13 +129,6 @@ export const projectsService = {
    */
   async getProjectMembers(projectId: string): Promise<TeamMember[]> {
     return this.getTeam(projectId);
-  },
-
-  /**
-   * Get all team members (for assignment dropdowns)
-   */
-  async getTeamMembers(): Promise<TeamMember[]> {
-    return apiClient.get<TeamMember[]>(ENDPOINTS.PROJECTS.TEAM(''));
   },
 
   /**

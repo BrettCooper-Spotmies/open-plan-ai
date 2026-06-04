@@ -8,6 +8,7 @@ import { Task, Issue, Milestone } from '@/types';
 import { toast } from 'sonner';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/services/monitoring/logger';
 
 // ==================== Task Mutations ====================
 
@@ -32,7 +33,7 @@ export function useCreateTask(projectId: string) {
             entity_id: newTask.id,
             entity_type: 'task',
           }, {
-            onError: (err) => console.error('Failed to send task-assignment notification:', err),
+            onError: (err) => logger.error('Failed to send task-assignment notification:', err),
           });
         }
       });
@@ -44,7 +45,7 @@ export function useCreateTask(projectId: string) {
       toast.success('Task created successfully');
     },
     onError: (error) => {
-      console.error('Error creating task:', error);
+      logger.error('Error creating task:', error);
       toast.error('Failed to create task');
     },
   });
@@ -105,7 +106,7 @@ export function useUpdateTask(projectId: string) {
               entity_id: variables.taskId,
               entity_type: 'task',
             }, {
-              onError: (err) => console.error('Failed to send task-update notification:', err),
+              onError: (err) => logger.error('Failed to send task-update notification:', err),
             });
           }
         });
@@ -130,7 +131,7 @@ export function useUpdateTask(projectId: string) {
                 entity_id: variables.taskId || undefined,
                 entity_type: 'task',
               }, {
-                onError: (err) => console.error('Failed to send task-completed notification:', err),
+                onError: (err) => logger.error('Failed to send task-completed notification:', err),
               });
             }
           });
@@ -201,7 +202,7 @@ export function useCreateIssue(projectId: string) {
       toast.success('Issue created successfully');
     },
     onError: (error) => {
-      console.error('Error creating issue:', error);
+      logger.error('Error creating issue:', error);
       toast.error('Failed to create issue');
     },
   });
@@ -280,7 +281,7 @@ export function useCreateMilestone(projectId: string) {
       toast.success('Milestone created successfully');
     },
     onError: (error) => {
-      console.error('Error creating milestone:', error);
+      logger.error('Error creating milestone:', error);
       toast.error('Failed to create milestone');
     },
   });
@@ -354,7 +355,7 @@ export function useCreateModule(projectId: string) {
       toast.success('Module created successfully');
     },
     onError: (error) => {
-      console.error('Error creating module:', error);
+      logger.error('Error creating module:', error);
       toast.error('Failed to create module');
     },
   });

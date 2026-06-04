@@ -71,21 +71,27 @@ class Logger {
     }
   }
 
-  /**
-   * Sends an error entry to our backend via sendBeacon (survives page unload, non-blocking).
-   * TODO: wire up to the Node.js backend log endpoint when available.
-   */
   private sendToLogSink(entry: LogEntry): void {
     try {
-      // No-op for now — log to console.error as a fallback in production
-      console.error(JSON.stringify({
-        error_message: `[${entry.level.toUpperCase()}] ${entry.message}`,
-        context: entry.context ?? {},
-        timestamp: entry.timestamp,
-        page_url: window.location.pathname,
-      }));
+      // Dynamic import avoids a circular dependency at module load time.
+      import('@/infrastructure/monitoring/sentry').then(({ captureException }) => {
+        captureException(new Error(entry.message), {
+          level: entry.level,
+          context: entry.context ?? {},
+          timestamp: entry.timestamp,
+          page_url: window.location.pathname,
+        });
+      }).catch(() => {
+        // Sentry unavailable — structured fallback so log aggregators can still parse it.
+        console.error(JSON.stringify({
+          error_message: `[${entry.level.toUpperCase()}] ${entry.message}`,
+          context: entry.context ?? {},
+          timestamp: entry.timestamp,
+          page_url: window.location.pathname,
+        }));
+      });
     } catch {
-      // Never throw from the logger — it would cause an infinite loop via ErrorBoundary
+      // Never throw from the logger — it would cause an infinite loop via ErrorBoundary.
     }
   }
 

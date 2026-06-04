@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { defaultUserSettings } from '@/data/mockData';
 import { UserSettings } from '@/types';
+import { defaultPreferences as defaultUserSettings } from '@/stores/useUserStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,6 +65,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { useUserStore } from '@/stores/useUserStore';
 import { getPasswordRequirements } from '@/lib/passwordValidation';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { logger } from '@/services/monitoring/logger';
 
 type ThemePreference = 'light' | 'dark' | 'system';
 
@@ -200,7 +201,7 @@ const Settings = () => {
       toast.success('Workspace created successfully');
       setNewOrgForm({ name: '', description: '' });
     } catch (error) {
-      console.error('Error creating workspace:', error);
+      logger.error('Error creating workspace:', error);
       toast.error('Failed to create workspace');
     } finally {
       setIsCreatingOrg(false);
@@ -234,7 +235,7 @@ const Settings = () => {
       await refreshOrganizations();
       toast.success('Workspace settings saved');
     } catch (error) {
-      console.error('Error saving workspace settings:', error);
+      logger.error('Error saving workspace settings:', error);
       const maybe = error as { code?: string; message?: string; details?: string };
       const isPermissionLikeError =
         maybe?.code === 'PGRST116' ||
@@ -262,7 +263,7 @@ const Settings = () => {
       await refreshProfile();
       toast.success('Profile updated successfully');
     } catch (error) {
-      console.error('Error saving profile:', error);
+      logger.error('Error saving profile:', error);
       toast.error('Failed to update profile');
     } finally {
       setProfileLoading(false);
@@ -300,7 +301,7 @@ const Settings = () => {
       } catch (error) {
         URL.revokeObjectURL(localPreview);
         setLocalAvatarPreview(null);
-        console.error('Error uploading avatar:', error);
+        logger.error('Error uploading avatar:', error);
         toast.error('Failed to upload avatar');
       } finally {
         setAvatarLoading(false);
@@ -339,7 +340,7 @@ const Settings = () => {
         // Revert preview on failure
         URL.revokeObjectURL(localPreview);
         setOrgForm(prev => ({ ...prev, logoUrl: '' }));
-        console.error('Error uploading logo:', error);
+        logger.error('Error uploading logo:', error);
         toast.error('Failed to upload logo');
       } finally {
         setLogoLoading(false);
@@ -365,7 +366,7 @@ const Settings = () => {
       await refreshOrganizations();
       toast.success('Organization logo removed');
     } catch (error) {
-      console.error('Error removing logo:', error);
+      logger.error('Error removing logo:', error);
       toast.error('Failed to remove logo');
     } finally {
       setLogoLoading(false);
@@ -401,7 +402,7 @@ const Settings = () => {
         setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       }
     } catch (error) {
-      console.error('Error updating password:', error);
+      logger.error('Error updating password:', error);
       toast.error('Failed to update password');
     } finally {
       setPasswordLoading(false);
@@ -425,7 +426,7 @@ const Settings = () => {
         navigate('/login');
       }
     } catch (error) {
-      console.error('Error deleting account:', error);
+      logger.error('Error deleting account:', error);
       toast.error('Failed to delete account');
     } finally {
       setDeleteLoading(false);

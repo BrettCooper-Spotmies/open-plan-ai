@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { logger } from '@/services/monitoring/logger';
 
 interface SharedFile {
   fileName: string;
@@ -92,7 +93,7 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
     chatService.getSharedFiles(conversation.id)
       .then(setSharedFiles)
       .catch((err) => {
-        console.warn('[DetailPanel] Failed to load shared files', {
+        logger.warn('[DetailPanel] Failed to load shared files', {
           conversationId: conversation.id,
           error: err instanceof Error ? err.message : String(err),
         });
@@ -152,7 +153,7 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
       setIsEditing(false);
       onRefetch?.();
     } catch (err: any) {
-      console.error('Full Update Error:', err);
+      logger.error('Full Update Error:', err);
       const errorMessage = err.message || err.details || (typeof err === 'object' ? JSON.stringify(err) : String(err));
 
       if (errorMessage.includes('column "avatar_url" of relation "conversations" does not exist')) {
@@ -200,7 +201,7 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
       toast.success('Group photo updated');
       onRefetch?.();
     } catch (err: any) {
-      console.error(err);
+      logger.error(err);
       toast.error('Failed to update group photo: ' + (err.message || 'Unknown error'));
     } finally {
       setIsUploading(false);
@@ -214,7 +215,7 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
       setAddDialogOpen(false);
       onRefetch?.();
     } catch (err) {
-      console.error(err);
+      logger.error(err);
       toast.error('Failed to add member');
     }
   };
@@ -244,7 +245,7 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
       setSelectedUserIds([]);
       onRefetch?.();
     } catch (err) {
-      console.error(err);
+      logger.error(err);
       toast.error('Failed to add members');
     } finally {
       setIsBulkAdding(false);
@@ -265,7 +266,7 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
       toast.success('Member removed');
       onRefetch?.();
     } catch (err) {
-      console.error(err);
+      logger.error(err);
       toast.error('Failed to remove member');
     }
   };
@@ -285,7 +286,7 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
       });
       toast.success(`Downloading ${file.fileName}`);
     } catch (error) {
-      console.error('Failed to download shared file:', error);
+      logger.error('Failed to download shared file:', error);
       toast.error('Failed to download file');
     } finally {
       setDownloadingFile(null);
@@ -321,7 +322,7 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
       onRefetch?.();
       navigate('/chat');
     } catch (err) {
-      console.error(err);
+      logger.error(err);
       toast.error('Failed to leave group');
     }
   };

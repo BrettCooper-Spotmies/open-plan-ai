@@ -3,6 +3,7 @@ import { chatService } from '@/services/chat.service';
 import { chatTransport } from '../transport';
 import type { ChatMessage, ReadReceipt } from '../types';
 import type { Unsubscribe } from '../transport/IChatTransport';
+import { logger } from '@/services/monitoring/logger';
 
 /**
  * Manages read receipts for an active conversation.
@@ -33,7 +34,7 @@ export function useReadReceipts(
     try {
       // Mark conversation as read (fire-and-forget; errors are logged not thrown)
       chatService.markConversationAsRead(convId).catch((err) => {
-        console.error('[ReadReceipts] markConversationAsRead failed:', err);
+        logger.error('[ReadReceipts] markConversationAsRead failed:', err);
       });
 
       const ids = msgs.map((m) => m.id).filter(id => !id.startsWith('temp-'));
@@ -44,7 +45,7 @@ export function useReadReceipts(
       const map = await chatService.getReadReceipts(ids);
       setReadReceiptMap(map);
     } catch (err) {
-      console.error('[ReadReceipts] getReadReceipts failed:', err);
+      logger.error('[ReadReceipts] getReadReceipts failed:', err);
     }
   }, []);
 

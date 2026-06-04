@@ -4,6 +4,7 @@ import { useProjectStore } from '@/stores/useProjectStore';
 import { queryKeys } from '@/lib/queryClient';
 import { Issue } from '@/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { logger } from '@/services/monitoring/logger';
 
 /**
  * Fetch all issues across all org projects (fan-out)
@@ -151,7 +152,7 @@ export function useUpdateIssue() {
           };
         }
         if (typeof old !== 'object' || !('id' in (old as object))) {
-          console.warn('[useIssues] setQueriesData: unexpected cache shape', typeof old);
+          logger.warn('[useIssues] setQueriesData: unexpected cache shape', typeof old);
         }
         return old;
       });
@@ -159,7 +160,7 @@ export function useUpdateIssue() {
       return { previousIssue, projectId };
     },
     onError: (_err, { projectId, issueId }, context) => {
-      console.error('Issue update failed, rolling back', _err);
+      logger.error('Issue update failed, rolling back', _err);
     },
     onSuccess: (updatedIssue, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.all });

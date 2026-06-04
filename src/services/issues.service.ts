@@ -21,7 +21,13 @@ export const issuesService = {
    * Get issue by ID
    */
   async getById(issueId: string): Promise<Issue | null> {
-    return apiClient.get<Issue>(ENDPOINTS.ISSUES.BY_ID(issueId));
+    try {
+      return await apiClient.get<Issue>(ENDPOINTS.ISSUES.BY_ID(issueId));
+    } catch (err) {
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (status === 404) return null;
+      throw err;
+    }
   },
 
   /**

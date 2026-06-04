@@ -66,13 +66,6 @@ export const tasksService = {
   },
 
   /**
-   * Get all tasks — returns empty array; use getByProject for actual data.
-   */
-  async getAll(): Promise<Task[]> {
-    return [];
-  },
-
-  /**
    * Get tasks for a specific project
    */
   async getByProject(projectId: string, limit?: number): Promise<Task[]> {
@@ -87,8 +80,14 @@ export const tasksService = {
    * Get task by ID
    */
   async getById(taskId: string): Promise<Task | null> {
-    const data = await apiClient.get<any>(ENDPOINTS.TASKS.BY_ID(taskId));
-    return data ? fromApi(data) : null;
+    try {
+      const data = await apiClient.get<any>(ENDPOINTS.TASKS.BY_ID(taskId));
+      return data ? fromApi(data) : null;
+    } catch (err) {
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (status === 404) return null;
+      throw err;
+    }
   },
 
   /**

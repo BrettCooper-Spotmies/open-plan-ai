@@ -69,6 +69,7 @@ import { projectMembersService } from "@/services/projectMembers.service";
 import { chatService } from "@/services/chat.service";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryClient";
+import { logger } from '@/services/monitoring/logger';
 
 const projectTypes = [
     "Hardware Development",
@@ -651,7 +652,7 @@ const EditProject = () => {
             setDeleteProjectConfirmText("");
             navigate("/projects");
         } catch (error) {
-            console.error("Error deleting project:", error);
+            logger.error("Error deleting project:", error);
             const errorMessage = error instanceof Error ? error.message : "";
             if (errorMessage.toLowerCase().includes("access denied")) {
                 toast.error("Only the project owner can delete this project.");
@@ -717,7 +718,7 @@ const EditProject = () => {
                     }));
                     await projectMembersService.addMembers(project.id, memberData);
                 } catch (memberError) {
-                    console.error('[executeSave] Error adding team members', {
+                    logger.error('[executeSave] Error adding team members', {
                         projectId: id,
                         userIds: newMembers.map(m => m.memberId),
                         error: memberError,
@@ -739,7 +740,7 @@ const EditProject = () => {
                         try {
                             await chatService.forceRemoveProjectChatMembers(project.id, removedMemberIds);
                         } catch (chatError) {
-                            console.error('[executeSave] Chat member removal failed', {
+                            logger.error('[executeSave] Chat member removal failed', {
                                 projectId: id,
                                 userIds: removedMemberIds,
                                 error: chatError,
@@ -752,7 +753,7 @@ const EditProject = () => {
                         }
                     }
                 } catch (memberError) {
-                    console.error('[executeSave] Error removing team members', {
+                    logger.error('[executeSave] Error removing team members', {
                         projectId: id,
                         userIds: removedMemberIds,
                         error: memberError,
@@ -800,7 +801,7 @@ const EditProject = () => {
                     await modulesService.deleteMany(moduleIdsToRemove);
                 }
             } catch (moduleError) {
-                console.error('Error syncing modules:', moduleError);
+                logger.error('Error syncing modules:', moduleError);
                 toast.warning('Project updated but module changes failed to sync');
             }
 
@@ -843,7 +844,7 @@ const EditProject = () => {
                     await milestonesService.deleteMany(milestoneIdsToRemove);
                 }
             } catch (milestoneError) {
-                console.error('Error syncing milestones:', milestoneError);
+                logger.error('Error syncing milestones:', milestoneError);
                 toast.warning('Project updated but milestone changes failed to sync');
             }
 
@@ -855,7 +856,7 @@ const EditProject = () => {
             toast.success('Project updated successfully!');
             navigate(`/projects/${id}`);
         } catch (error) {
-            console.error('Error updating project:', error);
+            logger.error('Error updating project:', error);
             toast.error('Failed to update project');
         } finally {
             setIsSaving(false);

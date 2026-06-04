@@ -9,6 +9,7 @@ import { ModulesListView } from './ModulesListView';
 import { ModuleDetailModal } from './ModuleDetailModal';
 import { AddModuleDialog } from './AddModuleDialog';
 import { getModuleTasks, getModuleProgress } from '../utils/projectUtils';
+import { logger } from '@/services/monitoring/logger';
 
 interface ModuleWithStats extends Module {
   taskCount: number;
@@ -69,7 +70,7 @@ export function ModuleViewControls({
             className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
             onClick={() => {
               if (onSearchQueryChange) onSearchQueryChange('');
-              else if (import.meta.env.DEV) console.warn('[ModulesSection] onSearchQueryChange undefined');
+              else if (import.meta.env.DEV) logger.warn('[ModulesSection] onSearchQueryChange undefined');
             }}
           >
             <X className="h-4 w-4" />

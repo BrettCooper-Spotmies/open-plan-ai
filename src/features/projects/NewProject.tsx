@@ -72,6 +72,7 @@ import { attachmentsService } from "@/services/attachments.service";
 import { projectLinksService } from "@/services/projectLinks.service";
 import { projectMembersService } from "@/services/projectMembers.service";
 import { isValidUuid } from "@/utils/uuid";
+import { logger } from '@/services/monitoring/logger';
 
 const projectTypes = [
   "Hardware Development",
@@ -633,7 +634,7 @@ const NewProject = () => {
             );
             toast.success(`${filesToUpload.length} file(s) uploaded successfully`);
           } catch (uploadError) {
-            console.error('Error uploading files:', uploadError);
+            logger.error('Error uploading files:', uploadError);
             toast.warning('Project created but some files failed to upload');
           }
         }
@@ -649,7 +650,7 @@ const NewProject = () => {
           }));
           await projectMembersService.addMembers(project.id, memberData);
         } catch (memberError) {
-          console.error('Error adding team members:', memberError);
+          logger.error('Error adding team members:', memberError);
           toast.warning('Project created but some team members could not be added');
         }
       }
@@ -662,7 +663,7 @@ const NewProject = () => {
             links.map(l => ({ title: l.title, url: l.url }))
           );
         } catch (linkError) {
-          console.error('Error creating project links:', linkError);
+          logger.error('Error creating project links:', linkError);
           toast.warning('Project created but some links could not be saved');
         }
       }
@@ -670,7 +671,7 @@ const NewProject = () => {
       toast.success('Project created successfully!');
       navigate(`/projects/${project.id}`);
     } catch (error) {
-      console.error('Error creating project:', error);
+      logger.error('Error creating project:', error);
       const message = error instanceof Error ? error.message : 'Failed to create project';
       toast.error(message);
     } finally {

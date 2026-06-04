@@ -121,22 +121,3 @@ export function useDeleteProject() {
   });
 }
 
-/**
- * Fetch team members
- */
-export function useTeamMembers() {
-  return useQuery({
-    queryKey: queryKeys.team.members(),
-    queryFn: () => projectsService.getTeamMembers(),
-  });
-}
-
-/**
- * Fetch modules
- */
-export function useModules() {
-  return useQuery({
-    queryKey: queryKeys.modules.list(),
-    queryFn: () => projectsService.getModules(),
-  });
-}

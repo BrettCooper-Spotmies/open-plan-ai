@@ -78,6 +78,7 @@ import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { logger } from '@/services/monitoring/logger';
 
 // Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
 const toDateOnly = (date: Date | undefined | null): string | undefined => {
@@ -658,7 +659,7 @@ export const TaskDetailModal = ({
           });
         }
       } catch (error) {
-        console.error('Failed to add comment:', error);
+        logger.error('Failed to add comment:', error);
         setNewComment(content); // Restore content on error
       }
     } else {
@@ -847,7 +848,7 @@ export const TaskDetailModal = ({
       setPendingTagRenames([]);
       onClose();
     } catch (error) {
-      console.error('Failed to update task:', error);
+      logger.error('Failed to update task:', error);
     } finally {
       setIsSaving(false);
     }
@@ -906,7 +907,7 @@ export const TaskDetailModal = ({
   const getTaskById = (id: string) => {
     const taskFound = allTasks.find(t => t.id === id);
     if (!taskFound) {
-      console.warn(`Task with ID ${id} not found in allTasks`);
+      logger.warn(`Task with ID ${id} not found in allTasks`);
     }
     return taskFound;
   };

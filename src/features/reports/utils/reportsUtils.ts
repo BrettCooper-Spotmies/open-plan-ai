@@ -11,19 +11,9 @@ import {
   isWithinInterval
 } from 'date-fns';
 
-export type ReportTimeRange = '7d' | '30d' | '90d' | 'custom';
-
-export interface ReportFilter {
-  projectId?: string;
-  timeRange: ReportTimeRange;
-  customDateRange?: { start: string; end: string };
-  moduleIds?: string[];
-  milestoneIds?: string[];
-  assigneeIds?: string[];
-  priority?: Priority[];
-  status?: TaskStatus[];
-  tags?: string[];
-}
+// Single source of truth — ReportFilter is defined in useFilterStore.
+// Importing from there prevents the two definitions from silently diverging.
+export type { ReportFilter, ReportTimeRange } from '@/stores/useFilterStore';
 
 export interface ReportKPI {
   projectProgress: number;

@@ -17,6 +17,7 @@ import { chatService } from '@/services/chat.service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { Conversation } from '../types';
+import { logger } from '@/services/monitoring/logger';
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -67,7 +68,7 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
       onSelect(convId);
       setSearchQuery(''); // Clear search after selection
     } catch (err) {
-      console.error('Failed to start DM:', err);
+      logger.error('Failed to start DM:', err);
       toast.error('Failed to start conversation');
     } finally {
       setIsCreatingDM(false);

@@ -2,6 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { config } from '@/config';
 import { tokenStorage } from '@/services/api/client';
 import type { IChatTransport, Unsubscribe } from './IChatTransport';
+import { logger } from '@/services/monitoring/logger';
 
 export class SocketIOChatTransport implements IChatTransport {
   private socket: Socket;
@@ -19,7 +20,7 @@ export class SocketIOChatTransport implements IChatTransport {
     });
 
     this.socket.on('connect_error', (err) => {
-      console.warn('[SocketIOChatTransport] connect error', err.message);
+      logger.warn('[SocketIOChatTransport] connect error', err.message);
     });
 
     // Re-join all tracked rooms after every (re)connect

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useAuth } from './AuthContext';
 import { organizationsService, Organization } from '@/services/organizations.service';
 import { sanitizeUuidCandidate } from '@/utils/uuid';
+import { logger } from '@/services/monitoring/logger';
 
 interface OrganizationContextValue {
   organizations: Organization[];
@@ -47,7 +48,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       }
       setCurrentOrganizationState(savedOrg || orgs[0] || null);
     } catch (error) {
-      console.error('Error fetching organizations:', error);
+      logger.error('Error fetching organizations:', error);
       setOrganizations([]);
     } finally {
       hasLoadedOnceRef.current = true;

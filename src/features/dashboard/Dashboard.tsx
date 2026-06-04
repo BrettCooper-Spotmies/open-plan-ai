@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { teamService } from '@/services/team.service';
+import { logger } from '@/services/monitoring/logger';
 
 export default function Dashboard() {
   const isMobile = useIsMobile();
@@ -48,7 +49,7 @@ export default function Dashboard() {
       setNewOrgForm({ name: '', description: '' });
       setCreateDialogOpen(false);
     } catch (error) {
-      console.error('Error creating organization:', error);
+      logger.error('Error creating organization:', error);
       toast.error('Failed to create organization');
     } finally {
       setIsCreating(false);

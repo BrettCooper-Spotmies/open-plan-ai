@@ -8,6 +8,7 @@ import { chatService } from '@/services/chat.service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { ReachableUser } from '../types';
+import { logger } from '@/services/monitoring/logger';
 
 interface NewDMDialogProps {
   open: boolean;
@@ -29,7 +30,7 @@ export function NewDMDialog({ open, onOpenChange, onSelect, onConversationCreate
       .getReachableUsers(orgId)
       .then(setUsers)
       .catch((err) => {
-        console.error('Failed to fetch users:', err);
+        logger.error('Failed to fetch users:', err);
         toast.error('Failed to load users');
       })
       .finally(() => setLoading(false));
@@ -48,7 +49,7 @@ export function NewDMDialog({ open, onOpenChange, onSelect, onConversationCreate
       onOpenChange(false);
       setSearch('');
     } catch (err) {
-      console.error('Failed to start DM:', err);
+      logger.error('Failed to start DM:', err);
       toast.error('Failed to start conversation');
     }
   };

@@ -14,6 +14,7 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { organizationsService } from '@/services/organizations.service';
 import { toast } from 'sonner';
 import type { TeamMember } from '@/services/team.service';
+import { logger } from '@/services/monitoring/logger';
 
 interface ManageOrgAccessDialogProps {
   open: boolean;
@@ -51,7 +52,7 @@ export function ManageOrgAccessDialog({
       const orgs = await organizationsService.getMemberOrganizations(member.userId);
       setMemberOrgs(orgs);
     } catch (err) {
-      console.error('Failed to fetch member organizations:', err);
+      logger.error('Failed to fetch member organizations:', err);
       toast.error('Failed to load organization access');
     } finally {
       setIsLoading(false);

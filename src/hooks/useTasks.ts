@@ -4,6 +4,7 @@ import { useProjectStore } from '@/stores/useProjectStore';
 import { queryKeys } from '@/lib/queryClient';
 import { Task } from '@/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { logger } from '@/services/monitoring/logger';
 
 /**
  * Fetch all tasks across all org projects (fan-out)
@@ -136,7 +137,7 @@ export function useUpdateTask() {
           };
         }
         if (typeof old !== 'object' || !('id' in (old as object))) {
-          console.warn('[useTasks] setQueriesData: unexpected cache shape', typeof old);
+          logger.warn('[useTasks] setQueriesData: unexpected cache shape', typeof old);
         }
         return old;
       });
@@ -144,7 +145,7 @@ export function useUpdateTask() {
       return { previousTask, projectId };
     },
     onError: (_err, { projectId, taskId }, context) => {
-      console.error('Task update failed, rolling back', _err);
+      logger.error('Task update failed, rolling back', _err);
     },
     onSuccess: (updatedTask, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });

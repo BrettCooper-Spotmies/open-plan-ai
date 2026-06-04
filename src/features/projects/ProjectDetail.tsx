@@ -69,6 +69,7 @@ import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
 import { calculateProjectProgress } from './utils/projectUtils';
 import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember } from '@/types';
+import { logger } from '@/services/monitoring/logger';
 
 // Issue Filter interface
 interface IssueFilter {
@@ -758,7 +759,7 @@ export default function ProjectDetail() {
             await chatService.forceRemoveProjectChatMembers(project.id, [memberId]);
           }
         } catch (chatErr) {
-          console.warn('[ProjectDetail] chat cleanup failed during member removal', {
+          logger.warn('[ProjectDetail] chat cleanup failed during member removal', {
             projectId: project.id,
             memberId,
             error: chatErr instanceof Error ? chatErr.message : String(chatErr),
@@ -866,7 +867,7 @@ export default function ProjectDetail() {
         );
       }
     } catch (error: any) {
-      console.error('Failed to create milestone and link tasks:', error);
+      logger.error('Failed to create milestone and link tasks:', error);
       toast.error(error?.message || 'Failed to create milestone');
     }
   };

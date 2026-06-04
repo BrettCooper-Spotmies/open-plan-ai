@@ -12,6 +12,7 @@ import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { ReachableUser } from '../types';
+import { logger } from '@/services/monitoring/logger';
 
 interface NewGroupDialogProps {
   open: boolean;
@@ -40,7 +41,7 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
       .getReachableUsers(orgId)
       .then(setUsers)
       .catch((err) => {
-        console.error('Failed to fetch users:', err);
+        logger.error('Failed to fetch users:', err);
         toast.error('Failed to load users');
       })
       .finally(() => setLoading(false));
@@ -74,7 +75,7 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
       onOpenChange(false);
       onSelect(convId);
     } catch (err) {
-      console.error('Failed to create group:', err);
+      logger.error('Failed to create group:', err);
       toast.error('Failed to create group');
     }
   };
@@ -102,7 +103,7 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
       setAvatarUrl(publicUrl);
       toast.success('Group photo uploaded');
     } catch (err: any) {
-      console.error(err);
+      logger.error(err);
       toast.error('Failed to upload image: ' + (err.message || 'Unknown error'));
     } finally {
       setIsUploading(false);

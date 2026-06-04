@@ -1,6 +1,5 @@
 import { lazy, Suspense } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -9,35 +8,48 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { queryClient } from "@/lib/queryClient";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayoutSkeleton } from "@/components/layout/AppLayoutSkeleton";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { OrganizationProvider } from "@/contexts/OrganizationContext";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AppLayoutOutlet } from "@/components/layout/AppLayoutOutlet";
+import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { useUserStore } from "@/stores/useUserStore";
 
-// Eagerly loaded routes (initial page load)
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import VerifyEmail from "./pages/VerifyEmail";
-import NotFound from "./pages/NotFound";
-import JoinOrganization from "./pages/JoinOrganization";
+// ── Auth module (new canonical location) ──────────────────────────────────────
+import {
+  AuthProvider,
+  ProtectedRoute,
+  LoginPage,
+  SignupPage,
+  ForgotPasswordPage,
+  ResetPasswordPage,
+  VerifyEmailPage,
+  JoinOrganizationPage,
+} from "@/modules/auth";
 
-// Lazy loaded feature routes (code splitting)
-const Dashboard = lazy(() => import("./features/dashboard"));
-const MyDay = lazy(() => import("./features/myday"));
-const Calendar = lazy(() => import("./features/calendar"));
-const Projects = lazy(() => import("./features/projects"));
+// 404 — eagerly loaded (tiny, always needed)
+import NotFound from "./pages/NotFound";
+
+// ── Feature routes — lazy loaded for code splitting ───────────────────────────
+const Dashboard     = lazy(() => import("./features/dashboard"));
+const MyDay         = lazy(() => import("./features/myday"));
+const Calendar      = lazy(() => import("./features/calendar"));
+const Projects      = lazy(() => import("./features/projects"));
 const ProjectDetail = lazy(() => import("./features/projects/ProjectDetail"));
-const NewProject = lazy(() => import("./features/projects/NewProject"));
-const EditProject = lazy(() => import("./features/projects/EditProject"));
-const IssuePage = lazy(() => import("./features/projects/IssuePage"));
-const Team = lazy(() => import("./features/team"));
-const Settings = lazy(() => import("./features/settings"));
-const Reports = lazy(() => import("./features/reports"));
+const NewProject    = lazy(() => import("./features/projects/NewProject"));
+const EditProject   = lazy(() => import("./features/projects/EditProject"));
+const IssuePage     = lazy(() => import("./features/projects/IssuePage"));
+const Team          = lazy(() => import("./features/team"));
+const Settings      = lazy(() => import("./features/settings"));
+const Reports       = lazy(() => import("./features/reports"));
 const Notifications = lazy(() => import("./features/notifications"));
-const Chat = lazy(() => import("./features/chat"));
+const Chat          = lazy(() => import("./features/chat"));
+
+// ── ReactQueryDevtools — dev only, lazy so it is never in the production bundle
+const ReactQueryDevtools = import.meta.env.DEV
+  ? lazy(() =>
+      import("@tanstack/react-query-devtools").then((m) => ({
+        default: m.ReactQueryDevtools,
+      }))
+    )
+  : null;
 
 const App = () => {
   const storedTheme = useUserStore.getState().preferences.theme;
@@ -53,15 +65,15 @@ const App = () => {
                 <Sonner />
                 <BrowserRouter>
                   <Routes>
-                    {/* Public routes */}
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/signup" element={<Signup />} />
-                    <Route path="/forgot-password" element={<ForgotPassword />} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
-                    <Route path="/verify-email" element={<VerifyEmail />} />
-                    <Route path="/join-org" element={<JoinOrganization />} />
+                    {/* ── Public (auth) routes ─────────────────────────────── */}
+                    <Route path="/login"           element={<LoginPage />} />
+                    <Route path="/signup"          element={<SignupPage />} />
+                    <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                    <Route path="/reset-password"  element={<ResetPasswordPage />} />
+                    <Route path="/verify-email"    element={<VerifyEmailPage />} />
+                    <Route path="/join-org"        element={<JoinOrganizationPage />} />
 
-                    {/* Protected routes */}
+                    {/* ── Protected routes ─────────────────────────────────── */}
                     <Route element={<ProtectedRoute />}>
                       <Route element={<AppLayoutOutlet />}>
                         <Route
@@ -80,7 +92,6 @@ const App = () => {
                             </Suspense>
                           }
                         />
-
                         <Route
                           path="/projects"
                           element={
@@ -155,7 +166,7 @@ const App = () => {
                         />
                       </Route>
 
-                      {/* Routes with no padding */}
+                      {/* ── Routes without content padding ───────────────── */}
                       <Route element={<AppLayoutOutlet noPadding />}>
                         <Route
                           path="/calendar"
@@ -184,14 +195,20 @@ const App = () => {
                       </Route>
                     </Route>
 
-                    {/* 404 route */}
+                    {/* 404 */}
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </BrowserRouter>
+
+                {/* Dev tools — zero production bundle impact via lazy + null guard */}
+                {ReactQueryDevtools && (
+                  <Suspense fallback={null}>
+                    <ReactQueryDevtools initialIsOpen={false} />
+                  </Suspense>
+                )}
               </TooltipProvider>
             </OrganizationProvider>
           </AuthProvider>
-          {import.meta.env.DEV && <ReactQueryDevtools initialIsOpen={false} />}
         </QueryClientProvider>
       </ErrorBoundary>
     </ThemeProvider>
@@ -199,5 +216,3 @@ const App = () => {
 };
 
 export default App;
-
-

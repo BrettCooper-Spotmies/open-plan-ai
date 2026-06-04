@@ -49,6 +49,7 @@ export const useProjectStore = create<ProjectState>()(
     persist(
       immer((set) => ({
         ...initialState,
+
         
         setProjects: (projects) => set({ projects }),
         
@@ -152,7 +153,16 @@ export const useProjectStore = create<ProjectState>()(
         setError: (error) => set({ error }),
         reset: () => set(initialState),
       })),
-      { name: 'project-store' }
+      {
+        name: 'project-store',
+        // Only persist the selected project ID.
+        // React Query owns all server data (projects, tasks, milestones, issues)
+        // and keeps it fresh. Persisting the full tree to localStorage causes
+        // stale-data bugs and blocks the main thread on large datasets.
+        partialize: (state) => ({
+          selectedProjectId: state.selectedProjectId,
+        }),
+      }
     ),
     { name: 'ProjectStore' }
   )

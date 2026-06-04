@@ -15,6 +15,7 @@ import data from '@emoji-mart/data';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 import { WifiOff, Clock } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { logger } from '@/services/monitoring/logger';
 
 interface MessageInputProps {
   conversationId: string;
@@ -240,7 +241,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
         setPendingFiles([]);
         toast.info('📵 Saved offline — will send when you reconnect');
       } catch (err) {
-        console.error('[MessageInput] Offline queue failed:', err);
+        logger.error('[MessageInput] Offline queue failed:', err);
         toast.error('Failed to save message offline. Please try again.');
       }
       return;
@@ -274,7 +275,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
               description: trimmed.length > 100 ? trimmed.substring(0, 97) + '...' : trimmed,
             });
           } catch (notifErr) {
-            console.warn('[MessageInput] Failed to create mention notification:', notifErr);
+            logger.warn('[MessageInput] Failed to create mention notification:', notifErr);
           }
         }
       });
@@ -282,7 +283,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
       onMessageSent?.();
       onCancelReply?.();
     } catch (err) {
-      console.error('Failed to send message:', err);
+      logger.error('Failed to send message:', err);
       toast.error('Failed to send message');
       setDraft(conversationId, trimmed);
     } finally {

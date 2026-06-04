@@ -1,43 +1,66 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { config } from '@/config';
 
-const ACCESS_TOKEN_KEY = 'openplan_access_token';
-const REFRESH_TOKEN_KEY = 'openplan_refresh_token';
+// ─── Token Storage ────────────────────────────────────────────────────────────
+//
+// SECURITY MODEL:
+//   Access token  → in-memory only (never touches storage, invisible to XSS)
+//   Refresh token → httpOnly cookie (set by the backend, unreadable by JS)
+//
+// On hard refresh the access token is gone, so the app calls /auth/refresh on
+// mount. The browser automatically sends the httpOnly cookie; the backend
+// validates it and returns a fresh access token in the JSON body.
+//
+// This pattern eliminates localStorage-based token theft via XSS.
 
-let isRedirectingToLogin = false;
+let _accessToken: string | null = null;
 
 export const tokenStorage = {
-  getAccessToken: () => localStorage.getItem(ACCESS_TOKEN_KEY),
-  getRefreshToken: () => localStorage.getItem(REFRESH_TOKEN_KEY),
-  setTokens: (accessToken: string, refreshToken: string) => {
-    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
-    isRedirectingToLogin = false;
+  getAccessToken: (): string | null => _accessToken,
+
+  setAccessToken: (token: string): void => {
+    _accessToken = token;
   },
-  clearTokens: () => {
-    localStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem(REFRESH_TOKEN_KEY);
+
+  // The refresh token lives in an httpOnly cookie — the browser manages it.
+  // These stubs exist so call-sites that previously called setTokens / clearTokens
+  // continue to compile without changes until each is updated individually.
+  setTokens: (accessToken: string, _refreshToken: string): void => {
+    _accessToken = accessToken;
+    // _refreshToken is now set by the backend via Set-Cookie — ignore it here.
   },
+
+  clearTokens: (): void => {
+    _accessToken = null;
+    // The httpOnly cookie is cleared by calling POST /auth/logout on the backend,
+    // which responds with Set-Cookie: refreshToken=; Max-Age=0; HttpOnly
+  },
+
+  // Legacy alias — kept for backwards compat during migration
+  getRefreshToken: (): null => null,
 };
 
-// Track token refresh state for queuing concurrent requests
+// ─── Refresh queue ────────────────────────────────────────────────────────────
+
+let isRedirectingToLogin = false;
 let isRefreshing = false;
 let refreshSubscribers: Array<(token: string) => void> = [];
 
-function subscribeTokenRefresh(cb: (token: string) => void) {
+function subscribeTokenRefresh(cb: (token: string) => void): void {
   refreshSubscribers.push(cb);
 }
 
-function onTokenRefreshed(token: string) {
+function onTokenRefreshed(token: string): void {
   refreshSubscribers.forEach((cb) => cb(token));
   refreshSubscribers = [];
 }
 
-function onRefreshFailed() {
+function onRefreshFailed(): void {
   refreshSubscribers = [];
 }
 
-// Extend config type to track retried requests
+// ─── Axios instance ───────────────────────────────────────────────────────────
+
 interface RetryableRequest extends InternalAxiosRequestConfig {
   _retry?: boolean;
 }
@@ -46,9 +69,11 @@ const axiosInstance: AxiosInstance = axios.create({
   baseURL: config.api.baseUrl,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
+  // Required so the browser sends the httpOnly refresh cookie cross-origin.
+  withCredentials: true,
 });
 
-// Request interceptor — attach access token
+// Request interceptor — attach access token from memory
 axiosInstance.interceptors.request.use((reqConfig) => {
   const token = tokenStorage.getAccessToken();
   if (token) {
@@ -57,7 +82,7 @@ axiosInstance.interceptors.request.use((reqConfig) => {
   return reqConfig;
 });
 
-// Response interceptor — handle 401 with token refresh
+// Response interceptor — silent token refresh on 401
 axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -67,9 +92,18 @@ axiosInstance.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Only skip refresh for endpoints that would cause infinite loops or are unauthenticated by design
-    const skipRefreshUrls = ['/auth/refresh', '/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password', '/auth/send-otp', '/auth/verify-otp'];
+    // Skip refresh for auth endpoints to avoid infinite loops
+    const skipRefreshUrls = [
+      '/auth/refresh',
+      '/auth/login',
+      '/auth/register',
+      '/auth/forgot-password',
+      '/auth/reset-password',
+      '/auth/send-otp',
+      '/auth/verify-otp',
+    ];
     const shouldSkipRefresh = skipRefreshUrls.some((ep) => originalRequest.url?.includes(ep));
+
     if (shouldSkipRefresh) {
       tokenStorage.clearTokens();
       if (!isRedirectingToLogin && !window.location.pathname.includes('/login')) {
@@ -80,7 +114,6 @@ axiosInstance.interceptors.response.use(
     }
 
     if (isRefreshing) {
-      // Queue this request — it will be retried once refresh completes
       return new Promise<AxiosResponse>((resolve) => {
         subscribeTokenRefresh((newToken) => {
           originalRequest.headers!.Authorization = `Bearer ${newToken}`;
@@ -94,13 +127,16 @@ axiosInstance.interceptors.response.use(
     isRefreshing = true;
 
     try {
-      const refreshToken = tokenStorage.getRefreshToken();
-      if (!refreshToken) throw new Error('No refresh token');
+      // POST /auth/refresh with NO body — the browser sends the httpOnly
+      // refresh-token cookie automatically via withCredentials: true.
+      const response = await axios.post(
+        `${config.api.baseUrl}/auth/refresh`,
+        {},
+        { withCredentials: true }
+      );
+      const { accessToken } = response.data.data;
 
-      const response = await axios.post(`${config.api.baseUrl}/auth/refresh`, { refreshToken });
-      const { accessToken, refreshToken: newRefreshToken } = response.data.data;
-
-      tokenStorage.setTokens(accessToken, newRefreshToken);
+      tokenStorage.setAccessToken(accessToken);
       onTokenRefreshed(accessToken);
       isRefreshing = false;
 
@@ -119,66 +155,71 @@ axiosInstance.interceptors.response.use(
   },
 );
 
-/**
- * Extract the most meaningful error message from an axios error response.
- * Priority: first details[].message → error.message → generic fallback
- */
+// ─── Error extraction ─────────────────────────────────────────────────────────
+
 function extractApiError(err: unknown): Error {
-  const e = err as any;
+  const e = err as {
+    response?: {
+      data?: {
+        error?: { details?: Array<{ message?: string }>; message?: string };
+        message?: string;
+      };
+    };
+    message?: string;
+  };
+
   const body = e?.response?.data;
   if (body) {
-    // Pick the first field-level validation detail if present
     const detail = body?.error?.details?.[0]?.message;
     if (typeof detail === 'string' && detail) {
-      return Object.assign(new Error(detail), { response: e.response });
+      return Object.assign(new Error(detail), { response: (err as { response?: unknown }).response });
     }
-    // Fall back to the top-level error message
     const msg = body?.error?.message ?? body?.message;
     if (typeof msg === 'string' && msg) {
-      return Object.assign(new Error(msg), { response: e.response });
+      return Object.assign(new Error(msg), { response: (err as { response?: unknown }).response });
     }
   }
-  // Last resort: the raw axios message
   return err instanceof Error ? err : new Error('An unexpected error occurred');
 }
 
+// ─── ApiClient ────────────────────────────────────────────────────────────────
+
 class ApiClient {
-  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async get<T>(url: string, cfg?: AxiosRequestConfig): Promise<T> {
     try {
-      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.get(url, config);
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.get(url, cfg);
       return res.data.data;
     } catch (err) { throw extractApiError(err); }
   }
 
-  async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async post<T>(url: string, data?: unknown, cfg?: AxiosRequestConfig): Promise<T> {
     try {
-      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.post(url, data, config);
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.post(url, data, cfg);
       return res.data.data;
     } catch (err) { throw extractApiError(err); }
   }
 
-  async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async put<T>(url: string, data?: unknown, cfg?: AxiosRequestConfig): Promise<T> {
     try {
-      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.put(url, data, config);
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.put(url, data, cfg);
       return res.data.data;
     } catch (err) { throw extractApiError(err); }
   }
 
-  async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  async patch<T>(url: string, data?: unknown, cfg?: AxiosRequestConfig): Promise<T> {
     try {
-      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.patch(url, data, config);
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.patch(url, data, cfg);
       return res.data.data;
     } catch (err) { throw extractApiError(err); }
   }
 
-  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async delete<T>(url: string, cfg?: AxiosRequestConfig): Promise<T> {
     try {
-      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.delete(url, config);
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.delete(url, cfg);
       return res.data.data;
     } catch (err) { throw extractApiError(err); }
   }
 
-  // Raw axios for cases where we need full response or skip the data unwrap
   get raw() { return axiosInstance; }
 }
 

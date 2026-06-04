@@ -20,6 +20,7 @@ import { chatService } from '@/services/chat.service';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { ChatMessage } from './types';
+import { logger } from '@/services/monitoring/logger';
 
 export default function Chat() {
   const { conversationId } = useParams<{ conversationId?: string }>();
@@ -110,7 +111,7 @@ export default function Chat() {
       await chatService.editMessage(messageId, newContent);
       await refetchMessages();
     } catch (err) {
-      console.error('Failed to edit message:', err);
+      logger.error('Failed to edit message:', err);
       toast.error('Failed to edit message');
     }
   }, [refetchMessages]);
@@ -120,7 +121,7 @@ export default function Chat() {
       await chatService.deleteMessage(messageId, senderName);
       await refetchMessages();
     } catch (err) {
-      console.error('Failed to delete message:', err);
+      logger.error('Failed to delete message:', err);
       toast.error('Failed to delete message');
     }
   }, [refetchMessages]);

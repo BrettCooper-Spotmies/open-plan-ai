@@ -7,6 +7,7 @@ import { useChatStore } from '../stores/useChatStore';
 import type { Conversation, ChatMessage, MessageReaction } from '../types';
 import type { Unsubscribe } from '../transport/IChatTransport';
 import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/services/monitoring/logger';
 
 type ConversationAccessState = { readOnly: boolean; leftAt: string | null; joinedAt: string | null };
 
@@ -56,7 +57,7 @@ export function useConversations() {
         setConversations(data);
       }
     } catch (err) {
-      console.error('Failed to fetch conversations:', err);
+      logger.error('Failed to fetch conversations:', err);
     } finally {
       if (isMountedRef.current && !background) setLoading(false);
     }
@@ -266,7 +267,7 @@ export function useMessages(conversationId: string | null) {
             setCachedMessages(conversationId, data, data.length === PAGE_SIZE);
           })
           .catch((err) => {
-            if (!cancelled) console.error('Background message revalidation failed:', err);
+            if (!cancelled) logger.error('Background message revalidation failed:', err);
           });
       }
     } else {
@@ -281,7 +282,7 @@ export function useMessages(conversationId: string | null) {
           setCachedMessages(conversationId, data, data.length === PAGE_SIZE);
         })
         .catch((err) => {
-          console.error('Failed to fetch messages:', err);
+          logger.error('Failed to fetch messages:', err);
           if (!cancelled) setLoading(false);
         });
     }
@@ -419,7 +420,7 @@ export function useMessages(conversationId: string | null) {
       storeResolveOptimistic(conversationId, tempId, realMsg);
       removePendingMessage(tempId);
     } catch (err) {
-      console.error('Failed to send message:', err);
+      logger.error('Failed to send message:', err);
       const isNetworkError = !navigator.onLine ||
         err.name === 'TypeError' ||
         err.message?.toLowerCase().includes('fetch') ||
@@ -469,7 +470,7 @@ export function useMessages(conversationId: string | null) {
           storeResolveOptimistic(msg.conversationId, msg.id, realMsg);
           removePendingMessage(msg.id);
         } catch (err) {
-          console.error('Failed to resend:', err);
+          logger.error('Failed to resend:', err);
           const isStillOffline = !navigator.onLine || err.name === 'TypeError' || err.message?.includes('fetch');
           if (!isStillOffline) {
             // If it's a real server error (e.g. 400), remove it to avoid infinite loops
@@ -530,7 +531,7 @@ export function useMessages(conversationId: string | null) {
       setHasMore(data.length === PAGE_SIZE);
       setCachedMessages(conversationId, data, data.length === PAGE_SIZE);
     } catch (err) {
-      console.error('Failed to refetch messages:', err);
+      logger.error('Failed to refetch messages:', err);
     }
   }, [conversationId, setCachedMessages]);
 
@@ -575,7 +576,7 @@ export function useReactions(messages: ChatMessage[], currentUserId?: string, co
       const map = await chatService.getReactions(ids, currentUserId);
       setReactionMap(map);
     } catch (err) {
-      console.error('Failed to fetch reactions:', err);
+      logger.error('Failed to fetch reactions:', err);
     }
   }, [messages, currentUserId]);
 
@@ -635,7 +636,7 @@ export function useReactions(messages: ChatMessage[], currentUserId?: string, co
       const map = await chatService.getReactions([messageId], currentUserId ?? '');
       setReactionMap((prev) => ({ ...prev, [messageId]: map[messageId] ?? [] }));
     } catch (err) {
-      console.error('Failed to toggle reaction:', err);
+      logger.error('Failed to toggle reaction:', err);
       // Revert optimistic update on error
       const map = await chatService.getReactions([messageId], currentUserId ?? '').catch(() => ({}));
       setReactionMap((prev) => ({ ...prev, [messageId]: (map as Record<string, MessageReaction[]>)[messageId] ?? prev[messageId] ?? [] }));
