@@ -513,24 +513,11 @@ export default function ProjectDetail() {
     );
   }, [project?.tasks, project?.milestones, modules, project?.issues]);
 
-  // Sync calculated progress with stored project progress (runs only when project or overallProgress changes)
+  // Refs for progress-sync effect (defined here so they're stable across renders)
   const updateProjectMutateRef = useRef(updateProjectMutation.mutate);
   updateProjectMutateRef.current = updateProjectMutation.mutate;
   const updateProjectIsPendingRef = useRef(updateProjectMutation.isPending);
   updateProjectIsPendingRef.current = updateProjectMutation.isPending;
-
-  useEffect(() => {
-    if (
-      project &&
-      progressBreakdown.overallProgress !== project.progress &&
-      !updateProjectIsPendingRef.current
-    ) {
-      updateProjectMutateRef.current({
-        id: project.id,
-        updates: { progress: progressBreakdown.overallProgress }
-      });
-    }
-  }, [project, progressBreakdown.overallProgress]);
 
   // Filter tasks by search query
   const filteredTasks = useMemo(() => {
@@ -576,6 +563,21 @@ export default function ProjectDetail() {
     const projectRole = (project?.myRole || '').toLowerCase();
     return projectRole === 'admin' || projectRole === 'manager';
   }, [organizationMembers, user?.id, project?.myRole]);
+
+  // Sync calculated progress — only for users who can PUT the project (manager/admin)
+  useEffect(() => {
+    if (
+      project &&
+      progressBreakdown.overallProgress !== project.progress &&
+      !updateProjectIsPendingRef.current &&
+      canAddModulesAndMilestones
+    ) {
+      updateProjectMutateRef.current({
+        id: project.id,
+        updates: { progress: progressBreakdown.overallProgress }
+      });
+    }
+  }, [project, progressBreakdown.overallProgress, canAddModulesAndMilestones]);
 
   const canStartProjectChat = useMemo(() => {
     if (!project || !user?.id) return false;
