@@ -1,44 +1,46 @@
-import { defineConfig } from "vite";
-import react from "@vitejs/plugin-react-swc";
-import path from "path";
-import { componentTagger } from "lovable-tagger";
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react-swc';
+import path from 'path';
+import { componentTagger } from 'lovable-tagger';
 
-// https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
-    // Explicit localhost keeps the HMR WebSocket + HTTP ping on the same host as the page
-    // (fixes endless failed fetch() in vite/dist/client/client.mjs waitForSuccessfulPing when
-    // using host: "::" or mismatched IPv6/LAN URLs). For real-device testing via LAN IP, set
-    // host: true and configure server.hmr.host to that IP.
-    host: "localhost",
+    host: 'localhost',
     port: 8080,
     strictPort: true,
     hmr: {
-      protocol: "ws",
-      host: "localhost",
+      protocol: 'ws',
+      host: 'localhost',
       port: 8080,
       clientPort: 8080,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [react(), mode === 'development' && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '@': path.resolve(__dirname, './src'),
+      '@core': path.resolve(__dirname, './src/core'),
+      '@shared': path.resolve(__dirname, './src/shared'),
+      '@modules': path.resolve(__dirname, './src/modules'),
+      '@routes': path.resolve(__dirname, './src/routes'),
     },
-    dedupe: ["react", "react-dom"],
+    dedupe: ['react', 'react-dom'],
   },
   optimizeDeps: {
-    include: ["react", "react-dom"],
+    include: ['react', 'react-dom'],
   },
   build: {
     rollupOptions: {
       output: {
         manualChunks: {
-          // Split large vendor libraries into separate chunks
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-query': ['@tanstack/react-query'],
+          'vendor-state': ['zustand'],
           'vendor-charts': ['recharts'],
           'vendor-dates': ['date-fns'],
           'vendor-dnd': ['@hello-pangea/dnd'],
+          'vendor-forms': ['react-hook-form', 'zod', '@hookform/resolvers'],
+          'vendor-socket': ['socket.io-client'],
           'vendor-ui': [
             '@radix-ui/react-dialog',
             '@radix-ui/react-dropdown-menu',
@@ -50,11 +52,33 @@ export default defineConfig(({ mode }) => ({
         },
       },
     },
-    // Enable tree-shaking
     treeshake: true,
-    // Improve source maps for production debugging
-    sourcemap: mode === 'development',
-    // Minify in production
+    sourcemap: mode !== 'production',
     minify: mode === 'production' ? 'esbuild' : false,
+    chunkSizeWarningLimit: 600,
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    exclude: ['node_modules', 'dist', 'e2e'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html', 'lcov'],
+      exclude: [
+        'node_modules/',
+        'src/test/',
+        'src/**/*.d.ts',
+        'src/components/ui/',
+        'src/main.tsx',
+      ],
+      thresholds: {
+        lines: 70,
+        functions: 70,
+        branches: 60,
+        statements: 70,
+      },
+    },
   },
 }));

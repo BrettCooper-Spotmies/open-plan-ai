@@ -14,17 +14,26 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Linting */
-    "strict": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noImplicitAny": false,
-    "noFallthroughCasesInSwitch": false,
+    /* Strict mode */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitAny": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false,
+    "forceConsistentCasingInFileNames": true,
 
+    /* Path aliases */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@core/*": ["./src/core/*"],
+      "@shared/*": ["./src/shared/*"],
+      "@modules/*": ["./src/modules/*"],
+      "@routes/*": ["./src/routes/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "e2e"],
+  "exclude": ["node_modules", "dist"]
 }
