@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2, Layers, Upload, Download, GitMerge, ChartGantt } from 'lucide-react';
+import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2, Layers, Upload, Download, GitMerge, ChartGantt, ShieldAlert } from 'lucide-react';
 import { BOMView } from './components/BOMView';
 import { ECOView } from './components/ECOView';
 import { GateView } from './components/GateView';
+import { RiskView } from './components/RiskView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -1210,7 +1211,7 @@ export default function ProjectDetail() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             {/* Left Side: Tabs and Filters */}
             <div className="w-full py-1 md:mr-auto md:w-auto">
-              <TabsList className="bg-muted/50 grid grid-cols-7 w-full h-9 md:w-auto md:flex md:shrink-0">
+              <TabsList className="bg-muted/50 grid grid-cols-8 w-full h-9 md:w-auto md:flex md:shrink-0">
                 <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Tasks">
                   <ListTodo className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Tasks</span>}
@@ -1258,6 +1259,10 @@ export default function ProjectDetail() {
                 <TabsTrigger value="gate-reviews" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Phase Gate Tracker">
                   <ChartGantt className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Gates</span>}
+                </TabsTrigger>
+                <TabsTrigger value="risk" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Risk & Issue Tracker">
+                  <ShieldAlert className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">Risk</span>}
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -1446,6 +1451,9 @@ export default function ProjectDetail() {
           </TabsContent>
           <TabsContent value="gate-reviews" className="mt-6">
             <GateView />
+          </TabsContent>
+          <TabsContent value="risk" className="mt-6">
+            <RiskView />
           </TabsContent>
         </Tabs>
       </div>
