@@ -252,7 +252,7 @@ export interface Activity {
 export type ProjectView = 'kanban' | 'timeline' | 'list' | 'dependencies' | 'milestones' | 'issues';
 
 // NEW: Section-based navigation for project detail
-export type ProjectSection = 'tasks' | 'modules' | 'milestones' | 'issues' | 'bom' | 'eng-changes';
+export type ProjectSection = 'tasks' | 'modules' | 'milestones' | 'issues' | 'bom' | 'eng-changes' | 'gate-reviews';
 export type TaskViewMode = 'kanban' | 'list';
 export type ModuleViewMode = 'kanban' | 'list';
 

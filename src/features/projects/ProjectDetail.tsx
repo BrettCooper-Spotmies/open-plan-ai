@@ -1,8 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2, Layers, Upload, Download, GitMerge } from 'lucide-react';
+import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2, Layers, Upload, Download, GitMerge, ChartGantt } from 'lucide-react';
 import { BOMView } from './components/BOMView';
 import { ECOView } from './components/ECOView';
+import { GateView } from './components/GateView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -1209,7 +1210,7 @@ export default function ProjectDetail() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             {/* Left Side: Tabs and Filters */}
             <div className="w-full py-1 md:mr-auto md:w-auto">
-              <TabsList className="bg-muted/50 grid grid-cols-6 w-full h-9 md:w-auto md:flex md:shrink-0">
+              <TabsList className="bg-muted/50 grid grid-cols-7 w-full h-9 md:w-auto md:flex md:shrink-0">
                 <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Tasks">
                   <ListTodo className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Tasks</span>}
@@ -1253,6 +1254,10 @@ export default function ProjectDetail() {
                 <TabsTrigger value="eng-changes" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Engineering Changes">
                   <GitMerge className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Eng. Changes</span>}
+                </TabsTrigger>
+                <TabsTrigger value="gate-reviews" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Phase Gate Tracker">
+                  <ChartGantt className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">Gates</span>}
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -1438,6 +1443,9 @@ export default function ProjectDetail() {
           </TabsContent>
           <TabsContent value="eng-changes" className="mt-6 -mx-6 -mb-6 flex flex-col">
             <ECOView newTrigger={ecoNewOpen} onNewConsumed={() => setEcoNewOpen(false)} />
+          </TabsContent>
+          <TabsContent value="gate-reviews" className="mt-6">
+            <GateView />
           </TabsContent>
         </Tabs>
       </div>
