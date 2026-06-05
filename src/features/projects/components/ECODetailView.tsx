@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, Fragment } from 'react';
 import * as LucideIcons from 'lucide-react';
 import {
   ChevronLeft, ChevronRight, GitMerge, GitBranch, Check, CheckCircle,
@@ -20,27 +20,27 @@ import { cn } from '@/lib/utils';
 // ── Lifecycle tracker ─────────────────────────────────────────────────────────
 
 const LC_NODES = [
-  { key: 'DRAFT',     label: 'Draft',     icon: Edit },
+  { key: 'DRAFT', label: 'Draft', icon: Edit },
   { key: 'IN_REVIEW', label: 'In Review', icon: ClipboardCheck },
-  { key: 'APPROVED',  label: 'Approved',  icon: CheckCircle },
-  { key: 'RELEASED',  label: 'Released',  icon: GitBranch,  sub: 'ECN' },
-  { key: 'VERIFIED',  label: 'Verified',  icon: Shield },
-  { key: 'CLOSED',    label: 'Closed',    icon: Check },
+  { key: 'APPROVED', label: 'Approved', icon: CheckCircle },
+  { key: 'RELEASED', label: 'Released', icon: GitBranch, sub: 'ECN' },
+  { key: 'VERIFIED', label: 'Verified', icon: Shield },
+  { key: 'CLOSED', label: 'Closed', icon: Check },
 ] as const;
 
 function LifecycleTracker({ status }: { status: ECOStatus }) {
   const cur = lifecycleIndex(status);
   const offTrack =
-    status === 'REWORK'   ? { at: 1, label: 'Rework',  color: '#f97316' }
-  : status === 'ON_HOLD'  ? { at: 1, label: 'On Hold', color: '#F59E0B' }
-  : null;
+    status === 'REWORK' ? { at: 1, label: 'Rework', color: '#f97316' }
+      : status === 'ON_HOLD' ? { at: 1, label: 'On Hold', color: '#F59E0B' }
+        : null;
 
   return (
-    <div className="bg-card border border-border rounded-lg px-5 py-4 mb-4">
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-[13px] font-semibold text-foreground">Change Lifecycle</div>
+    <div className="bg-card border border-border rounded-lg px-6 py-5 mb-4">
+      <div className="flex items-center justify-between mb-6">
+        <div className="text-[14px] font-semibold text-foreground">Change Lifecycle</div>
         <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
-          <Info className="w-3 h-3" />
+          <Info className="w-3.5 h-3.5 shrink-0" />
           Approval authorizes release · release ≠ start of work
         </div>
       </div>
@@ -49,39 +49,51 @@ function LifecycleTracker({ status }: { status: ECOStatus }) {
           const done = i < cur;
           const here = i === cur;
           const isOff = !!offTrack && offTrack.at === i && here;
-          const accent = isOff ? offTrack!.color : done ? '#16A34A' : here ? '#2563EB' : undefined;
           const NodeIcon = isOff ? RefreshCw : n.icon;
           return (
-            <div key={n.key} className="flex items-start">
-              <div className="flex flex-col items-center gap-1.5 w-16 shrink-0">
+            <Fragment key={n.key}>
+              {/* Node column */}
+              <div className="flex flex-col items-center gap-2 shrink-0" style={{ width: 76 }}>
                 <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center shrink-0"
+                  className={cn(
+                    'rounded-full flex items-center justify-center shrink-0 transition-all',
+                    here ? 'w-11 h-11' : 'w-9 h-9',
+                  )}
                   style={{
-                    background: done ? '#16A34A' : here ? accent : 'transparent',
+                    background: done ? '#16A34A' : here ? 'hsl(var(--primary))' : 'transparent',
                     border: done || here ? 'none' : '1.5px solid hsl(var(--border))',
+                    boxShadow: here ? '0 0 0 4px hsl(var(--primary)/0.15)' : undefined,
                   }}
                 >
                   {done
-                    ? <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />
-                    : <NodeIcon className="w-3.5 h-3.5" style={{ color: here ? '#fff' : undefined }} />}
+                    ? <Check className="w-4 h-4 text-white" strokeWidth={3} />
+                    : <NodeIcon
+                        className={here ? 'w-5 h-5' : 'w-4 h-4'}
+                        style={{ color: here ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))' }}
+                      />
+                  }
                 </div>
                 <span
-                  className="text-[11px] text-center leading-tight"
-                  style={{ fontWeight: here ? 600 : 500, color: done ? undefined : here ? accent : undefined }}
+                  className="text-[11px] text-center leading-tight w-full"
+                  style={{
+                    fontWeight: here ? 600 : 400,
+                    color: here ? 'hsl(var(--primary))' : done ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+                  }}
                 >
                   {isOff ? offTrack!.label : n.label}
                 </span>
                 {'sub' in n && n.sub && (
-                  <span className="text-[9px] text-muted-foreground -mt-1">{n.sub}</span>
+                  <span className="text-[10px] text-muted-foreground -mt-1.5 leading-none">{n.sub}</span>
                 )}
               </div>
+              {/* Connector line between nodes */}
               {i < LC_NODES.length - 1 && (
                 <div
-                  className="h-0.5 rounded mt-3.5 flex-1"
+                  className="h-0.5 rounded flex-1 mt-[22px]"
                   style={{ background: i < cur ? '#16A34A' : 'hsl(var(--border))' }}
                 />
               )}
-            </div>
+            </Fragment>
           );
         })}
       </div>
@@ -104,8 +116,8 @@ function ApprovalPipeline({
   const dotFor = (decision: DecisionType | undefined) => {
     if (decision === 'APPROVED') return { color: '#16A34A', Icon: Check };
     if (decision === 'REJECTED') return { color: '#DC2626', Icon: X };
-    if (decision === 'ACTIVE')   return { color: '#2563EB', Icon: null };
-    if (decision === 'HOLD')     return { color: '#F59E0B', Icon: Pause };
+    if (decision === 'ACTIVE') return { color: '#2563EB', Icon: null };
+    if (decision === 'HOLD') return { color: '#F59E0B', Icon: Pause };
     return { color: '#6B7280', Icon: null };
   };
 
@@ -124,27 +136,28 @@ function ApprovalPipeline({
         </div>
       </div>
 
-      {/* Steps strip */}
-      <div className="flex items-stretch gap-0 py-4">
+      {/* Steps strip — each card is flex-1 so all 4 share equal width */}
+      <div className="flex items-stretch py-4">
         {detail.steps.map((s, i) => {
           const { color, Icon } = dotFor(s.decision);
           const active = s.decision === 'ACTIVE';
           return (
-            <div key={s.order} className="flex items-center">
+            <Fragment key={s.order}>
               <div
-                className="flex-1 border rounded-lg px-3.5 py-3 min-w-0"
+                className="flex-1 min-w-0 border rounded-lg px-4 py-3.5"
                 style={{
                   background: active
-                    ? 'rgba(37,99,235,0.07)'
+                    ? 'hsl(var(--primary)/0.06)'
                     : s.decision === 'APPROVED' ? 'rgba(22,163,74,0.05)'
-                    : s.decision === 'REJECTED' ? 'rgba(220,38,38,0.05)'
-                    : 'hsl(var(--muted)/0.4)',
-                  borderColor: active ? 'rgba(37,99,235,0.35)' : 'hsl(var(--border))',
+                      : s.decision === 'REJECTED' ? 'rgba(220,38,38,0.05)'
+                        : 'hsl(var(--muted)/0.3)',
+                  borderColor: active ? 'hsl(var(--primary)/0.35)' : 'hsl(var(--border))',
                 }}
               >
-                <div className="flex items-center justify-between mb-2">
+                {/* Stage label + status dot */}
+                <div className="flex items-center justify-between mb-3">
                   <span
-                    className="text-[10px] font-semibold uppercase tracking-wider truncate"
+                    className="text-[10px] font-bold uppercase tracking-widest truncate"
                     style={{ color }}
                   >
                     {s.stage}
@@ -156,46 +169,52 @@ function ApprovalPipeline({
                     {Icon
                       ? <Icon className="w-2.5 h-2.5 text-white" strokeWidth={2.5} />
                       : active
-                      ? <div className="w-2 h-2 rounded-full bg-white" />
-                      : <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#fff5' }} />}
+                        ? <div className="w-2 h-2 rounded-full bg-white" />
+                        : <div className="w-1.5 h-1.5 rounded-full bg-white/50" />}
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <ECOAvatar name={s.name} size={18} />
+                {/* Approver */}
+                <div className="flex items-center gap-2 mb-1.5">
+                  <ECOAvatar name={s.name} size={22} />
                   <div className="min-w-0">
-                    <div className="text-[12px] font-semibold text-foreground truncate">{s.name}</div>
-                    <div className="text-[10px] text-muted-foreground truncate">{s.role}</div>
+                    <div className="text-[13px] font-semibold text-foreground truncate">{s.name}</div>
+                    <div className="text-[11px] text-muted-foreground truncate">{s.role}</div>
                   </div>
                 </div>
-                <div className="text-[11px] font-medium" style={{ color }}>
+                {/* Status line */}
+                <div className="text-[12px] font-medium mt-1" style={{ color }}>
                   {s.decision === 'APPROVED'
                     ? `Approved · ${s.date}`
                     : s.decision === 'ACTIVE'
-                    ? s.date === 'Revising' ? 'Revising artifacts' : `In review · ${s.date}`
-                    : s.decision === 'REJECTED'
-                    ? `Rejected · ${s.date}`
-                    : s.decision === 'HOLD'
-                    ? 'On hold'
-                    : s.date}
+                      ? s.date === 'Revising' ? 'Revising artifacts' : `In review · ${s.date}`
+                      : s.decision === 'REJECTED'
+                        ? `Rejected · ${s.date}`
+                        : s.decision === 'HOLD'
+                          ? 'On hold'
+                          : s.date}
                 </div>
+                {/* Optional badge */}
                 {s.optional && (
-                  <div className="mt-1.5 pt-1.5 border-t border-dashed border-border/60">
+                  <div className="mt-2 pt-2 border-t border-dashed border-border/50">
                     <span
-                      className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-semibold"
-                      style={{ background: '#F59E0B22', color: '#F59E0B', border: '1px solid #F59E0B44' }}
+                      className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold"
+                      style={{ background: '#F59E0B18', color: '#F59E0B', border: '1px solid #F59E0B40' }}
                     >
                       Optional
                     </span>
                     {s.optionalReason && (
-                      <div className="text-[10px] text-muted-foreground mt-1 leading-snug">{s.optionalReason}</div>
+                      <div className="text-[11px] text-muted-foreground mt-1.5 leading-snug">{s.optionalReason}</div>
                     )}
                   </div>
                 )}
               </div>
+              {/* Chevron separator */}
               {i < detail.steps.length - 1 && (
-                <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/50 shrink-0 mx-1" />
+                <div className="flex items-center shrink-0 px-1.5">
+                  <ChevronRight className="w-4 h-4 text-muted-foreground/40" />
+                </div>
               )}
-            </div>
+            </Fragment>
           );
         })}
       </div>
@@ -842,14 +861,14 @@ function headerActions(status: ECOStatus) {
   const ghost = 'ghost' as const;
   const primary = 'primary' as const;
   switch (status) {
-    case 'DRAFT':     return [{ k: 'edit', label: 'Edit Draft', icon: Edit, kind: ghost }, { k: 'submit', label: 'Submit for Review', icon: Send, kind: primary }];
+    case 'DRAFT': return [{ k: 'edit', label: 'Edit Draft', icon: Edit, kind: ghost }, { k: 'submit', label: 'Submit for Review', icon: Send, kind: primary }];
     case 'IN_REVIEW': return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }];
-    case 'ON_HOLD':   return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }, { k: 'resume', label: 'Resume Review', icon: RefreshCw, kind: primary }];
-    case 'REWORK':    return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }, { k: 'resubmit', label: 'Revise & Resubmit', icon: RefreshCw, kind: primary }];
-    case 'APPROVED':  return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }, { k: 'generate', label: 'Generate ECN', icon: GitBranch, kind: primary }];
-    case 'RELEASED':  return [{ k: 'ecn', label: 'View ECN', icon: Download, kind: ghost }, { k: 'verify', label: 'Mark Verified', icon: Shield, kind: primary }];
-    case 'VERIFIED':  return [{ k: 'ecn', label: 'View ECN', icon: Download, kind: ghost }, { k: 'close', label: 'Close ECO', icon: Check, kind: primary }];
-    default:          return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }];
+    case 'ON_HOLD': return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }, { k: 'resume', label: 'Resume Review', icon: RefreshCw, kind: primary }];
+    case 'REWORK': return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }, { k: 'resubmit', label: 'Revise & Resubmit', icon: RefreshCw, kind: primary }];
+    case 'APPROVED': return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }, { k: 'generate', label: 'Generate ECN', icon: GitBranch, kind: primary }];
+    case 'RELEASED': return [{ k: 'ecn', label: 'View ECN', icon: Download, kind: ghost }, { k: 'verify', label: 'Mark Verified', icon: Shield, kind: primary }];
+    case 'VERIFIED': return [{ k: 'ecn', label: 'View ECN', icon: Download, kind: ghost }, { k: 'close', label: 'Close ECO', icon: Check, kind: primary }];
+    default: return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }];
   }
 }
 
@@ -918,9 +937,9 @@ export function ECODetailView({
     if (k === 'edit') { onEdit?.(eco); return; }
     if (k === 'generate' || k === 'ecn') { setEcnOpen(true); return; }
     if (k === 'verify') { setVerifyOpen(true); return; }
-    if (k === 'submit')    { setDetail(p => ({ ...p, status: 'IN_REVIEW' })); flash('Submitted for review'); return; }
-    if (k === 'resume')    { setDetail(p => ({ ...p, status: 'IN_REVIEW' })); flash('Review resumed'); return; }
-    if (k === 'resubmit')  {
+    if (k === 'submit') { setDetail(p => ({ ...p, status: 'IN_REVIEW' })); flash('Submitted for review'); return; }
+    if (k === 'resume') { setDetail(p => ({ ...p, status: 'IN_REVIEW' })); flash('Review resumed'); return; }
+    if (k === 'resubmit') {
       setDetail(p => {
         const steps = p.steps.map((s, i) => ({
           ...s,
