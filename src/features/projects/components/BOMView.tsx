@@ -9,7 +9,7 @@ function ownerInitials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
 }
 const OWNER_COLORS = [
-  '#7C3AED','#2563EB','#059669','#D97706','#DC2626','#0891B2','#EA580C','#4F46E5',
+  '#7C3AED', '#2563EB', '#059669', '#D97706', '#DC2626', '#0891B2', '#EA580C', '#4F46E5',
 ];
 function ownerColor(name: string) {
   let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) & 0xffffffff;
@@ -298,18 +298,18 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets }: {
 
 // ── List view ──────────────────────────────────────────────────────
 const HEADERS = [
-  { key: 'level',  label: 'Level',        w: 74  },
-  { key: 'part',   label: 'Part',          w: null },
-  { key: 'qty',    label: 'Qty',           w: 50  },
-  { key: 'uom',    label: 'UOM',           w: 50  },
-  { key: 'mfr',    label: 'Manufacturer',  w: 130 },
-  { key: 'price',  label: 'Unit Price',    w: 90  },
-  { key: 'lead',   label: 'Lead',          w: 64  },
-  { key: 'rev',    label: 'Rev',           w: 46  },
-  { key: 'status', label: 'Status',        w: 92  },
-  { key: 'owner',  label: 'Owner',         w: 140 },
-  { key: 'req',    label: 'Traceability',  w: 170 },
-  { key: 'act',    label: '',              w: 30  },
+  { key: 'level', label: 'Level', w: 74 },
+  { key: 'part', label: 'Part', w: null },
+  { key: 'qty', label: 'Qty', w: 50 },
+  { key: 'uom', label: 'UOM', w: 50 },
+  { key: 'mfr', label: 'Manufacturer', w: 130 },
+  { key: 'price', label: 'Unit Price', w: 90 },
+  { key: 'lead', label: 'Lead', w: 64 },
+  { key: 'rev', label: 'Rev', w: 46 },
+  { key: 'status', label: 'Status', w: 92 },
+  { key: 'owner', label: 'Owner', w: 140 },
+  { key: 'req', label: 'Traceability', w: 170 },
+  { key: 'act', label: '', w: 30 },
 ] as const;
 
 function ListView({ rows, expanded, toggle, filtersActive, onOpen, totalCount }: {
@@ -616,10 +616,10 @@ export function BOMView({ addOpen = false, onAddClose }: BOMViewProps) {
   );
 
   const facets = useMemo(() => ({
-    units:         [...new Set(allNodes.map(n => n.uom))].sort(),
+    units: [...new Set(allNodes.map(n => n.uom))].sort(),
     manufacturers: [...new Set(allNodes.map(n => n.manufacturer))].sort(),
-    suppliers:     [...new Set(allNodes.map(n => n.distributor))].sort(),
-    owners:        [...new Set(allNodes.map(n => n.owner))].sort(),
+    suppliers: [...new Set(allNodes.map(n => n.distributor))].sort(),
+    owners: [...new Set(allNodes.map(n => n.owner))].sort(),
   }), [allNodes]);
 
   const activeCount =
@@ -661,7 +661,7 @@ export function BOMView({ addOpen = false, onAddClose }: BOMViewProps) {
 
   const totalCount = useMemo(() => allNodes.length, [allNodes]);
   const approvedCount = useMemo(() => allNodes.filter(n => n.status === 'approved').length, [allNodes]);
-  const pendingCount  = useMemo(() => allNodes.filter(n => n.status === 'pending').length,  [allNodes]);
+  const pendingCount = useMemo(() => allNodes.filter(n => n.status === 'pending').length, [allNodes]);
   const totalCost = useMemo(() => allNodes.reduce((s, n) => s + n.price * n.qty, 0), [allNodes]);
 
   // Detail view — search session parts first, then BOM_NODES
@@ -700,7 +700,7 @@ export function BOMView({ addOpen = false, onAddClose }: BOMViewProps) {
   };
 
   return (
-    <div className="flex flex-col h-full px-6 overflow-hidden bg-background">
+    <div className="flex flex-col h-full px-6 overflow-hidden bg-background" style={{ height: 'calc(100vh - 220px)' }}>
       {/* ── Fixed header zone (no scroll) ─────────────────────────── */}
       <div className="shrink-0 py-4">
         {/* Stat cards */}
