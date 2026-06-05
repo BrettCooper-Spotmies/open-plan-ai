@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { issuesService } from '@/services/issues.service';
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { queryKeys } from '@/lib/queryClient';
 import { Issue } from '@/types';
@@ -7,7 +9,8 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { logger } from '@/services/monitoring/logger';
 
 /**
- * Fetch all issues across all org projects (fan-out)
+ * Fetch all issues across all org projects — single aggregated endpoint,
+ * replaces the previous O(n) fan-out across individual project endpoints.
  */
 export function useAllIssues() {
   const { currentOrganization } = useOrganization();
@@ -15,20 +18,17 @@ export function useAllIssues() {
 
   return useQuery({
     queryKey: [...queryKeys.issues.all, 'org-all', orgId],
-    queryFn: async (): Promise<Issue[]> => {
-      if (!orgId) return [];
-      const { projectsService } = await import('@/services/projects.service');
-      const projects = await projectsService.getAll(orgId);
-      if (!projects.length) return [];
-      const results = await Promise.all(projects.map(p => issuesService.getByProject(p.id).catch(() => [])));
-      return results.flat();
+    queryFn: (): Promise<Issue[]> => {
+      if (!orgId) return Promise.resolve([]);
+      return apiClient.get<Issue[]>(ENDPOINTS.ORGANIZATIONS.ALL_ISSUES(orgId));
     },
     enabled: !!orgId,
   });
 }
 
 /**
- * Fetch all issues for the current organization (fan-out across projects)
+ * Alias — same single-endpoint implementation, kept for backward compatibility
+ * with components that import useOrgAllIssues.
  */
 export function useOrgAllIssues() {
   const { currentOrganization } = useOrganization();
@@ -36,13 +36,9 @@ export function useOrgAllIssues() {
 
   return useQuery({
     queryKey: [...queryKeys.issues.all, 'org', orgId],
-    queryFn: async (): Promise<Issue[]> => {
-      if (!orgId) return [];
-      const { projectsService } = await import('@/services/projects.service');
-      const projects = await projectsService.getAll(orgId);
-      if (!projects.length) return [];
-      const results = await Promise.all(projects.map(p => issuesService.getByProject(p.id).catch(() => [])));
-      return results.flat();
+    queryFn: (): Promise<Issue[]> => {
+      if (!orgId) return Promise.resolve([]);
+      return apiClient.get<Issue[]>(ENDPOINTS.ORGANIZATIONS.ALL_ISSUES(orgId));
     },
     enabled: !!orgId,
   });

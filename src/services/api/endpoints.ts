@@ -35,6 +35,8 @@ export const ENDPOINTS = {
     ACCEPT_BY_ID: (id: string) => `/invitations/${id}/accept`,
     ACTIVITIES: (orgId: string) => `/organizations/${orgId}/activities`,
     REPORTS_OVERVIEW: (orgId: string) => `/organizations/${orgId}/reports/overview`,
+    ALL_TASKS: (orgId: string) => `/organizations/${orgId}/tasks`,
+    ALL_ISSUES: (orgId: string) => `/organizations/${orgId}/issues`,
   },
   // Projects
   PROJECTS: {
