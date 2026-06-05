@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2 } from 'lucide-react';
+import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2, Layers, Upload, Download } from 'lucide-react';
+import { BOMView } from './components/BOMView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -381,6 +382,7 @@ export default function ProjectDetail() {
   const [viewModeStr, setViewModeStr] = useState<TaskViewMode | null>(null);
   const [moduleViewModeStr, setModuleViewModeStr] = useState<ModuleViewMode | null>(null);
   const [issueViewModeStr, setIssueViewModeStr] = useState<'table' | 'kanban' | null>(null);
+  const [bomAddOpen, setBomAddOpen] = useState(false);
   const [milestoneViewModeStr, setMilestoneViewModeStr] = useState<'list' | 'kanban' | null>(null);
 
   const viewMode = viewModeStr || (isMobile ? 'list' : 'kanban');
@@ -1205,7 +1207,7 @@ export default function ProjectDetail() {
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             {/* Left Side: Tabs and Filters */}
             <div className="w-full py-1 md:mr-auto md:w-auto">
-              <TabsList className="bg-muted/50 grid grid-cols-4 w-full h-9 md:w-auto md:flex md:shrink-0">
+              <TabsList className="bg-muted/50 grid grid-cols-5 w-full h-9 md:w-auto md:flex md:shrink-0">
                 <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Tasks">
                   <ListTodo className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Tasks</span>}
@@ -1241,6 +1243,10 @@ export default function ProjectDetail() {
                       {openIssuesCount}
                     </Badge>
                   )}
+                </TabsTrigger>
+                <TabsTrigger value="bom" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Bill of Materials">
+                  <Layers className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">BOM</span>}
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -1317,6 +1323,22 @@ export default function ProjectDetail() {
                   onReportIssue={() => setIsAddIssueDialogOpen(true)}
                 />
               )}
+              {section === 'bom' && (
+                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
+                  <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
+                    <Upload className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Import</span>
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
+                    <Download className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Export</span>
+                  </Button>
+                  <Button size="sm" onClick={() => setBomAddOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">Add Part</span>
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1392,6 +1414,9 @@ export default function ProjectDetail() {
               onIssueUpdate={handleIssueUpdate}
               onIssueDelete={handleIssueDelete}
             />
+          </TabsContent>
+          <TabsContent value="bom" className="mt-0 -mx-6 -mb-6 flex flex-col" style={{ height: 'calc(100vh - 220px)' }}>
+            <BOMView addOpen={bomAddOpen} onAddClose={() => setBomAddOpen(false)} />
           </TabsContent>
         </Tabs>
       </div>
