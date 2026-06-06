@@ -73,7 +73,7 @@ export default function Projects() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const { currentOrganization } = useOrganization();
+  const { currentOrganization, isLoading: orgLoading } = useOrganization();
   const { data: projects, isLoading, error } = useProjects();
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const [view, setView] = useState<'grid' | 'list'>('grid');
@@ -125,7 +125,10 @@ export default function Projects() {
     navigate(`/projects/${projectId}/edit`);
   };
 
-  if (isLoading) {
+  // Show the skeleton while the org is still resolving too — otherwise the
+  // org-scoped projects query is disabled (isLoading=false) and we briefly flash
+  // the "No projects found" empty state before the real loading shimmer.
+  if (orgLoading || isLoading) {
     return <AppLayoutSkeleton variant="projects" />;
   }
 

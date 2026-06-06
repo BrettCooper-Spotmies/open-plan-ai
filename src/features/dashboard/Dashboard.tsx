@@ -35,7 +35,9 @@ export default function Dashboard() {
   const { data: milestones, isLoading: milestonesLoading } = useUpcomingDashboardMilestones(4);
   const { data: projectSummaries, isLoading: projectsLoading } = useProjectSummaries();
 
-  const isLoading = statsLoading || activitiesLoading || milestonesLoading || projectsLoading;
+  // Include org loading so we show the skeleton (not a flash of zeros / empty
+  // states) while the org resolves and the org-scoped queries are still disabled.
+  const isLoading = orgLoading || statsLoading || activitiesLoading || milestonesLoading || projectsLoading;
 
   const handleCreateOrg = async () => {
     if (!newOrgForm.name.trim()) {

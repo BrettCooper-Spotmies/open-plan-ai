@@ -31,6 +31,10 @@ export interface AuthResponse extends AuthTokens {
   user: BackendUser;
 }
 
+// Dedupe concurrent bootstraps — React StrictMode double-invokes effects in dev
+// and providers can mount together, so this keeps /auth/me to a single request.
+let bootstrapInFlight: Promise<BackendUser | null> | null = null;
+
 export const authService = {
   async register(email: string, password: string, metadata?: SignUpMetadata): Promise<{ message: string; email: string }> {
     return apiClient.post(ENDPOINTS.AUTH.REGISTER, {
@@ -54,22 +58,29 @@ export const authService = {
    * so a logged-out bootstrap never triggers a redirect on public pages.
    * Returns the user, or null if there is no valid session.
    */
-  async bootstrap(): Promise<BackendUser | null> {
-    const opts = { withCredentials: true };
-    const url = (path: string) => `${config.api.baseUrl}${path}`;
-    try {
-      const res = await axios.get(url(ENDPOINTS.AUTH.ME), opts);
-      return res.data.data as BackendUser;
-    } catch {
-      // access cookie missing/expired — fall through to a single refresh attempt
-    }
-    try {
-      await axios.post(url(ENDPOINTS.AUTH.REFRESH), {}, opts);
-      const res = await axios.get(url(ENDPOINTS.AUTH.ME), opts);
-      return res.data.data as BackendUser;
-    } catch {
-      return null;
-    }
+  bootstrap(): Promise<BackendUser | null> {
+    if (bootstrapInFlight) return bootstrapInFlight;
+
+    bootstrapInFlight = (async () => {
+      const opts = { withCredentials: true };
+      const url = (path: string) => `${config.api.baseUrl}${path}`;
+      try {
+        const res = await axios.get(url(ENDPOINTS.AUTH.ME), opts);
+        return res.data.data as BackendUser;
+      } catch {
+        // access cookie missing/expired — fall through to a single refresh attempt
+      }
+      try {
+        await axios.post(url(ENDPOINTS.AUTH.REFRESH), {}, opts);
+        const res = await axios.get(url(ENDPOINTS.AUTH.ME), opts);
+        return res.data.data as BackendUser;
+      } catch {
+        return null;
+      }
+    })();
+
+    void bootstrapInFlight.finally(() => { bootstrapInFlight = null; });
+    return bootstrapInFlight;
   },
 
   async logout(): Promise<void> {
