@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
-import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2, Layers, Upload, Download, GitMerge, ChartGantt, ShieldAlert } from 'lucide-react';
+import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2, Layers, Upload, Download, GitMerge, ChartGantt, ShieldAlert, ListChecks } from 'lucide-react';
 import { BOMView } from './components/BOMView';
+import RequirementsView from './components/RequirementsView';
 import { ECOView } from './components/ECOView';
 import { GateView } from './components/GateView';
 import { RiskView } from './components/RiskView';
@@ -1252,6 +1253,10 @@ export default function ProjectDetail() {
                   <Layers className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">BOM</span>}
                 </TabsTrigger>
+                <TabsTrigger value="requirements" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Requirements">
+                  <ListChecks className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">Requirements</span>}
+                </TabsTrigger>
                 <TabsTrigger value="eng-changes" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Engineering Changes">
                   <GitMerge className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Eng. Changes</span>}
@@ -1469,6 +1474,9 @@ export default function ProjectDetail() {
           </TabsContent>
           <TabsContent value="bom" className="mt-0 -mx-6 -mb-6 flex flex-col">
             <BOMView addOpen={bomAddOpen} onAddClose={() => setBomAddOpen(false)} />
+          </TabsContent>
+          <TabsContent value="requirements" className="mt-6 -mx-6 -mb-6 flex flex-col">
+            <RequirementsView />
           </TabsContent>
           <TabsContent value="eng-changes" className="mt-6 -mx-6 -mb-6 flex flex-col">
             <ECOView newTrigger={ecoNewOpen} onNewConsumed={() => setEcoNewOpen(false)} />

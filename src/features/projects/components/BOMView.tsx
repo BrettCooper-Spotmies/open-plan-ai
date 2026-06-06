@@ -52,7 +52,7 @@ function StatCard({ label, value, icon: Icon, iconColor, sub, accent }: {
         <span className="text-xs text-muted-foreground">{label}</span>
         <Icon className="w-4 h-4" style={{ color: iconColor }} />
       </div>
-      <div className="text-[26px] font-bold leading-tight mb-0.5" style={{ color: accent ? '#2563EB' : undefined }}>
+      <div className="text-[26px] font-bold leading-tight mb-0.5">
         {value}
       </div>
       <div className="text-[11px] text-muted-foreground">{sub}</div>
@@ -148,7 +148,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets }: {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4" style={{ color: '#2563EB' }} />
+            <Filter className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-semibold text-foreground">Filters</span>
           </div>
           <button onClick={onClose}
@@ -164,7 +164,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets }: {
                 <button key={id} onClick={() => set('bomType', id)}
                   className={cn('flex-1 py-1.5 rounded-md text-xs font-medium cursor-pointer border-none transition-colors',
                     filters.bomType === id ? 'text-white' : 'bg-transparent text-muted-foreground hover:text-foreground')}
-                  style={{ background: filters.bomType === id ? '#2563EB' : undefined }}>
+                  style={{ background: filters.bomType === id ? 'hsl(var(--foreground))' : undefined }}>
                   {label}
                 </button>
               ))}
@@ -371,7 +371,7 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, totalCount }:
                 >
                   {hasChildren ? (
                     <span className="inline-flex transition-transform" style={{ transform: isExp ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
-                      <ChevronDown className="w-3 h-3" style={{ color: isExp ? '#2563EB' : undefined }} />
+                      <ChevronDown className="w-3 h-3" />
                     </span>
                   ) : <span className="w-3 inline-block" />}
                 </span>
@@ -386,7 +386,7 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, totalCount }:
               <div className="flex-1 min-w-0 px-2 flex items-center gap-2.5">
                 <PartThumb cat={row.cat} size={32} />
                 <div className="min-w-0">
-                  <span className="text-xs font-medium font-mono block" style={{ color: '#2563EB' }}>{row.pn}</span>
+                  <span className="text-xs font-medium font-mono block" className="text-foreground">{row.pn}</span>
                   <span className={cn('text-sm block truncate',
                     row.level === 0 ? 'font-semibold text-foreground' : row.level === 1 ? 'font-medium text-foreground' : 'text-muted-foreground'
                   )}>
@@ -478,7 +478,7 @@ function GridView({ rows, onOpen, totalCount }: { rows: BOMNode[]; onOpen: (id: 
               onMouseLeave={() => setHovered(null)}
               className="bg-card border rounded-xl overflow-hidden cursor-pointer transition-all"
               style={{
-                borderColor: isH ? 'rgba(37,99,235,0.4)' : 'var(--border)',
+                borderColor: isH ? 'hsl(var(--foreground) / 0.25)' : 'var(--border)',
                 transform: isH ? 'translateY(-2px)' : undefined,
               }}
             >
@@ -493,7 +493,7 @@ function GridView({ rows, onOpen, totalCount }: { rows: BOMNode[]; onOpen: (id: 
               </div>
               {/* Body */}
               <div className="px-3.5 pb-3.5 pt-0.5">
-                <div className="text-[11px] font-medium font-mono mb-1" style={{ color: '#2563EB' }}>{row.pn}</div>
+                <div className="text-[11px] font-medium font-mono mb-1" className="text-foreground">{row.pn}</div>
                 <div className="text-[13.5px] font-semibold text-foreground leading-snug mb-2.5 line-clamp-2 min-h-[35px]">
                   {row.desc}
                 </div>
@@ -693,7 +693,7 @@ export function BOMView({ addOpen = false, onAddClose }: BOMViewProps) {
         className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium border-none cursor-pointer transition-colors',
           active ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground hover:text-foreground')}
       >
-        <Icon className="w-3.5 h-3.5" style={{ color: active ? '#2563EB' : undefined }} />
+        <Icon className="w-3.5 h-3.5" />
         {label}
       </button>
     );
@@ -705,7 +705,7 @@ export function BOMView({ addOpen = false, onAddClose }: BOMViewProps) {
       <div className="shrink-0 py-4">
         {/* Stat cards */}
         <div className="flex gap-3 mb-4">
-          <StatCard label="Total Parts" value={String(totalCount)} icon={Layers} iconColor="#2563EB" sub="across all levels" accent />
+          <StatCard label="Total Parts" value={String(totalCount)} icon={Layers} iconColor="hsl(var(--foreground))" sub="across all levels" />
           <StatCard label="Approved" value={String(approvedCount)} icon={CheckCircle} iconColor="#16A34A" sub={`${Math.round(approvedCount / totalCount * 100)}% approval rate`} />
           <StatCard label="Pending Review" value={String(pendingCount)} icon={Clock} iconColor="#D97706" sub="needs attention" />
           <StatCard label="Total BOM Cost" value={`$${totalCost.toFixed(2)}`} icon={DollarSign} iconColor="#9333EA" sub="estimated assembly cost" />
@@ -740,11 +740,10 @@ export function BOMView({ addOpen = false, onAddClose }: BOMViewProps) {
               activeCount ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-foreground border-border hover:bg-muted'
             )}
           >
-            <Filter className="w-3.5 h-3.5" style={{ color: activeCount ? '#2563EB' : undefined }} />
+            <Filter className="w-3.5 h-3.5" />
             Filter
             {activeCount > 0 && (
-              <span className="min-w-4 h-4 px-1 rounded-full text-[10px] font-bold text-white flex items-center justify-center"
-                style={{ background: '#2563EB' }}>
+              <span className="min-w-4 h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-foreground text-background">
                 {activeCount}
               </span>
             )}

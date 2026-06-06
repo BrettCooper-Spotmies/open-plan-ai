@@ -67,10 +67,7 @@ export function BOMStatusPill({ status }: { status: BOMStatus }) {
 export function ReqTag({ label }: { label: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium cursor-pointer whitespace-nowrap transition-colors"
-      style={{ background: 'rgba(37,99,235,0.1)', color: '#2563EB', border: '1px solid rgba(37,99,235,0.2)' }}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(37,99,235,0.2)'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = 'rgba(37,99,235,0.1)'; }}
+      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium cursor-pointer whitespace-nowrap transition-colors bg-muted text-foreground border border-border hover:bg-accent"
     >
       <Link2 style={{ width: 10, height: 10 }} />
       {label}

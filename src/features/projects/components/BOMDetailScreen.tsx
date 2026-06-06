@@ -114,7 +114,7 @@ function AddSubcomponentDialog({
                     <PartThumb cat={part.cat} size={32} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-mono font-medium" style={{ color: '#2563EB' }}>{part.pn}</span>
+                        <span className="text-[11px] font-mono font-medium" className="text-foreground">{part.pn}</span>
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded"
                           style={{ background: `${meta.tint}18`, color: meta.tint }}>
                           {meta.label.split(' ')[0]}
@@ -648,7 +648,7 @@ export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Prop
                 />
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-                <span className="font-mono font-medium" style={{ color: '#2563EB' }}>{node.pn}</span>
+                <span className="font-mono font-medium" className="text-foreground">{node.pn}</span>
                 <span>·</span>
                 <span className="inline-flex items-center gap-1.5" style={{ color: meta.tint }}>
                   <span className="w-2 h-2 rounded-sm inline-block" style={{ background: meta.tint }} />
@@ -761,7 +761,7 @@ export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Prop
                   >
                     <PartThumb cat={c.cat} size={34} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-medium font-mono" style={{ color: '#2563EB' }}>{c.pn}</div>
+                      <div className="text-[11px] font-medium font-mono" className="text-foreground">{c.pn}</div>
                       <div className="text-sm font-medium text-foreground truncate">{c.desc}</div>
                     </div>
                     <span className="text-xs text-muted-foreground tabular-nums shrink-0">{c.qty} {c.uom}</span>
@@ -785,15 +785,15 @@ export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Prop
                         onClick={() => onNavigate(p.id)}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted border border-border cursor-pointer hover:bg-accent transition-colors"
                       >
-                        <span className="text-[11px] font-mono" style={{ color: '#2563EB' }}>{p.pn}</span>
+                        <span className="text-[11px] font-mono" className="text-foreground">{p.pn}</span>
                         <span className="text-xs text-foreground">{p.desc}</span>
                       </button>
                       <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
                     </div>
                   ))}
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-                    style={{ background: 'rgba(37,99,235,0.1)', border: '1px solid rgba(37,99,235,0.25)' }}>
-                    <span className="text-[11px] font-mono" style={{ color: '#2563EB' }}>{node.pn}</span>
+                    className="bg-muted border border-border">
+                    <span className="text-[11px] font-mono text-foreground">{node.pn}</span>
                     <span className="text-xs text-foreground font-medium">{node.desc}</span>
                   </span>
                 </div>
@@ -909,12 +909,12 @@ export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Prop
                     <div key={p.id}
                       onClick={() => !isCur && onNavigate(p.id)}
                       className="flex items-center gap-2.5 py-1.5 px-2 rounded-lg transition-colors"
-                      style={{ marginLeft: i * 14, cursor: isCur ? 'default' : 'pointer', background: isCur ? 'rgba(37,99,235,0.08)' : undefined }}
-                      onMouseEnter={e => { if (!isCur) (e.currentTarget as HTMLElement).style.background = 'var(--muted)'; }}
+                      style={{ marginLeft: i * 14, cursor: isCur ? 'default' : 'pointer', background: isCur ? 'hsl(var(--muted))' : undefined }}
+                      onMouseEnter={e => { if (!isCur) (e.currentTarget as HTMLElement).style.background = 'hsl(var(--muted))'; }}
                       onMouseLeave={e => { if (!isCur) (e.currentTarget as HTMLElement).style.background = ''; }}
                     >
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pm.tint }} />
-                      <span className="text-[11px] font-mono shrink-0" style={{ color: isCur ? '#2563EB' : undefined }}>{p.id}</span>
+                      <span className="text-[11px] font-mono shrink-0 text-foreground">{p.id}</span>
                       <span className={`text-[12.5px] truncate ${isCur ? 'text-foreground font-semibold' : 'text-muted-foreground'}`}>
                         {p.desc}
                       </span>
