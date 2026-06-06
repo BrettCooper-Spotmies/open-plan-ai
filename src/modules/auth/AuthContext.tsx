@@ -1,6 +1,6 @@
 import React, { createContext, useEffect, useState, useCallback, useContext, useMemo } from 'react';
 import { authService, BackendUser, SignUpMetadata } from './services/auth.service';
-import { apiClient, tokenStorage } from '@/shared/api/client';
+import { apiClient } from '@/shared/api/client';
 import { ENDPOINTS } from '@/shared/api/endpoints';
 import { setSentryUser, clearSentryUser } from '@/infrastructure/monitoring/sentry';
 
@@ -30,17 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Initialize auth state from stored token
   useEffect(() => {
     const init = async () => {
-      const accessToken = tokenStorage.getAccessToken();
-      if (!accessToken) {
-        setIsLoading(false);
-        return;
-      }
       try {
-        const me = await authService.getMe();
-        setUser(me);
-        setSentryUser(me.id, me.email);
-      } catch {
-        tokenStorage.clearTokens();
+        // Auth lives entirely in httpOnly cookies, so login state can't be read
+        // from JS — bootstrap() probes the session (and refreshes if needed).
+        const me = await authService.bootstrap();
+        if (me) {
+          setUser(me);
+          setSentryUser(me.id, me.email);
+        }
       } finally {
         setIsLoading(false);
       }
@@ -65,11 +62,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setPendingVerificationEmail(null);
       return { error: null };
     } catch (err: unknown) {
-      // Check if the error is an unverified email response (403)
+      // Check if the error is an unverified email response (403).
+      // The backend sends ForbiddenError with a JSON-encoded message:
+      //   { "code": "EMAIL_NOT_VERIFIED", "email": "..." }
       const axiosErr = err as { response?: { status?: number; data?: { error?: { message?: string } } } };
       if (axiosErr?.response?.status === 403) {
-        const msg = axiosErr.response?.data?.error?.message || '';
-        if (msg === 'email_not_verified') {
+        const rawMsg = axiosErr.response?.data?.error?.message || '';
+        let code = '';
+        try { code = (JSON.parse(rawMsg) as { code?: string }).code || ''; } catch { /* not JSON */ }
+        if (code === 'EMAIL_NOT_VERIFIED') {
           // Backend auto-sends OTP on this 403 — just flag the state
           setPendingVerificationEmail(email);
           return { error: null, requiresVerification: true, email };

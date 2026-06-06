@@ -1,6 +1,5 @@
 import { io, Socket } from 'socket.io-client';
 import { config } from '@/config';
-import { tokenStorage } from '@/services/api/client';
 import type { IChatTransport, Unsubscribe } from './IChatTransport';
 import { logger } from '@/services/monitoring/logger';
 
@@ -11,10 +10,9 @@ export class SocketIOChatTransport implements IChatTransport {
 
   constructor() {
     this.socket = io(config.api.wsUrl, {
-      // Always read the current token so reconnects use a fresh value
-      auth: (cb: (data: object) => void) => {
-        cb({ token: tokenStorage.getAccessToken() });
-      },
+      // Auth is via the httpOnly accessToken cookie — withCredentials makes the
+      // browser send it on the WS handshake, where the server reads it.
+      withCredentials: true,
       transports: ['websocket', 'polling'],
       autoConnect: true,
     });

@@ -1,5 +1,7 @@
-import { apiClient, tokenStorage } from '@/services/api/client';
+import axios from 'axios';
+import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
+import { config } from '@/config';
 
 export interface SignUpMetadata {
   name?: string;
@@ -41,21 +43,42 @@ export const authService = {
   },
 
   async login(email: string, password: string): Promise<AuthResponse> {
-    const result = await apiClient.post<AuthResponse>(ENDPOINTS.AUTH.LOGIN, { email, password });
-    // The backend sets the refresh token as an httpOnly cookie.
-    // We only store the short-lived access token in memory.
-    tokenStorage.setAccessToken(result.accessToken);
-    return result;
+    // The backend sets both tokens as httpOnly cookies; nothing to store here.
+    return apiClient.post<AuthResponse>(ENDPOINTS.AUTH.LOGIN, { email, password });
+  },
+
+  /**
+   * Restore the session on app load. The auth cookies are httpOnly so JS can't
+   * read them — instead we probe /auth/me, and if the access cookie is missing
+   * or expired, do one refresh and retry. Bare axios (no interceptors) is used
+   * so a logged-out bootstrap never triggers a redirect on public pages.
+   * Returns the user, or null if there is no valid session.
+   */
+  async bootstrap(): Promise<BackendUser | null> {
+    const opts = { withCredentials: true };
+    const url = (path: string) => `${config.api.baseUrl}${path}`;
+    try {
+      const res = await axios.get(url(ENDPOINTS.AUTH.ME), opts);
+      return res.data.data as BackendUser;
+    } catch {
+      // access cookie missing/expired — fall through to a single refresh attempt
+    }
+    try {
+      await axios.post(url(ENDPOINTS.AUTH.REFRESH), {}, opts);
+      const res = await axios.get(url(ENDPOINTS.AUTH.ME), opts);
+      return res.data.data as BackendUser;
+    } catch {
+      return null;
+    }
   },
 
   async logout(): Promise<void> {
-    const refreshToken = tokenStorage.getRefreshToken();
+    // The refresh-token cookie is sent automatically via withCredentials, so no
+    // body is needed. The backend revokes the token and clears both cookies.
     try {
-      if (refreshToken) {
-        await apiClient.post(ENDPOINTS.AUTH.LOGOUT, { refreshToken });
-      }
-    } finally {
-      tokenStorage.clearTokens();
+      await apiClient.post(ENDPOINTS.AUTH.LOGOUT);
+    } catch {
+      // Ignore network/401 errors — the user is logging out regardless.
     }
   },
 
@@ -76,16 +99,11 @@ export const authService = {
   },
 
   async verifyOtp(email: string, otp: string): Promise<AuthResponse> {
-    const result = await apiClient.post<AuthResponse>(ENDPOINTS.AUTH.VERIFY_OTP, { email, otp });
-    tokenStorage.setAccessToken(result.accessToken);
-    return result;
+    // Backend sets both tokens as httpOnly cookies on success.
+    return apiClient.post<AuthResponse>(ENDPOINTS.AUTH.VERIFY_OTP, { email, otp });
   },
 
   async getMe(): Promise<BackendUser> {
     return apiClient.get(ENDPOINTS.AUTH.ME);
-  },
-
-  isAuthenticated(): boolean {
-    return !!tokenStorage.getAccessToken(); // in-memory access token
   },
 };

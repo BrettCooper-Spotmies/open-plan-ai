@@ -1,62 +1,41 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { config } from '@/config';
 
-// ─── Token Storage ────────────────────────────────────────────────────────────
+// ─── Auth model ───────────────────────────────────────────────────────────────
 //
-// SECURITY MODEL:
-//   Access token  → in-memory only (never touches storage, invisible to XSS)
-//   Refresh token → httpOnly cookie (set by the backend, unreadable by JS)
+// Backend-managed httpOnly cookies:
+//   Access token  → httpOnly cookie `accessToken`  (set by backend, ~15m)
+//   Refresh token → httpOnly cookie `refreshToken` (set by backend, ~7d)
 //
-// On hard refresh the access token is gone, so the app calls /auth/refresh on
-// mount. The browser automatically sends the httpOnly cookie; the backend
-// validates it and returns a fresh access token in the JSON body.
-//
-// This pattern eliminates localStorage-based token theft via XSS.
-
-let _accessToken: string | null = null;
-
-export const tokenStorage = {
-  getAccessToken: (): string | null => _accessToken,
-
-  setAccessToken: (token: string): void => {
-    _accessToken = token;
-  },
-
-  // The refresh token lives in an httpOnly cookie — the browser manages it.
-  // These stubs exist so call-sites that previously called setTokens / clearTokens
-  // continue to compile without changes until each is updated individually.
-  setTokens: (accessToken: string, _refreshToken: string): void => {
-    _accessToken = accessToken;
-    // _refreshToken is now set by the backend via Set-Cookie — ignore it here.
-  },
-
-  clearTokens: (): void => {
-    _accessToken = null;
-    // The httpOnly cookie is cleared by calling POST /auth/logout on the backend,
-    // which responds with Set-Cookie: refreshToken=; Max-Age=0; HttpOnly
-  },
-
-  // Legacy alias — kept for backwards compat during migration
-  getRefreshToken: (): null => null,
-};
+// The browser sends both automatically (withCredentials: true). JavaScript never
+// reads or stores tokens, so there is no token storage here. On a 401 the
+// interceptor calls /auth/refresh (cookie sent automatically); the backend
+// rotates the cookies and the original request is retried.
 
 // ─── Refresh queue ────────────────────────────────────────────────────────────
 
 let isRedirectingToLogin = false;
 let isRefreshing = false;
-let refreshSubscribers: Array<(token: string) => void> = [];
+let refreshSubscribers: Array<() => void> = [];
 
-function subscribeTokenRefresh(cb: (token: string) => void): void {
+function subscribeTokenRefresh(cb: () => void): void {
   refreshSubscribers.push(cb);
 }
 
-function onTokenRefreshed(token: string): void {
-  refreshSubscribers.forEach((cb) => cb(token));
+function onTokenRefreshed(): void {
+  refreshSubscribers.forEach((cb) => cb());
   refreshSubscribers = [];
 }
 
 function onRefreshFailed(): void {
   refreshSubscribers = [];
+}
+
+function redirectToLogin(): void {
+  if (!isRedirectingToLogin && !window.location.pathname.includes('/login')) {
+    isRedirectingToLogin = true;
+    window.location.href = '/login';
+  }
 }
 
 // ─── Axios instance ───────────────────────────────────────────────────────────
@@ -69,20 +48,13 @@ const axiosInstance: AxiosInstance = axios.create({
   baseURL: config.api.baseUrl,
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
-  // Required so the browser sends the httpOnly refresh cookie cross-origin.
+  // Required so the browser sends the httpOnly auth cookies on every request.
   withCredentials: true,
 });
 
-// Request interceptor — attach access token from memory
-axiosInstance.interceptors.request.use((reqConfig) => {
-  const token = tokenStorage.getAccessToken();
-  if (token) {
-    reqConfig.headers.Authorization = `Bearer ${token}`;
-  }
-  return reqConfig;
-});
-
-// Response interceptor — silent token refresh on 401
+// Response interceptor — silent token refresh on 401.
+// No Authorization header is set: the access token is an httpOnly cookie the
+// browser attaches automatically.
 axiosInstance.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -105,18 +77,13 @@ axiosInstance.interceptors.response.use(
     const shouldSkipRefresh = skipRefreshUrls.some((ep) => originalRequest.url?.includes(ep));
 
     if (shouldSkipRefresh) {
-      tokenStorage.clearTokens();
-      if (!isRedirectingToLogin && !window.location.pathname.includes('/login')) {
-        isRedirectingToLogin = true;
-        window.location.href = '/login';
-      }
+      redirectToLogin();
       return Promise.reject(error);
     }
 
     if (isRefreshing) {
       return new Promise<AxiosResponse>((resolve) => {
-        subscribeTokenRefresh((newToken) => {
-          originalRequest.headers!.Authorization = `Bearer ${newToken}`;
+        subscribeTokenRefresh(() => {
           originalRequest._retry = true;
           resolve(axiosInstance(originalRequest));
         });
@@ -128,28 +95,16 @@ axiosInstance.interceptors.response.use(
 
     try {
       // POST /auth/refresh with NO body — the browser sends the httpOnly
-      // refresh-token cookie automatically via withCredentials: true.
-      const response = await axios.post(
-        `${config.api.baseUrl}/auth/refresh`,
-        {},
-        { withCredentials: true }
-      );
-      const { accessToken } = response.data.data;
+      // refresh-token cookie automatically. The backend rotates both cookies.
+      await axios.post(`${config.api.baseUrl}/auth/refresh`, {}, { withCredentials: true });
 
-      tokenStorage.setAccessToken(accessToken);
-      onTokenRefreshed(accessToken);
       isRefreshing = false;
-
-      originalRequest.headers!.Authorization = `Bearer ${accessToken}`;
+      onTokenRefreshed();
       return axiosInstance(originalRequest);
     } catch (refreshError) {
       isRefreshing = false;
       onRefreshFailed();
-      tokenStorage.clearTokens();
-      if (!isRedirectingToLogin && !window.location.pathname.includes('/login')) {
-        isRedirectingToLogin = true;
-        window.location.href = '/login';
-      }
+      redirectToLogin();
       return Promise.reject(refreshError);
     }
   },
