@@ -1,9 +1,7 @@
 import { useState } from 'react';
 import {
   CheckCircle2, Flag, Clock, AlertTriangle, ChevronRight,
-  Download, Plus,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   GATE_MONTHS, GATE_PHASES, GATE_MILESTONES,
@@ -38,10 +36,10 @@ const STATUS_LABEL: Record<GateStatus, string> = {
 // ── Summary card icons (static list) ──────────────────────────────
 const SUMMARY_ICONS = [CheckCircle2, Flag, Clock, AlertTriangle] as const;
 const SUMMARY_ITEMS = [
-  { label: 'Gates Complete', value: '3 / 6',  token: '--status-done',        idx: 0 },
-  { label: 'Current Phase',  value: 'MRR',    token: '--status-in-progress', idx: 1 },
-  { label: 'Days to Gate 3', value: '22',     token: '--priority-medium',    idx: 2 },
-  { label: 'Open Issues',    value: '7',      token: '--status-blocked',     idx: 3 },
+  { label: 'Gates Complete', value: '3 / 6', token: '--status-done', idx: 0 },
+  { label: 'Current Phase', value: 'MRR', token: '--status-in-progress', idx: 1 },
+  { label: 'Days to Gate 3', value: '22', token: '--priority-medium', idx: 2 },
+  { label: 'Open Issues', value: '7', token: '--status-blocked', idx: 3 },
 ] as const;
 
 // ── Table column widths ────────────────────────────────────────────
@@ -51,9 +49,9 @@ export function GateReviewsScreen({ onOpenGate }: { onOpenGate: (id: string) => 
   const [hovered, setHovered] = useState<string | null>(null);
 
   return (
-    <div className="flex flex-col gap-4 animate-fade-in">
+    <div className="flex flex-col gap-4 animate-fade-in pt-4">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      {/* <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <Flag className="h-5 w-5" style={{ color: 'hsl(var(--status-in-progress))' }} />
@@ -63,17 +61,7 @@ export function GateReviewsScreen({ onOpenGate }: { onOpenGate: (id: string) => 
             Project: Smart Patient Vital Monitor — milestone timeline and gate review status.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <Download className="h-3.5 w-3.5" />
-            Export
-          </Button>
-          <Button size="sm" className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" />
-            Add Gate
-          </Button>
-        </div>
-      </div>
+      </div> */}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

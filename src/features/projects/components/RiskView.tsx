@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import {
   ShieldAlert, AlertTriangle, CheckCircle2, Eye,
-  Download, Plus, MoreHorizontal,
+  MoreHorizontal,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   RISKS, RISK_DOTS, RISK_STATUS_META, RISK_OWNER_PALETTE,
@@ -30,18 +29,18 @@ function OwnerAvatar({ name, idx, size = 24 }: { name: string; idx: number; size
 
 // ── Summary cards ─────────────────────────────────────────────────
 const SUMMARY_ITEMS = [
-  { label: 'Total Risks', value: '24', token: '--foreground',        Icon: ShieldAlert },
-  { label: 'Critical',    value: '3',  token: '--status-blocked',    Icon: AlertTriangle },
-  { label: 'Mitigated',   value: '14', token: '--status-done',       Icon: CheckCircle2 },
-  { label: 'Open',        value: '7',  token: '--priority-high',     Icon: Eye },
+  { label: 'Total Risks', value: '24', token: '--foreground', Icon: ShieldAlert },
+  { label: 'Critical', value: '3', token: '--status-blocked', Icon: AlertTriangle },
+  { label: 'Mitigated', value: '14', token: '--status-done', Icon: CheckCircle2 },
+  { label: 'Open', value: '7', token: '--priority-high', Icon: Eye },
 ] as const;
 
 // ── Heatmap legend entries ─────────────────────────────────────────
 const LEGEND = [
   { label: 'Critical (≥20)', bg: 'hsl(var(--status-blocked) / 0.28)', border: 'hsl(var(--status-blocked) / 0.5)' },
-  { label: 'High (10–19)',   bg: 'hsl(var(--priority-high)  / 0.22)', border: 'hsl(var(--priority-high)  / 0.38)' },
-  { label: 'Medium (5–9)',   bg: 'hsl(var(--status-done)    / 0.12)', border: 'hsl(var(--status-done)    / 0.22)' },
-  { label: 'Low (<5)',       bg: 'hsl(var(--status-done)    / 0.05)', border: 'hsl(var(--status-done)    / 0.14)' },
+  { label: 'High (10–19)', bg: 'hsl(var(--priority-high)  / 0.22)', border: 'hsl(var(--priority-high)  / 0.38)' },
+  { label: 'Medium (5–9)', bg: 'hsl(var(--status-done)    / 0.12)', border: 'hsl(var(--status-done)    / 0.22)' },
+  { label: 'Low (<5)', bg: 'hsl(var(--status-done)    / 0.05)', border: 'hsl(var(--status-done)    / 0.14)' },
 ];
 
 const REGISTER_COLS = '88px minmax(0,1fr) 72px minmax(160px,200px) 108px 32px';
@@ -51,9 +50,9 @@ export function RiskView() {
   const [hovCell, setHovCell] = useState<string | null>(null);
 
   return (
-    <div className="flex flex-col gap-4 animate-fade-in">
+    <div className="flex flex-col gap-4 animate-fade-in pt-4">
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+      {/* <div className="flex items-start justify-between gap-3 flex-wrap">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <ShieldAlert className="h-5 w-5" style={{ color: 'hsl(var(--status-in-progress))' }} />
@@ -63,17 +62,7 @@ export function RiskView() {
             Project: EV Charging Station — risk register and probability–impact assessment.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <Download className="h-3.5 w-3.5" />
-            Export
-          </Button>
-          <Button size="sm" className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" />
-            Add Risk
-          </Button>
-        </div>
-      </div>
+      </div> */}
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -134,18 +123,18 @@ export function RiskView() {
                       >
                         {dotsHere.length > 0
                           ? dotsHere.map(d => (
-                              <div
-                                key={d.id}
-                                title={d.id}
-                                className="rounded-full shrink-0"
-                                style={{ width: 8, height: 8, background: 'hsl(var(--foreground))', opacity: 0.65 }}
-                              />
-                            ))
+                            <div
+                              key={d.id}
+                              title={d.id}
+                              className="rounded-full shrink-0"
+                              style={{ width: 8, height: 8, background: 'hsl(var(--foreground))', opacity: 0.65 }}
+                            />
+                          ))
                           : (
-                              <span className="text-[9px] text-foreground" style={{ opacity: 0.15 }}>
-                                {prob * impact}
-                              </span>
-                            )}
+                            <span className="text-[9px] text-foreground" style={{ opacity: 0.15 }}>
+                              {prob * impact}
+                            </span>
+                          )}
                       </div>
                     );
                   })
