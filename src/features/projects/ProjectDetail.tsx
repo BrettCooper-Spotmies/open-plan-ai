@@ -1484,7 +1484,7 @@ export default function ProjectDetail() {
             <RequirementsView />
           </TabsContent>
           <TabsContent value="eng-changes" className="mt-6 -mx-6 -mb-6 flex flex-col">
-            <ECOView newTrigger={ecoNewOpen} onNewConsumed={() => setEcoNewOpen(false)} />
+            <ECOView projectId={id!} newTrigger={ecoNewOpen} onNewConsumed={() => setEcoNewOpen(false)} />
           </TabsContent>
           <TabsContent value="gate-reviews" className="mt-6">
             <GateView />

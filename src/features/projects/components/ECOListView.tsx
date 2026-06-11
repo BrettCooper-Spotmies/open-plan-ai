@@ -4,21 +4,22 @@ import {
   Boxes, Calendar, ChevronRight, CheckCircle,
 } from 'lucide-react';
 import {
-  ECO_LIST, ECOListItem, MAIN_STATUSES, ECO_TYPE_LABEL, REASON_LABEL,
+  ECOListItem, MAIN_STATUSES, ECO_TYPE_LABEL, REASON_LABEL,
   MODULE_COLORS,
   statusMeta, priorityMeta, changeClassMeta, effectivityText,
-  buildDetail,
+  buildDetail, fromApiEcoListItem,
 } from './ecoData';
 import { ECOAvatar, StatusPill } from './ECOShared';
 import { cn } from '@/lib/utils';
+import { useECOList, useECOStats } from '@/hooks/useECOs';
 
 // ── KPI stat card ─────────────────────────────────────────────────────────────
 
 function StatCard({
-  label, value, sub, icon: Icon, iconColor, accent,
+  label, value, sub, icon: Icon, iconColor, accent, loading,
 }: {
   label: string; value: number; sub: string;
-  icon: React.ElementType; iconColor: string; accent?: boolean;
+  icon: React.ElementType; iconColor: string; accent?: boolean; loading?: boolean;
 }) {
   return (
     <div className={cn(
@@ -30,7 +31,7 @@ function StatCard({
         <Icon className="w-3.5 h-3.5" style={{ color: iconColor }} />
       </div>
       <div className="text-[26px] font-bold leading-tight mb-0.5" style={{ color: accent ? '#2563EB' : undefined }}>
-        {value}
+        {loading ? <span className="inline-block w-8 h-7 rounded bg-muted/60 animate-pulse" /> : value}
       </div>
       <div className="text-[11px] text-muted-foreground">{sub}</div>
     </div>
@@ -87,7 +88,9 @@ function ECORow({
           <Calendar className="w-3 h-3" />
           {eco.target}
         </span>
-        <span className="font-mono text-muted-foreground/70">Rev {eco.revFrom}→{eco.revTo}</span>
+        {eco.revFrom && eco.revTo && (
+          <span className="font-mono text-muted-foreground/70">Rev {eco.revFrom}→{eco.revTo}</span>
+        )}
       </div>
     </div>
   );
@@ -103,20 +106,17 @@ function PreviewPanel({ eco, onOpen }: { eco: ECOListItem; onOpen: () => void })
 
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col">
-      {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
         <span className="text-[13px] font-mono font-semibold text-blue-500">{eco.num}</span>
         <StatusPill meta={sm} />
       </div>
 
       <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
-        {/* Title + desc */}
         <div>
           <div className="text-[15px] font-semibold text-foreground mb-1.5">{eco.title}</div>
           <div className="text-[12px] text-muted-foreground leading-relaxed">{eco.desc}</div>
         </div>
 
-        {/* Badges */}
         <div className="flex flex-wrap gap-1.5">
           <StatusPill meta={pm} />
           <StatusPill meta={cm} />
@@ -130,13 +130,12 @@ function PreviewPanel({ eco, onOpen }: { eco: ECOListItem; onOpen: () => void })
 
         <div className="h-px bg-border" />
 
-        {/* Meta grid */}
         <div className="grid grid-cols-2 gap-x-4 gap-y-3">
           {([
             ['Owner', eco.owner],
             ['Originator', eco.originator],
             ['Effectivity', effectivityText(eco.effectivity)],
-            ['ECO Rev', `${eco.revFrom} → ${eco.revTo}`],
+            ['ECO Rev', eco.revFrom && eco.revTo ? `${eco.revFrom} → ${eco.revTo}` : '—'],
           ] as [string, string][]).map(([k, v]) => (
             <div key={k}>
               <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 mb-0.5">{k}</div>
@@ -145,37 +144,37 @@ function PreviewPanel({ eco, onOpen }: { eco: ECOListItem; onOpen: () => void })
           ))}
         </div>
 
-        {/* Modules */}
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
-            Affected Modules
+        {eco.modules.length > 0 && (
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2">
+              Affected Modules
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {eco.modules.map(m => (
+                <span
+                  key={m}
+                  className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                  style={{
+                    background: (MODULE_COLORS[m] ?? '#6B7280') + '22',
+                    color: MODULE_COLORS[m] ?? '#6B7280',
+                  }}
+                >
+                  {m}
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {eco.modules.map(m => (
-              <span
-                key={m}
-                className="px-2 py-0.5 rounded-full text-[11px] font-semibold"
-                style={{
-                  background: (MODULE_COLORS[m] ?? '#6B7280') + '22',
-                  color: MODULE_COLORS[m] ?? '#6B7280',
-                }}
-              >
-                {m}
-              </span>
-            ))}
-          </div>
-        </div>
+        )}
 
-        {/* Pipeline mini-view */}
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 mb-2.5">
             Approval Pipeline
           </div>
           <div className="flex flex-col gap-2.5">
             {detail.steps.map((p) => {
-              const done = p.decision === 'APPROVED';
+              const done   = p.decision === 'APPROVED';
               const active = p.decision === 'ACTIVE';
-              const rej = p.decision === 'REJECTED';
+              const rej    = p.decision === 'REJECTED';
               return (
                 <div key={p.order} className="flex items-center gap-2.5">
                   <ECOAvatar name={p.name} size={22} />
@@ -196,7 +195,6 @@ function PreviewPanel({ eco, onOpen }: { eco: ECOListItem; onOpen: () => void })
           </div>
         </div>
 
-        {/* Open button */}
         <button
           onClick={onOpen}
           className="flex items-center justify-center gap-2 w-full py-2.5 rounded-md text-[13px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
@@ -211,28 +209,27 @@ function PreviewPanel({ eco, onOpen }: { eco: ECOListItem; onOpen: () => void })
 // ── ECOListView ───────────────────────────────────────────────────────────────
 
 export function ECOListView({
+  projectId,
   onOpen,
 }: {
+  projectId: string;
   onOpen: (eco: ECOListItem) => void;
 }) {
-  const [selectedId, setSelectedId] = useState(ECO_LIST[0].id);
-  const [fStatus, setFStatus] = useState<string>('ALL');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [fStatus, setFStatus]     = useState<string>('ALL');
   const [fPriority, setFPriority] = useState<string>('ALL');
 
-  const selected = ECO_LIST.find(e => e.id === selectedId) ?? ECO_LIST[0];
+  const apiFilters: Record<string, string> = {};
+  if (fStatus   !== 'ALL') apiFilters.status   = fStatus.toLowerCase();
+  if (fPriority !== 'ALL') apiFilters.priority = fPriority.toLowerCase();
 
-  const list = ECO_LIST.filter(e =>
-    (fStatus === 'ALL' || e.status === fStatus) &&
-    (fPriority === 'ALL' || e.priority === fPriority),
-  );
+  const { data: listData, isLoading: listLoading } = useECOList(projectId, apiFilters);
+  const { data: stats, isLoading: statsLoading }   = useECOStats(projectId);
 
-  // KPI counts
-  const openCount = ECO_LIST.filter(e =>
-    ['DRAFT', 'SUBMITTED', 'IN_REVIEW', 'ON_HOLD', 'APPROVED'].includes(e.status),
-  ).length;
-  const inReview   = ECO_LIST.filter(e => e.status === 'IN_REVIEW').length;
-  const awaitingMe = ECO_LIST.filter(e => e.awaitingMe).length;
-  const released   = ECO_LIST.filter(e => e.status === 'RELEASED').length;
+  const list: ECOListItem[] = (listData?.data ?? []).map(fromApiEcoListItem);
+
+  const effectiveSelectedId = selectedId ?? list[0]?.id ?? null;
+  const selected = list.find(e => e.id === effectiveSelectedId) ?? list[0] ?? null;
 
   const Sel = ({
     value, onChange, opts, allLabel,
@@ -255,44 +252,49 @@ export function ECOListView({
 
   return (
     <div className="flex flex-col h-full overflow-hidden text-foreground">
-      {/* KPI cards — fixed header */}
+      {/* KPI cards */}
       <div className="shrink-0 px-6 pt-4 pb-3">
         <div className="flex gap-3 flex-wrap">
-          <StatCard label="Open ECOs"          value={openCount}   sub="Across the program"        icon={GitMerge}       iconColor="#2563EB" accent />
-          <StatCard label="In Review"          value={inReview}    sub="Awaiting sign-off"          icon={Clock}          iconColor="#F59E0B" />
-          <StatCard label="Awaiting My Action" value={awaitingMe}  sub="You are active approver"    icon={ClipboardCheck} iconColor="#DC2626" />
-          <StatCard label="Released This Month" value={released}   sub="ECNs generated"             icon={GitBranch}      iconColor="#16A34A" />
+          <StatCard label="Open ECOs"           value={stats?.openEcos ?? 0}           sub="Across the program"     icon={GitMerge}       iconColor="#2563EB" accent    loading={statsLoading} />
+          <StatCard label="In Review"           value={stats?.inReview ?? 0}           sub="Awaiting sign-off"       icon={Clock}          iconColor="#F59E0B"           loading={statsLoading} />
+          <StatCard label="Awaiting My Action"  value={stats?.awaitingMyAction ?? 0}   sub="You are active approver" icon={ClipboardCheck} iconColor="#DC2626"           loading={statsLoading} />
+          <StatCard label="Released This Month" value={stats?.releasedThisMonth ?? 0}  sub="ECNs generated"          icon={GitBranch}      iconColor="#16A34A"           loading={statsLoading} />
         </div>
       </div>
 
-      {/* List + preview — scrollable */}
+      {/* List + preview */}
       <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
         <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 320px', alignItems: 'start' }}>
           {/* Left: list */}
           <div className="bg-card border border-border rounded-lg overflow-hidden">
-            {/* Toolbar */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border gap-3 flex-wrap">
               <span className="text-[13px] font-semibold">
                 Change Orders{' '}
-                <span className="font-normal text-muted-foreground">· {list.length}</span>
+                <span className="font-normal text-muted-foreground">
+                  · {listLoading ? '…' : list.length}
+                </span>
               </span>
               <div className="flex gap-2 items-center">
                 <Sel value={fStatus}   onChange={setFStatus}   opts={MAIN_STATUSES}                          allLabel="All statuses" />
                 <Sel value={fPriority} onChange={setFPriority} opts={['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']} allLabel="All priorities" />
               </div>
             </div>
-            {/* Rows */}
             <div className="p-2.5 flex flex-col gap-2">
-              {list.map(eco => (
+              {listLoading && (
+                <div className="py-10 text-center text-[12px] text-muted-foreground">
+                  Loading change orders…
+                </div>
+              )}
+              {!listLoading && list.map(eco => (
                 <ECORow
                   key={eco.id}
                   eco={eco}
-                  selected={selected.id === eco.id}
+                  selected={effectiveSelectedId === eco.id}
                   onSelect={() => setSelectedId(eco.id)}
                   onOpen={() => onOpen(eco)}
                 />
               ))}
-              {list.length === 0 && (
+              {!listLoading && list.length === 0 && (
                 <div className="py-10 text-center text-[12px] text-muted-foreground">
                   No change orders match these filters.
                 </div>
@@ -301,7 +303,14 @@ export function ECOListView({
           </div>
 
           {/* Right: preview */}
-          <PreviewPanel eco={selected} onOpen={() => onOpen(selected)} />
+          {selected && (
+            <PreviewPanel eco={selected} onOpen={() => onOpen(selected)} />
+          )}
+          {!selected && !listLoading && (
+            <div className="bg-card border border-border rounded-lg p-8 text-center text-[12px] text-muted-foreground">
+              Select a change order to preview
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -12,10 +12,14 @@ import {
   MODULE_COLORS, ACTIVITY_META, PIPELINE_TEMPLATE,
   statusMeta, priorityMeta, changeClassMeta, changeMeta, impactMeta, dispositionMeta,
   effectivityText, lifecycleIndex, buildDetail, topAssemblies,
-  ECOStatus, DecisionType,
+  ECOStatus, DecisionType, fromApiEcoDetail,
 } from './ecoData';
 import { ECOAvatar, StatusPill } from './ECOShared';
 import { cn } from '@/lib/utils';
+import {
+  useECODetail, useECODecision, useSubmitECO,
+  useReleaseECO, useVerifyECO, useCloseECO, useHoldECO, useResumeECO,
+} from '@/hooks/useECOs';
 
 // ── Lifecycle tracker ─────────────────────────────────────────────────────────
 
@@ -599,15 +603,15 @@ function ActivityTimeline({ detail }: { detail: ECODetail }) {
 function ECNReleaseModal({
   detail,
   onClose,
-  onReleased,
+  onRelease,
 }: {
   detail: ECODetail;
   onClose: () => void;
-  onReleased: (num: string) => void;
+  onRelease: () => Promise<void>;
 }) {
-  const [released, setReleased] = useState(detail.status !== 'APPROVED');
+  const [releasing, setReleasing] = useState(false);
+  const [released, setReleased]   = useState(detail.status !== 'APPROVED');
   const ecn = detail.ecn;
-  if (!ecn) return null;
 
   const revBumps = detail.parts.filter(p => p.rev && p.rev.from !== p.rev.to);
   const dispCounts = detail.parts.reduce<Record<string, number>>((acc, p) => {
@@ -653,7 +657,7 @@ function ECNReleaseModal({
           </div>
 
           {/* Milestone recalc */}
-          {ecn.recalc.count > 0 ? (
+          {ecn && ecn.recalc.count > 0 ? (
             <div className="flex gap-3 p-3.5 rounded-lg" style={{ background: 'rgba(245,158,11,0.07)', border: '1px solid rgba(245,158,11,0.25)' }}>
               <RefreshCw className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#F59E0B' }} />
               <div>
@@ -673,7 +677,7 @@ function ECNReleaseModal({
             </div>
           )}
 
-          {/* Effectivity + on-release */}
+          {/* Effectivity + on-release (only shown when ECN exists) */}
           <div className="flex gap-3 flex-wrap">
             <div className="flex-1 min-w-[180px] p-3.5 rounded-lg bg-muted/40 border border-border">
               <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">Effectivity Cut-in</div>
@@ -713,12 +717,13 @@ function ECNReleaseModal({
           </div>
 
           {/* Distribution */}
+          {ecn && ecn.distribution.length > 0 && (
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
               Distribution List <span className="normal-case tracking-normal font-normal">· notified on release</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {ecn.distribution.map((name, i) => (
+              {ecn.distribution.map((name) => (
                 <div key={name} className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-muted/50 border border-border">
                   <ECOAvatar name={name} size={20} />
                   <span className="text-[12px] text-foreground">{name}</span>
@@ -726,8 +731,10 @@ function ECNReleaseModal({
               ))}
             </div>
           </div>
+          )}
 
           {/* Tasks */}
+          {ecn && ecn.tasks.length > 0 && (
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
               Implementation Tasks ({ecn.tasks.length}){' '}
@@ -763,6 +770,7 @@ function ECNReleaseModal({
               })}
             </div>
           </div>
+          )}
         </div>
 
         <div className="px-5 py-4 border-t border-border flex justify-end gap-2 sticky bottom-0 bg-card">
@@ -774,11 +782,15 @@ function ECNReleaseModal({
           </button>
           {!released && (
             <button
-              onClick={() => { setReleased(true); onReleased(ecn.num); }}
-              className="flex items-center gap-2 px-4 py-2 rounded-md text-[13px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors"
+              disabled={releasing}
+              onClick={async () => {
+                setReleasing(true);
+                try { await onRelease(); setReleased(true); } finally { setReleasing(false); }
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-md text-[13px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors disabled:opacity-60"
             >
               <Send className="w-3.5 h-3.5" />
-              Generate & Release ECN
+              {releasing ? 'Releasing…' : 'Generate & Release ECN'}
             </button>
           )}
           {released && (
@@ -787,7 +799,7 @@ function ECNReleaseModal({
               style={{ background: '#16A34A' }}
             >
               <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-              Released · {ecn.num} distributed
+              Released{ecn ? ` · ${ecn.num} distributed` : ''}
             </span>
           )}
         </div>
@@ -805,9 +817,10 @@ function VerifyModal({
 }: {
   detail: ECODetail;
   onClose: () => void;
-  onConfirm: (note: string) => void;
+  onConfirm: (note: string) => Promise<void>;
 }) {
-  const [note, setNote] = useState('');
+  const [note, setNote]           = useState('');
+  const [saving, setSaving]       = useState(false);
   return (
     <div onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6">
       <div onClick={e => e.stopPropagation()} className="w-[480px] max-w-full bg-card border border-border rounded-xl shadow-2xl">
@@ -842,12 +855,16 @@ function VerifyModal({
             Cancel
           </button>
           <button
-            onClick={() => onConfirm(note.trim())}
-            className="flex items-center gap-2 px-4 py-2 rounded-md text-[13px] font-semibold text-white transition-colors"
+            disabled={saving}
+            onClick={async () => {
+              setSaving(true);
+              try { await onConfirm(note.trim()); } finally { setSaving(false); }
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-md text-[13px] font-semibold text-white transition-colors disabled:opacity-60"
             style={{ background: '#9333EA' }}
           >
             <Shield className="w-3.5 h-3.5" />
-            Mark Verified
+            {saving ? 'Saving…' : 'Mark Verified'}
           </button>
         </div>
       </div>
@@ -887,78 +904,72 @@ function Toast({ message }: { message: string }) {
 
 export function ECODetailView({
   eco,
+  projectId,
   onBack,
   onEdit,
 }: {
   eco: ECOListItem;
+  projectId: string;
   onBack: () => void;
   onEdit?: (eco: ECOListItem) => void;
 }) {
-  const [detail, setDetail] = useState<ECODetail>(() => buildDetail(eco));
-  const [ecnOpen, setEcnOpen] = useState(false);
+  const [ecnOpen, setEcnOpen]     = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast]         = useState<string | null>(null);
 
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
+
+  // Live data from API; fall back to mock detail while loading
+  const { data: liveRaw } = useECODetail(projectId, eco.id);
+  const detail: ECODetail = liveRaw ? fromApiEcoDetail(liveRaw) : buildDetail(eco);
+
+  // Mutations
+  const decisionMutation = useECODecision(projectId, eco.id);
+  const submitMutation   = useSubmitECO(projectId, eco.id);
+  const releaseMutation  = useReleaseECO(projectId, eco.id);
+  const verifyMutation   = useVerifyECO(projectId, eco.id);
+  const closeMutation    = useCloseECO(projectId, eco.id);
+  const holdMutation     = useHoldECO(projectId, eco.id);
+  const resumeMutation   = useResumeECO(projectId, eco.id);
 
   const sm = statusMeta(detail.status);
   const pm = priorityMeta(detail.priority);
   const cm = changeClassMeta(detail.changeClass);
 
-  const handleDecision = (kind: 'approve' | 'reject', comment: string) => {
-    setDetail(prev => {
-      const active = prev.steps.find(s => s.decision === 'ACTIVE') ?? {} as PipelineStep;
-      if (kind === 'approve') {
-        const steps = prev.steps.map(s =>
-          s.decision === 'ACTIVE' ? { ...s, decision: 'APPROVED' as DecisionType, date: 'Just now' } : s,
-        );
-        const nextIdx = steps.findIndex(s => s.decision === 'PENDING');
-        const allDone = nextIdx === -1;
-        if (!allDone) steps[nextIdx] = { ...steps[nextIdx], decision: 'ACTIVE' as DecisionType, date: 'Just now' };
-        const newAct = { actor: active.name ?? prev.owner, action: 'APPROVED', when: 'Just now', note: comment || 'Reviewed finished artifacts — approved.' };
-        return { ...prev, steps, status: allDone ? 'APPROVED' : prev.status, awaitingMe: false, activity: [newAct, ...prev.activity] };
-      }
-      const steps = prev.steps.map((s, i) => ({
-        ...s,
-        decision: (i === 0 ? 'ACTIVE' : 'PENDING') as DecisionType,
-        date: i === 0 ? 'Revising' : 'Pending',
-      }));
-      const rej = { stage: active.stage ?? 'Review', by: active.name ?? prev.owner, when: 'Just now', reason: comment };
-      const newAct = { actor: active.name ?? prev.owner, action: 'REJECTED', when: 'Just now', note: `Rework at ${active.stage ?? 'review'} — ${comment}` };
-      return {
-        ...prev, steps, status: 'REWORK' as ECOStatus, owner: prev.originator, awaitingMe: false,
-        rejections: [...(prev.rejections ?? []), rej], activity: [newAct, ...prev.activity],
-      };
-    });
-    flash(kind === 'approve' ? 'Step approved — pipeline advanced' : 'Returned to originator for artifact rework');
+  const handleDecision = async (kind: 'approve' | 'reject', comment: string) => {
+    try {
+      await decisionMutation.mutateAsync({
+        decision: kind === 'approve' ? 'approved' : 'rejected',
+        note: comment || undefined,
+      });
+      flash(kind === 'approve' ? 'Step approved — pipeline advanced' : 'Returned to originator for artifact rework');
+    } catch {
+      flash('Failed to record decision');
+    }
   };
 
-  const onAction = (k: string) => {
+  const onAction = async (k: string) => {
     if (k === 'edit') { onEdit?.(eco); return; }
     if (k === 'generate' || k === 'ecn') { setEcnOpen(true); return; }
     if (k === 'verify') { setVerifyOpen(true); return; }
-    if (k === 'submit') { setDetail(p => ({ ...p, status: 'IN_REVIEW' })); flash('Submitted for review'); return; }
-    if (k === 'resume') { setDetail(p => ({ ...p, status: 'IN_REVIEW' })); flash('Review resumed'); return; }
-    if (k === 'resubmit') {
-      setDetail(p => {
-        const steps = p.steps.map((s, i) => ({
-          ...s,
-          decision: (i === 0 ? 'APPROVED' : i === 1 ? 'ACTIVE' : 'PENDING') as DecisionType,
-          date: i === 0 ? 'Apr 14' : i === 1 ? 'Just now' : 'Pending',
-        }));
-        return {
-          ...p, status: 'IN_REVIEW' as ECOStatus, awaitingMe: true, steps,
-          activity: [{ actor: p.originator, action: 'RESUBMITTED', when: 'Just now', note: 'Revised artifacts resubmitted — re-entering the pipeline from stage 1.' }, ...p.activity],
-        };
-      });
-      flash('Resubmitted — back in review from stage 1'); return;
+    if (k === 'submit' || k === 'resubmit') {
+      try {
+        await submitMutation.mutateAsync();
+        flash(k === 'submit' ? 'Submitted for review' : 'Resubmitted — back in review');
+      } catch { flash('Failed to submit'); }
+      return;
+    }
+    if (k === 'resume') {
+      try { await resumeMutation.mutateAsync(); flash('Review resumed'); } catch { flash('Failed to resume'); }
+      return;
+    }
+    if (k === 'hold') {
+      try { await holdMutation.mutateAsync(); flash('ECO placed on hold'); } catch { flash('Failed to hold'); }
+      return;
     }
     if (k === 'close') {
-      setDetail(p => ({
-        ...p, status: 'CLOSED' as ECOStatus,
-        activity: [{ actor: p.owner, action: 'CLOSED', when: 'Just now', note: 'ECO/ECN closed — change complete.' }, ...p.activity],
-      }));
-      flash('ECO closed'); return;
+      try { await closeMutation.mutateAsync(); flash('ECO closed'); } catch { flash('Failed to close'); }
+      return;
     }
     flash('Action: ' + k);
   };
@@ -1082,14 +1093,9 @@ export function ECODetailView({
         <ECNReleaseModal
           detail={detail}
           onClose={() => setEcnOpen(false)}
-          onReleased={num => {
-            setDetail(p => ({
-              ...p, status: 'RELEASED' as ECOStatus,
-              activity: [{
-                actor: p.owner, action: 'RELEASED', when: 'Just now',
-                note: `ECN ${num} generated & distributed — change promoted to released state.`,
-              }, ...p.activity],
-            }));
+          onRelease={async () => {
+            await releaseMutation.mutateAsync({});
+            flash('ECN generated & released');
           }}
         />
       )}
@@ -1098,16 +1104,12 @@ export function ECODetailView({
         <VerifyModal
           detail={detail}
           onClose={() => setVerifyOpen(false)}
-          onConfirm={note => {
-            setDetail(p => ({
-              ...p, status: 'VERIFIED' as ECOStatus,
-              activity: [{
-                actor: p.owner, action: 'VERIFIED', when: 'Just now',
-                note: note || 'Implementation verified — effectivity cut-in confirmed.',
-              }, ...p.activity],
-            }));
-            setVerifyOpen(false);
-            flash('Implementation verified');
+          onConfirm={async note => {
+            try {
+              await verifyMutation.mutateAsync({ note: note || undefined });
+              setVerifyOpen(false);
+              flash('Implementation verified');
+            } catch { flash('Failed to verify'); }
           }}
         />
       )}

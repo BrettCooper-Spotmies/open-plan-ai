@@ -145,4 +145,13 @@ export const queryKeys = {
     detail:    (partId: string) => ['parts', 'detail', partId] as const,
     revisions: (partId: string) => ['parts', 'revisions', partId] as const,
   },
+
+  // Engineering Changes (ECO)
+  ecos: {
+    all:    ['ecos'] as const,
+    list:   (projectId: string, filters?: object) => ['ecos', 'list', projectId, filters] as const,
+    stats:  (projectId: string) => ['ecos', 'stats', projectId] as const,
+    detail: (ecoId: string) => ['ecos', 'detail', ecoId] as const,
+    ecn:    (ecoId: string) => ['ecos', 'ecn', ecoId] as const,
+  },
 };

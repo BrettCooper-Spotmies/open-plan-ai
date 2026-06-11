@@ -149,6 +149,23 @@ export const ENDPOINTS = {
     MEMBER: (conversationId: string, userId: string) => `/conversations/${conversationId}/members/${userId}`,
     FILES: (id: string) => `/conversations/${id}/files`,
   },
+  // Engineering Changes (ECO)
+  ECOS: {
+    LIST:     (projectId: string) => `/projects/${projectId}/ecos`,
+    STATS:    (projectId: string) => `/projects/${projectId}/ecos/stats`,
+    CREATE:   (projectId: string) => `/projects/${projectId}/ecos`,
+    BY_ID:    (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}`,
+    UPDATE:   (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}`,
+    DELETE:   (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}`,
+    SUBMIT:   (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/submit`,
+    DECISION: (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/decision`,
+    RELEASE:  (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/release`,
+    VERIFY:   (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/verify`,
+    CLOSE:    (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/close`,
+    HOLD:     (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/hold`,
+    RESUME:   (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/resume`,
+    ECN:      (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/ecn`,
+  },
   // Links
   LINKS: {
     DELETE: (id: string) => `/links/${id}`,

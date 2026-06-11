@@ -11,6 +11,7 @@ import {
 } from './ecoData';
 import { ECOAvatar } from './ECOShared';
 import { cn } from '@/lib/utils';
+import { useCreateECO } from '@/hooks/useECOs';
 
 // ── BOM pool (simulates where-used rollup) ────────────────────────────────────
 
@@ -145,12 +146,15 @@ interface PipelineStepWizard extends PipelineStep {
 // ── ECOWizard ─────────────────────────────────────────────────────────────────
 
 export function ECOWizard({
+  projectId,
   seed,
   onClose,
 }: {
+  projectId: string;
   seed: null | { title?: string; desc?: string; type?: ECOType; priority?: ECOPriority; reason?: ECOReason; revFrom?: string; revTo?: string; ecr?: string; changeClass?: ChangeClass };
   onClose: (result?: { saved: boolean }) => void;
 }) {
+  const createMutation = useCreateECO(projectId);
   const [step, setStep] = useState(0);
 
   // Step 1 — Basics
@@ -764,17 +768,59 @@ export function ECOWizard({
               </button>
             ) : (
               <button
-                onClick={() => canSubmit && onClose({ saved: true })}
-                disabled={!canSubmit}
+                onClick={async () => {
+                  if (!canSubmit) return;
+                  try {
+                    await createMutation.mutateAsync({
+                      title:       basics.title,
+                      description: basics.description || null,
+                      type:        basics.type.toLowerCase() as any,
+                      reason:      basics.reason.toLowerCase() as any,
+                      priority:    basics.priority.toLowerCase() as any,
+                      changeClass: basics.changeClass as any,
+                      effectivityType:  basics.effType.toLowerCase() as any,
+                      effectivityValue: basics.effValue || null,
+                      originatingEcr:   basics.ecr || null,
+                      revFrom:     basics.revFrom || null,
+                      revTo:       basics.revTo || null,
+                      scheduleImpact:   impact.schedule.toLowerCase() as any,
+                      requiresRecertification: impact.recert,
+                      firmwareCoupling: impact.firmware,
+                      unitCostDelta:    impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
+                      oneTimeCost:      impact.oneTimeCost  ? parseFloat(impact.oneTimeCost)  : null,
+                      diffRows: diffRows.map((r, i) => ({
+                        order:       i,
+                        parameter:   r.param,
+                        fromValue:   r.from || null,
+                        toValue:     r.to   || null,
+                        changeLabel: r.cls.toLowerCase() as any,
+                      })),
+                      pipelineSteps: pipeline.map((p, i) => ({
+                        order:         i + 1,
+                        stage:         p.stage,
+                        stageLabel:    p.stage,
+                        approverName:  p.name  || null,
+                        approverRole:  p.role  || null,
+                        isOptional:    p.optional ?? false,
+                        optionalReason: p.optionalReason || null,
+                        justification:  p.justification  || null,
+                      })),
+                    });
+                    onClose({ saved: true });
+                  } catch {
+                    // error toast could be added here
+                  }
+                }}
+                disabled={!canSubmit || createMutation.isPending}
                 className={cn(
                   'flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors font-[inherit]',
-                  canSubmit
+                  canSubmit && !createMutation.isPending
                     ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
                     : 'bg-muted/50 text-muted-foreground cursor-default',
                 )}
               >
                 <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-                Save Draft
+                {createMutation.isPending ? 'Saving…' : 'Save Draft'}
               </button>
             )}
           </div>

@@ -36,6 +36,8 @@ All domain logic lives here. Each feature folder contains its page component(s),
 
 BOM feature files: `BOMView.tsx` (orchestrator), `BOMDetailScreen.tsx`, `BOMMapView.tsx`, `BOMShared.tsx`, `bomData.ts` (type definitions, adapter functions `fromApiNode()`/`fromApiRevision()`, and all tree utilities — no mock data). Hooks in `src/hooks/useBom.ts`, `useParts.ts`, `useBomDocuments.ts`.
 
+ECO (Engineering Changes) feature files: `ECOView.tsx` (orchestrator — receives `projectId: string` from `ProjectDetail`), `ECOListView.tsx` (KPI cards + list + preview panel), `ECODetailView.tsx` (full detail + approval pipeline + ECN release), `ECOWizard.tsx` (5-step create wizard), `ECOShared.tsx` (shared pills/avatars), `ecoData.ts` (TypeScript types, enums, adapter functions, helper utilities). Hooks in `src/hooks/useECOs.ts`.
+
 ### Data Flow
 
 ```
@@ -77,3 +79,15 @@ Vitest + React Testing Library. Test setup at `src/test/setup.ts`. Path alias `@
 - **PRD.md** is the authoritative product spec. `src/types/index.ts` is the authoritative type source.
 - **New shadcn components**: `npx shadcn-ui@latest add <component>` — outputs to `src/components/ui/`.
 - Module type vocabulary and status enumerations are fixed (`TASK_STATUSES`, `PRIORITIES`, `MODULE_TYPES`). Custom values are not supported at v1.
+- **Enum case convention**: Backend API returns enum values in lowercase (`in_review`, `design_change`). Frontend TypeScript types use UPPERCASE (`IN_REVIEW`, `DESIGN_CHANGE`). Convert inbound with `.toUpperCase()` in adapter functions; outbound with `.toLowerCase()` in mutation payloads. See `ecoData.ts` adapters for the established pattern.
+
+## ECO — Key Integration Notes
+
+- `useECOs.ts` exports 13 React Query hooks: `useECOList`, `useECOStats`, `useECODetail`, `useCreateECO`, `useUpdateECO`, `useDeleteECO`, `useSubmitECO`, `useECODecision`, `useReleaseECO`, `useVerifyECO`, `useCloseECO`, `useHoldECO`, `useResumeECO`. All invalidate relevant `queryKeys.ecos.*` entries on success.
+- `useECOList` uses `apiClient.raw.get` (not the wrapper) to access the paginated response shape `{ data: r.data.data, meta: r.data.meta }`.
+- `ecoData.ts` adapter functions: `fromApiEcoListItem(raw: ApiEcoListItem): ECOListItem` and `fromApiEcoDetail(raw: ApiEcoDetail): ECODetail`. These handle the UPPERCASE conversion and map nested objects (parts, steps, diff rows, activities, ECN).
+- `ECODetailView` falls back to `buildDetail(eco)` (synthetic pipeline steps) while the live `useECODetail` query loads — avoids a loading spinner for the preview-to-detail transition.
+- `ECOListView` preview panel uses `buildDetail(eco)` for pipeline steps — avoids N+1 API calls for each list item.
+- **ECN null-check**: `detail.ecn` is `null` for ECOs in `APPROVED` state (ECN doesn't exist until `releaseEco()` is called). Always guard ECN sections with `{ecn && ...}` before rendering distribution list or implementation tasks.
+- **`modules` field**: List API returns only `moduleIds: string[]` (UUIDs); `fromApiEcoListItem` sets `modules: []`. The detail API returns full module objects with names — `fromApiEcoDetail` maps them to `raw.modules.map(m => m.name)`.
+- Stats route: `/projects/:projectId/ecos/stats` — must be registered before `/:ecoId` on the backend to prevent Express matching `"stats"` as an ecoId.

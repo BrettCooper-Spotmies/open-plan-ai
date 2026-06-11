@@ -1,4 +1,8 @@
 // ECO (Engineering Change Order) — types, enums, mock data, color helpers
+import type {
+  ApiEcoListItem, ApiEcoDetail, ApiEcoPart, ApiEcoPipelineStep,
+  ApiEcoDiffRow, ApiEcoActivity,
+} from '@/hooks/useECOs';
 
 // ── Enumerations ──────────────────────────────────────────────────────────────
 
@@ -635,3 +639,127 @@ export const ACTIVITY_META: Record<string, ActivityMeta> = {
   CLOSED:       { icon: 'Check',         color: '#16A34A' },
   CANCELLED:    { icon: 'Slash',         color: '#6B7280' },
 };
+
+// ── API adapters (backend → frontend types) ───────────────────────────────────
+
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export function fromApiEcoListItem(raw: ApiEcoListItem): ECOListItem {
+  return {
+    id:          raw.id,
+    num:         raw.num,
+    title:       raw.title,
+    desc:        raw.description ?? '',
+    type:        raw.type.toUpperCase() as ECOType,
+    status:      raw.status.toUpperCase() as ECOStatus,
+    priority:    raw.priority.toUpperCase() as ECOPriority,
+    reason:      raw.reason.toUpperCase() as ECOReason,
+    changeClass: raw.changeClass as ChangeClass,
+    ecr:         raw.originatingEcr,
+    effectivity: {
+      type:  (raw.effectivityType?.toUpperCase() ?? 'DATE') as EffectivityType,
+      value: raw.effectivityValue ?? '',
+    },
+    originator:  raw.originatorName ?? '—',
+    owner:       raw.ownerName ?? '—',
+    created:     fmtDate(raw.initiatedAt),
+    target:      raw.targetDate ? fmtDate(raw.targetDate) : '—',
+    revFrom:     raw.revFrom ?? '',
+    revTo:       raw.revTo ?? '',
+    parts:       raw.partCount,
+    docs:        [],
+    modules:     [],
+    awaitingMe:  raw.awaitingMe,
+  };
+}
+
+function fromApiPart(raw: ApiEcoPart): ECOPart {
+  return {
+    pn:     raw.partNumber,
+    desc:   raw.description,
+    rev:    (raw.revFrom || raw.revTo)
+              ? { from: raw.revFrom ?? '', to: raw.revTo ?? '' }
+              : null,
+    impact: raw.impactLevel.toUpperCase() as ImpactLevel,
+    disp:   raw.disposition.toUpperCase() as ECODisposition,
+    qty:    raw.qty ?? 0,
+    paths:  raw.whereUsedPaths,
+  };
+}
+
+function fromApiStep(raw: ApiEcoPipelineStep): PipelineStep {
+  const decUp = raw.decision.toUpperCase() as DecisionType;
+  let date: string | undefined;
+  if (raw.decidedAt) date = fmtDate(raw.decidedAt);
+  else if (raw.decision === 'active') date = 'In review';
+  else if (raw.decision === 'pending') date = 'Pending';
+  return {
+    order:         raw.order,
+    stage:         raw.stageLabel,
+    name:          raw.approverName ?? '—',
+    role:          raw.approverRole ?? '—',
+    optional:      raw.isOptional,
+    optionalReason: raw.optionalReason ?? undefined,
+    justification:  raw.justification ?? undefined,
+    decision:       decUp,
+    date,
+  };
+}
+
+function fromApiDiffRow(raw: ApiEcoDiffRow): DiffRow {
+  return {
+    param: raw.parameter,
+    from:  raw.fromValue ?? '',
+    to:    raw.toValue ?? '',
+    cls:   raw.changeLabel.toUpperCase() as ChangeLabel,
+  };
+}
+
+function fromApiActivity(raw: ApiEcoActivity): ActivityEntry {
+  const actionKey = raw.type.replace(/^eco\./, '').toUpperCase();
+  return {
+    actor: '—',
+    action: actionKey,
+    when:   fmtDate(raw.createdAt),
+    note:   raw.description ?? raw.title,
+  };
+}
+
+export function fromApiEcoDetail(raw: ApiEcoDetail): ECODetail {
+  const base = fromApiEcoListItem(raw);
+  return {
+    ...base,
+    modules:  raw.modules.map(m => m.name),
+    parts:    raw.parts.map(fromApiPart),
+    steps:    raw.steps.map(fromApiStep),
+    rejections: [],
+    diff:     raw.diffRows.map(fromApiDiffRow),
+    impact: {
+      schedule:     (raw.scheduleImpact?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
+      milestones:   [],
+      unitCostDelta: raw.unitCostDelta ?? 0,
+      oneTimeCost:   raw.oneTimeCost ?? 0,
+      recert:        raw.requiresRecertification,
+      certNotes:     raw.certNotes ?? '',
+      firmware:      raw.firmwareCoupling,
+      inventoryQty:  raw.inventoryQty ?? 0,
+    },
+    activity: raw.activities.map(fromApiActivity),
+    ecn: raw.ecn
+      ? {
+          num:          raw.ecn.num,
+          distribution: raw.ecn.distributionList.map(d => d.name),
+          recalc:       { count: 0, days: 0, gate: '' },
+          tasks:        raw.ecn.implementationTasks.map(t => ({
+            task:     t.task,
+            assignee: '—',
+            due:      '—',
+            status:   (t.done ? 'done' : 'todo') as 'done' | 'todo',
+          })),
+        }
+      : null,
+  };
+}
