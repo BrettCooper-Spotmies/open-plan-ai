@@ -34,7 +34,7 @@ Backend runs separately at `http://localhost:3001`. Set `VITE_API_BASE_URL` and 
 
 All domain logic lives here. Each feature folder contains its page component(s), sub-components, and any feature-specific hooks. New features follow the same pattern: feature folder → register route in `App.tsx`.
 
-BOM feature files: `BOMView.tsx` (orchestrator), `BOMDetailScreen.tsx`, `BOMMapView.tsx`, `BOMShared.tsx`, `bomData.ts` (currently hardcoded — replace with API when backend BOM v2 ships).
+BOM feature files: `BOMView.tsx` (orchestrator), `BOMDetailScreen.tsx`, `BOMMapView.tsx`, `BOMShared.tsx`, `bomData.ts` (type definitions, adapter functions `fromApiNode()`/`fromApiRevision()`, and all tree utilities — no mock data). Hooks in `src/hooks/useBom.ts`, `useParts.ts`, `useBomDocuments.ts`.
 
 ### Data Flow
 

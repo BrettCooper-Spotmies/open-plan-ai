@@ -102,11 +102,22 @@ export const ENDPOINTS = {
   },
   // BOM
   BOM: {
-    LIST: (projectId: string) => `/projects/${projectId}/bom`,
-    CREATE: (projectId: string) => `/projects/${projectId}/bom`,
-    SUMMARY: (projectId: string) => `/projects/${projectId}/bom/summary`,
-    EXPORT: (projectId: string) => `/projects/${projectId}/bom/export`,
-    BY_ID: (id: string) => `/bom/${id}`,
+    TREE:              (projectId: string) => `/projects/${projectId}/bom/tree`,
+    NODES:             (projectId: string) => `/projects/${projectId}/bom/nodes`,
+    SUMMARY:           (projectId: string) => `/projects/${projectId}/bom/summary`,
+    EXPORT:            (projectId: string) => `/projects/${projectId}/bom/export`,
+    NODE:              (nodeId: string) => `/bom/nodes/${nodeId}`,
+    NODE_MOVE:         (nodeId: string) => `/bom/nodes/${nodeId}/parent`,
+    NODE_REQUIREMENTS: (nodeId: string) => `/bom/nodes/${nodeId}/requirements`,
+    REQ_LINK:          (linkId: string) => `/bom/requirement-links/${linkId}`,
+  },
+  // Parts catalog (org-scoped)
+  PARTS: {
+    LIST:      (orgId: string)  => `/organizations/${orgId}/parts`,
+    CREATE:    (orgId: string)  => `/organizations/${orgId}/parts`,
+    BY_ID:     (partId: string) => `/parts/${partId}`,
+    REVISIONS: (partId: string) => `/parts/${partId}/revisions`,
+    WHERE_USED:(partId: string) => `/parts/${partId}/where-used`,
   },
   // Notifications
   NOTIFICATIONS: {

@@ -1473,7 +1473,12 @@ export default function ProjectDetail() {
             />
           </TabsContent>
           <TabsContent value="bom" className="mt-0 -mx-6 -mb-6 flex flex-col">
-            <BOMView addOpen={bomAddOpen} onAddClose={() => setBomAddOpen(false)} />
+            <BOMView
+              projectId={project.id}
+              orgId={currentOrganization?.id ?? ''}
+              addOpen={bomAddOpen}
+              onAddClose={() => setBomAddOpen(false)}
+            />
           </TabsContent>
           <TabsContent value="requirements" className="mt-6 -mx-6 -mb-6 flex flex-col">
             <RequirementsView />

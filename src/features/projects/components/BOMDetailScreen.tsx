@@ -5,6 +5,7 @@ import {
   ChevronDown, Check, History, User, MessageSquare, Send, Trash2, Pencil, X,
   Plus, Search, Boxes,
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { BOMDocuments } from './BOMDocuments';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -12,45 +13,47 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, bomFlatAll, BOM_NODES } from './bomData';
+import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, ApiPartResponse, fromApiRevision } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMPartSheet, BOMPartPayload } from './BOMPartSheet';
+import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision, useOrgParts } from '@/hooks/useParts';
+import { useCreateBomNode, useUpdateBomNode } from '@/hooks/useBom';
+import { uploadBomDocumentFile } from '@/hooks/useBomDocuments';
 
 // ── Add Sub-component Dialog ───────────────────────────────────────
 function AddSubcomponentDialog({
-  open, onClose, parentNode,
+  open, onClose, parentNode, orgId,
   onAdd, onCreateNew,
 }: {
   open: boolean;
   onClose: () => void;
   parentNode: BOMNode;
-  onAdd: (part: BOMNode, qty: number, uom: string) => void;
+  orgId: string;
+  onAdd: (part: ApiPartResponse, qty: number, uom: string) => void;
   onCreateNew: () => void;
 }) {
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<BOMNode | null>(null);
+  const [selected, setSelected] = useState<ApiPartResponse | null>(null);
   const [qty, setQty] = useState('1');
   const [uom, setUom] = useState('EA');
 
-  const allParts = useMemo(() => {
-    const existingIds = new Set([
-      parentNode.id,
-      ...(parentNode.children ?? []).map(c => c.id),
-    ]);
-    return bomFlatAll(BOM_NODES).filter(n => !existingIds.has(n.id));
-  }, [parentNode]);
+  const { data: partsData, isLoading: partsLoading } = useOrgParts(orgId, search ? { search } : undefined);
+
+  const allParts = partsData?.data ?? [];
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    if (!q) return allParts.slice(0, 50);
-    return allParts.filter(n =>
-      n.pn.toLowerCase().includes(q) || n.desc.toLowerCase().includes(q)
-    ).slice(0, 50);
+    if (search) {
+      const q = search.toLowerCase();
+      return allParts.filter(p =>
+        p.partNumber.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
+      ).slice(0, 50);
+    }
+    return allParts.slice(0, 50);
   }, [allParts, search]);
 
   const handleAdd = () => {
     if (!selected) return;
-    onAdd({ ...selected, qty: parseFloat(qty) || 1, uom }, parseFloat(qty) || 1, uom);
+    onAdd(selected, parseFloat(qty) || 1, uom);
     setSelected(null); setSearch(''); setQty('1'); setUom('EA');
     onClose();
   };
@@ -90,16 +93,38 @@ function AddSubcomponentDialog({
 
         {/* Parts list */}
         <div className="flex-1 overflow-y-auto px-5 pb-1 min-h-0">
-          {filtered.length === 0 ? (
+          {partsLoading ? (
+            <div className="space-y-1 py-1">
+              {[0, 1, 2, 3, 4].map(i => (
+                <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent">
+                  <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-4 w-14 rounded" />
+                    </div>
+                    <Skeleton className="h-3.5 w-40" />
+                  </div>
+                  <div className="text-right shrink-0">
+                    <Skeleton className="h-3.5 w-12 mb-1" />
+                    <Skeleton className="h-3 w-8 ml-auto" />
+                  </div>
+                  <Skeleton className="w-4 h-4 rounded-full shrink-0" />
+                </div>
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground">
               <Search className="w-6 h-6 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">No matching parts found</p>
+              <p className="text-sm">{search ? 'No matching parts found' : 'No parts in this organization yet'}</p>
             </div>
           ) : (
             <div className="space-y-1">
               {filtered.map(part => {
-                const meta = BOM_CAT_META[part.cat] ?? BOM_CAT_META.assembly;
+                const meta = BOM_CAT_META[part.category] ?? BOM_CAT_META.assembly;
                 const isSelected = selected?.id === part.id;
+                const price = parseFloat(part.latestRevision?.price ?? '0');
+                const leadTime = Math.ceil((part.latestRevision?.leadTimeDays ?? 0) / 7);
                 return (
                   <div
                     key={part.id}
@@ -111,20 +136,20 @@ function AddSubcomponentDialog({
                         : 'border-transparent hover:border-border hover:bg-muted/40'
                     )}
                   >
-                    <PartThumb cat={part.cat} size={32} />
+                    <PartThumb cat={part.category} size={32} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-mono font-medium" className="text-foreground">{part.pn}</span>
+                        <span className="text-[11px] font-mono font-medium text-foreground">{part.partNumber}</span>
                         <span className="text-[10px] font-medium px-1.5 py-0.5 rounded"
                           style={{ background: `${meta.tint}18`, color: meta.tint }}>
                           {meta.label.split(' ')[0]}
                         </span>
                       </div>
-                      <div className="text-xs text-foreground font-medium truncate">{part.desc}</div>
+                      <div className="text-xs text-foreground font-medium truncate">{part.description}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-xs font-medium text-foreground">${part.price.toFixed(2)}</div>
-                      <div className="text-[10px] text-muted-foreground">{part.leadTime} wk</div>
+                      <div className="text-xs font-medium text-foreground">${price.toFixed(2)}</div>
+                      <div className="text-[10px] text-muted-foreground">{leadTime} wk</div>
                     </div>
                     <div className={cn(
                       'w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center',
@@ -244,7 +269,7 @@ function seedNotes(pn: string, owner: string): BOMNote[] {
 }
 
 function NotesCard({ pn, owner }: { pn: string; owner: string }) {
-  const [notes, setNotes]       = useState<BOMNote[]>(() => seedNotes(pn, owner));
+  const [notes, setNotes]       = useState<BOMNote[]>([]);
   const [draft, setDraft]       = useState('');
   const [editId, setEditId]     = useState<string | null>(null);
   const [editText, setEditText] = useState('');
@@ -401,6 +426,9 @@ function NotesCard({ pn, owner }: { pn: string; owner: string }) {
 
 interface Props {
   node: BOMNode;
+  rootNodes: BOMNode[];
+  orgId: string;
+  projectId: string;
   onBack: () => void;
   onNavigate: (id: string) => void;
 }
@@ -443,7 +471,9 @@ function RevisionToggle({
 }) {
   const [open, setOpen] = useState(false);
   const active = revHistory[activeIdx];
-  const isLatest = activeIdx === revHistory.length - 1;
+  const isLatest = revHistory.length === 0 || activeIdx === revHistory.length - 1;
+
+  if (!active) return null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -522,18 +552,33 @@ function RevisionToggle({
 }
 
 // ── Main component ─────────────────────────────────────────────────
-export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Props) {
-  // ── Local revision state ──
-  const [revHistory, setRevHistory] = useState<BOMRevision[]>(originalNode.revHistory);
-  const [activeRevIdx, setActiveRevIdx] = useState(originalNode.revHistory.length - 1);
+export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectId, onBack, onNavigate }: Props) {
+  // ── Revision history from API ──
+  const { data: apiRevisions, isLoading: revisionsLoading } = usePartRevisions(originalNode._partId);
+  const revHistory = useMemo<BOMRevision[]>(
+    () => (apiRevisions ?? []).map(fromApiRevision),
+    [apiRevisions],
+  );
+
+  const [activeRevIdx, setActiveRevIdx] = useState(0);
   const [showEdit, setShowEdit] = useState(false);
-  // ── Sub-component state ──
-  const [localChildren, setLocalChildren]     = useState<BOMNode[]>([]);
   const [showAddSub, setShowAddSub]           = useState(false);
   const [showCreateNewSub, setShowCreateNewSub] = useState(false);
 
-  const activeRev = revHistory[activeRevIdx];
-  const isLatest = activeRevIdx === revHistory.length - 1;
+  // Point to latest revision whenever the node changes or revisions first load
+  useEffect(() => {
+    setActiveRevIdx(Math.max(0, revHistory.length - 1));
+  }, [originalNode.id, revHistory.length]);
+
+  // ── Mutations ──
+  const createNode   = useCreateBomNode(projectId);
+  const updateNode   = useUpdateBomNode(projectId);
+  const createPart   = useCreatePart(orgId);
+  const updatePart   = useUpdatePart();
+  const createRev    = useCreateRevision();
+
+  const activeRev = revHistory[activeRevIdx] ?? { rev: originalNode.rev, status: originalNode.status, price: originalNode.price, leadTime: originalNode.leadTime, date: '', author: '', changes: '' } as BOMRevision;
+  const isLatest = revHistory.length === 0 || activeRevIdx === revHistory.length - 1;
 
   // Build a synthetic "view node" that reflects the active revision's data
   const node: BOMNode = {
@@ -542,66 +587,69 @@ export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Prop
     status: activeRev.status,
     price: activeRev.price,
     leadTime: activeRev.leadTime,
-    revHistory,
   };
 
   const meta = BOM_CAT_META[node.cat] ?? BOM_CAT_META.assembly;
-  const path = bomPath(node.id) ?? [node];
-  // Merge static children with session-added children
-  const children = [...(node.children ?? []), ...localChildren];
+  const path = bomPath(node.id, rootNodes) ?? [node];
+  const children = node.children ?? [];
   const extended = node.price * node.qty;
 
-  const handleAddSubcomponent = (part: BOMNode, qty: number, uom: string) => {
-    setLocalChildren(prev => [...prev, { ...part, qty, uom }]);
+  const handleAddSubcomponent = async (part: ApiPartResponse, qty: number, uom: string) => {
+    await createNode.mutateAsync({ partId: part.id, quantity: qty, unit: uom, parentId: originalNode.id });
   };
-  const handleNewSubSaved = (payload: BOMPartPayload) => {
-    const newPart: BOMNode = {
-      id: `${node.id}.${children.length + 1}`,
-      level: node.level + 1,
-      pn: payload.pn,
-      desc: payload.desc,
-      qty: payload.qty,
-      uom: payload.uom,
-      supplier: payload.manufacturer,
-      rev: payload.rev,
-      status: payload.status,
-      req: payload.req,
-      cat: payload.category,
-      manufacturer: payload.manufacturer,
-      distributor: payload.distributor || 'Digi-Key',
-      price: payload.price,
-      leadTime: payload.leadTime,
-      mpn: payload.mpn,
-      owner: payload.owner || 'Unassigned',
-      revHistory: [{ rev: payload.rev, date: new Date().toISOString().split('T')[0], author: 'You', changes: 'Initial release', status: payload.status, price: payload.price, leadTime: payload.leadTime }],
-    };
-    setLocalChildren(prev => [...prev, newPart]);
+
+  const handleNewSubSaved = async (payload: BOMPartPayload) => {
+    const part = await createPart.mutateAsync({
+      partNumber:          payload.pn,
+      description:         payload.desc,
+      category:            payload.category,
+      manufacturer:        payload.manufacturer || undefined,
+      distributor:         payload.distributor || undefined,
+      mpn:                 payload.mpn || undefined,
+      unit:                payload.uom,
+      initialStatus:       payload.status,
+      initialRev:          payload.rev,
+      initialPrice:        payload.price > 0 ? payload.price : undefined,
+      initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime * 7 : undefined,
+    });
+    const node = await createNode.mutateAsync({
+      partId: part.id, quantity: payload.qty, unit: payload.uom,
+      status: payload.status, parentId: originalNode.id,
+    });
+    const docFiles = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as File[];
+    await Promise.allSettled(docFiles.map(f => uploadBomDocumentFile(node.id, f)));
+    setShowCreateNewSub(false);
   };
+
   const typeText =
     bomTypeOf(originalNode) === 'top' ? 'Top-Level Assembly'
     : bomTypeOf(originalNode) === 'catalog' ? 'Catalog Part'
     : 'Sub-Assembly';
 
   // ── Save handler ──
-  const handleSave = (payload: BOMPartPayload) => {
-    const newRev: BOMRevision = {
-      rev: payload.versionMode === 'new' ? (payload.newRevLabel ?? activeRev.rev) : activeRev.rev,
-      date: new Date().toISOString().split('T')[0],
-      author: 'You',
-      changes: payload.changeNotes || `Updated Rev ${activeRev.rev}`,
-      status: payload.status,
-      price: payload.price,
-      leadTime: payload.leadTime,
-    };
-
+  const handleSave = async (payload: BOMPartPayload) => {
+    if (!originalNode._partId) return;
     if (payload.versionMode === 'new') {
-      // Append new revision
-      setRevHistory(h => [...h, newRev]);
-      setActiveRevIdx(revHistory.length); // point to the new entry
+      await createRev.mutateAsync({
+        partId: originalNode._partId,
+        dto: {
+          rev: payload.newRevLabel ?? activeRev.rev,
+          changes: payload.changeNotes || `Updated Rev ${activeRev.rev}`,
+          status: payload.status,
+          price: payload.price,
+          leadTimeDays: payload.leadTime * 7,
+        },
+      });
     } else {
-      // Overwrite current revision in place
-      setRevHistory(h => h.map((r, i) => i === activeRevIdx ? newRev : r));
+      await Promise.all([
+        updateNode.mutateAsync({ nodeId: originalNode.id, dto: { quantity: payload.qty, unit: payload.uom, status: payload.status } }),
+        updatePart.mutateAsync({ partId: originalNode._partId, dto: { description: payload.desc, manufacturer: payload.manufacturer || undefined, distributor: payload.distributor || undefined, mpn: payload.mpn || undefined } }),
+      ]);
     }
+    // Upload any documents attached in the edit form
+    const docFiles = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as File[];
+    await Promise.allSettled(docFiles.map(f => uploadBomDocumentFile(originalNode.id, f)));
+    setShowEdit(false);
   };
 
   return (
@@ -689,7 +737,7 @@ export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Prop
           <Field label="Quantity">{node.qty} {node.uom}</Field>
           <Field label="Unit Price">${node.price.toFixed(2)}</Field>
           <Field label="Lead Time">{node.leadTime} weeks</Field>
-          <Field label="BOM Level">{node.id}</Field>
+          <Field label="BOM Level">{node.level}</Field>
           <Field label="Handled By">
             <span className="flex items-center gap-1.5">
               <span className="w-4 h-4 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-[8px] font-bold text-primary shrink-0">
@@ -710,15 +758,15 @@ export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Prop
                 <div className="w-48 shrink-0"><PartThumb cat={node.cat} big /></div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-muted-foreground leading-relaxed mb-3.5">
-                    {node.desc} — {meta.label.toLowerCase()} component sourced from {node.manufacturer}.
-                    Used at level {node.id} of the EV Charging Station assembly with a quantity of {node.qty} {node.uom} per unit.
+                    {node.desc} — {meta.label.toLowerCase()} component{node.manufacturer ? ` sourced from ${node.manufacturer}` : ''}.
+                    BOM level {node.level} · quantity {node.qty} {node.uom} per unit.
                   </p>
                   <div className="grid grid-cols-3 gap-x-4 gap-y-3.5">
                     <Field label="Extended Price">${extended.toFixed(2)}</Field>
                     <Field label="Status">{node.status === 'approved' ? 'Approved' : 'Pending review'}</Field>
                     <Field label="Revision">Rev {node.rev}</Field>
                     <Field label="Category">{meta.label}</Field>
-                    <Field label="Sub-components">{children.length}{localChildren.length > 0 ? <span className="text-[10px] text-primary ml-1">+{localChildren.length} new</span> : null}</Field>
+                    <Field label="Sub-components">{children.length}</Field>
                     <Field label="Traceability links">{node.req.length}</Field>
                   </div>
                 </div>
@@ -849,54 +897,79 @@ export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Prop
             <Card
               title="Revision History"
               action={
-                <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <History className="w-3.5 h-3.5" />
-                  {revHistory.length} rev{revHistory.length !== 1 ? 's' : ''}
-                </div>
+                revisionsLoading ? (
+                  <Skeleton className="h-4 w-14" />
+                ) : (
+                  <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <History className="w-3.5 h-3.5" />
+                    {revHistory.length} rev{revHistory.length !== 1 ? 's' : ''}
+                  </div>
+                )
               }
             >
-              <div className="flex flex-col gap-0">
-                {[...revHistory].reverse().map((r, ri) => {
-                  const origIdx = revHistory.length - 1 - ri;
-                  const isActive = origIdx === activeRevIdx;
-                  const isLatestRev = origIdx === revHistory.length - 1;
-                  return (
-                    <div key={r.rev}
-                      onClick={() => setActiveRevIdx(origIdx)}
-                      className={cn(
-                        'flex items-start gap-3 py-2.5 px-2 rounded-lg cursor-pointer transition-colors -mx-2',
-                        isActive ? 'bg-primary/5' : 'hover:bg-muted/50'
-                      )}
-                    >
-                      {/* Timeline */}
+              {revisionsLoading ? (
+                <div className="flex flex-col gap-0">
+                  {[0, 1, 2].map(i => (
+                    <div key={i} className="flex items-start gap-3 py-2.5 px-2 -mx-2">
                       <div className="flex flex-col items-center shrink-0 mt-1.5">
-                        <div className={cn(
-                          'w-2 h-2 rounded-full border-2 shrink-0',
-                          isActive ? 'border-primary bg-primary' : 'border-muted-foreground bg-transparent'
-                        )} />
-                        {ri < revHistory.length - 1 && (
-                          <div className="w-px bg-border flex-1 min-h-[18px] mt-1" />
-                        )}
+                        <Skeleton className="w-2 h-2 rounded-full" />
+                        {i < 2 && <Skeleton className="w-px flex-1 min-h-[18px] mt-1" />}
                       </div>
                       <div className="flex-1 min-w-0 pb-1">
-                        <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                          <span className={cn('text-xs font-mono font-semibold', isActive ? 'text-primary' : 'text-foreground')}>
-                            Rev {r.rev}
-                          </span>
-                          {isLatestRev && (
-                            <span className="text-[9px] uppercase tracking-wide px-1 rounded bg-primary/10 text-primary font-semibold">latest</span>
-                          )}
-                          {isActive && <Check className="w-3 h-3 text-primary ml-auto shrink-0" />}
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <Skeleton className="h-3 w-12" />
+                          {i === 0 && <Skeleton className="h-3.5 w-10 rounded" />}
                         </div>
-                        <div className="text-[11.5px] text-muted-foreground leading-snug">{r.changes}</div>
-                        <div className="text-[10.5px] text-muted-foreground/60 mt-0.5">
-                          {r.date} · {r.author}
-                        </div>
+                        <Skeleton className="h-3 w-full mb-1" />
+                        <Skeleton className="h-2.5 w-28" />
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-0">
+                  {[...revHistory].reverse().map((r, ri) => {
+                    const origIdx = revHistory.length - 1 - ri;
+                    const isActive = origIdx === activeRevIdx;
+                    const isLatestRev = origIdx === revHistory.length - 1;
+                    return (
+                      <div key={r.rev}
+                        onClick={() => setActiveRevIdx(origIdx)}
+                        className={cn(
+                          'flex items-start gap-3 py-2.5 px-2 rounded-lg cursor-pointer transition-colors -mx-2',
+                          isActive ? 'bg-primary/5' : 'hover:bg-muted/50'
+                        )}
+                      >
+                        {/* Timeline */}
+                        <div className="flex flex-col items-center shrink-0 mt-1.5">
+                          <div className={cn(
+                            'w-2 h-2 rounded-full border-2 shrink-0',
+                            isActive ? 'border-primary bg-primary' : 'border-muted-foreground bg-transparent'
+                          )} />
+                          {ri < revHistory.length - 1 && (
+                            <div className="w-px bg-border flex-1 min-h-[18px] mt-1" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0 pb-1">
+                          <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                            <span className={cn('text-xs font-mono font-semibold', isActive ? 'text-primary' : 'text-foreground')}>
+                              Rev {r.rev}
+                            </span>
+                            {isLatestRev && (
+                              <span className="text-[9px] uppercase tracking-wide px-1 rounded bg-primary/10 text-primary font-semibold">latest</span>
+                            )}
+                            {isActive && <Check className="w-3 h-3 text-primary ml-auto shrink-0" />}
+                          </div>
+                          <div className="text-[11.5px] text-muted-foreground leading-snug">{r.changes}</div>
+                          <div className="text-[10.5px] text-muted-foreground/60 mt-0.5">
+                            {r.date} · {r.author}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </Card>
 
             {/* Hierarchy */}
@@ -914,7 +987,7 @@ export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Prop
                       onMouseLeave={e => { if (!isCur) (e.currentTarget as HTMLElement).style.background = ''; }}
                     >
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pm.tint }} />
-                      <span className="text-[11px] font-mono shrink-0 text-foreground">{p.id}</span>
+                      <span className="text-[11px] font-mono shrink-0 text-foreground">{p.pn}</span>
                       <span className={`text-[12.5px] truncate ${isCur ? 'text-foreground font-semibold' : 'text-muted-foreground'}`}>
                         {p.desc}
                       </span>
@@ -925,7 +998,7 @@ export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Prop
             </Card>
 
             {/* Documents */}
-            <BOMDocuments pn={node.pn} mpn={node.mpn} rev={node.rev} />
+            <BOMDocuments nodeId={originalNode.id} />
           </div>
         </div>
       </div>
@@ -935,6 +1008,7 @@ export function BOMDetailScreen({ node: originalNode, onBack, onNavigate }: Prop
         open={showAddSub}
         onClose={() => setShowAddSub(false)}
         parentNode={node}
+        orgId={orgId}
         onAdd={handleAddSubcomponent}
         onCreateNew={() => { setShowAddSub(false); setShowCreateNewSub(true); }}
       />

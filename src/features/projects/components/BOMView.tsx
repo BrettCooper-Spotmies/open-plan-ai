@@ -3,6 +3,10 @@ import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
   CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User,
 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useBomTree, useCreateBomNode } from '@/hooks/useBom';
+import { useCreatePart } from '@/hooks/useParts';
+import { uploadBomDocumentFile } from '@/hooks/useBomDocuments';
 
 // Owner initials helper (shared with detail screen)
 function ownerInitials(name: string) {
@@ -31,15 +35,124 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   BOMNode, BOMFilters, EMPTY_FILTERS,
-  BOM_NODES, BOM_CAT_META,
-  bomFlatAll, bomFlatten, bomCountAll, bomFind,
+  BOM_CAT_META,
+  bomFlatAll, bomFlatten, bomFind,
   bomFilterTree, bomFlattenInclude, bomTypeOf,
-  BOMRevision,
+  fromApiNode,
 } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMDetailScreen } from './BOMDetailScreen';
 import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload } from './BOMPartSheet';
+
+// ── Skeletons ──────────────────────────────────────────────────────
+function StatCardSkeleton() {
+  return (
+    <div className="bg-card rounded-lg p-4 flex-1 min-w-0 border border-border">
+      <div className="flex justify-between items-start mb-3">
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-4 w-4 rounded" />
+      </div>
+      <Skeleton className="h-7 w-14 mb-2" />
+      <Skeleton className="h-3 w-28" />
+    </div>
+  );
+}
+
+function ListRowSkeleton({ level = 0 }: { level?: number }) {
+  return (
+    <div className="flex items-center px-6 border-b border-border" style={{ minWidth: 1200, height: 46 }}>
+      <div style={{ flexBasis: 74, flexShrink: 0 }} className="flex items-center">
+        <Skeleton className="h-3 w-6" style={{ marginLeft: level * 16 }} />
+      </div>
+      <div className="flex-1 min-w-0 px-2 flex items-center gap-2.5">
+        <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+        <div className="min-w-0 flex-1">
+          <Skeleton className="h-2.5 w-20 mb-1.5" />
+          <Skeleton className="h-3.5 w-48" />
+        </div>
+      </div>
+      <div style={{ flexBasis: 50, flexShrink: 0 }} className="px-2 flex justify-end"><Skeleton className="h-3.5 w-6" /></div>
+      <div style={{ flexBasis: 50, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-8" /></div>
+      <div style={{ flexBasis: 140, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-20" /></div>
+      <div style={{ flexBasis: 90, flexShrink: 0 }} className="px-2 flex justify-end"><Skeleton className="h-3.5 w-14" /></div>
+      <div style={{ flexBasis: 74, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-10" /></div>
+      <div style={{ flexBasis: 50, flexShrink: 0 }} className="px-2"><Skeleton className="h-5 w-8 rounded" /></div>
+      <div style={{ flexBasis: 92, flexShrink: 0 }} className="px-2"><Skeleton className="h-5 w-16 rounded-full" /></div>
+      <div style={{ flexBasis: 140, flexShrink: 0 }} className="px-2 flex items-center gap-1.5">
+        <Skeleton className="w-5 h-5 rounded-full shrink-0" />
+        <Skeleton className="h-3 w-20" />
+      </div>
+      <div style={{ flexBasis: 170, flexShrink: 0 }} className="px-2"><Skeleton className="h-5 w-16 rounded-full" /></div>
+      <div style={{ flexBasis: 30, flexShrink: 0 }} />
+    </div>
+  );
+}
+
+function GridCardSkeleton() {
+  return (
+    <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="p-2.5">
+        <Skeleton className="w-full h-40 rounded-lg" />
+      </div>
+      <div className="px-3.5 pb-3.5 pt-0.5">
+        <Skeleton className="h-2.5 w-24 mb-1.5" />
+        <Skeleton className="h-4 w-full mb-1" />
+        <Skeleton className="h-4 w-3/4 mb-3" />
+        <div className="grid grid-cols-2 gap-x-2.5 gap-y-2 mb-3">
+          <Skeleton className="h-8 rounded" />
+          <Skeleton className="h-8 rounded" />
+          <Skeleton className="h-8 rounded" />
+          <Skeleton className="h-8 rounded" />
+        </div>
+        <Skeleton className="h-7 w-full rounded-md mb-3" />
+        <div className="flex items-center justify-between pt-2.5 border-t border-border">
+          <Skeleton className="h-5 w-24 rounded-full" />
+          <Skeleton className="h-5 w-8 rounded" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const SKELETON_LEVELS = [0, 0, 1, 1, 2, 0, 1, 2];
+
+function BOMViewSkeleton() {
+  return (
+    <div className="flex flex-col h-full px-6 overflow-hidden bg-background" style={{ height: 'calc(100vh - 220px)' }}>
+      <div className="shrink-0 py-4">
+        <div className="flex gap-3 mb-4">
+          {[0, 1, 2, 3].map(i => <StatCardSkeleton key={i} />)}
+        </div>
+        <div className="flex items-center gap-2.5 pb-0">
+          <Skeleton className="h-8 w-72 rounded-md" />
+          <Skeleton className="h-7 w-20 rounded-md" />
+          <Skeleton className="h-7 w-20 rounded-md" />
+          <Skeleton className="h-7 w-20 rounded-md" />
+          <div className="flex-1" />
+          <Skeleton className="h-7 w-20 rounded-md" />
+          <div className="w-px h-5 bg-border" />
+          <Skeleton className="h-7 w-28 rounded-lg" />
+        </div>
+      </div>
+      {/* Table header — real so column names are visible */}
+      <div className="flex items-center px-6 border-b border-t border-border bg-muted/40" style={{ minWidth: 1200 }}>
+        {HEADERS.map((c, i) => (
+          <div key={c.key}
+            style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
+            className={cn('py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none',
+              i === 0 ? 'pl-0 pr-2' : 'px-2'
+            )}>
+            {c.label}
+          </div>
+        ))}
+      </div>
+      <div className="flex-1 overflow-hidden border-t-0" style={{ minWidth: 1200 }}>
+        {SKELETON_LEVELS.map((level, i) => <ListRowSkeleton key={i} level={level} />)}
+      </div>
+    </div>
+  );
+}
 
 // ── Stat card ─────────────────────────────────────────────────────
 function StatCard({ label, value, icon: Icon, iconColor, sub, accent }: {
@@ -378,7 +491,7 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, totalCount }:
                 <span className={cn('text-xs font-semibold ml-0.5 tabular-nums',
                   row.level === 0 ? 'text-foreground' : row.level === 1 ? 'text-muted-foreground' : 'text-muted-foreground/60'
                 )}>
-                  {row.id}
+                  {row.level}
                 </span>
               </div>
 
@@ -487,7 +600,7 @@ function GridView({ rows, onOpen, totalCount }: { rows: BOMNode[]; onOpen: (id: 
                 <PartThumb cat={row.cat} big />
                 <span className="absolute top-4 left-4 px-1.5 py-0.5 rounded text-[10px] font-semibold"
                   style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', color: meta.tint, border: `1px solid ${meta.tint}40` }}>
-                  {row.id}
+                  L{row.level}
                 </span>
                 <span className="absolute top-4 right-4"><BOMStatusPill status={row.status} /></span>
               </div>
@@ -534,14 +647,14 @@ function GridView({ rows, onOpen, totalCount }: { rows: BOMNode[]; onOpen: (id: 
 type ViewMode = 'list' | 'grid' | 'map';
 
 interface BOMViewProps {
+  projectId: string;
+  orgId: string;
   addOpen?: boolean;
   onAddClose?: () => void;
 }
 
-export function BOMView({ addOpen = false, onAddClose }: BOMViewProps) {
+export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMViewProps) {
   const [selected, setSelected] = useState<string | null>(null);
-  // Parts added in this session (merged into the tree at root level)
-  const [sessionParts, setSessionParts] = useState<BOMNode[]>([]);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending'>('all');
   const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('bom_view') as ViewMode) ?? 'list');
@@ -550,13 +663,20 @@ export function BOMView({ addOpen = false, onAddClose }: BOMViewProps) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem('bom_expanded');
     if (saved) { try { return JSON.parse(saved); } catch { /* ignore */ } }
-    const init: Record<string, boolean> = {};
-    const walk = (nodes: BOMNode[], depth: number) => {
-      for (const n of nodes) { if (depth < 2) init[n.id] = true; if (n.children) walk(n.children, depth + 1); }
-    };
-    walk(BOM_NODES, 0);
-    return init;
+    return {};
   });
+
+  // ── Live API data ─────────────────────────────────────────────────
+  const { data: bomTree, isLoading: treeLoading } = useBomTree(projectId);
+  const createPart = useCreatePart(orgId);
+  const createNode = useCreateBomNode(projectId);
+
+  const rootNodes = useMemo(() => {
+    if (!bomTree?.root) return [];
+    return [fromApiNode(bomTree.root)];
+  }, [bomTree]);
+
+  const allNodes = useMemo(() => bomFlatAll(rootNodes), [rootNodes]);
 
   const toggle = (id: string) => {
     setExpanded(prev => {
@@ -568,52 +688,36 @@ export function BOMView({ addOpen = false, onAddClose }: BOMViewProps) {
 
   const handleView = (v: ViewMode) => { setView(v); localStorage.setItem('bom_view', v); };
 
-  // ── Add Part handler ──────────────────────────────────────────────
-  const handleAddPart = (payload: BOMPartPayload) => {
-    const revEntry: BOMRevision = {
-      rev: payload.rev,
-      date: new Date().toISOString().split('T')[0],
-      author: 'You',
-      changes: 'Initial release',
-      status: payload.status,
-      price: payload.price,
-      leadTime: payload.leadTime,
-    };
-    const newPart: BOMNode = {
-      id: `1.${7 + sessionParts.length}`,   // append after existing 6 top-level assemblies
-      level: 1,
-      pn: payload.pn,
-      desc: payload.desc,
-      qty: payload.qty,
-      uom: payload.uom,
-      supplier: payload.manufacturer,
-      rev: payload.rev,
-      status: payload.status,
-      req: payload.req,
-      cat: payload.category,
-      manufacturer: payload.manufacturer,
-      distributor: payload.distributor || 'Digi-Key',
-      price: payload.price,
-      leadTime: payload.leadTime,
-      mpn: payload.mpn,
-      owner: payload.owner || 'Unassigned',
-      revHistory: [revEntry],
-    };
-    setSessionParts(p => [...p, newPart]);
-    if (onAddClose) onAddClose();
+  // ── Add Part handler (two-step: create part in catalog, then node) ─
+  const handleAddPart = async (payload: BOMPartPayload) => {
+    try {
+      const part = await createPart.mutateAsync({
+        partNumber:          payload.pn,
+        description:         payload.desc,
+        category:            payload.category,
+        manufacturer:        payload.manufacturer || undefined,
+        distributor:         payload.distributor  || undefined,
+        mpn:                 payload.mpn          || undefined,
+        unit:                payload.uom,
+        initialStatus:       payload.status,
+        initialRev:          payload.rev,
+        initialPrice:        payload.price > 0 ? payload.price : undefined,
+        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime * 7 : undefined,
+      });
+      const node = await createNode.mutateAsync({
+        partId:   part.id,
+        quantity: payload.qty,
+        unit:     payload.uom,
+        status:   payload.status,
+      });
+      // Upload any documents attached in the form
+      const docFiles = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as File[];
+      await Promise.allSettled(docFiles.map(f => uploadBomDocumentFile(node.id, f)));
+      if (onAddClose) onAddClose();
+    } catch {
+      // errors are logged by React Query's MutationCache; no further action needed
+    }
   };
-
-  // Merge session-added parts into the data sources
-  const allBaseNodes = useMemo(() => bomFlatAll(BOM_NODES), []);
-  const allNodes = useMemo(
-    () => sessionParts.length ? [...allBaseNodes, ...sessionParts] : allBaseNodes,
-    [allBaseNodes, sessionParts]
-  );
-  // Combined root nodes (for list/map views that walk the tree)
-  const rootNodes = useMemo(
-    () => sessionParts.length ? [...BOM_NODES, ...sessionParts] : BOM_NODES,
-    [sessionParts]
-  );
 
   const facets = useMemo(() => ({
     units: [...new Set(allNodes.map(n => n.uom))].sort(),
@@ -659,15 +763,26 @@ export function BOMView({ addOpen = false, onAddClose }: BOMViewProps) {
 
   const gridRows = useMemo(() => allNodes.filter(pred), [allNodes, pred]);
 
-  const totalCount = useMemo(() => allNodes.length, [allNodes]);
-  const approvedCount = useMemo(() => allNodes.filter(n => n.status === 'approved').length, [allNodes]);
-  const pendingCount = useMemo(() => allNodes.filter(n => n.status === 'pending').length, [allNodes]);
-  const totalCost = useMemo(() => allNodes.reduce((s, n) => s + n.price * n.qty, 0), [allNodes]);
+  const totalCount    = bomTree?.totalNodes    ?? allNodes.length;
+  const approvedCount = bomTree?.approvedCount ?? allNodes.filter(n => n.status === 'approved').length;
+  const pendingCount  = bomTree?.pendingCount  ?? allNodes.filter(n => n.status === 'pending').length;
+  const totalCost     = useMemo(() => allNodes.reduce((s, n) => s + n.price * n.qty, 0), [allNodes]);
 
-  // Detail view — search session parts first, then BOM_NODES
+  if (treeLoading) return <BOMViewSkeleton />;
+
+  // Detail view
   if (selected) {
-    const node = sessionParts.find(n => n.id === selected) ?? bomFind(selected);
-    if (node) return <BOMDetailScreen node={node} onBack={() => setSelected(null)} onNavigate={setSelected} />;
+    const node = bomFind(selected, rootNodes);
+    if (node) return (
+      <BOMDetailScreen
+        node={node}
+        rootNodes={rootNodes}
+        orgId={orgId}
+        projectId={projectId}
+        onBack={() => setSelected(null)}
+        onNavigate={setSelected}
+      />
+    );
   }
 
   const Tab = ({ id, label }: { id: 'all' | 'approved' | 'pending'; label: string }) => (
@@ -706,7 +821,7 @@ export function BOMView({ addOpen = false, onAddClose }: BOMViewProps) {
         {/* Stat cards */}
         <div className="flex gap-3 mb-4">
           <StatCard label="Total Parts" value={String(totalCount)} icon={Layers} iconColor="hsl(var(--foreground))" sub="across all levels" />
-          <StatCard label="Approved" value={String(approvedCount)} icon={CheckCircle} iconColor="#16A34A" sub={`${Math.round(approvedCount / totalCount * 100)}% approval rate`} />
+          <StatCard label="Approved" value={String(approvedCount)} icon={CheckCircle} iconColor="#16A34A" sub={`${totalCount > 0 ? Math.round(approvedCount / totalCount * 100) : 0}% approval rate`} />
           <StatCard label="Pending Review" value={String(pendingCount)} icon={Clock} iconColor="#D97706" sub="needs attention" />
           <StatCard label="Total BOM Cost" value={`$${totalCost.toFixed(2)}`} icon={DollarSign} iconColor="#9333EA" sub="estimated assembly cost" />
         </div>
