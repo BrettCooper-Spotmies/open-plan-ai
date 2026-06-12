@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, GitMerge, GitBranch, Check, CheckCircle,
   XCircle, Clock, Lock, AlertCircle, Boxes, Info, DollarSign, Flag,
   Package, Shield, Cpu, Scissors, RefreshCw, Send, Download, Edit,
-  History, Link2, X, Pause, Plus, ClipboardCheck,
+  History, Link2, X, Pause, Plus, ClipboardCheck, Loader2,
 } from 'lucide-react';
 import {
   ECOListItem, ECODetail, PipelineStep,
@@ -20,6 +20,141 @@ import {
   useECODetail, useECODecision, useSubmitECO,
   useReleaseECO, useVerifyECO, useCloseECO, useHoldECO, useResumeECO,
 } from '@/hooks/useECOs';
+
+// ── Detail skeleton components ────────────────────────────────────────────────
+
+function SkeletonPipelineCard() {
+  return (
+    <div
+      className="flex-1 min-w-0 border rounded-lg px-4 py-3.5 animate-pulse"
+      style={{ background: 'hsl(var(--muted)/0.3)', borderColor: 'hsl(var(--border))' }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="h-2.5 rounded bg-muted w-24" />
+        <div className="h-4 w-4 rounded-full bg-muted" />
+      </div>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-[22px] h-[22px] rounded-full bg-muted shrink-0" />
+        <div className="flex-1">
+          <div className="h-3.5 rounded bg-muted w-24 mb-1" />
+          <div className="h-3 rounded bg-muted w-20" />
+        </div>
+      </div>
+      <div className="h-3 rounded bg-muted w-28 mt-1" />
+    </div>
+  );
+}
+
+function SkeletonApprovalPipeline() {
+  return (
+    <div className="bg-card border border-border rounded-lg px-5 py-4 mb-4">
+      <div className="flex items-center justify-between mb-1">
+        <div className="h-5 rounded bg-muted w-40 animate-pulse" />
+        <div className="h-4 rounded bg-muted w-36 animate-pulse" />
+      </div>
+      <div className="flex items-stretch py-4">
+        {[0, 1, 2, 3].map((_, i) => (
+          <Fragment key={i}>
+            <SkeletonPipelineCard />
+            {i < 3 && (
+              <div className="flex items-center shrink-0 px-1.5">
+                <ChevronRight className="w-4 h-4 text-muted-foreground/20" />
+              </div>
+            )}
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SkeletonTableSection({ className }: { className?: string }) {
+  return (
+    <div className={cn('bg-card border border-border rounded-lg overflow-hidden', className)}>
+      <div className="px-4 py-3.5 border-b border-border animate-pulse">
+        <div className="h-5 rounded bg-muted w-40 mb-1.5" />
+        <div className="h-3.5 rounded bg-muted w-28" />
+      </div>
+      <div className="p-4 flex flex-col gap-3 animate-pulse">
+        {[100, 85, 92, 78, 88].map((pct, i) => (
+          <div key={i} className="h-4 rounded bg-muted" style={{ width: `${pct}%` }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SkeletonSideCard({ className }: { className?: string }) {
+  return (
+    <div className={cn('bg-card border border-border rounded-lg px-4 py-3.5', className)}>
+      <div className="flex items-center justify-between mb-3 animate-pulse">
+        <div className="h-5 rounded bg-muted w-36" />
+        <div className="h-5 rounded-full bg-muted w-16" />
+      </div>
+      <div className="flex flex-col gap-3 animate-pulse">
+        {[0, 1, 2, 3, 4].map(i => (
+          <div key={i} className="flex justify-between items-center py-2 border-b border-border/50">
+            <div className="h-3.5 rounded bg-muted w-32" />
+            <div className="h-3.5 rounded bg-muted w-24" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SkeletonPartsCard({ className }: { className?: string }) {
+  return (
+    <div className={cn('bg-card border border-border rounded-lg overflow-hidden', className)}>
+      <div className="px-4 py-3.5 border-b border-border animate-pulse">
+        <div className="h-5 rounded bg-muted w-32 mb-1.5" />
+        <div className="h-3.5 rounded bg-muted w-44" />
+      </div>
+      {[0, 1, 2].map(i => (
+        <div key={i} className="px-4 py-3 animate-pulse" style={{ borderBottom: '1px solid hsl(var(--border)/0.5)' }}>
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="h-3.5 rounded bg-muted w-28" />
+            <div className="flex gap-1.5">
+              <div className="h-5 rounded bg-muted w-24" />
+              <div className="h-5 rounded bg-muted w-14" />
+            </div>
+          </div>
+          <div className="h-3 rounded bg-muted w-48 mb-1.5" />
+          <div className="flex gap-1.5">
+            <div className="h-4 rounded bg-muted w-20" />
+            <div className="h-4 rounded bg-muted w-24" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SkeletonActivityTimeline() {
+  return (
+    <div className="bg-card border border-border rounded-lg overflow-hidden">
+      <div className="px-4 py-3.5 border-b border-border flex items-center gap-2 animate-pulse">
+        <div className="h-3.5 w-3.5 rounded bg-muted" />
+        <div className="h-5 rounded bg-muted w-16" />
+        <div className="h-3 rounded bg-muted w-32 ml-auto" />
+      </div>
+      <div className="px-4 py-4 animate-pulse">
+        {[0, 1, 2, 3, 4].map(i => (
+          <div key={i} className="flex gap-3">
+            <div className="flex flex-col items-center">
+              <div className="w-6 h-6 rounded-full bg-muted shrink-0" />
+              {i < 4 && <div className="w-px flex-1 bg-border/30 min-h-[14px]" />}
+            </div>
+            <div className={cn('min-w-0', i < 4 ? 'pb-4' : 'pb-0')}>
+              <div className="h-3 rounded bg-muted w-52 mb-1.5" />
+              <div className="h-3 rounded bg-muted w-36" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ── Lifecycle tracker ─────────────────────────────────────────────────────────
 
@@ -110,9 +245,11 @@ function LifecycleTracker({ status }: { status: ECOStatus }) {
 function ApprovalPipeline({
   detail,
   onDecision,
+  isPending,
 }: {
   detail: ECODetail;
   onDecision: (kind: 'approve' | 'reject', comment: string) => void;
+  isPending?: boolean;
 }) {
   const [comment, setComment] = useState('');
   const [err, setErr] = useState(false);
@@ -261,15 +398,19 @@ function ApprovalPipeline({
           <div className="flex gap-2 mt-2.5">
             <button
               onClick={() => submit('approve')}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold text-white transition-colors"
+              disabled={isPending}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold text-white transition-colors disabled:opacity-60"
               style={{ background: '#16A34A' }}
             >
-              <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-              Approve step
+              {isPending
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <Check className="w-3.5 h-3.5" strokeWidth={2.5} />}
+              {isPending ? 'Saving…' : 'Approve step'}
             </button>
             <button
               onClick={() => submit('reject')}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors"
+              disabled={isPending}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors disabled:opacity-60"
               style={{ color: '#DC2626', border: '1px solid #DC262655', background: 'transparent' }}
             >
               <X className="w-3.5 h-3.5" strokeWidth={2.5} />
@@ -919,9 +1060,10 @@ export function ECODetailView({
 
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
-  // Live data from API; fall back to mock detail while loading
-  const { data: liveRaw } = useECODetail(projectId, eco.id);
+  // Live data from API; fall back to list-item-derived detail during first load
+  const { data: liveRaw, isLoading: detailLoading } = useECODetail(projectId, eco.id);
   const detail: ECODetail = liveRaw ? fromApiEcoDetail(liveRaw) : buildDetail(eco);
+  const isFirstLoad = detailLoading && !liveRaw;
 
   // Mutations
   const decisionMutation = useECODecision(projectId, eco.id);
@@ -935,6 +1077,15 @@ export function ECODetailView({
   const sm = statusMeta(detail.status);
   const pm = priorityMeta(detail.priority);
   const cm = changeClassMeta(detail.changeClass);
+
+  const actionPending: Record<string, boolean> = {
+    submit:   submitMutation.isPending,
+    resubmit: submitMutation.isPending,
+    resume:   resumeMutation.isPending,
+    hold:     holdMutation.isPending,
+    close:    closeMutation.isPending,
+  };
+  const anyActionPending = Object.values(actionPending).some(Boolean);
 
   const handleDecision = async (kind: 'approve' | 'reject', comment: string) => {
     try {
@@ -1021,21 +1172,27 @@ export function ECODetailView({
           <p className="text-[13px] text-muted-foreground max-w-3xl leading-relaxed">{detail.desc}</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          {headerActions(detail.status).map(a => (
-            <button
-              key={a.k}
-              onClick={() => onAction(a.k)}
-              className={cn(
-                'flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] cursor-pointer transition-colors font-[inherit]',
-                a.kind === 'primary'
-                  ? 'font-semibold bg-primary hover:bg-primary/90 text-primary-foreground border-none'
-                  : 'font-medium bg-card text-foreground border border-border hover:bg-accent/50',
-              )}
-            >
-              <a.icon className="w-3.5 h-3.5" strokeWidth={2} />
-              {a.label}
-            </button>
-          ))}
+          {headerActions(detail.status).map(a => {
+            const thisLoading = !!actionPending[a.k];
+            return (
+              <button
+                key={a.k}
+                onClick={() => onAction(a.k)}
+                disabled={anyActionPending}
+                className={cn(
+                  'flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] cursor-pointer transition-colors font-[inherit] disabled:opacity-60 disabled:cursor-not-allowed',
+                  a.kind === 'primary'
+                    ? 'font-semibold bg-primary hover:bg-primary/90 text-primary-foreground border-none'
+                    : 'font-medium bg-card text-foreground border border-border hover:bg-accent/50',
+                )}
+              >
+                {thisLoading
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <a.icon className="w-3.5 h-3.5" strokeWidth={2} />}
+                {a.label}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -1075,17 +1232,40 @@ export function ECODetailView({
       </div>
 
       <LifecycleTracker status={detail.status} />
-      <ApprovalPipeline detail={detail} onDecision={handleDecision} />
+
+      {isFirstLoad ? (
+        <SkeletonApprovalPipeline />
+      ) : (
+        <ApprovalPipeline detail={detail} onDecision={handleDecision} isPending={decisionMutation.isPending} />
+      )}
 
       {/* Two-column content */}
       <div className="flex gap-4 items-start flex-wrap">
         <div className="flex-[2] min-w-0 flex flex-col gap-4">
-          <VersionDiff detail={detail} />
-          <ActivityTimeline detail={detail} />
+          {isFirstLoad ? (
+            <>
+              <SkeletonTableSection />
+              <SkeletonActivityTimeline />
+            </>
+          ) : (
+            <>
+              <VersionDiff detail={detail} />
+              <ActivityTimeline detail={detail} />
+            </>
+          )}
         </div>
         <div className="flex-1 min-w-[280px] flex flex-col gap-4">
-          <ImpactAssessment detail={detail} />
-          <AffectedParts detail={detail} />
+          {isFirstLoad ? (
+            <>
+              <SkeletonSideCard />
+              <SkeletonPartsCard />
+            </>
+          ) : (
+            <>
+              <ImpactAssessment detail={detail} />
+              <AffectedParts detail={detail} />
+            </>
+          )}
         </div>
       </div>
 
