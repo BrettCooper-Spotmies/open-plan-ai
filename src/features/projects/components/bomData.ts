@@ -111,6 +111,7 @@ export interface ApiNodeResponse {
   unit: string;
   status: BOMStatus;
   notes: string | null;
+  owner: { id: string; name: string } | null;
   part: ApiPartResponse;
   requirements: ApiReqLinkResponse[];
   children?: ApiNodeResponse[];
@@ -159,7 +160,7 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     price:        parseFloat(rev?.price ?? '0'),
     leadTime:     Math.ceil((rev?.leadTimeDays ?? 0) / 7),
     mpn:          node.part.mpn ?? '',
-    owner:        '',
+    owner:        node.owner?.name ?? '',
     revHistory:   [],  // loaded on demand via usePartRevisions
     children:     node.children?.map(c => fromApiNode(c, depth + 1)),
     _partId:      node.part.id,

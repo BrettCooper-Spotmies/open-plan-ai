@@ -31,7 +31,7 @@ export default function Dashboard() {
   const [newOrgForm, setNewOrgForm] = useState({ name: '', description: '' });
 
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
-  const { data: activities, isLoading: activitiesLoading } = useRecentActivity(4);
+  const { data: activities, isLoading: activitiesLoading } = useRecentActivity(10);
   const { data: milestones, isLoading: milestonesLoading } = useUpcomingDashboardMilestones(4);
   const { data: projectSummaries, isLoading: projectsLoading } = useProjectSummaries();
 

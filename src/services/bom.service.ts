@@ -15,6 +15,7 @@ export interface CreateNodeDto {
   parentId?: string | null;
   position?: number;
   notes?: string;
+  ownerId?: string | null;
 }
 
 export interface UpdateNodeDto {

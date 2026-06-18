@@ -1016,6 +1016,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       {/* Create New Sub-component sheet */}
       <BOMPartSheet
         mode="add"
+        projectId={projectId}
         open={showCreateNewSub}
         onClose={() => setShowCreateNewSub(false)}
         onSave={handleNewSubSaved}
@@ -1024,6 +1025,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       {/* Edit Part sheet */}
       <BOMPartSheet
         mode="edit"
+        projectId={projectId}
         node={node}
         open={showEdit}
         onClose={() => setShowEdit(false)}

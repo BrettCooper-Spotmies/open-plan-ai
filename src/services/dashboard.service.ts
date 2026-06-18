@@ -93,9 +93,10 @@ export const dashboardService = {
     }
   },
 
-  async getRecentActivity(orgId: string, _limit = 10): Promise<Activity[]> {
+  async getRecentActivity(orgId: string, limit = 10): Promise<Activity[]> {
     try {
-      return apiClient.get(ENDPOINTS.ORGANIZATIONS.ACTIVITIES(orgId));
+      const data = await apiClient.get<Activity[]>(ENDPOINTS.ORGANIZATIONS.ACTIVITIES(orgId));
+      return (data || []).slice(0, limit);
     } catch {
       return [];
     }

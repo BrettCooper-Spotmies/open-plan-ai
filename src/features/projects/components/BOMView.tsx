@@ -709,6 +709,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
         quantity: payload.qty,
         unit:     payload.uom,
         status:   payload.status,
+        ownerId:  payload.ownerId ?? null,
       });
       // Upload any documents attached in the form
       const docFiles = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as File[];
@@ -900,6 +901,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
       {/* Add Part sheet */}
       <BOMPartSheet
         mode="add"
+        projectId={projectId}
         open={addOpen}
         onClose={() => onAddClose?.()}
         onSave={handleAddPart}

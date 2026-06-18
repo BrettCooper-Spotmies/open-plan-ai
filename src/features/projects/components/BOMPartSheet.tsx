@@ -12,15 +12,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import {
-  Zap, Cpu, Package, Box, Monitor, Shield, Layers, User,
+  Zap, Cpu, Package, Box, Monitor, Shield, Layers, ChevronsUpDown,
   CheckCircle, Clock, GitBranch, Save, Plus, X,
   FileText, ImageIcon, Upload, Paperclip, AlertCircle,
 } from 'lucide-react';
 import {
   BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, BOMRevision,
 } from './bomData';
+import { useProjectMembers } from '@/hooks/useProjectTeam';
+import { TeamMember } from '@/types';
 
 // ── Public payload type ───────────────────────────────────────────
 export interface BOMPartPayload {
@@ -38,6 +43,7 @@ export interface BOMPartPayload {
   leadTime: number;
   mpn: string;
   owner: string;
+  ownerId?: string;
   req: string[];
   // documents (File objects; null = cleared, undefined = unchanged)
   docPhoto?: File | null;
@@ -53,6 +59,7 @@ export interface BOMPartPayload {
 interface Props {
   mode: 'add' | 'edit';
   node?: BOMNode;           // required when mode === 'edit'
+  projectId: string;
   open: boolean;
   onClose: () => void;
   onSave: (payload: BOMPartPayload) => void;
@@ -179,24 +186,27 @@ function PhotoUpload({ file, onChange }: { file: File | null; onChange: (f: File
 }
 
 // ── Main component ─────────────────────────────────────────────────
-export function BOMPartSheet({ mode, node, open, onClose, onSave }: Props) {
+export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: Props) {
   const isEdit = mode === 'edit';
 
+  const { data: projectMembers = [] } = useProjectMembers(projectId);
+
   // ── Form state ──
-  const [pn,           setPn]           = useState(node?.pn ?? '');
-  const [desc,         setDesc]         = useState(node?.desc ?? '');
-  const [category,     setCategory]     = useState<BOMCategory>(node?.cat ?? 'assembly');
-  const [status,       setStatus]       = useState<BOMStatus>(node?.status ?? 'pending');
-  const [rev,          setRev]          = useState(node?.rev ?? 'A');
-  const [qty,          setQty]          = useState(String(node?.qty ?? 1));
-  const [uom,          setUom]          = useState(node?.uom ?? 'EA');
-  const [manufacturer, setManufacturer] = useState(node?.manufacturer ?? '');
-  const [distributor,  setDistributor]  = useState(node?.distributor ?? '');
-  const [price,        setPrice]        = useState(String(node?.price ?? ''));
-  const [leadTime,     setLeadTime]     = useState(String(node?.leadTime ?? ''));
-  const [mpn,          setMpn]          = useState(node?.mpn ?? '');
-  const [owner,        setOwner]        = useState(node?.owner ?? '');
-  const [req,          setReq]          = useState<string[]>(node?.req ?? []);
+  const [pn,             setPn]             = useState(node?.pn ?? '');
+  const [desc,           setDesc]           = useState(node?.desc ?? '');
+  const [category,       setCategory]       = useState<BOMCategory>(node?.cat ?? 'assembly');
+  const [status,         setStatus]         = useState<BOMStatus>(node?.status ?? 'pending');
+  const [rev,            setRev]            = useState(node?.rev ?? 'A');
+  const [qty,            setQty]            = useState(String(node?.qty ?? 1));
+  const [uom,            setUom]            = useState(node?.uom ?? 'EA');
+  const [manufacturer,   setManufacturer]   = useState(node?.manufacturer ?? '');
+  const [distributor,    setDistributor]    = useState(node?.distributor ?? '');
+  const [price,          setPrice]          = useState(String(node?.price ?? ''));
+  const [leadTime,       setLeadTime]       = useState(String(node?.leadTime ?? ''));
+  const [mpn,            setMpn]            = useState(node?.mpn ?? '');
+  const [selectedOwner,  setSelectedOwner]  = useState<TeamMember | null>(null);
+  const [ownerPopover,   setOwnerPopover]   = useState(false);
+  const [req,            setReq]            = useState<string[]>(node?.req ?? []);
   const [reqInput,     setReqInput]     = useState('');
   // documents
   const [docPhoto,     setDocPhoto]     = useState<File | null>(null);
@@ -222,6 +232,7 @@ export function BOMPartSheet({ mode, node, open, onClose, onSave }: Props) {
     if (!isEdit && !pn.trim())          e.pn = 'Part number is required';
     if (!desc.trim())                   e.desc = 'Description is required';
     if (!manufacturer.trim())           e.mfr = 'Manufacturer is required';
+    if (!selectedOwner)                 e.owner = 'Owner is required';
     if (isEdit && versionMode === 'new' && !changeNotes.trim()) e.notes = 'Change notes are required when creating a new revision';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -239,7 +250,10 @@ export function BOMPartSheet({ mode, node, open, onClose, onSave }: Props) {
       manufacturer, distributor,
       price: parseFloat(price) || 0,
       leadTime: parseInt(leadTime) || 0,
-      mpn, owner, req,
+      mpn,
+      owner: selectedOwner?.name ?? '',
+      ownerId: selectedOwner?.id,
+      req,
       docPhoto, docDatasheet, doc3DModel, docFootprint,
       versionMode: isEdit ? versionMode : undefined,
       newRevLabel: isEdit && versionMode === 'new' ? newRevLabel : undefined,
@@ -326,12 +340,65 @@ export function BOMPartSheet({ mode, node, open, onClose, onSave }: Props) {
                   </div>
                 </FL>
 
-                <FL label="Owner / Handled By">
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-                    <FInput value={owner} onChange={e => setOwner(e.target.value)}
-                      placeholder="e.g. Sarah Chen" className="h-9 pl-9" />
-                  </div>
+                <FL label="Owner / Handled By" required>
+                  <Popover open={ownerPopover} onOpenChange={setOwnerPopover}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className={cn(
+                          'w-full h-9 flex items-center gap-2 px-3 rounded-md border text-sm transition-colors bg-muted border-border hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                          errors.owner && 'border-destructive'
+                        )}
+                      >
+                        {selectedOwner ? (
+                          <>
+                            <Avatar className="h-5 w-5 shrink-0">
+                              <AvatarFallback className="text-[9px] bg-primary/20 text-primary">
+                                {selectedOwner.initials}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="flex-1 text-left truncate">{selectedOwner.name}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="flex-1 text-left text-muted-foreground">Select project member…</span>
+                          </>
+                        )}
+                        <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[260px]" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search members…" />
+                        <CommandList>
+                          <CommandEmpty>No members found.</CommandEmpty>
+                          <CommandGroup heading="Project Members">
+                            {projectMembers.map(member => (
+                              <CommandItem
+                                key={member.id}
+                                value={`${member.id} ${member.name}`}
+                                onSelect={() => {
+                                  setSelectedOwner(member);
+                                  setOwnerPopover(false);
+                                }}
+                                className="cursor-pointer"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-5 w-5">
+                                    <AvatarFallback className="text-[9px]">
+                                      {member.initials}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  {member.name}
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                  {errors.owner && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.owner}</p>}
                 </FL>
 
                 {!isEdit && (
