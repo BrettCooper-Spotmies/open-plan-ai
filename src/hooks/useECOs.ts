@@ -103,6 +103,7 @@ export interface ApiEcoActivity {
 export interface ApiEcoDetail extends ApiEcoListItem {
   requiresRecertification: boolean;
   certNotes: string | null;
+  impactArea: string | null;
   firmwareCoupling: boolean;
   inventoryQty: number | null;
   scheduleImpact: string | null;

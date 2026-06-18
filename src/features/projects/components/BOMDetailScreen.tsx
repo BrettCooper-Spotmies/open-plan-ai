@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, ApiPartResponse, fromApiRevision } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMPartSheet, BOMPartPayload } from './BOMPartSheet';
+import { BOMECOSheet } from './BOMECOSheet';
 import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision, useOrgParts } from '@/hooks/useParts';
 import { useCreateBomNode, useUpdateBomNode } from '@/hooks/useBom';
 import { uploadBomDocumentFile } from '@/hooks/useBomDocuments';
@@ -471,6 +472,7 @@ function RevisionToggle({
   onChange: (idx: number) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const { formatCurrency } = useCurrency();
   const active = revHistory[activeIdx];
   const isLatest = revHistory.length === 0 || activeIdx === revHistory.length - 1;
 
@@ -565,6 +567,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
 
   const [activeRevIdx, setActiveRevIdx] = useState(0);
   const [showEdit, setShowEdit] = useState(false);
+  const [ecoOpen, setEcoOpen] = useState(false);
   const [showAddSub, setShowAddSub]           = useState(false);
   const [showCreateNewSub, setShowCreateNewSub] = useState(false);
 
@@ -711,7 +714,10 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap">
+            <button
+              onClick={() => setEcoOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap"
+            >
               <GitMerge className="w-3.5 h-3.5 text-muted-foreground" /> New ECO
             </button>
             <button
@@ -1033,6 +1039,14 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         open={showEdit}
         onClose={() => setShowEdit(false)}
         onSave={handleSave}
+      />
+
+      {/* New ECO sheet */}
+      <BOMECOSheet
+        open={ecoOpen}
+        onClose={() => setEcoOpen(false)}
+        node={node}
+        projectId={projectId}
       />
     </div>
   );

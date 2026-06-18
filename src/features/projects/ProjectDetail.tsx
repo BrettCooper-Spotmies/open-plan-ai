@@ -1257,18 +1257,18 @@ export default function ProjectDetail() {
                   <GitMerge className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Eng. Changes</span>}
                 </TabsTrigger>
-                <TabsTrigger value="requirements" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Requirements">
+                {/* <TabsTrigger value="requirements" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Requirements">
                   <ListChecks className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Requirements</span>}
-                </TabsTrigger>
-                <TabsTrigger value="gate-reviews" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Phase Gate Tracker">
+                </TabsTrigger> */}
+                {/* <TabsTrigger value="gate-reviews" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Phase Gate Tracker">
                   <ChartGantt className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Gates</span>}
-                </TabsTrigger>
-                <TabsTrigger value="risk" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Risk & Issue Tracker">
+                </TabsTrigger> */}
+                {/* <TabsTrigger value="risk" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Risk & Issue Tracker">
                   <ShieldAlert className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Risk</span>}
-                </TabsTrigger>
+                </TabsTrigger> */}
               </TabsList>
             </div>
 
