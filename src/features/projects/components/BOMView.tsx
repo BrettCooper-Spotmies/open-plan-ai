@@ -44,6 +44,7 @@ import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMDetailScreen } from './BOMDetailScreen';
 import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload } from './BOMPartSheet';
+import { useCurrency } from '@/hooks/useCurrency';
 
 // ── Skeletons ──────────────────────────────────────────────────────
 function StatCardSkeleton() {
@@ -174,11 +175,12 @@ function StatCard({ label, value, icon: Icon, iconColor, sub, accent }: {
 }
 
 // ── Filter drawer ──────────────────────────────────────────────────
-function FilterDrawer({ open, filters, setFilters, onClose, facets }: {
+function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymbol }: {
   open: boolean; filters: BOMFilters;
   setFilters: React.Dispatch<React.SetStateAction<BOMFilters>>;
   onClose: () => void;
   facets: { units: string[]; manufacturers: string[]; suppliers: string[]; owners: string[] };
+  currencySymbol: string;
 }) {
   const [customMfrs, setCustomMfrs] = useState<string[]>([]);
   const [customSuppliers, setCustomSuppliers] = useState<string[]>([]);
@@ -294,11 +296,11 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets }: {
             </div>
           </Section>
 
-          <Section title="Unit Price (USD)">
+          <Section title={`Unit Price (${currencySymbol})`}>
             <div className="flex items-center gap-2">
-              <RangeInput value={filters.priceMin} onChange={v => set('priceMin', v)} placeholder="Min" prefix="$" />
+              <RangeInput value={filters.priceMin} onChange={v => set('priceMin', v)} placeholder="Min" prefix={currencySymbol} />
               <span className="text-muted-foreground text-xs">–</span>
-              <RangeInput value={filters.priceMax} onChange={v => set('priceMax', v)} placeholder="Max" prefix="$" />
+              <RangeInput value={filters.priceMax} onChange={v => set('priceMax', v)} placeholder="Max" prefix={currencySymbol} />
             </div>
           </Section>
 
@@ -425,13 +427,14 @@ const HEADERS = [
   { key: 'act', label: '', w: 30 },
 ] as const;
 
-function ListView({ rows, expanded, toggle, filtersActive, onOpen, totalCount }: {
+function ListView({ rows, expanded, toggle, filtersActive, onOpen, totalCount, formatCurrency }: {
   rows: BOMNode[];
   expanded: Record<string, boolean>;
   toggle: (id: string) => void;
   filtersActive: boolean;
   onOpen: (id: string) => void;
   totalCount: number;
+  formatCurrency: (n: number) => string;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const rowH = 46;
@@ -515,7 +518,7 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, totalCount }:
               {/* Manufacturer */}
               <div style={{ flexBasis: 140, flexShrink: 0 }} className="px-2 text-xs text-muted-foreground truncate">{row.manufacturer}</div>
               {/* Price */}
-              <div style={{ flexBasis: 90, flexShrink: 0 }} className="px-2 text-sm text-foreground text-right tabular-nums">${row.price.toFixed(2)}</div>
+              <div style={{ flexBasis: 90, flexShrink: 0 }} className="px-2 text-sm text-foreground text-right tabular-nums">{formatCurrency(row.price)}</div>
               {/* Lead */}
               <div style={{ flexBasis: 74, flexShrink: 0 }} className="px-2 text-xs text-muted-foreground tabular-nums">{row.leadTime} wk</div>
               {/* Rev */}
@@ -563,7 +566,7 @@ function Meta({ label, value }: { label: string; value: string }) {
   );
 }
 
-function GridView({ rows, onOpen, totalCount }: { rows: BOMNode[]; onOpen: (id: string) => void; totalCount: number }) {
+function GridView({ rows, onOpen, totalCount, formatCurrency }: { rows: BOMNode[]; onOpen: (id: string) => void; totalCount: number; formatCurrency: (n: number) => string }) {
   const [hovered, setHovered] = useState<string | null>(null);
 
   if (rows.length === 0) {
@@ -612,7 +615,7 @@ function GridView({ rows, onOpen, totalCount }: { rows: BOMNode[]; onOpen: (id: 
                 </div>
                 <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 mb-2.5">
                   <Meta label="Qty" value={`${row.qty} ${row.uom}`} />
-                  <Meta label="Unit Price" value={`$${row.price.toFixed(2)}`} />
+                  <Meta label="Unit Price" value={formatCurrency(row.price)} />
                   <Meta label="Manufacturer" value={row.manufacturer} />
                   <Meta label="Lead Time" value={`${row.leadTime} wk`} />
                 </div>
@@ -665,6 +668,8 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
     if (saved) { try { return JSON.parse(saved); } catch { /* ignore */ } }
     return {};
   });
+
+  const { formatCurrency, currencySymbol } = useCurrency();
 
   // ── Live API data ─────────────────────────────────────────────────
   const { data: bomTree, isLoading: treeLoading } = useBomTree(projectId);
@@ -824,7 +829,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
           <StatCard label="Total Parts" value={String(totalCount)} icon={Layers} iconColor="hsl(var(--foreground))" sub="across all levels" />
           <StatCard label="Approved" value={String(approvedCount)} icon={CheckCircle} iconColor="#16A34A" sub={`${totalCount > 0 ? Math.round(approvedCount / totalCount * 100) : 0}% approval rate`} />
           <StatCard label="Pending Review" value={String(pendingCount)} icon={Clock} iconColor="#D97706" sub="needs attention" />
-          <StatCard label="Total BOM Cost" value={`$${totalCost.toFixed(2)}`} icon={DollarSign} iconColor="#9333EA" sub="estimated assembly cost" />
+          <StatCard label="Total BOM Cost" value={formatCurrency(totalCost)} icon={DollarSign} iconColor="#9333EA" sub="estimated assembly cost" />
         </div>
 
         {/* Toolbar */}
@@ -885,10 +890,11 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
           filtersActive={filtersActive}
           onOpen={setSelected}
           totalCount={totalCount}
+          formatCurrency={formatCurrency}
         />
       )}
       {view === 'grid' && (
-        <GridView rows={gridRows} onOpen={setSelected} totalCount={totalCount} />
+        <GridView rows={gridRows} onOpen={setSelected} totalCount={totalCount} formatCurrency={formatCurrency} />
       )}
       {view === 'map' && (
         <BOMMapView nodes={rootNodes} onOpen={setSelected} pred={pred} filtersActive={filtersActive} />
@@ -896,6 +902,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
       <FilterDrawer
         open={filterOpen} filters={filters} setFilters={setFilters}
         onClose={() => setFilterOpen(false)} facets={facets}
+        currencySymbol={currencySymbol}
       />
 
       {/* Add Part sheet */}

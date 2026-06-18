@@ -66,6 +66,7 @@ import { useUserStore } from '@/stores/useUserStore';
 import { getPasswordRequirements } from '@/lib/passwordValidation';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { logger } from '@/services/monitoring/logger';
+import { SUPPORTED_CURRENCIES } from '@/hooks/useCurrency';
 
 type ThemePreference = 'light' | 'dark' | 'system';
 
@@ -116,6 +117,7 @@ const Settings = () => {
     companySize: '',
     timezone: 'America/New_York',
     dateFormat: 'MM/DD/YYYY',
+    currency: 'USD',
     logoUrl: '',
   });
   const [orgLoading, setOrgLoading] = useState(false);
@@ -180,6 +182,7 @@ const Settings = () => {
         companySize: settings.companySize || '',
         timezone: settings.timezone || 'America/New_York',
         dateFormat: settings.dateFormat || 'MM/DD/YYYY',
+        currency: settings.currency || 'USD',
         logoUrl: resolveFileUrl(settings.logoUrl) ?? settings.logoUrl ?? prev.logoUrl,
       }));
     }
@@ -229,6 +232,7 @@ const Settings = () => {
           companySize: orgForm.companySize,
           timezone: orgForm.timezone,
           dateFormat: orgForm.dateFormat,
+          currency: orgForm.currency,
         },
       });
 
@@ -687,6 +691,23 @@ const Settings = () => {
                             <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
                             <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
                             <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Currency</Label>
+                        <Select
+                          value={orgForm.currency}
+                          onValueChange={(value) => setOrgForm({ ...orgForm, currency: value })}
+                          disabled={!canEditOrganizationSettings}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SUPPORTED_CURRENCIES.map(c => (
+                              <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { InputOTP, InputOTPGroup, InputOTPSlot, REGEXP_ONLY_DIGITS } from "@/components/ui/input-otp";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Layers, Mail, AlertCircle, CheckCircle } from "lucide-react";
 import { authService } from "@/services/auth.service";
@@ -185,6 +185,7 @@ const VerifyEmail = () => {
               <div className="flex justify-center">
                 <InputOTP
                   maxLength={6}
+                  pattern={REGEXP_ONLY_DIGITS}
                   value={otp}
                   onChange={setOtp}
                   disabled={isLoading}

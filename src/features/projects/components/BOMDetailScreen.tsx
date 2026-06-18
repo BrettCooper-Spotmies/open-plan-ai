@@ -19,6 +19,7 @@ import { BOMPartSheet, BOMPartPayload } from './BOMPartSheet';
 import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision, useOrgParts } from '@/hooks/useParts';
 import { useCreateBomNode, useUpdateBomNode } from '@/hooks/useBom';
 import { uploadBomDocumentFile } from '@/hooks/useBomDocuments';
+import { useCurrency } from '@/hooks/useCurrency';
 
 // ── Add Sub-component Dialog ───────────────────────────────────────
 function AddSubcomponentDialog({
@@ -148,7 +149,7 @@ function AddSubcomponentDialog({
                       <div className="text-xs text-foreground font-medium truncate">{part.description}</div>
                     </div>
                     <div className="text-right shrink-0">
-                      <div className="text-xs font-medium text-foreground">${price.toFixed(2)}</div>
+                      <div className="text-xs font-medium text-foreground">{formatCurrency(price)}</div>
                       <div className="text-[10px] text-muted-foreground">{leadTime} wk</div>
                     </div>
                     <div className={cn(
@@ -539,7 +540,7 @@ function RevisionToggle({
                   </div>
                   <div className="text-[11px] text-muted-foreground truncate">{r.changes}</div>
                   <div className="text-[10px] text-muted-foreground/60 mt-0.5">
-                    {r.date} · {r.author} · ${r.price.toFixed(2)}
+                    {r.date} · {r.author} · {formatCurrency(r.price)}
                   </div>
                 </div>
               </button>
@@ -553,6 +554,8 @@ function RevisionToggle({
 
 // ── Main component ─────────────────────────────────────────────────
 export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectId, onBack, onNavigate }: Props) {
+  const { formatCurrency } = useCurrency();
+
   // ── Revision history from API ──
   const { data: apiRevisions, isLoading: revisionsLoading } = usePartRevisions(originalNode._partId);
   const revHistory = useMemo<BOMRevision[]>(
@@ -735,7 +738,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
           <Field label="Manufacturer">{node.manufacturer}</Field>
           <Field label="Supplier">{node.distributor}</Field>
           <Field label="Quantity">{node.qty} {node.uom}</Field>
-          <Field label="Unit Price">${node.price.toFixed(2)}</Field>
+          <Field label="Unit Price">{formatCurrency(node.price)}</Field>
           <Field label="Lead Time">{node.leadTime} weeks</Field>
           <Field label="BOM Level">{node.level}</Field>
           <Field label="Handled By">
@@ -762,7 +765,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                     BOM level {node.level} · quantity {node.qty} {node.uom} per unit.
                   </p>
                   <div className="grid grid-cols-3 gap-x-4 gap-y-3.5">
-                    <Field label="Extended Price">${extended.toFixed(2)}</Field>
+                    <Field label="Extended Price">{formatCurrency(extended)}</Field>
                     <Field label="Status">{node.status === 'approved' ? 'Approved' : 'Pending review'}</Field>
                     <Field label="Revision">Rev {node.rev}</Field>
                     <Field label="Category">{meta.label}</Field>
@@ -813,7 +816,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                       <div className="text-sm font-medium text-foreground truncate">{c.desc}</div>
                     </div>
                     <span className="text-xs text-muted-foreground tabular-nums shrink-0">{c.qty} {c.uom}</span>
-                    <span className="text-sm text-foreground tabular-nums w-20 text-right shrink-0">${c.price.toFixed(2)}</span>
+                    <span className="text-sm text-foreground tabular-nums w-20 text-right shrink-0">{formatCurrency(c.price)}</span>
                     <BOMStatusPill status={c.status} />
                     <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                   </div>
@@ -872,8 +875,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   { label: 'Manufacturer',     value: node.manufacturer,                                      icon: 'Factory' },
                   { label: 'Manufacturer PN',  value: node.mpn,                                               icon: 'Hash',   mono: true },
                   { label: 'Supplier',         value: node.distributor,                                       icon: 'Truck' },
-                  { label: 'Unit Price',       value: `$${node.price.toFixed(2)}`,                            icon: 'DollarSign' },
-                  { label: 'Extended Price',   value: `$${extended.toFixed(2)} · ${node.qty} ${node.uom}`,   icon: 'Tag' },
+                  { label: 'Unit Price',       value: formatCurrency(node.price),                            icon: 'DollarSign' },
+                  { label: 'Extended Price',   value: `${formatCurrency(extended)} · ${node.qty} ${node.uom}`,   icon: 'Tag' },
                   { label: 'Lead Time',        value: `${node.leadTime} weeks`,                               icon: 'Clock' },
                   { label: 'Handled By',       value: node.owner,                                             icon: 'User' },
                 ].map((r, i) => {

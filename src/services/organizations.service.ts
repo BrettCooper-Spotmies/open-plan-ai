@@ -8,6 +8,7 @@ export interface OrganizationSettings {
   companySize?: string;
   timezone?: string;
   dateFormat?: string;
+  currency?: string;
   logoUrl?: string;
 }
 

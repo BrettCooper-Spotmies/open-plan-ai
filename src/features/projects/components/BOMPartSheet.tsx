@@ -3,7 +3,7 @@
  * Tabs: Details · Sourcing · Traceability · Documents
  * Edit mode shows version management inline.
  */
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -18,7 +18,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import {
   Zap, Cpu, Package, Box, Monitor, Shield, Layers, ChevronsUpDown,
-  CheckCircle, Clock, GitBranch, Save, Plus, X,
+  CheckCircle, Clock, GitBranch, Save, Plus, X, ChevronRight, ChevronLeft,
   FileText, ImageIcon, Upload, Paperclip, AlertCircle,
 } from 'lucide-react';
 import {
@@ -66,6 +66,9 @@ interface Props {
 }
 
 // ── Constants ─────────────────────────────────────────────────────
+const TABS = ['details', 'sourcing', 'traceability', 'documents'] as const;
+type TabId = typeof TABS[number];
+
 const LETTERS = 'ABCDEFGHIJ';
 const CATEGORIES: BOMCategory[] = ['assembly', 'power', 'control', 'connector', 'enclosure', 'hmi', 'safety'];
 const CAT_ICONS: Record<BOMCategory, React.ElementType> = {
@@ -207,6 +210,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   const [selectedOwner,  setSelectedOwner]  = useState<TeamMember | null>(null);
   const [ownerPopover,   setOwnerPopover]   = useState(false);
   const [req,            setReq]            = useState<string[]>(node?.req ?? []);
+  const [activeTab,      setActiveTab]      = useState<TabId>('details');
   const [reqInput,     setReqInput]     = useState('');
   // documents
   const [docPhoto,     setDocPhoto]     = useState<File | null>(null);
@@ -220,12 +224,65 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   // validation
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Reset all form state when the dialog opens so stale data never shows
+  useEffect(() => {
+    if (!open) return;
+    setPn(node?.pn ?? '');
+    setDesc(node?.desc ?? '');
+    setCategory(node?.cat ?? 'assembly');
+    setStatus(node?.status ?? 'pending');
+    setRev(node?.rev ?? 'A');
+    setQty(String(node?.qty ?? 1));
+    setUom(node?.uom ?? 'EA');
+    setManufacturer(node?.manufacturer ?? '');
+    setDistributor(node?.distributor ?? '');
+    setPrice(String(node?.price ?? ''));
+    setLeadTime(String(node?.leadTime ?? ''));
+    setMpn(node?.mpn ?? '');
+    setSelectedOwner(null);
+    setOwnerPopover(false);
+    setReq(node?.req ?? []);
+    setReqInput('');
+    setDocPhoto(null);
+    setDocDatasheet(null);
+    setDoc3DModel(null);
+    setDocFootprint(null);
+    setVersionMode('same');
+    setNewRevLabel(node ? nextRev(node.rev) : 'B');
+    setChangeNotes('');
+    setErrors({});
+    setActiveTab('details');
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const addReq = () => {
     const v = reqInput.trim().toUpperCase();
     if (v && !req.includes(v)) { setReq(r => [...r, v]); }
     setReqInput('');
   };
   const removeReq = (r: string) => setReq(rs => rs.filter(x => x !== r));
+
+  const validateTab = (tab: TabId): boolean => {
+    const e: Record<string, string> = {};
+    if (tab === 'details') {
+      if (!isEdit && !pn.trim()) e.pn = 'Part number is required';
+      if (!desc.trim())          e.desc = 'Description is required';
+      if (!selectedOwner)        e.owner = 'Owner is required';
+    }
+    if (tab === 'sourcing') {
+      if (!manufacturer.trim())  e.mfr = 'Manufacturer is required';
+    }
+    if (tab === 'documents') {
+      if (isEdit && versionMode === 'new' && !changeNotes.trim())
+        e.notes = 'Change notes are required when creating a new revision';
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleNext = () => {
+    if (!validateTab(activeTab)) return;
+    setActiveTab(TABS[TABS.indexOf(activeTab) + 1]);
+  };
 
   const validate = () => {
     const e: Record<string, string> = {};
@@ -285,7 +342,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
         </DialogHeader>
 
         {/* ── Tabs ── */}
-        <Tabs defaultValue="details" className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabId)} className="flex flex-col flex-1 min-h-0 overflow-hidden">
           <TabsList className="mx-7 mt-4 mb-0 shrink-0 bg-muted/50 h-9 w-auto self-start gap-0.5">
             <TabsTrigger value="details"      className="text-xs px-4">Details</TabsTrigger>
             <TabsTrigger value="sourcing"     className="text-xs px-4">Sourcing</TabsTrigger>
@@ -456,7 +513,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                 <FInput value={distributor} onChange={e => setDistributor(e.target.value)}
                   placeholder="e.g. Digi-Key" className="h-9" />
               </FL>
-              <FL label="Unit Price ($)">
+              <FL label="Unit Price">
                 <FInput value={price} onChange={e => setPrice(e.target.value)}
                   type="number" step="0.01" placeholder="0.00" className="h-9" />
               </FL>
@@ -543,8 +600,8 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
           </TabsContent>
         </Tabs>
 
-        {/* ── Version section (Edit only) — side-by-side ── */}
-        {isEdit && node && (
+        {/* ── Version section (Edit only, last tab only) ── */}
+        {isEdit && node && activeTab === 'documents' && (
           <div className="px-7 pt-5 pb-4 border-t border-border bg-muted/20 shrink-0">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               Save as Version
@@ -601,22 +658,36 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
         {/* ── Footer ── */}
         <div className="px-7 py-4 border-t border-border flex items-center justify-between gap-4 shrink-0 bg-card">
           <div className="text-sm text-muted-foreground">
-            {isEdit
-              ? versionMode === 'new'
-                ? <span>Will create <span className="font-mono font-medium text-foreground">Rev {newRevLabel || '?'}</span> — Rev {node?.rev} preserved in history</span>
-                : <span>Will overwrite <span className="font-mono font-medium text-foreground">Rev {node?.rev}</span> in place</span>
-              : 'New part will be added to the Bill of Materials'}
+            {activeTab === 'documents'
+              ? isEdit
+                ? versionMode === 'new'
+                  ? <span>Will create <span className="font-mono font-medium text-foreground">Rev {newRevLabel || '?'}</span> — Rev {node?.rev} preserved in history</span>
+                  : <span>Will overwrite <span className="font-mono font-medium text-foreground">Rev {node?.rev}</span> in place</span>
+                : 'New part will be added to the Bill of Materials'
+              : <span className="text-xs text-muted-foreground">Step {TABS.indexOf(activeTab) + 1} of {TABS.length}</span>}
           </div>
-          <div className="flex gap-3 shrink-0">
-            <Button variant="outline" size="default" className="px-6" onClick={onClose}>Cancel</Button>
-            <Button size="default" className="gap-2 px-6"
-              disabled={isEdit && versionMode === 'new' && !changeNotes.trim()}
-              onClick={handleSave}>
-              <Save className="w-4 h-4" />
-              {isEdit
-                ? versionMode === 'new' ? `Save as Rev ${newRevLabel || '?'}` : 'Save Changes'
-                : 'Add Part'}
-            </Button>
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" size="default" className="px-5" onClick={onClose}>Cancel</Button>
+            {TABS.indexOf(activeTab) > 0 && (
+              <Button variant="outline" size="default" className="gap-1.5 px-4"
+                onClick={() => { setErrors({}); setActiveTab(TABS[TABS.indexOf(activeTab) - 1]); }}>
+                <ChevronLeft className="w-4 h-4" /> Back
+              </Button>
+            )}
+            {activeTab !== 'documents' ? (
+              <Button size="default" className="gap-1.5 px-5" onClick={handleNext}>
+                Next <ChevronRight className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button size="default" className="gap-2 px-6"
+                disabled={isEdit && versionMode === 'new' && !changeNotes.trim()}
+                onClick={handleSave}>
+                <Save className="w-4 h-4" />
+                {isEdit
+                  ? versionMode === 'new' ? `Save as Rev ${newRevLabel || '?'}` : 'Save Changes'
+                  : 'Add Part'}
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>
