@@ -1256,6 +1256,10 @@ const NewProject = () => {
                           setNewMilestoneStart(date);
                           setIsMilestoneStartOpen(false);
                         }}
+                        disabled={(date) =>
+                          (startDate ? isBefore(date, startDate) : false) ||
+                          (expectedEndDate ? isBefore(expectedEndDate, date) : false)
+                        }
                         initialFocus
                       />
                     )}
@@ -1290,7 +1294,9 @@ const NewProject = () => {
                           setIsMilestoneEndOpen(false);
                         }}
                         disabled={(date) =>
-                          newMilestoneStart ? isBefore(date, newMilestoneStart) : false
+                          (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) ||
+                          (startDate ? isBefore(date, startDate) : false) ||
+                          (expectedEndDate ? isBefore(expectedEndDate, date) : false)
                         }
                         initialFocus
                       />
