@@ -164,13 +164,6 @@ const VerifyEmail = () => {
             </Alert>
           )}
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
           {success && (
             <Alert className="border-green-500/50 bg-green-500/10">
               <CheckCircle className="h-4 w-4 text-green-600" />
@@ -182,7 +175,7 @@ const VerifyEmail = () => {
 
           {!success && (
             <>
-              <div className="flex justify-center">
+              <div className="flex flex-col items-center justify-center gap-2">
                 <InputOTP
                   maxLength={6}
                   value={otp}
@@ -190,14 +183,19 @@ const VerifyEmail = () => {
                   disabled={isLoading}
                 >
                   <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
+                    <InputOTPSlot index={0} className="bg-white dark:bg-zinc-900 border-slate-300 dark:border-slate-700 shadow-sm" />
+                    <InputOTPSlot index={1} className="bg-white dark:bg-zinc-900 border-slate-300 dark:border-slate-700 shadow-sm" />
+                    <InputOTPSlot index={2} className="bg-white dark:bg-zinc-900 border-slate-300 dark:border-slate-700 shadow-sm" />
+                    <InputOTPSlot index={3} className="bg-white dark:bg-zinc-900 border-slate-300 dark:border-slate-700 shadow-sm" />
+                    <InputOTPSlot index={4} className="bg-white dark:bg-zinc-900 border-slate-300 dark:border-slate-700 shadow-sm" />
+                    <InputOTPSlot index={5} className="bg-white dark:bg-zinc-900 border-slate-300 dark:border-slate-700 shadow-sm" />
                   </InputOTPGroup>
                 </InputOTP>
+                {error && (
+                  <p className="text-sm font-medium text-destructive">
+                    {error}
+                  </p>
+                )}
               </div>
 
               <Button
