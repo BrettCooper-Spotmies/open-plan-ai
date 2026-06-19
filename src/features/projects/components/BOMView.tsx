@@ -8,6 +8,11 @@ import { useBomTree, useCreateBomNode } from '@/hooks/useBom';
 import { useCreatePart } from '@/hooks/useParts';
 import { uploadBomDocumentFile } from '@/hooks/useBomDocuments';
 
+function softTint(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 // Owner initials helper (shared with detail screen)
 function ownerInitials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
@@ -49,13 +54,12 @@ import { useCurrency } from '@/hooks/useCurrency';
 // ── Skeletons ──────────────────────────────────────────────────────
 function StatCardSkeleton() {
   return (
-    <div className="bg-card rounded-lg p-4 flex-1 min-w-0 border border-border">
-      <div className="flex justify-between items-start mb-3">
-        <Skeleton className="h-3 w-20" />
-        <Skeleton className="h-4 w-4 rounded" />
+    <div className="bg-card rounded-lg p-2.5 flex-1 min-w-0 border border-border flex items-center gap-2.5">
+      <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
+      <div className="min-w-0 flex-1">
+        <Skeleton className="h-4 w-10 mb-1.5" />
+        <Skeleton className="h-2.5 w-20" />
       </div>
-      <Skeleton className="h-7 w-14 mb-2" />
-      <Skeleton className="h-3 w-28" />
     </div>
   );
 }
@@ -156,20 +160,24 @@ function BOMViewSkeleton() {
 }
 
 // ── Stat card ─────────────────────────────────────────────────────
-function StatCard({ label, value, icon: Icon, iconColor, sub, accent }: {
+function StatCard({ label, value, icon: Icon, iconColor, accent }: {
   label: string; value: string; icon: React.ElementType;
-  iconColor: string; sub: string; accent?: boolean;
+  iconColor: string; accent?: boolean;
 }) {
   return (
-    <div className={cn('bg-card rounded-lg p-4 flex-1 min-w-0 border', accent ? 'border-primary/25' : 'border-border')}>
-      <div className="flex justify-between items-start mb-2">
-        <span className="text-xs text-muted-foreground">{label}</span>
+    <div className={cn('bg-card rounded-lg px-3.5 py-2.5 flex-1 min-w-0 border flex items-center gap-2.5', accent ? 'border-primary/25' : 'border-border')}>
+      <span
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        style={{ backgroundColor: softTint(iconColor, 0.12) }}
+      >
         <Icon className="w-4 h-4" style={{ color: iconColor }} />
-      </div>
-      <div className="text-[26px] font-bold leading-tight mb-0.5">
-        {value}
-      </div>
-      <div className="text-[11px] text-muted-foreground">{sub}</div>
+      </span>
+      <span className="min-w-0">
+        <span className="block text-lg font-bold leading-tight truncate" style={{ color: accent ? iconColor : undefined }}>
+          {value}
+        </span>
+        <span className="block text-[11px] text-muted-foreground truncate">{label}</span>
+      </span>
     </div>
   );
 }
@@ -826,10 +834,10 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
       <div className="shrink-0 py-4">
         {/* Stat cards */}
         <div className="flex gap-3 mb-4">
-          <StatCard label="Total Parts" value={String(totalCount)} icon={Layers} iconColor="hsl(var(--foreground))" sub="across all levels" />
-          <StatCard label="Approved" value={String(approvedCount)} icon={CheckCircle} iconColor="#16A34A" sub={`${totalCount > 0 ? Math.round(approvedCount / totalCount * 100) : 0}% approval rate`} />
-          <StatCard label="Pending Review" value={String(pendingCount)} icon={Clock} iconColor="#D97706" sub="needs attention" />
-          <StatCard label="Total BOM Cost" value={formatCurrency(totalCost)} icon={DollarSign} iconColor="#9333EA" sub="estimated assembly cost" />
+          <StatCard label="Total Parts" value={String(totalCount)} icon={Layers} iconColor="#2563EB" accent />
+          <StatCard label="Approved" value={String(approvedCount)} icon={CheckCircle} iconColor="#16A34A" />
+          <StatCard label="Pending Review" value={String(pendingCount)} icon={Clock} iconColor="#D97706" />
+          <StatCard label="Total BOM Cost" value={formatCurrency(totalCost)} icon={DollarSign} iconColor="#9333EA" />
         </div>
 
         {/* Toolbar */}

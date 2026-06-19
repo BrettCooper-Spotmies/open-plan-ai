@@ -235,3 +235,138 @@ export const bomFlattenInclude = (nodes: BOMNode[], include: Set<string>): BOMNo
 
 export const bomTypeOf = (n: BOMNode): 'top' | 'subassembly' | 'catalog' =>
   n.level === 0 ? 'top' : (n.children && n.children.length ? 'subassembly' : 'catalog');
+
+// ── Sub-component bulk import (Excel/CSV) ─────────────────────────
+
+const IMPORT_CATEGORY_VALUES: BOMCategory[] = ['assembly', 'power', 'control', 'connector', 'enclosure', 'hmi', 'safety'];
+const IMPORT_STATUS_VALUES: BOMStatus[] = ['approved', 'pending'];
+
+interface ImportColumnDef {
+  label: string;
+  required: boolean;
+  aliases: string[]; // lowercase header strings that map to this column
+}
+
+export const SUBCOMPONENT_IMPORT_COLUMNS: ImportColumnDef[] = [
+  { label: 'Part Number',        required: true,  aliases: ['part number', 'partnumber', 'pn'] },
+  { label: 'Description',        required: true,  aliases: ['description', 'desc'] },
+  { label: 'Category',           required: true,  aliases: ['category'] },
+  { label: 'Status',             required: false, aliases: ['status'] },
+  { label: 'Manufacturer',       required: false, aliases: ['manufacturer'] },
+  { label: 'MPN',                required: false, aliases: ['mpn'] },
+  { label: 'Supplier',           required: false, aliases: ['supplier', 'distributor'] },
+  { label: 'Unit Price',         required: false, aliases: ['unit price', 'price'] },
+  { label: 'Lead Time (weeks)',  required: false, aliases: ['lead time (weeks)', 'lead time', 'leadtime'] },
+  { label: 'Quantity',           required: true,  aliases: ['quantity', 'qty'] },
+  { label: 'UOM',                required: false, aliases: ['uom', 'unit'] },
+];
+
+export interface ParsedImportRow {
+  rowNumber: number; // 1-based spreadsheet row, header row counts as row 1
+  partNumber: string;
+  description: string;
+  category: BOMCategory | '';
+  status: BOMStatus;
+  manufacturer: string;
+  mpn: string;
+  supplier: string;
+  unitPrice?: number;
+  leadTimeWeeks?: number;
+  quantity: number;
+  uom: string;
+  existingPart?: ApiPartResponse;
+  errors: string[];
+}
+
+const normalizeKey = (k: string) => k.trim().toLowerCase();
+
+function pickField(row: Record<string, unknown>, aliases: string[]): string {
+  for (const [rawKey, value] of Object.entries(row)) {
+    if (aliases.includes(normalizeKey(rawKey))) {
+      return value == null ? '' : String(value).trim();
+    }
+  }
+  return '';
+}
+
+const colAliases = (label: string) =>
+  SUBCOMPONENT_IMPORT_COLUMNS.find(c => c.label === label)!.aliases;
+
+export function parseSubcomponentImportRows(
+  rows: Record<string, unknown>[],
+  existingParts: ApiPartResponse[],
+): ParsedImportRow[] {
+  return rows.map((row, i) => {
+    const errors: string[] = [];
+
+    const partNumber   = pickField(row, colAliases('Part Number'));
+    const description  = pickField(row, colAliases('Description'));
+    const categoryRaw  = pickField(row, colAliases('Category')).toLowerCase();
+    const statusRaw    = pickField(row, colAliases('Status')).toLowerCase();
+    const manufacturer = pickField(row, colAliases('Manufacturer'));
+    const mpn          = pickField(row, colAliases('MPN'));
+    const supplier      = pickField(row, colAliases('Supplier'));
+    const unitPriceRaw  = pickField(row, colAliases('Unit Price'));
+    const leadTimeRaw   = pickField(row, colAliases('Lead Time (weeks)'));
+    const quantityRaw   = pickField(row, colAliases('Quantity'));
+    const uomRaw         = pickField(row, colAliases('UOM'));
+
+    if (!partNumber) errors.push('Missing Part Number');
+    if (!description) errors.push('Missing Description');
+
+    let category: BOMCategory | '' = '';
+    if (!categoryRaw) {
+      errors.push('Missing Category');
+    } else if (!IMPORT_CATEGORY_VALUES.includes(categoryRaw as BOMCategory)) {
+      errors.push(`Category "${categoryRaw}" is not valid`);
+    } else {
+      category = categoryRaw as BOMCategory;
+    }
+
+    let status: BOMStatus = 'pending';
+    if (statusRaw) {
+      if (!IMPORT_STATUS_VALUES.includes(statusRaw as BOMStatus)) {
+        errors.push(`Status "${statusRaw}" is not valid`);
+      } else {
+        status = statusRaw as BOMStatus;
+      }
+    }
+
+    let unitPrice: number | undefined;
+    if (unitPriceRaw) {
+      const n = Number(unitPriceRaw);
+      if (Number.isNaN(n)) errors.push('Unit Price must be a number');
+      else unitPrice = n;
+    }
+
+    let leadTimeWeeks: number | undefined;
+    if (leadTimeRaw) {
+      const n = Number(leadTimeRaw);
+      if (Number.isNaN(n)) errors.push('Lead Time must be a number');
+      else leadTimeWeeks = n;
+    }
+
+    let quantity = 1;
+    if (!quantityRaw) {
+      errors.push('Missing Quantity');
+    } else {
+      const n = Number(quantityRaw);
+      if (Number.isNaN(n) || n <= 0) errors.push('Quantity must be a positive number');
+      else quantity = n;
+    }
+
+    const uom = uomRaw || 'EA';
+
+    const existingPart = partNumber
+      ? existingParts.find(p => p.partNumber.trim().toLowerCase() === partNumber.toLowerCase())
+      : undefined;
+
+    return {
+      rowNumber: i + 2,
+      partNumber, description, category, status,
+      manufacturer, mpn, supplier, unitPrice, leadTimeWeeks, quantity, uom,
+      existingPart,
+      errors,
+    };
+  });
+}

@@ -15,25 +15,34 @@ import { useECOList, useECOStats } from '@/hooks/useECOs';
 
 // ── KPI stat card ─────────────────────────────────────────────────────────────
 
+function softTint(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function StatCard({
-  label, value, sub, icon: Icon, iconColor, accent,
+  label, value, icon: Icon, iconColor, accent,
 }: {
-  label: string; value: number; sub: string;
+  label: string; value: number;
   icon: React.ElementType; iconColor: string; accent?: boolean;
 }) {
   return (
     <div className={cn(
-      'bg-card border rounded-lg p-4 flex-1 min-w-[140px]',
+      'bg-card border rounded-lg px-3.5 py-2.5 flex-1 min-w-[140px] flex items-center gap-2.5',
       accent ? 'border-blue-500/25' : 'border-border',
     )}>
-      <div className="flex justify-between items-start mb-2">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <Icon className="w-3.5 h-3.5" style={{ color: iconColor }} />
-      </div>
-      <div className="text-[26px] font-bold leading-tight mb-0.5" style={{ color: accent ? '#2563EB' : undefined }}>
-        {value}
-      </div>
-      <div className="text-[11px] text-muted-foreground">{sub}</div>
+      <span
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        style={{ backgroundColor: softTint(iconColor, 0.12) }}
+      >
+        <Icon className="w-4 h-4" style={{ color: iconColor }} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-lg font-bold leading-tight truncate" style={{ color: accent ? iconColor : undefined }}>
+          {value}
+        </span>
+        <span className="block text-[11px] text-muted-foreground truncate">{label}</span>
+      </span>
     </div>
   );
 }
@@ -42,13 +51,12 @@ function StatCard({
 
 function SkeletonStatCard() {
   return (
-    <div className="bg-card border border-border rounded-lg p-4 flex-1 min-w-[140px] animate-pulse">
-      <div className="flex justify-between items-start mb-3">
+    <div className="bg-card border border-border rounded-lg p-2.5 flex-1 min-w-[140px] flex items-center gap-2.5 animate-pulse">
+      <div className="w-8 h-8 rounded-lg bg-muted shrink-0" />
+      <div className="min-w-0 flex-1">
+        <div className="h-4 rounded bg-muted w-10 mb-1.5" />
         <div className="h-2.5 rounded bg-muted w-20" />
-        <div className="h-3.5 w-3.5 rounded bg-muted" />
       </div>
-      <div className="h-7 rounded bg-muted w-10 mb-1.5" />
-      <div className="h-2.5 rounded bg-muted w-28" />
     </div>
   );
 }
@@ -345,10 +353,10 @@ export function ECOListView({
             </>
           ) : (
             <>
-              <StatCard label="Open ECOs"           value={stats?.openEcos ?? 0}           sub="Across the program"     icon={GitMerge}       iconColor="#2563EB" accent />
-              <StatCard label="In Review"           value={stats?.inReview ?? 0}           sub="Awaiting sign-off"       icon={Clock}          iconColor="#F59E0B" />
-              <StatCard label="Awaiting My Action"  value={stats?.awaitingMyAction ?? 0}   sub="You are active approver" icon={ClipboardCheck} iconColor="#DC2626" />
-              <StatCard label="Released This Month" value={stats?.releasedThisMonth ?? 0}  sub="ECNs generated"          icon={GitBranch}      iconColor="#16A34A" />
+              <StatCard label="Open ECOs"           value={stats?.openEcos ?? 0}           icon={GitMerge}       iconColor="#2563EB" accent />
+              <StatCard label="In Review"           value={stats?.inReview ?? 0}           icon={Clock}          iconColor="#F59E0B" />
+              <StatCard label="Awaiting My Action"  value={stats?.awaitingMyAction ?? 0}   icon={ClipboardCheck} iconColor="#DC2626" />
+              <StatCard label="Released This Month" value={stats?.releasedThisMonth ?? 0}  icon={GitBranch}      iconColor="#16A34A" />
             </>
           )}
         </div>

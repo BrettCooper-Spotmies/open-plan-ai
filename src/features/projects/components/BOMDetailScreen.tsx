@@ -2,8 +2,8 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   ArrowLeft, GitMerge, SquarePen, ChevronRight, Factory, Hash,
   Truck, DollarSign, Tag, Clock, FileText, Box, Cpu, Image, Package,
-  ChevronDown, Check, History, User, MessageSquare, Send, Trash2, Pencil, X,
-  Plus, Search, Boxes,
+  ChevronDown, Check, History, User, MessageSquare, Send, Trash2, Pencil,
+  Plus, Boxes, FileSpreadsheet,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BOMDocuments } from './BOMDocuments';
@@ -11,211 +11,75 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, ApiPartResponse, fromApiRevision } from './bomData';
+import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, fromApiRevision } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMPartSheet, BOMPartPayload } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
-import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision, useOrgParts } from '@/hooks/useParts';
+import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
+import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision } from '@/hooks/useParts';
 import { useCreateBomNode, useUpdateBomNode } from '@/hooks/useBom';
 import { uploadBomDocumentFile } from '@/hooks/useBomDocuments';
 import { useCurrency } from '@/hooks/useCurrency';
 
 // ── Add Sub-component Dialog ───────────────────────────────────────
 function AddSubcomponentDialog({
-  open, onClose, parentNode, orgId,
-  onAdd, onCreateNew,
+  open, onClose, parentNode,
+  onCreateNew, onImportExcel,
 }: {
   open: boolean;
   onClose: () => void;
   parentNode: BOMNode;
-  orgId: string;
-  onAdd: (part: ApiPartResponse, qty: number, uom: string) => void;
   onCreateNew: () => void;
+  onImportExcel: () => void;
 }) {
-  const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<ApiPartResponse | null>(null);
-  const [qty, setQty] = useState('1');
-  const [uom, setUom] = useState('EA');
-
-  const { data: partsData, isLoading: partsLoading } = useOrgParts(orgId, search ? { search } : undefined);
-
-  const allParts = partsData?.data ?? [];
-
-  const filtered = useMemo(() => {
-    if (search) {
-      const q = search.toLowerCase();
-      return allParts.filter(p =>
-        p.partNumber.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)
-      ).slice(0, 50);
-    }
-    return allParts.slice(0, 50);
-  }, [allParts, search]);
-
-  const handleAdd = () => {
-    if (!selected) return;
-    onAdd(selected, parseFloat(qty) || 1, uom);
-    setSelected(null); setSearch(''); setQty('1'); setUom('EA');
-    onClose();
-  };
-
-  const UOM_OPTIONS = ['EA', 'SET', 'LIC', 'KG', 'M', 'PCS'];
-
   return (
     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
-      <DialogContent className="sm:max-w-[540px] p-0 gap-0 overflow-hidden flex flex-col max-h-[85vh]">
+      <DialogContent className="sm:max-w-[540px] p-0 gap-0 overflow-hidden flex flex-col">
         <DialogHeader className="px-5 pt-5 pb-3 border-b border-border shrink-0">
           <DialogTitle className="text-base font-semibold flex items-center gap-2">
             <Boxes className="w-4 h-4 text-primary" />
             Add Sub-component
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Attach an existing part to <span className="font-mono text-foreground">{parentNode.pn}</span>, or create a new one.
+            Choose how you'd like to add a sub-component to <span className="font-mono text-foreground">{parentNode.pn}</span>.
           </DialogDescription>
         </DialogHeader>
 
-        {/* Search */}
-        <div className="px-5 pt-3 pb-2 shrink-0">
-          <div className="flex items-center gap-2 bg-muted border border-border rounded-lg px-3 py-2">
-            <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search by part number or description…"
-              className="bg-transparent border-none outline-none text-sm text-foreground w-full placeholder:text-muted-foreground"
-              autoFocus
-            />
-            {search && (
-              <button onClick={() => setSearch('')} className="text-muted-foreground hover:text-foreground transition-colors">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Parts list */}
-        <div className="flex-1 overflow-y-auto px-5 pb-1 min-h-0">
-          {partsLoading ? (
-            <div className="space-y-1 py-1">
-              {[0, 1, 2, 3, 4].map(i => (
-                <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-transparent">
-                  <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Skeleton className="h-3 w-20" />
-                      <Skeleton className="h-4 w-14 rounded" />
-                    </div>
-                    <Skeleton className="h-3.5 w-40" />
-                  </div>
-                  <div className="text-right shrink-0">
-                    <Skeleton className="h-3.5 w-12 mb-1" />
-                    <Skeleton className="h-3 w-8 ml-auto" />
-                  </div>
-                  <Skeleton className="w-4 h-4 rounded-full shrink-0" />
-                </div>
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
-              <Search className="w-6 h-6 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">{search ? 'No matching parts found' : 'No parts in this organization yet'}</p>
-            </div>
-          ) : (
-            <div className="space-y-1">
-              {filtered.map(part => {
-                const meta = BOM_CAT_META[part.category] ?? BOM_CAT_META.assembly;
-                const isSelected = selected?.id === part.id;
-                const price = parseFloat(part.latestRevision?.price ?? '0');
-                const leadTime = Math.ceil((part.latestRevision?.leadTimeDays ?? 0) / 7);
-                return (
-                  <div
-                    key={part.id}
-                    onClick={() => setSelected(isSelected ? null : part)}
-                    className={cn(
-                      'flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer border transition-all',
-                      isSelected
-                        ? 'border-primary/40 bg-primary/5'
-                        : 'border-transparent hover:border-border hover:bg-muted/40'
-                    )}
-                  >
-                    <PartThumb cat={part.category} size={32} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-mono font-medium text-foreground">{part.partNumber}</span>
-                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded"
-                          style={{ background: `${meta.tint}18`, color: meta.tint }}>
-                          {meta.label.split(' ')[0]}
-                        </span>
-                      </div>
-                      <div className="text-xs text-foreground font-medium truncate">{part.description}</div>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-xs font-medium text-foreground">{formatCurrency(price)}</div>
-                      <div className="text-[10px] text-muted-foreground">{leadTime} wk</div>
-                    </div>
-                    <div className={cn(
-                      'w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center',
-                      isSelected ? 'border-primary bg-primary' : 'border-border'
-                    )}>
-                      {isSelected && <Check className="w-2.5 h-2.5 text-white" />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Qty + UOM (shown when something is selected) */}
-        {selected && (
-          <div className="px-5 py-3 border-t border-border bg-muted/20 shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <span className="text-xs text-muted-foreground shrink-0">Quantity:</span>
-                <Input
-                  type="number" value={qty} onChange={e => setQty(e.target.value)}
-                  className="h-7 w-20 text-sm bg-background border-border"
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                {UOM_OPTIONS.map(u => (
-                  <button key={u} onClick={() => setUom(u)}
-                    className={cn(
-                      'px-2 py-1 rounded text-[11px] font-medium border cursor-pointer transition-colors',
-                      uom === u ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border hover:bg-muted'
-                    )}>
-                    {u}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="px-5 py-3.5 border-t border-border flex items-center gap-2 bg-card shrink-0">
+        <div className="px-5 py-5 flex flex-col gap-3">
           <button
             onClick={() => { onClose(); onCreateNew(); }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="flex items-center gap-3 p-4 rounded-lg border border-border text-left hover:border-primary/40 hover:bg-primary/5 transition-colors"
           >
-            <Plus className="w-3.5 h-3.5" /> Create New Part
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Plus className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-foreground">Add Manually</div>
+              <div className="text-xs text-muted-foreground">Create one new part using the part details form.</div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
           </button>
-          <div className="flex-1" />
+
+          <button
+            onClick={() => { onClose(); onImportExcel(); }}
+            className="flex items-center gap-3 p-4 rounded-lg border border-border text-left hover:border-primary/40 hover:bg-primary/5 transition-colors"
+          >
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <FileSpreadsheet className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-foreground">Import from Excel</div>
+              <div className="text-xs text-muted-foreground">Bulk-add multiple parts at once from a spreadsheet.</div>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+          </button>
+        </div>
+
+        <div className="px-5 py-3.5 border-t border-border flex items-center justify-end bg-card shrink-0">
           <button onClick={onClose}
             className="px-3 py-1.5 rounded-md text-xs font-medium border border-border text-foreground hover:bg-muted transition-colors">
             Cancel
-          </button>
-          <button
-            onClick={handleAdd}
-            disabled={!selected}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold transition-colors',
-              selected
-                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                : 'bg-muted text-muted-foreground cursor-not-allowed'
-            )}
-          >
-            <Plus className="w-3.5 h-3.5" /> Add to BOM
           </button>
         </div>
       </DialogContent>
@@ -245,7 +109,7 @@ function getInitials(name: string) {
 
 function formatRelative(date: Date): string {
   const diff = (Date.now() - date.getTime()) / 1000;
-  if (diff < 5)  return 'Just now';
+  if (diff < 5) return 'Just now';
   if (diff < 60) return `${Math.floor(diff)}s ago`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
@@ -271,12 +135,12 @@ function seedNotes(pn: string, owner: string): BOMNote[] {
 }
 
 function NotesCard({ pn, owner }: { pn: string; owner: string }) {
-  const [notes, setNotes]       = useState<BOMNote[]>([]);
-  const [draft, setDraft]       = useState('');
-  const [editId, setEditId]     = useState<string | null>(null);
+  const [notes, setNotes] = useState<BOMNote[]>([]);
+  const [draft, setDraft] = useState('');
+  const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
-  const textareaRef             = useRef<HTMLTextAreaElement>(null);
-  const editRef                 = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -568,8 +432,9 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const [activeRevIdx, setActiveRevIdx] = useState(0);
   const [showEdit, setShowEdit] = useState(false);
   const [ecoOpen, setEcoOpen] = useState(false);
-  const [showAddSub, setShowAddSub]           = useState(false);
+  const [showAddSub, setShowAddSub] = useState(false);
   const [showCreateNewSub, setShowCreateNewSub] = useState(false);
+  const [showImportExcel, setShowImportExcel] = useState(false);
 
   // Point to latest revision whenever the node changes or revisions first load
   useEffect(() => {
@@ -577,11 +442,11 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   }, [originalNode.id, revHistory.length]);
 
   // ── Mutations ──
-  const createNode   = useCreateBomNode(projectId);
-  const updateNode   = useUpdateBomNode(projectId);
-  const createPart   = useCreatePart(orgId);
-  const updatePart   = useUpdatePart();
-  const createRev    = useCreateRevision();
+  const createNode = useCreateBomNode(projectId);
+  const updateNode = useUpdateBomNode(projectId);
+  const createPart = useCreatePart(orgId);
+  const updatePart = useUpdatePart();
+  const createRev = useCreateRevision();
 
   const activeRev = revHistory[activeRevIdx] ?? { rev: originalNode.rev, status: originalNode.status, price: originalNode.price, leadTime: originalNode.leadTime, date: '', author: '', changes: '' } as BOMRevision;
   const isLatest = revHistory.length === 0 || activeRevIdx === revHistory.length - 1;
@@ -600,22 +465,18 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const children = node.children ?? [];
   const extended = node.price * node.qty;
 
-  const handleAddSubcomponent = async (part: ApiPartResponse, qty: number, uom: string) => {
-    await createNode.mutateAsync({ partId: part.id, quantity: qty, unit: uom, parentId: originalNode.id });
-  };
-
   const handleNewSubSaved = async (payload: BOMPartPayload) => {
     const part = await createPart.mutateAsync({
-      partNumber:          payload.pn,
-      description:         payload.desc,
-      category:            payload.category,
-      manufacturer:        payload.manufacturer || undefined,
-      distributor:         payload.distributor || undefined,
-      mpn:                 payload.mpn || undefined,
-      unit:                payload.uom,
-      initialStatus:       payload.status,
-      initialRev:          payload.rev,
-      initialPrice:        payload.price > 0 ? payload.price : undefined,
+      partNumber: payload.pn,
+      description: payload.desc,
+      category: payload.category,
+      manufacturer: payload.manufacturer || undefined,
+      distributor: payload.distributor || undefined,
+      mpn: payload.mpn || undefined,
+      unit: payload.uom,
+      initialStatus: payload.status,
+      initialRev: payload.rev,
+      initialPrice: payload.price > 0 ? payload.price : undefined,
       initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime * 7 : undefined,
     });
     const node = await createNode.mutateAsync({
@@ -629,8 +490,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
 
   const typeText =
     bomTypeOf(originalNode) === 'top' ? 'Top-Level Assembly'
-    : bomTypeOf(originalNode) === 'catalog' ? 'Catalog Part'
-    : 'Sub-Assembly';
+      : bomTypeOf(originalNode) === 'catalog' ? 'Catalog Part'
+        : 'Sub-Assembly';
 
   // ── Save handler ──
   const handleSave = async (payload: BOMPartPayload) => {
@@ -720,7 +581,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             >
               <GitMerge className="w-3.5 h-3.5 text-muted-foreground" /> New ECO
             </button>
-            <button
+            {/* <button
               onClick={() => isLatest && setShowEdit(true)}
               disabled={!isLatest}
               title={isLatest ? 'Edit this part' : 'Switch to latest revision to edit'}
@@ -732,7 +593,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               )}
             >
               <SquarePen className="w-3.5 h-3.5" /> Edit Part
-            </button>
+            </button> */}
           </div>
         </div>
 
@@ -878,13 +739,13 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             <Card title="Sourcing">
               <div className="flex flex-col gap-3">
                 {[
-                  { label: 'Manufacturer',     value: node.manufacturer,                                      icon: 'Factory' },
-                  { label: 'Manufacturer PN',  value: node.mpn,                                               icon: 'Hash',   mono: true },
-                  { label: 'Supplier',         value: node.distributor,                                       icon: 'Truck' },
-                  { label: 'Unit Price',       value: formatCurrency(node.price),                            icon: 'DollarSign' },
-                  { label: 'Extended Price',   value: `${formatCurrency(extended)} · ${node.qty} ${node.uom}`,   icon: 'Tag' },
-                  { label: 'Lead Time',        value: `${node.leadTime} weeks`,                               icon: 'Clock' },
-                  { label: 'Handled By',       value: node.owner,                                             icon: 'User' },
+                  { label: 'Manufacturer', value: node.manufacturer, icon: 'Factory' },
+                  { label: 'Manufacturer PN', value: node.mpn, icon: 'Hash', mono: true },
+                  { label: 'Supplier', value: node.distributor, icon: 'Truck' },
+                  { label: 'Unit Price', value: formatCurrency(node.price), icon: 'DollarSign' },
+                  { label: 'Extended Price', value: `${formatCurrency(extended)} · ${node.qty} ${node.uom}`, icon: 'Tag' },
+                  { label: 'Lead Time', value: `${node.leadTime} weeks`, icon: 'Clock' },
+                  { label: 'Handled By', value: node.owner, icon: 'User' },
                 ].map((r, i) => {
                   const Ic = ICON_MAP[r.icon] ?? Package;
                   return (
@@ -1017,9 +878,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         open={showAddSub}
         onClose={() => setShowAddSub(false)}
         parentNode={node}
-        orgId={orgId}
-        onAdd={handleAddSubcomponent}
         onCreateNew={() => { setShowAddSub(false); setShowCreateNewSub(true); }}
+        onImportExcel={() => { setShowAddSub(false); setShowImportExcel(true); }}
       />
 
       {/* Create New Sub-component sheet */}
@@ -1029,6 +889,15 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         open={showCreateNewSub}
         onClose={() => setShowCreateNewSub(false)}
         onSave={handleNewSubSaved}
+      />
+
+      {/* Import Sub-components from Excel */}
+      <BOMImportSubcomponentsDialog
+        open={showImportExcel}
+        onClose={() => setShowImportExcel(false)}
+        parentNode={originalNode}
+        projectId={projectId}
+        orgId={orgId}
       />
 
       {/* Edit Part sheet */}
