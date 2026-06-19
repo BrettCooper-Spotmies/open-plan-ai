@@ -134,7 +134,7 @@ const mk = (o: Partial<Requirement>): Requirement => ({
 
 const groupOf = (key: string): ReqGroup => {
   const m = key.match(/^([A-Z]+)/);
-  let p = m ? m[1] : 'SYS';
+  const p = m ? m[1] : 'SYS';
   if (p === 'STKN' || p === 'STK') return 'STK';
   if (p === 'MEC' || p === 'ENV') return 'ENC';
   if (p === 'UI') return 'HMI';
