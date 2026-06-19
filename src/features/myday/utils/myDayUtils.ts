@@ -123,10 +123,10 @@ export function hasUnresolvedDependencies(task: Task, allTasks: Task[]): boolean
  * Get all tasks assigned to a user across all projects
  */
 export function getUserTasks(projects: Project[], userId: string): MyDayTask[] {
-  const allTasks: Task[] = projects.flatMap(p => p.tasks);
+  const allTasks: Task[] = projects.flatMap(p => p.tasks || []);
 
   return projects.flatMap(project =>
-    project.tasks
+    (project.tasks || [])
       .filter(task => {
         const isAssignedToUser = task.assignees?.some(a => a.id === userId) ?? false;
         const isDueToday = getDueDateStatus(task.dueDate) === 'today';
@@ -141,7 +141,7 @@ export function getUserTasks(projects: Project[], userId: string): MyDayTask[] {
           isOverdue: dueDateStatus === 'overdue',
           isDueToday: dueDateStatus === 'today',
           isBlockingOthers: isBlockingOthers(task, allTasks),
-          isBlocked: task.status === 'blocked' || task.blockedBy.length > 0,
+          isBlocked: task.status === 'blocked' || (task.blockedBy?.length ?? 0) > 0,
           hasUnresolvedDependencies: hasUnresolvedDependencies(task, allTasks),
         };
       })
@@ -214,12 +214,12 @@ export function mapIssueToMyDayItem(issue: Issue, project: Project): MyDayItem {
  * Get all items (tasks and issues) assigned to a user across all projects
  */
 export function getUserItems(projects: Project[], userId: string): MyDayItem[] {
-  const allTasks: Task[] = projects.flatMap(p => p.tasks);
+  const allTasks: Task[] = projects.flatMap(p => p.tasks || []);
   const items: MyDayItem[] = [];
 
   // Add tasks
   projects.forEach(project => {
-    project.tasks
+    (project.tasks || [])
       .filter(task => {
         const isAssignedToUser = task.assignees?.some(a => a.id === userId) ?? false;
         const isDueToday = getDueDateStatus(task.dueDate) === 'today';

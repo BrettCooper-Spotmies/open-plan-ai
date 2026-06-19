@@ -100,7 +100,7 @@ interface KanbanViewProps {
   allTasks?: Task[]; // All tasks for dependency resolution
   issues?: Issue[]; // Issues for blocking indicator
   assignableMembers?: TeamMember[];
-  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  onTaskCreate?: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>, files?: File[]) => void;
   onTaskUpdate?: (task: Task, onError?: () => void) => void;
   onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
@@ -109,13 +109,23 @@ interface KanbanViewProps {
   onAddModule?: () => void;
 }
 
-const defaultColumns: KanbanColumn[] = [
-  { id: 'col-dependencies', status: 'blocked', label: 'Dependencies', color: 'bg-status-blocked', isSpecial: true },
-  { id: 'col-todo', status: 'todo', label: 'To Do', color: 'bg-status-todo' },
-  { id: 'col-in-progress', status: 'in-progress', label: 'In Progress', color: 'bg-status-in-progress' },
-  { id: 'col-review', status: 'review', label: 'Review', color: 'bg-status-review' },
-  { id: 'col-done', status: 'done', label: 'Done', color: 'bg-status-done' },
-];
+import { DEFAULT_COLUMNS as SERVICE_DEFAULT_COLUMNS } from '@/services/projectTaskColumns.service';
+
+/** Renders a coloured dot that works with both hex colours and Tailwind classes. */
+function ColumnColorDot({ color }: { color: string }) {
+  if (color.startsWith('#') || color.startsWith('rgb')) {
+    return <span className="w-2.5 h-2.5 rounded-full shrink-0 inline-block" style={{ backgroundColor: color }} />;
+  }
+  return <span className={cn('w-2.5 h-2.5 rounded-full shrink-0 inline-block', color)} />;
+}
+
+const defaultColumns: KanbanColumn[] = SERVICE_DEFAULT_COLUMNS.map((c) => ({
+  id: c.id,
+  status: c.status,
+  label: c.label,
+  color: c.color,          // keep hex as-is; ColumnColorDot uses inline style
+  isSpecial: c.isSpecial,
+}));
 
 const priorityColors = {
   critical: 'bg-priority-critical text-white',
@@ -611,7 +621,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                               {isDependenciesColumn ? (
                                 <Link2 className="h-4 w-4 text-status-blocked" />
                               ) : (
-                                <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                                <ColumnColorDot color={column.color} />
                               )}
                               <h3 
                                 title={column.label}
@@ -995,8 +1005,8 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         onUpdate={(updated) => setNewTask(updated as unknown as Partial<Task>)}
         onBatchUpdate={handleBatchTaskUpdateLocal}
         mode="create"
-        onCreate={(newTask) => {
-          onTaskCreate?.(newTask as Omit<Task, 'id' | 'createdAt' | 'updatedAt'>);
+        onCreate={(newTask, pendingFiles) => {
+          onTaskCreate?.(newTask as Omit<Task, 'id' | 'createdAt' | 'updatedAt'>, pendingFiles);
           // Close and reset draft so next task starts empty
           setIsMaximizedAddTask(false);
           setNewTask(createEmptyTaskDraft());

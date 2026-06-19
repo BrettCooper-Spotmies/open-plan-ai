@@ -66,25 +66,39 @@ export function mapMember(
 }
 
 export function mapMessage(
-  dbMsg: DbMessage & { deleted_by_name?: string | null },
-  senderProfile: DbProfile | undefined
+  dbMsg: (DbMessage & { deleted_by_name?: string | null }) | any,
+  senderProfile: DbProfile | undefined | null
 ): ChatMessage {
+  // Handle both snake_case (Supabase/DB) and camelCase (SocketIO/REST API) shapes
+  const m = dbMsg as any;
+  const senderId = m.sender_id ?? m.senderId ?? m.sender?.id ?? '';
+  const conversationId = m.conversation_id ?? m.conversationId ?? '';
+  const createdAt = m.created_at ?? m.createdAt ?? new Date().toISOString();
+  const updatedAt = m.updated_at ?? m.updatedAt ?? createdAt;
+  const deletedAt = m.deleted_at ?? m.deletedAt ?? null;
+  const contentType = m.content_type ?? m.contentType ?? 'text';
+
+  // For SocketIO messages, sender info is nested in msg.sender
+  const senderName = senderProfile?.name ?? m.sender?.name ?? m.senderName ?? 'Unknown';
+  const senderAvatar = senderProfile?.avatar_url ?? m.sender?.avatarUrl ?? m.sender?.avatar_url ?? undefined;
+  const senderInitials = senderProfile?.initials ?? m.sender?.initials ?? senderName?.slice(0, 2)?.toUpperCase() ?? '??';
+
   return {
-    id: dbMsg.id,
-    conversationId: dbMsg.conversation_id,
-    senderId: dbMsg.sender_id,
-    senderName: senderProfile?.name ?? 'Unknown',
-    senderAvatar: senderProfile?.avatar_url ?? undefined,
-    senderInitials: senderProfile?.initials ?? '??',
-    contentType: dbMsg.content_type as MessageContentType,
-    content: dbMsg.content,
+    id: m.id,
+    conversationId,
+    senderId,
+    senderName,
+    senderAvatar,
+    senderInitials,
+    contentType: contentType as MessageContentType,
+    content: m.content,
     attachments: [],
-    createdAt: dbMsg.created_at,
-    updatedAt: dbMsg.updated_at,
-    isEdited: dbMsg.updated_at !== dbMsg.created_at && !dbMsg.deleted_at,
-    deletedAt: dbMsg.deleted_at ?? undefined,
-    deletedByName: dbMsg.deleted_by_name ?? undefined,
-    replyToMessageId: dbMsg.reply_to_message_id ?? undefined,
+    createdAt,
+    updatedAt,
+    isEdited: updatedAt !== createdAt && !deletedAt,
+    deletedAt: deletedAt ?? undefined,
+    deletedByName: m.deleted_by_name ?? m.deletedByName ?? undefined,
+    replyToMessageId: m.reply_to_message_id ?? m.replyToMessageId ?? undefined,
   };
 }
 

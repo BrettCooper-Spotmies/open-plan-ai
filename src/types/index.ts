@@ -215,6 +215,7 @@ export interface Project {
   clientContact?: string;
   notes?: string;
   departments?: string[];
+  myRole?: string;
   createdBy?: string;
   createdAt: string;
   updatedAt: string;
@@ -251,7 +252,7 @@ export interface Activity {
 export type ProjectView = 'kanban' | 'timeline' | 'list' | 'dependencies' | 'milestones' | 'issues';
 
 // NEW: Section-based navigation for project detail
-export type ProjectSection = 'tasks' | 'modules' | 'milestones' | 'issues';
+export type ProjectSection = 'tasks' | 'modules' | 'milestones' | 'issues' | 'bom' | 'eng-changes' | 'gate-reviews' | 'risk';
 export type TaskViewMode = 'kanban' | 'list';
 export type ModuleViewMode = 'kanban' | 'list';
 

@@ -8,15 +8,17 @@ import { chatService } from '@/services/chat.service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { ReachableUser } from '../types';
+import { logger } from '@/services/monitoring/logger';
 
 interface NewDMDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (conversationId: string) => void;
   onConversationCreated?: () => Promise<void>;
+  orgId?: string;
 }
 
-export function NewDMDialog({ open, onOpenChange, onSelect, onConversationCreated }: NewDMDialogProps) {
+export function NewDMDialog({ open, onOpenChange, onSelect, onConversationCreated, orgId }: NewDMDialogProps) {
   const [search, setSearch] = useState('');
   const [users, setUsers] = useState<ReachableUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -25,10 +27,10 @@ export function NewDMDialog({ open, onOpenChange, onSelect, onConversationCreate
     if (!open) return;
     setLoading(true);
     chatService
-      .getReachableUsers()
+      .getReachableUsers(orgId)
       .then(setUsers)
       .catch((err) => {
-        console.error('Failed to fetch users:', err);
+        logger.error('Failed to fetch users:', err);
         toast.error('Failed to load users');
       })
       .finally(() => setLoading(false));
@@ -47,7 +49,7 @@ export function NewDMDialog({ open, onOpenChange, onSelect, onConversationCreate
       onOpenChange(false);
       setSearch('');
     } catch (err) {
-      console.error('Failed to start DM:', err);
+      logger.error('Failed to start DM:', err);
       toast.error('Failed to start conversation');
     }
   };

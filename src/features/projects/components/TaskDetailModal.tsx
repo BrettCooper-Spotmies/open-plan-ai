@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { attachmentsService } from '@/services/attachments.service';
 import { format, isBefore, startOfToday, parseISO } from 'date-fns';
 import {
   Dialog,
@@ -61,8 +62,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
-import { supabase } from '@/integrations/supabase/client';
-import { attachmentsService } from '@/services/attachments.service';
 import { commentsService } from '@/services/comments.service';
 import { useNotifications } from '@/hooks/useNotifications';
 import {
@@ -79,6 +78,7 @@ import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { logger } from '@/services/monitoring/logger';
 
 // Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
 const toDateOnly = (date: Date | undefined | null): string | undefined => {
@@ -99,7 +99,7 @@ interface TaskDetailModalProps {
   onBatchUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => Promise<void> | void;
   onDelete?: (taskId: string) => void;
   mode?: 'view' | 'create';
-  onCreate?: (task: Task) => void;
+  onCreate?: (task: Task, pendingFiles?: File[]) => void;
   modules?: { id: string; name: string; type: ModuleType }[];
   projectId?: string;
   onAddModule?: () => void;
@@ -107,12 +107,21 @@ interface TaskDetailModalProps {
   statusOptions?: Array<{ value: string; label: string; color?: string }>;
 }
 
-const DEFAULT_STATUS_OPTIONS: { value: TaskStatus; label: string; color: string }[] = [
-  { value: 'todo', label: 'Not Started', color: 'bg-status-todo' },
-  { value: 'in-progress', label: 'In Progress', color: 'bg-status-in-progress' },
-  { value: 'review', label: 'In Review', color: 'bg-status-review' },
-  { value: 'blocked', label: 'Blocked', color: 'bg-status-blocked' },
-  { value: 'done', label: 'Completed', color: 'bg-status-done' },
+/** Renders a status colour dot that works for both hex colours and Tailwind classes. */
+function StatusDot({ color }: { color: string }) {
+  if (!color) return <span className="w-2 h-2 rounded-full inline-block bg-muted-foreground/60" />;
+  if (color.startsWith('#') || color.startsWith('rgb')) {
+    return <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ backgroundColor: color }} />;
+  }
+  return <span className={cn('w-2 h-2 rounded-full inline-block shrink-0', color)} />;
+}
+
+const DEFAULT_STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
+  { value: 'backlog',      label: 'Backlog',      color: 'bg-[#6b7280]' },
+  { value: 'todo',         label: 'To Do',        color: 'bg-[#3b82f6]' },
+  { value: 'in_progress',  label: 'In Progress',  color: 'bg-[#f59e0b]' },
+  { value: 'in_review',    label: 'In Review',    color: 'bg-[#8b5cf6]' },
+  { value: 'done',         label: 'Done',         color: 'bg-[#10b981]' },
 ];
 
 const priorityOptions: { value: Priority; label: string; color: string }[] = [
@@ -184,14 +193,13 @@ export const TaskDetailModal = ({
   assignableMembers,
   statusOptions: providedStatusOptions,
 }: TaskDetailModalProps) => {
-  const { profile } = useAuth();
+  const { user: profile } = useAuth();
   const { currentOrganization } = useOrganization();
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const { createNotification } = useNotifications();
   const availableAssignees = assignableMembers ?? organizationMembers;
   const currentOrganizationMembership = organizationMembers.find((m) => m.id === profile?.id);
   const currentOrganizationRole = (currentOrganizationMembership?.role || '').toLowerCase();
-  const canCreateModule = currentOrganizationRole === 'owner' || currentOrganizationRole === 'admin';
   const [editedTask, setEditedTask] = useState<Task>(task || {
     id: '',
     title: '',
@@ -223,6 +231,7 @@ export const TaskDetailModal = ({
   const [editingTagOriginal, setEditingTagOriginal] = useState<string | null>(null);
   const [pendingTagRenames, setPendingTagRenames] = useState<Array<{ from: string; to: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [initialTaskSnapshot, setInitialTaskSnapshot] = useState('');
@@ -367,8 +376,24 @@ export const TaskDetailModal = ({
       return;
     }
 
-    const baseTask = task || editedTask;
+    const baseTask = task || (mode === 'create' ? {
+      id: '',
+      title: '',
+      description: '',
+      status: 'todo' as const,
+      priority: 'medium' as const,
+      module: '' as ModuleType,
+      assignees: [],
+      tags: [],
+      checklist: [],
+      blockedBy: [],
+      comments: [],
+      attachments: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    } : editedTask);
     setEditedTask(baseTask);
+    setPendingFiles([]);
     setInitialTaskSnapshot(serializeTaskForDirtyCheck(baseTask));
     
     // Track initial blocked by items
@@ -427,6 +452,11 @@ export const TaskDetailModal = ({
   };
 
   const handleCreate = () => {
+    if (!editedTask.title?.trim()) {
+      toast.error('Task title is required');
+      return;
+    }
+
     if (!editedTask.moduleIds || editedTask.moduleIds.length === 0) {
       return;
     }
@@ -437,7 +467,8 @@ export const TaskDetailModal = ({
     }
 
     if (editedTask && onCreate) {
-      onCreate(editedTask);
+      onCreate(editedTask, pendingFiles.length > 0 ? pendingFiles : undefined);
+      setPendingFiles([]);
       onClose();
     }
   };
@@ -478,94 +509,56 @@ export const TaskDetailModal = ({
 
   // Attachment handlers
   const attachments = editedTask.attachments || [];
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
-
+    // In create mode queue files locally; they are uploaded after the task is saved
+    if (mode === 'create') {
+      setPendingFiles(prev => [...prev, ...Array.from(files)]);
+      if (e.target) e.target.value = '';
+      return;
+    }
     setIsUploading(true);
     try {
-      const newAttachments: Attachment[] = [];
-
-      for (const file of Array.from(files)) {
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Math.random().toString(36).substring(2)}-${Date.now()}.${fileExt}`;
-        const filePath = `${projectId || 'temp'}/${fileName}`;
-
-        // Upload to Supabase Storage
-        const { error: uploadError } = await supabase.storage
-          .from('project-files')
-          .upload(filePath, file);
-
-        if (uploadError) {
-          console.error('Error uploading file:', uploadError);
-          continue;
-        }
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('project-files')
-          .getPublicUrl(filePath);
-
-        // Create attachment record in the database if task exists
-        let attachmentId = `attachment-${Date.now()}-${Math.random()}`;
-        const uploadedBy: TeamMember = profile ? {
-          id: profile.id,
-          name: profile.name || profile.email,
-          email: profile.email,
-          initials: profile.initials,
-          avatar: profile.avatar_url || undefined,
-          role: profile.role || 'member'
-        } : {
-          id: 'unknown',
-          name: 'Unknown',
-          email: '',
-          initials: 'UN',
-          role: 'member',
-        };
-
-        if (mode !== 'create' && editedTask.id) {
-          try {
-            const dbAttachment = await attachmentsService.create({
-              entity_id: editedTask.id,
-              entity_type: 'task',
-              file_name: file.name,
-              file_path: filePath,
-              file_size: file.size,
-              mime_type: file.type,
-              project_id: projectId,
-            });
-            attachmentId = dbAttachment.id;
-            // Map db user to TeamMember if needed, but for now we keep the mock or use real user if we had one
-          } catch (dbError) {
-            console.error('Error creating attachment record in DB:', dbError);
-            // Even if DB fails, we have the file in storage and it will show in UI temporarily
-          }
-        }
-
-        const attachment: Attachment = {
-          id: attachmentId,
-          filename: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          uploadedBy: uploadedBy,
-          uploadedAt: new Date().toISOString(),
-          url: publicUrl,
-        };
-
-        newAttachments.push(attachment);
-      }
-
-      handleFieldChange('attachments', [...attachments, ...newAttachments]);
-    } catch (error) {
-      console.error('Error handling file upload:', error);
+      const results = await Promise.all(
+        Array.from(files).map(file =>
+          attachmentsService.upload({
+            entityId: editedTask.id,
+            entityType: 'task',
+            projectId: editedTask.projectId ?? projectId,
+            file,
+          })
+        )
+      );
+      handleFieldChange('attachments', [
+        ...attachments,
+        ...results.map(r => ({
+          id: r.id,
+          name: r.fileName ?? r.file_name ?? 'file',
+          url: r.fileUrl ?? r.url ?? '',
+          size: r.fileSize ?? r.file_size ?? 0,
+          type: r.mimeType ?? r.mime_type ?? '',
+          uploadedAt: r.createdAt ?? r.uploaded_at ?? new Date().toISOString(),
+        })),
+      ]);
+      toast.success(`${results.length} file(s) uploaded`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to upload file');
     } finally {
       setIsUploading(false);
+      if (e.target) e.target.value = '';
     }
   };
 
-  const handleRemoveAttachment = (attachmentId: string) => {
-    handleFieldChange('attachments', attachments.filter(a => a.id !== attachmentId));
+  const handleRemoveAttachment = async (attachmentId: string) => {
+    try {
+      await attachmentsService.delete(attachmentId);
+      handleFieldChange('attachments', attachments.filter((a: any) => a.id !== attachmentId));
+    } catch {
+      handleFieldChange('attachments', attachments.filter((a: any) => a.id !== attachmentId));
+    }
   };
 
   const hasSelectedModules = (editedTask.moduleIds || []).length > 0;
@@ -637,12 +630,12 @@ export const TaskDetailModal = ({
           author: {
             id: profile.id,
             name: profile.name || profile.email,
-            initials: profile.initials,
-            avatar: profile.avatar_url || undefined,
+            initials: profile.initials || '',
+            avatar: profile.avatarUrl || undefined,
             email: profile.email,
-            role: profile.role || 'member'
+            role: 'member'
           },
-          createdAt: dbComment.created_at || new Date().toISOString(),
+          createdAt: dbComment.createdAt || new Date().toISOString(),
         };
 
         setEditedTask(prev => ({
@@ -666,7 +659,7 @@ export const TaskDetailModal = ({
           });
         }
       } catch (error) {
-        console.error('Failed to add comment:', error);
+        logger.error('Failed to add comment:', error);
         setNewComment(content); // Restore content on error
       }
     } else {
@@ -855,7 +848,7 @@ export const TaskDetailModal = ({
       setPendingTagRenames([]);
       onClose();
     } catch (error) {
-      console.error('Failed to update task:', error);
+      logger.error('Failed to update task:', error);
     } finally {
       setIsSaving(false);
     }
@@ -914,7 +907,7 @@ export const TaskDetailModal = ({
   const getTaskById = (id: string) => {
     const taskFound = allTasks.find(t => t.id === id);
     if (!taskFound) {
-      console.warn(`Task with ID ${id} not found in allTasks`);
+      logger.warn(`Task with ID ${id} not found in allTasks`);
     }
     return taskFound;
   };
@@ -944,7 +937,7 @@ export const TaskDetailModal = ({
               <Input
                 value={editedTask.title}
                 onChange={(e) => handleFieldChange('title', e.target.value)}
-                className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0 bg-transparent"
+                className="text-base font-medium h-10"
                 placeholder="Task title..."
                 aria-required="true"
               />
@@ -1044,7 +1037,7 @@ export const TaskDetailModal = ({
                     <SelectTrigger aria-required="true">
                       <SelectValue>
                         <div className="flex items-center gap-2">
-                          <div className={cn('w-2 h-2 rounded-full', currentStatusColor)} />
+                          <StatusDot color={currentStatusColor} />
                           {currentStatusLabel}
                         </div>
                       </SelectValue>
@@ -1053,7 +1046,7 @@ export const TaskDetailModal = ({
                       {statusOptions.map((option) => (
                         <SelectItem key={option.value} value={option.value}>
                           <div className="flex items-center gap-2">
-                            <div className={cn('w-2 h-2 rounded-full', option.color)} />
+                            <StatusDot color={option.color} />
                             {option.label}
                           </div>
                         </SelectItem>
@@ -1142,7 +1135,7 @@ export const TaskDetailModal = ({
                               <div className="text-sm text-center py-2 text-muted-foreground">
                                 No modules found.
                               </div>
-                              {onAddModule && canCreateModule && (
+                              {onAddModule && (
                                 <button
                                   className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
                                   onClick={() => {
@@ -1175,7 +1168,10 @@ export const TaskDetailModal = ({
                                           module: isFirst ? module.type : prev.module,
                                           updatedAt: new Date().toISOString()
                                         };
-                                        onUpdate(updated);
+                                        // Only call onUpdate when editing an existing task, not during creation
+                                        if (mode !== 'create') {
+                                          onUpdate(updated);
+                                        }
                                         return updated;
                                       });
                                       setIsModulePopoverOpen(false);
@@ -1188,7 +1184,7 @@ export const TaskDetailModal = ({
                                   </CommandItem>
                                 ))}
                             </CommandGroup>
-                            {onAddModule && canCreateModule && (
+                            {onAddModule && (
                               <>
                                 <Separator />
                                 <CommandGroup>
@@ -1577,6 +1573,29 @@ export const TaskDetailModal = ({
                     </div>
                   );
                 })}
+
+                {/* Pending files (create mode only) */}
+                {mode === 'create' && pendingFiles.length > 0 && (
+                  <div className="space-y-1">
+                    {pendingFiles.map((f, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{f.name}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 <label className={cn(
                   "flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors",

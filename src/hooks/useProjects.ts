@@ -82,10 +82,18 @@ export function useUpdateProject() {
 
       return { previousProject };
     },
-    onError: (_err, { id }, context) => {
-      // Rollback on error
+    onError: (_err, { id, updates }, context) => {
+      // Only rollback the project-level fields that were being updated,
+      // never wipe out task/milestone/issue data (which lives in the same cache key).
       if (context?.previousProject) {
-        queryClient.setQueryData(queryKeys.projects.detail(id), context.previousProject);
+        queryClient.setQueryData(queryKeys.projects.detail(id), (current: any) => {
+          if (!current) return context.previousProject;
+          // Revert only the fields that were optimistically applied, keep tasks/milestones/issues.
+          const revertedFields = Object.fromEntries(
+            Object.keys(updates).map((k) => [k, (context.previousProject as any)[k]])
+          );
+          return { ...current, ...revertedFields };
+        });
       }
     },
     onSuccess: (updatedProject) => {
@@ -113,22 +121,3 @@ export function useDeleteProject() {
   });
 }
 
-/**
- * Fetch team members
- */
-export function useTeamMembers() {
-  return useQuery({
-    queryKey: queryKeys.team.members(),
-    queryFn: () => projectsService.getTeamMembers(),
-  });
-}
-
-/**
- * Fetch modules
- */
-export function useModules() {
-  return useQuery({
-    queryKey: queryKeys.modules.list(),
-    queryFn: () => projectsService.getModules(),
-  });
-}

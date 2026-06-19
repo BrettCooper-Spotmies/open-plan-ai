@@ -110,3 +110,5 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines.
 ## 📄 License
 
 MIT License - see LICENSE file for details.
+
+

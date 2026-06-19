@@ -1,5 +1,3 @@
-import { supabase } from '@/integrations/supabase/client';
-
 export interface ProjectTaskColumn {
   id: string;
   status: string;
@@ -8,62 +6,53 @@ export interface ProjectTaskColumn {
   isSpecial?: boolean;
 }
 
-interface ProjectTaskColumnRow {
-  column_id: string;
-  status: string;
-  label: string;
-  color: string;
-  is_special: boolean;
-  position: number;
+export const DEFAULT_COLUMNS: ProjectTaskColumn[] = [
+  { id: 'backlog',     status: 'backlog',     label: 'Backlog',     color: '#6b7280' },
+  { id: 'todo',        status: 'todo',        label: 'To Do',       color: '#3b82f6' },
+  { id: 'in-progress', status: 'in-progress', label: 'In Progress', color: '#f59e0b' },
+  { id: 'review',      status: 'review',      label: 'In Review',   color: '#8b5cf6' },
+  { id: 'done',        status: 'done',        label: 'Done',        color: '#10b981', isSpecial: true },
+];
+
+function storageKey(projectId: string) {
+  return `openplan_columns_${projectId}`;
 }
 
-const mapRowToColumn = (row: ProjectTaskColumnRow): ProjectTaskColumn => ({
-  id: row.column_id,
-  status: row.status,
-  label: row.label,
-  color: row.color,
-  isSpecial: row.is_special,
-});
+const STATUS_ALIAS: Record<string, string> = {
+  in_progress: 'in-progress',
+  in_review:   'review',
+};
+
+function migrateColumn(col: ProjectTaskColumn): ProjectTaskColumn {
+  const normalized = STATUS_ALIAS[col.status] ?? col.status;
+  return normalized !== col.status ? { ...col, status: normalized } : col;
+}
 
 export const projectTaskColumnsService = {
   async getByProjectId(projectId: string): Promise<ProjectTaskColumn[]> {
-    const { data, error } = await supabase
-      .from('project_task_columns')
-      .select('column_id, status, label, color, is_special, position')
-      .eq('project_id', projectId)
-      .order('position', { ascending: true });
-
-    if (error) throw error;
-    return (data || []).map(mapRowToColumn);
+    try {
+      const raw = localStorage.getItem(storageKey(projectId));
+      if (raw) {
+        const parsed = JSON.parse(raw) as ProjectTaskColumn[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map(migrateColumn);
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+    return DEFAULT_COLUMNS;
   },
 
-  async replaceForProject(projectId: string, columns: ProjectTaskColumn[]): Promise<ProjectTaskColumn[]> {
-    const { error: deleteError } = await supabase
-      .from('project_task_columns')
-      .delete()
-      .eq('project_id', projectId);
-
-    if (deleteError) throw deleteError;
-
-    if (columns.length === 0) return [];
-
-    const payload = columns.map((column, index) => ({
-      project_id: projectId,
-      column_id: column.id,
-      status: column.status,
-      label: column.label,
-      color: column.color,
-      is_special: column.isSpecial ?? false,
-      position: index,
-    }));
-
-    const { data, error } = await supabase
-      .from('project_task_columns')
-      .insert(payload)
-      .select('column_id, status, label, color, is_special, position')
-      .order('position', { ascending: true });
-
-    if (error) throw error;
-    return (data || []).map(mapRowToColumn);
+  async replaceForProject(
+    projectId: string,
+    columns: ProjectTaskColumn[]
+  ): Promise<ProjectTaskColumn[]> {
+    try {
+      localStorage.setItem(storageKey(projectId), JSON.stringify(columns));
+    } catch {
+      // ignore storage errors
+    }
+    return columns;
   },
 };

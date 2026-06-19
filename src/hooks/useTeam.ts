@@ -50,7 +50,8 @@ export function useCancelInvitation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (invitationId: string) => teamService.cancelInvitation(invitationId),
+    mutationFn: ({ invitationId, orgId }: { invitationId: string; orgId: string }) =>
+      teamService.cancelInvitation(invitationId, orgId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.team.all });
     },

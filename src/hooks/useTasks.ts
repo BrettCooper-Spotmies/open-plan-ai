@@ -1,23 +1,34 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { tasksService } from '@/services/tasks.service';
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { queryKeys } from '@/lib/queryClient';
 import { Task } from '@/types';
-import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { logger } from '@/services/monitoring/logger';
 
 /**
- * Fetch all tasks across all projects
+ * Fetch all tasks across all org projects — single aggregated endpoint,
+ * replaces the previous O(n) fan-out across individual project endpoints.
  */
 export function useAllTasks() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: queryKeys.tasks.all,
-    queryFn: () => tasksService.getAll(),
+    queryKey: [...queryKeys.tasks.all, 'org-all', orgId],
+    queryFn: (): Promise<Task[]> => {
+      if (!orgId) return Promise.resolve([]);
+      return apiClient.get<Task[]>(ENDPOINTS.ORGANIZATIONS.ALL_TASKS(orgId));
+    },
+    enabled: !!orgId,
   });
 }
 
 /**
- * Fetch all tasks for the current organization
+ * Alias — same single-endpoint implementation, kept for backward compatibility
+ * with components that import useOrgAllTasks.
  */
 export function useOrgAllTasks() {
   const { currentOrganization } = useOrganization();
@@ -25,22 +36,9 @@ export function useOrgAllTasks() {
 
   return useQuery({
     queryKey: [...queryKeys.tasks.all, 'org', orgId],
-    queryFn: async () => {
-      if (!orgId) return [];
-
-      // Step 1: Get all project IDs for this organization
-      const { data: projectRows } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('organization_id', orgId)
-        .is('deleted_at', null);
-
-      const projectIds = (projectRows || []).map(p => p.id);
-      if (projectIds.length === 0) return [];
-
-      // Step 2: Get all tasks for these projects
-      const allTasks = await tasksService.getAll();
-      return allTasks.filter(t => t.projectId && projectIds.includes(t.projectId));
+    queryFn: (): Promise<Task[]> => {
+      if (!orgId) return Promise.resolve([]);
+      return apiClient.get<Task[]>(ENDPOINTS.ORGANIZATIONS.ALL_TASKS(orgId));
     },
     enabled: !!orgId,
   });
@@ -52,13 +50,7 @@ export function useOrgAllTasks() {
 export function useProjectTasks(projectId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.tasks.list(projectId || ''),
-    queryFn: () => tasksService.getAll().then(tasks =>
-      tasks.filter(t => {
-        // Find which project this task belongs to
-        const store = useProjectStore.getState();
-        return store.projects.some(p => p.id === projectId && p.tasks.some(pt => pt.id === t.id));
-      })
-    ),
+    queryFn: () => tasksService.getByProject(projectId!),
     enabled: !!projectId,
   });
 }
@@ -141,7 +133,7 @@ export function useUpdateTask() {
           };
         }
         if (typeof old !== 'object' || !('id' in (old as object))) {
-          console.warn('[useTasks] setQueriesData: unexpected cache shape', typeof old);
+          logger.warn('[useTasks] setQueriesData: unexpected cache shape', typeof old);
         }
         return old;
       });
@@ -149,15 +141,13 @@ export function useUpdateTask() {
       return { previousTask, projectId };
     },
     onError: (_err, { projectId, taskId }, context) => {
-      // Rollback on error - would need to restore previous task state
-      console.error('Task update failed, rolling back', _err);
+      logger.error('Task update failed, rolling back', _err);
     },
     onSuccess: (updatedTask, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(updatedTask.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-      // Invalidate My Day queries to refresh the My Day page
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
   });

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ConversationSearch } from './ConversationSearch';
@@ -16,6 +17,7 @@ import { chatService } from '@/services/chat.service';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import type { Conversation } from '../types';
+import { logger } from '@/services/monitoring/logger';
 
 interface ConversationListProps {
   conversations: Conversation[];
@@ -27,6 +29,7 @@ interface ConversationListProps {
 
 export function ConversationList({ conversations, loading, onSelect, onConversationCreated, onlineUserIds }: ConversationListProps) {
   const isMobile = useIsMobile();
+  const { currentOrganization } = useOrganization();
   const { activeConversationId, conversationFilter, setConversationFilter, searchQuery, setSearchQuery, unreadCounts } = useChatStore();
   const [dmDialogOpen, setDmDialogOpen] = useState(false);
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
@@ -65,7 +68,7 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
       onSelect(convId);
       setSearchQuery(''); // Clear search after selection
     } catch (err) {
-      console.error('Failed to start DM:', err);
+      logger.error('Failed to start DM:', err);
       toast.error('Failed to start conversation');
     } finally {
       setIsCreatingDM(false);
@@ -163,8 +166,8 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
         </div>
       </ScrollArea>
 
-      <NewDMDialog open={dmDialogOpen} onOpenChange={setDmDialogOpen} onSelect={onSelect} onConversationCreated={onConversationCreated} />
-      <NewGroupDialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen} onSelect={onSelect} onConversationCreated={onConversationCreated} />
+      <NewDMDialog open={dmDialogOpen} onOpenChange={setDmDialogOpen} onSelect={onSelect} onConversationCreated={onConversationCreated} orgId={currentOrganization?.id} />
+      <NewGroupDialog open={groupDialogOpen} onOpenChange={setGroupDialogOpen} onSelect={onSelect} onConversationCreated={onConversationCreated} orgId={currentOrganization?.id} />
     </div>
   );
 }

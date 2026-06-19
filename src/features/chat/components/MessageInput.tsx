@@ -3,8 +3,9 @@ import { Send, Paperclip, Loader2, X, Smile, File as FileIcon } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { useChatStore } from '../stores/useChatStore';
 import { chatService } from '@/services/chat.service';
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { ConversationMember, ChatMessage } from '../types';
 import { cn } from '@/lib/utils';
@@ -14,6 +15,7 @@ import data from '@emoji-mart/data';
 import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 import { WifiOff, Clock } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { logger } from '@/services/monitoring/logger';
 
 interface MessageInputProps {
   conversationId: string;
@@ -204,52 +206,17 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     setPendingFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const sendFileMessage = async (file: File, text?: string) => {
-    const ext = file.name.split('.').pop() || 'bin';
-    const path = `${conversationId}/${crypto.randomUUID()}.${ext}`;
-
-    const { error: uploadErr } = await supabase.storage
-      .from('chat-attachments')
-      .upload(path, file);
-    if (uploadErr) throw uploadErr;
-
-    const fileData = buildFileContent({
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType: file.type,
-      storagePath: path,
-      text: text || undefined,
-    });
-
-    if (sendMessage) {
-      await sendMessage('', 'file', fileData, replyingTo?.id);
-    } else {
-      const userId = user?.id;
-      if (!userId) throw new Error('Not authenticated');
-      let error: any = null;
-      ({ error } = await supabase
-        .from('chat_messages')
-        .insert({
-          conversation_id: conversationId,
-          sender_id: userId,
-          content: JSON.stringify(fileData),
-          content_type: 'file',
-          reply_to_message_id: replyingTo?.id || null,
-        } as any));
-      const missingReplyColumn =
-        !!error && typeof error.message === 'string' && /reply_to_message_id|column .* does not exist/i.test(error.message);
-      if (missingReplyColumn) {
-        ({ error } = await supabase
-          .from('chat_messages')
-          .insert({
-            conversation_id: conversationId,
-            sender_id: userId,
-            content: JSON.stringify(fileData),
-            content_type: 'file',
-          }));
-      }
-      if (error) throw error;
-    }
+  const sendFileMessage = async (file: File, caption?: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (caption) formData.append('caption', caption);
+    if (replyingTo?.id) formData.append('replyToMessageId', replyingTo.id);
+    const res = await apiClient.raw.post<{ success: boolean; data: any }>(
+      `${ENDPOINTS.CONVERSATIONS.FILE_MESSAGE(conversationId)}`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return res.data.data;
   };
 
   const handleSend = async () => {
@@ -274,7 +241,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
         setPendingFiles([]);
         toast.info('📵 Saved offline — will send when you reconnect');
       } catch (err) {
-        console.error('[MessageInput] Offline queue failed:', err);
+        logger.error('[MessageInput] Offline queue failed:', err);
         toast.error('Failed to save message offline. Please try again.');
       }
       return;
@@ -308,7 +275,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
               description: trimmed.length > 100 ? trimmed.substring(0, 97) + '...' : trimmed,
             });
           } catch (notifErr) {
-            console.warn('[MessageInput] Failed to create mention notification:', notifErr);
+            logger.warn('[MessageInput] Failed to create mention notification:', notifErr);
           }
         }
       });
@@ -316,7 +283,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
       onMessageSent?.();
       onCancelReply?.();
     } catch (err) {
-      console.error('Failed to send message:', err);
+      logger.error('Failed to send message:', err);
       toast.error('Failed to send message');
       setDraft(conversationId, trimmed);
     } finally {

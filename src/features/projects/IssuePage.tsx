@@ -7,6 +7,7 @@ import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useIssue, useUpdateIssue, useDeleteIssue } from '@/hooks/useIssues';
 import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { logger } from '@/services/monitoring/logger';
 
 export default function IssuePage() {
   const { projectId, issueId } = useParams();
@@ -86,7 +87,7 @@ export default function IssuePage() {
       });
       navigate(`/projects/${projectId}?tab=issues`);
     } catch (error) {
-      console.error('Failed to update issue:', error);
+      logger.error('Failed to update issue:', error);
     }
   };
 
@@ -98,7 +99,7 @@ export default function IssuePage() {
       });
       navigate(`/projects/${projectId}?tab=issues`);
     } catch (error) {
-      console.error('Failed to delete issue:', error);
+      logger.error('Failed to delete issue:', error);
     }
   };
 

@@ -1,23 +1,34 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { issuesService } from '@/services/issues.service';
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
 import { useProjectStore } from '@/stores/useProjectStore';
 import { queryKeys } from '@/lib/queryClient';
 import { Issue } from '@/types';
-import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { logger } from '@/services/monitoring/logger';
 
 /**
- * Fetch all issues across all projects
+ * Fetch all issues across all org projects — single aggregated endpoint,
+ * replaces the previous O(n) fan-out across individual project endpoints.
  */
 export function useAllIssues() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: queryKeys.issues.all,
-    queryFn: () => issuesService.getAll(),
+    queryKey: [...queryKeys.issues.all, 'org-all', orgId],
+    queryFn: (): Promise<Issue[]> => {
+      if (!orgId) return Promise.resolve([]);
+      return apiClient.get<Issue[]>(ENDPOINTS.ORGANIZATIONS.ALL_ISSUES(orgId));
+    },
+    enabled: !!orgId,
   });
 }
 
 /**
- * Fetch all issues for the current organization
+ * Alias — same single-endpoint implementation, kept for backward compatibility
+ * with components that import useOrgAllIssues.
  */
 export function useOrgAllIssues() {
   const { currentOrganization } = useOrganization();
@@ -25,22 +36,9 @@ export function useOrgAllIssues() {
 
   return useQuery({
     queryKey: [...queryKeys.issues.all, 'org', orgId],
-    queryFn: async () => {
-      if (!orgId) return [];
-
-      // Step 1: Get all project IDs for this organization
-      const { data: projectRows } = await supabase
-        .from('projects')
-        .select('id')
-        .eq('organization_id', orgId)
-        .is('deleted_at', null);
-
-      const projectIds = (projectRows || []).map(p => p.id);
-      if (projectIds.length === 0) return [];
-
-      // Step 2: Get all issues for these projects
-      const allIssues = await issuesService.getAll();
-      return allIssues.filter(i => i.projectId && projectIds.includes(i.projectId));
+    queryFn: (): Promise<Issue[]> => {
+      if (!orgId) return Promise.resolve([]);
+      return apiClient.get<Issue[]>(ENDPOINTS.ORGANIZATIONS.ALL_ISSUES(orgId));
     },
     enabled: !!orgId,
   });
@@ -52,9 +50,7 @@ export function useOrgAllIssues() {
 export function useProjectIssues(projectId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.issues.list(projectId),
-    queryFn: () => issuesService.getAll().then(issues =>
-      issues.filter(i => i.projectId === projectId)
-    ),
+    queryFn: () => issuesService.getByProject(projectId!),
     enabled: !!projectId,
   });
 }
@@ -74,9 +70,13 @@ export function useIssue(issueId: string | undefined) {
  * Fetch open issues count
  */
 export function useOpenIssuesCount() {
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
+
   return useQuery({
-    queryKey: queryKeys.issues.openCount(),
-    queryFn: () => issuesService.getOpenCount(),
+    queryKey: [...queryKeys.issues.openCount(), orgId],
+    queryFn: () => issuesService.getOpenCount(orgId),
+    enabled: !!orgId,
   });
 }
 
@@ -119,7 +119,7 @@ export function useUpdateIssue() {
       // Snapshot the previous value
       const previousIssue = queryClient.getQueryData(queryKeys.issues.detail(issueId));
 
-      // Optimically update the store
+      // Optimistically update the store
       const timestamp = (updates.status === 'resolved' || updates.status === 'closed') ? new Date().toISOString() : undefined;
       const issueUpdates = { ...updates, resolvedAt: timestamp };
       updateIssue(projectId, issueId, issueUpdates);
@@ -148,7 +148,7 @@ export function useUpdateIssue() {
           };
         }
         if (typeof old !== 'object' || !('id' in (old as object))) {
-          console.warn('[useIssues] setQueriesData: unexpected cache shape', typeof old);
+          logger.warn('[useIssues] setQueriesData: unexpected cache shape', typeof old);
         }
         return old;
       });
@@ -156,7 +156,7 @@ export function useUpdateIssue() {
       return { previousIssue, projectId };
     },
     onError: (_err, { projectId, issueId }, context) => {
-      console.error('Issue update failed, rolling back', _err);
+      logger.error('Issue update failed, rolling back', _err);
     },
     onSuccess: (updatedIssue, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.all });

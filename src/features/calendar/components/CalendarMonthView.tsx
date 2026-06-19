@@ -22,9 +22,9 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
   onEventClick,
 }) => {
   return (
-    <div className="flex flex-col h-full">
+    <div className="h-full flex flex-col">
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 border-b border-border">
+      <div className="grid grid-cols-7 border-b border-border shrink-0">
         {WEEKDAY_HEADERS.map((day) => (
           <div
             key={day}
@@ -35,8 +35,8 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
         ))}
       </div>
 
-      {/* Calendar grid */}
-      <div className="grid grid-cols-7 flex-1 min-h-0 auto-rows-fr">
+      {/* Calendar grid — rows share available height equally */}
+      <div className="flex-1 min-h-0 grid grid-cols-7 auto-rows-[1fr]">
         {days.map((day, index) => {
           const dayEvents = getEventsForDate(events, day.date);
           const visibleEvents = dayEvents.slice(0, MAX_VISIBLE_EVENTS);
@@ -47,7 +47,7 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
               key={index}
               className={cn(
                 'min-w-0 p-1 border-b border-r border-border cursor-pointer transition-colors',
-                'flex flex-col h-full overflow-hidden',
+                'flex flex-col overflow-hidden',
                 'hover:bg-accent/30',
                 !day.isCurrentMonth && 'bg-muted/30',
                 day.isToday && 'bg-primary/5'
@@ -68,7 +68,7 @@ export const CalendarMonthView: React.FC<CalendarMonthViewProps> = ({
               </div>
 
               {/* Events */}
-              <div className="space-y-0.5 flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-0.5 pb-0.5">
+              <div className="flex-1 min-h-0 space-y-0.5 overflow-y-auto custom-scrollbar pr-0.5 pb-0.5">
                 {visibleEvents.map((event) => (
                   <CalendarEventPreview key={event.id} event={event}>
                     <div onClick={(e) => { e.stopPropagation(); onEventClick(event); }}>

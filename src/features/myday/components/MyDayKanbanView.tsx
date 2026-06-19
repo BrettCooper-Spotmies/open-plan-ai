@@ -15,6 +15,7 @@ import {
 } from '../utils/myDayUtils';
 import { MyDayGroupBy, TaskStatus } from '@/types';
 import { toast } from 'sonner';
+import { logger } from '@/services/monitoring/logger';
 
 interface KanbanColumn {
   id: string;
@@ -168,7 +169,7 @@ export function MyDayKanbanView({
         if (source.droppableId !== destination.droppableId) {
           const prevTasks = [...localTasks];
           Promise.resolve(onStatusUpdate(draggableId, newStatus)).catch((err) => {
-            console.error('Status update failed', err);
+            logger.error('Status update failed', err);
             setLocalTasks(prevTasks);
             toast.error('Failed to update status');
           });

@@ -1,89 +1,54 @@
-import { supabase } from '@/integrations/supabase/client';
-import { Database } from '@/integrations/supabase/types';
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
 
-export type Notification = Database['public']['Tables']['notifications']['Row'];
-export type NotificationType = Database['public']['Enums']['notification_type'];
+export interface Notification {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  description: string | null;
+  read: boolean;
+  projectId: string | null;
+  entityId: string | null;
+  entityType: string | null;
+  createdAt: string;
+  project?: { id: string; name: string } | null;
+}
+
+export type NotificationType = string;
 
 export const notificationsService = {
-    async getAllByUserId(userId: string) {
-        const { data, error } = await supabase
-            .from('notifications')
-            .select('*, projects(name)')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false });
+  async getAll(): Promise<Notification[]> {
+    return apiClient.get(ENDPOINTS.NOTIFICATIONS.LIST);
+  },
 
-        if (error) throw error;
-        return data as any[];
-    },
+  async markAsRead(id: string): Promise<void> {
+    await apiClient.patch(ENDPOINTS.NOTIFICATIONS.READ(id), {});
+  },
 
-    async markAsRead(notificationId: string) {
-        const { error } = await supabase
-            .from('notifications')
-            .update({ read: true })
-            .eq('id', notificationId);
+  async markAllAsRead(): Promise<void> {
+    await apiClient.post(ENDPOINTS.NOTIFICATIONS.READ_ALL, {});
+  },
 
-        if (error) throw error;
-    },
+  async delete(id: string): Promise<void> {
+    await apiClient.delete(ENDPOINTS.NOTIFICATIONS.DELETE(id));
+  },
 
-    async markAllAsRead(userId: string) {
-        const { error } = await supabase
-            .from('notifications')
-            .update({ read: true })
-            .eq('user_id', userId)
-            .eq('read', false);
+  // Backend creates notifications server-side
+  async create(_: unknown): Promise<Notification> {
+    throw new Error('Notifications are created server-side');
+  },
 
-        if (error) throw error;
-    },
+  // Legacy compat
+  async getAllByUserId(_userId: string): Promise<Notification[]> {
+    return this.getAll();
+  },
 
-    async delete(notificationId: string) {
-        const { error } = await supabase
-            .from('notifications')
-            .delete()
-            .eq('id', notificationId);
+  async markAllAsReadByUserId(_userId: string): Promise<void> {
+    return this.markAllAsRead();
+  },
 
-        if (error) throw error;
-    },
-
-    async deleteAllRead(userId: string) {
-        const { error } = await supabase
-            .from('notifications')
-            .delete()
-            .eq('user_id', userId)
-            .eq('read', true);
-
-        if (error) throw error;
-    },
-
-    async create(notification: {
-        user_id: string;
-        actor_id?: string;
-        type: NotificationType;
-        title: string;
-        description: string; // Changed from content to description to match DB schema
-        project_id?: string;
-        conversation_id?: string;
-        entity_id?: string;
-        entity_type?: string;
-    }) {
-        // Keep backward compatibility with callers that still pass legacy fields
-        // but only insert columns that exist on the notifications table.
-        const payload = {
-            user_id: notification.user_id,
-            actor_id: notification.actor_id ?? null,
-            type: notification.type,
-            title: notification.title,
-            description: notification.description,
-            project_id: notification.project_id ?? null,
-            conversation_id: notification.conversation_id ?? null,
-        };
-
-        const { data, error } = await supabase
-            .from('notifications')
-            .insert(payload)
-            .select()
-            .single();
-
-        if (error) throw error;
-        return data;
-    }
+  async deleteAllRead(_userId: string): Promise<void> {
+    // No backend endpoint yet
+  },
 };

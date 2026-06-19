@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { defaultUserSettings } from '@/data/mockData';
 import { UserSettings } from '@/types';
+import { defaultPreferences as defaultUserSettings } from '@/stores/useUserStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,6 +64,9 @@ import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useUserStore } from '@/stores/useUserStore';
 import { getPasswordRequirements } from '@/lib/passwordValidation';
+import { resolveFileUrl } from '@/utils/fileUrl';
+import { logger } from '@/services/monitoring/logger';
+import { SUPPORTED_CURRENCIES } from '@/hooks/useCurrency';
 
 type ThemePreference = 'light' | 'dark' | 'system';
 
@@ -78,7 +81,8 @@ function normalizeTheme(value: unknown): ThemePreference {
 const Settings = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, profile, refreshProfile, updatePassword, deleteAccount } = useAuth();
+  const { user, refreshProfile, updatePassword, deleteAccount } = useAuth();
+  const profile = user;
   const { currentOrganization, refreshOrganizations, createOrganization, isLoading: orgContextLoading } = useOrganization();
   const { theme, changeTheme } = useAppTheme();
   const preferences = useUserStore((s) => s.preferences);
@@ -110,15 +114,16 @@ const Settings = () => {
   const [orgForm, setOrgForm] = useState({
     name: '',
     description: '',
-    companyName: '',
     companySize: '',
     timezone: 'America/New_York',
     dateFormat: 'MM/DD/YYYY',
+    currency: 'USD',
     logoUrl: '',
   });
   const [orgLoading, setOrgLoading] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
-  const [currentOrgRole, setCurrentOrgRole] = useState<'owner' | 'admin' | 'member' | null>(null);
+  const [localAvatarPreview, setLocalAvatarPreview] = useState<string | null>(null);
+  const currentOrgRole = (currentOrganization?.myRole ?? null) as 'admin' | 'manager' | 'member' | 'viewer' | null;
 
   // New organization creation state
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
@@ -129,9 +134,11 @@ const Settings = () => {
 
   // Password form state
   const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -172,46 +179,17 @@ const Settings = () => {
         ...prev,
         name: currentOrganization.name || '',
         description: currentOrganization.description || '',
-        companyName: settings.companyName || '',
         companySize: settings.companySize || '',
         timezone: settings.timezone || 'America/New_York',
         dateFormat: settings.dateFormat || 'MM/DD/YYYY',
-        logoUrl: settings.logoUrl || prev.logoUrl, // Preserve local logoUrl if server hasn't updated yet
+        currency: settings.currency || 'USD',
+        logoUrl: resolveFileUrl(settings.logoUrl) ?? settings.logoUrl ?? prev.logoUrl,
       }));
     }
   }, [currentOrganization]);
 
-  useEffect(() => {
-    let mounted = true;
 
-    const loadCurrentOrgRole = async () => {
-      if (!user?.id || !currentOrganization?.id) {
-        if (mounted) setCurrentOrgRole(null);
-        return;
-      }
-
-      try {
-        const memberships = await organizationsService.getMemberOrganizations(user.id);
-        const membership = memberships.find((m) => m.organization_id === currentOrganization.id);
-        const resolvedRole =
-          membership?.role === 'owner' || membership?.role === 'admin' || membership?.role === 'member'
-            ? membership.role
-            : null;
-        if (mounted) setCurrentOrgRole(resolvedRole);
-      } catch (error) {
-        console.error('Error loading organization role:', error);
-        if (mounted) setCurrentOrgRole(null);
-      }
-    };
-
-    void loadCurrentOrgRole();
-
-    return () => {
-      mounted = false;
-    };
-  }, [user?.id, currentOrganization?.id]);
-
-  const canEditOrganizationSettings = currentOrgRole === 'owner' || currentOrgRole === 'admin';
+  const canEditOrganizationSettings = currentOrgRole === 'admin' || currentOrgRole === 'manager';
   const roleLabel = currentOrgRole ? currentOrgRole.charAt(0).toUpperCase() + currentOrgRole.slice(1) : 'Member';
 
   const handleCreateOrganization = async () => {
@@ -226,7 +204,7 @@ const Settings = () => {
       toast.success('Workspace created successfully');
       setNewOrgForm({ name: '', description: '' });
     } catch (error) {
-      console.error('Error creating workspace:', error);
+      logger.error('Error creating workspace:', error);
       toast.error('Failed to create workspace');
     } finally {
       setIsCreatingOrg(false);
@@ -246,24 +224,22 @@ const Settings = () => {
 
     setOrgLoading(true);
     try {
-      // Update organization name and description
+      // Single PUT — name, description, and settings in one request
       await organizationsService.update(currentOrganization.id, {
         name: orgForm.name,
-        description: orgForm.description,
-      });
-
-      // Update organization settings
-      await organizationsService.updateSettings(currentOrganization.id, {
-        companyName: orgForm.companyName,
-        companySize: orgForm.companySize,
-        timezone: orgForm.timezone,
-        dateFormat: orgForm.dateFormat,
+        description: orgForm.description || null,
+        settings: {
+          companySize: orgForm.companySize,
+          timezone: orgForm.timezone,
+          dateFormat: orgForm.dateFormat,
+          currency: orgForm.currency,
+        },
       });
 
       await refreshOrganizations();
       toast.success('Workspace settings saved');
     } catch (error) {
-      console.error('Error saving workspace settings:', error);
+      logger.error('Error saving workspace settings:', error);
       const maybe = error as { code?: string; message?: string; details?: string };
       const isPermissionLikeError =
         maybe?.code === 'PGRST116' ||
@@ -291,7 +267,7 @@ const Settings = () => {
       await refreshProfile();
       toast.success('Profile updated successfully');
     } catch (error) {
-      console.error('Error saving profile:', error);
+      logger.error('Error saving profile:', error);
       toast.error('Failed to update profile');
     } finally {
       setProfileLoading(false);
@@ -310,18 +286,26 @@ const Settings = () => {
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error('File size must be less than 2MB');
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File size must be less than 5MB');
         return;
       }
+
+      // Show local preview immediately
+      const localPreview = URL.createObjectURL(file);
+      setLocalAvatarPreview(localPreview);
 
       setAvatarLoading(true);
       try {
         await profileService.uploadAvatar(file);
         await refreshProfile();
+        URL.revokeObjectURL(localPreview);
+        setLocalAvatarPreview(null);
         toast.success('Avatar updated successfully');
       } catch (error) {
-        console.error('Error uploading avatar:', error);
+        URL.revokeObjectURL(localPreview);
+        setLocalAvatarPreview(null);
+        logger.error('Error uploading avatar:', error);
         toast.error('Failed to upload avatar');
       } finally {
         setAvatarLoading(false);
@@ -339,23 +323,31 @@ const Settings = () => {
 
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (file.size > 2 * 1024 * 1024) {
-        toast.error('File size must be less than 2MB');
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File size must be less than 5MB');
         return;
       }
+
+      // Show local preview immediately
+      const localPreview = URL.createObjectURL(file);
+      setOrgForm(prev => ({ ...prev, logoUrl: localPreview }));
 
       setLogoLoading(true);
       try {
         const logoUrl = await organizationsService.uploadLogo(currentOrganization.id, file);
+        // Replace local blob URL with the permanent server URL
+        URL.revokeObjectURL(localPreview);
         setOrgForm(prev => ({ ...prev, logoUrl }));
         await refreshOrganizations();
         toast.success('Organization logo updated successfully');
       } catch (error) {
-        console.error('Error uploading logo:', error);
+        // Revert preview on failure
+        URL.revokeObjectURL(localPreview);
+        setOrgForm(prev => ({ ...prev, logoUrl: '' }));
+        logger.error('Error uploading logo:', error);
         toast.error('Failed to upload logo');
       } finally {
         setLogoLoading(false);
-        // Reset file input to allow re-uploading the same file
         if (logoInputRef.current) {
           logoInputRef.current.value = '';
         }
@@ -378,7 +370,7 @@ const Settings = () => {
       await refreshOrganizations();
       toast.success('Organization logo removed');
     } catch (error) {
-      console.error('Error removing logo:', error);
+      logger.error('Error removing logo:', error);
       toast.error('Failed to remove logo');
     } finally {
       setLogoLoading(false);
@@ -401,15 +393,20 @@ const Settings = () => {
 
     setPasswordLoading(true);
     try {
-      const { error } = await updatePassword(passwordForm.newPassword);
+      if (!passwordForm.currentPassword) {
+        toast.error('Please enter your current password');
+        setPasswordLoading(false);
+        return;
+      }
+      const { error } = await updatePassword(passwordForm.currentPassword, passwordForm.newPassword);
       if (error) {
         toast.error(error.message);
       } else {
         toast.success('Password updated successfully');
-        setPasswordForm({ newPassword: '', confirmPassword: '' });
+        setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       }
     } catch (error) {
-      console.error('Error updating password:', error);
+      logger.error('Error updating password:', error);
       toast.error('Failed to update password');
     } finally {
       setPasswordLoading(false);
@@ -433,7 +430,7 @@ const Settings = () => {
         navigate('/login');
       }
     } catch (error) {
-      console.error('Error deleting account:', error);
+      logger.error('Error deleting account:', error);
       toast.error('Failed to delete account');
     } finally {
       setDeleteLoading(false);
@@ -576,7 +573,7 @@ const Settings = () => {
                             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                           ) : orgForm.logoUrl ? (
                             <img
-                              src={orgForm.logoUrl}
+                              src={resolveFileUrl(orgForm.logoUrl) ?? orgForm.logoUrl}
                               alt="Organization logo"
                               className="h-full w-full object-contain"
                             />
@@ -638,16 +635,6 @@ const Settings = () => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="company-name">Company Name</Label>
-                        <Input
-                          id="company-name"
-                          value={orgForm.companyName}
-                          onChange={(e) => setOrgForm({ ...orgForm, companyName: e.target.value })}
-                          placeholder="e.g. Acme Corp"
-                          disabled={!canEditOrganizationSettings}
-                        />
-                      </div>
-                      <div className="space-y-2">
                         <Label htmlFor="company-size">Company Size</Label>
                         <Select
                           value={orgForm.companySize}
@@ -707,6 +694,23 @@ const Settings = () => {
                           </SelectContent>
                         </Select>
                       </div>
+                      <div className="space-y-2">
+                        <Label>Currency</Label>
+                        <Select
+                          value={orgForm.currency}
+                          onValueChange={(value) => setOrgForm({ ...orgForm, currency: value })}
+                          disabled={!canEditOrganizationSettings}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SUPPORTED_CURRENCIES.map(c => (
+                              <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                     <Button onClick={handleSaveGeneral} disabled={orgLoading || !canEditOrganizationSettings}>
                       {orgLoading ? (
@@ -735,15 +739,18 @@ const Settings = () => {
                 <CardContent className="space-y-6">
                   <div className="flex items-center gap-6">
                     <Avatar className="h-20 w-20">
-                      {avatarLoading ? (
+                      {avatarLoading && !localAvatarPreview ? (
                         <AvatarFallback className="bg-primary/10">
                           <Loader2 className="h-6 w-6 animate-spin" />
                         </AvatarFallback>
-                      ) : profile?.avatar_url ? (
-                        <AvatarImage src={profile.avatar_url} alt={profile.name} />
+                      ) : localAvatarPreview || profile?.avatar_url || (profile as any)?.avatarUrl ? (
+                        <AvatarImage
+                          src={localAvatarPreview || resolveFileUrl(profile?.avatar_url || (profile as any)?.avatarUrl) || profile?.avatar_url || ''}
+                          alt={profile?.name || 'Avatar'}
+                        />
                       ) : (
                         <AvatarFallback className="bg-primary/10 text-primary text-2xl">
-                          {profileForm.initials || 'U'}
+                          {profileForm.initials || profile?.name?.slice(0, 2).toUpperCase() || 'U'}
                         </AvatarFallback>
                       )}
                     </Avatar>
@@ -1038,6 +1045,27 @@ const Settings = () => {
                       </p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="current-password">Current Password</Label>
+                        <div className="relative">
+                          <Input
+                            id="current-password"
+                            type={showCurrentPassword ? "text" : "password"}
+                            value={passwordForm.currentPassword}
+                            onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                            placeholder="Enter current password"
+                            className="pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                            aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                          >
+                            {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
                       <div className="space-y-2">
                         <Label htmlFor="new-password">New Password</Label>
                         <div className="relative">

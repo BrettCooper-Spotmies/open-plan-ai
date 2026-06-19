@@ -88,31 +88,30 @@ const Team = () => {
     return role.trim().toLowerCase();
   };
 
-  const handleMessageClick = async (memberId: string) => {
-    if (memberId === user?.id) return;
+  const handleMessageClick = async (targetUserId: string) => {
+    if (!targetUserId || targetUserId === user?.id) return;
     try {
-      setIsStartingChat(memberId);
-      const convId = await chatService.getOrCreateDM(memberId);
+      setIsStartingChat(targetUserId);
+      const convId = await chatService.getOrCreateDM(targetUserId);
       navigate(`/chat/${convId}`);
-    } catch (err) {
-      console.error('Failed to start chat:', err);
-      toast.error('Failed to start chat');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start chat');
     } finally {
       setIsStartingChat(null);
     }
   };
 
-  // Check if current user is admin/owner
-  const currentMember = teamMembers?.find(m => m.id === user?.id);
-  const isOwner = normalizeRole(currentMember?.role) === 'owner';
+  // Check if current user has management privileges
+  const currentMember = teamMembers?.find(m => m.userId === user?.id || m.email === user?.email);
   const isAdminOrOwner = (() => {
     const role = normalizeRole(currentMember?.role);
-    return role === 'admin' || role === 'owner';
+    return role === 'admin' || role === 'manager';
   })();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteEmailError, setInviteEmailError] = useState('');
   const [inviteRole, setInviteRole] = useState('');
   const [inviteDepartment, setInviteDepartment] = useState('');
   const [manageOrgMember, setManageOrgMember] = useState<TeamMember | null>(null);
@@ -140,17 +139,23 @@ const Team = () => {
     departments: [...new Set(members.map((m) => m.department).filter(Boolean))].length,
   };
 
-  const handleInvite = async () => {
-    if (!inviteEmail || !inviteRole) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
+  const validateInviteEmail = (email: string): string => {
+    if (!email) return 'Email address is required';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email address';
+    return '';
+  };
 
-    if (!currentOrganization) {
-      toast.error('No organization selected');
+  const handleInvite = async () => {
+    const emailError = validateInviteEmail(inviteEmail);
+    if (emailError) {
+      setInviteEmailError(emailError);
       return;
     }
-    if (!currentOrganization.id) {
+    if (!inviteRole) {
+      toast.error('Please select a role');
+      return;
+    }
+    if (!currentOrganization?.id) {
       toast.error('No organization selected');
       return;
     }
@@ -176,6 +181,7 @@ const Team = () => {
         );
         setIsInviteDialogOpen(false);
         setInviteEmail('');
+        setInviteEmailError('');
         setInviteRole('');
         setInviteDepartment('');
         return;
@@ -184,20 +190,30 @@ const Team = () => {
       toast.success(`Invitation sent to ${inviteEmail}`);
       setIsInviteDialogOpen(false);
       setInviteEmail('');
+      setInviteEmailError('');
       setInviteRole('');
       setInviteDepartment('');
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error && err.message
-          ? err.message
-          : 'Failed to send invitation';
-      toast.error(message);
+    } catch (err: any) {
+      // err.message is already the most specific message (extracted by apiClient's extractApiError)
+      const apiMessage = typeof err?.message === 'string' && err.message
+        ? err.message
+        : 'Failed to send invitation. Please try again.';
+
+      const lower = apiMessage.toLowerCase();
+      if (lower.includes('already a member')) {
+        toast.info(`${inviteEmail} is already a member of this organization.`);
+      } else if (lower.includes('already exists') || lower.includes('already pending') || lower.includes('conflict')) {
+        toast.info(`Invitation already sent — a pending invitation already exists for ${inviteEmail}.`);
+      } else {
+        toast.error(apiMessage);
+      }
     }
   };
 
   const handleCancelInvite = async (invitationId: string) => {
+    if (!currentOrganization) return;
     try {
-      await cancelInviteMutation.mutateAsync(invitationId);
+      await cancelInviteMutation.mutateAsync({ invitationId, orgId: currentOrganization.id });
       toast.success('Invitation cancelled');
     } catch (err) {
       toast.error('Failed to cancel invitation');
@@ -232,7 +248,7 @@ const Team = () => {
     if (!editMember || !currentOrganization) return;
     try {
       await updateMemberMutation.mutateAsync({
-        memberId: editMember.id,
+        memberId: editMember.userId,
         orgId: currentOrganization.id,
         updates: { role: editRole, department: editDepartment || undefined },
       });
@@ -259,7 +275,7 @@ const Team = () => {
   }
 
   if (!currentMember) {
-    return <Navigate to="/projects" replace />;
+    return <Navigate to="/" replace />;
   }
 
   if (error) {
@@ -279,7 +295,7 @@ const Team = () => {
       <div className="space-y-6">
         {isAdminOrOwner && (
           <div className="flex justify-end">
-            <Dialog open={isInviteDialogOpen} onOpenChange={setIsInviteDialogOpen}>
+            <Dialog open={isInviteDialogOpen} onOpenChange={(open) => { setIsInviteDialogOpen(open); if (!open) { setInviteEmail(''); setInviteEmailError(''); setInviteRole(''); setInviteDepartment(''); } }}>
               <DialogTrigger asChild>
                 <Button>
                   <UserPlus className="h-4 w-4 mr-2" />
@@ -301,8 +317,15 @@ const Team = () => {
                       type="email"
                       placeholder="colleague@company.com"
                       value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
+                      onChange={(e) => {
+                        setInviteEmail(e.target.value);
+                        if (inviteEmailError) setInviteEmailError('');
+                      }}
+                      className={inviteEmailError ? 'border-destructive focus-visible:ring-destructive' : ''}
                     />
+                    {inviteEmailError && (
+                      <p className="text-xs text-destructive">{inviteEmailError}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="role">Role *</Label>
@@ -311,8 +334,9 @@ const Team = () => {
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="manager">Manager</SelectItem>
                         <SelectItem value="member">Member</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="viewer">Viewer</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -465,16 +489,29 @@ const Team = () => {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
+                        {member.avatar_url && (
+                          <img src={member.avatar_url} alt={member.name} className="h-full w-full rounded-full object-cover" />
+                        )}
                         <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">
-                          {member.initials}
+                          {member.initials || member.name?.slice(0, 2).toUpperCase() || '?'}
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <p className="font-medium text-sm">{member.name}</p>
+                        <p className="font-medium text-sm">{member.name || member.email}</p>
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="capitalize text-sm font-medium">{member.role}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={
+                      member.role === 'admin' ? 'border-purple-500/50 text-purple-600 bg-purple-500/10' :
+                      member.role === 'manager' ? 'border-blue-500/50 text-blue-600 bg-blue-500/10' :
+                      member.role === 'member' ? 'border-green-500/50 text-green-600 bg-green-500/10' :
+                      member.role === 'viewer' ? 'border-gray-500/50 text-gray-500 bg-gray-500/10' :
+                      ''
+                    }>
+                      {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{member.email}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className={getStatusColor(member.status)}>
@@ -496,19 +533,19 @@ const Team = () => {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {!isOwner && member.id !== user?.id && (
+                      {member.userId !== user?.id && (
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8"
-                          onClick={() => handleMessageClick(member.id)}
-                          disabled={isStartingChat === member.id}
+                          onClick={() => handleMessageClick(member.userId)}
+                          disabled={isStartingChat === member.userId}
                           title="Message"
                         >
                           <MessageSquare className="h-4 w-4" />
                         </Button>
                       )}
-                      {isAdminOrOwner && member.role !== 'owner' && (
+                      {isAdminOrOwner && member.userId !== user?.id && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -526,7 +563,7 @@ const Team = () => {
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-destructive"
-                              onClick={() => handleRemove(member.id)}
+                              onClick={() => handleRemove(member.userId)}
                             >
                               <Trash2 className="h-4 w-4 mr-2" />
                               Remove
@@ -586,18 +623,19 @@ const Team = () => {
               <Select
                 value={editRole}
                 onValueChange={setEditRole}
-                disabled={editMember?.id === user?.id}
+                disabled={editMember?.userId === user?.id}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="owner">Owner</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
                 </SelectContent>
               </Select>
-              {editMember?.id === user?.id && (
+              {editMember?.userId === user?.id && (
                 <p className="text-xs text-muted-foreground">You cannot change your own role.</p>
               )}
             </div>

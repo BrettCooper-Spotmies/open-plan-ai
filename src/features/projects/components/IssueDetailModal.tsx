@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { logger } from '@/services/monitoring/logger';
 
 interface IssueDetailModalProps {
   issue: Issue | null;
@@ -108,7 +109,7 @@ export function IssueDetailModal({
                   const projectId = pathParts[projectIndex + 1];
                   navigate(`/projects/${projectId}/issues/${editedIssue.id}`);
                 } else {
-                  console.warn("Could not determine project ID from URL");
+                  logger.warn("Could not determine project ID from URL");
                 }
                 onClose();
               }}

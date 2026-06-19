@@ -73,7 +73,7 @@ export default function Projects() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const { currentOrganization } = useOrganization();
+  const { currentOrganization, isLoading: orgLoading } = useOrganization();
   const { data: projects, isLoading, error } = useProjects();
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const [view, setView] = useState<'grid' | 'list'>('grid');
@@ -91,7 +91,8 @@ export default function Projects() {
 
   const projectList = projects || [];
   const currentMembership = organizationMembers.find((member) => member.id === user?.id);
-  const canCreateProject = (currentMembership?.role || '').toLowerCase() === 'owner';
+  const myRole = (currentOrganization?.myRole || currentMembership?.role || '').toLowerCase();
+  const canCreateProject = myRole === 'admin' || myRole === 'manager';
 
   useEffect(() => {
     if (isMobile && view !== 'list') {
@@ -124,7 +125,10 @@ export default function Projects() {
     navigate(`/projects/${projectId}/edit`);
   };
 
-  if (isLoading) {
+  // Show the skeleton while the org is still resolving too — otherwise the
+  // org-scoped projects query is disabled (isLoading=false) and we briefly flash
+  // the "No projects found" empty state before the real loading shimmer.
+  if (orgLoading || isLoading) {
     return <AppLayoutSkeleton variant="projects" />;
   }
 
@@ -228,7 +232,7 @@ export default function Projects() {
                   ? isMobile
                     ? 'Tap the + button above to create your first project.'
                     : 'Use the New Project button above to get started.'
-                  : 'Only organization owners can create projects.'
+                  : 'Only organization admins and managers can create projects.'
                 : 'Try adjusting your search query'}
             </p>
           </div>
@@ -497,7 +501,7 @@ export default function Projects() {
                       {projectLinks.map((link: any) => (
                         <div key={link.id} className="flex items-center gap-2 p-2 rounded-md bg-muted/50">
                           <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm flex-1">{link.name || link.title}</span>
+                          <span className="text-sm flex-1">{link.title || link.name}</span>
                           {link.url && (
                             <a
                               href={link.url}

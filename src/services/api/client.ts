@@ -1,105 +1,181 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { config } from '@/config';
-import { logger } from '@/services/monitoring/logger';
 
-const API_BASE_URL = config.api.baseUrl;
+// ─── Auth model ───────────────────────────────────────────────────────────────
+//
+// Backend-managed httpOnly cookies:
+//   Access token  → httpOnly cookie `accessToken`  (set by backend, ~15m)
+//   Refresh token → httpOnly cookie `refreshToken` (set by backend, ~7d)
+//
+// The browser sends both automatically (withCredentials: true). JavaScript never
+// reads or stores tokens, so there is no token storage here. On a 401 the
+// interceptor calls /auth/refresh (cookie sent automatically); the backend
+// rotates the cookies and the original request is retried.
+
+// ─── Refresh queue ────────────────────────────────────────────────────────────
+
+let isRedirectingToLogin = false;
+let isRefreshing = false;
+let refreshSubscribers: Array<() => void> = [];
+
+function subscribeTokenRefresh(cb: () => void): void {
+  refreshSubscribers.push(cb);
+}
+
+function onTokenRefreshed(): void {
+  refreshSubscribers.forEach((cb) => cb());
+  refreshSubscribers = [];
+}
+
+function onRefreshFailed(): void {
+  refreshSubscribers = [];
+}
+
+function redirectToLogin(): void {
+  if (!isRedirectingToLogin && !window.location.pathname.includes('/login')) {
+    isRedirectingToLogin = true;
+    window.location.href = '/login';
+  }
+}
+
+// ─── Axios instance ───────────────────────────────────────────────────────────
+
+interface RetryableRequest extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
+
+const axiosInstance: AxiosInstance = axios.create({
+  baseURL: config.api.baseUrl,
+  timeout: 15000,
+  headers: { 'Content-Type': 'application/json' },
+  // Required so the browser sends the httpOnly auth cookies on every request.
+  withCredentials: true,
+});
+
+// Response interceptor — silent token refresh on 401.
+// No Authorization header is set: the access token is an httpOnly cookie the
+// browser attaches automatically.
+axiosInstance.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config as RetryableRequest;
+
+    if (!error.response || error.response.status !== 401 || originalRequest._retry) {
+      return Promise.reject(error);
+    }
+
+    // Skip refresh for auth endpoints to avoid infinite loops
+    const skipRefreshUrls = [
+      '/auth/refresh',
+      '/auth/login',
+      '/auth/register',
+      '/auth/forgot-password',
+      '/auth/reset-password',
+      '/auth/send-otp',
+      '/auth/verify-otp',
+    ];
+    const shouldSkipRefresh = skipRefreshUrls.some((ep) => originalRequest.url?.includes(ep));
+
+    if (shouldSkipRefresh) {
+      redirectToLogin();
+      return Promise.reject(error);
+    }
+
+    if (isRefreshing) {
+      return new Promise<AxiosResponse>((resolve) => {
+        subscribeTokenRefresh(() => {
+          originalRequest._retry = true;
+          resolve(axiosInstance(originalRequest));
+        });
+      });
+    }
+
+    originalRequest._retry = true;
+    isRefreshing = true;
+
+    try {
+      // POST /auth/refresh with NO body — the browser sends the httpOnly
+      // refresh-token cookie automatically. The backend rotates both cookies.
+      await axios.post(`${config.api.baseUrl}/auth/refresh`, {}, { withCredentials: true });
+
+      isRefreshing = false;
+      onTokenRefreshed();
+      return axiosInstance(originalRequest);
+    } catch (refreshError) {
+      isRefreshing = false;
+      onRefreshFailed();
+      redirectToLogin();
+      return Promise.reject(refreshError);
+    }
+  },
+);
+
+// ─── Error extraction ─────────────────────────────────────────────────────────
+
+function extractApiError(err: unknown): Error {
+  const e = err as {
+    response?: {
+      data?: {
+        error?: { details?: Array<{ message?: string }>; message?: string };
+        message?: string;
+      };
+    };
+    message?: string;
+  };
+
+  const body = e?.response?.data;
+  if (body) {
+    const detail = body?.error?.details?.[0]?.message;
+    if (typeof detail === 'string' && detail) {
+      return Object.assign(new Error(detail), { response: (err as { response?: unknown }).response });
+    }
+    const msg = body?.error?.message ?? body?.message;
+    if (typeof msg === 'string' && msg) {
+      return Object.assign(new Error(msg), { response: (err as { response?: unknown }).response });
+    }
+  }
+  return err instanceof Error ? err : new Error('An unexpected error occurred');
+}
+
+// ─── ApiClient ────────────────────────────────────────────────────────────────
 
 class ApiClient {
-  private client: AxiosInstance;
-
-  constructor() {
-    this.client = axios.create({
-      baseURL: API_BASE_URL,
-      timeout: 10000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    this.setupInterceptors();
+  async get<T>(url: string, cfg?: AxiosRequestConfig): Promise<T> {
+    try {
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.get(url, cfg);
+      return res.data.data;
+    } catch (err) { throw extractApiError(err); }
   }
 
-  private setupInterceptors() {
-    // Request interceptor
-    this.client.interceptors.request.use(
-      (reqConfig) => {
-        logger.apiCall(reqConfig.method?.toUpperCase() || 'GET', reqConfig.url || '');
-        // Add auth token if available
-        const token = localStorage.getItem('auth_token');
-        if (token) {
-          reqConfig.headers.Authorization = `Bearer ${token}`;
-        }
-        return reqConfig;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
-
-    // Response interceptor
-    this.client.interceptors.response.use(
-      (response) => {
-        logger.apiCall(
-          response.config.method?.toUpperCase() || 'GET',
-          response.config.url || '',
-          response.status
-        );
-        return response;
-      },
-      (error: AxiosError) => {
-        logger.error('API Error', {
-          url: error.config?.url,
-          method: error.config?.method?.toUpperCase(),
-          status: error.response?.status,
-          message: error.message,
-        });
-        // Handle common errors
-        if (error.response?.status === 401) {
-          // Handle unauthorized
-          localStorage.removeItem('auth_token');
-          // Only redirect if not already on auth pages
-          if (!window.location.pathname.includes('/login')) {
-            window.location.href = '/login';
-          }
-        }
-        
-        if (error.response?.status === 403) {
-          console.error('Forbidden: You do not have permission to access this resource');
-        }
-        
-        if (error.response?.status === 500) {
-          console.error('Server error occurred');
-        }
-        
-        return Promise.reject(error);
-      }
-    );
+  async post<T>(url: string, data?: unknown, cfg?: AxiosRequestConfig): Promise<T> {
+    try {
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.post(url, data, cfg);
+      return res.data.data;
+    } catch (err) { throw extractApiError(err); }
   }
 
-  async get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.get(url, config);
-    return response.data;
+  async put<T>(url: string, data?: unknown, cfg?: AxiosRequestConfig): Promise<T> {
+    try {
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.put(url, data, cfg);
+      return res.data.data;
+    } catch (err) { throw extractApiError(err); }
   }
 
-  async post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.post(url, data, config);
-    return response.data;
+  async patch<T>(url: string, data?: unknown, cfg?: AxiosRequestConfig): Promise<T> {
+    try {
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.patch(url, data, cfg);
+      return res.data.data;
+    } catch (err) { throw extractApiError(err); }
   }
 
-  async put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.put(url, data, config);
-    return response.data;
+  async delete<T>(url: string, cfg?: AxiosRequestConfig): Promise<T> {
+    try {
+      const res: AxiosResponse<{ success: boolean; data: T }> = await axiosInstance.delete(url, cfg);
+      return res.data.data;
+    } catch (err) { throw extractApiError(err); }
   }
 
-  async patch<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.patch(url, data, config);
-    return response.data;
-  }
-
-  async delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
-    const response: AxiosResponse<T> = await this.client.delete(url, config);
-    return response.data;
-  }
+  get raw() { return axiosInstance; }
 }
 
 export const apiClient = new ApiClient();

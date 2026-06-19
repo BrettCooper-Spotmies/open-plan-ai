@@ -12,8 +12,10 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
 import { OrganizationSettings } from '@/services/organizations.service';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import { toast } from 'sonner';
 
 const mainNavItems = [{
@@ -72,22 +74,20 @@ export function AppSidebar() {
       setCurrentUserRole(null);
       return;
     }
-    supabase
-      .from('organization_members')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('organization_id', currentOrganization.id)
-      .single()
-      .then(({ data }) => {
-        setCurrentUserRole(data?.role || null);
-      });
+    apiClient
+      .get<{ role: string }[]>(ENDPOINTS.ORGANIZATIONS.MEMBERS(currentOrganization.id))
+      .then((members) => {
+        const me = members.find((m: any) => m.userId === user.id || m.user_id === user.id);
+        setCurrentUserRole(me?.role || null);
+      })
+      .catch(() => setCurrentUserRole(null));
   }, [user?.id, currentOrganization?.id]);
 
-  const canCreateOrg = currentUserRole === 'owner' || currentUserRole === 'admin';
+  const canCreateOrg = currentOrganization?.myRole === 'admin' || currentOrganization?.myRole === 'manager' || currentUserRole === 'admin' || currentUserRole === 'manager';
   const organizationNavItems = teamNavItems;
 
   const orgSettings = (currentOrganization?.settings || {}) as OrganizationSettings;
-  const orgLogo = orgSettings.logoUrl;
+  const orgLogo = resolveFileUrl(orgSettings.logoUrl) ?? orgSettings.logoUrl ?? null;
   const companyName = orgSettings.companyName;
 
   const isActive = (path: string) => {
@@ -185,6 +185,7 @@ export function AppSidebar() {
                 ) : (
                   organizations.map((org) => {
                     const settings = (org.settings || {}) as OrganizationSettings;
+                    const resolvedLogoUrl = resolveFileUrl(settings.logoUrl) ?? settings.logoUrl ?? null;
                     const isSelected = currentOrganization?.id === org.id;
                     return (
                       <button
@@ -193,8 +194,8 @@ export function AppSidebar() {
                         className={`flex items-center gap-3 w-full px-3 py-2 text-left transition-colors hover:bg-accent/50 ${isSelected ? 'bg-accent' : ''}`}
                       >
                         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 border border-primary/20 overflow-hidden">
-                          {settings.logoUrl ? (
-                            <img src={settings.logoUrl} alt="" className="h-full w-full object-cover" />
+                          {resolvedLogoUrl ? (
+                            <img src={resolvedLogoUrl} alt="" className="h-full w-full object-cover" />
                           ) : (
                             <Building2 className="h-3.5 w-3.5 text-primary" />
                           )}

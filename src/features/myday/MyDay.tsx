@@ -16,6 +16,7 @@ import { useUpdateTask, useBatchUpdateTasks } from '@/hooks/useTasks';
 import { useUpdateIssue } from '@/hooks/useIssues';
 import { useProjects } from '@/hooks/useProjects';
 import { toast } from 'sonner';
+import { logger } from '@/services/monitoring/logger';
 
 export default function MyDay() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -64,22 +65,30 @@ export default function MyDay() {
           updates: { status },
         });
       } else {
-        const issueStatusMap: Record<TaskStatus, IssueStatus> = {
-          'todo': 'open',
+        // 'review' has no meaningful IssueStatus equivalent, so it is not
+        // a valid drop target for issue cards. Only map statuses that have
+        // a clear 1-to-1 IssueStatus counterpart.
+        const issueStatusMap: Partial<Record<TaskStatus, IssueStatus>> = {
+          'todo':        'open',
           'in-progress': 'investigating',
-          'review': 'investigating',
-          'done': 'resolved',
-          'blocked': 'investigating'
+          'done':        'resolved',
+          'blocked':     'investigating',
+          // 'review' intentionally omitted — no equivalent IssueStatus exists.
         };
+        const mappedStatus = issueStatusMap[status];
+        if (!mappedStatus) {
+          toast.error(`Cannot set an issue to "${status}" status.`);
+          return;
+        }
         await updateIssueMutation.mutateAsync({
           projectId: item.projectId,
           issueId: taskId,
-          updates: { status: issueStatusMap[status] },
+          updates: { status: mappedStatus },
         });
       }
       toast.success(`${item.itemType === 'task' ? 'Task' : 'Issue'} status updated`);
     } catch (error) {
-      console.error(`Failed to update ${item.itemType} status:`, error);
+      logger.error(`Failed to update ${item.itemType} status:`, error);
       toast.error(`Failed to update ${item.itemType} status`);
     }
   };
@@ -110,7 +119,7 @@ export default function MyDay() {
         });
       }
     } catch (error) {
-      console.error('Failed to toggle checklist item:', error);
+      logger.error('Failed to toggle checklist item:', error);
       toast.error('Failed to update checklist');
     }
   };
@@ -137,7 +146,7 @@ export default function MyDay() {
       // Usually IssueDetailModal calls onUpdate. 
       // If we want to behave like TaskDetailModal, we just update.
     } catch (error) {
-      console.error('Failed to update issue:', error);
+      logger.error('Failed to update issue:', error);
       toast.error('Failed to update issue');
     }
   };
@@ -252,7 +261,7 @@ export default function MyDay() {
                 toast.success('Task updated');
               }
             } catch (error) {
-              console.error('Failed to update task:', error);
+              logger.error('Failed to update task:', error);
               toast.error('Failed to update task');
             }
           }}
@@ -271,7 +280,7 @@ export default function MyDay() {
                 toast.success('Dependencies updated');
               }
             } catch (error) {
-              console.error('Failed to batch update tasks:', error);
+              logger.error('Failed to batch update tasks:', error);
               toast.error('Failed to update dependent tasks');
             }
           }}

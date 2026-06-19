@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { teamService } from '@/services/team.service';
+import { logger } from '@/services/monitoring/logger';
 
 export default function Dashboard() {
   const isMobile = useIsMobile();
@@ -30,11 +31,13 @@ export default function Dashboard() {
   const [newOrgForm, setNewOrgForm] = useState({ name: '', description: '' });
 
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
-  const { data: activities, isLoading: activitiesLoading } = useRecentActivity(4);
+  const { data: activities, isLoading: activitiesLoading } = useRecentActivity(10);
   const { data: milestones, isLoading: milestonesLoading } = useUpcomingDashboardMilestones(4);
   const { data: projectSummaries, isLoading: projectsLoading } = useProjectSummaries();
 
-  const isLoading = statsLoading || activitiesLoading || milestonesLoading || projectsLoading;
+  // Include org loading so we show the skeleton (not a flash of zeros / empty
+  // states) while the org resolves and the org-scoped queries are still disabled.
+  const isLoading = orgLoading || statsLoading || activitiesLoading || milestonesLoading || projectsLoading;
 
   const handleCreateOrg = async () => {
     if (!newOrgForm.name.trim()) {
@@ -48,7 +51,7 @@ export default function Dashboard() {
       setNewOrgForm({ name: '', description: '' });
       setCreateDialogOpen(false);
     } catch (error) {
-      console.error('Error creating organization:', error);
+      logger.error('Error creating organization:', error);
       toast.error('Failed to create organization');
     } finally {
       setIsCreating(false);
@@ -64,16 +67,30 @@ export default function Dashboard() {
 
   const [acceptingInvite, setAcceptingInvite] = useState<string | null>(null);
 
-  const handleAcceptInvite = async (invitation: { id: string; token?: string | null }) => {
+  const handleAcceptInvite = async (invitation: { id: string }) => {
     setAcceptingInvite(invitation.id);
     try {
-      await teamService.acceptInvitation(invitation.id || invitation.token || '');
+      const { apiClient } = await import('@/services/api/client');
+      const { ENDPOINTS } = await import('@/services/api/endpoints');
+      await apiClient.post(ENDPOINTS.ORGANIZATIONS.ACCEPT_BY_ID(invitation.id), {});
       toast.success('Successfully joined the organization!');
+    } catch (err: any) {
+      // 409 means the user is already a member — treat as success and dismiss
+      const isAlreadyMember =
+        err?.response?.status === 409 ||
+        err?.status === 409 ||
+        (err?.message || '').toLowerCase().includes('already') ||
+        (err?.code || '').toUpperCase() === 'CONFLICT';
+
+      if (!isAlreadyMember) {
+        toast.error(err.message || 'Failed to accept invitation');
+        setAcceptingInvite(null);
+        return;
+      }
+      // Already a member — just dismiss the banner silently
+    } finally {
       await refreshOrganizations();
       queryClient.invalidateQueries({ queryKey: ['pending-invitations'] });
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to accept invitation');
-    } finally {
       setAcceptingInvite(null);
     }
   };
@@ -97,7 +114,7 @@ export default function Dashboard() {
 
   // Transform activities for ActivityFeed (Activity type)
   const activityItems: Activity[] = (activities || []).map((activity: any) => {
-    const userName: string = activity.profiles?.name || 'Team Member';
+    const userName: string = activity.user?.name || 'Team Member';
     const initials: string = userName
       .split(' ')
       .map((n: string) => n[0])
@@ -106,19 +123,19 @@ export default function Dashboard() {
       .slice(0, 2) || 'TM';
     return {
       id: activity.id,
-      type: activity.activity_type,
-      title: activity.description.split(' ').slice(0, 3).join(' '),
-      description: activity.description,
+      type: activity.type,
+      title: (activity.description || activity.title || 'Activity').split(' ').slice(0, 3).join(' '),
+      description: activity.description || activity.title || '',
       user: {
-        id: activity.user_id || 'unknown',
+        id: activity.user?.id || 'unknown',
         name: userName,
-        email: activity.profiles?.email || '',
+        email: '',
         role: '',
         initials,
       },
-      projectId: activity.project_id,
-      projectName: activity.projects?.name || '',
-      timestamp: activity.created_at || new Date().toISOString(),
+      projectId: activity.projectId,
+      projectName: '',
+      timestamp: activity.createdAt || new Date().toISOString(),
     };
   });
 

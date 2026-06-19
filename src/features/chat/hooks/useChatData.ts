@@ -5,9 +5,9 @@ import { chatTransport } from '../transport';
 import { mapMessage } from '../chat.mappers';
 import { useChatStore } from '../stores/useChatStore';
 import type { Conversation, ChatMessage, MessageReaction } from '../types';
-import type { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import type { Unsubscribe } from '../transport/IChatTransport';
 import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/services/monitoring/logger';
 
 type ConversationAccessState = { readOnly: boolean; leftAt: string | null; joinedAt: string | null };
 
@@ -45,7 +45,7 @@ export function useConversations() {
 
   const [conversations, setLocalConversations] = useState<Conversation[]>(cachedConversations);
   const [loading, setLoading] = useState(!hasCachedData);
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const channelRef = useRef<Unsubscribe | null>(null);
   const isMountedRef = useRef(true);
 
   const fetchConversations = useCallback(async (background = false) => {
@@ -57,7 +57,7 @@ export function useConversations() {
         setConversations(data);
       }
     } catch (err) {
-      console.error('Failed to fetch conversations:', err);
+      logger.error('Failed to fetch conversations:', err);
     } finally {
       if (isMountedRef.current && !background) setLoading(false);
     }
@@ -78,22 +78,6 @@ export function useConversations() {
   useEffect(() => {
     if (!conversations.length) return;
     const convIds = conversations.map((c) => c.id);
-    const msgChannel = supabase
-      .channel('global-new-messages')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chat_messages' },
-        (payload) => {
-          const newMsg = payload.new as any;
-          const activeId = useChatStore.getState().activeConversationId;
-          if (convIds.includes(newMsg.conversation_id) && newMsg.conversation_id !== activeId) {
-            useChatStore.getState().incrementUnread(newMsg.conversation_id);
-          }
-          fetchConversations(true);
-        }
-      )
-      .subscribe();
-
     channelRef.current = chatTransport.subscribeToConversationUpdates(
       convIds,
       () => { fetchConversations(true); }
@@ -104,10 +88,38 @@ export function useConversations() {
       () => { fetchConversations(true); }
     );
 
+    // Subscribe to every conversation room so we can track unread counts
+    // when messages arrive for non-active conversations.
+    const unreadUnsubs = convIds.map((convId) =>
+      chatTransport.subscribeToMessages(convId, (payload) => {
+        const raw = (payload as any)?.new ?? payload as any;
+        const activeId = useChatStore.getState().activeConversationId;
+        if (convId === activeId) return; // already viewing — no unread
+        useChatStore.getState().incrementUnread(convId);
+        // Also update the sidebar preview
+        const store = useChatStore.getState();
+        store.setConversations(
+          store.conversations.map((c) =>
+            c.id === convId
+              ? {
+                  ...c,
+                  lastMessage: {
+                    content: raw.content ?? '',
+                    senderName: raw.sender?.name ?? raw.senderName ?? '',
+                    createdAt: raw.createdAt ?? new Date().toISOString(),
+                  },
+                  lastMessageAt: raw.createdAt ?? new Date().toISOString(),
+                }
+              : c
+          )
+        );
+      })
+    );
+
     return () => {
       if (channelRef.current) chatTransport.unsubscribe(channelRef.current);
       chatTransport.unsubscribe(memberChannel);
-      supabase.removeChannel(msgChannel);
+      unreadUnsubs.forEach((unsub) => chatTransport.unsubscribe(unsub));
     };
   }, [conversations.length, fetchConversations]);
 
@@ -118,7 +130,8 @@ export function useConversations() {
  * Stale-while-revalidate hook for messages with offline support.
  */
 export function useMessages(conversationId: string | null) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
+  const profile = user;
   const {
     getCachedMessages,
     setCachedMessages,
@@ -142,8 +155,8 @@ export function useMessages(conversationId: string | null) {
   const [readOnlyNotice, setReadOnlyNotice] = useState<string | null>(null);
   const [leftAt, setLeftAt] = useState<string | null>(null);
   const [joinedAt, setJoinedAt] = useState<string | null>(null);
-  const channelRef = useRef<RealtimeChannel | null>(null);
-  const updateChannelRef = useRef<RealtimeChannel | null>(null);
+  const channelRef = useRef<Unsubscribe | null>(null);
+  const updateChannelRef = useRef<Unsubscribe | null>(null);
   const PAGE_SIZE = 50;
 
   const accessStateCacheRef = useRef(new Map<string, { expiresAt: number; state: ConversationAccessState }>());
@@ -254,7 +267,7 @@ export function useMessages(conversationId: string | null) {
             setCachedMessages(conversationId, data, data.length === PAGE_SIZE);
           })
           .catch((err) => {
-            if (!cancelled) console.error('Background message revalidation failed:', err);
+            if (!cancelled) logger.error('Background message revalidation failed:', err);
           });
       }
     } else {
@@ -269,7 +282,7 @@ export function useMessages(conversationId: string | null) {
           setCachedMessages(conversationId, data, data.length === PAGE_SIZE);
         })
         .catch((err) => {
-          console.error('Failed to fetch messages:', err);
+          logger.error('Failed to fetch messages:', err);
           if (!cancelled) setLoading(false);
         });
     }
@@ -322,40 +335,33 @@ export function useMessages(conversationId: string | null) {
     channelRef.current = chatTransport.subscribeToMessages(
       conversationId,
       async (payload) => {
-        const newMsg = payload.new;
-        const newMsgCreatedAtTs = new Date((newMsg as any)?.created_at).getTime();
+        // SocketIO backend sends MessageResponse directly;
+        // Supabase sent { new: row }. Handle both shapes.
+        const raw = payload as any;
+        const newMsg = raw?.new ?? raw;
+        const msgCreatedAt = newMsg?.createdAt ?? newMsg?.created_at;
+        const newMsgCreatedAtTs = msgCreatedAt ? new Date(msgCreatedAt).getTime() : NaN;
         const leftAtTs = leftAt ? new Date(leftAt).getTime() : NaN;
 
-        if (
-          Number.isFinite(leftAtTs) &&
-          Number.isFinite(newMsgCreatedAtTs) &&
-          newMsgCreatedAtTs > leftAtTs
-        ) {
-          return;
-        }
+        if (Number.isFinite(leftAtTs) && Number.isFinite(newMsgCreatedAtTs) && newMsgCreatedAtTs > leftAtTs) return;
         const joinedAtTs = joinedAt ? new Date(joinedAt).getTime() : NaN;
-        if (
-          Number.isFinite(joinedAtTs) &&
-          Number.isFinite(newMsgCreatedAtTs) &&
-          newMsgCreatedAtTs < joinedAtTs
-        ) {
-          return;
-        }
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id, name, email, avatar_url, initials, role')
-          .eq('id', newMsg.sender_id)
-          .single();
-        const mapped = mapMessage(newMsg, profile as any);
+        if (Number.isFinite(joinedAtTs) && Number.isFinite(newMsgCreatedAtTs) && newMsgCreatedAtTs < joinedAtTs) return;
+
+        const mapped = mapMessage(newMsg as any, null);
         setMessages((prev) => {
           if (prev.some((m) => m.id === mapped.id)) return prev;
           return [...prev, mapped];
         });
         storeAddMessage(conversationId, mapped);
+        updatePreview(conversationId, {
+          content: mapped.content,
+          senderName: mapped.senderName,
+          createdAt: mapped.createdAt,
+        });
       }
     );
     return () => { if (channelRef.current) chatTransport.unsubscribe(channelRef.current); };
-  }, [conversationId, storeAddMessage, leftAt, joinedAt]);
+  }, [conversationId, storeAddMessage, updatePreview, leftAt, joinedAt]);
 
   const sendMessage = useCallback(async (content: string, type: 'text' | 'file' = 'text', fileData?: any, replyToMessageId?: string) => {
     if (!conversationId || !user) return;
@@ -402,44 +408,7 @@ export function useMessages(conversationId: string | null) {
 
     try {
       let realMsg: ChatMessage;
-      if (type === 'file') {
-        let data: any = null;
-        let error: any = null;
-        ({ data, error } = await supabase
-          .from('chat_messages')
-          .insert({
-            conversation_id: conversationId,
-            sender_id: user.id,
-            content: optimisticMsg.content,
-            content_type: 'file',
-            reply_to_message_id: replyToMessageId || null,
-          } as any)
-          .select()
-          .single());
-        const missingReplyColumn =
-          !!error && typeof error.message === 'string' && /reply_to_message_id|column .* does not exist/i.test(error.message);
-        if (missingReplyColumn) {
-          ({ data, error } = await supabase
-            .from('chat_messages')
-            .insert({
-              conversation_id: conversationId,
-              sender_id: user.id,
-              content: optimisticMsg.content,
-              content_type: 'file',
-            })
-            .select()
-            .single());
-        }
-        if (error) throw error;
-        const { data: senderProfile } = await supabase
-          .from('profiles')
-          .select('id, name, email, avatar_url, initials, role')
-          .eq('id', user.id)
-          .single();
-        realMsg = mapMessage(data as any, senderProfile as any);
-      } else {
-        realMsg = await chatService.sendMessage(conversationId, content, user.id, replyToMessageId);
-      }
+      realMsg = await chatService.sendMessage(conversationId, content, undefined, replyToMessageId);
       realMsg.status = 'sent';
       setMessages((prev) => {
         // If the real message was already added by realtime, just remove the temp one
@@ -451,7 +420,7 @@ export function useMessages(conversationId: string | null) {
       storeResolveOptimistic(conversationId, tempId, realMsg);
       removePendingMessage(tempId);
     } catch (err) {
-      console.error('Failed to send message:', err);
+      logger.error('Failed to send message:', err);
       const isNetworkError = !navigator.onLine ||
         err.name === 'TypeError' ||
         err.message?.toLowerCase().includes('fetch') ||
@@ -501,7 +470,7 @@ export function useMessages(conversationId: string | null) {
           storeResolveOptimistic(msg.conversationId, msg.id, realMsg);
           removePendingMessage(msg.id);
         } catch (err) {
-          console.error('Failed to resend:', err);
+          logger.error('Failed to resend:', err);
           const isStillOffline = !navigator.onLine || err.name === 'TypeError' || err.message?.includes('fetch');
           if (!isStillOffline) {
             // If it's a real server error (e.g. 400), remove it to avoid infinite loops
@@ -530,7 +499,8 @@ export function useMessages(conversationId: string | null) {
     updateChannelRef.current = chatTransport.subscribeToMessageUpdates(
       conversationId,
       (payload) => {
-        const updatedRow = payload.new as any;
+        const raw = payload as any;
+        const updatedRow = raw?.new ?? raw;
         setMessages((prev) =>
           prev.map((m) => {
             if (m.id !== updatedRow.id) return m;
@@ -561,7 +531,7 @@ export function useMessages(conversationId: string | null) {
       setHasMore(data.length === PAGE_SIZE);
       setCachedMessages(conversationId, data, data.length === PAGE_SIZE);
     } catch (err) {
-      console.error('Failed to refetch messages:', err);
+      logger.error('Failed to refetch messages:', err);
     }
   }, [conversationId, setCachedMessages]);
 
@@ -595,51 +565,83 @@ export function useMessages(conversationId: string | null) {
   return { messages: combinedMessages, loading, hasMore, loadMore, refetchMessages, sendMessage, readOnly, readOnlyNotice };
 }
 
-export function useReactions(messages: ChatMessage[], currentUserId?: string) {
+export function useReactions(messages: ChatMessage[], currentUserId?: string, conversationId?: string | null) {
   const [reactionMap, setReactionMap] = useState<Record<string, MessageReaction[]>>({});
-  const channelRef = useRef<RealtimeChannel | null>(null);
 
   const fetchReactions = useCallback(async () => {
     if (!messages.length || !currentUserId) return;
     try {
       const ids = messages.map((m) => m.id).filter(id => !id.startsWith('temp-'));
-      if (ids.length === 0) {
-        setReactionMap({});
-        return;
-      }
+      if (ids.length === 0) { setReactionMap({}); return; }
       const map = await chatService.getReactions(ids, currentUserId);
       setReactionMap(map);
     } catch (err) {
-      console.error('Failed to fetch reactions:', err);
+      logger.error('Failed to fetch reactions:', err);
     }
   }, [messages, currentUserId]);
 
-  useEffect(() => {
-    fetchReactions();
-  }, [fetchReactions]);
+  useEffect(() => { fetchReactions(); }, [fetchReactions]);
 
+  // Real-time: apply the full reaction state pushed by the server — no secondary API call needed
   useEffect(() => {
-    if (!messages.length) return;
-    const channel = supabase
-      .channel('message-reactions-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'message_reactions' },
-        () => { fetchReactions(); }
-      )
-      .subscribe();
-    channelRef.current = channel;
-    return () => { if (channelRef.current) supabase.removeChannel(channelRef.current); };
-  }, [messages.length, fetchReactions]);
+    if (!conversationId) return;
+    const unsub = chatTransport.subscribeToReactionUpdates(
+      conversationId,
+      ({ messageId, reactions }) => {
+        const mapped = reactions.map((r) => ({
+          ...r,
+          reactedByMe: r.userIds.includes(currentUserId ?? ''),
+        }));
+        setReactionMap((prev) => ({ ...prev, [messageId]: mapped }));
+      },
+    );
+    return () => unsub();
+  }, [conversationId, currentUserId]);
 
   const handleToggleReaction = useCallback(async (messageId: string, emoji: string) => {
+    // 1. Optimistic update — instant feedback for the clicker
+    setReactionMap((prev) => {
+      const current = prev[messageId] ?? [];
+      const existing = current.find((r) => r.emoji === emoji);
+
+      if (existing?.reactedByMe) {
+        const newCount = existing.count - 1;
+        if (newCount === 0) return { ...prev, [messageId]: current.filter((r) => r.emoji !== emoji) };
+        return {
+          ...prev,
+          [messageId]: current.map((r) =>
+            r.emoji === emoji
+              ? { ...r, count: newCount, userIds: r.userIds.filter((id) => id !== currentUserId), reactedByMe: false }
+              : r,
+          ),
+        };
+      }
+      if (existing) {
+        return {
+          ...prev,
+          [messageId]: current.map((r) =>
+            r.emoji === emoji
+              ? { ...r, count: r.count + 1, userIds: [...r.userIds, currentUserId ?? ''], reactedByMe: true }
+              : r,
+          ),
+        };
+      }
+      return { ...prev, [messageId]: [...current, { emoji, count: 1, userIds: [currentUserId ?? ''], reactedByMe: true }] };
+    });
+
     try {
+      // 2. Persist + trigger socket broadcast to other users
       await chatService.toggleReaction(messageId, emoji);
-      await fetchReactions();
+      // 3. Reconcile with server truth (handles race conditions and socket failures)
+      const map = await chatService.getReactions([messageId], currentUserId ?? '');
+      setReactionMap((prev) => ({ ...prev, [messageId]: map[messageId] ?? [] }));
     } catch (err) {
-      console.error('Failed to toggle reaction:', err);
+      logger.error('Failed to toggle reaction:', err);
+      // Revert optimistic update on error
+      const map = await chatService.getReactions([messageId], currentUserId ?? '').catch(() => ({}));
+      setReactionMap((prev) => ({ ...prev, [messageId]: (map as Record<string, MessageReaction[]>)[messageId] ?? prev[messageId] ?? [] }));
     }
-  }, [fetchReactions]);
+  }, [currentUserId]);
 
   return { reactionMap, handleToggleReaction };
 }

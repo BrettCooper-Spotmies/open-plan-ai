@@ -58,6 +58,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { useCreateProject } from "@/hooks/useProjects";
 import { useOrganizationMembers } from "@/hooks/useProjectTeam";
 import { useCreateAttachment } from '@/hooks/useProjectAttachments';
@@ -70,8 +71,8 @@ import { projectStorageService, UploadedProjectFile } from "@/services/projectSt
 import { attachmentsService } from "@/services/attachments.service";
 import { projectLinksService } from "@/services/projectLinks.service";
 import { projectMembersService } from "@/services/projectMembers.service";
-import type { Database } from "@/integrations/supabase/types";
 import { isValidUuid } from "@/utils/uuid";
+import { logger } from '@/services/monitoring/logger';
 
 const projectTypes = [
   "Hardware Development",
@@ -118,7 +119,7 @@ interface Department {
 
 interface ProjectLink {
   id: string;
-  name: string;
+  title: string;
   url: string;
 }
 
@@ -155,6 +156,7 @@ const NewProject = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { currentOrganization } = useOrganization();
+  const { user: currentUser } = useAuth();
   const createProjectMutation = useCreateProject();
   const { data: teamMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const [isCreating, setIsCreating] = useState(false);
@@ -214,6 +216,10 @@ const NewProject = () => {
   const [links, setLinks] = useState<ProjectLink[]>([]);
   const [newLinkName, setNewLinkName] = useState("");
   const [newLinkUrl, setNewLinkUrl] = useState("");
+  const isLinkUrlValid = !newLinkUrl || (() => {
+    try { const p = new URL(newLinkUrl); return p.protocol === 'https:' || p.protocol === 'http:'; }
+    catch { return false; }
+  })();
   const [attachments, setAttachments] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -320,12 +326,8 @@ const NewProject = () => {
   };
 
   const handleAddMilestone = () => {
-    if (startDate && newMilestoneStart && isBefore(newMilestoneStart, startDate)) {
-      toast.error("Milestone start date cannot be earlier than project start date");
-      return;
-    }
-    if (expectedEndDate && newMilestoneEnd && isBefore(expectedEndDate, newMilestoneEnd)) {
-      toast.error("Milestone end date cannot be later than project expected completion date");
+    if (newMilestoneStart && newMilestoneEnd && isBefore(newMilestoneEnd, newMilestoneStart)) {
+      toast.error("Milestone end date cannot be before the start date");
       return;
     }
     if (newMilestoneName.trim() && newMilestoneStart && newMilestoneEnd) {
@@ -410,11 +412,20 @@ const NewProject = () => {
   };
 
   const handleAddLink = () => {
-    if (newLinkName && newLinkUrl) {
-      setLinks([...links, { id: Math.random().toString(36).substr(2, 9), name: newLinkName, url: newLinkUrl }]);
-      setNewLinkName("");
-      setNewLinkUrl("");
+    if (!newLinkName || !newLinkUrl) return;
+    try {
+      const parsed = new URL(newLinkUrl);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        toast.error('URL must start with https:// or http://');
+        return;
+      }
+    } catch {
+      toast.error('Please enter a valid URL (e.g., https://example.com)');
+      return;
     }
+    setLinks([...links, { id: Math.random().toString(36).substr(2, 9), title: newLinkName, url: newLinkUrl }]);
+    setNewLinkName("");
+    setNewLinkUrl("");
   };
 
   const handleRemoveLink = (linkId: string) => {
@@ -613,45 +624,33 @@ const NewProject = () => {
         ));
       }
 
-      // Upload files to Supabase Storage and create attachment records
+      // Upload files to S3 storage
       if (attachments.length > 0) {
         const filesToUpload = attachments.filter(att => att.file);
         if (filesToUpload.length > 0) {
           try {
-            const uploadResults = await Promise.all(
-              filesToUpload.map(att => projectStorageService.uploadFile(att.file!, project.id))
+            await Promise.all(
+              filesToUpload.map(att => projectStorageService.upload(project.id, att.file!))
             );
-
-            // Create attachment records in the database
-            const attachmentRecords = uploadResults.map(result => ({
-              entity_id: project.id,
-              entity_type: 'project' as const,
-              file_name: result.name,
-              file_path: result.path,
-              file_size: result.sizeBytes,
-              mime_type: result.mimeType,
-              project_id: project.id,
-            }));
-
-            await attachmentsService.createMany(attachmentRecords);
             toast.success(`${filesToUpload.length} file(s) uploaded successfully`);
           } catch (uploadError) {
-            console.error('Error uploading files:', uploadError);
+            logger.error('Error uploading files:', uploadError);
             toast.warning('Project created but some files failed to upload');
           }
         }
       }
 
-      // Add team members to the project
-      if (assignedMembers.length > 0) {
+      // Add team members to the project (exclude creator — backend already adds them as admin)
+      const membersToAdd = assignedMembers.filter(m => m.memberId !== currentUser?.id);
+      if (membersToAdd.length > 0) {
         try {
-          const memberData = assignedMembers.map(m => ({
+          const memberData = membersToAdd.map(m => ({
             userId: m.memberId,
             role: m.role,
           }));
           await projectMembersService.addMembers(project.id, memberData);
         } catch (memberError) {
-          console.error('Error adding team members:', memberError);
+          logger.error('Error adding team members:', memberError);
           toast.warning('Project created but some team members could not be added');
         }
       }
@@ -661,10 +660,10 @@ const NewProject = () => {
         try {
           await projectLinksService.createMany(
             project.id,
-            links.map(l => ({ name: l.name, url: l.url }))
+            links.map(l => ({ title: l.title, url: l.url }))
           );
         } catch (linkError) {
-          console.error('Error creating project links:', linkError);
+          logger.error('Error creating project links:', linkError);
           toast.warning('Project created but some links could not be saved');
         }
       }
@@ -672,7 +671,7 @@ const NewProject = () => {
       toast.success('Project created successfully!');
       navigate(`/projects/${project.id}`);
     } catch (error) {
-      console.error('Error creating project:', error);
+      logger.error('Error creating project:', error);
       const message = error instanceof Error ? error.message : 'Failed to create project';
       toast.error(message);
     } finally {
@@ -1248,6 +1247,7 @@ const NewProject = () => {
                   <PopoverContent className="w-auto p-0" align="start">
                     {isMilestoneStartOpen && (
                       <Calendar
+                        variant="dropdown"
                         mode="single"
                         month={milestoneStartCalendarMonth}
                         onMonthChange={setMilestoneStartCalendarMonth}
@@ -1256,11 +1256,6 @@ const NewProject = () => {
                           setNewMilestoneStart(date);
                           setIsMilestoneStartOpen(false);
                         }}
-                        disabled={(date) =>
-                          isBefore(date, startOfToday()) ||
-                          (startDate ? isBefore(date, startDate) : false) ||
-                          (expectedEndDate ? isBefore(expectedEndDate, date) : false)
-                        }
                         initialFocus
                       />
                     )}
@@ -1285,6 +1280,7 @@ const NewProject = () => {
                   <PopoverContent className="w-auto p-0" align="start">
                     {isMilestoneEndOpen && (
                       <Calendar
+                        variant="dropdown"
                         mode="single"
                         month={milestoneEndCalendarMonth}
                         onMonthChange={setMilestoneEndCalendarMonth}
@@ -1294,10 +1290,7 @@ const NewProject = () => {
                           setIsMilestoneEndOpen(false);
                         }}
                         disabled={(date) =>
-                          isBefore(date, startOfToday()) ||
-                          (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) ||
-                          (startDate ? isBefore(date, startDate) : false) ||
-                          (expectedEndDate ? isBefore(expectedEndDate, date) : false)
+                          newMilestoneStart ? isBefore(date, newMilestoneStart) : false
                         }
                         initialFocus
                       />
@@ -1458,9 +1451,10 @@ const NewProject = () => {
                     placeholder="URL (e.g., https://...)"
                     value={newLinkUrl}
                     onChange={(e) => setNewLinkUrl(e.target.value)}
+                    className={cn(newLinkUrl && !isLinkUrlValid && "border-destructive focus-visible:ring-destructive")}
                   />
                 </div>
-                <Button onClick={handleAddLink} disabled={!newLinkName || !newLinkUrl}>
+                <Button onClick={handleAddLink} disabled={!newLinkName || !newLinkUrl || !isLinkUrlValid}>
                   <Plus className="h-4 w-4 mr-1" />
                   Add Link
                 </Button>
@@ -1478,7 +1472,7 @@ const NewProject = () => {
                           <Globe className="h-5 w-5 text-blue-600" />
                         </div>
                         <div>
-                          <p className="font-medium text-sm">{link.name}</p>
+                          <p className="font-medium text-sm">{link.title}</p>
                           <a
                             href={link.url}
                             target="_blank"

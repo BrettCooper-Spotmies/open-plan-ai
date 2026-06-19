@@ -129,4 +129,29 @@ export const queryKeys = {
     tasks: (userId: string) => [...queryKeys.myDay.all, 'tasks', userId] as const,
     completedToday: (userId: string) => [...queryKeys.myDay.all, 'completedToday', userId] as const,
   },
+
+  // BOM
+  bom: {
+    all:     ['bom'] as const,
+    tree:    (projectId: string) => ['bom', 'tree', projectId] as const,
+    summary: (projectId: string) => ['bom', 'summary', projectId] as const,
+    node:    (nodeId: string)    => ['bom', 'node', nodeId] as const,
+  },
+
+  // Parts catalog
+  parts: {
+    all:       ['parts'] as const,
+    list:      (orgId: string, params?: object) => ['parts', 'list', orgId, params] as const,
+    detail:    (partId: string) => ['parts', 'detail', partId] as const,
+    revisions: (partId: string) => ['parts', 'revisions', partId] as const,
+  },
+
+  // Engineering Changes (ECO)
+  ecos: {
+    all:    ['ecos'] as const,
+    list:   (projectId: string, filters?: object) => ['ecos', 'list', projectId, filters] as const,
+    stats:  (projectId: string) => ['ecos', 'stats', projectId] as const,
+    detail: (ecoId: string) => ['ecos', 'detail', ecoId] as const,
+    ecn:    (ecoId: string) => ['ecos', 'ecn', ecoId] as const,
+  },
 };

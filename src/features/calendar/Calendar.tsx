@@ -29,6 +29,7 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { parse, format as formatDate, isValid } from 'date-fns';
 import { toast } from 'sonner';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
+import { logger } from '@/services/monitoring/logger';
 
 // Convert a DB milestone row to calendar event
 function dbMilestoneToCalendarEvent(m: any, projectName: string): CalendarEvent | null {
@@ -150,7 +151,7 @@ const CalendarPage: React.FC = () => {
       if (!isValid(parsed)) throw new Error('Invalid date');
       return parsed;
     } catch (e) {
-      console.warn('[Calendar] Invalid date param, using today:', dateParam, e);
+      logger.warn('[Calendar] Invalid date param, using today:', dateParam, e);
       return new Date();
     }
   }, [dateParam]);
@@ -335,7 +336,7 @@ const CalendarPage: React.FC = () => {
                 toast.error('Missing project ID or task ID');
               }
             } catch (error) {
-              console.error('Failed to update task:', error);
+              logger.error('Failed to update task:', error);
               toast.error('Failed to update task');
             }
           }}
@@ -343,7 +344,7 @@ const CalendarPage: React.FC = () => {
             try {
               await batchUpdateTasksMutation.mutateAsync(updates);
             } catch (error) {
-              console.error('Failed to batch update tasks:', error);
+              logger.error('Failed to batch update tasks:', error);
               toast.error('Failed to update dependent tasks');
             }
           }}
@@ -369,7 +370,7 @@ const CalendarPage: React.FC = () => {
               });
               toast.success('Milestone updated successfully');
             } catch (error) {
-              console.error('Failed to update milestone:', error);
+              logger.error('Failed to update milestone:', error);
               toast.error('Failed to update milestone');
             }
           }}
@@ -397,7 +398,7 @@ const CalendarPage: React.FC = () => {
                 toast.error('Missing project ID or issue ID');
               }
             } catch (error) {
-              console.error('Failed to update issue:', error);
+              logger.error('Failed to update issue:', error);
               toast.error('Failed to update issue');
             }
           }}
@@ -425,9 +426,9 @@ const CalendarPage: React.FC = () => {
   // ── Desktop layout ─────────────────────────────────────────────────────────
   return (
     <>
-      <div className="flex flex-col h-full gap-6 animate-fade-in">
+      <div className="h-full flex flex-col gap-4 animate-fade-in">
         {/* Page Header */}
-        <div>
+        <div className="shrink-0">
           <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
           <p className="text-muted-foreground text-sm mt-1">
             View and manage project timelines, milestones, and tasks.
@@ -435,7 +436,7 @@ const CalendarPage: React.FC = () => {
         </div>
 
         {/* Controls Layout */}
-        <div className="flex flex-col">
+        <div className="flex flex-col shrink-0">
           {/* Header */}
           <CalendarHeader
             currentDate={currentDate}
