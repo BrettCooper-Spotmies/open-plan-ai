@@ -180,7 +180,7 @@ export function MilestonesView({
                         const progress = getMilestoneProgress(milestone, tasks);
                         const milestoneTasks = getMilestoneTasks(milestone, tasks);
                         const milestoneIssues = getMilestoneIssues(milestone.id, issues);
-                        const daysUntil = Math.ceil((new Date(milestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                        const daysUntil = milestone.date ? Math.ceil((new Date(milestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : NaN;
                         const isOverdue = !milestone.completed && daysUntil < 0;
 
                         return (
@@ -209,13 +209,13 @@ export function MilestonesView({
                               <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                                 <Calendar className="h-3 w-3" />
                                 <span>
-                                  {new Date(milestone.date).toLocaleDateString('en-US', {
+                                  {milestone.date ? new Date(milestone.date).toLocaleDateString('en-US', {
                                     month: 'short',
                                     day: 'numeric',
                                     year: 'numeric',
-                                  })}
+                                  }) : 'No date'}
                                 </span>
-                                {!milestone.completed && (
+                                {!milestone.completed && !isNaN(daysUntil) && (
                                   <span className={cn(isOverdue ? 'text-destructive' : 'text-muted-foreground')}>
                                     {isOverdue ? `• ${Math.abs(daysUntil)}d overdue` : daysUntil === 0 ? '• Due today' : `• ${daysUntil}d left`}
                                   </span>
@@ -257,7 +257,7 @@ export function MilestonesView({
                 const status = getMilestoneStatus(milestone, tasks, issues);
                 const StatusIcon = statusConfig[status].icon;
                 const isExpanded = expandedMilestones.includes(milestone.id);
-                const daysUntil = Math.ceil((new Date(milestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                const daysUntil = milestone.date ? Math.ceil((new Date(milestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : NaN;
 
                 return (
                   <Collapsible key={milestone.id} open={isExpanded} onOpenChange={() => toggleExpanded(milestone.id)}>
@@ -316,13 +316,13 @@ export function MilestonesView({
                             <div className="text-right text-sm">
                               <div className="flex items-center gap-1.5 text-muted-foreground">
                                 <Calendar className="h-3.5 w-3.5" />
-                                {new Date(milestone.date).toLocaleDateString('en-US', {
+                                {milestone.date ? new Date(milestone.date).toLocaleDateString('en-US', {
                                   month: 'short',
                                   day: 'numeric',
                                   year: 'numeric'
-                                })}
+                                }) : 'No target date'}
                               </div>
-                              {!milestone.completed && (
+                              {!milestone.completed && !isNaN(daysUntil) && (
                                 <div className={cn(
                                   'text-xs mt-1',
                                   daysUntil < 0 ? 'text-destructive' : daysUntil < 7 ? 'text-orange-500' : 'text-muted-foreground'

@@ -156,6 +156,10 @@ const Signup = () => {
 
   return (
     <div className="min-h-screen bg-background flex">
+      <style>{`
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
       {/* Left side - Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary/10 via-primary/5 to-background items-center justify-center p-12">
         <div className="max-w-md space-y-8">
@@ -212,9 +216,9 @@ const Signup = () => {
       </div>
 
       {/* Right side - Signup Form */}
-      <div className="flex-1 flex items-center justify-center p-8">
+      <div className="flex-1 flex items-center justify-center p-4 sm:p-8 overflow-y-auto hide-scrollbar">
         <Card className="w-full max-w-md border-0 shadow-xl">
-          <CardHeader className="space-y-1 text-center">
+          <CardHeader className="space-y-1 text-center pb-4">
             <div className="flex items-center justify-center gap-2 lg:hidden mb-4">
               <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
                 <Layers className="h-6 w-6 text-primary-foreground" />
@@ -231,7 +235,7 @@ const Signup = () => {
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-3 pb-4">
               {error && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -265,7 +269,7 @@ const Signup = () => {
                 </Alert>
               )}
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="fullName">Full Name</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -282,7 +286,7 @@ const Signup = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <Label htmlFor="email">
                   Work Email
                   {inviteEmail && <span className="ml-2 text-xs text-muted-foreground font-normal">(locked to invited address)</span>}
@@ -305,7 +309,7 @@ const Signup = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="password">Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -354,7 +358,7 @@ const Signup = () => {
                     </div>
                   )}
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="confirmPassword">Confirm Password</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -390,7 +394,7 @@ const Signup = () => {
 
               {!isInviteSignup && (
                 <>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <Label htmlFor="companyName">Organization Name</Label>
                     <div className="relative">
                       <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -407,7 +411,7 @@ const Signup = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <Label htmlFor="industry">Industry</Label>
                     <div className="relative">
                       <Factory className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
@@ -433,7 +437,7 @@ const Signup = () => {
                 </>
               )}
             </CardContent>
-            <CardFooter className="flex flex-col gap-4">
+            <CardFooter className="flex flex-col gap-3 pb-6">
               <Button type="submit" className="w-full" disabled={isLoading || authLoading || inviteLoading || !!inviteError}>
                 {isLoading ? (
                   "Creating account..."

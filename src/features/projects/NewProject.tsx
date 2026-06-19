@@ -578,6 +578,21 @@ const NewProject = () => {
       return;
     }
 
+    if (newMilestoneName.trim() || newMilestoneStart || newMilestoneEnd) {
+      toast.error("You have an unsaved milestone. Please click '+ Add Milestone' or clear the inputs.");
+      return;
+    }
+
+    if (newModuleName.trim()) {
+      toast.error("You have an unsaved module. Please click 'Add Module' or clear the input.");
+      return;
+    }
+
+    if (newLinkName.trim() || newLinkUrl.trim()) {
+      toast.error("You have an unsaved project link. Please click 'Add Link' or clear the inputs.");
+      return;
+    }
+
     setIsCreating(true);
 
     try {
@@ -1256,6 +1271,10 @@ const NewProject = () => {
                           setNewMilestoneStart(date);
                           setIsMilestoneStartOpen(false);
                         }}
+                        disabled={(date) =>
+                          (startDate ? isBefore(date, startDate) : false) ||
+                          (expectedEndDate ? isBefore(expectedEndDate, date) : false)
+                        }
                         initialFocus
                       />
                     )}
@@ -1290,7 +1309,9 @@ const NewProject = () => {
                           setIsMilestoneEndOpen(false);
                         }}
                         disabled={(date) =>
-                          newMilestoneStart ? isBefore(date, newMilestoneStart) : false
+                          (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) ||
+                          (startDate ? isBefore(date, startDate) : false) ||
+                          (expectedEndDate ? isBefore(expectedEndDate, date) : false)
                         }
                         initialFocus
                       />
