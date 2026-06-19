@@ -111,7 +111,7 @@ export function MilestoneDetailModal({
   const milestoneTasks = getMilestoneTasks(editedMilestone, tasks);
   const milestoneIssues = getMilestoneIssues(editedMilestone.id, issues);
   const status = getMilestoneStatus(editedMilestone, tasks, issues);
-  const daysUntil = Math.ceil((new Date(editedMilestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const daysUntil = editedMilestone.date ? Math.ceil((new Date(editedMilestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : NaN;
 
   const completedTasks = milestoneTasks.filter(t => t.status === 'done').length;
   const inProgressTasks = milestoneTasks.filter(t => t.status === 'in-progress').length;
@@ -289,7 +289,7 @@ export function MilestoneDetailModal({
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {format(parseISO(editedMilestone.date), 'PPP')}
+                      {editedMilestone.date ? format(parseISO(editedMilestone.date), 'PPP') : 'Select target date'}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -297,7 +297,7 @@ export function MilestoneDetailModal({
                       mode="single"
                       month={milestoneDateCalendarMonth}
                       onMonthChange={setMilestoneDateCalendarMonth}
-                      selected={parseISO(editedMilestone.date)}
+                      selected={editedMilestone.date ? parseISO(editedMilestone.date) : undefined}
                       onSelect={(date) => date && handleFieldChange('date', format(date, 'yyyy-MM-dd'))}
                       disabled={{ before: startOfToday() }}
                       initialFocus
@@ -321,11 +321,13 @@ export function MilestoneDetailModal({
                 )}>
                   {editedMilestone.completed
                     ? `Completed ${editedMilestone.completedAt ? format(new Date(editedMilestone.completedAt), 'MMM d, yyyy') : ''}`
-                    : daysUntil < 0
-                      ? `${Math.abs(daysUntil)} days overdue`
-                      : daysUntil === 0
-                        ? 'Due today'
-                        : `${daysUntil} days remaining`
+                    : isNaN(daysUntil)
+                      ? 'No target date set'
+                      : daysUntil < 0
+                        ? `${Math.abs(daysUntil)} days overdue`
+                        : daysUntil === 0
+                          ? 'Due today'
+                          : `${daysUntil} days remaining`
                   }
                 </div>
               </div>
