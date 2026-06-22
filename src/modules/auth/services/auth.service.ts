@@ -102,7 +102,7 @@ export const authService = {
   },
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await apiClient.post(ENDPOINTS.AUTH.CHANGE_PASSWORD, { currentPassword, newPassword });
+    await apiClient.patch(ENDPOINTS.AUTH.CHANGE_PASSWORD, { currentPassword, newPassword });
   },
 
   async sendOtp(email: string): Promise<{ message: string }> {
