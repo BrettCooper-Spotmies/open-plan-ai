@@ -729,42 +729,31 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
             <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">
               Save as Version
             </div>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <label className={cn('flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors',
-                versionMode === 'same' ? 'border-primary/40 bg-primary/5' : 'border-border hover:bg-background')}>
-                <input type="radio" name="vmode" checked={versionMode === 'same'}
-                  onChange={() => setVersionMode('same')} className="mt-0.5 accent-primary shrink-0" />
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-foreground mb-0.5">
-                    Update <span className="font-mono">Rev {node.rev}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">Overwrites the current revision in place. No new history entry is created.</div>
-                </div>
-              </label>
-              <label className={cn('flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition-colors',
-                versionMode === 'new' ? 'border-primary/40 bg-primary/5' : 'border-border hover:bg-background')}>
-                <input type="radio" name="vmode" checked={versionMode === 'new'}
-                  onChange={() => setVersionMode('new')} className="mt-0.5 accent-primary shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <GitBranch className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span className="text-sm font-semibold text-foreground">Create new revision</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground mb-2">
-                    Appends a new revision. <span className="font-mono">Rev {node.rev}</span> is preserved in history.
-                  </div>
-                  {versionMode === 'new' && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs text-muted-foreground shrink-0">New label:</span>
-                      <Input value={newRevLabel}
-                        onChange={e => setNewRevLabel(e.target.value.toUpperCase().slice(0, 3))}
-                        className="h-7 text-xs font-mono w-20 bg-background" placeholder="B"
-                        onClick={e => e.stopPropagation()} />
-                    </div>
-                  )}
-                </div>
-              </label>
+            <div className="flex items-center gap-1 p-1 rounded-lg border border-border bg-background mb-2">
+              <button type="button" onClick={() => setVersionMode('same')}
+                className={cn('flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  versionMode === 'same' ? 'bg-card border border-border shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                Update Rev {node.rev}
+              </button>
+              <button type="button" onClick={() => setVersionMode('new')}
+                className={cn('flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  versionMode === 'new' ? 'bg-card border border-border shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                <GitBranch className="w-3.5 h-3.5" />
+                New revision
+              </button>
             </div>
+
+            {versionMode === 'new' ? (
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-xs text-muted-foreground shrink-0">Label:</span>
+                <Input value={newRevLabel}
+                  onChange={e => setNewRevLabel(e.target.value.toUpperCase().slice(0, 3))}
+                  className="h-7 text-xs font-mono w-16 bg-background" placeholder="B" />
+                <span className="text-xs text-muted-foreground">Rev {node.rev} is preserved in history.</span>
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground mb-4">Overwrites Rev {node.rev} in place. No history entry is created.</div>
+            )}
             {/* Change notes */}
             <div className="space-y-1.5">
               <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">

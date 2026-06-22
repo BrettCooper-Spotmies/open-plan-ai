@@ -6,16 +6,23 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { FilePreviewDialog, FilePreviewTarget } from '@/components/FilePreviewDialog';
 import { useBomDocuments, useUploadBomDocument, useDeleteBomDocument, BomAttachment, isImageAttachment } from '@/hooks/useBomDocuments';
 
 // ── Icon by MIME type / extension ────────────────────────────────────
 function fileIcon(doc: Pick<BomAttachment, 'mimeType' | 'fileName' | 'fileUrl'>): React.ElementType {
   if (isImageAttachment(doc)) return ImageIcon;
   if (doc.mimeType === 'application/pdf') return FileText;
-  const ext = doc.fileName.split('.').pop()?.toLowerCase() ?? '';
+  const ext = (doc.fileName || doc.fileUrl || '').split('.').pop()?.toLowerCase().split(/[?#]/)[0] ?? '';
   if (['step', 'stp', 'iges', 'igs', 'stl'].includes(ext)) return Box;
   if (['kicad_mod', 'kicad_pcb', 'lib', 'lbr'].includes(ext)) return Cpu;
   return File;
+}
+
+// Linked documents can be created without a fileName — fall back to the URL's last path segment.
+function displayName(doc: Pick<BomAttachment, 'fileName' | 'fileUrl'>): string {
+  if (doc.fileName) return doc.fileName;
+  return doc.fileUrl?.split('/').pop()?.split(/[?#]/)[0] || 'Untitled';
 }
 
 function formatBytes(b: number | null) {
@@ -34,16 +41,24 @@ function AttachmentRow({
   doc,
   onDelete,
   deleting,
+  onPreview,
 }: {
   doc: BomAttachment;
   onDelete: () => void;
   deleting: boolean;
+  onPreview: (target: FilePreviewTarget) => void;
 }) {
   const Icon = fileIcon(doc);
   const viewUrl = resolveFileUrl(doc.fileUrl);
 
   return (
-    <div className="group flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+    <div
+      className={cn(
+        'group flex items-center gap-3 px-4 py-3 border-b border-border last:border-0 hover:bg-muted/30 transition-colors',
+        viewUrl && 'cursor-pointer',
+      )}
+      onClick={() => viewUrl && onPreview({ url: viewUrl, fileName: displayName(doc), mimeType: doc.mimeType })}
+    >
       {/* Icon */}
       <div className="w-9 h-9 rounded-lg bg-primary/8 border border-primary/20 flex items-center justify-center shrink-0">
         <Icon className="w-4 h-4 text-primary" />
@@ -51,7 +66,7 @@ function AttachmentRow({
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="text-[12.5px] font-medium text-foreground truncate">{doc.fileName}</div>
+        <div className="text-[12.5px] font-medium text-foreground truncate">{displayName(doc)}</div>
         <div className="text-[11px] text-muted-foreground">
           {formatBytes(doc.fileSize)} · {formatDate(doc.createdAt)}
         </div>
@@ -63,16 +78,20 @@ function AttachmentRow({
           <>
             <ActionBtn
               icon={Eye}
-              label="View"
-              onClick={() => window.open(viewUrl, '_blank', 'noopener')}
+              label="Preview"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPreview({ url: viewUrl, fileName: displayName(doc), mimeType: doc.mimeType });
+              }}
             />
             <ActionBtn
               icon={Download}
               label="Download"
-              onClick={() => {
+              onClick={(e) => {
+                e.stopPropagation();
                 const a = document.createElement('a');
                 a.href = viewUrl;
-                a.download = doc.fileName;
+                a.download = displayName(doc);
                 a.click();
               }}
             />
@@ -83,7 +102,10 @@ function AttachmentRow({
           label="Delete"
           danger
           disabled={deleting}
-          onClick={onDelete}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
           spin={deleting}
         />
       </div>
@@ -96,7 +118,7 @@ function ActionBtn({
 }: {
   icon: React.ElementType;
   label: string;
-  onClick: () => void;
+  onClick: (e: React.MouseEvent) => void;
   danger?: boolean;
   disabled?: boolean;
   spin?: boolean;
@@ -152,6 +174,7 @@ export function BOMDocuments({ nodeId }: { nodeId: string }) {
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState<FilePreviewTarget | null>(null);
 
   const { data: docs, isLoading } = useBomDocuments(nodeId);
   const upload = useUploadBomDocument(nodeId);
@@ -186,7 +209,7 @@ export function BOMDocuments({ nodeId }: { nodeId: string }) {
     try {
       await remove.mutateAsync(doc.id);
     } catch {
-      setError(`Failed to delete "${doc.fileName}". Please try again.`);
+      setError(`Failed to delete "${displayName(doc)}". Please try again.`);
     } finally {
       setDeletingId(null);
     }
@@ -258,6 +281,7 @@ export function BOMDocuments({ nodeId }: { nodeId: string }) {
               doc={doc}
               onDelete={() => handleDelete(doc)}
               deleting={deletingId === doc.id}
+              onPreview={setPreviewing}
             />
           ))}
 
@@ -277,6 +301,8 @@ export function BOMDocuments({ nodeId }: { nodeId: string }) {
           )}
         </div>
       )}
+
+      <FilePreviewDialog file={previewing} onClose={() => setPreviewing(null)} />
     </div>
   );
 }

@@ -79,6 +79,8 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
+import { resolveFileUrl } from '@/utils/fileUrl';
+import { FilePreviewDialog, FilePreviewTarget } from '@/components/FilePreviewDialog';
 
 // Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
 const toDateOnly = (date: Date | undefined | null): string | undefined => {
@@ -235,6 +237,7 @@ export const TaskDetailModal = ({
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [initialTaskSnapshot, setInitialTaskSnapshot] = useState('');
+  const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
   const [initialBlockedByIds, setInitialBlockedByIds] = useState<string[]>([]);
   const [initialBlockingToIds, setInitialBlockingToIds] = useState<string[]>([]);
   const [initializedForKey, setInitializedForKey] = useState<string | null>(null);
@@ -536,11 +539,14 @@ export const TaskDetailModal = ({
         ...attachments,
         ...results.map(r => ({
           id: r.id,
-          name: r.fileName ?? r.file_name ?? 'file',
+          filename: r.fileName ?? r.file_name ?? 'file',
           url: r.fileUrl ?? r.url ?? '',
-          size: r.fileSize ?? r.file_size ?? 0,
-          type: r.mimeType ?? r.mime_type ?? '',
+          fileSize: r.fileSize ?? r.file_size ?? 0,
+          fileType: r.mimeType ?? r.mime_type ?? '',
           uploadedAt: r.createdAt ?? r.uploaded_at ?? new Date().toISOString(),
+          uploadedBy: profile
+            ? { id: profile.id, name: profile.name, email: profile.email, role: '', initials: profile.initials ?? '' }
+            : { id: '', name: 'You', email: '', role: '', initials: '' },
         })),
       ]);
       toast.success(`${results.length} file(s) uploaded`);
@@ -921,6 +927,7 @@ export const TaskDetailModal = ({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
       <DialogContent className="max-w-3xl max-h-[90vh] w-[95vw] sm:w-full p-0 gap-0" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="px-4 sm:px-6 py-4 border-b">
@@ -1533,11 +1540,12 @@ export const TaskDetailModal = ({
               <div className="space-y-2">
                 {attachments.map((attachment) => {
                   const FileIcon = getFileIcon(attachment.fileType);
+                  const viewUrl = resolveFileUrl(attachment.url) ?? attachment.url;
                   return (
                     <div
                       key={attachment.id}
                       className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 group cursor-pointer hover:bg-muted"
-                      onClick={() => window.open(attachment.url, '_blank')}
+                      onClick={() => setPreviewingFile({ url: viewUrl, fileName: attachment.filename, mimeType: attachment.fileType })}
                     >
                       <FileIcon className="h-8 w-8 text-muted-foreground" />
                       <div className="flex-1 min-w-0">
@@ -1553,7 +1561,10 @@ export const TaskDetailModal = ({
                           className="h-7 w-7"
                           onClick={(e) => {
                             e.stopPropagation();
-                            window.open(attachment.url, '_blank');
+                            const a = document.createElement('a');
+                            a.href = viewUrl;
+                            a.download = attachment.filename;
+                            a.click();
                           }}
                         >
                           <Download className="h-4 w-4" />
@@ -1859,5 +1870,7 @@ export const TaskDetailModal = ({
         variant="destructive"
       />
     </Dialog>
+    <FilePreviewDialog file={previewingFile} onClose={() => setPreviewingFile(null)} />
+    </>
   );
 }

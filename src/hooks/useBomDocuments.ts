@@ -29,7 +29,7 @@ export interface BomAttachment {
   id: string;
   entityId: string;
   entityType: string;
-  fileName: string;
+  fileName: string | null;
   fileKey: string;
   fileUrl: string;   // "serve:attachments/bom_node/..." or a raw http(s) URL for linked docs
   fileSize: number | null;
@@ -43,7 +43,7 @@ const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'av
 // True if this attachment is an image — used to pick the part's product photo
 export function isImageAttachment(doc: Pick<BomAttachment, 'mimeType' | 'fileName' | 'fileUrl'>): boolean {
   if (doc.mimeType?.startsWith('image/')) return true;
-  const ext = (doc.fileName || doc.fileUrl).split('.').pop()?.toLowerCase().split(/[?#]/)[0] ?? '';
+  const ext = (doc.fileName || doc.fileUrl || '').split('.').pop()?.toLowerCase().split(/[?#]/)[0] ?? '';
   return IMAGE_EXTENSIONS.includes(ext);
 }
 
