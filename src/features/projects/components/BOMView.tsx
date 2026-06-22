@@ -9,7 +9,7 @@ import { useCreatePart } from '@/hooks/useParts';
 import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
 
 async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
-  const docs = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as DocValue[];
+  const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? [])].filter(Boolean) as DocValue[];
   await Promise.allSettled(
     docs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName)),
   );

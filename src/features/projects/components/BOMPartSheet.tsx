@@ -50,9 +50,10 @@ export interface BOMPartPayload {
   req: string[];
   // documents (uploaded file or linked URL; null = cleared, undefined = unchanged)
   docPhoto?: DocValue | null;
-  docDatasheet?: DocValue | null;
-  doc3DModel?: DocValue | null;
-  docFootprint?: DocValue | null;
+  // technical files support multiple attachments per category
+  docDatasheet?: DocValue[];
+  doc3DModel?: DocValue[];
+  docFootprint?: DocValue[];
   // edit-only version fields
   versionMode?: 'same' | 'new';
   newRevLabel?: string;
@@ -80,6 +81,14 @@ const CAT_ICONS: Record<BOMCategory, React.ElementType> = {
 };
 const UOM_OPTIONS = ['EA', 'SET', 'LIC', 'KG', 'M', 'FT', 'PCS', 'LOT'];
 
+type LeadTimeUnit = 'days' | 'weeks' | 'months';
+// BOMPartPayload.leadTime is always expressed in weeks downstream — these factors convert into weeks.
+const LEAD_TIME_UNITS: { id: LeadTimeUnit; label: string; toWeeks: number }[] = [
+  { id: 'days',   label: 'Days',   toWeeks: 1 / 7 },
+  { id: 'weeks',  label: 'Weeks',  toWeeks: 1 },
+  { id: 'months', label: 'Months', toWeeks: 30 / 7 },
+];
+
 function nextRev(rev: string) {
   const i = LETTERS.indexOf(rev.toUpperCase());
   return i >= 0 && i < LETTERS.length - 1 ? LETTERS[i + 1] : rev;
@@ -101,26 +110,32 @@ const FInput = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
   <Input {...props} className={cn('h-8 text-sm bg-muted border-border focus-visible:ring-1', props.className)} />
 );
 
-// ── File upload row (supports uploading a file or linking a URL) ──
+// ── File upload row (supports multiple uploaded files and/or linked URLs) ──
 interface FileRowProps {
   icon: React.ElementType;
   label: string;
   hint: string;
   accept: string;
-  value: DocValue | null;
-  onChange: (v: DocValue | null) => void;
+  value: DocValue[];
+  onChange: (v: DocValue[]) => void;
 }
 function FileRow({ icon: Icon, label, hint, accept, value, onChange }: FileRowProps) {
   const ref = useRef<HTMLInputElement>(null);
-  const [mode, setMode] = useState<'file' | 'url'>('file');
+  const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInput, setUrlInput] = useState('');
 
+  const addFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    onChange([...value, ...Array.from(files).map(file => ({ kind: 'file', file }) as DocValue)]);
+  };
   const addUrl = () => {
     const u = urlInput.trim();
     if (!u) return;
-    onChange({ kind: 'url', url: u });
+    onChange([...value, { kind: 'url', url: u }]);
     setUrlInput('');
+    setShowUrlInput(false);
   };
+  const removeAt = (i: number) => onChange(value.filter((_, idx) => idx !== i));
 
   return (
     <div className="rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors">
@@ -130,56 +145,47 @@ function FileRow({ icon: Icon, label, hint, accept, value, onChange }: FileRowPr
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-foreground">{label}</div>
-          {value?.kind === 'file' ? (
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-[11px] text-primary font-medium truncate max-w-[220px]">{value.file.name}</span>
-              <span className="text-[10px] text-muted-foreground shrink-0">
-                ({(value.file.size / 1024).toFixed(0)} KB)
-              </span>
-            </div>
-          ) : value?.kind === 'url' ? (
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <LinkIcon className="w-3 h-3 text-primary shrink-0" />
-              <span className="text-[11px] text-primary font-medium truncate max-w-[260px]">{value.url}</span>
-            </div>
-          ) : (
-            <div className="text-[11px] text-muted-foreground">{hint}</div>
-          )}
+          {value.length === 0 && <div className="text-[11px] text-muted-foreground">{hint}</div>}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {value && (
-            <button onClick={() => onChange(null)}
-              className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-              <X className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {value ? (
-            <button onClick={() => ref.current?.click()}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors">
-              <Upload className="w-3 h-3" /> Replace
-            </button>
-          ) : mode === 'file' ? (
-            <>
-              <button onClick={() => ref.current?.click()}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors">
-                <Upload className="w-3 h-3" /> Upload
-              </button>
-              <button onClick={() => setMode('url')}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors">
-                <LinkIcon className="w-3 h-3" /> URL
-              </button>
-            </>
-          ) : (
-            <button onClick={() => setMode('file')}
-              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors">
-              <Upload className="w-3 h-3" /> Upload instead
-            </button>
-          )}
+          <button onClick={() => ref.current?.click()}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors">
+            <Upload className="w-3 h-3" /> Upload
+          </button>
+          <button onClick={() => setShowUrlInput(s => !s)}
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors">
+            <LinkIcon className="w-3 h-3" /> URL
+          </button>
         </div>
-        <input ref={ref} type="file" accept={accept} className="hidden"
-          onChange={e => { const f = e.target.files?.[0]; if (f) { onChange({ kind: 'file', file: f }); setMode('file'); } }} />
+        <input ref={ref} type="file" accept={accept} multiple className="hidden"
+          onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
       </div>
-      {!value && mode === 'url' && (
+      {value.length > 0 && (
+        <div className="px-3 pb-3 -mt-1 space-y-1.5">
+          {value.map((v, i) => (
+            <div key={i} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-muted/50 border border-border/50">
+              {v.kind === 'file' ? (
+                <>
+                  <span className="text-[11px] text-primary font-medium truncate flex-1">{v.file.name}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    ({(v.file.size / 1024).toFixed(0)} KB)
+                  </span>
+                </>
+              ) : (
+                <>
+                  <LinkIcon className="w-3 h-3 text-primary shrink-0" />
+                  <span className="text-[11px] text-primary font-medium truncate flex-1">{v.url}</span>
+                </>
+              )}
+              <button onClick={() => removeAt(i)}
+                className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {showUrlInput && (
         <div className="px-3 pb-3 -mt-1 flex items-center gap-2">
           <input
             value={urlInput}
@@ -308,6 +314,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   const [distributor,    setDistributor]    = useState(node?.distributor ?? '');
   const [price,          setPrice]          = useState(String(node?.price ?? ''));
   const [leadTime,       setLeadTime]       = useState(String(node?.leadTime ?? ''));
+  const [leadTimeUnit,   setLeadTimeUnit]   = useState<LeadTimeUnit>('weeks');
   const [mpn,            setMpn]            = useState(node?.mpn ?? '');
   const [selectedOwner,  setSelectedOwner]  = useState<TeamMember | null>(null);
   const [ownerPopover,   setOwnerPopover]   = useState(false);
@@ -316,9 +323,9 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   const [reqInput,     setReqInput]     = useState('');
   // documents
   const [docPhoto,     setDocPhoto]     = useState<DocValue | null>(null);
-  const [docDatasheet, setDocDatasheet] = useState<DocValue | null>(null);
-  const [doc3DModel,   setDoc3DModel]   = useState<DocValue | null>(null);
-  const [docFootprint, setDocFootprint] = useState<DocValue | null>(null);
+  const [docDatasheet, setDocDatasheet] = useState<DocValue[]>([]);
+  const [doc3DModel,   setDoc3DModel]   = useState<DocValue[]>([]);
+  const [docFootprint, setDocFootprint] = useState<DocValue[]>([]);
   // edit: version
   const [versionMode,  setVersionMode]  = useState<'same' | 'new'>('same');
   const [newRevLabel,  setNewRevLabel]  = useState(node ? nextRev(node.rev) : 'B');
@@ -340,15 +347,16 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     setDistributor(node?.distributor ?? '');
     setPrice(String(node?.price ?? ''));
     setLeadTime(String(node?.leadTime ?? ''));
+    setLeadTimeUnit('weeks');
     setMpn(node?.mpn ?? '');
     setSelectedOwner(null);
     setOwnerPopover(false);
     setReq(node?.req ?? []);
     setReqInput('');
     setDocPhoto(null);
-    setDocDatasheet(null);
-    setDoc3DModel(null);
-    setDocFootprint(null);
+    setDocDatasheet([]);
+    setDoc3DModel([]);
+    setDocFootprint([]);
     setVersionMode('same');
     setNewRevLabel(node ? nextRev(node.rev) : 'B');
     setChangeNotes('');
@@ -408,7 +416,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
       uom,
       manufacturer, distributor,
       price: parseFloat(price) || 0,
-      leadTime: parseInt(leadTime) || 0,
+      leadTime: Math.round((parseFloat(leadTime) || 0) * LEAD_TIME_UNITS.find(u => u.id === leadTimeUnit)!.toWeeks),
       mpn,
       owner: selectedOwner?.name ?? '',
       ownerId: selectedOwner?.id,
@@ -619,9 +627,22 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                 <FInput value={price} onChange={e => setPrice(e.target.value)}
                   type="number" step="0.01" placeholder="0.00" className="h-9" />
               </FL>
-              <FL label="Lead Time (weeks)">
-                <FInput value={leadTime} onChange={e => setLeadTime(e.target.value)}
-                  type="number" placeholder="8" className="h-9" />
+              <FL label="Lead Time">
+                <div className="flex gap-1.5">
+                  <FInput value={leadTime} onChange={e => setLeadTime(e.target.value)}
+                    type="number" placeholder="8" className="h-9 flex-1" />
+                  <div className="flex gap-1 shrink-0">
+                    {LEAD_TIME_UNITS.map(u => (
+                      <button key={u.id} onClick={() => setLeadTimeUnit(u.id)}
+                        className={cn(
+                          'px-2.5 h-9 rounded-md text-xs font-medium border cursor-pointer transition-colors',
+                          leadTimeUnit === u.id ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border hover:bg-muted'
+                        )}>
+                        {u.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </FL>
               <FL label="Quantity">
                 <FInput value={qty} onChange={e => setQty(e.target.value)}
