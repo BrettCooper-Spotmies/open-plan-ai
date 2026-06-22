@@ -692,8 +692,8 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
   const createNode = useCreateBomNode(projectId);
 
   const rootNodes = useMemo(() => {
-    if (!bomTree?.root) return [];
-    const nodes = [fromApiNode(bomTree.root)];
+    if (!bomTree?.roots?.length) return [];
+    const nodes = bomTree.roots.map(r => fromApiNode(r));
     assignLevelLabels(nodes);
     return nodes;
   }, [bomTree]);

@@ -18,7 +18,7 @@ import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision } from '@/hooks/useParts';
-import { useCreateBomNode, useUpdateBomNode } from '@/hooks/useBom';
+import { useCreateBomNode, useUpdateBomNode, useAddRequirement, useRemoveRequirement } from '@/hooks/useBom';
 import { uploadBomDocumentFile, addBomDocumentLink, useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
 import { useCurrency } from '@/hooks/useCurrency';
 import { resolveFileUrl } from '@/utils/fileUrl';
@@ -462,6 +462,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const createPart = useCreatePart(orgId);
   const updatePart = useUpdatePart();
   const createRev = useCreateRevision();
+  const addRequirement = useAddRequirement(projectId);
+  const removeRequirement = useRemoveRequirement(projectId);
 
   const activeRev = revHistory[activeRevIdx] ?? { rev: originalNode.rev, status: originalNode.status, price: originalNode.price, leadTime: originalNode.leadTime, date: '', author: '', changes: '' } as BOMRevision;
   const isLatest = revHistory.length === 0 || activeRevIdx === revHistory.length - 1;
@@ -497,6 +499,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     const node = await createNode.mutateAsync({
       partId: part.id, quantity: payload.qty, unit: payload.uom,
       status: payload.status, parentId: originalNode.id,
+      ownerId: payload.ownerId ?? null,
     });
     await saveBomDocs(node.id, payload);
     setShowCreateNewSub(false);
@@ -529,6 +532,15 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     }
     // Upload any documents attached in the edit form
     await saveBomDocs(originalNode.id, payload);
+
+    // Sync requirement traceability links
+    const toAdd = payload.req.filter(r => !originalNode.req.includes(r));
+    const toRemove = (originalNode._reqLinks ?? []).filter(l => !payload.req.includes(l.requirementId));
+    await Promise.all([
+      ...toAdd.map(requirementId => addRequirement.mutateAsync({ nodeId: originalNode.id, requirementId })),
+      ...toRemove.map(link => removeRequirement.mutateAsync(link.id)),
+    ]);
+
     setShowEdit(false);
   };
 
@@ -594,7 +606,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             >
               <GitMerge className="w-3.5 h-3.5 text-muted-foreground" /> New ECO
             </button>
-            {/* <button
+            <button
               onClick={() => isLatest && setShowEdit(true)}
               disabled={!isLatest}
               title={isLatest ? 'Edit this part' : 'Switch to latest revision to edit'}
@@ -606,7 +618,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               )}
             >
               <SquarePen className="w-3.5 h-3.5" /> Edit Part
-            </button> */}
+            </button>
           </div>
         </div>
 

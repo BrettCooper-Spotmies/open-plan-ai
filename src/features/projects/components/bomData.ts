@@ -37,6 +37,7 @@ export interface BOMNode {
   _x?: number;
   _y?: number;
   _partId?: string;   // backend part UUID — stored on adapted nodes for mutation calls
+  _reqLinks?: ApiReqLinkResponse[];  // raw requirement links (id + requirementId) — needed to remove a link by id
 }
 
 export const EMPTY_FILTERS = {
@@ -124,7 +125,7 @@ export interface ApiTreeResponse {
   id: string;
   projectId: string;
   orgId: string;
-  root: ApiNodeResponse | null;
+  roots: ApiNodeResponse[];
   totalNodes: number;
   pendingCount: number;
   approvedCount: number;
@@ -155,6 +156,7 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     rev:          rev?.rev ?? 'A',
     status:       node.status,
     req:          node.requirements.map(r => r.requirementId),
+    _reqLinks:    node.requirements,
     cat:          node.part.category,
     manufacturer: node.part.manufacturer ?? '',
     distributor:  node.part.distributor ?? '',

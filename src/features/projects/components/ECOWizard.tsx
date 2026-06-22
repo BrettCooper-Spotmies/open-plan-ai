@@ -168,7 +168,7 @@ export function ECOWizard({
 
   // Step 2 — Affected items (real BOM parts for this project)
   const { data: bomTree } = useBomTree(projectId);
-  const bomRootNodes = useMemo(() => (bomTree?.root ? [fromApiNode(bomTree.root)] : []), [bomTree]);
+  const bomRootNodes = useMemo(() => (bomTree?.roots ?? []).map(r => fromApiNode(r)), [bomTree]);
   const bomPool = useMemo(
     () => bomFlatAll(bomRootNodes).map(n => ({
       pn: n.pn,
