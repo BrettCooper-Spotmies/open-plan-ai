@@ -7,6 +7,7 @@ import { MessageArea } from './components/MessageArea';
 import { MessageInput } from './components/MessageInput';
 import { ChatHeader } from './components/ChatHeader';
 import { DetailPanel } from './components/DetailPanel';
+import { AddMemberDialog } from './components/AddMemberDialog';
 import { EmptyState } from './components/EmptyState';
 import { TypingIndicator } from './components/TypingIndicator';
 import { MessageAreaSkeleton } from './components/MessageAreaSkeleton';
@@ -31,6 +32,7 @@ export default function Chat() {
 
   const { conversations, loading: convsLoading, refetch } = useConversations();
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
   const activeId = conversationId || (isMobile ? null : activeConversationId);
   const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages, sendMessage, readOnly, readOnlyNotice } = useMessages(activeId ?? null);
   const { reactionMap, handleToggleReaction } = useReactions(messages, user?.id, activeId ?? null);
@@ -168,6 +170,7 @@ export default function Chat() {
                   onBack={isMobile ? handleBack : undefined}
                   onlineUserIds={onlineUserIds}
                   typingText={typingText}
+                  onAddMember={() => setAddMemberOpen(true)}
                 />
                 {isMessageSearchOpen && <MessageSearchBar />}
                 {msgsLoading ? (
@@ -203,6 +206,15 @@ export default function Chat() {
               routeHasConversation && convsLoading ? <MessageAreaSkeleton /> : <EmptyState type="no-selection" />
             )}
           </div>
+        )}
+
+        {activeConv && (
+          <AddMemberDialog
+            conversation={activeConv}
+            open={addMemberOpen}
+            onOpenChange={setAddMemberOpen}
+            onMemberAdded={refetch}
+          />
         )}
 
         {isDetailPanelOpen && activeConv && (
