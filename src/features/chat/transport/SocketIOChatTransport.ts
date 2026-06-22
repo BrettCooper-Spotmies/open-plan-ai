@@ -114,10 +114,13 @@ export class SocketIOChatTransport implements IChatTransport {
   }
 
   subscribeToReadReceipts(
-    _conversationId: string,
+    conversationId: string,
     onInsert: (payload: unknown) => void
   ): Unsubscribe {
-    const handler = (payload: unknown) => onInsert(payload);
+    const handler = (payload: unknown) => {
+      if ((payload as any)?.conversationId !== conversationId) return;
+      onInsert(payload);
+    };
     this.socket.on('message-read', handler);
     return () => {
       this.socket.off('message-read', handler);

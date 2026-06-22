@@ -44,6 +44,7 @@ interface ChatState {
   getDraft: (conversationId: string) => string;
   markAsRead: (conversationId: string) => void;
   incrementUnread: (conversationId: string) => void;
+  hydrateUnreadCounts: (conversations: Conversation[]) => void;
   getTotalUnread: () => number;
   toggleMessageSearch: () => void;
   setMessageSearchQuery: (query: string) => void;
@@ -116,6 +117,14 @@ export const useChatStore = create<ChatState>()(
             [conversationId]: (state.unreadCounts[conversationId] || 0) + 1,
           },
         })),
+      hydrateUnreadCounts: (conversations) =>
+        set((state) => {
+          const next = { ...state.unreadCounts };
+          for (const c of conversations) {
+            next[c.id] = c.id === state.activeConversationId ? 0 : (c.unreadCount ?? next[c.id] ?? 0);
+          }
+          return { unreadCounts: next };
+        }),
       getTotalUnread: () => {
         const counts = get().unreadCounts;
         return Object.values(counts).reduce((sum, c) => sum + c, 0);

@@ -35,6 +35,7 @@ const generateId = () => {
  * Stale-while-revalidate hook for conversations.
  */
 export function useConversations() {
+  const { user } = useAuth();
   const {
     conversations: cachedConversations,
     setConversations,
@@ -55,6 +56,7 @@ export function useConversations() {
       if (isMountedRef.current) {
         setLocalConversations(data);
         setConversations(data);
+        useChatStore.getState().hydrateUnreadCounts(data);
       }
     } catch (err) {
       logger.error('Failed to fetch conversations:', err);
@@ -93,11 +95,15 @@ export function useConversations() {
     const unreadUnsubs = convIds.map((convId) =>
       chatTransport.subscribeToMessages(convId, (payload) => {
         const raw = (payload as any)?.new ?? payload as any;
-        const activeId = useChatStore.getState().activeConversationId;
-        if (convId === activeId) return; // already viewing — no unread
-        useChatStore.getState().incrementUnread(convId);
-        // Also update the sidebar preview
         const store = useChatStore.getState();
+        const activeId = store.activeConversationId;
+        const isOwnMessage = (raw.senderId ?? raw.sender?.id) === user?.id;
+
+        if (convId !== activeId) {
+          store.incrementUnread(convId);
+        }
+
+        // Also update the sidebar preview
         store.setConversations(
           store.conversations.map((c) =>
             c.id === convId
@@ -105,6 +111,7 @@ export function useConversations() {
                   ...c,
                   lastMessage: {
                     content: raw.content ?? '',
+                    senderId: raw.senderId ?? raw.sender?.id ?? undefined,
                     senderName: raw.sender?.name ?? raw.senderName ?? '',
                     createdAt: raw.createdAt ?? new Date().toISOString(),
                   },
@@ -113,6 +120,15 @@ export function useConversations() {
               : c
           )
         );
+
+        if (convId !== activeId && !isOwnMessage) {
+          const conv = store.conversations.find((c) => c.id === convId);
+          const senderName = raw.sender?.name ?? raw.senderName ?? 'Someone';
+          const preview = (raw.content ?? '').slice(0, 80);
+          toast.message(conv?.type === 'group' && conv.name ? `${senderName} in ${conv.name}` : senderName, {
+            description: preview,
+          });
+        }
       })
     );
 

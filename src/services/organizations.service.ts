@@ -128,6 +128,7 @@ export const organizationsService = {
     const res = await apiClient.raw.post<{ success: boolean; data: { logoUrl: string } }>(
       ENDPOINTS.ORGANIZATIONS.LOGO(orgId),
       formData,
+      { headers: { 'Content-Type': undefined } },
     );
     const rawUrl = res.data.data.logoUrl;
     return resolveFileUrl(rawUrl) ?? rawUrl;
