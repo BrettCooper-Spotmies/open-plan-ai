@@ -9,7 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import {
@@ -490,7 +490,7 @@ const Team = () => {
                     <div className="flex items-center gap-3">
                       <Avatar className="h-8 w-8">
                         {member.avatar_url && (
-                          <img src={member.avatar_url} alt={member.name} className="h-full w-full rounded-full object-cover" />
+                          <AvatarImage src={member.avatar_url} alt={member.name} className="object-cover" />
                         )}
                         <AvatarFallback className="bg-primary/10 text-primary font-medium text-xs">
                           {member.initials || member.name?.slice(0, 2).toUpperCase() || '?'}

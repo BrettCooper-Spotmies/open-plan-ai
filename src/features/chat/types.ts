@@ -17,6 +17,7 @@ export interface ConversationMember {
   role: ConversationMemberRole;
   isOnline: boolean;
   lastSeenAt?: string;
+  lastReadAt?: string | null;
 }
 
 export interface MessageAttachment {
@@ -79,12 +80,14 @@ export interface Conversation {
   members: ConversationMember[];
   lastMessage?: {
     content: string;
+    senderId?: string;
     senderName: string;
     createdAt: string;
     status?: 'pending' | 'sending' | 'sent' | 'delivered' | 'read';
   };
   lastMessageAt: string;
   createdAt: string;
+  unreadCount?: number;
 }
 
 export interface ReachableUser {

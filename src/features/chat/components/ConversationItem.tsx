@@ -74,7 +74,9 @@ export function ConversationItem({ conversation, isActive, unreadCount, onClick,
         </div>
         {conversation.lastMessage && (
           <p className={cn('text-xs truncate mt-0.5', unreadCount > 0 ? 'text-foreground' : 'text-muted-foreground')}>
-            {conversation.type === 'group' && `${conversation.lastMessage.senderName}: `}
+            {conversation.lastMessage.senderId === currentUserId
+              ? 'You: '
+              : conversation.type === 'group' && conversation.lastMessage.senderName && `${conversation.lastMessage.senderName}: `}
             {conversation.lastMessage.content}
             {conversation.lastMessage.status === 'pending' && (
               <Clock className="inline-block h-3 w-3 ml-1 text-muted-foreground" />

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
-import { Sun, LayoutGrid, List } from 'lucide-react';
+import { LayoutGrid, List } from 'lucide-react';
 import { MyDayStats } from './components/MyDayStats';
 import { MyDayKanbanView } from './components/MyDayKanbanView';
 import { MyDayListView } from './components/MyDayListView';
@@ -169,9 +169,6 @@ export default function MyDay() {
         {/* Header - always visible, never shimmers */}
         <div className="mb-6">
           <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Sun className="h-6 w-6 text-primary" />
-            </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">My Day</h1>
               <p className="text-sm text-muted-foreground">{today}</p>
@@ -209,9 +206,6 @@ export default function MyDay() {
         {/* Kanban/List content */}
         {userTasks.length === 0 ? (
           <div className="text-center py-16">
-            <div className="p-4 rounded-full bg-muted/50 inline-block mb-4">
-              <Sun className="h-8 w-8 text-muted-foreground" />
-            </div>
             <h3 className="text-lg font-medium text-foreground mb-2">
               All caught up!
             </h3>

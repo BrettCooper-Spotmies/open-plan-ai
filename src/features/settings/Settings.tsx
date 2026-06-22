@@ -941,13 +941,20 @@ const Settings = () => {
                               <Check className="h-2.5 w-2.5" />
                             </span>
                           )}
-                          <div className={`h-12 rounded mb-3 flex items-center justify-center ${id === 'light'
-                            ? 'bg-background border border-border'
-                            : id === 'dark'
-                              ? 'bg-foreground'
-                              : 'bg-gradient-to-r from-background to-foreground border border-border'
-                            }`}>
-                            <Icon className={`h-5 w-5 ${id === 'dark' ? 'text-background' : 'text-foreground'}`} />
+                          <div
+                            className="h-12 rounded mb-3 flex items-center justify-center"
+                            style={
+                              id === 'light'
+                                ? { backgroundColor: '#ffffff', border: '1px solid #e2e8f0' }
+                                : id === 'dark'
+                                  ? { backgroundColor: '#0f172a' }
+                                  : { background: 'linear-gradient(to right, #ffffff, #0f172a)', border: '1px solid #e2e8f0' }
+                            }
+                          >
+                            <Icon
+                              className="h-5 w-5"
+                              style={{ color: id === 'light' ? '#1e293b' : '#f8fafc' }}
+                            />
                           </div>
                           <span className={`text-sm font-medium ${isActive ? 'text-primary' : 'text-foreground'}`}>
                             {label}

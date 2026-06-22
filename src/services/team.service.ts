@@ -1,5 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import {
   normalizeInviteEmail,
   inviteMatchesAnyEmail,
@@ -52,7 +53,9 @@ function fromApi(raw: Record<string, unknown>): TeamMember {
   const u = (raw.user ?? {}) as Record<string, unknown>;
   const email = (u.email ?? raw.email ?? '') as string;
   const name = ((u.name ?? raw.name ?? '') as string).trim() || email.split('@')[0] || '';
-  const avatarUrl = (u.avatarUrl ?? u.avatar_url ?? raw.avatarUrl ?? raw.avatar_url ?? null) as string | null;
+  const avatarUrl = resolveFileUrl(
+    (u.avatarUrl ?? u.avatar_url ?? raw.avatarUrl ?? raw.avatar_url ?? null) as string | null
+  );
   const initials = ((u.initials ?? raw.initials ?? '') as string) ||
     name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
 

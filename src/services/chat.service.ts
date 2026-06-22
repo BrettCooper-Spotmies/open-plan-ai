@@ -1,6 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
-import type { Conversation, ChatMessage, ReachableUser, ReadReceipt, MessageReaction } from '@/features/chat/types';
+import type { Conversation, ChatMessage, ReachableUser, MessageReaction } from '@/features/chat/types';
 import { resolveFileUrl } from '@/utils/fileUrl';
 
 /** Map backend MessageResponse (camelCase) to frontend ChatMessage (flat senderId). */
@@ -43,6 +43,7 @@ function mapConversation(raw: any): Conversation {
     initials: m.initials ?? (m.name ?? '').slice(0, 2).toUpperCase(),
     role: m.role ?? 'member',
     lastSeenAt: m.lastSeenAt ?? m.last_seen_at ?? null,
+    lastReadAt: m.lastReadAt ?? m.last_read_at ?? null,
     joinedAt: m.joinedAt ?? m.joined_at ?? null,
     leftAt: m.leftAt ?? m.left_at ?? null,
   }));
@@ -56,10 +57,16 @@ function mapConversation(raw: any): Conversation {
     avatarUrl: raw.avatarUrl ?? raw.avatar_url ?? undefined,
     members,
     lastMessage: raw.lastMessage
-      ? { content: raw.lastMessage.content, senderName: '', createdAt: raw.lastMessage.createdAt }
+      ? {
+          content: raw.lastMessage.content,
+          senderId: raw.lastMessage.senderId ?? undefined,
+          senderName: raw.lastMessage.senderName ?? '',
+          createdAt: raw.lastMessage.createdAt,
+        }
       : undefined,
     lastMessageAt: raw.updatedAt ?? raw.lastMessageAt ?? raw.createdAt ?? new Date().toISOString(),
     createdAt: raw.createdAt ?? new Date().toISOString(),
+    unreadCount: raw.unreadCount ?? 0,
   };
 }
 
@@ -186,10 +193,6 @@ export const chatService = {
     } catch {
       return [];
     }
-  },
-
-  async getReadReceipts(_messageIds: string[]): Promise<Record<string, ReadReceipt[]>> {
-    return {};
   },
 
   async getReactions(
