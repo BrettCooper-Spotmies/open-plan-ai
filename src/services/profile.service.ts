@@ -26,7 +26,7 @@ function mapToProfile(data: Record<string, unknown>): Profile {
 export const profileService = {
   async getProfile(): Promise<Profile | null> {
     try {
-      const data = await apiClient.get<Record<string, unknown>>(ENDPOINTS.USERS.ME);
+      const data = await apiClient.get<Record<string, unknown>>(ENDPOINTS.USERS.ME_PROFILE);
       return mapToProfile(data);
     } catch {
       return null;
@@ -34,7 +34,7 @@ export const profileService = {
   },
 
   async updateProfile(updates: Partial<Omit<Profile, 'id' | 'email'>>): Promise<Profile> {
-    const data = await apiClient.patch<Record<string, unknown>>(ENDPOINTS.USERS.ME, updates);
+    const data = await apiClient.put<Record<string, unknown>>(ENDPOINTS.USERS.ME_PROFILE, updates);
     return mapToProfile(data);
   },
 

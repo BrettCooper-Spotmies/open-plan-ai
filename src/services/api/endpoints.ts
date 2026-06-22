@@ -16,6 +16,7 @@ export const ENDPOINTS = {
   // Users
   USERS: {
     ME: '/users/me',
+    ME_PROFILE: '/users/me/profile',
     SEARCH: '/users/search',
     BY_ID: (id: string) => `/users/${id}`,
     ORGS: (id: string) => `/users/${id}/organizations`,
