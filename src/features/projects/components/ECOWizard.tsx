@@ -12,17 +12,8 @@ import {
 import { ECOAvatar } from './ECOShared';
 import { cn } from '@/lib/utils';
 import { useCreateECO } from '@/hooks/useECOs';
-
-// ── BOM pool (simulates where-used rollup) ────────────────────────────────────
-
-const BOM_POOL = [
-  { pn: 'EV-ENC-041', desc: 'Sheet Metal Cabinet IP54',       whereUsed: ['EV-ASM-100 Main Assembly'] },
-  { pn: 'EV-ENC-042', desc: 'Front Door Panel',               whereUsed: ['EV-ASM-110 Door Frame'] },
-  { pn: 'EV-PCB-002', desc: 'Main Controller PCBA',           whereUsed: ['EV-ASM-100 Main Assembly'] },
-  { pn: 'EV-CHD-034', desc: 'Cable Management Bracket',       whereUsed: ['EV-ASM-120 Harness Sub-Assy'] },
-  { pn: 'EV-SAF-062', desc: 'Emergency Stop Button',          whereUsed: ['EV-ASM-110 Door Frame'] },
-  { pn: 'EV-IC-U2',   desc: 'USB-C PD Controller PMIC',      whereUsed: ['EV-PCB-002 Main Controller PCBA'] },
-];
+import { useBomTree } from '@/hooks/useBom';
+import { fromApiNode, bomFlatAll, bomPath } from './bomData';
 
 // ── Attachment file type helper ───────────────────────────────────────────────
 
@@ -175,11 +166,22 @@ export function ECOWizard({
     effType: 'DATE', effValue: '',
   });
 
-  // Step 2 — Affected items
+  // Step 2 — Affected items (real BOM parts for this project)
+  const { data: bomTree } = useBomTree(projectId);
+  const bomRootNodes = useMemo(() => (bomTree?.root ? [fromApiNode(bomTree.root)] : []), [bomTree]);
+  const bomPool = useMemo(
+    () => bomFlatAll(bomRootNodes).map(n => ({
+      pn: n.pn,
+      desc: n.desc,
+      whereUsed: (bomPath(n.id, bomRootNodes) ?? []).slice(0, -1).map(a => `${a.pn} ${a.desc}`),
+    })),
+    [bomRootNodes],
+  );
+
   const [items, setItems] = useState<ItemState[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const addItem = (p: typeof BOM_POOL[number]) => {
+  const addItem = (p: typeof bomPool[number]) => {
     setItems(prev =>
       prev.find(x => x.pn === p.pn)
         ? prev
@@ -389,19 +391,25 @@ export function ECOWizard({
       </div>
       {pickerOpen && (
         <div className="border border-border rounded-lg overflow-hidden">
-          {BOM_POOL.map(p => (
-            <div
-              key={p.pn}
-              onClick={() => addItem(p)}
-              className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
-            >
-              <div>
-                <span className="text-[12px] font-mono font-semibold text-blue-500">{p.pn}</span>
-                <span className="text-[12px] text-muted-foreground ml-2.5">{p.desc}</span>
-              </div>
-              <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+          {bomPool.length === 0 ? (
+            <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
+              No parts in this project's BOM yet.
             </div>
-          ))}
+          ) : (
+            bomPool.map(p => (
+              <div
+                key={p.pn}
+                onClick={() => addItem(p)}
+                className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
+              >
+                <div>
+                  <span className="text-[12px] font-mono font-semibold text-blue-500">{p.pn}</span>
+                  <span className="text-[12px] text-muted-foreground ml-2.5">{p.desc}</span>
+                </div>
+                <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+              </div>
+            ))
+          )}
         </div>
       )}
       {items.length === 0 && !pickerOpen && (
