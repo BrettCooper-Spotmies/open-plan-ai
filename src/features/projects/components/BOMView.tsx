@@ -6,7 +6,14 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBomTree, useCreateBomNode } from '@/hooks/useBom';
 import { useCreatePart } from '@/hooks/useParts';
-import { uploadBomDocumentFile } from '@/hooks/useBomDocuments';
+import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
+
+async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
+  const docs = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as DocValue[];
+  await Promise.allSettled(
+    docs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName)),
+  );
+}
 
 function softTint(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
@@ -48,7 +55,7 @@ import {
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMDetailScreen } from './BOMDetailScreen';
 import { BOMMapView } from './BOMMapView';
-import { BOMPartSheet, BOMPartPayload } from './BOMPartSheet';
+import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { useCurrency } from '@/hooks/useCurrency';
 
 // ── Skeletons ──────────────────────────────────────────────────────
@@ -725,8 +732,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
         ownerId:  payload.ownerId ?? null,
       });
       // Upload any documents attached in the form
-      const docFiles = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as File[];
-      await Promise.allSettled(docFiles.map(f => uploadBomDocumentFile(node.id, f)));
+      await saveBomDocs(node.id, payload);
       if (onAddClose) onAddClose();
     } catch {
       // errors are logged by React Query's MutationCache; no further action needed

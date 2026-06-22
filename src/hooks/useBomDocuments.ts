@@ -16,6 +16,15 @@ export async function uploadBomDocumentFile(nodeId: string, file: File): Promise
   return res.data.data;
 }
 
+// Plain async helper for linking an external URL as a document — usable outside React hooks
+export async function addBomDocumentLink(nodeId: string, url: string, fileName?: string): Promise<BomAttachment> {
+  const res = await apiClient.raw.post<{ success: boolean; data: BomAttachment }>(
+    ENDPOINTS.UPLOADS.ATTACHMENT_LINK,
+    { entityId: nodeId, entityType: 'bom_node', url, fileName },
+  );
+  return res.data.data;
+}
+
 export interface BomAttachment {
   id: string;
   entityId: string;
@@ -51,6 +60,22 @@ export function useUploadBomDocument(nodeId: string) {
         ENDPOINTS.UPLOADS.ATTACHMENTS,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } },
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bom-documents', nodeId] });
+    },
+  });
+}
+
+export function useAddBomDocumentLink(nodeId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ url, fileName }: { url: string; fileName?: string }) => {
+      const res = await apiClient.raw.post<{ success: boolean; data: BomAttachment }>(
+        ENDPOINTS.UPLOADS.ATTACHMENT_LINK,
+        { entityId: nodeId, entityType: ENTITY_TYPE, url, fileName },
       );
       return res.data.data;
     },

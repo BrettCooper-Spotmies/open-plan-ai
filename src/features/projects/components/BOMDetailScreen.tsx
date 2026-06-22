@@ -14,13 +14,20 @@ import {
 import { cn } from '@/lib/utils';
 import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, fromApiRevision } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
-import { BOMPartSheet, BOMPartPayload } from './BOMPartSheet';
+import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision } from '@/hooks/useParts';
 import { useCreateBomNode, useUpdateBomNode } from '@/hooks/useBom';
-import { uploadBomDocumentFile } from '@/hooks/useBomDocuments';
+import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
 import { useCurrency } from '@/hooks/useCurrency';
+
+async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
+  const docs = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as DocValue[];
+  await Promise.allSettled(
+    docs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName)),
+  );
+}
 
 // ── Add Sub-component Dialog ───────────────────────────────────────
 function AddSubcomponentDialog({
@@ -483,8 +490,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       partId: part.id, quantity: payload.qty, unit: payload.uom,
       status: payload.status, parentId: originalNode.id,
     });
-    const docFiles = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as File[];
-    await Promise.allSettled(docFiles.map(f => uploadBomDocumentFile(node.id, f)));
+    await saveBomDocs(node.id, payload);
     setShowCreateNewSub(false);
   };
 
@@ -514,8 +520,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       ]);
     }
     // Upload any documents attached in the edit form
-    const docFiles = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as File[];
-    await Promise.allSettled(docFiles.map(f => uploadBomDocumentFile(originalNode.id, f)));
+    await saveBomDocs(originalNode.id, payload);
     setShowEdit(false);
   };
 

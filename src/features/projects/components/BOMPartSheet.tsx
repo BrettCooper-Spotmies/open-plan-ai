@@ -19,13 +19,16 @@ import { cn } from '@/lib/utils';
 import {
   Zap, Cpu, Package, Box, Monitor, Shield, Layers, ChevronsUpDown,
   CheckCircle, Clock, GitBranch, Save, Plus, X, ChevronRight, ChevronLeft,
-  FileText, ImageIcon, Upload, Paperclip, AlertCircle,
+  FileText, ImageIcon, Upload, Paperclip, AlertCircle, Link as LinkIcon,
 } from 'lucide-react';
 import {
   BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, BOMRevision,
 } from './bomData';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { TeamMember } from '@/types';
+
+// ── Document value: either an uploaded file or a linked URL ───────
+export type DocValue = { kind: 'file'; file: File } | { kind: 'url'; url: string; fileName?: string };
 
 // ── Public payload type ───────────────────────────────────────────
 export interface BOMPartPayload {
@@ -45,11 +48,11 @@ export interface BOMPartPayload {
   owner: string;
   ownerId?: string;
   req: string[];
-  // documents (File objects; null = cleared, undefined = unchanged)
-  docPhoto?: File | null;
-  docDatasheet?: File | null;
-  doc3DModel?: File | null;
-  docFootprint?: File | null;
+  // documents (uploaded file or linked URL; null = cleared, undefined = unchanged)
+  docPhoto?: DocValue | null;
+  docDatasheet?: DocValue | null;
+  doc3DModel?: DocValue | null;
+  docFootprint?: DocValue | null;
   // edit-only version fields
   versionMode?: 'same' | 'new';
   newRevLabel?: string;
@@ -98,92 +101,191 @@ const FInput = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
   <Input {...props} className={cn('h-8 text-sm bg-muted border-border focus-visible:ring-1', props.className)} />
 );
 
-// ── File upload row ────────────────────────────────────────────────
+// ── File upload row (supports uploading a file or linking a URL) ──
 interface FileRowProps {
   icon: React.ElementType;
   label: string;
   hint: string;
   accept: string;
-  file: File | null;
-  onChange: (f: File | null) => void;
+  value: DocValue | null;
+  onChange: (v: DocValue | null) => void;
 }
-function FileRow({ icon: Icon, label, hint, accept, file, onChange }: FileRowProps) {
+function FileRow({ icon: Icon, label, hint, accept, value, onChange }: FileRowProps) {
   const ref = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<'file' | 'url'>('file');
+  const [urlInput, setUrlInput] = useState('');
+
+  const addUrl = () => {
+    const u = urlInput.trim();
+    if (!u) return;
+    onChange({ kind: 'url', url: u });
+    setUrlInput('');
+  };
+
   return (
-    <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors">
-      <div className="w-9 h-9 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0">
-        <Icon className="w-4 h-4 text-muted-foreground" />
+    <div className="rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors">
+      <div className="flex items-center gap-3 p-3">
+        <div className="w-9 h-9 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0">
+          <Icon className="w-4 h-4 text-muted-foreground" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-foreground">{label}</div>
+          {value?.kind === 'file' ? (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-[11px] text-primary font-medium truncate max-w-[220px]">{value.file.name}</span>
+              <span className="text-[10px] text-muted-foreground shrink-0">
+                ({(value.file.size / 1024).toFixed(0)} KB)
+              </span>
+            </div>
+          ) : value?.kind === 'url' ? (
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <LinkIcon className="w-3 h-3 text-primary shrink-0" />
+              <span className="text-[11px] text-primary font-medium truncate max-w-[260px]">{value.url}</span>
+            </div>
+          ) : (
+            <div className="text-[11px] text-muted-foreground">{hint}</div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {value && (
+            <button onClick={() => onChange(null)}
+              className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {value ? (
+            <button onClick={() => ref.current?.click()}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors">
+              <Upload className="w-3 h-3" /> Replace
+            </button>
+          ) : mode === 'file' ? (
+            <>
+              <button onClick={() => ref.current?.click()}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors">
+                <Upload className="w-3 h-3" /> Upload
+              </button>
+              <button onClick={() => setMode('url')}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors">
+                <LinkIcon className="w-3 h-3" /> URL
+              </button>
+            </>
+          ) : (
+            <button onClick={() => setMode('file')}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors">
+              <Upload className="w-3 h-3" /> Upload instead
+            </button>
+          )}
+        </div>
+        <input ref={ref} type="file" accept={accept} className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) { onChange({ kind: 'file', file: f }); setMode('file'); } }} />
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-foreground">{label}</div>
-        {file ? (
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[11px] text-primary font-medium truncate max-w-[220px]">{file.name}</span>
-            <span className="text-[10px] text-muted-foreground shrink-0">
-              ({(file.size / 1024).toFixed(0)} KB)
-            </span>
-          </div>
-        ) : (
-          <div className="text-[11px] text-muted-foreground">{hint}</div>
-        )}
-      </div>
-      <div className="flex items-center gap-1 shrink-0">
-        {file && (
-          <button onClick={() => onChange(null)}
-            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-            <X className="w-3.5 h-3.5" />
+      {!value && mode === 'url' && (
+        <div className="px-3 pb-3 -mt-1 flex items-center gap-2">
+          <input
+            value={urlInput}
+            onChange={e => setUrlInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') addUrl(); }}
+            placeholder="https://example.com/file.pdf"
+            className="flex-1 h-8 text-xs bg-muted border border-border rounded-md px-2.5 outline-none focus:border-primary/40 placeholder:text-muted-foreground/50"
+          />
+          <button
+            disabled={!urlInput.trim()}
+            onClick={addUrl}
+            className="px-3 py-1.5 rounded-md text-[11px] font-medium bg-foreground text-background disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            Add
           </button>
-        )}
-        <button onClick={() => ref.current?.click()}
-          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium border border-border bg-background hover:bg-muted transition-colors">
-          <Upload className="w-3 h-3" /> {file ? 'Replace' : 'Upload'}
-        </button>
-      </div>
-      <input ref={ref} type="file" accept={accept} className="hidden"
-        onChange={e => onChange(e.target.files?.[0] ?? null)} />
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Photo upload ───────────────────────────────────────────────────
-function PhotoUpload({ file, onChange }: { file: File | null; onChange: (f: File | null) => void }) {
+// ── Photo upload (supports uploading a file or linking a URL) ──────
+function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v: DocValue | null) => void }) {
   const ref = useRef<HTMLInputElement>(null);
-  const preview = file ? URL.createObjectURL(file) : null;
+  const [mode, setMode] = useState<'file' | 'url'>('file');
+  const [urlInput, setUrlInput] = useState('');
+  const preview = value?.kind === 'file' ? URL.createObjectURL(value.file) : value?.kind === 'url' ? value.url : null;
+
+  const addUrl = () => {
+    const u = urlInput.trim();
+    if (!u) return;
+    onChange({ kind: 'url', url: u });
+    setUrlInput('');
+  };
+
   return (
     <div className="space-y-2">
       <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         Product Photo
       </Label>
       <div
-        onClick={() => ref.current?.click()}
+        onClick={() => { if (!value && mode === 'file') ref.current?.click(); }}
         className={cn(
-          'relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed cursor-pointer transition-colors',
-          file ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30 hover:bg-muted/60 hover:border-primary/30',
+          'relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition-colors',
+          value ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30 hover:bg-muted/60 hover:border-primary/30',
+          !value && mode === 'file' && 'cursor-pointer',
         )}
         style={{ height: 140 }}
       >
         {preview ? (
           <>
             <img src={preview} alt="preview" className="w-full h-full object-cover rounded-xl opacity-80" />
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30 rounded-xl">
-              <span className="text-xs text-white font-medium">Click to replace</span>
-            </div>
+            {value?.kind === 'file' && (
+              <div onClick={() => ref.current?.click()}
+                className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30 rounded-xl cursor-pointer">
+                <span className="text-xs text-white font-medium">Click to replace</span>
+              </div>
+            )}
           </>
-        ) : (
+        ) : mode === 'file' ? (
           <>
             <ImageIcon className="w-8 h-8 text-muted-foreground/40 mb-2" />
             <span className="text-xs text-muted-foreground">Click to upload product photo</span>
             <span className="text-[10px] text-muted-foreground/60 mt-0.5">PNG, JPG, WEBP · max 10 MB</span>
           </>
+        ) : (
+          <div className="w-full px-4 flex flex-col items-center gap-2">
+            <LinkIcon className="w-6 h-6 text-muted-foreground/40" />
+            <div className="w-full flex items-center gap-2">
+              <input
+                value={urlInput}
+                onChange={e => setUrlInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addUrl(); }}
+                onClick={e => e.stopPropagation()}
+                placeholder="https://example.com/photo.jpg"
+                className="flex-1 h-8 text-xs bg-background border border-border rounded-md px-2.5 outline-none focus:border-primary/40 placeholder:text-muted-foreground/50"
+              />
+              <button
+                disabled={!urlInput.trim()}
+                onClick={e => { e.stopPropagation(); addUrl(); }}
+                className="px-3 py-1.5 rounded-md text-[11px] font-medium bg-foreground text-background disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+              >
+                Add
+              </button>
+            </div>
+          </div>
         )}
       </div>
-      {file && (
-        <button onClick={() => onChange(null)} className="text-[11px] text-destructive hover:underline">
-          Remove photo
-        </button>
-      )}
+      <div className="flex items-center gap-3">
+        {value ? (
+          <>
+            <button onClick={() => onChange(null)} className="text-[11px] text-destructive hover:underline">
+              Remove photo
+            </button>
+            {value.kind === 'url' && (
+              <span className="text-[11px] text-muted-foreground truncate max-w-[260px]">{value.url}</span>
+            )}
+          </>
+        ) : (
+          <button onClick={() => setMode(m => m === 'file' ? 'url' : 'file')} className="text-[11px] text-muted-foreground hover:text-foreground underline">
+            {mode === 'file' ? 'or paste an image URL' : 'or upload a file instead'}
+          </button>
+        )}
+      </div>
       <input ref={ref} type="file" accept="image/*" className="hidden"
-        onChange={e => onChange(e.target.files?.[0] ?? null)} />
+        onChange={e => { const f = e.target.files?.[0]; if (f) { onChange({ kind: 'file', file: f }); setMode('file'); } }} />
     </div>
   );
 }
@@ -213,10 +315,10 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   const [activeTab,      setActiveTab]      = useState<TabId>('details');
   const [reqInput,     setReqInput]     = useState('');
   // documents
-  const [docPhoto,     setDocPhoto]     = useState<File | null>(null);
-  const [docDatasheet, setDocDatasheet] = useState<File | null>(null);
-  const [doc3DModel,   setDoc3DModel]   = useState<File | null>(null);
-  const [docFootprint, setDocFootprint] = useState<File | null>(null);
+  const [docPhoto,     setDocPhoto]     = useState<DocValue | null>(null);
+  const [docDatasheet, setDocDatasheet] = useState<DocValue | null>(null);
+  const [doc3DModel,   setDoc3DModel]   = useState<DocValue | null>(null);
+  const [docFootprint, setDocFootprint] = useState<DocValue | null>(null);
   // edit: version
   const [versionMode,  setVersionMode]  = useState<'same' | 'new'>('same');
   const [newRevLabel,  setNewRevLabel]  = useState(node ? nextRev(node.rev) : 'B');
@@ -583,18 +685,18 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
           <TabsContent value="documents" className="flex-1 overflow-y-auto px-7 py-5 mt-0 data-[state=inactive]:hidden">
             <div className="grid grid-cols-2 gap-8">
               <div>
-                <PhotoUpload file={docPhoto} onChange={setDocPhoto} />
+                <PhotoUpload value={docPhoto} onChange={setDocPhoto} />
               </div>
               <div className="space-y-3">
                 <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-3">
                   Technical Files
                 </Label>
                 <FileRow icon={FileText}  label="Datasheet"         hint="PDF · Manufacturer datasheet"
-                  accept=".pdf,application/pdf" file={docDatasheet} onChange={setDocDatasheet} />
+                  accept=".pdf,application/pdf" value={docDatasheet} onChange={setDocDatasheet} />
                 <FileRow icon={Paperclip} label="3D Model (STEP)"   hint=".step, .stp · CAD model file"
-                  accept=".step,.stp"           file={doc3DModel}   onChange={setDoc3DModel} />
+                  accept=".step,.stp"           value={doc3DModel}   onChange={setDoc3DModel} />
                 <FileRow icon={Paperclip} label="Footprint Library" hint=".kicad_mod, .lib · EDA footprint"
-                  accept=".kicad_mod,.lib,.lbr" file={docFootprint} onChange={setDocFootprint} />
+                  accept=".kicad_mod,.lib,.lbr" value={docFootprint} onChange={setDocFootprint} />
               </div>
             </div>
           </TabsContent>
