@@ -103,26 +103,27 @@ export function useConversations() {
           store.incrementUnread(convId);
         }
 
-        // Also update the sidebar preview
-        store.setConversations(
-          store.conversations.map((c) =>
-            c.id === convId
-              ? {
-                  ...c,
-                  lastMessage: {
-                    content: raw.content ?? '',
-                    senderId: raw.senderId ?? raw.sender?.id ?? undefined,
-                    senderName: raw.sender?.name ?? raw.senderName ?? '',
-                    createdAt: raw.createdAt ?? new Date().toISOString(),
-                  },
-                  lastMessageAt: raw.createdAt ?? new Date().toISOString(),
-                }
-              : c
-          )
+        // Update both the Zustand cache and the locally-rendered state — this hook
+        // returns its own `conversations` state, which the store update alone doesn't touch.
+        const nextConversations = store.conversations.map((c) =>
+          c.id === convId
+            ? {
+                ...c,
+                lastMessage: {
+                  content: raw.content ?? '',
+                  senderId: raw.senderId ?? raw.sender?.id ?? undefined,
+                  senderName: raw.sender?.name ?? raw.senderName ?? '',
+                  createdAt: raw.createdAt ?? new Date().toISOString(),
+                },
+                lastMessageAt: raw.createdAt ?? new Date().toISOString(),
+              }
+            : c
         );
+        store.setConversations(nextConversations);
+        setLocalConversations(nextConversations);
 
         if (convId !== activeId && !isOwnMessage) {
-          const conv = store.conversations.find((c) => c.id === convId);
+          const conv = nextConversations.find((c) => c.id === convId);
           const senderName = raw.sender?.name ?? raw.senderName ?? 'Someone';
           const preview = (raw.content ?? '').slice(0, 80);
           toast.message(conv?.type === 'group' && conv.name ? `${senderName} in ${conv.name}` : senderName, {
