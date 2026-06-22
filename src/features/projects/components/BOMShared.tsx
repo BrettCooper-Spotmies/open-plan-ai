@@ -11,8 +11,8 @@ const CAT_ICONS: Record<BOMCategory, React.ElementType> = {
 };
 
 export function PartThumb({
-  cat, size = 32, radius = 7, big = false,
-}: { cat: BOMCategory; size?: number; radius?: number; big?: boolean }) {
+  cat, size = 32, radius = 7, big = false, imageUrl,
+}: { cat: BOMCategory; size?: number; radius?: number; big?: boolean; imageUrl?: string | null }) {
   const meta = BOM_CAT_META[cat] ?? BOM_CAT_META.assembly;
   const Icon = CAT_ICONS[cat] ?? Package;
   const iconSize = big ? 34 : Math.round(size * 0.46);
@@ -27,11 +27,19 @@ export function PartThumb({
     flexShrink: 0,
     border: '1px solid var(--border)',
     background: `${meta.tint}0d`,
-    backgroundImage: `repeating-linear-gradient(135deg, ${meta.tint}1f 0, ${meta.tint}1f 1px, transparent 1px, transparent ${patternSize}px)`,
+    backgroundImage: imageUrl ? undefined : `repeating-linear-gradient(135deg, ${meta.tint}1f 0, ${meta.tint}1f 1px, transparent 1px, transparent ${patternSize}px)`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   };
+
+  if (imageUrl) {
+    return (
+      <div style={containerStyle}>
+        <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+      </div>
+    );
+  }
 
   return (
     <div style={containerStyle}>

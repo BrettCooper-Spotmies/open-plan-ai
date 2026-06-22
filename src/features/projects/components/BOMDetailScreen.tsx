@@ -19,8 +19,9 @@ import { BOMECOSheet } from './BOMECOSheet';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision } from '@/hooks/useParts';
 import { useCreateBomNode, useUpdateBomNode } from '@/hooks/useBom';
-import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
+import { uploadBomDocumentFile, addBomDocumentLink, useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
 import { useCurrency } from '@/hooks/useCurrency';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
   const docs = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as DocValue[];
@@ -429,6 +430,13 @@ function RevisionToggle({
 export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectId, onBack, onNavigate }: Props) {
   const { formatCurrency } = useCurrency();
 
+  // ── Uploaded documents — pull the product photo (first image attachment) ──
+  const { data: nodeDocs } = useBomDocuments(originalNode.id);
+  const photoUrl = useMemo(() => {
+    const photo = (nodeDocs ?? []).find(isImageAttachment);
+    return photo ? resolveFileUrl(photo.fileUrl) : null;
+  }, [nodeDocs]);
+
   // ── Revision history from API ──
   const { data: apiRevisions, isLoading: revisionsLoading } = usePartRevisions(originalNode._partId);
   const revHistory = useMemo<BOMRevision[]>(
@@ -554,7 +562,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         <div className="px-6 pb-4 flex items-start justify-between gap-5">
           <div className="flex gap-4 items-start min-w-0">
             <div className="w-16 shrink-0">
-              <PartThumb cat={node.cat} size={64} radius={12} />
+              <PartThumb cat={node.cat} size={64} radius={12} imageUrl={photoUrl} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
@@ -630,7 +638,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             {/* Overview */}
             <Card title="Overview">
               <div className="flex gap-4">
-                <div className="w-48 shrink-0"><PartThumb cat={node.cat} big /></div>
+                <div className="w-48 shrink-0"><PartThumb cat={node.cat} big imageUrl={photoUrl} /></div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-muted-foreground leading-relaxed mb-3.5">
                     {node.desc} — {meta.label.toLowerCase()} component{node.manufacturer ? ` sourced from ${node.manufacturer}` : ''}.

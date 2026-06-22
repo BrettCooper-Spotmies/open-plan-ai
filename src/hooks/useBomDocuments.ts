@@ -31,11 +31,20 @@ export interface BomAttachment {
   entityType: string;
   fileName: string;
   fileKey: string;
-  fileUrl: string;   // "serve:attachments/bom_node/..."
-  fileSize: number;
-  mimeType: string;
+  fileUrl: string;   // "serve:attachments/bom_node/..." or a raw http(s) URL for linked docs
+  fileSize: number | null;
+  mimeType: string | null;
   uploadedBy: string;
   createdAt: string;
+}
+
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'avif'];
+
+// True if this attachment is an image — used to pick the part's product photo
+export function isImageAttachment(doc: Pick<BomAttachment, 'mimeType' | 'fileName' | 'fileUrl'>): boolean {
+  if (doc.mimeType?.startsWith('image/')) return true;
+  const ext = (doc.fileName || doc.fileUrl).split('.').pop()?.toLowerCase().split(/[?#]/)[0] ?? '';
+  return IMAGE_EXTENSIONS.includes(ext);
 }
 
 const ENTITY_TYPE = 'bom_node';

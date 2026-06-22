@@ -6,19 +6,20 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
-import { useBomDocuments, useUploadBomDocument, useDeleteBomDocument, BomAttachment } from '@/hooks/useBomDocuments';
+import { useBomDocuments, useUploadBomDocument, useDeleteBomDocument, BomAttachment, isImageAttachment } from '@/hooks/useBomDocuments';
 
 // ── Icon by MIME type / extension ────────────────────────────────────
-function fileIcon(mimeType: string, fileName: string): React.ElementType {
-  if (mimeType.startsWith('image/')) return ImageIcon;
-  if (mimeType === 'application/pdf') return FileText;
-  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+function fileIcon(doc: Pick<BomAttachment, 'mimeType' | 'fileName' | 'fileUrl'>): React.ElementType {
+  if (isImageAttachment(doc)) return ImageIcon;
+  if (doc.mimeType === 'application/pdf') return FileText;
+  const ext = doc.fileName.split('.').pop()?.toLowerCase() ?? '';
   if (['step', 'stp', 'iges', 'igs', 'stl'].includes(ext)) return Box;
   if (['kicad_mod', 'kicad_pcb', 'lib', 'lbr'].includes(ext)) return Cpu;
   return File;
 }
 
-function formatBytes(b: number) {
+function formatBytes(b: number | null) {
+  if (b == null) return 'Linked';
   if (b < 1024) return `${b} B`;
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(0)} KB`;
   return `${(b / (1024 * 1024)).toFixed(1)} MB`;
@@ -38,7 +39,7 @@ function AttachmentRow({
   onDelete: () => void;
   deleting: boolean;
 }) {
-  const Icon = fileIcon(doc.mimeType, doc.fileName);
+  const Icon = fileIcon(doc);
   const viewUrl = resolveFileUrl(doc.fileUrl);
 
   return (
