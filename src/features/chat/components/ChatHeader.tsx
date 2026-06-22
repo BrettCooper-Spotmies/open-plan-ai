@@ -1,4 +1,4 @@
-import { ArrowLeft, Info, Phone, Search, Video } from 'lucide-react';
+import { ArrowLeft, Info, Phone, Search, UserPlus, Video } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { OnlineStatus } from './OnlineStatus';
@@ -13,14 +13,18 @@ interface ChatHeaderProps {
   onBack?: () => void;
   onlineUserIds?: Set<string>;
   typingText?: string;
+  onAddMember?: () => void;
 }
 
-export function ChatHeader({ conversation, onBack, onlineUserIds, typingText }: ChatHeaderProps) {
+export function ChatHeader({ conversation, onBack, onlineUserIds, typingText, onAddMember }: ChatHeaderProps) {
   const { user } = useAuth();
   const currentUserId = user?.id;
   const toggleDetailPanel = useChatStore((s) => s.toggleDetailPanel);
   const setDetailPanelOpen = useChatStore((s) => s.setDetailPanelOpen);
   const isDetailOpen = useChatStore((s) => s.isDetailPanelOpen);
+
+  const currentMember = conversation.members.find((m) => m.id === currentUserId);
+  const isOwner = currentMember?.role === 'owner';
 
   const otherMember = conversation.type === 'dm'
     ? conversation.members.find((m) => m.id !== currentUserId)
@@ -30,7 +34,7 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText }: 
 
   const displayName = conversation.type === 'dm' ? otherMember?.name || conversation.name : conversation.name;
   const isEmoji = (str: string) => {
-    const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/;
+    const emojiRegex = /(©|®|[ -㌀]|\ud83c[퀀-\udfff]|\ud83d[퀀-\udfff]|\ud83e[퀀-\udfff])/;
     return emojiRegex.test(str) && str.length <= 8;
   };
 
@@ -85,6 +89,11 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText }: 
 
       <div className="flex items-center gap-1">
         <Button variant="ghost" size="icon" className="h-8 w-8" title="Search" onClick={() => useChatStore.getState().toggleMessageSearch()}><Search className="h-4 w-4" /></Button>
+        {conversation.type === 'group' && isOwner && onAddMember && (
+          <Button variant="ghost" size="icon" className="h-8 w-8" title="Add member" onClick={onAddMember}>
+            <UserPlus className="h-4 w-4" />
+          </Button>
+        )}
         <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Voice call"><Phone className="h-4 w-4" /></Button>
         <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Video call"><Video className="h-4 w-4" /></Button>
         <Button

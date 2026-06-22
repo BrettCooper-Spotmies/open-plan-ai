@@ -1,6 +1,5 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
-import { attachmentsService } from './attachments.service';
 import { resolveFileUrl } from '@/utils/fileUrl';
 
 export interface OrganizationSettings {
@@ -121,26 +120,25 @@ export const organizationsService = {
   },
 
   /**
-   * Upload organization logo to S3, then save the URL in org settings.
+   * Upload organization logo — single-step endpoint handles S3 + settings update.
    */
   async uploadLogo(orgId: string, file: File): Promise<string> {
-    const record = await attachmentsService.upload({
-      entityId: orgId,
-      entityType: 'organization',
-      file,
-    });
-    const rawUrl = record.fileUrl ?? record.url ?? '';
-    // Persist the raw reference in org settings
-    await this.update(orgId, { settings: { logoUrl: rawUrl } });
-    // Return resolved URL for immediate display
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.raw.post<{ success: boolean; data: { logoUrl: string } }>(
+      ENDPOINTS.ORGANIZATIONS.LOGO(orgId),
+      formData,
+      { headers: { 'Content-Type': undefined } },
+    );
+    const rawUrl = res.data.data.logoUrl;
     return resolveFileUrl(rawUrl) ?? rawUrl;
   },
 
   /**
-   * Remove organization logo — clear from settings.
+   * Remove organization logo.
    */
   async deleteLogo(orgId: string): Promise<void> {
-    await this.update(orgId, { settings: { logoUrl: '' } });
+    await apiClient.delete<void>(ENDPOINTS.ORGANIZATIONS.LOGO(orgId));
   },
 
   /**
