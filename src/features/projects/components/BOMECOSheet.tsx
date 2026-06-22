@@ -136,6 +136,7 @@ export function BOMECOSheet({
 
   // ── Impact tab state ──
   const [impactArea, setImpactArea] = useState<ImpactArea>('schedule');
+  const [impactAreaOther, setImpactAreaOther] = useState('');
   const [impactLevel, setImpactLevel] = useState<ImpactLevel>('MEDIUM');
   const [impactDesc, setImpactDesc] = useState('');
 
@@ -171,6 +172,9 @@ export function BOMECOSheet({
     if (tab === 'part' && !ecoTitle.trim()) {
       e.title = 'ECO title is required';
     }
+    if (tab === 'impact' && impactArea === 'other' && !impactAreaOther.trim()) {
+      e.impactAreaOther = 'Specify the impact area';
+    }
     if (tab === 'approval') {
       if (pipeline.length < 1) e.pipeline = 'At least 1 approval stage is required';
       else if (!pipelineValid) e.pipeline = 'Optional or reordered stages need a justification';
@@ -199,7 +203,7 @@ export function BOMECOSheet({
         revFrom: revFrom || null,
         revTo: revTo || null,
         scheduleImpact: impactLevel.toLowerCase(),
-        impactArea,
+        impactArea: impactArea === 'other' ? (impactAreaOther.trim() || 'other') : impactArea,
         certNotes: impactDesc || null,
         parts: node._partId ? [{
           partId: node._partId,
@@ -431,6 +435,24 @@ export function BOMECOSheet({
                     />
                   </FL>
                 </div>
+                {impactArea === 'other' && (
+                  <FL label="Specify Impact Area" required>
+                    <FInput
+                      value={impactAreaOther}
+                      onChange={e => {
+                        setImpactAreaOther(e.target.value);
+                        if (errors.impactAreaOther) setErrors(({ impactAreaOther: _o, ...rest }) => rest);
+                      }}
+                      placeholder="e.g. Logistics, Documentation"
+                      className={cn(errors.impactAreaOther && 'border-destructive')}
+                    />
+                    {errors.impactAreaOther && (
+                      <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                        <AlertCircle className="w-3 h-3" />{errors.impactAreaOther}
+                      </p>
+                    )}
+                  </FL>
+                )}
                 <FL label="Impact Description">
                   <textarea
                     value={impactDesc}
