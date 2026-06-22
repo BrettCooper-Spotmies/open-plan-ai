@@ -50,7 +50,7 @@ import {
   BOM_CAT_META,
   bomFlatAll, bomFlatten, bomFind,
   bomFilterTree, bomFlattenInclude, bomTypeOf,
-  fromApiNode,
+  fromApiNode, assignLevelLabels,
 } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMDetailScreen } from './BOMDetailScreen';
@@ -509,7 +509,7 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, totalCount, f
                 <span className={cn('text-xs font-semibold ml-0.5 tabular-nums',
                   row.level === 0 ? 'text-foreground' : row.level === 1 ? 'text-muted-foreground' : 'text-muted-foreground/60'
                 )}>
-                  {row.level}
+                  {row.levelLabel ?? row.level}
                 </span>
               </div>
 
@@ -618,7 +618,7 @@ function GridView({ rows, onOpen, totalCount, formatCurrency }: { rows: BOMNode[
                 <PartThumb cat={row.cat} big />
                 <span className="absolute top-4 left-4 px-1.5 py-0.5 rounded text-[10px] font-semibold"
                   style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', color: meta.tint, border: `1px solid ${meta.tint}40` }}>
-                  L{row.level}
+                  {row.levelLabel ?? `L${row.level}`}
                 </span>
                 <span className="absolute top-4 right-4"><BOMStatusPill status={row.status} /></span>
               </div>
@@ -693,7 +693,9 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
 
   const rootNodes = useMemo(() => {
     if (!bomTree?.root) return [];
-    return [fromApiNode(bomTree.root)];
+    const nodes = [fromApiNode(bomTree.root)];
+    assignLevelLabels(nodes);
+    return nodes;
   }, [bomTree]);
 
   const allNodes = useMemo(() => bomFlatAll(rootNodes), [rootNodes]);
