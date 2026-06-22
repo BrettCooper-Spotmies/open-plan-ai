@@ -50,12 +50,21 @@ export function usePresence(currentUserId: string | undefined) {
       if (socket.connected) requestOnlineUsers();
     }, 2000);
 
+    // Periodic resync: a missed user-online/user-offline broadcast (brief
+    // reconnect blip, event firing before the listener attached, etc.) would
+    // otherwise leave this tab's presence state stale until its own socket
+    // happens to reconnect. Polling self-heals that without waiting on it.
+    const resyncInterval = setInterval(() => {
+      if (socket.connected) requestOnlineUsers();
+    }, 20000);
+
     // Always include self
     const current = useChatStore.getState().onlineUserIds;
     setOnlineUserIds(new Set([...current, currentUserId]));
 
     return () => {
       clearTimeout(fallbackTimer);
+      clearInterval(resyncInterval);
       socket.off('online-users', handleOnlineUsers);
       socket.off('user-online', handleUserOnline);
       socket.off('user-offline', handleUserOffline);
