@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { apiClient } from '@/services/api/client';
 import { teamService } from '@/services/team.service';
 import {
@@ -17,6 +18,7 @@ export default function JoinOrganization() {
   const inviteParam = searchParams.get('invite');
   const navigate = useNavigate();
   const { user, isLoading: authLoading, signOut } = useAuth();
+  const { refreshOrganizations } = useOrganization();
 
   const [invitation, setInvitation] = useState<any>(null);
   const [orgName, setOrgName] = useState<string>('');
@@ -64,8 +66,8 @@ export default function JoinOrganization() {
     setAccepting(true);
     try {
       await teamService.acceptInvitation(inviteParam);
-      // Clear any stored invite token now that it's been used
       localStorage.removeItem('pending_invite_token');
+      await refreshOrganizations();
       setSuccess(true);
       setTimeout(() => navigate('/'), 1500);
     } catch (err: any) {
@@ -133,10 +135,6 @@ export default function JoinOrganization() {
                 <Link to={`/signup?invite=${inviteParam}`} className="w-full">
                   <Button className="w-full">Create Account</Button>
                 </Link>
-                {/* I already have an account button */}
-                {/*  <Link to={`/login?redirect=${encodeURIComponent(`/join-org?invite=${inviteParam}`)}`} className="w-full">
-                  <Button variant="outline" className="w-full">I already have an account</Button>
-                </Link>*/}
               </div>
               {invitation?.expiresAt && (
                 <p className="text-xs text-muted-foreground">
