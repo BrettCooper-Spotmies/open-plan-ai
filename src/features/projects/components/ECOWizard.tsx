@@ -7,12 +7,13 @@ import {
   ECOType, ECOReason, ECOPriority, ChangeClass, EffectivityType, ImpactLevel, ECODisposition,
   ECO_TYPE_LABEL, REASON_LABEL, PRIORITY_LABEL, CHANGE_CLASS_LABEL,
   EFFECTIVITY_LABEL, IMPACT_LABEL, DISPOSITION_LABEL, CHANGE_LABEL_MAP, ChangeLabel,
-  PipelineStep, PIPELINE_TEMPLATE,
+  PipelineStep, PIPELINE_STAGE_DEFS,
 } from './ecoData';
 import { ECOAvatar } from './ECOShared';
 import { cn } from '@/lib/utils';
 import { useCreateECO } from '@/hooks/useECOs';
 import { useBomTree } from '@/hooks/useBom';
+import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { fromApiNode, bomFlatAll, bomPath } from './bomData';
 
 // ── Attachment file type helper ───────────────────────────────────────────────
@@ -211,16 +212,25 @@ export function ECOWizard({
     unitCostDelta: '', oneTimeCost: '',
   });
 
-  // Step 5 — Pipeline
+  // Step 5 — Pipeline (approvers are real project members, picked by the user)
+  const { data: projectMembers = [] } = useProjectMembers(projectId);
+
   const defaultOrder = useMemo(() => {
     const m: Record<string, number> = {};
-    PIPELINE_TEMPLATE.forEach((s, i) => { m[s.stage] = i; });
+    PIPELINE_STAGE_DEFS.forEach((s, i) => { m[s.stage] = i; });
     return m;
   }, []);
 
   const [pipeline, setPipeline] = useState<PipelineStepWizard[]>(
-    PIPELINE_TEMPLATE.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
+    PIPELINE_STAGE_DEFS.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
   );
+
+  const assignApprover = (idx: number, memberId: string) => {
+    const member = projectMembers.find(m => m.id === memberId);
+    setPipeline(pl => pl.map((x, i) => (
+      i === idx ? { ...x, approverId: member?.id ?? null, name: member?.name ?? '', role: member?.role ?? '' } : x
+    )));
+  };
 
   // Lock QA & Final Approval for Class I
   const lockStage = (stage: string) =>
@@ -231,7 +241,8 @@ export function ECOWizard({
 
   const pipelineValid = pipeline.every((p, idx) => {
     const needsReason = p.optional || stageMoved(p, idx);
-    return !needsReason || (p.justification ?? '').trim().length > 0;
+    const reasonOk = !needsReason || (p.justification ?? '').trim().length > 0;
+    return reasonOk && !!p.approverId;
   });
 
   const canSubmit = basics.title.trim() && items.length >= 1 && pipeline.length >= 1 && pipelineValid;
@@ -619,8 +630,17 @@ export function ECOWizard({
   const StepApproval = (
     <div className="flex flex-col gap-2.5">
       <div className="text-[13px] text-muted-foreground mb-1">
-        Ordered sign-off pipeline · reorder with arrows · mark stages optional. Any change to the default requires a justification.
+        Ordered sign-off pipeline · assign a project member to each stage · reorder with arrows · mark stages optional. Any change to the default requires a justification.
       </div>
+      {projectMembers.length === 0 && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+          style={{ color: '#F59E0B', background: '#F59E0B14', border: '1px solid #F59E0B33' }}
+        >
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          No project members found — add members to the project team before assigning approvers.
+        </div>
+      )}
       {basics.changeClass === 'I' && (
         <div
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
@@ -642,7 +662,7 @@ export function ECOWizard({
           >
             <div className="flex items-center gap-2">
               <span className="text-[12px] font-bold text-muted-foreground w-5">{idx + 1}</span>
-              <ECOAvatar name={p.name} size={26} />
+              <ECOAvatar name={p.name || '?'} size={26} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
                   {p.stage}
@@ -655,7 +675,17 @@ export function ECOWizard({
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] text-muted-foreground">{p.name} · {p.role}</div>
+                <select
+                  value={p.approverId ?? ''}
+                  onChange={e => assignApprover(idx, e.target.value)}
+                  className="mt-0.5 w-full max-w-[240px] bg-muted/40 border rounded-md text-foreground text-[11px] px-2 py-1 outline-none focus:border-primary/40 cursor-pointer appearance-none font-[inherit]"
+                  style={{ borderColor: p.approverId ? 'hsl(var(--border))' : '#F59E0B88' }}
+                >
+                  <option value="" disabled className="bg-card">Select approver…</option>
+                  {projectMembers.map(m => (
+                    <option key={m.id} value={m.id} className="bg-card">{m.name} · {m.role}</option>
+                  ))}
+                </select>
               </div>
               {locked ? (
                 <span
@@ -799,7 +829,7 @@ export function ECOWizard({
             {canSubmit
               ? <span className="text-muted-foreground">Ready to save draft</span>
               : !pipelineValid
-              ? 'Add a justification for each optional / reordered pipeline stage'
+              ? 'Assign an approver to every stage, and a justification for each optional / reordered stage'
               : 'Need a title, ≥1 affected item and a pipeline to submit'}
           </div>
           <div className="flex gap-2">
@@ -848,12 +878,13 @@ export function ECOWizard({
                         changeLabel: r.cls.toLowerCase() as any,
                       })),
                       pipelineSteps: pipeline.map((p, i) => ({
-                        order:         i + 1,
-                        stage:         p.stage,
-                        stageLabel:    p.stage,
-                        approverName:  p.name  || null,
-                        approverRole:  p.role  || null,
-                        isOptional:    p.optional ?? false,
+                        order:          i + 1,
+                        stage:          p.stage,
+                        stageLabel:     p.stage,
+                        approverUserId: p.approverId || null,
+                        approverName:   p.name  || null,
+                        approverRole:   p.role  || null,
+                        isOptional:     p.optional ?? false,
                         optionalReason: p.optionalReason || null,
                         justification:  p.justification  || null,
                       })),

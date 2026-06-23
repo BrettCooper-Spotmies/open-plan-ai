@@ -175,6 +175,7 @@ export interface PipelineStep {
   stage: string;
   name: string;
   role: string;
+  approverId?: string | null;
   optional?: boolean;
   optionalReason?: string;
   justification?: string;
@@ -301,6 +302,18 @@ export const PIPELINE_TEMPLATE: PipelineStep[] = [
   },
   { order: 4, stage: 'Final Approval',     name: 'Linda Torres', role: 'VP Engineering' },
 ];
+
+// Stage skeleton for the create wizard — no fake approvers. The caller must
+// assign a real project member to each stage before submitting.
+export const PIPELINE_STAGE_DEFS: PipelineStep[] = PIPELINE_TEMPLATE.map(s => ({
+  order: s.order,
+  stage: s.stage,
+  name: '',
+  role: '',
+  approverId: null,
+  optional: s.optional,
+  optionalReason: s.optionalReason,
+}));
 
 function pipelineForStatus(status: ECOStatus, steps: PipelineStep[]): PipelineStep[] {
   const decided = (n: number) =>

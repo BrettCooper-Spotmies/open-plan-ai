@@ -382,7 +382,7 @@ export default function ProjectDetail() {
   const tabParam = searchParams.get('tab') as ProjectSection;
 
   const isMobile = useIsMobile();
-  const [section, setSection] = useState<ProjectSection>(tabParam || 'tasks');
+  const [section, setSection] = useState<ProjectSection>(tabParam || 'bom');
   const [viewModeStr, setViewModeStr] = useState<TaskViewMode | null>(null);
   const [moduleViewModeStr, setModuleViewModeStr] = useState<ModuleViewMode | null>(null);
   const [issueViewModeStr, setIssueViewModeStr] = useState<'table' | 'kanban' | null>(null);
@@ -1213,6 +1213,14 @@ export default function ProjectDetail() {
             {/* Left Side: Tabs and Filters */}
             <div className="w-full py-1 md:mr-auto md:w-auto">
               <TabsList className="bg-muted/50 grid grid-cols-8 w-full h-9 md:w-auto md:flex md:shrink-0">
+                <TabsTrigger value="bom" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Bill of Materials">
+                  <Layers className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">BOM</span>}
+                </TabsTrigger>
+                <TabsTrigger value="eng-changes" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Engineering Changes">
+                  <GitMerge className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">Eng. Changes</span>}
+                </TabsTrigger>
                 <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Tasks">
                   <ListTodo className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Tasks</span>}
@@ -1248,14 +1256,6 @@ export default function ProjectDetail() {
                       {openIssuesCount}
                     </Badge>
                   )}
-                </TabsTrigger>
-                <TabsTrigger value="bom" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Bill of Materials">
-                  <Layers className="h-4 w-4 shrink-0" />
-                  {!isMobile && <span className="truncate">BOM</span>}
-                </TabsTrigger>
-                <TabsTrigger value="eng-changes" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Engineering Changes">
-                  <GitMerge className="h-4 w-4 shrink-0" />
-                  {!isMobile && <span className="truncate">Eng. Changes</span>}
                 </TabsTrigger>
                 {/* <TabsTrigger value="requirements" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Requirements">
                   <ListChecks className="h-4 w-4 shrink-0" />

@@ -25,6 +25,7 @@ import {
   BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, BOMRevision,
 } from './bomData';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
+import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { TeamMember } from '@/types';
 
 // ── Document value: either an uploaded file or a linked URL ───────
@@ -301,6 +302,9 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   const isEdit = mode === 'edit';
 
   const { data: projectMembers = [] } = useProjectMembers(projectId);
+  const { data: project } = useProjectDetail(projectId);
+  const projectRole = (project?.myRole || '').toLowerCase();
+  const canEditStatus = projectRole === 'admin' || projectRole === 'manager';
 
   // ── Form state ──
   const [pn,             setPn]             = useState(node?.pn ?? '');
@@ -493,10 +497,13 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                 <FL label="Status">
                   <div className="flex gap-2">
                     {(['approved', 'pending'] as BOMStatus[]).map(s => (
-                      <button key={s} onClick={() => setStatus(s)}
+                      <button key={s} type="button" disabled={!canEditStatus}
+                        onClick={() => canEditStatus && setStatus(s)}
+                        title={canEditStatus ? undefined : 'Only project managers or admins can change part status'}
                         className={cn(
-                          'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium cursor-pointer transition-colors',
-                          status === s ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:bg-muted'
+                          'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors',
+                          status === s ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:bg-muted',
+                          canEditStatus ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 hover:bg-card'
                         )}>
                         {s === 'approved'
                           ? <CheckCircle className="w-4 h-4" style={{ color: '#16A34A' }} />
@@ -505,6 +512,9 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                       </button>
                     ))}
                   </div>
+                  {!canEditStatus && (
+                    <p className="text-[11px] text-muted-foreground mt-1.5">Only project managers or admins can change part status.</p>
+                  )}
                 </FL>
 
                 <FL label="Owner / Handled By" required>
