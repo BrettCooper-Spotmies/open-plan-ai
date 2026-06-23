@@ -274,10 +274,6 @@ const Team = () => {
     return <AppLayoutSkeleton variant="team" />;
   }
 
-  if (!currentMember) {
-    return <Navigate to="/" replace />;
-  }
-
   if (error) {
     return (
       <>
@@ -288,6 +284,10 @@ const Team = () => {
         </div>
       </>
     );
+  }
+
+  if (!currentMember) {
+    return <Navigate to="/" replace />;
   }
 
   return (
