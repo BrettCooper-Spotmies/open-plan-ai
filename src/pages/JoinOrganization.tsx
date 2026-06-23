@@ -133,9 +133,10 @@ export default function JoinOrganization() {
                 <Link to={`/signup?invite=${inviteParam}`} className="w-full">
                   <Button className="w-full">Create Account</Button>
                 </Link>
-                <Link to={`/login?redirect=${encodeURIComponent(`/join-org?invite=${inviteParam}`)}`} className="w-full">
+                {/* I already have an account button */}
+                {/*  <Link to={`/login?redirect=${encodeURIComponent(`/join-org?invite=${inviteParam}`)}`} className="w-full">
                   <Button variant="outline" className="w-full">I already have an account</Button>
-                </Link>
+                </Link>*/}
               </div>
               {invitation?.expiresAt && (
                 <p className="text-xs text-muted-foreground">
