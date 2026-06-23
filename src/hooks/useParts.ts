@@ -26,7 +26,7 @@ export function useCreatePart(orgId: string) {
   return useMutation({
     mutationFn: (dto: CreatePartDto) => partsService.create(orgId, dto),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.parts.list(orgId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.parts.listRoot(orgId) });
     },
   });
 }
