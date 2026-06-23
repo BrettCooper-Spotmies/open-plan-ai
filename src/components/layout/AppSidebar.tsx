@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, Zap, Coffee, ChevronsUpDown, Check, Plus, Building2, Loader2, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, Coffee, ChevronsUpDown, Check, Plus, Building2, Loader2, MessageSquare } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
+import { Logo } from '@/components/Logo';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -140,7 +141,7 @@ export function AppSidebar() {
                   {orgLogo ? (
                     <img src={orgLogo} alt="Org logo" className="h-full w-full object-cover" />
                   ) : (
-                    <Building2 className="h-3.5 w-3.5 text-primary" />
+                    <Logo className="h-3.5 w-3.5 text-primary" />
                   )}
                 </div>
 
@@ -197,7 +198,7 @@ export function AppSidebar() {
                           {resolvedLogoUrl ? (
                             <img src={resolvedLogoUrl} alt="" className="h-full w-full object-cover" />
                           ) : (
-                            <Building2 className="h-3.5 w-3.5 text-primary" />
+                            <Logo className="h-3.5 w-3.5 text-primary" />
                           )}
                         </div>
                         <div className="flex flex-col min-w-0 flex-1">
@@ -281,7 +282,7 @@ export function AppSidebar() {
         <SidebarFooter className="p-3">
           <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground shrink-0">
-              <Zap className="h-3.5 w-3.5" />
+              <Logo className="h-3.5 w-3.5" />
             </div>
             {!collapsed && (
               <div className="flex flex-col">

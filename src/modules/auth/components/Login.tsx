@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Layers, Mail, Lock, ArrowRight, AlertCircle, CheckCircle, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, ArrowRight, AlertCircle, CheckCircle, Eye, EyeOff } from "lucide-react";
+import { Logo } from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { teamService } from "@/services/team.service";
@@ -128,7 +129,7 @@ const Login = () => {
         <div className="max-w-md space-y-6">
           <div className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center">
-              <Layers className="h-7 w-7 text-primary-foreground" />
+              <Logo className="h-7 w-7 text-primary-foreground" />
             </div>
             <span className="text-3xl font-bold text-foreground">OpenPlan AI</span>
           </div>
@@ -163,7 +164,7 @@ const Login = () => {
           <CardHeader className="space-y-1 text-center pb-4">
             <div className="flex items-center justify-center gap-2 lg:hidden mb-4">
               <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-                <Layers className="h-6 w-6 text-primary-foreground" />
+                <Logo className="h-6 w-6 text-primary-foreground" />
               </div>
               <span className="text-xl font-bold">OpenPlan AI</span>
             </div>
