@@ -455,20 +455,23 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
               </div>
             ) : (
               <>
-                <Avatar className="h-16 w-16 mx-auto">
-                  {conversation.avatarUrl && !isEmoji(conversation.avatarUrl) ? (
-                    <AvatarImage src={conversation.avatarUrl} />
-                  ) : null}
-                  <AvatarFallback className={cn('text-lg font-semibold', isGroup && 'bg-primary/10 text-primary')}>
-                    {conversation.avatarUrl && isEmoji(conversation.avatarUrl) ? (
-                      conversation.avatarUrl
-                    ) : isGroup ? (
-                      conversation.name.split(' ').map((w) => w[0]).join('').slice(0, 2)
-                    ) : (
-                      conversation.members.find((m) => m.id !== currentUserId)?.initials || '??'
-                    )}
-                  </AvatarFallback>
-                </Avatar>
+                {(() => {
+                  const otherMember = !isGroup ? conversation.members.find((m) => m.id !== currentUserId) : null;
+                  const topAvatarUrl = isGroup ? conversation.avatarUrl : otherMember?.avatarUrl;
+                  const topInitials = isGroup
+                    ? conversation.name.split(' ').map((w) => w[0]).join('').slice(0, 2)
+                    : otherMember?.initials || '??';
+                  return (
+                    <Avatar className="h-16 w-16 mx-auto">
+                      {topAvatarUrl && !isEmoji(topAvatarUrl) ? (
+                        <AvatarImage src={topAvatarUrl} className="object-cover" />
+                      ) : null}
+                      <AvatarFallback className={cn('text-lg font-semibold', isGroup && 'bg-primary/10 text-primary')}>
+                        {topAvatarUrl && isEmoji(topAvatarUrl) ? topAvatarUrl : topInitials}
+                      </AvatarFallback>
+                    </Avatar>
+                  );
+                })()}
                 <h4 className="font-semibold mt-2">{conversation.name}</h4>
                 {conversation.description && (
                   <p className="text-xs text-muted-foreground mt-1">{conversation.description}</p>
@@ -496,6 +499,9 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
                 <div key={member.id} className="flex items-center gap-2 group">
                   <div className="relative">
                     <Avatar className="h-7 w-7">
+                      {member.avatarUrl && (
+                        <AvatarImage src={member.avatarUrl} alt={member.name} className="object-cover" />
+                      )}
                       <AvatarFallback className="text-[10px]">{member.initials}</AvatarFallback>
                     </Avatar>
                     <OnlineStatus isOnline={onlineUserIds.has(member.id)} className="absolute -bottom-0.5 -right-0.5" size="sm" />

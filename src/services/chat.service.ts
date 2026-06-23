@@ -13,7 +13,7 @@ function mapChatMessage(raw: any): ChatMessage {
     conversationId: raw.conversationId ?? raw.conversation_id ?? '',
     senderId: raw.senderId ?? raw.sender_id ?? raw.sender?.id ?? '',
     senderName: raw.senderName ?? raw.sender?.name ?? raw.sender_name ?? 'Unknown',
-    senderAvatar: raw.senderAvatar ?? raw.sender?.avatarUrl ?? raw.sender?.avatar_url ?? undefined,
+    senderAvatar: resolveFileUrl(raw.senderAvatar ?? raw.sender?.avatarUrl ?? raw.sender?.avatar_url) ?? raw.senderAvatar ?? raw.sender?.avatarUrl ?? undefined,
     senderInitials: raw.senderInitials ?? raw.sender?.initials ?? (raw.sender?.name ?? '').slice(0, 2).toUpperCase() ?? '??',
     contentType: (raw.contentType ?? raw.content_type ?? 'text') as any,
     content: raw.content ?? '',
@@ -35,26 +35,30 @@ function mapChatMessage(raw: any): ChatMessage {
 
 /** Map the backend ConversationResponse shape to the frontend Conversation type. */
 function mapConversation(raw: any): Conversation {
-  const members = (raw.members ?? []).map((m: any) => ({
-    id: m.userId ?? m.id,
-    userId: m.userId ?? m.id,
-    name: m.name ?? '',
-    avatarUrl: m.avatarUrl ?? m.avatar_url ?? null,
-    initials: m.initials ?? (m.name ?? '').slice(0, 2).toUpperCase(),
-    role: m.role ?? 'member',
-    lastSeenAt: m.lastSeenAt ?? m.last_seen_at ?? null,
-    lastReadAt: m.lastReadAt ?? m.last_read_at ?? null,
-    joinedAt: m.joinedAt ?? m.joined_at ?? null,
-    leftAt: m.leftAt ?? m.left_at ?? null,
-  }));
+  const members = (raw.members ?? []).map((m: any) => {
+    const rawAvatarUrl = m.avatarUrl ?? m.avatar_url ?? null;
+    return {
+      id: m.userId ?? m.id,
+      userId: m.userId ?? m.id,
+      name: m.name ?? '',
+      avatarUrl: resolveFileUrl(rawAvatarUrl) ?? rawAvatarUrl ?? undefined,
+      initials: m.initials ?? (m.name ?? '').slice(0, 2).toUpperCase(),
+      role: m.role ?? 'member',
+      lastSeenAt: m.lastSeenAt ?? m.last_seen_at ?? null,
+      lastReadAt: m.lastReadAt ?? m.last_read_at ?? null,
+      joinedAt: m.joinedAt ?? m.joined_at ?? null,
+      leftAt: m.leftAt ?? m.left_at ?? null,
+    };
+  });
 
+  const rawConvAvatarUrl = raw.avatarUrl ?? raw.avatar_url ?? null;
   return {
     id: raw.id,
     type: raw.isGroupChat ? 'group' : 'dm',
     name: raw.title ?? raw.name ?? '',
     title: raw.title ?? raw.name ?? null,
     description: raw.description ?? undefined,
-    avatarUrl: raw.avatarUrl ?? raw.avatar_url ?? undefined,
+    avatarUrl: resolveFileUrl(rawConvAvatarUrl) ?? rawConvAvatarUrl ?? undefined,
     members,
     lastMessage: raw.lastMessage
       ? {
@@ -189,7 +193,11 @@ export const chatService = {
   async getReachableUsers(orgId?: string): Promise<ReachableUser[]> {
     try {
       const params = orgId ? `?q=&orgId=${encodeURIComponent(orgId)}` : '?q=';
-      return await apiClient.get(`${ENDPOINTS.USERS.SEARCH}${params}`);
+      const users: ReachableUser[] = await apiClient.get(`${ENDPOINTS.USERS.SEARCH}${params}`);
+      return users.map((u) => ({
+        ...u,
+        avatarUrl: resolveFileUrl(u.avatarUrl) ?? u.avatarUrl,
+      }));
     } catch {
       return [];
     }

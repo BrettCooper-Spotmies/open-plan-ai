@@ -6,6 +6,7 @@ import type {
   MessageContentType,
   ConversationType,
 } from './types';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 interface DbProfile {
   id: string;
@@ -53,11 +54,12 @@ export function mapMember(
   dbMember: DbConversationMember,
   profile: DbProfile | undefined
 ): ConversationMember {
+  const rawAvatarUrl = profile?.avatar_url ?? undefined;
   return {
     id: dbMember.user_id,
     name: profile?.name ?? 'Unknown',
     email: profile?.email ?? '',
-    avatarUrl: profile?.avatar_url ?? undefined,
+    avatarUrl: resolveFileUrl(rawAvatarUrl) ?? rawAvatarUrl,
     initials: profile?.initials ?? '??',
     role: dbMember.role as ConversationMemberRole,
     isOnline: false,
@@ -80,7 +82,8 @@ export function mapMessage(
 
   // For SocketIO messages, sender info is nested in msg.sender
   const senderName = senderProfile?.name ?? m.sender?.name ?? m.senderName ?? 'Unknown';
-  const senderAvatar = senderProfile?.avatar_url ?? m.sender?.avatarUrl ?? m.sender?.avatar_url ?? undefined;
+  const rawSenderAvatar = senderProfile?.avatar_url ?? m.sender?.avatarUrl ?? m.sender?.avatar_url ?? undefined;
+  const senderAvatar = resolveFileUrl(rawSenderAvatar) ?? rawSenderAvatar ?? undefined;
   const senderInitials = senderProfile?.initials ?? m.sender?.initials ?? senderName?.slice(0, 2)?.toUpperCase() ?? '??';
 
   return {
