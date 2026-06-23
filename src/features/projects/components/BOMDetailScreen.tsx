@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, fromApiRevision } from './bomData';
+import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, fromApiRevision, formatLeadTime } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
@@ -506,7 +506,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       initialStatus: payload.status,
       initialRev: payload.rev,
       initialPrice: payload.price > 0 ? payload.price : undefined,
-      initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime * 7 : undefined,
+      initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
     });
     const node = await createNode.mutateAsync({
       partId: part.id, quantity: payload.qty, unit: payload.uom,
@@ -533,13 +533,29 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
           changes: payload.changeNotes || `Updated Rev ${activeRev.rev}`,
           status: payload.status,
           price: payload.price,
-          leadTimeDays: payload.leadTime * 7,
+          leadTimeDays: payload.leadTime,
         },
       });
     } else {
+      // Revisions are append-only on the backend — there is no endpoint to
+      // patch price/leadTime on an existing row. "Update in place" therefore
+      // means inserting a new revision row under the *same* rev label, which
+      // becomes the new latest revision without bumping the visible rev letter.
+      const priceChanged = payload.price !== activeRev.price;
+      const leadTimeChanged = payload.leadTime !== activeRev.leadTime;
       await Promise.all([
         updateNode.mutateAsync({ nodeId: originalNode.id, dto: { quantity: payload.qty, unit: payload.uom, status: payload.status } }),
         updatePart.mutateAsync({ partId: originalNode._partId, dto: { description: payload.desc, manufacturer: payload.manufacturer || undefined, distributor: payload.distributor || undefined, mpn: payload.mpn || undefined } }),
+        ...(priceChanged || leadTimeChanged ? [createRev.mutateAsync({
+          partId: originalNode._partId,
+          dto: {
+            rev: activeRev.rev,
+            changes: payload.changeNotes || 'Updated price / lead time',
+            status: payload.status,
+            price: payload.price,
+            leadTimeDays: payload.leadTime,
+          },
+        })] : []),
       ]);
     }
     // Upload any documents attached in the edit form
@@ -692,7 +708,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
           <Field label="Supplier">{node.distributor}</Field>
           <Field label="Quantity">{node.qty} {node.uom}</Field>
           <Field label="Unit Price">{formatCurrency(node.price)}</Field>
-          <Field label="Lead Time">{node.leadTime} weeks</Field>
+          <Field label="Lead Time">{formatLeadTime(node.leadTime)}</Field>
           <Field label="BOM Level">{node.level}</Field>
           <Field label="Handled By">
             <span className="flex items-center gap-1.5">
@@ -830,7 +846,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   { label: 'Supplier', value: node.distributor, icon: 'Truck' },
                   { label: 'Unit Price', value: formatCurrency(node.price), icon: 'DollarSign' },
                   { label: 'Extended Price', value: `${formatCurrency(extended)} · ${node.qty} ${node.uom}`, icon: 'Tag' },
-                  { label: 'Lead Time', value: `${node.leadTime} weeks`, icon: 'Clock' },
+                  { label: 'Lead Time', value: formatLeadTime(node.leadTime), icon: 'Clock' },
                   { label: 'Handled By', value: node.owner, icon: 'User' },
                 ].map((r, i) => {
                   const Ic = ICON_MAP[r.icon] ?? Package;

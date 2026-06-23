@@ -92,12 +92,20 @@ const CAT_ICONS: Record<BOMCategory, React.ElementType> = {
 const UOM_OPTIONS = ['EA', 'SET', 'LIC', 'KG', 'M', 'FT', 'PCS', 'LOT'];
 
 type LeadTimeUnit = 'days' | 'weeks' | 'months';
-// BOMPartPayload.leadTime is always expressed in weeks downstream — these factors convert into weeks.
-const LEAD_TIME_UNITS: { id: LeadTimeUnit; label: string; toWeeks: number }[] = [
-  { id: 'days',   label: 'Days',   toWeeks: 1 / 7 },
-  { id: 'weeks',  label: 'Weeks',  toWeeks: 1 },
-  { id: 'months', label: 'Months', toWeeks: 30 / 7 },
+// BOMPartPayload.leadTime is always expressed in days downstream — these factors convert into days.
+const LEAD_TIME_UNITS: { id: LeadTimeUnit; label: string; toDays: number }[] = [
+  { id: 'days',   label: 'Days',   toDays: 1 },
+  { id: 'weeks',  label: 'Weeks',  toDays: 7 },
+  { id: 'months', label: 'Months', toDays: 30 },
 ];
+
+// Pick whichever unit reproduces a stored day count cleanly, so re-opening
+// the edit form shows back what the user most likely entered.
+function deriveLeadTime(days: number): { value: string; unit: LeadTimeUnit } {
+  if (days > 0 && days % 30 === 0) return { value: String(days / 30), unit: 'months' };
+  if (days > 0 && days % 7 === 0)  return { value: String(days / 7), unit: 'weeks' };
+  return { value: days > 0 ? String(days) : '', unit: 'days' };
+}
 
 function nextRev(rev: string) {
   const i = LETTERS.indexOf(rev.toUpperCase());
@@ -331,8 +339,9 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   const [manufacturer,   setManufacturer]   = useState(node?.manufacturer ?? '');
   const [distributor,    setDistributor]    = useState(node?.distributor ?? '');
   const [price,          setPrice]          = useState(String(node?.price ?? ''));
-  const [leadTime,       setLeadTime]       = useState(String(node?.leadTime ?? ''));
-  const [leadTimeUnit,   setLeadTimeUnit]   = useState<LeadTimeUnit>('weeks');
+  const initialLeadTime = deriveLeadTime(node?.leadTime ?? 0);
+  const [leadTime,       setLeadTime]       = useState(initialLeadTime.value);
+  const [leadTimeUnit,   setLeadTimeUnit]   = useState<LeadTimeUnit>(initialLeadTime.unit);
   const [mpn,            setMpn]            = useState(node?.mpn ?? '');
   const [selectedOwner,  setSelectedOwner]  = useState<TeamMember | null>(null);
   const [ownerPopover,   setOwnerPopover]   = useState(false);
@@ -365,8 +374,9 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     setManufacturer(node?.manufacturer ?? '');
     setDistributor(node?.distributor ?? '');
     setPrice(String(node?.price ?? ''));
-    setLeadTime(String(node?.leadTime ?? ''));
-    setLeadTimeUnit('weeks');
+    const lt = deriveLeadTime(node?.leadTime ?? 0);
+    setLeadTime(lt.value);
+    setLeadTimeUnit(lt.unit);
     setMpn(node?.mpn ?? '');
     setSelectedOwner(null);
     setOwnerPopover(false);
@@ -438,7 +448,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
         uom,
         manufacturer, distributor,
         price: parseFloat(price) || 0,
-        leadTime: Math.round((parseFloat(leadTime) || 0) * LEAD_TIME_UNITS.find(u => u.id === leadTimeUnit)!.toWeeks),
+        leadTime: Math.round((parseFloat(leadTime) || 0) * LEAD_TIME_UNITS.find(u => u.id === leadTimeUnit)!.toDays),
         mpn,
         owner: selectedOwner?.name ?? '',
         ownerId: selectedOwner?.id,

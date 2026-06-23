@@ -56,7 +56,7 @@ import {
   BOM_CAT_META,
   bomFlatAll, bomFlatten, bomFind,
   bomFilterTree, bomFlattenInclude, bomTypeOf,
-  fromApiNode, assignLevelLabels,
+  fromApiNode, assignLevelLabels, formatLeadTime,
 } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMDetailScreen, AddSubcomponentDialog } from './BOMDetailScreen';
@@ -327,7 +327,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
             </div>
           </Section>
 
-          <Section title="Lead Time (weeks)">
+          <Section title="Lead Time (days)">
             <div className="flex items-center gap-2">
               <RangeInput value={filters.leadMin} onChange={v => set('leadMin', v)} placeholder="Min" />
               <span className="text-muted-foreground text-xs">–</span>
@@ -551,7 +551,7 @@ function ListView({
               {/* Price */}
               <div style={{ flexBasis: 90, flexShrink: 0 }} className="px-2 text-sm text-foreground text-right tabular-nums">{formatCurrency(row.price)}</div>
               {/* Lead */}
-              <div style={{ flexBasis: 74, flexShrink: 0 }} className="px-2 text-xs text-muted-foreground tabular-nums">{row.leadTime} wk</div>
+              <div style={{ flexBasis: 74, flexShrink: 0 }} className="px-2 text-xs text-muted-foreground tabular-nums">{formatLeadTime(row.leadTime)}</div>
               {/* Rev */}
               <div style={{ flexBasis: 50, flexShrink: 0 }} className="px-2">
                 <span className="text-[11px] font-semibold text-muted-foreground bg-muted border border-border rounded px-1.5 py-0.5">{row.rev}</span>
@@ -675,7 +675,7 @@ function GridView({ rows, onOpen, totalCount, formatCurrency }: { rows: BOMNode[
                   <Meta label="Qty" value={`${row.qty} ${row.uom}`} />
                   <Meta label="Unit Price" value={formatCurrency(row.price)} />
                   <Meta label="Manufacturer" value={row.manufacturer} />
-                  <Meta label="Lead Time" value={`${row.leadTime} wk`} />
+                  <Meta label="Lead Time" value={formatLeadTime(row.leadTime)} />
                 </div>
                 {/* Owner row */}
                 <div className="flex items-center gap-1.5 mb-2.5 py-1.5 px-2 rounded-md bg-muted/40 border border-border/50">
@@ -801,7 +801,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
         initialStatus:       payload.status,
         initialRev:          payload.rev,
         initialPrice:        payload.price > 0 ? payload.price : undefined,
-        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime * 7 : undefined,
+        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
       });
       const node = await createNode.mutateAsync({
         partId:   part.id,
@@ -837,7 +837,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
         initialStatus:       payload.status,
         initialRev:          payload.rev,
         initialPrice:        payload.price > 0 ? payload.price : undefined,
-        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime * 7 : undefined,
+        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
       });
       const node = await createNode.mutateAsync({
         partId:   part.id,

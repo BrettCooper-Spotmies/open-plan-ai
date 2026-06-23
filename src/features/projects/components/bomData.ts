@@ -10,7 +10,7 @@ export interface BOMRevision {
   changes: string;    // change description
   status: BOMStatus;
   price: number;
-  leadTime: number;
+  leadTime: number;   // days — mirrors backend leadTimeDays 1:1, no unit conversion
 }
 
 export interface BOMNode {
@@ -29,7 +29,7 @@ export interface BOMNode {
   manufacturer: string;
   distributor: string;
   price: number;
-  leadTime: number;
+  leadTime: number;   // days — mirrors backend leadTimeDays 1:1, no unit conversion
   mpn: string;
   owner: string;
   revHistory: BOMRevision[];
@@ -181,7 +181,7 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     manufacturer: node.part.manufacturer ?? '',
     distributor:  node.part.distributor ?? '',
     price:        parseFloat(rev?.price ?? '0'),
-    leadTime:     Math.ceil((rev?.leadTimeDays ?? 0) / 7),
+    leadTime:     rev?.leadTimeDays ?? 0,
     mpn:          node.part.mpn ?? '',
     owner:        node.owner?.name ?? '',
     revHistory:   [],  // loaded on demand via usePartRevisions
@@ -198,8 +198,18 @@ export function fromApiRevision(r: ApiRevisionResponse): BOMRevision {
     changes:  r.changes,
     status:   r.status,
     price:    parseFloat(r.price ?? '0'),
-    leadTime: Math.ceil((r.leadTimeDays ?? 0) / 7),
+    leadTime: r.leadTimeDays ?? 0,
   };
+}
+
+// ── Lead time display ──────────────────────────────────────────────
+// leadTime is always stored/passed around in days; this picks whichever
+// unit (days/weeks/months) renders it most cleanly for display.
+export function formatLeadTime(days: number): string {
+  if (!days || days <= 0) return '—';
+  if (days % 30 === 0 && days >= 30) return `${days / 30} mo`;
+  if (days % 7 === 0 && days >= 7) return `${days / 7} wk`;
+  return `${days} d`;
 }
 
 export function fromApiApproval(a: ApiApprovalResponse): BOMApproval {
