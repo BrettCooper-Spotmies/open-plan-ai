@@ -14,13 +14,21 @@ import {
 import { cn } from '@/lib/utils';
 import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, fromApiRevision } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
-import { BOMPartSheet, BOMPartPayload } from './BOMPartSheet';
+import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision } from '@/hooks/useParts';
-import { useCreateBomNode, useUpdateBomNode } from '@/hooks/useBom';
-import { uploadBomDocumentFile } from '@/hooks/useBomDocuments';
+import { useCreateBomNode, useUpdateBomNode, useAddRequirement, useRemoveRequirement } from '@/hooks/useBom';
+import { uploadBomDocumentFile, addBomDocumentLink, useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
 import { useCurrency } from '@/hooks/useCurrency';
+import { resolveFileUrl } from '@/utils/fileUrl';
+
+async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
+  const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? [])].filter(Boolean) as DocValue[];
+  await Promise.allSettled(
+    docs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName)),
+  );
+}
 
 // ── Add Sub-component Dialog ───────────────────────────────────────
 function AddSubcomponentDialog({
@@ -422,6 +430,13 @@ function RevisionToggle({
 export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectId, onBack, onNavigate }: Props) {
   const { formatCurrency } = useCurrency();
 
+  // ── Uploaded documents — pull the product photo (first image attachment) ──
+  const { data: nodeDocs } = useBomDocuments(originalNode.id);
+  const photoUrl = useMemo(() => {
+    const photo = (nodeDocs ?? []).find(isImageAttachment);
+    return photo ? resolveFileUrl(photo.fileUrl) : null;
+  }, [nodeDocs]);
+
   // ── Revision history from API ──
   const { data: apiRevisions, isLoading: revisionsLoading } = usePartRevisions(originalNode._partId);
   const revHistory = useMemo<BOMRevision[]>(
@@ -447,6 +462,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const createPart = useCreatePart(orgId);
   const updatePart = useUpdatePart();
   const createRev = useCreateRevision();
+  const addRequirement = useAddRequirement(projectId);
+  const removeRequirement = useRemoveRequirement(projectId);
 
   const activeRev = revHistory[activeRevIdx] ?? { rev: originalNode.rev, status: originalNode.status, price: originalNode.price, leadTime: originalNode.leadTime, date: '', author: '', changes: '' } as BOMRevision;
   const isLatest = revHistory.length === 0 || activeRevIdx === revHistory.length - 1;
@@ -482,9 +499,9 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     const node = await createNode.mutateAsync({
       partId: part.id, quantity: payload.qty, unit: payload.uom,
       status: payload.status, parentId: originalNode.id,
+      ownerId: payload.ownerId ?? null,
     });
-    const docFiles = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as File[];
-    await Promise.allSettled(docFiles.map(f => uploadBomDocumentFile(node.id, f)));
+    await saveBomDocs(node.id, payload);
     setShowCreateNewSub(false);
   };
 
@@ -514,8 +531,16 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       ]);
     }
     // Upload any documents attached in the edit form
-    const docFiles = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as File[];
-    await Promise.allSettled(docFiles.map(f => uploadBomDocumentFile(originalNode.id, f)));
+    await saveBomDocs(originalNode.id, payload);
+
+    // Sync requirement traceability links
+    const toAdd = payload.req.filter(r => !originalNode.req.includes(r));
+    const toRemove = (originalNode._reqLinks ?? []).filter(l => !payload.req.includes(l.requirementId));
+    await Promise.all([
+      ...toAdd.map(requirementId => addRequirement.mutateAsync({ nodeId: originalNode.id, requirementId })),
+      ...toRemove.map(link => removeRequirement.mutateAsync(link.id)),
+    ]);
+
     setShowEdit(false);
   };
 
@@ -549,7 +574,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         <div className="px-6 pb-4 flex items-start justify-between gap-5">
           <div className="flex gap-4 items-start min-w-0">
             <div className="w-16 shrink-0">
-              <PartThumb cat={node.cat} size={64} radius={12} />
+              <PartThumb cat={node.cat} size={64} radius={12} imageUrl={photoUrl} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
@@ -581,7 +606,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             >
               <GitMerge className="w-3.5 h-3.5 text-muted-foreground" /> New ECO
             </button>
-            {/* <button
+            <button
               onClick={() => isLatest && setShowEdit(true)}
               disabled={!isLatest}
               title={isLatest ? 'Edit this part' : 'Switch to latest revision to edit'}
@@ -593,7 +618,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               )}
             >
               <SquarePen className="w-3.5 h-3.5" /> Edit Part
-            </button> */}
+            </button>
           </div>
         </div>
 
@@ -625,7 +650,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             {/* Overview */}
             <Card title="Overview">
               <div className="flex gap-4">
-                <div className="w-48 shrink-0"><PartThumb cat={node.cat} big /></div>
+                <div className="w-48 shrink-0"><PartThumb cat={node.cat} big imageUrl={photoUrl} /></div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-muted-foreground leading-relaxed mb-3.5">
                     {node.desc} — {meta.label.toLowerCase()} component{node.manufacturer ? ` sourced from ${node.manufacturer}` : ''}.

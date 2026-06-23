@@ -16,17 +16,35 @@ export async function uploadBomDocumentFile(nodeId: string, file: File): Promise
   return res.data.data;
 }
 
+// Plain async helper for linking an external URL as a document — usable outside React hooks
+export async function addBomDocumentLink(nodeId: string, url: string, fileName?: string): Promise<BomAttachment> {
+  const res = await apiClient.raw.post<{ success: boolean; data: BomAttachment }>(
+    ENDPOINTS.UPLOADS.ATTACHMENT_LINK,
+    { entityId: nodeId, entityType: 'bom_node', url, fileName },
+  );
+  return res.data.data;
+}
+
 export interface BomAttachment {
   id: string;
   entityId: string;
   entityType: string;
-  fileName: string;
+  fileName: string | null;
   fileKey: string;
-  fileUrl: string;   // "serve:attachments/bom_node/..."
-  fileSize: number;
-  mimeType: string;
+  fileUrl: string;   // "serve:attachments/bom_node/..." or a raw http(s) URL for linked docs
+  fileSize: number | null;
+  mimeType: string | null;
   uploadedBy: string;
   createdAt: string;
+}
+
+const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'avif'];
+
+// True if this attachment is an image — used to pick the part's product photo
+export function isImageAttachment(doc: Pick<BomAttachment, 'mimeType' | 'fileName' | 'fileUrl'>): boolean {
+  if (doc.mimeType?.startsWith('image/')) return true;
+  const ext = (doc.fileName || doc.fileUrl || '').split('.').pop()?.toLowerCase().split(/[?#]/)[0] ?? '';
+  return IMAGE_EXTENSIONS.includes(ext);
 }
 
 const ENTITY_TYPE = 'bom_node';
@@ -51,6 +69,22 @@ export function useUploadBomDocument(nodeId: string) {
         ENDPOINTS.UPLOADS.ATTACHMENTS,
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } },
+      );
+      return res.data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['bom-documents', nodeId] });
+    },
+  });
+}
+
+export function useAddBomDocumentLink(nodeId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ url, fileName }: { url: string; fileName?: string }) => {
+      const res = await apiClient.raw.post<{ success: boolean; data: BomAttachment }>(
+        ENDPOINTS.UPLOADS.ATTACHMENT_LINK,
+        { entityId: nodeId, entityType: ENTITY_TYPE, url, fileName },
       );
       return res.data.data;
     },

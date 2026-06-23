@@ -23,6 +23,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { resolveFileUrl } from '@/utils/fileUrl';
+import { FilePreviewDialog, FilePreviewTarget } from '@/components/FilePreviewDialog';
 import {
     Calendar as CalendarIcon,
     MessageSquare,
@@ -202,6 +204,7 @@ export function IssueDetailContent({
     const [isUploading, setIsUploading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
 
     useEffect(() => {
         if (issue) {
@@ -784,11 +787,12 @@ export function IssueDetailContent({
                         <div className="space-y-2">
                             {attachments.map((attachment) => {
                                 const FileIcon = getFileIcon(attachment.fileType);
+                                const viewUrl = resolveFileUrl(attachment.url) ?? attachment.url;
                                 return (
                                     <div
                                         key={attachment.id}
                                         className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 group cursor-pointer hover:bg-muted"
-                                        onClick={() => window.open(attachment.url, '_blank')}
+                                        onClick={() => setPreviewingFile({ url: viewUrl, fileName: attachment.filename, mimeType: attachment.fileType })}
                                     >
                                         <FileIcon className="h-8 w-8 text-muted-foreground" />
                                         <div className="flex-1 min-w-0">
@@ -804,7 +808,10 @@ export function IssueDetailContent({
                                                 className="h-7 w-7"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    window.open(attachment.url, '_blank');
+                                                    const a = document.createElement('a');
+                                                    a.href = viewUrl;
+                                                    a.download = attachment.filename;
+                                                    a.click();
                                                 }}
                                             >
                                                 <Download className="h-4 w-4" />
@@ -1068,11 +1075,8 @@ export function IssueDetailContent({
                     )}
                 </div>
 
-
-
-
-
             </div>
+            <FilePreviewDialog file={previewingFile} onClose={() => setPreviewingFile(null)} />
         </div >
     );
 }

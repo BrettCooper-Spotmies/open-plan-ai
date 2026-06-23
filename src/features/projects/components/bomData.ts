@@ -16,6 +16,7 @@ export interface BOMRevision {
 export interface BOMNode {
   id: string;
   level: number;
+  levelLabel?: string;  // hierarchical position, e.g. "1.0", "1.1", "1.1.1" — set via assignLevelLabels()
   pn: string;
   desc: string;
   qty: number;
@@ -36,6 +37,7 @@ export interface BOMNode {
   _x?: number;
   _y?: number;
   _partId?: string;   // backend part UUID — stored on adapted nodes for mutation calls
+  _reqLinks?: ApiReqLinkResponse[];  // raw requirement links (id + requirementId) — needed to remove a link by id
 }
 
 export const EMPTY_FILTERS = {
@@ -123,7 +125,7 @@ export interface ApiTreeResponse {
   id: string;
   projectId: string;
   orgId: string;
-  root: ApiNodeResponse | null;
+  roots: ApiNodeResponse[];
   totalNodes: number;
   pendingCount: number;
   approvedCount: number;
@@ -154,6 +156,7 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     rev:          rev?.rev ?? 'A',
     status:       node.status,
     req:          node.requirements.map(r => r.requirementId),
+    _reqLinks:    node.requirements,
     cat:          node.part.category,
     manufacturer: node.part.manufacturer ?? '',
     distributor:  node.part.distributor ?? '',
@@ -235,6 +238,16 @@ export const bomFlattenInclude = (nodes: BOMNode[], include: Set<string>): BOMNo
 
 export const bomTypeOf = (n: BOMNode): 'top' | 'subassembly' | 'catalog' =>
   n.level === 0 ? 'top' : (n.children && n.children.length ? 'subassembly' : 'catalog');
+
+// Assigns hierarchical position labels in place, e.g. root "1.0", its children "1.1"/"1.2",
+// their children "1.1.1"/"1.1.2" — matches the dot-notation BOM level numbering convention.
+export function assignLevelLabels(nodes: BOMNode[], prefix: number[] = []): void {
+  nodes.forEach((node, i) => {
+    const path = [...prefix, i + 1];
+    node.levelLabel = path.length === 1 ? `${path[0]}.0` : path.join('.');
+    if (node.children) assignLevelLabels(node.children, path);
+  });
+}
 
 // ── Sub-component bulk import (Excel/CSV) ─────────────────────────
 

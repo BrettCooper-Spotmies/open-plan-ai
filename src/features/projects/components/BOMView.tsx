@@ -6,7 +6,14 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBomTree, useCreateBomNode } from '@/hooks/useBom';
 import { useCreatePart } from '@/hooks/useParts';
-import { uploadBomDocumentFile } from '@/hooks/useBomDocuments';
+import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
+
+async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
+  const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? [])].filter(Boolean) as DocValue[];
+  await Promise.allSettled(
+    docs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName)),
+  );
+}
 
 function softTint(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
@@ -43,12 +50,12 @@ import {
   BOM_CAT_META,
   bomFlatAll, bomFlatten, bomFind,
   bomFilterTree, bomFlattenInclude, bomTypeOf,
-  fromApiNode,
+  fromApiNode, assignLevelLabels,
 } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMDetailScreen } from './BOMDetailScreen';
 import { BOMMapView } from './BOMMapView';
-import { BOMPartSheet, BOMPartPayload } from './BOMPartSheet';
+import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { useCurrency } from '@/hooks/useCurrency';
 
 // ── Skeletons ──────────────────────────────────────────────────────
@@ -502,7 +509,7 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, totalCount, f
                 <span className={cn('text-xs font-semibold ml-0.5 tabular-nums',
                   row.level === 0 ? 'text-foreground' : row.level === 1 ? 'text-muted-foreground' : 'text-muted-foreground/60'
                 )}>
-                  {row.level}
+                  {row.levelLabel ?? row.level}
                 </span>
               </div>
 
@@ -611,7 +618,7 @@ function GridView({ rows, onOpen, totalCount, formatCurrency }: { rows: BOMNode[
                 <PartThumb cat={row.cat} big />
                 <span className="absolute top-4 left-4 px-1.5 py-0.5 rounded text-[10px] font-semibold"
                   style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', color: meta.tint, border: `1px solid ${meta.tint}40` }}>
-                  L{row.level}
+                  {row.levelLabel ?? `L${row.level}`}
                 </span>
                 <span className="absolute top-4 right-4"><BOMStatusPill status={row.status} /></span>
               </div>
@@ -685,8 +692,10 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
   const createNode = useCreateBomNode(projectId);
 
   const rootNodes = useMemo(() => {
-    if (!bomTree?.root) return [];
-    return [fromApiNode(bomTree.root)];
+    if (!bomTree?.roots?.length) return [];
+    const nodes = bomTree.roots.map(r => fromApiNode(r));
+    assignLevelLabels(nodes);
+    return nodes;
   }, [bomTree]);
 
   const allNodes = useMemo(() => bomFlatAll(rootNodes), [rootNodes]);
@@ -725,8 +734,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
         ownerId:  payload.ownerId ?? null,
       });
       // Upload any documents attached in the form
-      const docFiles = [payload.docPhoto, payload.docDatasheet, payload.doc3DModel, payload.docFootprint].filter(Boolean) as File[];
-      await Promise.allSettled(docFiles.map(f => uploadBomDocumentFile(node.id, f)));
+      await saveBomDocs(node.id, payload);
       if (onAddClose) onAddClose();
     } catch {
       // errors are logged by React Query's MutationCache; no further action needed

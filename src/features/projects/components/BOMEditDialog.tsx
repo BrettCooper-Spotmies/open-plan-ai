@@ -170,67 +170,44 @@ export function BOMEditDialog({ node, open, onClose, onSave }: Props) {
               Save as Version
             </div>
 
-            <div className="space-y-2">
-              {/* Same revision */}
-              <label className={cn(
-                'flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
-                versionMode === 'same'
-                  ? 'border-primary/40 bg-primary/5'
-                  : 'border-border hover:bg-muted/50'
-              )}>
-                <input
-                  type="radio" name="vmode" value="same"
-                  checked={versionMode === 'same'}
-                  onChange={() => setVersionMode('same')}
-                  className="mt-0.5 accent-primary"
-                />
-                <div className="min-w-0">
-                  <div className="text-sm font-medium text-foreground">
-                    Update <span className="font-mono">Rev {node.rev}</span>
-                    <span className="ml-2 text-[11px] font-normal text-muted-foreground">(overwrite current)</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Changes replace the existing revision. No new version entry is created.
-                  </div>
-                </div>
-              </label>
-
-              {/* New revision */}
-              <label className={cn(
-                'flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors',
-                versionMode === 'new'
-                  ? 'border-primary/40 bg-primary/5'
-                  : 'border-border hover:bg-muted/50'
-              )}>
-                <input
-                  type="radio" name="vmode" value="new"
-                  checked={versionMode === 'new'}
-                  onChange={() => setVersionMode('new')}
-                  className="mt-0.5 accent-primary"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <GitBranch className="w-3.5 h-3.5 text-primary shrink-0" />
-                    <span className="text-sm font-medium text-foreground">Create new revision</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5 mb-2">
-                    Adds a new revision entry. The current <span className="font-mono">Rev {node.rev}</span> is preserved in history.
-                  </div>
-                  {versionMode === 'new' && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <span className="text-xs text-muted-foreground shrink-0">New revision label:</span>
-                      <Input
-                        value={newRevLabel}
-                        onChange={e => setNewRevLabel(e.target.value.toUpperCase().slice(0, 3))}
-                        className="h-7 text-xs font-mono w-20 bg-background"
-                        placeholder="B"
-                        onClick={e => e.stopPropagation()}
-                      />
-                    </div>
-                  )}
-                </div>
-              </label>
+            <div className="flex items-center gap-1 p-1 rounded-lg border border-border bg-muted/40">
+              <button
+                type="button"
+                onClick={() => setVersionMode('same')}
+                className={cn(
+                  'flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  versionMode === 'same' ? 'bg-card border border-border shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Update Rev {node.rev}
+              </button>
+              <button
+                type="button"
+                onClick={() => setVersionMode('new')}
+                className={cn(
+                  'flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                  versionMode === 'new' ? 'bg-card border border-border shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <GitBranch className="w-3.5 h-3.5" />
+                New revision
+              </button>
             </div>
+
+            {versionMode === 'new' ? (
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs text-muted-foreground shrink-0">Label:</span>
+                <Input
+                  value={newRevLabel}
+                  onChange={e => setNewRevLabel(e.target.value.toUpperCase().slice(0, 3))}
+                  className="h-7 text-xs font-mono w-16 bg-background"
+                  placeholder="B"
+                />
+                <span className="text-xs text-muted-foreground">Rev {node.rev} is preserved in history.</span>
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground mt-2">Overwrites Rev {node.rev} in place. No history entry is created.</div>
+            )}
 
             {/* Change notes */}
             <div className="mt-3 space-y-1.5">
@@ -243,8 +220,8 @@ export function BOMEditDialog({ node, open, onClose, onSave }: Props) {
                 placeholder={versionMode === 'new'
                   ? 'Describe what changed in this revision…'
                   : 'Optional: describe the correction made…'}
-                className="text-sm bg-muted border-border resize-none min-h-[72px]"
-                rows={3}
+                className="text-sm bg-muted border-border resize-none min-h-[60px]"
+                rows={2}
               />
             </div>
           </div>

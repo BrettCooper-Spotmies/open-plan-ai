@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import {
-  GitMerge, X, AlertCircle, ChevronDown, Check, CheckCircle, Clock,
+  GitMerge, X, AlertCircle, ChevronDown, ChevronRight, ChevronLeft, Check, CheckCircle, Clock,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -66,6 +66,12 @@ function FSelect<T extends string>({
 
 const UOM_OPTIONS = ['EA', 'SET', 'LIC', 'KG', 'M', 'FT', 'PCS', 'LOT'];
 
+const TABS = ['part', 'impact', 'reason', 'approval'] as const;
+type TabId = typeof TABS[number];
+const TAB_LABEL: Record<TabId, string> = {
+  part: 'Part Details', impact: 'Impact', reason: 'Reason', approval: 'Approval',
+};
+
 // ── Impact area options ───────────────────────────────────────────────────────
 
 const IMPACT_AREA_OPTIONS = [
@@ -109,6 +115,9 @@ export function BOMECOSheet({
   const createMutation = useCreateECO(projectId);
   const meta = BOM_CAT_META[node.cat] ?? BOM_CAT_META.assembly;
 
+  const [activeTab, setActiveTab] = useState<TabId>('part');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   // ── Part Details editable state (pre-filled from node) ──
   const [desc, setDesc] = useState(node.desc ?? '');
   const [status, setStatus] = useState<BOMStatus>(node.status ?? 'pending');
@@ -127,6 +136,7 @@ export function BOMECOSheet({
 
   // ── Impact tab state ──
   const [impactArea, setImpactArea] = useState<ImpactArea>('schedule');
+  const [impactAreaOther, setImpactAreaOther] = useState('');
   const [impactLevel, setImpactLevel] = useState<ImpactLevel>('MEDIUM');
   const [impactDesc, setImpactDesc] = useState('');
 
@@ -157,6 +167,28 @@ export function BOMECOSheet({
 
   const canSubmit = ecoTitle.trim() && pipeline.length >= 1 && pipelineValid;
 
+  const validateTab = (tab: TabId): boolean => {
+    const e: Record<string, string> = {};
+    if (tab === 'part' && !ecoTitle.trim()) {
+      e.title = 'ECO title is required';
+    }
+    if (tab === 'impact' && impactArea === 'other' && !impactAreaOther.trim()) {
+      e.impactAreaOther = 'Specify the impact area';
+    }
+    if (tab === 'approval') {
+      if (pipeline.length < 1) e.pipeline = 'At least 1 approval stage is required';
+      else if (!pipelineValid) e.pipeline = 'Optional or reordered stages need a justification';
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleNext = () => {
+    if (!validateTab(activeTab)) return;
+    setErrors({});
+    setActiveTab(TABS[TABS.indexOf(activeTab) + 1]);
+  };
+
   // ── Submit ──
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -171,7 +203,7 @@ export function BOMECOSheet({
         revFrom: revFrom || null,
         revTo: revTo || null,
         scheduleImpact: impactLevel.toLowerCase(),
-        impactArea,
+        impactArea: impactArea === 'other' ? (impactAreaOther.trim() || 'other') : impactArea,
         certNotes: impactDesc || null,
         parts: node._partId ? [{
           partId: node._partId,
@@ -227,16 +259,16 @@ export function BOMECOSheet({
         </DialogHeader>
 
         {/* Tabs */}
-        <Tabs defaultValue="part" className="flex flex-col flex-1 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabId)} className="flex flex-col flex-1 overflow-hidden">
           <div className="px-7 pt-3 pb-0 border-b border-border shrink-0">
             <TabsList className="bg-transparent h-auto p-0 gap-0 w-full justify-start rounded-none">
-              {(['part', 'impact', 'reason', 'approval'] as const).map(t => (
+              {TABS.map(t => (
                 <TabsTrigger
                   key={t}
                   value={t}
                   className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-foreground data-[state=active]:bg-transparent text-muted-foreground text-[13px] font-medium px-4 py-2 capitalize"
                 >
-                  {t === 'part' ? 'Part Details' : t.charAt(0).toUpperCase() + t.slice(1)}
+                  {TAB_LABEL[t]}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -251,9 +283,11 @@ export function BOMECOSheet({
                 <FL label="ECO Title" required>
                   <FInput
                     value={ecoTitle}
-                    onChange={e => setEcoTitle(e.target.value)}
+                    onChange={e => { setEcoTitle(e.target.value); if (errors.title) setErrors(({ title: _title, ...rest }) => rest); }}
                     placeholder="e.g. Motor Housing Rev B Redesign"
+                    className={cn(errors.title && 'border-destructive')}
                   />
+                  {errors.title && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.title}</p>}
                 </FL>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -401,6 +435,24 @@ export function BOMECOSheet({
                     />
                   </FL>
                 </div>
+                {impactArea === 'other' && (
+                  <FL label="Specify Impact Area" required>
+                    <FInput
+                      value={impactAreaOther}
+                      onChange={e => {
+                        setImpactAreaOther(e.target.value);
+                        if (errors.impactAreaOther) setErrors(({ impactAreaOther: _o, ...rest }) => rest);
+                      }}
+                      placeholder="e.g. Logistics, Documentation"
+                      className={cn(errors.impactAreaOther && 'border-destructive')}
+                    />
+                    {errors.impactAreaOther && (
+                      <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                        <AlertCircle className="w-3 h-3" />{errors.impactAreaOther}
+                      </p>
+                    )}
+                  </FL>
+                )}
                 <FL label="Impact Description">
                   <textarea
                     value={impactDesc}
@@ -571,28 +623,21 @@ export function BOMECOSheet({
         {/* Footer */}
         <div className="px-7 py-4 border-t border-border flex items-center justify-between gap-4 shrink-0 bg-card">
           <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-            {canSubmit && (
+            {activeTab !== 'approval' ? (
+              <span>Step {TABS.indexOf(activeTab) + 1} of {TABS.length}</span>
+            ) : canSubmit ? (
               <>
                 <Check className="w-3.5 h-3.5" style={{ color: '#16A34A' }} />
                 <span>Ready to create ECO</span>
               </>
-            )}
-            {!canSubmit && !ecoTitle.trim() && (
+            ) : (
               <>
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" style={{ color: '#F59E0B' }} />
-                <span>Enter an ECO title in the <strong>Part Details</strong> tab</span>
-              </>
-            )}
-            {!canSubmit && ecoTitle.trim() && pipeline.length < 1 && (
-              <>
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" style={{ color: '#F59E0B' }} />
-                <span>At least 1 approval stage is required</span>
-              </>
-            )}
-            {!canSubmit && ecoTitle.trim() && pipeline.length >= 1 && !pipelineValid && (
-              <>
-                <AlertCircle className="w-3.5 h-3.5 shrink-0" style={{ color: '#F59E0B' }} />
-                <span>Optional or reordered stages need a justification</span>
+                <span>
+                  {pipeline.length < 1
+                    ? 'At least 1 approval stage is required'
+                    : 'Optional or reordered stages need a justification'}
+                </span>
               </>
             )}
           </div>
@@ -603,13 +648,30 @@ export function BOMECOSheet({
             >
               Cancel
             </button>
-            <button
-              onClick={handleSubmit}
-              disabled={!canSubmit || createMutation.isPending}
-              className="px-4 py-1.5 rounded-md text-sm font-medium bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-[inherit]"
-            >
-              {createMutation.isPending ? 'Creating…' : 'Create ECO'}
-            </button>
+            {TABS.indexOf(activeTab) > 0 && (
+              <button
+                onClick={() => { setErrors({}); setActiveTab(TABS[TABS.indexOf(activeTab) - 1]); }}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium border border-border bg-transparent text-foreground hover:bg-muted transition-colors font-[inherit]"
+              >
+                <ChevronLeft className="w-4 h-4" /> Back
+              </button>
+            )}
+            {activeTab !== 'approval' ? (
+              <button
+                onClick={handleNext}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium bg-foreground text-background hover:bg-foreground/90 transition-colors font-[inherit]"
+              >
+                Next <ChevronRight className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={handleSubmit}
+                disabled={!canSubmit || createMutation.isPending}
+                className="px-4 py-1.5 rounded-md text-sm font-medium bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-[inherit]"
+              >
+                {createMutation.isPending ? 'Creating…' : 'Create ECO'}
+              </button>
+            )}
           </div>
         </div>
       </DialogContent>

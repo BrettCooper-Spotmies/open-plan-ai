@@ -12,17 +12,8 @@ import {
 import { ECOAvatar } from './ECOShared';
 import { cn } from '@/lib/utils';
 import { useCreateECO } from '@/hooks/useECOs';
-
-// ── BOM pool (simulates where-used rollup) ────────────────────────────────────
-
-const BOM_POOL = [
-  { pn: 'EV-ENC-041', desc: 'Sheet Metal Cabinet IP54',       whereUsed: ['EV-ASM-100 Main Assembly'] },
-  { pn: 'EV-ENC-042', desc: 'Front Door Panel',               whereUsed: ['EV-ASM-110 Door Frame'] },
-  { pn: 'EV-PCB-002', desc: 'Main Controller PCBA',           whereUsed: ['EV-ASM-100 Main Assembly'] },
-  { pn: 'EV-CHD-034', desc: 'Cable Management Bracket',       whereUsed: ['EV-ASM-120 Harness Sub-Assy'] },
-  { pn: 'EV-SAF-062', desc: 'Emergency Stop Button',          whereUsed: ['EV-ASM-110 Door Frame'] },
-  { pn: 'EV-IC-U2',   desc: 'USB-C PD Controller PMIC',      whereUsed: ['EV-PCB-002 Main Controller PCBA'] },
-];
+import { useBomTree } from '@/hooks/useBom';
+import { fromApiNode, bomFlatAll, bomPath } from './bomData';
 
 // ── Attachment file type helper ───────────────────────────────────────────────
 
@@ -80,35 +71,42 @@ const inputCls = 'w-full bg-muted/40 border border-border rounded-md text-foregr
 
 const STEPS = ['Basics', 'Items', 'Details', 'Impact', 'Approval'];
 
-function Stepper({ step, setStep }: { step: number; setStep: (i: number) => void }) {
+function Stepper({ step, maxStepReached, onStepClick }: { step: number; maxStepReached: number; onStepClick: (i: number) => void }) {
   return (
     <div className="flex gap-1">
-      {STEPS.map((s, i) => (
-        <div key={s} onClick={() => setStep(i)} className="flex-1 cursor-pointer pb-2.5">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <div
-              className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[11px] font-semibold"
-              style={{
-                background: i < step ? '#16A34A' : i === step ? '#2563EB' : 'hsl(var(--muted))',
-                color: i <= step ? '#fff' : undefined,
-                border: i > step ? '1px solid hsl(var(--border))' : 'none',
-              }}
-            >
-              {i < step ? <Check className="w-3 h-3 text-white" strokeWidth={3} /> : i + 1}
-            </div>
-            <span
-              className="text-[12px] whitespace-nowrap"
-              style={{ fontWeight: i === step ? 600 : 500, color: i === step ? undefined : undefined }}
-            >
-              {s}
-            </span>
-          </div>
+      {STEPS.map((s, i) => {
+        const locked = i > maxStepReached;
+        return (
           <div
-            className="h-0.5 rounded"
-            style={{ background: i <= step ? '#2563EB' : 'hsl(var(--border))' }}
-          />
-        </div>
-      ))}
+            key={s}
+            onClick={() => !locked && onStepClick(i)}
+            className={cn('flex-1 pb-2.5', locked ? 'cursor-not-allowed' : 'cursor-pointer')}
+          >
+            <div className="flex items-center gap-1.5 mb-1.5" style={{ opacity: locked ? 0.45 : 1 }}>
+              <div
+                className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[11px] font-semibold"
+                style={{
+                  background: i < step ? '#16A34A' : i === step ? '#2563EB' : 'hsl(var(--muted))',
+                  color: i <= step ? '#fff' : undefined,
+                  border: i > step ? '1px solid hsl(var(--border))' : 'none',
+                }}
+              >
+                {i < step ? <Check className="w-3 h-3 text-white" strokeWidth={3} /> : i + 1}
+              </div>
+              <span
+                className="text-[12px] whitespace-nowrap"
+                style={{ fontWeight: i === step ? 600 : 500 }}
+              >
+                {s}
+              </span>
+            </div>
+            <div
+              className="h-0.5 rounded"
+              style={{ background: i <= step ? '#2563EB' : 'hsl(var(--border))' }}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -156,6 +154,8 @@ export function ECOWizard({
 }) {
   const createMutation = useCreateECO(projectId);
   const [step, setStep] = useState(0);
+  const [maxStepReached, setMaxStepReached] = useState(0);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Step 1 — Basics
   const [basics, setBasics] = useState<BasicsState>({
@@ -166,11 +166,22 @@ export function ECOWizard({
     effType: 'DATE', effValue: '',
   });
 
-  // Step 2 — Affected items
+  // Step 2 — Affected items (real BOM parts for this project)
+  const { data: bomTree } = useBomTree(projectId);
+  const bomRootNodes = useMemo(() => (bomTree?.roots ?? []).map(r => fromApiNode(r)), [bomTree]);
+  const bomPool = useMemo(
+    () => bomFlatAll(bomRootNodes).map(n => ({
+      pn: n.pn,
+      desc: n.desc,
+      whereUsed: (bomPath(n.id, bomRootNodes) ?? []).slice(0, -1).map(a => `${a.pn} ${a.desc}`),
+    })),
+    [bomRootNodes],
+  );
+
   const [items, setItems] = useState<ItemState[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const addItem = (p: typeof BOM_POOL[number]) => {
+  const addItem = (p: typeof bomPool[number]) => {
     setItems(prev =>
       prev.find(x => x.pn === p.pn)
         ? prev
@@ -225,6 +236,27 @@ export function ECOWizard({
 
   const canSubmit = basics.title.trim() && items.length >= 1 && pipeline.length >= 1 && pipelineValid;
 
+  const validateStep = (s: number): boolean => {
+    const e: Record<string, string> = {};
+    if (s === 0 && !basics.title.trim()) e.title = 'Title is required';
+    if (s === 1 && items.length < 1) e.items = 'At least 1 affected part is required';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleNext = () => {
+    if (!validateStep(step)) return;
+    setErrors({});
+    const next = step + 1;
+    setStep(next);
+    setMaxStepReached(m => Math.max(m, next));
+  };
+
+  const handleStepClick = (i: number) => {
+    setErrors({});
+    setStep(i);
+  };
+
   // ── Render helpers ────────────────────────────────────────────────────────
 
   const upItem = <K extends keyof ItemState>(idx: number, key: K, val: ItemState[K]) =>
@@ -241,10 +273,18 @@ export function ECOWizard({
         <FieldLabel>Title</FieldLabel>
         <input
           value={basics.title}
-          onChange={e => setBasics({ ...basics, title: e.target.value })}
+          onChange={e => {
+            setBasics({ ...basics, title: e.target.value });
+            if (errors.title) setErrors(({ title: _title, ...rest }) => rest);
+          }}
           placeholder="e.g. Motor Housing Redesign"
-          className={inputCls}
+          className={cn(inputCls, errors.title && 'border-destructive')}
         />
+        {errors.title && (
+          <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+            <AlertCircle className="w-3 h-3" />{errors.title}
+          </p>
+        )}
       </div>
       <div>
         <FieldLabel>Description</FieldLabel>
@@ -351,24 +391,36 @@ export function ECOWizard({
       </div>
       {pickerOpen && (
         <div className="border border-border rounded-lg overflow-hidden">
-          {BOM_POOL.map(p => (
-            <div
-              key={p.pn}
-              onClick={() => addItem(p)}
-              className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
-            >
-              <div>
-                <span className="text-[12px] font-mono font-semibold text-blue-500">{p.pn}</span>
-                <span className="text-[12px] text-muted-foreground ml-2.5">{p.desc}</span>
-              </div>
-              <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+          {bomPool.length === 0 ? (
+            <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
+              No parts in this project's BOM yet.
             </div>
-          ))}
+          ) : (
+            bomPool.map(p => (
+              <div
+                key={p.pn}
+                onClick={() => addItem(p)}
+                className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
+              >
+                <div>
+                  <span className="text-[12px] font-mono font-semibold text-blue-500">{p.pn}</span>
+                  <span className="text-[12px] text-muted-foreground ml-2.5">{p.desc}</span>
+                </div>
+                <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+              </div>
+            ))
+          )}
         </div>
       )}
       {items.length === 0 && !pickerOpen && (
-        <div className="py-7 text-center border border-dashed border-border rounded-lg text-[12px] text-muted-foreground">
-          No parts yet — at least one is required to submit.
+        <div
+          className="py-7 text-center border border-dashed rounded-lg text-[12px]"
+          style={{
+            borderColor: errors.items ? '#DC2626' : 'hsl(var(--border))',
+            color: errors.items ? '#DC2626' : 'hsl(var(--muted-foreground))',
+          }}
+        >
+          {errors.items ?? 'No parts yet — at least one is required to submit.'}
         </div>
       )}
       {items.map((it, idx) => (
@@ -729,7 +781,7 @@ export function ECOWizard({
               <X className="w-4 h-4 text-muted-foreground" />
             </button>
           </div>
-          <Stepper step={step} setStep={setStep} />
+          <Stepper step={step} maxStepReached={maxStepReached} onStepClick={handleStepClick} />
         </div>
 
         {/* Body */}
@@ -753,7 +805,7 @@ export function ECOWizard({
           <div className="flex gap-2">
             {step > 0 && (
               <button
-                onClick={() => setStep(step - 1)}
+                onClick={() => { setErrors({}); setStep(step - 1); }}
                 className="px-4 py-2 rounded-md text-[13px] font-medium bg-muted/50 text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit]"
               >
                 Back
@@ -761,7 +813,7 @@ export function ECOWizard({
             )}
             {step < STEPS.length - 1 ? (
               <button
-                onClick={() => setStep(step + 1)}
+                onClick={handleNext}
                 className="px-4 py-2 rounded-md text-[13px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors font-[inherit]"
               >
                 Next

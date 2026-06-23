@@ -176,6 +176,7 @@ export const ENDPOINTS = {
   UPLOADS: {
     AVATAR: '/uploads/avatar',
     ATTACHMENTS: '/uploads/attachments',
+    ATTACHMENT_LINK: '/uploads/attachments/link',
     ATTACHMENT: (id: string) => `/uploads/attachments/${id}`,
     BY_ENTITY: (entityType: string, entityId: string) => `/uploads/attachments/${entityType}/${entityId}`,
   },
