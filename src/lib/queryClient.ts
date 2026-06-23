@@ -141,6 +141,9 @@ export const queryKeys = {
   // Parts catalog
   parts: {
     all:       ['parts'] as const,
+    // listRoot has no `params` slot — invalidating this prefix matches every
+    // filtered/unfiltered useOrgParts query, since RQ does partial-key matching.
+    listRoot:  (orgId: string) => ['parts', 'list', orgId] as const,
     list:      (orgId: string, params?: object) => ['parts', 'list', orgId, params] as const,
     detail:    (partId: string) => ['parts', 'detail', partId] as const,
     revisions: (partId: string) => ['parts', 'revisions', partId] as const,
