@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, Coffee, ChevronsUpDown, Check, Plus, Building2, Loader2, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, Coffee, ChevronsUpDown, Check, Plus, Building2, Loader2, MessageSquare, Plug } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { Logo } from '@/components/Logo';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
@@ -49,6 +49,10 @@ const teamNavItems = [{
   title: 'Team',
   url: '/team',
   icon: Users
+}, {
+  title: 'Integrations',
+  url: '/integrations',
+  icon: Plug
 }, {
   title: 'Settings',
   url: '/settings',
