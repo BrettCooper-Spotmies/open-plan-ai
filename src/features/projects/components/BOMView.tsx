@@ -3,6 +3,7 @@ import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
   CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBomTree, useCreateBomNode } from '@/hooks/useBom';
 import { useCreatePart } from '@/hooks/useParts';
@@ -735,9 +736,13 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
       });
       // Upload any documents attached in the form
       await saveBomDocs(node.id, payload);
+      toast.success('Part added to BOM');
       if (onAddClose) onAddClose();
-    } catch {
-      // errors are logged by React Query's MutationCache; no further action needed
+    } catch (err) {
+      toast.error('Failed to add part', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+      throw err; // re-throw so the dialog stays open and the user can retry
     }
   };
 

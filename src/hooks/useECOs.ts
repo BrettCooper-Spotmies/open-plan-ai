@@ -166,7 +166,7 @@ export function useCreateECO(projectId: string) {
     mutationFn: (dto: unknown) =>
       apiClient.post<ApiEcoDetail>(ENDPOINTS.ECOS.CREATE(projectId), dto),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.ecos.list(projectId) });
+      qc.invalidateQueries({ queryKey: queryKeys.ecos.listRoot(projectId) });
       qc.invalidateQueries({ queryKey: queryKeys.ecos.stats(projectId) });
     },
   });
@@ -179,7 +179,7 @@ export function useUpdateECO(projectId: string, ecoId: string) {
       apiClient.put<ApiEcoDetail>(ENDPOINTS.ECOS.UPDATE(projectId, ecoId), dto),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.ecos.detail(ecoId) });
-      qc.invalidateQueries({ queryKey: queryKeys.ecos.list(projectId) });
+      qc.invalidateQueries({ queryKey: queryKeys.ecos.listRoot(projectId) });
     },
   });
 }
@@ -190,7 +190,7 @@ export function useDeleteECO(projectId: string) {
     mutationFn: (ecoId: string) =>
       apiClient.delete(ENDPOINTS.ECOS.DELETE(projectId, ecoId)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.ecos.list(projectId) });
+      qc.invalidateQueries({ queryKey: queryKeys.ecos.listRoot(projectId) });
       qc.invalidateQueries({ queryKey: queryKeys.ecos.stats(projectId) });
     },
   });
@@ -203,7 +203,7 @@ export function useSubmitECO(projectId: string, ecoId: string) {
       apiClient.post<ApiEcoDetail>(ENDPOINTS.ECOS.SUBMIT(projectId, ecoId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.ecos.detail(ecoId) });
-      qc.invalidateQueries({ queryKey: queryKeys.ecos.list(projectId) });
+      qc.invalidateQueries({ queryKey: queryKeys.ecos.listRoot(projectId) });
       qc.invalidateQueries({ queryKey: queryKeys.ecos.stats(projectId) });
     },
   });
@@ -216,7 +216,7 @@ export function useECODecision(projectId: string, ecoId: string) {
       apiClient.post<ApiEcoDetail>(ENDPOINTS.ECOS.DECISION(projectId, ecoId), dto),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.ecos.detail(ecoId) });
-      qc.invalidateQueries({ queryKey: queryKeys.ecos.list(projectId) });
+      qc.invalidateQueries({ queryKey: queryKeys.ecos.listRoot(projectId) });
       qc.invalidateQueries({ queryKey: queryKeys.ecos.stats(projectId) });
     },
   });
@@ -231,7 +231,7 @@ export function useReleaseECO(projectId: string, ecoId: string) {
     }) => apiClient.post<ApiEcoDetail>(ENDPOINTS.ECOS.RELEASE(projectId, ecoId), dto),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.ecos.detail(ecoId) });
-      qc.invalidateQueries({ queryKey: queryKeys.ecos.list(projectId) });
+      qc.invalidateQueries({ queryKey: queryKeys.ecos.listRoot(projectId) });
       qc.invalidateQueries({ queryKey: queryKeys.ecos.stats(projectId) });
     },
   });
@@ -244,7 +244,7 @@ export function useVerifyECO(projectId: string, ecoId: string) {
       apiClient.post<ApiEcoDetail>(ENDPOINTS.ECOS.VERIFY(projectId, ecoId), dto ?? {}),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.ecos.detail(ecoId) });
-      qc.invalidateQueries({ queryKey: queryKeys.ecos.list(projectId) });
+      qc.invalidateQueries({ queryKey: queryKeys.ecos.listRoot(projectId) });
       qc.invalidateQueries({ queryKey: queryKeys.ecos.stats(projectId) });
     },
   });
@@ -257,7 +257,7 @@ export function useCloseECO(projectId: string, ecoId: string) {
       apiClient.post<ApiEcoDetail>(ENDPOINTS.ECOS.CLOSE(projectId, ecoId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.ecos.detail(ecoId) });
-      qc.invalidateQueries({ queryKey: queryKeys.ecos.list(projectId) });
+      qc.invalidateQueries({ queryKey: queryKeys.ecos.listRoot(projectId) });
       qc.invalidateQueries({ queryKey: queryKeys.ecos.stats(projectId) });
     },
   });
@@ -270,7 +270,7 @@ export function useHoldECO(projectId: string, ecoId: string) {
       apiClient.post<ApiEcoDetail>(ENDPOINTS.ECOS.HOLD(projectId, ecoId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.ecos.detail(ecoId) });
-      qc.invalidateQueries({ queryKey: queryKeys.ecos.list(projectId) });
+      qc.invalidateQueries({ queryKey: queryKeys.ecos.listRoot(projectId) });
     },
   });
 }
@@ -282,7 +282,7 @@ export function useResumeECO(projectId: string, ecoId: string) {
       apiClient.post<ApiEcoDetail>(ENDPOINTS.ECOS.RESUME(projectId, ecoId)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.ecos.detail(ecoId) });
-      qc.invalidateQueries({ queryKey: queryKeys.ecos.list(projectId) });
+      qc.invalidateQueries({ queryKey: queryKeys.ecos.listRoot(projectId) });
       qc.invalidateQueries({ queryKey: queryKeys.ecos.stats(projectId) });
     },
   });

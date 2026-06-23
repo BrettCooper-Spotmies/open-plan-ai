@@ -148,10 +148,13 @@ export const queryKeys = {
 
   // Engineering Changes (ECO)
   ecos: {
-    all:    ['ecos'] as const,
-    list:   (projectId: string, filters?: object) => ['ecos', 'list', projectId, filters] as const,
-    stats:  (projectId: string) => ['ecos', 'stats', projectId] as const,
-    detail: (ecoId: string) => ['ecos', 'detail', ecoId] as const,
-    ecn:    (ecoId: string) => ['ecos', 'ecn', ecoId] as const,
+    all:      ['ecos'] as const,
+    // listRoot has no `filters` slot — invalidating this prefix matches every
+    // filtered/unfiltered useECOList query, since RQ does partial-key matching.
+    listRoot: (projectId: string) => ['ecos', 'list', projectId] as const,
+    list:     (projectId: string, filters?: object) => ['ecos', 'list', projectId, filters] as const,
+    stats:    (projectId: string) => ['ecos', 'stats', projectId] as const,
+    detail:   (ecoId: string) => ['ecos', 'detail', ecoId] as const,
+    ecn:      (ecoId: string) => ['ecos', 'ecn', ecoId] as const,
   },
 };
