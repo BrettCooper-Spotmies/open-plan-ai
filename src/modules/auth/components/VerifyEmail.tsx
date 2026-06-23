@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Layers, Mail, AlertCircle, CheckCircle } from "lucide-react";
+import { Mail, AlertCircle, CheckCircle } from "lucide-react";
+import { Logo } from "@/components/Logo";
 import { authService } from "@/services/auth.service";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -133,7 +134,7 @@ const VerifyEmail = () => {
         <CardHeader className="space-y-1 text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-              <Layers className="h-6 w-6 text-primary-foreground" />
+              <Logo className="h-6 w-6 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold">OpenPlan AI</span>
           </div>

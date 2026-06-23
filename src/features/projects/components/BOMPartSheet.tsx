@@ -67,7 +67,7 @@ interface Props {
   projectId: string;
   open: boolean;
   onClose: () => void;
-  onSave: (payload: BOMPartPayload) => void;
+  onSave: (payload: BOMPartPayload) => void | Promise<void>;
 }
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -336,6 +336,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   const [changeNotes,  setChangeNotes]  = useState('');
   // validation
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   // Reset all form state when the dialog opens so stale data never shows
   useEffect(() => {
@@ -409,32 +410,39 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     return Object.keys(e).length === 0;
   };
 
-  const handleSave = () => {
-    if (!validate()) return;
-    onSave({
-      mode,
-      pn: isEdit ? (node?.pn ?? pn) : pn.trim(),
-      desc, category, status,
-      rev: isEdit ? (versionMode === 'new' ? (newRevLabel || nextRev(node!.rev)) : node!.rev) : rev,
-      qty: parseFloat(qty) || 1,
-      uom,
-      manufacturer, distributor,
-      price: parseFloat(price) || 0,
-      leadTime: Math.round((parseFloat(leadTime) || 0) * LEAD_TIME_UNITS.find(u => u.id === leadTimeUnit)!.toWeeks),
-      mpn,
-      owner: selectedOwner?.name ?? '',
-      ownerId: selectedOwner?.id,
-      req,
-      docPhoto, docDatasheet, doc3DModel, docFootprint,
-      versionMode: isEdit ? versionMode : undefined,
-      newRevLabel: isEdit && versionMode === 'new' ? newRevLabel : undefined,
-      changeNotes: isEdit ? changeNotes : undefined,
-    });
-    onClose();
+  const handleSave = async () => {
+    if (!validate() || saving) return;
+    setSaving(true);
+    try {
+      await onSave({
+        mode,
+        pn: isEdit ? (node?.pn ?? pn) : pn.trim(),
+        desc, category, status,
+        rev: isEdit ? (versionMode === 'new' ? (newRevLabel || nextRev(node!.rev)) : node!.rev) : rev,
+        qty: parseFloat(qty) || 1,
+        uom,
+        manufacturer, distributor,
+        price: parseFloat(price) || 0,
+        leadTime: Math.round((parseFloat(leadTime) || 0) * LEAD_TIME_UNITS.find(u => u.id === leadTimeUnit)!.toWeeks),
+        mpn,
+        owner: selectedOwner?.name ?? '',
+        ownerId: selectedOwner?.id,
+        req,
+        docPhoto, docDatasheet, doc3DModel, docFootprint,
+        versionMode: isEdit ? versionMode : undefined,
+        newRevLabel: isEdit && versionMode === 'new' ? newRevLabel : undefined,
+        changeNotes: isEdit ? changeNotes : undefined,
+      });
+      onClose();
+    } catch {
+      // onSave already surfaces a toast on failure; keep the dialog open so the user can retry
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+    <Dialog open={open} onOpenChange={v => { if (!v && !saving) onClose(); }}>
       <DialogContent className="max-w-[1200px] w-[92vw] p-0 gap-0 flex flex-col overflow-hidden"
         style={{ maxHeight: '90vh', minHeight: '75vh' }}>
 
@@ -789,9 +797,9 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
               : <span className="text-xs text-muted-foreground">Step {TABS.indexOf(activeTab) + 1} of {TABS.length}</span>}
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button variant="outline" size="default" className="px-5" onClick={onClose}>Cancel</Button>
+            <Button variant="outline" size="default" className="px-5" onClick={onClose} disabled={saving}>Cancel</Button>
             {TABS.indexOf(activeTab) > 0 && (
-              <Button variant="outline" size="default" className="gap-1.5 px-4"
+              <Button variant="outline" size="default" className="gap-1.5 px-4" disabled={saving}
                 onClick={() => { setErrors({}); setActiveTab(TABS[TABS.indexOf(activeTab) - 1]); }}>
                 <ChevronLeft className="w-4 h-4" /> Back
               </Button>
@@ -802,12 +810,14 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
               </Button>
             ) : (
               <Button size="default" className="gap-2 px-6"
-                disabled={isEdit && versionMode === 'new' && !changeNotes.trim()}
+                disabled={saving || (isEdit && versionMode === 'new' && !changeNotes.trim())}
                 onClick={handleSave}>
                 <Save className="w-4 h-4" />
-                {isEdit
-                  ? versionMode === 'new' ? `Save as Rev ${newRevLabel || '?'}` : 'Save Changes'
-                  : 'Add Part'}
+                {saving
+                  ? 'Saving…'
+                  : isEdit
+                    ? versionMode === 'new' ? `Save as Rev ${newRevLabel || '?'}` : 'Save Changes'
+                    : 'Add Part'}
               </Button>
             )}
           </div>

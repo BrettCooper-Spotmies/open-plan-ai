@@ -1,4 +1,5 @@
 import { useState, useRef, useMemo } from 'react';
+import { toast } from 'sonner';
 import {
   GitMerge, Check, X, Plus, ChevronDown, Lock, AlertCircle,
   Upload, FileText, Image, Box, Boxes, Package, Scissors,
@@ -889,9 +890,12 @@ export function ECOWizard({
                         justification:  p.justification  || null,
                       })),
                     });
+                    toast.success('ECO created');
                     onClose({ saved: true });
-                  } catch {
-                    // error toast could be added here
+                  } catch (err) {
+                    toast.error('Failed to create ECO', {
+                      description: err instanceof Error ? err.message : undefined,
+                    });
                   }
                 }}
                 disabled={!canSubmit || createMutation.isPending}

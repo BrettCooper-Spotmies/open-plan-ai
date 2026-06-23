@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Layers, Lock, ArrowLeft, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Lock, ArrowLeft, Eye, EyeOff, AlertCircle } from "lucide-react";
+import { Logo } from "@/components/Logo";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { authService } from "@/services/auth.service";
 
@@ -60,7 +61,7 @@ const ResetPassword = () => {
           <CardHeader className="space-y-1 text-center">
             <div className="flex items-center justify-center gap-2 mb-4">
               <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-                <Layers className="h-6 w-6 text-primary-foreground" />
+                <Logo className="h-6 w-6 text-primary-foreground" />
               </div>
               <span className="text-xl font-bold">OpenPlan AI</span>
             </div>
@@ -92,7 +93,7 @@ const ResetPassword = () => {
         <CardHeader className="space-y-1 text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-              <Layers className="h-6 w-6 text-primary-foreground" />
+              <Logo className="h-6 w-6 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold">OpenPlan AI</span>
           </div>
