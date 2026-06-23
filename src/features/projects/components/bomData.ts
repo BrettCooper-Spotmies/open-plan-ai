@@ -1,6 +1,6 @@
 // BOM types, API response types, adapters, and tree helpers
 
-export type BOMStatus = 'approved' | 'pending';
+export type BOMStatus = 'approved' | 'pending' | 'rejected';
 export type BOMCategory = 'power' | 'control' | 'connector' | 'enclosure' | 'hmi' | 'safety' | 'assembly';
 
 export interface BOMRevision {
@@ -131,6 +131,26 @@ export interface ApiTreeResponse {
   approvedCount: number;
 }
 
+export interface ApiApprovalResponse {
+  id: string;
+  nodeId: string;
+  partId: string;
+  action: 'approved' | 'rejected';
+  performedBy: { id: string; name: string };
+  reason: string | null;
+  comment: string | null;
+  createdAt: string;
+}
+
+export interface BOMApproval {
+  id: string;
+  action: 'approved' | 'rejected';
+  performedByName: string;
+  reason: string | null;
+  comment: string | null;
+  date: string; // ISO date string
+}
+
 export interface ApiSummaryResponse {
   treeId: string | null;
   projectId: string;
@@ -179,6 +199,17 @@ export function fromApiRevision(r: ApiRevisionResponse): BOMRevision {
     status:   r.status,
     price:    parseFloat(r.price ?? '0'),
     leadTime: Math.ceil((r.leadTimeDays ?? 0) / 7),
+  };
+}
+
+export function fromApiApproval(a: ApiApprovalResponse): BOMApproval {
+  return {
+    id:              a.id,
+    action:          a.action,
+    performedByName: a.performedBy.name,
+    reason:          a.reason,
+    comment:         a.comment,
+    date:            a.createdAt,
   };
 }
 

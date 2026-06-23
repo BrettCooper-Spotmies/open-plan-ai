@@ -1,12 +1,13 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
-  CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus,
+  CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useBomTree, useCreateBomNode } from '@/hooks/useBom';
+import { useBomTree, useCreateBomNode, useApproveBomNode, useRejectBomNode } from '@/hooks/useBom';
 import { useCreatePart } from '@/hooks/useParts';
+import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
 
 async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
@@ -57,6 +58,7 @@ import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMDetailScreen, AddSubcomponentDialog } from './BOMDetailScreen';
 import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
+import { BOMRejectDialog } from './BOMRejectDialog';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { useCurrency } from '@/hooks/useCurrency';
 
@@ -98,7 +100,7 @@ function ListRowSkeleton({ level = 0 }: { level?: number }) {
         <Skeleton className="h-3 w-20" />
       </div>
       <div style={{ flexBasis: 170, flexShrink: 0 }} className="px-2"><Skeleton className="h-5 w-16 rounded-full" /></div>
-      <div style={{ flexBasis: 56, flexShrink: 0 }} />
+      <div style={{ flexBasis: 110, flexShrink: 0 }} />
     </div>
   );
 }
@@ -305,9 +307,9 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
 
           <Section title="Status">
             <div className="flex gap-2 flex-wrap">
-              {(['approved', 'pending'] as const).map(s => (
+              {(['approved', 'pending', 'rejected'] as const).map(s => (
                 <Chip key={s} active={filters.statuses.includes(s)} onClick={() => toggle('statuses', s)}>
-                  {s === 'approved' ? 'Approved' : 'Pending'}
+                  {s === 'approved' ? 'Approved' : s === 'pending' ? 'Pending' : 'Rejected'}
                 </Chip>
               ))}
             </div>
@@ -441,10 +443,13 @@ const HEADERS = [
   { key: 'status', label: 'Status', w: 92 },
   { key: 'owner', label: 'Owner', w: 140 },
   { key: 'req', label: 'Traceability', w: 170 },
-  { key: 'act', label: '', w: 56 },
+  { key: 'act', label: '', w: 110 },
 ] as const;
 
-function ListView({ rows, expanded, toggle, filtersActive, onOpen, onAddSub, totalCount, formatCurrency }: {
+function ListView({
+  rows, expanded, toggle, filtersActive, onOpen, onAddSub, totalCount, formatCurrency,
+  canApprove, onApprove, onReject, approvingId,
+}: {
   rows: BOMNode[];
   expanded: Record<string, boolean>;
   toggle: (id: string) => void;
@@ -453,6 +458,10 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, onAddSub, tot
   onAddSub: (node: BOMNode) => void;
   totalCount: number;
   formatCurrency: (n: number) => string;
+  canApprove: boolean;
+  onApprove: (node: BOMNode) => void;
+  onReject: (node: BOMNode) => void;
+  approvingId: string | null;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const rowH = 46;
@@ -557,7 +566,27 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, onAddSub, tot
                 {row.req.length > 2 && <span className="text-[11px] text-muted-foreground self-center">+{row.req.length - 2}</span>}
               </div>
               {/* Actions */}
-              <div style={{ flexBasis: 56, flexShrink: 0 }} className={cn('flex items-center justify-end gap-1 transition-opacity', isHovered ? 'opacity-100' : 'opacity-0')}>
+              <div style={{ flexBasis: 110, flexShrink: 0 }} className={cn('flex items-center justify-end gap-1 transition-opacity', isHovered ? 'opacity-100' : 'opacity-0')}>
+                {canApprove && row.status === 'pending' && (
+                  <>
+                    <button
+                      onClick={e => { e.stopPropagation(); onApprove(row); }}
+                      disabled={approvingId === row.id}
+                      title="Approve part"
+                      className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                    >
+                      <Check className="w-3.5 h-3.5" style={{ color: '#16A34A' }} />
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); onReject(row); }}
+                      disabled={approvingId === row.id}
+                      title="Reject part"
+                      className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                    >
+                      <X className="w-3.5 h-3.5" style={{ color: '#DC2626' }} />
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={e => { e.stopPropagation(); onAddSub(row); }}
                   title="Add sub-component"
@@ -687,7 +716,8 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
   const [createSubNode, setCreateSubNode] = useState<BOMNode | null>(null);
   const [importSubNode, setImportSubNode] = useState<BOMNode | null>(null);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
+  const [rejectTarget, setRejectTarget] = useState<BOMNode | null>(null);
   const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('bom_view') as ViewMode) ?? 'list');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<BOMFilters>({ ...EMPTY_FILTERS });
@@ -701,8 +731,38 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
 
   // ── Live API data ─────────────────────────────────────────────────
   const { data: bomTree, isLoading: treeLoading } = useBomTree(projectId);
+  const { data: project } = useProjectDetail(projectId);
   const createPart = useCreatePart(orgId);
   const createNode = useCreateBomNode(projectId);
+  const approveBomNode = useApproveBomNode(projectId);
+  const rejectBomNode = useRejectBomNode(projectId);
+
+  const projectRole = (project?.myRole || '').toLowerCase();
+  const canApprove = projectRole === 'admin' || projectRole === 'manager';
+
+  const handleApprove = async (node: BOMNode) => {
+    try {
+      await approveBomNode.mutateAsync({ nodeId: node.id });
+      toast.success(`${node.pn} approved`);
+    } catch (err) {
+      toast.error('Failed to approve part', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
+  const handleRejectConfirm = async (reason: string, comment?: string) => {
+    if (!rejectTarget) return;
+    try {
+      await rejectBomNode.mutateAsync({ nodeId: rejectTarget.id, reason, comment });
+      toast.success(`${rejectTarget.pn} rejected`);
+    } catch (err) {
+      toast.error('Failed to reject part', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+      throw err;
+    }
+  };
 
   const rootNodes = useMemo(() => {
     if (!bomTree?.roots?.length) return [];
@@ -856,7 +916,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
     );
   }
 
-  const Tab = ({ id, label }: { id: 'all' | 'approved' | 'pending'; label: string }) => (
+  const Tab = ({ id, label }: { id: 'all' | 'approved' | 'pending' | 'rejected'; label: string }) => (
     <button
       onClick={() => setFilterStatus(id)}
       className={cn(
@@ -916,6 +976,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
           <Tab id="all" label="All Parts" />
           <Tab id="approved" label="Approved" />
           <Tab id="pending" label="Pending" />
+          <Tab id="rejected" label="Rejected" />
 
           <div className="flex-1" />
 
@@ -957,6 +1018,10 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
           onAddSub={setAddSubNode}
           totalCount={totalCount}
           formatCurrency={formatCurrency}
+          canApprove={canApprove}
+          onApprove={handleApprove}
+          onReject={setRejectTarget}
+          approvingId={approveBomNode.isPending ? approveBomNode.variables?.nodeId ?? null : null}
         />
       )}
       {view === 'grid' && (
@@ -1012,6 +1077,14 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
           orgId={orgId}
         />
       )}
+
+      {/* Reject confirmation (mandatory reason) */}
+      <BOMRejectDialog
+        open={!!rejectTarget}
+        partLabel={rejectTarget?.pn}
+        onClose={() => setRejectTarget(null)}
+        onConfirm={handleRejectConfirm}
+      />
     </div>
   );
 }

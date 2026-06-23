@@ -64,6 +64,14 @@ export function BOMStatusPill({ status }: { status: BOMStatus }) {
       </span>
     );
   }
+  if (status === 'rejected') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium"
+        style={{ background: 'rgba(220,38,38,0.1)', color: '#DC2626', border: '1px solid rgba(220,38,38,0.2)' }}>
+        Rejected
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium"
       style={{ background: 'rgba(245,158,11,0.1)', color: '#D97706', border: '1px solid rgba(245,158,11,0.2)' }}>

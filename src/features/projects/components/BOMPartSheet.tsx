@@ -4,6 +4,7 @@
  * Edit mode shows version management inline.
  */
 import { useState, useRef, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -12,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -20,12 +22,16 @@ import {
   Zap, Cpu, Package, Box, Monitor, Shield, Layers, ChevronsUpDown,
   CheckCircle, Clock, GitBranch, Save, Plus, X, ChevronRight, ChevronLeft,
   FileText, ImageIcon, Upload, Paperclip, AlertCircle, Link as LinkIcon,
+  Check, XCircle, History, Loader2,
 } from 'lucide-react';
 import {
-  BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, BOMRevision,
+  BOMNode, BOMStatus, BOMCategory, BOM_CAT_META,
 } from './bomData';
+import { BOMStatusPill } from './BOMShared';
+import { BOMRejectDialog } from './BOMRejectDialog';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { useApproveBomNode, useRejectBomNode, useBomNodeApprovals } from '@/hooks/useBom';
 import { TeamMember } from '@/types';
 
 // ── Document value: either an uploaded file or a linked URL ───────
@@ -72,7 +78,10 @@ interface Props {
 
 // ── Constants ─────────────────────────────────────────────────────
 const TABS = ['details', 'sourcing', 'traceability', 'documents'] as const;
-type TabId = typeof TABS[number];
+type WizardTabId = typeof TABS[number];
+type TabId = WizardTabId | 'history';
+// 'history' isn't part of the linear wizard flow — treat it as index -1 so Next/Back math stays well-defined.
+const wizardIndex = (t: TabId) => (t === 'history' ? -1 : TABS.indexOf(t));
 
 const LETTERS = 'ABCDEFGHIJ';
 const CATEGORIES: BOMCategory[] = ['assembly', 'power', 'control', 'connector', 'enclosure', 'hmi', 'safety'];
@@ -306,6 +315,11 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   const projectRole = (project?.myRole || '').toLowerCase();
   const canEditStatus = projectRole === 'admin' || projectRole === 'manager';
 
+  const approveBomNode = useApproveBomNode(projectId);
+  const rejectBomNode = useRejectBomNode(projectId);
+  const { data: approvals = [], isLoading: approvalsLoading } = useBomNodeApprovals(isEdit ? node?.id : undefined);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+
   // ── Form state ──
   const [pn,             setPn]             = useState(node?.pn ?? '');
   const [desc,           setDesc]           = useState(node?.desc ?? '');
@@ -376,7 +390,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   };
   const removeReq = (r: string) => setReq(rs => rs.filter(x => x !== r));
 
-  const validateTab = (tab: TabId): boolean => {
+  const validateTab = (tab: WizardTabId): boolean => {
     const e: Record<string, string> = {};
     if (tab === 'details') {
       if (!isEdit && !pn.trim()) e.pn = 'Part number is required';
@@ -395,8 +409,9 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   };
 
   const handleNext = () => {
+    if (activeTab === 'history') return;
     if (!validateTab(activeTab)) return;
-    setActiveTab(TABS[TABS.indexOf(activeTab) + 1]);
+    setActiveTab(TABS[wizardIndex(activeTab) + 1]);
   };
 
   const validate = () => {
@@ -441,7 +456,35 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     }
   };
 
+  const handleApproveClick = async () => {
+    if (!node) return;
+    try {
+      await approveBomNode.mutateAsync({ nodeId: node.id });
+      toast.success(`${node.pn} approved`);
+      onClose();
+    } catch (err) {
+      toast.error('Failed to approve part', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
+  const handleRejectConfirm = async (reason: string, comment?: string) => {
+    if (!node) return;
+    try {
+      await rejectBomNode.mutateAsync({ nodeId: node.id, reason, comment });
+      toast.success(`${node.pn} rejected`);
+      onClose();
+    } catch (err) {
+      toast.error('Failed to reject part', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+      throw err;
+    }
+  };
+
   return (
+    <>
     <Dialog open={open} onOpenChange={v => { if (!v && !saving) onClose(); }}>
       <DialogContent className="max-w-[1200px] w-[92vw] p-0 gap-0 flex flex-col overflow-hidden"
         style={{ maxHeight: '90vh', minHeight: '75vh' }}>
@@ -470,6 +513,11 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
             <TabsTrigger value="sourcing"     className="text-xs px-4">Sourcing</TabsTrigger>
             <TabsTrigger value="traceability" className="text-xs px-4">Traceability</TabsTrigger>
             <TabsTrigger value="documents"    className="text-xs px-4">Documents</TabsTrigger>
+            {isEdit && node && (
+              <TabsTrigger value="history" className="text-xs px-4 gap-1.5">
+                <History className="w-3.5 h-3.5" /> History
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* ── DETAILS — two-column ── */}
@@ -503,25 +551,53 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
               {/* Right col */}
               <div className="space-y-5">
                 <FL label="Status">
-                  <div className="flex gap-2">
-                    {(['approved', 'pending'] as BOMStatus[]).map(s => (
-                      <button key={s} type="button" disabled={!canEditStatus}
-                        onClick={() => canEditStatus && setStatus(s)}
-                        title={canEditStatus ? undefined : 'Only project managers or admins can change part status'}
-                        className={cn(
-                          'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors',
-                          status === s ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:bg-muted',
-                          canEditStatus ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 hover:bg-card'
-                        )}>
-                        {s === 'approved'
-                          ? <CheckCircle className="w-4 h-4" style={{ color: '#16A34A' }} />
-                          : <Clock className="w-4 h-4" style={{ color: '#D97706' }} />}
-                        {s === 'approved' ? 'Approved' : 'Pending'}
+                  {!isEdit ? (
+                    <>
+                      <div className="flex gap-2">
+                        {(['approved', 'pending'] as BOMStatus[]).map(s => (
+                          <button key={s} type="button" disabled={!canEditStatus}
+                            onClick={() => canEditStatus && setStatus(s)}
+                            title={canEditStatus ? undefined : 'Only project managers or admins can change part status'}
+                            className={cn(
+                              'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors',
+                              status === s ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:bg-muted',
+                              canEditStatus ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 hover:bg-card'
+                            )}>
+                            {s === 'approved'
+                              ? <CheckCircle className="w-4 h-4" style={{ color: '#16A34A' }} />
+                              : <Clock className="w-4 h-4" style={{ color: '#D97706' }} />}
+                            {s === 'approved' ? 'Approved' : 'Pending'}
+                          </button>
+                        ))}
+                      </div>
+                      {!canEditStatus && (
+                        <p className="text-[11px] text-muted-foreground mt-1.5">Only project managers or admins can change part status.</p>
+                      )}
+                    </>
+                  ) : node?.status === 'pending' && canEditStatus ? (
+                    <div className="flex gap-2">
+                      <button type="button" disabled={approveBomNode.isPending || rejectBomNode.isPending}
+                        onClick={handleApproveClick}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        {approveBomNode.isPending
+                          ? <Loader2 className="w-4 h-4 animate-spin" />
+                          : <Check className="w-4 h-4" style={{ color: '#16A34A' }} />}
+                        Approve
                       </button>
-                    ))}
-                  </div>
-                  {!canEditStatus && (
-                    <p className="text-[11px] text-muted-foreground mt-1.5">Only project managers or admins can change part status.</p>
+                      <button type="button" disabled={approveBomNode.isPending || rejectBomNode.isPending}
+                        onClick={() => setShowRejectDialog(true)}
+                        className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <XCircle className="w-4 h-4" style={{ color: '#DC2626' }} />
+                        Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 h-9">
+                      <BOMStatusPill status={node?.status ?? 'pending'} />
+                      {!canEditStatus && (
+                        <span className="text-[11px] text-muted-foreground">Only project managers or admins can approve or reject parts.</span>
+                      )}
+                    </div>
                   )}
                 </FL>
 
@@ -739,6 +815,60 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
               </div>
             </div>
           </TabsContent>
+
+          {/* ── HISTORY — approval audit trail (edit mode only) ── */}
+          {isEdit && node && (
+            <TabsContent value="history" className="flex-1 overflow-y-auto px-7 py-5 mt-0 data-[state=inactive]:hidden">
+              <div className="max-w-xl">
+                <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-1">
+                  Approval History
+                </Label>
+                <p className="text-xs text-muted-foreground mb-4">
+                  Full record of approve/reject actions taken on this part.
+                </p>
+                {approvalsLoading ? (
+                  <div className="flex flex-col gap-3">
+                    {[0, 1].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+                  </div>
+                ) : approvals.length === 0 ? (
+                  <div className="flex items-center justify-center h-28 rounded-xl border-2 border-dashed border-border bg-muted/20">
+                    <p className="text-sm text-muted-foreground">No approval activity yet</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-0">
+                    {approvals.map((a, i) => {
+                      const color = a.action === 'approved' ? '#16A34A' : '#DC2626';
+                      return (
+                        <div key={a.id} className="flex items-start gap-3 py-2.5 px-2 -mx-2">
+                          <div className="flex flex-col items-center shrink-0 mt-1.5">
+                            <div className="w-2 h-2 rounded-full border-2 shrink-0" style={{ borderColor: color, background: color }} />
+                            {i < approvals.length - 1 && <div className="w-px bg-border flex-1 min-h-[18px] mt-1" />}
+                          </div>
+                          <div className="flex-1 min-w-0 pb-1">
+                            <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                              <span className="text-xs font-semibold" style={{ color }}>
+                                {a.action === 'approved' ? 'Approved' : 'Rejected'}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">by {a.performedByName}</span>
+                            </div>
+                            {a.reason && (
+                              <div className="text-[11.5px] text-foreground leading-snug">Reason: {a.reason}</div>
+                            )}
+                            {a.comment && (
+                              <div className="text-[11.5px] text-muted-foreground leading-snug">{a.comment}</div>
+                            )}
+                            <div className="text-[10.5px] text-muted-foreground/60 mt-0.5">
+                              {new Date(a.date).toLocaleString()}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* ── Version section (Edit only, last tab only) ── */}
@@ -788,23 +918,25 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
         {/* ── Footer ── */}
         <div className="px-7 py-4 border-t border-border flex items-center justify-between gap-4 shrink-0 bg-card">
           <div className="text-sm text-muted-foreground">
-            {activeTab === 'documents'
-              ? isEdit
-                ? versionMode === 'new'
-                  ? <span>Will create <span className="font-mono font-medium text-foreground">Rev {newRevLabel || '?'}</span> — Rev {node?.rev} preserved in history</span>
-                  : <span>Will overwrite <span className="font-mono font-medium text-foreground">Rev {node?.rev}</span> in place</span>
-                : 'New part will be added to the Bill of Materials'
-              : <span className="text-xs text-muted-foreground">Step {TABS.indexOf(activeTab) + 1} of {TABS.length}</span>}
+            {activeTab === 'history'
+              ? <span className="text-xs text-muted-foreground">Approval and rejection history for this part</span>
+              : activeTab === 'documents'
+                ? isEdit
+                  ? versionMode === 'new'
+                    ? <span>Will create <span className="font-mono font-medium text-foreground">Rev {newRevLabel || '?'}</span> — Rev {node?.rev} preserved in history</span>
+                    : <span>Will overwrite <span className="font-mono font-medium text-foreground">Rev {node?.rev}</span> in place</span>
+                  : 'New part will be added to the Bill of Materials'
+                : <span className="text-xs text-muted-foreground">Step {wizardIndex(activeTab) + 1} of {TABS.length}</span>}
           </div>
           <div className="flex gap-2 shrink-0">
             <Button variant="outline" size="default" className="px-5" onClick={onClose} disabled={saving}>Cancel</Button>
-            {TABS.indexOf(activeTab) > 0 && (
+            {(activeTab === 'history' || wizardIndex(activeTab) > 0) && (
               <Button variant="outline" size="default" className="gap-1.5 px-4" disabled={saving}
-                onClick={() => { setErrors({}); setActiveTab(TABS[TABS.indexOf(activeTab) - 1]); }}>
+                onClick={() => { setErrors({}); setActiveTab(activeTab === 'history' ? 'documents' : TABS[wizardIndex(activeTab) - 1]); }}>
                 <ChevronLeft className="w-4 h-4" /> Back
               </Button>
             )}
-            {activeTab !== 'documents' ? (
+            {activeTab === 'history' ? null : activeTab !== 'documents' ? (
               <Button size="default" className="gap-1.5 px-5" onClick={handleNext}>
                 Next <ChevronRight className="w-4 h-4" />
               </Button>
@@ -824,5 +956,14 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Reject confirmation (mandatory reason) */}
+    <BOMRejectDialog
+      open={showRejectDialog}
+      partLabel={node?.pn}
+      onClose={() => setShowRejectDialog(false)}
+      onConfirm={handleRejectConfirm}
+    />
+    </>
   );
 }

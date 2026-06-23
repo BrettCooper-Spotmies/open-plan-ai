@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { toast } from 'sonner';
 import {
   ArrowLeft, GitMerge, SquarePen, ChevronRight, Factory, Hash,
   Truck, DollarSign, Tag, Clock, FileText, Box, Cpu, Image, Package,
   ChevronDown, Check, History, User, MessageSquare, Send, Trash2, Pencil,
-  Plus, Boxes, FileSpreadsheet,
+  Plus, Boxes, FileSpreadsheet, XCircle, Loader2, ShieldCheck,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BOMDocuments } from './BOMDocuments';
@@ -18,7 +19,9 @@ import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision } from '@/hooks/useParts';
-import { useCreateBomNode, useUpdateBomNode, useAddRequirement, useRemoveRequirement } from '@/hooks/useBom';
+import { useCreateBomNode, useUpdateBomNode, useAddRequirement, useRemoveRequirement, useApproveBomNode, useRejectBomNode, useBomNodeApprovals } from '@/hooks/useBom';
+import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { BOMRejectDialog } from './BOMRejectDialog';
 import { uploadBomDocumentFile, addBomDocumentLink, useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
 import { useCurrency } from '@/hooks/useCurrency';
 import { resolveFileUrl } from '@/utils/fileUrl';
@@ -450,6 +453,15 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const [showAddSub, setShowAddSub] = useState(false);
   const [showCreateNewSub, setShowCreateNewSub] = useState(false);
   const [showImportExcel, setShowImportExcel] = useState(false);
+  const [showReject, setShowReject] = useState(false);
+
+  // ── Approval workflow ──
+  const { data: project } = useProjectDetail(projectId);
+  const projectRole = (project?.myRole || '').toLowerCase();
+  const canApprove = projectRole === 'admin' || projectRole === 'manager';
+  const approveBomNode = useApproveBomNode(projectId);
+  const rejectBomNode = useRejectBomNode(projectId);
+  const { data: approvals = [], isLoading: approvalsLoading } = useBomNodeApprovals(originalNode.id);
 
   // Point to latest revision whenever the node changes or revisions first load
   useEffect(() => {
@@ -544,6 +556,32 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     setShowEdit(false);
   };
 
+  // ── Approve / Reject handlers ──
+  const handleApprove = async () => {
+    try {
+      await approveBomNode.mutateAsync({ nodeId: originalNode.id });
+      toast.success(`${originalNode.pn} approved`);
+    } catch (err) {
+      toast.error('Failed to approve part', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
+  const handleRejectConfirm = async (reason: string, comment?: string) => {
+    try {
+      await rejectBomNode.mutateAsync({ nodeId: originalNode.id, reason, comment });
+      toast.success(`${originalNode.pn} rejected`);
+    } catch (err) {
+      toast.error('Failed to reject part', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+      throw err;
+    }
+  };
+
+  const showApprovalActions = canApprove && isLatest && node.status === 'pending';
+
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
       {/* Breadcrumb */}
@@ -600,6 +638,29 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
+            {showApprovalActions && (
+              <>
+                <button
+                  onClick={handleApprove}
+                  disabled={approveBomNode.isPending || rejectBomNode.isPending}
+                  title="Approve this part"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {approveBomNode.isPending
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Check className="w-3.5 h-3.5" style={{ color: '#16A34A' }} />}
+                  Approve
+                </button>
+                <button
+                  onClick={() => setShowReject(true)}
+                  disabled={approveBomNode.isPending || rejectBomNode.isPending}
+                  title="Reject this part"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <XCircle className="w-3.5 h-3.5" style={{ color: '#DC2626' }} /> Reject
+                </button>
+              </>
+            )}
             <button
               onClick={() => setEcoOpen(true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap"
@@ -867,6 +928,72 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               )}
             </Card>
 
+            {/* Approval History */}
+            <Card
+              title="Approval History"
+              action={
+                approvalsLoading ? (
+                  <Skeleton className="h-4 w-14" />
+                ) : (
+                  <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    {approvals.length} action{approvals.length !== 1 ? 's' : ''}
+                  </div>
+                )
+              }
+            >
+              {approvalsLoading ? (
+                <div className="flex flex-col gap-0">
+                  {[0, 1].map(i => (
+                    <div key={i} className="flex items-start gap-3 py-2.5 px-2 -mx-2">
+                      <div className="flex flex-col items-center shrink-0 mt-1.5">
+                        <Skeleton className="w-2 h-2 rounded-full" />
+                        {i < 1 && <Skeleton className="w-px flex-1 min-h-[18px] mt-1" />}
+                      </div>
+                      <div className="flex-1 min-w-0 pb-1">
+                        <Skeleton className="h-3 w-24 mb-1.5" />
+                        <Skeleton className="h-3 w-full mb-1" />
+                        <Skeleton className="h-2.5 w-28" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : approvals.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No approval activity yet.</p>
+              ) : (
+                <div className="flex flex-col gap-0">
+                  {approvals.map((a, i) => {
+                    const color = a.action === 'approved' ? '#16A34A' : '#DC2626';
+                    return (
+                      <div key={a.id} className="flex items-start gap-3 py-2.5 px-2 -mx-2">
+                        <div className="flex flex-col items-center shrink-0 mt-1.5">
+                          <div className="w-2 h-2 rounded-full border-2 shrink-0" style={{ borderColor: color, background: color }} />
+                          {i < approvals.length - 1 && <div className="w-px bg-border flex-1 min-h-[18px] mt-1" />}
+                        </div>
+                        <div className="flex-1 min-w-0 pb-1">
+                          <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                            <span className="text-xs font-semibold" style={{ color }}>
+                              {a.action === 'approved' ? 'Approved' : 'Rejected'}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">by {a.performedByName}</span>
+                          </div>
+                          {a.reason && (
+                            <div className="text-[11.5px] text-foreground leading-snug">Reason: {a.reason}</div>
+                          )}
+                          {a.comment && (
+                            <div className="text-[11.5px] text-muted-foreground leading-snug">{a.comment}</div>
+                          )}
+                          <div className="text-[10.5px] text-muted-foreground/60 mt-0.5">
+                            {new Date(a.date).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+
             {/* Hierarchy */}
             <Card title="Hierarchy">
               <div className="flex flex-col">
@@ -941,6 +1068,14 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         onClose={() => setEcoOpen(false)}
         node={node}
         projectId={projectId}
+      />
+
+      {/* Reject confirmation (mandatory reason) */}
+      <BOMRejectDialog
+        open={showReject}
+        partLabel={originalNode.pn}
+        onClose={() => setShowReject(false)}
+        onConfirm={handleRejectConfirm}
       />
     </div>
   );

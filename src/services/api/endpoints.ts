@@ -112,6 +112,9 @@ export const ENDPOINTS = {
     NODE_MOVE:         (nodeId: string) => `/bom/nodes/${nodeId}/parent`,
     NODE_REQUIREMENTS: (nodeId: string) => `/bom/nodes/${nodeId}/requirements`,
     REQ_LINK:          (linkId: string) => `/bom/requirement-links/${linkId}`,
+    APPROVE_NODE:      (nodeId: string) => `/bom/nodes/${nodeId}/approve`,
+    REJECT_NODE:       (nodeId: string) => `/bom/nodes/${nodeId}/reject`,
+    NODE_APPROVALS:    (nodeId: string) => `/bom/nodes/${nodeId}/approvals`,
   },
   // Parts catalog (org-scoped)
   PARTS: {
