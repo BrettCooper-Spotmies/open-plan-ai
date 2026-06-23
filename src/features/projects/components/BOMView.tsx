@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
-  CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User,
+  CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useBomTree, useCreateBomNode } from '@/hooks/useBom';
@@ -53,9 +53,10 @@ import {
   fromApiNode, assignLevelLabels,
 } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
-import { BOMDetailScreen } from './BOMDetailScreen';
+import { BOMDetailScreen, AddSubcomponentDialog } from './BOMDetailScreen';
 import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
+import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { useCurrency } from '@/hooks/useCurrency';
 
 // ── Skeletons ──────────────────────────────────────────────────────
@@ -96,7 +97,7 @@ function ListRowSkeleton({ level = 0 }: { level?: number }) {
         <Skeleton className="h-3 w-20" />
       </div>
       <div style={{ flexBasis: 170, flexShrink: 0 }} className="px-2"><Skeleton className="h-5 w-16 rounded-full" /></div>
-      <div style={{ flexBasis: 30, flexShrink: 0 }} />
+      <div style={{ flexBasis: 56, flexShrink: 0 }} />
     </div>
   );
 }
@@ -439,15 +440,16 @@ const HEADERS = [
   { key: 'status', label: 'Status', w: 92 },
   { key: 'owner', label: 'Owner', w: 140 },
   { key: 'req', label: 'Traceability', w: 170 },
-  { key: 'act', label: '', w: 30 },
+  { key: 'act', label: '', w: 56 },
 ] as const;
 
-function ListView({ rows, expanded, toggle, filtersActive, onOpen, totalCount, formatCurrency }: {
+function ListView({ rows, expanded, toggle, filtersActive, onOpen, onAddSub, totalCount, formatCurrency }: {
   rows: BOMNode[];
   expanded: Record<string, boolean>;
   toggle: (id: string) => void;
   filtersActive: boolean;
   onOpen: (id: string) => void;
+  onAddSub: (node: BOMNode) => void;
   totalCount: number;
   formatCurrency: (n: number) => string;
 }) {
@@ -553,8 +555,15 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, totalCount, f
                   : row.req.slice(0, 2).map(r => <ReqTag key={r} label={r} />)}
                 {row.req.length > 2 && <span className="text-[11px] text-muted-foreground self-center">+{row.req.length - 2}</span>}
               </div>
-              {/* Arrow */}
-              <div style={{ flexBasis: 30, flexShrink: 0 }} className={cn('flex justify-center transition-opacity', isHovered ? 'opacity-100' : 'opacity-0')}>
+              {/* Actions */}
+              <div style={{ flexBasis: 56, flexShrink: 0 }} className={cn('flex items-center justify-end gap-1 transition-opacity', isHovered ? 'opacity-100' : 'opacity-0')}>
+                <button
+                  onClick={e => { e.stopPropagation(); onAddSub(row); }}
+                  title="Add sub-component"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </div>
             </div>
@@ -673,6 +682,9 @@ interface BOMViewProps {
 
 export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMViewProps) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [addSubNode, setAddSubNode] = useState<BOMNode | null>(null);
+  const [createSubNode, setCreateSubNode] = useState<BOMNode | null>(null);
+  const [importSubNode, setImportSubNode] = useState<BOMNode | null>(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending'>('all');
   const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('bom_view') as ViewMode) ?? 'list');
@@ -736,6 +748,38 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
       // Upload any documents attached in the form
       await saveBomDocs(node.id, payload);
       if (onAddClose) onAddClose();
+    } catch {
+      // errors are logged by React Query's MutationCache; no further action needed
+    }
+  };
+
+  // ── Add Sub-component handler (from the list view "+" action) ──────
+  const handleAddSubcomponent = async (payload: BOMPartPayload) => {
+    if (!createSubNode) return;
+    try {
+      const part = await createPart.mutateAsync({
+        partNumber:          payload.pn,
+        description:         payload.desc,
+        category:            payload.category,
+        manufacturer:        payload.manufacturer || undefined,
+        distributor:         payload.distributor  || undefined,
+        mpn:                 payload.mpn          || undefined,
+        unit:                payload.uom,
+        initialStatus:       payload.status,
+        initialRev:          payload.rev,
+        initialPrice:        payload.price > 0 ? payload.price : undefined,
+        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime * 7 : undefined,
+      });
+      const node = await createNode.mutateAsync({
+        partId:   part.id,
+        quantity: payload.qty,
+        unit:     payload.uom,
+        status:   payload.status,
+        parentId: createSubNode.id,
+        ownerId:  payload.ownerId ?? null,
+      });
+      await saveBomDocs(node.id, payload);
+      setCreateSubNode(null);
     } catch {
       // errors are logged by React Query's MutationCache; no further action needed
     }
@@ -905,6 +949,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
           toggle={toggle}
           filtersActive={filtersActive}
           onOpen={setSelected}
+          onAddSub={setAddSubNode}
           totalCount={totalCount}
           formatCurrency={formatCurrency}
         />
@@ -929,6 +974,39 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
         onClose={() => onAddClose?.()}
         onSave={handleAddPart}
       />
+
+      {/* Add Sub-component dialog (from list row "+" action) */}
+      {addSubNode && (
+        <AddSubcomponentDialog
+          open={!!addSubNode}
+          onClose={() => setAddSubNode(null)}
+          parentNode={addSubNode}
+          onCreateNew={() => { setCreateSubNode(addSubNode); setAddSubNode(null); }}
+          onImportExcel={() => { setImportSubNode(addSubNode); setAddSubNode(null); }}
+        />
+      )}
+
+      {/* Create New Sub-component sheet */}
+      {createSubNode && (
+        <BOMPartSheet
+          mode="add"
+          projectId={projectId}
+          open={!!createSubNode}
+          onClose={() => setCreateSubNode(null)}
+          onSave={handleAddSubcomponent}
+        />
+      )}
+
+      {/* Import Sub-components from Excel */}
+      {importSubNode && (
+        <BOMImportSubcomponentsDialog
+          open={!!importSubNode}
+          onClose={() => setImportSubNode(null)}
+          parentNode={importSubNode}
+          projectId={projectId}
+          orgId={orgId}
+        />
+      )}
     </div>
   );
 }
