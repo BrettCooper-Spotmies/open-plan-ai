@@ -15,11 +15,14 @@ import {
   ECOStatus, DecisionType, fromApiEcoDetail,
 } from './ecoData';
 import { ECOAvatar, StatusPill } from './ECOShared';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
   useECODetail, useECODecision, useSubmitECO,
   useReleaseECO, useVerifyECO, useCloseECO, useHoldECO, useResumeECO,
+  useExportEcoSummaryCsv, useExportEcoDetailedCsv,
 } from '@/hooks/useECOs';
+import { downloadEcoCsv } from '@/features/reports/utils/exportUtils';
 
 // ── Detail skeleton components ────────────────────────────────────────────────
 
@@ -1073,6 +1076,11 @@ export function ECODetailView({
   const closeMutation    = useCloseECO(projectId, eco.id);
   const holdMutation     = useHoldECO(projectId, eco.id);
   const resumeMutation   = useResumeECO(projectId, eco.id);
+  const exportSummaryCsv = useExportEcoSummaryCsv(projectId);
+  const exportDetailedCsv = useExportEcoDetailedCsv(projectId);
+
+  // Export dropdown state
+  const [exportOpen, setExportOpen] = useState(false);
 
   const sm = statusMeta(detail.status);
   const pm = priorityMeta(detail.priority);
@@ -1103,6 +1111,29 @@ export function ECODetailView({
     if (k === 'edit') { onEdit?.(eco); return; }
     if (k === 'generate' || k === 'ecn') { setEcnOpen(true); return; }
     if (k === 'verify') { setVerifyOpen(true); return; }
+    if (k === 'export') { setExportOpen(true); return; }
+    if (k === 'exportSummaryCsv') {
+      try {
+        const blob = await exportSummaryCsv.mutateAsync([eco.id]);
+        downloadEcoCsv(blob, 'summary', 1);
+        flash('ECO exported as CSV');
+      } catch {
+        flash('Failed to export');
+      }
+      setExportOpen(false);
+      return;
+    }
+    if (k === 'exportDetailedCsv') {
+      try {
+        const blob = await exportDetailedCsv.mutateAsync([eco.id]);
+        downloadEcoCsv(blob, 'detailed', 1);
+        flash('ECO exported as detailed CSV');
+      } catch {
+        flash('Failed to export');
+      }
+      setExportOpen(false);
+      return;
+    }
     if (k === 'submit' || k === 'resubmit') {
       try {
         await submitMutation.mutateAsync();
@@ -1122,7 +1153,6 @@ export function ECODetailView({
       try { await closeMutation.mutateAsync(); flash('ECO closed'); } catch { flash('Failed to close'); }
       return;
     }
-    flash('Action: ' + k);
   };
 
   return (
@@ -1174,6 +1204,39 @@ export function ECODetailView({
         <div className="flex gap-2 shrink-0">
           {headerActions(detail.status).map(a => {
             const thisLoading = !!actionPending[a.k];
+
+            // Special handling for export button
+            if (a.k === 'export') {
+              return (
+                <DropdownMenu key={a.k} open={exportOpen} onOpenChange={setExportOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      disabled={anyActionPending}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] cursor-pointer transition-colors font-[inherit] disabled:opacity-60 disabled:cursor-not-allowed',
+                        a.kind === 'primary'
+                          ? 'font-semibold bg-primary hover:bg-primary/90 text-primary-foreground border-none'
+                          : 'font-medium bg-card text-foreground border border-border hover:bg-accent/50',
+                      )}
+                    >
+                      {thisLoading
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <a.icon className="w-3.5 h-3.5" strokeWidth={2} />}
+                      {a.label}
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => onAction('exportSummaryCsv')}>
+                      Export as CSV (Summary)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onAction('exportDetailedCsv')}>
+                      Export as CSV (Detailed)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            }
+
             return (
               <button
                 key={a.k}

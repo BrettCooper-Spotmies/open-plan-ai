@@ -1350,10 +1350,10 @@ export default function ProjectDetail() {
                     <Upload className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Import</span>
                   </Button> */}
-                  <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
+                  {/* <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
                     <Download className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Export</span>
-                  </Button>
+                  </Button> */}
                   <Button size="sm" onClick={() => setBomAddOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
                     <Plus className="h-4 w-4" />
                     <span className="hidden sm:inline">Add Part</span>

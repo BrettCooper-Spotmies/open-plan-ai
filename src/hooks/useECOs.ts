@@ -296,3 +296,29 @@ export function useGetECN(projectId: string | undefined, ecoId: string | undefin
     enabled: !!projectId && !!ecoId,
   });
 }
+
+// ─── Export hooks ────────────────────────────────────────────────────────────
+
+export function useExportEcoSummaryCsv(projectId: string) {
+  return useMutation({
+    mutationFn: (ecoIds: string[]) =>
+      apiClient.raw
+        .get(`/projects/${projectId}/ecos/export/summary`, {
+          params: { ids: ecoIds.join(',') },
+          responseType: 'blob',
+        })
+        .then((r) => r.data as Blob),
+  });
+}
+
+export function useExportEcoDetailedCsv(projectId: string) {
+  return useMutation({
+    mutationFn: (ecoIds: string[]) =>
+      apiClient.raw
+        .get(`/projects/${projectId}/ecos/export/detailed`, {
+          params: { ids: ecoIds.join(',') },
+          responseType: 'blob',
+        })
+        .then((r) => r.data as Blob),
+  });
+}

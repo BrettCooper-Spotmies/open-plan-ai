@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
-  CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check,
+  CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check, Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,6 +9,9 @@ import { useBomTree, useCreateBomNode, useApproveBomNode, useRejectBomNode } fro
 import { useCreatePart } from '@/hooks/useParts';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
+import { bomService } from '@/services/bom.service';
+import { downloadBomCsv } from '@/features/reports/utils/exportUtils';
+import { createBomWorkbook, downloadExcelFile } from '@/utils/excelExport';
 
 async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
   const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? [])].filter(Boolean) as DocValue[];
@@ -46,6 +49,7 @@ function OwnerBadge({ name, size = 'sm' }: { name: string; size?: 'sm' | 'xs' })
   );
 }
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
   BOMNode, BOMFilters, EMPTY_FILTERS,
@@ -850,6 +854,55 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
     }
   };
 
+  const handleExportCsv = async () => {
+    try {
+      const blob = await bomService.exportCsv(projectId);
+      downloadBomCsv(blob, projectId);
+      toast.success('BOM exported as CSV');
+    } catch (err) {
+      toast.error('Failed to export BOM', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      const blob = await bomService.exportCsv(projectId);
+      const text = await blob.text();
+      const rows = text.split('\n').slice(1).map(line => {
+        const cells = line.split(',').map(cell => cell.replace(/^"|"$/g, ''));
+        return {
+          partNumber: cells[0],
+          description: cells[1],
+          category: cells[2],
+          quantity: parseFloat(cells[3]) || 0,
+          unit: cells[4],
+          status: cells[5],
+          manufacturer: cells[6] || null,
+          distributor: cells[7] || null,
+          mpn: cells[8] || null,
+          price: parseFloat(cells[9]) || null,
+          leadTime: parseFloat(cells[10]) || null,
+          revision: cells[11],
+          owner: cells[12],
+          level: cells[13],
+          requirements: cells[14],
+        };
+      }).filter(row => row.partNumber);
+
+      const workbook = await createBomWorkbook(rows);
+      const dateStr = new Date().toISOString().split('T')[0];
+      const filename = `bom-${projectId}-${dateStr}.xlsx`;
+      await downloadExcelFile(workbook, filename);
+      toast.success('BOM exported as Excel');
+    } catch (err) {
+      toast.error('Failed to export BOM', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
   const facets = useMemo(() => ({
     units: [...new Set(allNodes.map(n => n.uom))].sort(),
     manufacturers: [...new Set(allNodes.map(n => n.manufacturer))].sort(),
@@ -973,12 +1026,32 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
             )}
           </div>
 
-          <Tab id="all" label="All Parts" />
+          <Tab id="all" label="All" />
           <Tab id="approved" label="Approved" />
           <Tab id="pending" label="Pending" />
           <Tab id="rejected" label="Rejected" />
 
           <div className="flex-1" />
+
+          {/* Export dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border bg-card text-foreground border-border hover:bg-muted cursor-pointer transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportCsv}>
+                Export as CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportExcel}>
+                Export as Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Filter button */}
           <button
