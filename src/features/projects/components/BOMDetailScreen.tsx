@@ -31,7 +31,7 @@ async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
 }
 
 // ── Add Sub-component Dialog ───────────────────────────────────────
-function AddSubcomponentDialog({
+export function AddSubcomponentDialog({
   open, onClose, parentNode,
   onCreateNew, onImportExcel,
 }: {
