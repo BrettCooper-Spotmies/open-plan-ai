@@ -204,7 +204,9 @@ const NewProject = () => {
 
   // Team Members
   const [assignedMembers, setAssignedMembers] = useState<TeamMemberAssignment[]>([]);
-  const [selectedMember, setSelectedMember] = useState("");
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
+  const [memberSearch, setMemberSearch] = useState("");
 
   // Departments
   const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
@@ -367,16 +369,23 @@ const NewProject = () => {
     setDeleteConfirmation({ isOpen: true, type: 'milestone', id });
   };
 
-  const handleAddTeamMember = () => {
-    if (selectedMember) {
-      const exists = assignedMembers.find(m => m.memberId === selectedMember);
-      if (exists) return;
+  const handleAddTeamMembers = () => {
+    if (selectedMembers.length === 0) return;
+    const newAssignments = selectedMembers
+      .filter(id => !assignedMembers.find(am => am.memberId === id))
+      .map(id => {
+        const member = getMemberById(id);
+        return { memberId: id, role: member?.role || 'member' };
+      });
+    setAssignedMembers([...assignedMembers, ...newAssignments]);
+    setSelectedMembers([]);
+    setIsMemberDropdownOpen(false);
+  };
 
-      const member = getMemberById(selectedMember);
-      const inheritedRole = member?.role || 'member';
-      setAssignedMembers([...assignedMembers, { memberId: selectedMember, role: inheritedRole }]);
-      setSelectedMember("");
-    }
+  const handleToggleMemberSelection = (memberId: string) => {
+    setSelectedMembers(prev =>
+      prev.includes(memberId) ? prev.filter(id => id !== memberId) : [...prev, memberId]
+    );
   };
 
   const handleRemoveTeamMember = (memberId: string) => {
@@ -982,42 +991,75 @@ const NewProject = () => {
             <CardDescription>Assign team members to this project (organization role is inherited automatically)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <Select value={selectedMember} onValueChange={setSelectedMember}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select team member" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {teamMembers
+            {/* Multi-select dropdown with checkboxes */}
+            <Popover open={isMemberDropdownOpen} onOpenChange={(open) => { setIsMemberDropdownOpen(open); if (!open) setMemberSearch(""); }}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between font-normal"
+                >
+                  {selectedMembers.length > 0
+                    ? `${selectedMembers.length} member${selectedMembers.length > 1 ? 's' : ''} selected`
+                    : "Select team member"}
+                  <ChevronDown className="h-4 w-4 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-full p-0" align="start" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                <div className="p-2 border-b">
+                  <Input
+                    placeholder="Search members..."
+                    value={memberSearch}
+                    onChange={(e) => setMemberSearch(e.target.value)}
+                    className="h-8 text-sm"
+                    autoFocus
+                  />
+                </div>
+                <div className="max-h-52 overflow-y-auto">
+                  {teamMembers
+                    .filter(m => !assignedMembers.find(am => am.memberId === m.id))
+                    .filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase()))
+                    .length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">
+                      {memberSearch ? "No members match your search" : "All members already added"}
+                    </p>
+                  ) : (
+                    teamMembers
                       .filter(m => !assignedMembers.find(am => am.memberId === m.id))
+                      .filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase()))
                       .map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-6 w-6">
-                              <AvatarImage src={member.avatar} />
-                              <AvatarFallback className="text-xs">{member.initials}</AvatarFallback>
-                            </Avatar>
-                            {member.name}
-                          </div>
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handleAddTeamMember} disabled={!selectedMember}>
-                <Plus className="h-4 w-4 mr-1" />
-                Add
-              </Button>
-            </div>
-            {getMemberById(selectedMember) && (
-              <p className="text-[11px] text-muted-foreground">
-                Role will be inherited automatically from organization:{" "}
-                <span className="font-medium text-foreground capitalize">
-                  {getMemberById(selectedMember)?.role || 'member'}
-                </span>
-              </p>
-            )}
+                        <div
+                          key={member.id}
+                          className="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors"
+                          onClick={() => handleToggleMemberSelection(member.id)}
+                        >
+                          <Checkbox
+                            checked={selectedMembers.includes(member.id)}
+                            onCheckedChange={() => handleToggleMemberSelection(member.id)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <Avatar className="h-7 w-7">
+                            <AvatarImage src={member.avatar} />
+                            <AvatarFallback className="text-xs">{member.initials}</AvatarFallback>
+                          </Avatar>
+                          <span className="text-sm">{member.name}</span>
+                        </div>
+                      ))
+                  )}
+                </div>
+                {selectedMembers.length > 0 && (
+                  <div className="border-t p-2">
+                    <Button
+                      className="w-full"
+                      size="sm"
+                      onClick={handleAddTeamMembers}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Add {selectedMembers.length} Member{selectedMembers.length > 1 ? 's' : ''}
+                    </Button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
 
             {assignedMembers.length > 0 && (
               <div className="space-y-2">
@@ -1060,7 +1102,7 @@ const NewProject = () => {
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
                 <p>No team members added yet</p>
-                <p className="text-sm">Select a team member to add them to this project</p>
+                <p className="text-sm">Select members above and click Add to assign them</p>
               </div>
             )}
           </CardContent>
@@ -1164,7 +1206,7 @@ const NewProject = () => {
         </Card>
 
         {/* Section 4: Project Modules */}
-        <Card>
+        {/*<Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Cpu className="h-5 w-5 text-primary" />
@@ -1223,10 +1265,10 @@ const NewProject = () => {
               </p>
             )}
           </CardContent>
-        </Card>
+        </Card>*/}
 
         {/* Section 5: Project Milestones */}
-        <Card>
+        {/*<Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Flag className="h-5 w-5 text-primary" />
@@ -1370,10 +1412,10 @@ const NewProject = () => {
               </p>
             )}
           </CardContent>
-        </Card>
+        </Card> */}
 
         {/* Section 6: Storage */}
-        <Card>
+        {/*<Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Paperclip className="h-5 w-5 text-primary" />
@@ -1382,7 +1424,7 @@ const NewProject = () => {
             <CardDescription>Manage project documents, files, and external links</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* File Upload Section */}
+            
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label className="text-base font-medium">Files & Documents</Label>
@@ -1391,7 +1433,7 @@ const NewProject = () => {
                 )}
               </div>
 
-              {/* Hidden file input */}
+              
               <input
                 type="file"
                 ref={fileInputRef}
@@ -1401,7 +1443,7 @@ const NewProject = () => {
                 className="hidden"
               />
 
-              {/* Drag and drop zone */}
+             
               <div
                 onClick={handleUploadClick}
                 onDragOver={handleDragOver}
@@ -1458,7 +1500,7 @@ const NewProject = () => {
 
             <Separator />
 
-            {/* Links Section */}
+            
             <div className="space-y-4">
               <Label className="text-base font-medium">Project Links</Label>
               <div className="flex gap-3">
@@ -1519,7 +1561,7 @@ const NewProject = () => {
               )}
             </div>
           </CardContent>
-        </Card>
+        </Card>*/}
 
         {/* Section 5: Task Import */}
         {/* <Card>
