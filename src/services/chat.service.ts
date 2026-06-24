@@ -274,34 +274,38 @@ export const chatService = {
     });
   },
 
-  // Project chat group stubs — backend handles group creation via project creation
-  async ensureProjectGroup(_projectId: string): Promise<string> {
-    throw new Error('Project group management is handled server-side.');
+  // Project chat group: lazily created on first "Start Chat" click, keyed by project id.
+  async ensureProjectGroup(projectId: string): Promise<string> {
+    const data = await apiClient.post<any>(ENDPOINTS.PROJECTS.CHAT(projectId), {});
+    return data.conversationId;
   },
 
-  async getProjectGroupConversationId(_projectId: string): Promise<string | null> {
-    return null;
+  async getProjectGroupConversationId(projectId: string): Promise<string | null> {
+    const data = await apiClient.get<any>(ENDPOINTS.PROJECTS.CHAT(projectId));
+    return data?.conversationId ?? null;
   },
 
-  async getProjectIdForConversation(_conversationId: string): Promise<string | null> {
-    return null;
+  async getProjectIdForConversation(conversationId: string): Promise<string | null> {
+    const data = await apiClient.get<any>(ENDPOINTS.CONVERSATIONS.BY_ID(conversationId));
+    return data?.projectId ?? data?.project_id ?? null;
   },
 
   async syncProjectGroupMembers(_projectId: string): Promise<void> {
-    // No-op — backend handles this server-side
+    // No-op — newly added project members are pulled into the group chat
+    // lazily, the next time anyone opens the chat for that project.
   },
 
   async retainProjectChatMembershipAfterRemoval(
     _projectId: string,
     _userIds: string[]
   ): Promise<void> {
-    // No-op — backend handles this server-side
+    // No-op — removing someone from a project intentionally leaves their
+    // chat membership untouched unless the caller explicitly removes them too.
   },
 
-  async forceRemoveProjectChatMembers(
-    _projectId: string,
-    _userIds: string[]
-  ): Promise<void> {
-    // No-op — backend handles this server-side
+  async forceRemoveProjectChatMembers(projectId: string, userIds: string[]): Promise<void> {
+    const conversationId = await this.getProjectGroupConversationId(projectId);
+    if (!conversationId) return;
+    await Promise.all(userIds.map((userId) => this.removeMemberFromGroup(conversationId, userId)));
   },
 };

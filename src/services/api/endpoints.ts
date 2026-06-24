@@ -50,6 +50,7 @@ export const ENDPOINTS = {
     STAGE: (id: string) => `/projects/${id}/stage`,
     MEMBERS: (id: string) => `/projects/${id}/members`,
     MEMBER: (projectId: string, userId: string) => `/projects/${projectId}/members/${userId}`,
+    CHAT: (id: string) => `/projects/${id}/chat`,
     TEAM: (id: string) => `/projects/${id}/team`,
     LINKS: (id: string) => `/projects/${id}/links`,
     ACTIVITIES: (id: string) => `/projects/${id}/activities`,
