@@ -54,7 +54,7 @@ import {
   Smile
 } from "lucide-react";
 import { format, isBefore, startOfMonth, startOfToday } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, isValidPhoneNumber, sanitizePhoneInput } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -604,8 +604,8 @@ const NewProject = () => {
       return;
     }
 
-    if (clientContact && clientContact.length !== 10) {
-      toast.error('Contact number must be exactly 10 digits');
+    if (clientContact && !isValidPhoneNumber(clientContact)) {
+      toast.error('Please enter a valid phone number');
       setShowOptionalDetails(true);
       return;
     }
@@ -961,16 +961,16 @@ const NewProject = () => {
                     {clientOrgError && <p className="text-xs text-destructive">{clientOrgError}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="clientContact">Contact Number (10 digits)</Label>
+                    <Label htmlFor="clientContact">Contact Number</Label>
                     <Input
                       id="clientContact"
-                      placeholder="e.g. 1234567890"
+                      placeholder="e.g. +1 4155552671"
                       value={clientContact}
-                      maxLength={10}
+                      maxLength={16}
                       onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, "");
+                        const val = sanitizePhoneInput(e.target.value);
                         setClientContact(val);
-                        setClientContactError(val.length > 0 && val.length < 10 ? "Phone number must be exactly 10 digits" : "");
+                        setClientContactError(val.length > 0 && !isValidPhoneNumber(val) ? "Please enter a valid phone number (with country code)" : "");
                       }}
                     />
                     {clientContactError && <p className="text-xs text-destructive">{clientContactError}</p>}
