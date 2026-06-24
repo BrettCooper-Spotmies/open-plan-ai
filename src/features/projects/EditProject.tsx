@@ -215,7 +215,6 @@ const EditProject = () => {
     const [newMilestoneName, setNewMilestoneName] = useState("");
     const [newMilestoneStart, setNewMilestoneStart] = useState<Date>();
     const [newMilestoneEnd, setNewMilestoneEnd] = useState<Date>();
-    const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
     const [isMilestoneStartOpen, setIsMilestoneStartOpen] = useState(false);
     const [isMilestoneEndOpen, setIsMilestoneEndOpen] = useState(false);
     const [milestoneStartCalendarMonth, setMilestoneStartCalendarMonth] = useState<Date>(() =>
@@ -240,6 +239,36 @@ const EditProject = () => {
             );
         }
     }, [isMilestoneEndOpen, newMilestoneEnd, newMilestoneStart, startDate]);
+
+    // Inline milestone editing (edit-in-place on the list item)
+    const [editingMilestoneId, setEditingMilestoneId] = useState<string | null>(null);
+    const [editingMilestoneName, setEditingMilestoneName] = useState("");
+    const [editingMilestoneStart, setEditingMilestoneStart] = useState<Date>();
+    const [editingMilestoneEnd, setEditingMilestoneEnd] = useState<Date>();
+    const [isEditMilestoneStartOpen, setIsEditMilestoneStartOpen] = useState(false);
+    const [isEditMilestoneEndOpen, setIsEditMilestoneEndOpen] = useState(false);
+    const [editMilestoneStartCalendarMonth, setEditMilestoneStartCalendarMonth] = useState<Date>(() =>
+        startOfMonth(new Date())
+    );
+    const [editMilestoneEndCalendarMonth, setEditMilestoneEndCalendarMonth] = useState<Date>(() =>
+        startOfMonth(new Date())
+    );
+
+    useLayoutEffect(() => {
+        if (isEditMilestoneStartOpen) {
+            setEditMilestoneStartCalendarMonth(
+                startOfMonth(editingMilestoneStart ?? startDate ?? new Date())
+            );
+        }
+    }, [isEditMilestoneStartOpen, editingMilestoneStart, startDate]);
+
+    useLayoutEffect(() => {
+        if (isEditMilestoneEndOpen) {
+            setEditMilestoneEndCalendarMonth(
+                startOfMonth(editingMilestoneEnd ?? editingMilestoneStart ?? startDate ?? new Date())
+            );
+        }
+    }, [isEditMilestoneEndOpen, editingMilestoneEnd, editingMilestoneStart, startDate]);
 
     // Links state
     const [newLinkName, setNewLinkName] = useState("");
@@ -299,9 +328,9 @@ const EditProject = () => {
             setMilestones(milestones.filter(m => m.id !== id));
             if (editingMilestoneId === id) {
                 setEditingMilestoneId(null);
-                setNewMilestoneName("");
-                setNewMilestoneStart(undefined);
-                setNewMilestoneEnd(undefined);
+                setEditingMilestoneName("");
+                setEditingMilestoneStart(undefined);
+                setEditingMilestoneEnd(undefined);
             }
         } else if (type === 'attachment') {
             try {
@@ -392,25 +421,15 @@ const EditProject = () => {
             return;
         }
         if (newMilestoneName.trim() && newMilestoneStart && newMilestoneEnd) {
-            if (editingMilestoneId) {
-                setMilestones(milestones.map(m => m.id === editingMilestoneId ? {
-                    ...m,
+            setMilestones([
+                ...milestones,
+                {
+                    id: Math.random().toString(36).substr(2, 9),
                     name: newMilestoneName.trim(),
                     startDate: newMilestoneStart,
                     endDate: newMilestoneEnd
-                } : m));
-                setEditingMilestoneId(null);
-            } else {
-                setMilestones([
-                    ...milestones,
-                    {
-                        id: Math.random().toString(36).substr(2, 9),
-                        name: newMilestoneName.trim(),
-                        startDate: newMilestoneStart,
-                        endDate: newMilestoneEnd
-                    }
-                ]);
-            }
+                }
+            ]);
             setNewMilestoneName("");
             setNewMilestoneStart(undefined);
             setNewMilestoneEnd(undefined);
@@ -418,10 +437,41 @@ const EditProject = () => {
     };
 
     const handleEditMilestone = (milestone: ProjectMilestone) => {
-        setNewMilestoneName(milestone.name);
-        setNewMilestoneStart(milestone.startDate);
-        setNewMilestoneEnd(milestone.endDate);
         setEditingMilestoneId(milestone.id);
+        setEditingMilestoneName(milestone.name);
+        setEditingMilestoneStart(milestone.startDate);
+        setEditingMilestoneEnd(milestone.endDate);
+    };
+
+    const handleSaveMilestoneEdit = () => {
+        if (!editingMilestoneId) return;
+        if (startDate && editingMilestoneStart && isBefore(editingMilestoneStart, startDate)) {
+            toast.error("Milestone start date cannot be earlier than project start date");
+            return;
+        }
+        if (targetDate && editingMilestoneEnd && isBefore(targetDate, editingMilestoneEnd)) {
+            toast.error("Milestone end date cannot be later than project target date");
+            return;
+        }
+        if (editingMilestoneName.trim() && editingMilestoneStart && editingMilestoneEnd) {
+            setMilestones(milestones.map(m => m.id === editingMilestoneId ? {
+                ...m,
+                name: editingMilestoneName.trim(),
+                startDate: editingMilestoneStart,
+                endDate: editingMilestoneEnd
+            } : m));
+            setEditingMilestoneId(null);
+            setEditingMilestoneName("");
+            setEditingMilestoneStart(undefined);
+            setEditingMilestoneEnd(undefined);
+        }
+    };
+
+    const handleCancelMilestoneEdit = () => {
+        setEditingMilestoneId(null);
+        setEditingMilestoneName("");
+        setEditingMilestoneStart(undefined);
+        setEditingMilestoneEnd(undefined);
     };
 
     const handleRemoveMilestone = (id: string) => {
@@ -680,6 +730,10 @@ const EditProject = () => {
 
         if (newMilestoneName.trim() || newMilestoneStart || newMilestoneEnd) {
             toast.error("You have an unsaved milestone. Please click 'Add Milestone' or clear the inputs.");
+            return;
+        }
+        if (editingMilestoneId) {
+            toast.error("You have an unsaved milestone edit. Please save or cancel it first.");
             return;
         }
         if (newModuleName.trim()) {
@@ -1641,45 +1695,112 @@ const EditProject = () => {
                                     </PopoverContent>
                                 </Popover>
                             </div>
-                            <div className="flex gap-2">
-                                {editingMilestoneId && (
-                                    <Button 
-                                        variant="outline" 
-                                        className="w-1/3"
-                                        onClick={() => {
-                                            setEditingMilestoneId(null);
-                                            setNewMilestoneName("");
-                                            setNewMilestoneStart(undefined);
-                                            setNewMilestoneEnd(undefined);
-                                        }}
-                                    >
-                                        <X className="h-4 w-4 mr-1" />
-                                        Cancel
-                                    </Button>
-                                )}
-                                <Button className="flex-1" variant="secondary" onClick={handleAddMilestone} disabled={!newMilestoneName.trim() || !newMilestoneStart || !newMilestoneEnd}>
-                                    {editingMilestoneId ? "Update Milestone" : "Add Milestone"}
-                                </Button>
-                            </div>
+                            <Button className="w-full" variant="secondary" onClick={handleAddMilestone} disabled={!newMilestoneName.trim() || !newMilestoneStart || !newMilestoneEnd}>
+                                Add Milestone
+                            </Button>
                         </div>
 
                         {milestones.length > 0 && (
                             <div className="grid gap-3 pt-2">
-                                {milestones.map((ms) => (
-                                    <div key={ms.id} className="flex items-center justify-between p-3 rounded-md border-l-4 border-l-primary bg-muted/30">
-                                        <div className="space-y-1">
-                                            <p className="text-sm font-semibold">{ms.name}</p>
-                                            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-                                                <div className="flex items-center gap-1"><CalendarIcon className="h-3 w-3" /> {ms.startDate ? format(ms.startDate, "PP") : ""}</div>
-                                                <div className="flex items-center gap-1"><Target className="h-3 w-3" /> {ms.endDate ? format(ms.endDate, "PP") : ""}</div>
+                                {milestones.map((ms) => {
+                                    const isEditing = editingMilestoneId === ms.id;
+                                    if (isEditing) {
+                                        return (
+                                            <div key={ms.id} className="space-y-2 p-3 rounded-md border-l-4 border-l-primary bg-muted/30">
+                                                <Input
+                                                    autoFocus
+                                                    value={editingMilestoneName}
+                                                    onChange={(e) => setEditingMilestoneName(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') handleSaveMilestoneEdit();
+                                                        if (e.key === 'Escape') handleCancelMilestoneEdit();
+                                                    }}
+                                                    className="h-8"
+                                                />
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <Popover open={isEditMilestoneStartOpen} onOpenChange={setIsEditMilestoneStartOpen}>
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal text-xs", !editingMilestoneStart && "text-muted-foreground")}>
+                                                                <CalendarIcon className="mr-2 h-3 w-3" />
+                                                                {editingMilestoneStart ? format(editingMilestoneStart, "PP") : "Start"}
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0">
+                                                            {isEditMilestoneStartOpen && (
+                                                                <Calendar
+                                                                    mode="single"
+                                                                    month={editMilestoneStartCalendarMonth}
+                                                                    onMonthChange={setEditMilestoneStartCalendarMonth}
+                                                                    selected={editingMilestoneStart}
+                                                                    onSelect={(date) => {
+                                                                        setEditingMilestoneStart(date);
+                                                                        setIsEditMilestoneStartOpen(false);
+                                                                    }}
+                                                                    disabled={(date) =>
+                                                                        isBefore(date, startOfToday()) ||
+                                                                        (startDate ? isBefore(date, startDate) : false) ||
+                                                                        (targetDate ? isBefore(targetDate, date) : false)
+                                                                    }
+                                                                />
+                                                            )}
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                    <Popover open={isEditMilestoneEndOpen} onOpenChange={setIsEditMilestoneEndOpen}>
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal text-xs", !editingMilestoneEnd && "text-muted-foreground")}>
+                                                                <CalendarIcon className="mr-2 h-3 w-3" />
+                                                                {editingMilestoneEnd ? format(editingMilestoneEnd, "PP") : "End"}
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0">
+                                                            {isEditMilestoneEndOpen && (
+                                                                <Calendar
+                                                                    mode="single"
+                                                                    month={editMilestoneEndCalendarMonth}
+                                                                    onMonthChange={setEditMilestoneEndCalendarMonth}
+                                                                    selected={editingMilestoneEnd}
+                                                                    onSelect={(date) => {
+                                                                        setEditingMilestoneEnd(date);
+                                                                        setIsEditMilestoneEndOpen(false);
+                                                                    }}
+                                                                    disabled={(date) =>
+                                                                        isBefore(date, startOfToday()) ||
+                                                                        (editingMilestoneStart ? isBefore(date, editingMilestoneStart) : false) ||
+                                                                        (startDate ? isBefore(date, startDate) : false) ||
+                                                                        (targetDate ? isBefore(targetDate, date) : false)
+                                                                    }
+                                                                />
+                                                            )}
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                </div>
+                                                <div className="flex justify-end gap-1">
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSaveMilestoneEdit} disabled={!editingMilestoneName.trim() || !editingMilestoneStart || !editingMilestoneEnd}>
+                                                        <Check className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCancelMilestoneEdit}>
+                                                        <X className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div key={ms.id} className="flex items-center justify-between p-3 rounded-md border-l-4 border-l-primary bg-muted/30">
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-semibold">{ms.name}</p>
+                                                <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                                                    <div className="flex items-center gap-1"><CalendarIcon className="h-3 w-3" /> {ms.startDate ? format(ms.startDate, "PP") : ""}</div>
+                                                    <div className="flex items-center gap-1"><Target className="h-3 w-3" /> {ms.endDate ? format(ms.endDate, "PP") : ""}</div>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditMilestone(ms)}><Pencil className="h-3 w-3" /></Button>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveMilestone(ms.id)}><Trash2 className="h-3 w-3" /></Button>
                                             </div>
                                         </div>
-                                        <div className="flex gap-1">
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditMilestone(ms)}><Pencil className="h-3 w-3" /></Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveMilestone(ms.id)}><Trash2 className="h-3 w-3" /></Button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </CardContent>
