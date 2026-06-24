@@ -382,7 +382,7 @@ export default function ProjectDetail() {
   const tabParam = searchParams.get('tab') as ProjectSection;
 
   const isMobile = useIsMobile();
-  const [section, setSection] = useState<ProjectSection>(tabParam || 'tasks');
+  const [section, setSection] = useState<ProjectSection>(tabParam || 'bom');
   const [viewModeStr, setViewModeStr] = useState<TaskViewMode | null>(null);
   const [moduleViewModeStr, setModuleViewModeStr] = useState<ModuleViewMode | null>(null);
   const [issueViewModeStr, setIssueViewModeStr] = useState<'table' | 'kanban' | null>(null);
@@ -1213,6 +1213,14 @@ export default function ProjectDetail() {
             {/* Left Side: Tabs and Filters */}
             <div className="w-full py-1 md:mr-auto md:w-auto">
               <TabsList className="bg-muted/50 grid grid-cols-8 w-full h-9 md:w-auto md:flex md:shrink-0">
+                <TabsTrigger value="bom" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Bill of Materials">
+                  <Layers className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">BOM</span>}
+                </TabsTrigger>
+                <TabsTrigger value="eng-changes" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Engineering Changes">
+                  <GitMerge className="h-4 w-4 shrink-0" />
+                  {!isMobile && <span className="truncate">Eng. Changes</span>}
+                </TabsTrigger>
                 <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Tasks">
                   <ListTodo className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Tasks</span>}
@@ -1248,14 +1256,6 @@ export default function ProjectDetail() {
                       {openIssuesCount}
                     </Badge>
                   )}
-                </TabsTrigger>
-                <TabsTrigger value="bom" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Bill of Materials">
-                  <Layers className="h-4 w-4 shrink-0" />
-                  {!isMobile && <span className="truncate">BOM</span>}
-                </TabsTrigger>
-                <TabsTrigger value="eng-changes" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Engineering Changes">
-                  <GitMerge className="h-4 w-4 shrink-0" />
-                  {!isMobile && <span className="truncate">Eng. Changes</span>}
                 </TabsTrigger>
                 {/* <TabsTrigger value="requirements" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Requirements">
                   <ListChecks className="h-4 w-4 shrink-0" />
@@ -1350,10 +1350,10 @@ export default function ProjectDetail() {
                     <Upload className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Import</span>
                   </Button> */}
-                  <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
+                  {/* <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
                     <Download className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Export</span>
-                  </Button>
+                  </Button> */}
                   <Button size="sm" onClick={() => setBomAddOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
                     <Plus className="h-4 w-4" />
                     <span className="hidden sm:inline">Add Part</span>
@@ -1362,10 +1362,10 @@ export default function ProjectDetail() {
               )}
               {section === 'eng-changes' && (
                 <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
-                  <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
+                  {/* <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
                     <Download className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Export</span>
-                  </Button>
+                  </Button> */}
                   <Button size="sm" onClick={() => setEcoNewOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
                     <Plus className="h-4 w-4" />
                     <span className="hidden sm:inline">New ECO</span>

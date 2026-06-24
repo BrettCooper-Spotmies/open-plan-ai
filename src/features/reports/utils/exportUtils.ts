@@ -168,3 +168,47 @@ export function downloadCSVReport(data: ReportExportData): void {
 export function triggerPDFExport(): void {
   window.print();
 }
+
+// ─── ECO/BOM CSV export helpers ────────────────────────────────────────────────
+
+/**
+ * Download CSV content as a file
+ * @param blob Blob containing CSV data
+ * @param filename Output filename
+ */
+export function downloadCsvBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  // Revoke URL after a short delay to allow download to start
+  setTimeout(() => URL.revokeObjectURL(url), 100);
+}
+
+/**
+ * Download ECO CSV export
+ * @param blob Blob from server response
+ * @param format 'summary' | 'detailed'
+ * @param ecoCount Number of ECOs being exported
+ */
+export function downloadEcoCsv(blob: Blob, format: 'summary' | 'detailed', ecoCount: number): void {
+  const dateStr = format(new Date(), 'yyyy-MM-dd');
+  const filename = ecoCount === 1
+    ? `eco-${format}-${dateStr}.csv`
+    : `ecos-${format}-${ecoCount}-${dateStr}.csv`;
+  downloadCsvBlob(blob, filename);
+}
+
+/**
+ * Download BOM CSV export
+ * @param blob Blob from server response
+ * @param projectId Project ID for filename
+ */
+export function downloadBomCsv(blob: Blob, projectId: string): void {
+  const dateStr = format(new Date(), 'yyyy-MM-dd');
+  const filename = `bom-${projectId}-${dateStr}.csv`;
+  downloadCsvBlob(blob, filename);
+}

@@ -34,6 +34,16 @@ Backend runs separately at `http://localhost:3001`. Set `VITE_API_BASE_URL` and 
 
 All domain logic lives here. Each feature folder contains its page component(s), sub-components, and any feature-specific hooks. New features follow the same pattern: feature folder → register route in `App.tsx`.
 
+### Modular Monolith Migration (in progress)
+
+`eslint.config.js` defines a target layered architecture enforced via `eslint-plugin-boundaries`: `app → module → shared → infrastructure`, with imports only allowed downward. `src/features/`, `src/services/`, `src/hooks/`, `src/stores/`, `src/pages/`, `src/contexts/`, `src/workers/`, `src/lib/`, `src/data/`, `src/utils/`, `src/types/`, `src/config/`, and `src/components/` are all classified as the unrestricted `legacy` layer until the migration completes.
+
+Only **`src/modules/auth`** has actually been migrated — it has real `components/constants/hooks/pages/schemas/services/stores/types` subfolders and `App.tsx` imports `AuthContext`/auth pages directly from `@/modules/auth`. Every other `src/modules/<name>/` (calendar, chat, dashboard, myday, notifications, projects, reports, settings, team) is a **single `index.ts` bridge file** that just re-exports from the corresponding legacy `src/features/<name>/`, `src/hooks/`, and `src/stores/` — there's no real code there yet. `App.tsx` still lazy-loads routes from `./features/*` for everything except auth.
+
+**Practical implication:** unless you're specifically continuing the migration, add new code to `src/features/`, `src/hooks/`, `src/stores/` as before — not to the `src/modules/<name>/index.ts` stubs. If you do move a feature into `src/modules/`, update its bridge file's re-exports and the corresponding `App.tsx` import.
+
+**Logging convention**: `no-console` is an ESLint error (allows only `table`/`group`/`groupEnd`/`groupCollapsed`/`time`/`timeEnd`). Use `logger` from `src/services/monitoring/logger.ts` instead of `console.*`. Sentry init lives in `src/infrastructure/monitoring/sentry.ts`.
+
 BOM feature files: `BOMView.tsx` (orchestrator), `BOMDetailScreen.tsx`, `BOMMapView.tsx`, `BOMShared.tsx`, `bomData.ts` (type definitions, adapter functions `fromApiNode()`/`fromApiRevision()`, and all tree utilities — no mock data). Hooks in `src/hooks/useBom.ts`, `useParts.ts`, `useBomDocuments.ts`.
 
 ECO (Engineering Changes) feature files: `ECOView.tsx` (orchestrator — receives `projectId: string` from `ProjectDetail`), `ECOListView.tsx` (KPI cards + list + preview panel), `ECODetailView.tsx` (full detail + approval pipeline + ECN release), `ECOWizard.tsx` (5-step create wizard), `ECOShared.tsx` (shared pills/avatars), `ecoData.ts` (TypeScript types, enums, adapter functions, helper utilities). Hooks in `src/hooks/useECOs.ts`.
@@ -46,7 +56,7 @@ Component → custom hook (src/hooks/) → React Query → Axios client → Back
                                           Zustand (UI-only state)
 ```
 
-**React Query** (`src/lib/queryClient.ts`): `staleTime: 5min`, `gcTime: 30min`, `refetchOnWindowFocus: false`. All server data goes through React Query hooks in `src/hooks/`.
+**React Query** (`src/lib/queryClient.ts`): `staleTime: 1min`, `gcTime: 5min`, `refetchOnWindowFocus: false`. All server data goes through React Query hooks in `src/hooks/`.
 
 **Zustand stores** (`src/stores/`): Three stores — `useProjectStore` (projects + tasks local cache), `useFilterStore` (filter preferences), `useUserStore` (current user + preferences). Only for UI-only global state; don't duplicate React Query data here.
 
@@ -83,7 +93,7 @@ Vitest + React Testing Library. Test setup at `src/test/setup.ts`. Path alias `@
 
 ## ECO — Key Integration Notes
 
-- `useECOs.ts` exports 13 React Query hooks: `useECOList`, `useECOStats`, `useECODetail`, `useCreateECO`, `useUpdateECO`, `useDeleteECO`, `useSubmitECO`, `useECODecision`, `useReleaseECO`, `useVerifyECO`, `useCloseECO`, `useHoldECO`, `useResumeECO`. All invalidate relevant `queryKeys.ecos.*` entries on success.
+- `useECOs.ts` exports 14 React Query hooks: `useECOList`, `useECOStats`, `useECODetail`, `useCreateECO`, `useUpdateECO`, `useDeleteECO`, `useSubmitECO`, `useECODecision`, `useReleaseECO`, `useVerifyECO`, `useCloseECO`, `useHoldECO`, `useResumeECO`, `useGetECN`. All invalidate relevant `queryKeys.ecos.*` entries on success.
 - `useECOList` uses `apiClient.raw.get` (not the wrapper) to access the paginated response shape `{ data: r.data.data, meta: r.data.meta }`.
 - `ecoData.ts` adapter functions: `fromApiEcoListItem(raw: ApiEcoListItem): ECOListItem` and `fromApiEcoDetail(raw: ApiEcoDetail): ECODetail`. These handle the UPPERCASE conversion and map nested objects (parts, steps, diff rows, activities, ECN).
 - `ECODetailView` falls back to `buildDetail(eco)` (synthetic pipeline steps) while the live `useECODetail` query loads — avoids a loading spinner for the preview-to-detail transition.

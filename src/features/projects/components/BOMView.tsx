@@ -1,13 +1,17 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
-  CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus,
+  CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check, Download,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useBomTree, useCreateBomNode } from '@/hooks/useBom';
+import { useBomTree, useCreateBomNode, useApproveBomNode, useRejectBomNode } from '@/hooks/useBom';
 import { useCreatePart } from '@/hooks/useParts';
+import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
+import { bomService } from '@/services/bom.service';
+import { downloadBomCsv } from '@/features/reports/utils/exportUtils';
+import { createBomWorkbook, downloadExcelFile } from '@/utils/excelExport';
 
 async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
   const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? [])].filter(Boolean) as DocValue[];
@@ -45,18 +49,20 @@ function OwnerBadge({ name, size = 'sm' }: { name: string; size?: 'sm' | 'xs' })
   );
 }
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
   BOMNode, BOMFilters, EMPTY_FILTERS,
   BOM_CAT_META,
   bomFlatAll, bomFlatten, bomFind,
   bomFilterTree, bomFlattenInclude, bomTypeOf,
-  fromApiNode, assignLevelLabels,
+  fromApiNode, assignLevelLabels, formatLeadTime,
 } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMDetailScreen, AddSubcomponentDialog } from './BOMDetailScreen';
 import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
+import { BOMRejectDialog } from './BOMRejectDialog';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { useCurrency } from '@/hooks/useCurrency';
 
@@ -98,7 +104,7 @@ function ListRowSkeleton({ level = 0 }: { level?: number }) {
         <Skeleton className="h-3 w-20" />
       </div>
       <div style={{ flexBasis: 170, flexShrink: 0 }} className="px-2"><Skeleton className="h-5 w-16 rounded-full" /></div>
-      <div style={{ flexBasis: 56, flexShrink: 0 }} />
+      <div style={{ flexBasis: 110, flexShrink: 0 }} />
     </div>
   );
 }
@@ -305,9 +311,9 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
 
           <Section title="Status">
             <div className="flex gap-2 flex-wrap">
-              {(['approved', 'pending'] as const).map(s => (
+              {(['approved', 'pending', 'rejected'] as const).map(s => (
                 <Chip key={s} active={filters.statuses.includes(s)} onClick={() => toggle('statuses', s)}>
-                  {s === 'approved' ? 'Approved' : 'Pending'}
+                  {s === 'approved' ? 'Approved' : s === 'pending' ? 'Pending' : 'Rejected'}
                 </Chip>
               ))}
             </div>
@@ -321,7 +327,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
             </div>
           </Section>
 
-          <Section title="Lead Time (weeks)">
+          <Section title="Lead Time (days)">
             <div className="flex items-center gap-2">
               <RangeInput value={filters.leadMin} onChange={v => set('leadMin', v)} placeholder="Min" />
               <span className="text-muted-foreground text-xs">–</span>
@@ -441,10 +447,13 @@ const HEADERS = [
   { key: 'status', label: 'Status', w: 92 },
   { key: 'owner', label: 'Owner', w: 140 },
   { key: 'req', label: 'Traceability', w: 170 },
-  { key: 'act', label: '', w: 56 },
+  { key: 'act', label: '', w: 110 },
 ] as const;
 
-function ListView({ rows, expanded, toggle, filtersActive, onOpen, onAddSub, totalCount, formatCurrency }: {
+function ListView({
+  rows, expanded, toggle, filtersActive, onOpen, onAddSub, totalCount, formatCurrency,
+  canApprove, onApprove, onReject, approvingId,
+}: {
   rows: BOMNode[];
   expanded: Record<string, boolean>;
   toggle: (id: string) => void;
@@ -453,6 +462,10 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, onAddSub, tot
   onAddSub: (node: BOMNode) => void;
   totalCount: number;
   formatCurrency: (n: number) => string;
+  canApprove: boolean;
+  onApprove: (node: BOMNode) => void;
+  onReject: (node: BOMNode) => void;
+  approvingId: string | null;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const rowH = 46;
@@ -538,7 +551,7 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, onAddSub, tot
               {/* Price */}
               <div style={{ flexBasis: 90, flexShrink: 0 }} className="px-2 text-sm text-foreground text-right tabular-nums">{formatCurrency(row.price)}</div>
               {/* Lead */}
-              <div style={{ flexBasis: 74, flexShrink: 0 }} className="px-2 text-xs text-muted-foreground tabular-nums">{row.leadTime} wk</div>
+              <div style={{ flexBasis: 74, flexShrink: 0 }} className="px-2 text-xs text-muted-foreground tabular-nums">{formatLeadTime(row.leadTime)}</div>
               {/* Rev */}
               <div style={{ flexBasis: 50, flexShrink: 0 }} className="px-2">
                 <span className="text-[11px] font-semibold text-muted-foreground bg-muted border border-border rounded px-1.5 py-0.5">{row.rev}</span>
@@ -557,7 +570,27 @@ function ListView({ rows, expanded, toggle, filtersActive, onOpen, onAddSub, tot
                 {row.req.length > 2 && <span className="text-[11px] text-muted-foreground self-center">+{row.req.length - 2}</span>}
               </div>
               {/* Actions */}
-              <div style={{ flexBasis: 56, flexShrink: 0 }} className={cn('flex items-center justify-end gap-1 transition-opacity', isHovered ? 'opacity-100' : 'opacity-0')}>
+              <div style={{ flexBasis: 110, flexShrink: 0 }} className={cn('flex items-center justify-end gap-1 transition-opacity', isHovered ? 'opacity-100' : 'opacity-0')}>
+                {canApprove && row.status === 'pending' && (
+                  <>
+                    <button
+                      onClick={e => { e.stopPropagation(); onApprove(row); }}
+                      disabled={approvingId === row.id}
+                      title="Approve part"
+                      className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                    >
+                      <Check className="w-3.5 h-3.5" style={{ color: '#16A34A' }} />
+                    </button>
+                    <button
+                      onClick={e => { e.stopPropagation(); onReject(row); }}
+                      disabled={approvingId === row.id}
+                      title="Reject part"
+                      className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                    >
+                      <X className="w-3.5 h-3.5" style={{ color: '#DC2626' }} />
+                    </button>
+                  </>
+                )}
                 <button
                   onClick={e => { e.stopPropagation(); onAddSub(row); }}
                   title="Add sub-component"
@@ -642,7 +675,7 @@ function GridView({ rows, onOpen, totalCount, formatCurrency }: { rows: BOMNode[
                   <Meta label="Qty" value={`${row.qty} ${row.uom}`} />
                   <Meta label="Unit Price" value={formatCurrency(row.price)} />
                   <Meta label="Manufacturer" value={row.manufacturer} />
-                  <Meta label="Lead Time" value={`${row.leadTime} wk`} />
+                  <Meta label="Lead Time" value={formatLeadTime(row.leadTime)} />
                 </div>
                 {/* Owner row */}
                 <div className="flex items-center gap-1.5 mb-2.5 py-1.5 px-2 rounded-md bg-muted/40 border border-border/50">
@@ -687,7 +720,8 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
   const [createSubNode, setCreateSubNode] = useState<BOMNode | null>(null);
   const [importSubNode, setImportSubNode] = useState<BOMNode | null>(null);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
+  const [rejectTarget, setRejectTarget] = useState<BOMNode | null>(null);
   const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('bom_view') as ViewMode) ?? 'list');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<BOMFilters>({ ...EMPTY_FILTERS });
@@ -701,8 +735,38 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
 
   // ── Live API data ─────────────────────────────────────────────────
   const { data: bomTree, isLoading: treeLoading } = useBomTree(projectId);
+  const { data: project } = useProjectDetail(projectId);
   const createPart = useCreatePart(orgId);
   const createNode = useCreateBomNode(projectId);
+  const approveBomNode = useApproveBomNode(projectId);
+  const rejectBomNode = useRejectBomNode(projectId);
+
+  const projectRole = (project?.myRole || '').toLowerCase();
+  const canApprove = projectRole === 'admin' || projectRole === 'manager';
+
+  const handleApprove = async (node: BOMNode) => {
+    try {
+      await approveBomNode.mutateAsync({ nodeId: node.id });
+      toast.success(`${node.pn} approved`);
+    } catch (err) {
+      toast.error('Failed to approve part', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
+  const handleRejectConfirm = async (reason: string, comment?: string) => {
+    if (!rejectTarget) return;
+    try {
+      await rejectBomNode.mutateAsync({ nodeId: rejectTarget.id, reason, comment });
+      toast.success(`${rejectTarget.pn} rejected`);
+    } catch (err) {
+      toast.error('Failed to reject part', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+      throw err;
+    }
+  };
 
   const rootNodes = useMemo(() => {
     if (!bomTree?.roots?.length) return [];
@@ -737,7 +801,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
         initialStatus:       payload.status,
         initialRev:          payload.rev,
         initialPrice:        payload.price > 0 ? payload.price : undefined,
-        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime * 7 : undefined,
+        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
       });
       const node = await createNode.mutateAsync({
         partId:   part.id,
@@ -773,7 +837,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
         initialStatus:       payload.status,
         initialRev:          payload.rev,
         initialPrice:        payload.price > 0 ? payload.price : undefined,
-        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime * 7 : undefined,
+        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
       });
       const node = await createNode.mutateAsync({
         partId:   part.id,
@@ -787,6 +851,55 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
       setCreateSubNode(null);
     } catch {
       // errors are logged by React Query's MutationCache; no further action needed
+    }
+  };
+
+  const handleExportCsv = async () => {
+    try {
+      const blob = await bomService.exportCsv(projectId);
+      downloadBomCsv(blob, projectId);
+      toast.success('BOM exported as CSV');
+    } catch (err) {
+      toast.error('Failed to export BOM', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      const blob = await bomService.exportCsv(projectId);
+      const text = await blob.text();
+      const rows = text.split('\n').slice(1).map(line => {
+        const cells = line.split(',').map(cell => cell.replace(/^"|"$/g, ''));
+        return {
+          partNumber: cells[0],
+          description: cells[1],
+          category: cells[2],
+          quantity: parseFloat(cells[3]) || 0,
+          unit: cells[4],
+          status: cells[5],
+          manufacturer: cells[6] || null,
+          distributor: cells[7] || null,
+          mpn: cells[8] || null,
+          price: parseFloat(cells[9]) || null,
+          leadTime: parseFloat(cells[10]) || null,
+          revision: cells[11],
+          owner: cells[12],
+          level: cells[13],
+          requirements: cells[14],
+        };
+      }).filter(row => row.partNumber);
+
+      const workbook = await createBomWorkbook(rows);
+      const dateStr = new Date().toISOString().split('T')[0];
+      const filename = `bom-${projectId}-${dateStr}.xlsx`;
+      await downloadExcelFile(workbook, filename);
+      toast.success('BOM exported as Excel');
+    } catch (err) {
+      toast.error('Failed to export BOM', {
+        description: err instanceof Error ? err.message : undefined,
+      });
     }
   };
 
@@ -856,7 +969,7 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
     );
   }
 
-  const Tab = ({ id, label }: { id: 'all' | 'approved' | 'pending'; label: string }) => (
+  const Tab = ({ id, label }: { id: 'all' | 'approved' | 'pending' | 'rejected'; label: string }) => (
     <button
       onClick={() => setFilterStatus(id)}
       className={cn(
@@ -913,11 +1026,32 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
             )}
           </div>
 
-          <Tab id="all" label="All Parts" />
+          <Tab id="all" label="All" />
           <Tab id="approved" label="Approved" />
           <Tab id="pending" label="Pending" />
+          <Tab id="rejected" label="Rejected" />
 
           <div className="flex-1" />
+
+          {/* Export dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border bg-card text-foreground border-border hover:bg-muted cursor-pointer transition-colors"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Export
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportCsv}>
+                Export as CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportExcel}>
+                Export as Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Filter button */}
           <button
@@ -957,6 +1091,10 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
           onAddSub={setAddSubNode}
           totalCount={totalCount}
           formatCurrency={formatCurrency}
+          canApprove={canApprove}
+          onApprove={handleApprove}
+          onReject={setRejectTarget}
+          approvingId={approveBomNode.isPending ? approveBomNode.variables?.nodeId ?? null : null}
         />
       )}
       {view === 'grid' && (
@@ -1012,6 +1150,14 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
           orgId={orgId}
         />
       )}
+
+      {/* Reject confirmation (mandatory reason) */}
+      <BOMRejectDialog
+        open={!!rejectTarget}
+        partLabel={rejectTarget?.pn}
+        onClose={() => setRejectTarget(null)}
+        onConfirm={handleRejectConfirm}
+      />
     </div>
   );
 }

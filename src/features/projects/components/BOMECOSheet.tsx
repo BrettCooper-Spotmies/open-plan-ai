@@ -13,10 +13,11 @@ import { cn } from '@/lib/utils';
 import {
   ECOType, ECOReason, ECOPriority, ImpactLevel,
   ECO_TYPE_LABEL, REASON_LABEL, PRIORITY_LABEL, IMPACT_LABEL,
-  PipelineStep, PIPELINE_TEMPLATE,
+  PipelineStep, PIPELINE_STAGE_DEFS,
 } from './ecoData';
 import { ECOAvatar } from './ECOShared';
 import { useCreateECO } from '@/hooks/useECOs';
+import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { BOMNode, BOMStatus, BOM_CAT_META } from './bomData';
 import { toast } from 'sonner';
 
@@ -146,23 +147,33 @@ export function BOMECOSheet({
   const [priority, setPriority] = useState<ECOPriority>('MEDIUM');
   const [reasonDesc, setReasonDesc] = useState('');
 
-  // ── Approval tab state ──
+  // ── Approval tab state (approvers are real project members, picked by the user) ──
+  const { data: projectMembers = [] } = useProjectMembers(projectId);
+
   const defaultOrder = useMemo(() => {
     const m: Record<string, number> = {};
-    PIPELINE_TEMPLATE.forEach((s, i) => { m[s.stage] = i; });
+    PIPELINE_STAGE_DEFS.forEach((s, i) => { m[s.stage] = i; });
     return m;
   }, []);
 
   const [pipeline, setPipeline] = useState<PipelineStepLocal[]>(
-    PIPELINE_TEMPLATE.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
+    PIPELINE_STAGE_DEFS.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
   );
+
+  const assignApprover = (idx: number, memberId: string) => {
+    const member = projectMembers.find(m => m.id === memberId);
+    setPipeline(pl => pl.map((x, i) => (
+      i === idx ? { ...x, approverId: member?.id ?? null, name: member?.name ?? '', role: member?.role ?? '' } : x
+    )));
+  };
 
   const stageMoved = (p: PipelineStep, idx: number) =>
     defaultOrder[p.stage] !== undefined && defaultOrder[p.stage] !== idx;
 
   const pipelineValid = pipeline.every((p, idx) => {
     const needsReason = p.optional || stageMoved(p, idx);
-    return !needsReason || (p.justification ?? '').trim().length > 0;
+    const reasonOk = !needsReason || (p.justification ?? '').trim().length > 0;
+    return reasonOk && !!p.approverId;
   });
 
   const canSubmit = ecoTitle.trim() && pipeline.length >= 1 && pipelineValid;
@@ -177,7 +188,7 @@ export function BOMECOSheet({
     }
     if (tab === 'approval') {
       if (pipeline.length < 1) e.pipeline = 'At least 1 approval stage is required';
-      else if (!pipelineValid) e.pipeline = 'Optional or reordered stages need a justification';
+      else if (!pipelineValid) e.pipeline = 'Every stage needs an approver, and optional/reordered stages need a justification';
     }
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -216,6 +227,7 @@ export function BOMECOSheet({
           order: i + 1,
           stage: p.stage,
           stageLabel: p.stage,
+          approverUserId: p.approverId ?? null,
           approverName: p.name ?? null,
           approverRole: p.role ?? null,
           isOptional: p.optional ?? false,
@@ -517,8 +529,17 @@ export function BOMECOSheet({
             <div className="absolute inset-0 overflow-y-auto">
               <div className="px-7 py-5 flex flex-col gap-2.5">
                 <p className="text-[13px] text-muted-foreground mb-1">
-                  Ordered sign-off pipeline · reorder with arrows · mark stages optional. Any change to the default requires a justification.
+                  Ordered sign-off pipeline · assign a project member to each stage · reorder with arrows · mark stages optional. Any change to the default requires a justification.
                 </p>
+                {projectMembers.length === 0 && (
+                  <div
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+                    style={{ color: '#F59E0B', background: '#F59E0B14', border: '1px solid #F59E0B33' }}
+                  >
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    No project members found — add members to the project team before assigning approvers.
+                  </div>
+                )}
                 {pipeline.map((p, idx) => {
                   const moved = stageMoved(p, idx);
                   const needsReason = p.optional || moved;
@@ -530,7 +551,7 @@ export function BOMECOSheet({
                     >
                       <div className="flex items-center gap-2">
                         <span className="text-[12px] font-bold text-muted-foreground w-5">{idx + 1}</span>
-                        <ECOAvatar name={p.name} size={26} />
+                        <ECOAvatar name={p.name || '?'} size={26} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
                             {p.stage}
@@ -543,7 +564,17 @@ export function BOMECOSheet({
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-muted-foreground">{p.name} · {p.role}</div>
+                          <select
+                            value={p.approverId ?? ''}
+                            onChange={e => assignApprover(idx, e.target.value)}
+                            className="mt-0.5 w-full max-w-[240px] bg-muted/40 border rounded-md text-foreground text-[11px] px-2 py-1 outline-none focus:border-primary/40 cursor-pointer appearance-none font-[inherit]"
+                            style={{ borderColor: p.approverId ? 'hsl(var(--border))' : '#F59E0B88' }}
+                          >
+                            <option value="" disabled className="bg-card">Select approver…</option>
+                            {projectMembers.map(m => (
+                              <option key={m.id} value={m.id} className="bg-card">{m.name} · {m.role}</option>
+                            ))}
+                          </select>
                         </div>
                         <button
                           onClick={() => setPipeline(pl => pl.map((x, i) => i === idx ? { ...x, optional: !x.optional } : x))}
@@ -636,7 +667,7 @@ export function BOMECOSheet({
                 <span>
                   {pipeline.length < 1
                     ? 'At least 1 approval stage is required'
-                    : 'Optional or reordered stages need a justification'}
+                    : 'Assign an approver to every stage, and a justification for each optional / reordered stage'}
                 </span>
               </>
             )}

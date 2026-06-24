@@ -8,12 +8,13 @@ import {
   ECOType, ECOReason, ECOPriority, ChangeClass, EffectivityType, ImpactLevel, ECODisposition,
   ECO_TYPE_LABEL, REASON_LABEL, PRIORITY_LABEL, CHANGE_CLASS_LABEL,
   EFFECTIVITY_LABEL, IMPACT_LABEL, DISPOSITION_LABEL, CHANGE_LABEL_MAP, ChangeLabel,
-  PipelineStep, PIPELINE_TEMPLATE,
+  PipelineStep, PIPELINE_STAGE_DEFS,
 } from './ecoData';
 import { ECOAvatar } from './ECOShared';
 import { cn } from '@/lib/utils';
 import { useCreateECO } from '@/hooks/useECOs';
 import { useBomTree } from '@/hooks/useBom';
+import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { fromApiNode, bomFlatAll, bomPath } from './bomData';
 
 // ── Attachment file type helper ───────────────────────────────────────────────
@@ -118,13 +119,15 @@ interface BasicsState {
   title: string; description: string;
   type: ECOType; priority: ECOPriority; reason: ECOReason;
   changeClass: ChangeClass;
-  revFrom: string; revTo: string; ecr: string;
+  ecr: string;
   effType: EffectivityType; effValue: string;
 }
 
 interface ItemState {
   pn: string; desc: string; impact: ImpactLevel;
   disp: ECODisposition; whereUsed: string[];
+  partId: string; nodeId: string;
+  revFrom: string; revTo: string;
 }
 
 interface DiffRowState {
@@ -150,7 +153,7 @@ export function ECOWizard({
   onClose,
 }: {
   projectId: string;
-  seed: null | { title?: string; desc?: string; type?: ECOType; priority?: ECOPriority; reason?: ECOReason; revFrom?: string; revTo?: string; ecr?: string; changeClass?: ChangeClass };
+  seed: null | { title?: string; desc?: string; type?: ECOType; priority?: ECOPriority; reason?: ECOReason; ecr?: string; changeClass?: ChangeClass };
   onClose: (result?: { saved: boolean }) => void;
 }) {
   const createMutation = useCreateECO(projectId);
@@ -163,7 +166,7 @@ export function ECOWizard({
     title: seed?.title ?? '', description: seed?.desc ?? '',
     type: seed?.type ?? 'DESIGN_CHANGE', priority: seed?.priority ?? 'MEDIUM',
     reason: seed?.reason ?? 'PERFORMANCE', changeClass: seed?.changeClass ?? 'II',
-    revFrom: seed?.revFrom ?? 'A', revTo: seed?.revTo ?? 'B', ecr: seed?.ecr ?? '',
+    ecr: seed?.ecr ?? '',
     effType: 'DATE', effValue: '',
   });
 
@@ -174,6 +177,9 @@ export function ECOWizard({
     () => bomFlatAll(bomRootNodes).map(n => ({
       pn: n.pn,
       desc: n.desc,
+      rev: n.rev,
+      partId: n._partId ?? '',
+      nodeId: n.id,
       whereUsed: (bomPath(n.id, bomRootNodes) ?? []).slice(0, -1).map(a => `${a.pn} ${a.desc}`),
     })),
     [bomRootNodes],
@@ -182,11 +188,17 @@ export function ECOWizard({
   const [items, setItems] = useState<ItemState[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // Selecting a part auto-populates Rev From from its current BOM revision;
+  // Rev To is left for the user to fill in once the target rev is known.
   const addItem = (p: typeof bomPool[number]) => {
     setItems(prev =>
       prev.find(x => x.pn === p.pn)
         ? prev
-        : [...prev, { pn: p.pn, desc: p.desc, impact: 'MEDIUM', disp: 'REWORK', whereUsed: p.whereUsed }],
+        : [...prev, {
+            pn: p.pn, desc: p.desc, impact: 'MEDIUM', disp: 'REWORK', whereUsed: p.whereUsed,
+            partId: p.partId, nodeId: p.nodeId,
+            revFrom: p.rev, revTo: '',
+          }],
     );
     setPickerOpen(false);
   };
@@ -212,16 +224,25 @@ export function ECOWizard({
     unitCostDelta: '', oneTimeCost: '',
   });
 
-  // Step 5 — Pipeline
+  // Step 5 — Pipeline (approvers are real project members, picked by the user)
+  const { data: projectMembers = [] } = useProjectMembers(projectId);
+
   const defaultOrder = useMemo(() => {
     const m: Record<string, number> = {};
-    PIPELINE_TEMPLATE.forEach((s, i) => { m[s.stage] = i; });
+    PIPELINE_STAGE_DEFS.forEach((s, i) => { m[s.stage] = i; });
     return m;
   }, []);
 
   const [pipeline, setPipeline] = useState<PipelineStepWizard[]>(
-    PIPELINE_TEMPLATE.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
+    PIPELINE_STAGE_DEFS.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
   );
+
+  const assignApprover = (idx: number, memberId: string) => {
+    const member = projectMembers.find(m => m.id === memberId);
+    setPipeline(pl => pl.map((x, i) => (
+      i === idx ? { ...x, approverId: member?.id ?? null, name: member?.name ?? '', role: member?.role ?? '' } : x
+    )));
+  };
 
   // Lock QA & Final Approval for Class I
   const lockStage = (stage: string) =>
@@ -232,10 +253,11 @@ export function ECOWizard({
 
   const pipelineValid = pipeline.every((p, idx) => {
     const needsReason = p.optional || stageMoved(p, idx);
-    return !needsReason || (p.justification ?? '').trim().length > 0;
+    const reasonOk = !needsReason || (p.justification ?? '').trim().length > 0;
+    return reasonOk && !!p.approverId;
   });
 
-  const canSubmit = basics.title.trim() && items.length >= 1 && pipeline.length >= 1 && pipelineValid;
+  const canSubmit = basics.title.trim() && items.length >= 1 && pipeline.length >= 2 && pipelineValid;
 
   const validateStep = (s: number): boolean => {
     const e: Record<string, string> = {};
@@ -322,19 +344,9 @@ export function ECOWizard({
           Class I locks QA &amp; Final Approval as mandatory in the pipeline.
         </div>
       )}
-      <div className="grid grid-cols-[80px_80px_1fr] gap-3">
-        <div>
-          <FieldLabel>Rev From</FieldLabel>
-          <input value={basics.revFrom} onChange={e => setBasics({ ...basics, revFrom: e.target.value })} className={inputCls} />
-        </div>
-        <div>
-          <FieldLabel>Rev To</FieldLabel>
-          <input value={basics.revTo} onChange={e => setBasics({ ...basics, revTo: e.target.value })} className={inputCls} />
-        </div>
-        <div>
-          <FieldLabel>Originating ECR</FieldLabel>
-          <input value={basics.ecr} onChange={e => setBasics({ ...basics, ecr: e.target.value })} placeholder="ECR-2026-088 (optional)" className={inputCls} />
-        </div>
+      <div>
+        <FieldLabel>Originating ECR</FieldLabel>
+        <input value={basics.ecr} onChange={e => setBasics({ ...basics, ecr: e.target.value })} placeholder="ECR-2026-088 (optional)" className={inputCls} />
       </div>
       {/* Effectivity */}
       <div>
@@ -435,6 +447,21 @@ export function ECOWizard({
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
+          <div className="flex gap-2 mb-2">
+            <div className="flex-1">
+              <FieldLabel>Rev From</FieldLabel>
+              <input value={it.revFrom} disabled className={cn(inputCls, 'font-mono text-center cursor-not-allowed opacity-70')} />
+            </div>
+            <div className="flex-1">
+              <FieldLabel>Rev To</FieldLabel>
+              <input
+                value={it.revTo}
+                onChange={e => upItem(idx, 'revTo', e.target.value)}
+                placeholder="e.g. B"
+                className={cn(inputCls, 'font-mono text-center')}
+              />
+            </div>
+          </div>
           <div className="flex gap-2">
             <div className="flex-1">
               <EcoSelect value={it.impact} onChange={v => upItem(idx, 'impact', v)} options={Object.keys(IMPACT_LABEL) as ImpactLevel[]} labels={IMPACT_LABEL} />
@@ -460,7 +487,7 @@ export function ECOWizard({
       {/* Diff rows */}
       <div className="flex items-center justify-between">
         <div className="text-[13px] text-muted-foreground">
-          Field-level Rev {basics.revFrom} → {basics.revTo} diff · {diffRows.length} row{diffRows.length !== 1 ? 's' : ''}
+          Field-level diff · {diffRows.length} row{diffRows.length !== 1 ? 's' : ''}
         </div>
         <button
           onClick={() => setDiffRows(r => [...r, { param: '', from: '', to: '', cls: 'MODIFIED' }])}
@@ -473,8 +500,8 @@ export function ECOWizard({
       {diffRows.length > 0 && (
         <div className="flex gap-2 text-[10px] text-muted-foreground uppercase tracking-wider">
           <div className="flex-[1.2]">Parameter</div>
-          <div className="flex-1">Rev {basics.revFrom}</div>
-          <div className="flex-1">Rev {basics.revTo}</div>
+          <div className="flex-1">From</div>
+          <div className="flex-1">To</div>
           <div className="w-32">Class</div>
           <div className="w-5" />
         </div>
@@ -620,8 +647,17 @@ export function ECOWizard({
   const StepApproval = (
     <div className="flex flex-col gap-2.5">
       <div className="text-[13px] text-muted-foreground mb-1">
-        Ordered sign-off pipeline · reorder with arrows · mark stages optional. Any change to the default requires a justification.
+        Ordered sign-off pipeline · assign a project member to each stage · reorder with arrows · mark stages optional. Any change to the default requires a justification.
       </div>
+      {projectMembers.length === 0 && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+          style={{ color: '#F59E0B', background: '#F59E0B14', border: '1px solid #F59E0B33' }}
+        >
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          No project members found — add members to the project team before assigning approvers.
+        </div>
+      )}
       {basics.changeClass === 'I' && (
         <div
           className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
@@ -631,8 +667,18 @@ export function ECOWizard({
           Class I — Safety/Regulatory: QA and Final Approval are locked as mandatory and cannot be removed.
         </div>
       )}
+      {pipeline.length < 2 && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+          style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
+        >
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          At least one approver besides the Originator is required — this ECO can&apos;t be submitted with nobody to review it.
+        </div>
+      )}
       {pipeline.map((p, idx) => {
         const locked = lockStage(p.stage);
+        const removalLocked = locked || pipeline.length <= 2;
         const moved = stageMoved(p, idx);
         const needsReason = p.optional || moved;
         return (
@@ -643,7 +689,7 @@ export function ECOWizard({
           >
             <div className="flex items-center gap-2">
               <span className="text-[12px] font-bold text-muted-foreground w-5">{idx + 1}</span>
-              <ECOAvatar name={p.name} size={26} />
+              <ECOAvatar name={p.name || '?'} size={26} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
                   {p.stage}
@@ -656,7 +702,17 @@ export function ECOWizard({
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] text-muted-foreground">{p.name} · {p.role}</div>
+                <select
+                  value={p.approverId ?? ''}
+                  onChange={e => assignApprover(idx, e.target.value)}
+                  className="mt-0.5 w-full max-w-[240px] bg-muted/40 border rounded-md text-foreground text-[11px] px-2 py-1 outline-none focus:border-primary/40 cursor-pointer appearance-none font-[inherit]"
+                  style={{ borderColor: p.approverId ? 'hsl(var(--border))' : '#F59E0B88' }}
+                >
+                  <option value="" disabled className="bg-card">Select approver…</option>
+                  {projectMembers.map(m => (
+                    <option key={m.id} value={m.id} className="bg-card">{m.name} · {m.role}</option>
+                  ))}
+                </select>
               </div>
               {locked ? (
                 <span
@@ -698,8 +754,8 @@ export function ECOWizard({
                   <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
                 </button>
               </div>
-              {locked ? (
-                <div className="w-4 flex justify-center">
+              {removalLocked ? (
+                <div className="w-4 flex justify-center" title={locked ? undefined : 'At least one non-Originator approver is required'}>
                   <Lock className="w-3 h-3 text-muted-foreground/50" />
                 </div>
               ) : (
@@ -800,7 +856,7 @@ export function ECOWizard({
             {canSubmit
               ? <span className="text-muted-foreground">Ready to save draft</span>
               : !pipelineValid
-              ? 'Add a justification for each optional / reordered pipeline stage'
+              ? 'Assign an approver to every stage, and a justification for each optional / reordered stage'
               : 'Need a title, ≥1 affected item and a pipeline to submit'}
           </div>
           <div className="flex gap-2">
@@ -834,13 +890,19 @@ export function ECOWizard({
                       effectivityType:  basics.effType.toLowerCase() as any,
                       effectivityValue: basics.effValue || null,
                       originatingEcr:   basics.ecr || null,
-                      revFrom:     basics.revFrom || null,
-                      revTo:       basics.revTo || null,
                       scheduleImpact:   impact.schedule.toLowerCase() as any,
                       requiresRecertification: impact.recert,
                       firmwareCoupling: impact.firmware,
                       unitCostDelta:    impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
                       oneTimeCost:      impact.oneTimeCost  ? parseFloat(impact.oneTimeCost)  : null,
+                      parts: items.map(it => ({
+                        partId:      it.partId,
+                        bomNodeId:   it.nodeId || null,
+                        revFrom:     it.revFrom || null,
+                        revTo:       it.revTo || null,
+                        impactLevel: it.impact.toLowerCase() as any,
+                        disposition: it.disp.toLowerCase() as any,
+                      })),
                       diffRows: diffRows.map((r, i) => ({
                         order:       i,
                         parameter:   r.param,
@@ -849,12 +911,13 @@ export function ECOWizard({
                         changeLabel: r.cls.toLowerCase() as any,
                       })),
                       pipelineSteps: pipeline.map((p, i) => ({
-                        order:         i + 1,
-                        stage:         p.stage,
-                        stageLabel:    p.stage,
-                        approverName:  p.name  || null,
-                        approverRole:  p.role  || null,
-                        isOptional:    p.optional ?? false,
+                        order:          i + 1,
+                        stage:          p.stage,
+                        stageLabel:     p.stage,
+                        approverUserId: p.approverId || null,
+                        approverName:   p.name  || null,
+                        approverRole:   p.role  || null,
+                        isOptional:     p.optional ?? false,
                         optionalReason: p.optionalReason || null,
                         justification:  p.justification  || null,
                       })),

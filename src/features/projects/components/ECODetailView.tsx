@@ -15,11 +15,16 @@ import {
   ECOStatus, DecisionType, fromApiEcoDetail,
 } from './ecoData';
 import { ECOAvatar, StatusPill } from './ECOShared';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
   useECODetail, useECODecision, useSubmitECO,
   useReleaseECO, useVerifyECO, useCloseECO, useHoldECO, useResumeECO,
+  useExportEcoSummaryCsv, useExportEcoDetailedCsv,
 } from '@/hooks/useECOs';
+import { downloadEcoCsv } from '@/features/reports/utils/exportUtils';
+import { useAuth } from '@/modules/auth';
+import { useProjectMembers } from '@/hooks/useProjectTeam';
 
 // ── Detail skeleton components ────────────────────────────────────────────────
 
@@ -207,9 +212,9 @@ function LifecycleTracker({ status }: { status: ECOStatus }) {
                   {done
                     ? <Check className="w-4 h-4 text-white" strokeWidth={3} />
                     : <NodeIcon
-                        className={here ? 'w-5 h-5' : 'w-4 h-4'}
-                        style={{ color: here ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))' }}
-                      />
+                      className={here ? 'w-5 h-5' : 'w-4 h-4'}
+                      style={{ color: here ? 'hsl(var(--primary-foreground))' : 'hsl(var(--muted-foreground))' }}
+                    />
                   }
                 </div>
                 <span
@@ -246,10 +251,14 @@ function ApprovalPipeline({
   detail,
   onDecision,
   isPending,
+  canAct,
+  isOverride,
 }: {
   detail: ECODetail;
   onDecision: (kind: 'approve' | 'reject', comment: string) => void;
   isPending?: boolean;
+  canAct?: boolean;
+  isOverride?: boolean;
 }) {
   const [comment, setComment] = useState('');
   const [err, setErr] = useState(false);
@@ -376,12 +385,24 @@ function ApprovalPipeline({
       )}
 
       {/* Inline action */}
-      {detail.steps.some(s => s.decision === 'ACTIVE') && detail.awaitingMe && (
+      {detail.steps.some(s => s.decision === 'ACTIVE') && canAct && (
         <div className="pt-4 border-t border-border">
           <div className="text-[12px] text-muted-foreground mb-2">
-            You are the active approver for{' '}
-            <strong className="text-foreground">{detail.steps.find(s => s.decision === 'ACTIVE')?.stage}</strong>.
-            You are reviewing finished engineering artifacts — approve to advance, or reject to return them to the originator.
+            {isOverride ? (
+              <>
+                Approving on behalf of{' '}
+                <strong className="text-foreground">{detail.steps.find(s => s.decision === 'ACTIVE')?.name}</strong>
+                {' '}for{' '}
+                <strong className="text-foreground">{detail.steps.find(s => s.decision === 'ACTIVE')?.stage}</strong>
+                {' '}as a project manager. This override is recorded in the activity log.
+              </>
+            ) : (
+              <>
+                You are the active approver for{' '}
+                <strong className="text-foreground">{detail.steps.find(s => s.decision === 'ACTIVE')?.stage}</strong>.
+                You are reviewing finished engineering artifacts — approve to advance, or reject to return them to the originator.
+              </>
+            )}
           </div>
           <textarea
             value={comment}
@@ -751,7 +772,7 @@ function ECNReleaseModal({
   onRelease: () => Promise<void>;
 }) {
   const [releasing, setReleasing] = useState(false);
-  const [released, setReleased]   = useState(detail.status !== 'APPROVED');
+  const [released, setReleased] = useState(detail.status !== 'APPROVED');
   const ecn = detail.ecn;
 
   const revBumps = detail.parts.filter(p => p.rev && p.rev.from !== p.rev.to);
@@ -859,58 +880,58 @@ function ECNReleaseModal({
 
           {/* Distribution */}
           {ecn && ecn.distribution.length > 0 && (
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-              Distribution List <span className="normal-case tracking-normal font-normal">· notified on release</span>
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                Distribution List <span className="normal-case tracking-normal font-normal">· notified on release</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {ecn.distribution.map((name) => (
+                  <div key={name} className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-muted/50 border border-border">
+                    <ECOAvatar name={name} size={20} />
+                    <span className="text-[12px] text-foreground">{name}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {ecn.distribution.map((name) => (
-                <div key={name} className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-muted/50 border border-border">
-                  <ECOAvatar name={name} size={20} />
-                  <span className="text-[12px] text-foreground">{name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
           )}
 
           {/* Tasks */}
           {ecn && ecn.tasks.length > 0 && (
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-              Implementation Tasks ({ecn.tasks.length}){' '}
-              <span className="normal-case tracking-normal font-normal">· tracked to Verified</span>
-            </div>
-            <div className="flex flex-col gap-2">
-              {ecn.tasks.map((t, i) => {
-                const done = t.status === 'done';
-                return (
-                  <div key={i} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-muted/30 border border-border">
-                    <div
-                      className="w-4 h-4 rounded flex items-center justify-center shrink-0"
-                      style={{
-                        border: `1.5px solid ${done ? '#16A34A' : 'hsl(var(--muted-foreground)/0.4)'}`,
-                        background: done ? '#16A34A' : 'transparent',
-                      }}
-                    >
-                      {done && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-2">
+                Implementation Tasks ({ecn.tasks.length}){' '}
+                <span className="normal-case tracking-normal font-normal">· tracked to Verified</span>
+              </div>
+              <div className="flex flex-col gap-2">
+                {ecn.tasks.map((t, i) => {
+                  const done = t.status === 'done';
+                  return (
+                    <div key={i} className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg bg-muted/30 border border-border">
+                      <div
+                        className="w-4 h-4 rounded flex items-center justify-center shrink-0"
+                        style={{
+                          border: `1.5px solid ${done ? '#16A34A' : 'hsl(var(--muted-foreground)/0.4)'}`,
+                          background: done ? '#16A34A' : 'transparent',
+                        }}
+                      >
+                        {done && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
+                      </div>
+                      <span
+                        className="flex-1 text-[12px] text-foreground"
+                        style={{ textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.5 : 1 }}
+                      >
+                        {t.task}
+                      </span>
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground shrink-0">
+                        <ECOAvatar name={t.assignee} size={16} />
+                        {t.assignee}
+                      </div>
+                      <span className="text-[11px] text-muted-foreground w-10 text-right shrink-0">{t.due}</span>
                     </div>
-                    <span
-                      className="flex-1 text-[12px] text-foreground"
-                      style={{ textDecoration: done ? 'line-through' : 'none', opacity: done ? 0.5 : 1 }}
-                    >
-                      {t.task}
-                    </span>
-                    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground shrink-0">
-                      <ECOAvatar name={t.assignee} size={16} />
-                      {t.assignee}
-                    </div>
-                    <span className="text-[11px] text-muted-foreground w-10 text-right shrink-0">{t.due}</span>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
           )}
         </div>
 
@@ -960,8 +981,8 @@ function VerifyModal({
   onClose: () => void;
   onConfirm: (note: string) => Promise<void>;
 }) {
-  const [note, setNote]           = useState('');
-  const [saving, setSaving]       = useState(false);
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
   return (
     <div onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6">
       <div onClick={e => e.stopPropagation()} className="w-[480px] max-w-full bg-card border border-border rounded-xl shadow-2xl">
@@ -1021,12 +1042,12 @@ function headerActions(status: ECOStatus) {
   switch (status) {
     case 'DRAFT': return [{ k: 'edit', label: 'Edit Draft', icon: Edit, kind: ghost }, { k: 'submit', label: 'Submit for Review', icon: Send, kind: primary }];
     case 'IN_REVIEW': return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }];
-    case 'ON_HOLD': return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }, { k: 'resume', label: 'Resume Review', icon: RefreshCw, kind: primary }];
-    case 'REWORK': return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }, { k: 'resubmit', label: 'Revise & Resubmit', icon: RefreshCw, kind: primary }];
-    case 'APPROVED': return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }, { k: 'generate', label: 'Generate ECN', icon: GitBranch, kind: primary }];
+    case 'ON_HOLD': return [{ k: 'resume', label: 'Resume Review', icon: RefreshCw, kind: primary }];
+    case 'REWORK': return [{ k: 'resubmit', label: 'Revise & Resubmit', icon: RefreshCw, kind: primary }];
+    case 'APPROVED': return [{ k: 'generate', label: 'Generate ECN', icon: GitBranch, kind: primary }];
     case 'RELEASED': return [{ k: 'ecn', label: 'View ECN', icon: Download, kind: ghost }, { k: 'verify', label: 'Mark Verified', icon: Shield, kind: primary }];
     case 'VERIFIED': return [{ k: 'ecn', label: 'View ECN', icon: Download, kind: ghost }, { k: 'close', label: 'Close ECO', icon: Check, kind: primary }];
-    default: return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }];
+    default: return [];
   }
 }
 
@@ -1054,9 +1075,9 @@ export function ECODetailView({
   onBack: () => void;
   onEdit?: (eco: ECOListItem) => void;
 }) {
-  const [ecnOpen, setEcnOpen]     = useState(false);
+  const [ecnOpen, setEcnOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
-  const [toast, setToast]         = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
@@ -1065,25 +1086,40 @@ export function ECODetailView({
   const detail: ECODetail = liveRaw ? fromApiEcoDetail(liveRaw) : buildDetail(eco);
   const isFirstLoad = detailLoading && !liveRaw;
 
+  // Approval rights: the assigned approver acts normally; project managers/admins
+  // can act on the assignee's behalf (override). `awaitingMe` is server-computed
+  // and true only for the assignee.
+  const { user } = useAuth();
+  const { data: projectMembers = [] } = useProjectMembers(projectId);
+  const myRole = projectMembers.find(m => m.id === user?.id)?.role?.toLowerCase();
+  const canOverride = myRole === 'manager' || myRole === 'admin';
+  const canAct = detail.awaitingMe || canOverride;
+  const isOverride = !detail.awaitingMe && canOverride;
+
   // Mutations
   const decisionMutation = useECODecision(projectId, eco.id);
-  const submitMutation   = useSubmitECO(projectId, eco.id);
-  const releaseMutation  = useReleaseECO(projectId, eco.id);
-  const verifyMutation   = useVerifyECO(projectId, eco.id);
-  const closeMutation    = useCloseECO(projectId, eco.id);
-  const holdMutation     = useHoldECO(projectId, eco.id);
-  const resumeMutation   = useResumeECO(projectId, eco.id);
+  const submitMutation = useSubmitECO(projectId, eco.id);
+  const releaseMutation = useReleaseECO(projectId, eco.id);
+  const verifyMutation = useVerifyECO(projectId, eco.id);
+  const closeMutation = useCloseECO(projectId, eco.id);
+  const holdMutation = useHoldECO(projectId, eco.id);
+  const resumeMutation = useResumeECO(projectId, eco.id);
+  const exportSummaryCsv = useExportEcoSummaryCsv(projectId);
+  const exportDetailedCsv = useExportEcoDetailedCsv(projectId);
+
+  // Export dropdown state
+  const [exportOpen, setExportOpen] = useState(false);
 
   const sm = statusMeta(detail.status);
   const pm = priorityMeta(detail.priority);
   const cm = changeClassMeta(detail.changeClass);
 
   const actionPending: Record<string, boolean> = {
-    submit:   submitMutation.isPending,
+    submit: submitMutation.isPending,
     resubmit: submitMutation.isPending,
-    resume:   resumeMutation.isPending,
-    hold:     holdMutation.isPending,
-    close:    closeMutation.isPending,
+    resume: resumeMutation.isPending,
+    hold: holdMutation.isPending,
+    close: closeMutation.isPending,
   };
   const anyActionPending = Object.values(actionPending).some(Boolean);
 
@@ -1103,6 +1139,29 @@ export function ECODetailView({
     if (k === 'edit') { onEdit?.(eco); return; }
     if (k === 'generate' || k === 'ecn') { setEcnOpen(true); return; }
     if (k === 'verify') { setVerifyOpen(true); return; }
+    if (k === 'export') { setExportOpen(true); return; }
+    if (k === 'exportSummaryCsv') {
+      try {
+        const blob = await exportSummaryCsv.mutateAsync([eco.id]);
+        downloadEcoCsv(blob, 'summary', 1);
+        flash('ECO exported as CSV');
+      } catch {
+        flash('Failed to export');
+      }
+      setExportOpen(false);
+      return;
+    }
+    if (k === 'exportDetailedCsv') {
+      try {
+        const blob = await exportDetailedCsv.mutateAsync([eco.id]);
+        downloadEcoCsv(blob, 'detailed', 1);
+        flash('ECO exported as detailed CSV');
+      } catch {
+        flash('Failed to export');
+      }
+      setExportOpen(false);
+      return;
+    }
     if (k === 'submit' || k === 'resubmit') {
       try {
         await submitMutation.mutateAsync();
@@ -1122,7 +1181,6 @@ export function ECODetailView({
       try { await closeMutation.mutateAsync(); flash('ECO closed'); } catch { flash('Failed to close'); }
       return;
     }
-    flash('Action: ' + k);
   };
 
   return (
@@ -1174,6 +1232,39 @@ export function ECODetailView({
         <div className="flex gap-2 shrink-0">
           {headerActions(detail.status).map(a => {
             const thisLoading = !!actionPending[a.k];
+
+            // Special handling for export button
+            if (a.k === 'export') {
+              return (
+                <DropdownMenu key={a.k} open={exportOpen} onOpenChange={setExportOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      disabled={anyActionPending}
+                      className={cn(
+                        'flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-[13px] cursor-pointer transition-colors font-[inherit] disabled:opacity-60 disabled:cursor-not-allowed',
+                        a.kind === 'primary'
+                          ? 'font-semibold bg-primary hover:bg-primary/90 text-primary-foreground border-none'
+                          : 'font-medium bg-card text-foreground border border-border hover:bg-accent/50',
+                      )}
+                    >
+                      {thisLoading
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <a.icon className="w-3.5 h-3.5" strokeWidth={2} />}
+                      {a.label}
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => onAction('exportSummaryCsv')}>
+                      Export as CSV (Summary)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onAction('exportDetailedCsv')}>
+                      Export as CSV (Detailed)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            }
+
             return (
               <button
                 key={a.k}
@@ -1236,7 +1327,7 @@ export function ECODetailView({
       {isFirstLoad ? (
         <SkeletonApprovalPipeline />
       ) : (
-        <ApprovalPipeline detail={detail} onDecision={handleDecision} isPending={decisionMutation.isPending} />
+        <ApprovalPipeline detail={detail} onDecision={handleDecision} isPending={decisionMutation.isPending} canAct={canAct} isOverride={isOverride} />
       )}
 
       {/* Two-column content */}

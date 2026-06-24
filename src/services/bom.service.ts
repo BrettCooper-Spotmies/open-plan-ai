@@ -5,6 +5,7 @@ import type {
   ApiNodeResponse,
   ApiSummaryResponse,
   ApiReqLinkResponse,
+  ApiApprovalResponse,
 } from '@/features/projects/components/bomData';
 
 export interface CreateNodeDto {
@@ -60,6 +61,18 @@ export const bomService = {
 
   async removeRequirement(linkId: string): Promise<void> {
     await apiClient.delete(ENDPOINTS.BOM.REQ_LINK(linkId));
+  },
+
+  async approveNode(nodeId: string, comment?: string): Promise<ApiNodeResponse> {
+    return apiClient.post<ApiNodeResponse>(ENDPOINTS.BOM.APPROVE_NODE(nodeId), { comment });
+  },
+
+  async rejectNode(nodeId: string, reason: string, comment?: string): Promise<ApiNodeResponse> {
+    return apiClient.post<ApiNodeResponse>(ENDPOINTS.BOM.REJECT_NODE(nodeId), { reason, comment });
+  },
+
+  async getNodeApprovals(nodeId: string): Promise<ApiApprovalResponse[]> {
+    return apiClient.get<ApiApprovalResponse[]>(ENDPOINTS.BOM.NODE_APPROVALS(nodeId));
   },
 
   async exportCsv(projectId: string): Promise<Blob> {
