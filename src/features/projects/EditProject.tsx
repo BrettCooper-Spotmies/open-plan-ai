@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
     Dialog,
     DialogContent,
@@ -47,6 +48,7 @@ import {
     Target,
     Pencil,
     Trash2,
+    Check,
     Globe,
     ChevronDown,
     ChevronUp,
@@ -206,6 +208,7 @@ const EditProject = () => {
     const [modules, setModules] = useState<ProjectModule[]>([]);
     const [newModuleName, setNewModuleName] = useState("");
     const [editingModuleId, setEditingModuleId] = useState<string | null>(null);
+    const [editingModuleName, setEditingModuleName] = useState("");
 
     // Milestones
     const [milestones, setMilestones] = useState<ProjectMilestone[]>([]);
@@ -284,7 +287,7 @@ const EditProject = () => {
             setModules(modules.filter(m => m.id !== id));
             if (editingModuleId === id) {
                 setEditingModuleId(null);
-                setNewModuleName("");
+                setEditingModuleName("");
             }
         } else if (type === 'milestone') {
             const exists = milestones.some(m => m.id === id);
@@ -352,19 +355,27 @@ const EditProject = () => {
 
     const handleAddModule = () => {
         if (newModuleName.trim()) {
-            if (editingModuleId) {
-                setModules(modules.map(m => m.id === editingModuleId ? { ...m, name: newModuleName.trim() } : m));
-                setEditingModuleId(null);
-            } else {
-                setModules([...modules, { id: Math.random().toString(36).substr(2, 9), name: newModuleName.trim() }]);
-            }
+            setModules([...modules, { id: Math.random().toString(36).substr(2, 9), name: newModuleName.trim() }]);
             setNewModuleName("");
         }
     };
 
     const handleEditModule = (module: ProjectModule) => {
-        setNewModuleName(module.name);
         setEditingModuleId(module.id);
+        setEditingModuleName(module.name);
+    };
+
+    const handleSaveModuleEdit = () => {
+        if (editingModuleName.trim() && editingModuleId) {
+            setModules(modules.map(m => m.id === editingModuleId ? { ...m, name: editingModuleName.trim() } : m));
+        }
+        setEditingModuleId(null);
+        setEditingModuleName("");
+    };
+
+    const handleCancelModuleEdit = () => {
+        setEditingModuleId(null);
+        setEditingModuleName("");
     };
 
     const handleRemoveModule = (id: string) => {
@@ -673,6 +684,10 @@ const EditProject = () => {
         }
         if (newModuleName.trim()) {
             toast.error("You have an unsaved module. Please click 'Add Module' or clear the input.");
+            return;
+        }
+        if (editingModuleId) {
+            toast.error("You have an unsaved module edit. Please save or cancel it first.");
             return;
         }
         if (newLinkName.trim() || newLinkUrl.trim()) {
@@ -1491,44 +1506,64 @@ const EditProject = () => {
                                 onChange={(e) => setNewModuleName(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleAddModule()}
                             />
-                            {editingModuleId && (
-                                <Button 
-                                    variant="outline" 
-                                    onClick={() => {
-                                        setEditingModuleId(null);
-                                        setNewModuleName("");
-                                    }}
-                                >
-                                    <X className="h-4 w-4 mr-0" />
-                                </Button>
-                            )}
                             <Button onClick={handleAddModule} disabled={!newModuleName.trim()}>
-                                {editingModuleId ? <Settings className="h-4 w-4 mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
-                                {editingModuleId ? "Update" : "Add"}
+                                <Plus className="h-4 w-4 mr-1" />
+                                Add
                             </Button>
                         </div>
 
                         {modules.length > 0 && (
+                            <ScrollArea className={modules.length > 5 ? "h-[280px] pr-2" : ""}>
                             <div className="grid gap-2 pt-2">
-                                {modules.map((module) => (
-                                    <div key={module.id} className="flex items-center justify-between p-3 rounded-md border group">
-                                        <div className="flex items-center gap-3">
-                                            <Badge variant="outline" className="h-6 w-6 rounded-full flex items-center justify-center p-0">
-                                                {modules.indexOf(module) + 1}
-                                            </Badge>
-                                            <span className="text-sm font-medium">{module.name}</span>
+                                {modules.map((module) => {
+                                    const isEditing = editingModuleId === module.id;
+                                    return (
+                                        <div key={module.id} className="flex items-center justify-between p-3 rounded-md border group">
+                                            <div className="flex items-center gap-3 flex-1">
+                                                <Badge variant="outline" className="h-6 w-6 rounded-full flex items-center justify-center p-0 shrink-0">
+                                                    {modules.indexOf(module) + 1}
+                                                </Badge>
+                                                {isEditing ? (
+                                                    <Input
+                                                        autoFocus
+                                                        value={editingModuleName}
+                                                        onChange={(e) => setEditingModuleName(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') handleSaveModuleEdit();
+                                                            if (e.key === 'Escape') handleCancelModuleEdit();
+                                                        }}
+                                                        className="h-8"
+                                                    />
+                                                ) : (
+                                                    <span className="text-sm font-medium">{module.name}</span>
+                                                )}
+                                            </div>
+                                            <div className={`flex gap-1 ${isEditing ? '' : 'opacity-0 group-hover:opacity-100 transition-opacity'}`}>
+                                                {isEditing ? (
+                                                    <>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSaveModuleEdit} disabled={!editingModuleName.trim()}>
+                                                            <Check className="h-3 w-3" />
+                                                        </Button>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleCancelModuleEdit}>
+                                                            <X className="h-3 w-3" />
+                                                        </Button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditModule(module)}>
+                                                            <Pencil className="h-3 w-3" />
+                                                        </Button>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveModule(module.id)}>
+                                                            <Trash2 className="h-3 w-3" />
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditModule(module)}>
-                                                <Pencil className="h-3 w-3" />
-                                            </Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleRemoveModule(module.id)}>
-                                                <Trash2 className="h-3 w-3" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
+                            </ScrollArea>
                         )}
                     </CardContent>
                 </Card>
