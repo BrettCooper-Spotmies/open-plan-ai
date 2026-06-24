@@ -100,7 +100,7 @@ function normalizeTheme(value: unknown): ThemePreference {
 const Settings = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { user, refreshProfile, updatePassword, deleteAccount } = useAuth();
+  const { user, refreshProfile, updatePassword, deleteAccount, signOut } = useAuth();
   const profile = user;
   const { currentOrganization, createOrganization, isLoading: orgContextLoading } = useOrganization();
   const { theme, changeTheme } = useAppTheme();
@@ -315,8 +315,13 @@ const Settings = () => {
       if (error) {
         toast.error(error.message);
       } else {
-        toast.success('Password updated successfully');
+        toast.success('Password updated. Please sign in again.');
         setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        // Backend revokes all refresh tokens on password change, but the current
+        // access token cookie stays valid until it expires — sign out explicitly
+        // so the user is forced to re-authenticate immediately.
+        await signOut();
+        navigate('/login');
       }
     } catch (error) {
       logger.error('Error updating password:', error);
