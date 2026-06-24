@@ -47,6 +47,7 @@ export interface ApiEcoPipelineStep {
   decision: string;
   decidedAt: string | null;
   decidedBy: string | null;
+  decidedByName: string | null;
   note: string | null;
 }
 

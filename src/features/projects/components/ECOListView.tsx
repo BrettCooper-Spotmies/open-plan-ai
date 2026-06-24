@@ -1,17 +1,22 @@
 import { useState } from 'react';
 import {
   GitMerge, GitBranch, Clock, ClipboardCheck,
-  Boxes, Calendar, ChevronRight, CheckCircle,
+  Boxes, Calendar, ChevronRight, CheckCircle, Download, Loader2,
 } from 'lucide-react';
 import {
   ECOListItem, MAIN_STATUSES, ECO_TYPE_LABEL, REASON_LABEL,
   MODULE_COLORS,
   statusMeta, priorityMeta, changeClassMeta, effectivityText,
-  buildDetail, fromApiEcoListItem,
+  buildDetail, fromApiEcoListItem, fromApiEcoDetail,
 } from './ecoData';
 import { ECOAvatar, StatusPill } from './ECOShared';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { useECOList, useECOStats } from '@/hooks/useECOs';
+import {
+  useECOList, useECOStats, useECODetail,
+  useExportEcoSummaryCsv, useExportEcoDetailedCsv,
+} from '@/hooks/useECOs';
+import { downloadEcoCsv } from '@/features/reports/utils/exportUtils';
 
 // ── KPI stat card ─────────────────────────────────────────────────────────────
 
@@ -130,6 +135,15 @@ function SkeletonPreviewPanel() {
   );
 }
 
+function Toast({ message }: { message: string }) {
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-card border border-border rounded-lg px-5 py-2.5 text-[13px] font-medium text-foreground shadow-xl z-[300] flex items-center gap-2">
+      <CheckCircle className="w-3.5 h-3.5 shrink-0" style={{ color: '#16A34A' }} />
+      {message}
+    </div>
+  );
+}
+
 // ── List row ──────────────────────────────────────────────────────────────────
 
 function ECORow({
@@ -162,6 +176,15 @@ function ECORow({
             <span className="text-[10px] text-muted-foreground whitespace-nowrap">
               {ECO_TYPE_LABEL[eco.type]}
             </span>
+            {eco.awaitingMe && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap"
+                style={{ background: '#DC262618', color: '#DC2626', border: '1px solid #DC262640' }}
+              >
+                <ClipboardCheck className="w-2.5 h-2.5" />
+                Awaiting your action
+              </span>
+            )}
           </div>
           <div className="text-[14px] font-medium text-foreground truncate">{eco.title}</div>
         </div>
@@ -190,11 +213,12 @@ function ECORow({
 
 // ── Preview panel ─────────────────────────────────────────────────────────────
 
-function PreviewPanel({ eco, onOpen }: { eco: ECOListItem; onOpen: () => void }) {
+function PreviewPanel({ projectId, eco, onOpen }: { projectId: string; eco: ECOListItem; onOpen: () => void }) {
   const sm = statusMeta(eco.status);
   const pm = priorityMeta(eco.priority);
   const cm = changeClassMeta(eco.changeClass);
-  const detail = buildDetail(eco);
+  const { data: liveRaw } = useECODetail(projectId, eco.id);
+  const detail = liveRaw ? fromApiEcoDetail(liveRaw) : buildDetail(eco);
 
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden flex flex-col">
@@ -310,6 +334,13 @@ export function ECOListView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [fStatus, setFStatus]     = useState<string>('ALL');
   const [fPriority, setFPriority] = useState<string>('ALL');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
+
+  const exportSummaryCsv = useExportEcoSummaryCsv(projectId);
+  const exportDetailedCsv = useExportEcoDetailedCsv(projectId);
+  const exporting = exportSummaryCsv.isPending || exportDetailedCsv.isPending;
 
   const apiFilters: Record<string, string> = {};
   if (fStatus   !== 'ALL') apiFilters.status   = fStatus.toLowerCase();
@@ -322,6 +353,20 @@ export function ECOListView({
 
   const effectiveSelectedId = selectedId ?? list[0]?.id ?? null;
   const selected = list.find(e => e.id === effectiveSelectedId) ?? list[0] ?? null;
+
+  const handleExport = async (kind: 'summary' | 'detailed') => {
+    if (!selected) return;
+    setExportOpen(false);
+    try {
+      const blob = kind === 'summary'
+        ? await exportSummaryCsv.mutateAsync([selected.id])
+        : await exportDetailedCsv.mutateAsync([selected.id]);
+      downloadEcoCsv(blob, kind, 1);
+      flash(`${selected.num} exported as CSV`);
+    } catch {
+      flash('Failed to export');
+    }
+  };
 
   const Sel = ({
     value, onChange, opts, allLabel,
@@ -377,6 +422,28 @@ export function ECOListView({
               <div className="flex gap-2 items-center">
                 <Sel value={fStatus}   onChange={setFStatus}   opts={MAIN_STATUSES}                          allLabel="All statuses" />
                 <Sel value={fPriority} onChange={setFPriority} opts={['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']} allLabel="All priorities" />
+                <DropdownMenu open={exportOpen} onOpenChange={setExportOpen}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      disabled={!selected || exporting}
+                      title={selected ? `Export ${selected.num}` : 'Select a change order to export'}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-medium bg-card text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {exporting
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Download className="w-3.5 h-3.5" />}
+                      Export
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleExport('summary')}>
+                      Export as CSV (Summary)
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleExport('detailed')}>
+                      Export as CSV (Detailed)
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
             <div className="p-2.5 flex flex-col gap-2">
@@ -404,7 +471,7 @@ export function ECOListView({
           {listLoading ? (
             <SkeletonPreviewPanel />
           ) : selected ? (
-            <PreviewPanel eco={selected} onOpen={() => onOpen(selected)} />
+            <PreviewPanel projectId={projectId} eco={selected} onOpen={() => onOpen(selected)} />
           ) : (
             <div className="bg-card border border-border rounded-lg p-8 text-center text-[12px] text-muted-foreground">
               Select a change order to preview
@@ -412,6 +479,8 @@ export function ECOListView({
           )}
         </div>
       </div>
+
+      {toast && <Toast message={toast} />}
     </div>
   );
 }

@@ -181,6 +181,9 @@ export interface PipelineStep {
   justification?: string;
   decision?: DecisionType;
   date?: string;
+  note?: string | null;
+  decidedById?: string | null;
+  decidedByName?: string | null;
 }
 
 export interface DiffRow {
@@ -714,12 +717,28 @@ function fromApiStep(raw: ApiEcoPipelineStep): PipelineStep {
     stage:         raw.stageLabel,
     name:          raw.approverName ?? '—',
     role:          raw.approverRole ?? '—',
+    approverId:    raw.approverUserId ?? null,
     optional:      raw.isOptional,
     optionalReason: raw.optionalReason ?? undefined,
     justification:  raw.justification ?? undefined,
     decision:       decUp,
     date,
+    note:          raw.note ?? null,
+    decidedById:   raw.decidedBy ?? null,
+    decidedByName: raw.decidedByName ?? null,
   };
+}
+
+function rejectionsFromSteps(steps: ApiEcoPipelineStep[]): Rejection[] {
+  return steps
+    .filter((s) => s.decision === 'rejected')
+    .sort((a, b) => (a.decidedAt ?? '').localeCompare(b.decidedAt ?? ''))
+    .map((s) => ({
+      stage:  s.stageLabel,
+      by:     s.decidedByName ?? s.approverName ?? '—',
+      when:   s.decidedAt ? fmtDate(s.decidedAt) : '—',
+      reason: s.note ?? '',
+    }));
 }
 
 function fromApiDiffRow(raw: ApiEcoDiffRow): DiffRow {
@@ -748,7 +767,7 @@ export function fromApiEcoDetail(raw: ApiEcoDetail): ECODetail {
     modules:  raw.modules.map(m => m.name),
     parts:    raw.parts.map(fromApiPart),
     steps:    raw.steps.map(fromApiStep),
-    rejections: [],
+    rejections: rejectionsFromSteps(raw.steps),
     diff:     raw.diffRows.map(fromApiDiffRow),
     impact: {
       schedule:     (raw.scheduleImpact?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,

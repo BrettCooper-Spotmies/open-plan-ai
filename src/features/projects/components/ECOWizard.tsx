@@ -246,7 +246,7 @@ export function ECOWizard({
     return reasonOk && !!p.approverId;
   });
 
-  const canSubmit = basics.title.trim() && items.length >= 1 && pipeline.length >= 1 && pipelineValid;
+  const canSubmit = basics.title.trim() && items.length >= 1 && pipeline.length >= 2 && pipelineValid;
 
   const validateStep = (s: number): boolean => {
     const e: Record<string, string> = {};
@@ -651,8 +651,18 @@ export function ECOWizard({
           Class I — Safety/Regulatory: QA and Final Approval are locked as mandatory and cannot be removed.
         </div>
       )}
+      {pipeline.length < 2 && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+          style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
+        >
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          At least one approver besides the Originator is required — this ECO can&apos;t be submitted with nobody to review it.
+        </div>
+      )}
       {pipeline.map((p, idx) => {
         const locked = lockStage(p.stage);
+        const removalLocked = locked || pipeline.length <= 2;
         const moved = stageMoved(p, idx);
         const needsReason = p.optional || moved;
         return (
@@ -728,8 +738,8 @@ export function ECOWizard({
                   <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
                 </button>
               </div>
-              {locked ? (
-                <div className="w-4 flex justify-center">
+              {removalLocked ? (
+                <div className="w-4 flex justify-center" title={locked ? undefined : 'At least one non-Originator approver is required'}>
                   <Lock className="w-3 h-3 text-muted-foreground/50" />
                 </div>
               ) : (
