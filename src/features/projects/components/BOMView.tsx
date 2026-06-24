@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
-  CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check, Download,
+  CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check, Download, ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -624,82 +624,139 @@ function Meta({ label, value }: { label: string; value: string }) {
   );
 }
 
-function GridView({ rows, onOpen, totalCount, formatCurrency }: { rows: BOMNode[]; onOpen: (id: string) => void; totalCount: number; formatCurrency: (n: number) => string }) {
-  const [hovered, setHovered] = useState<string | null>(null);
+function GridBreadcrumb({ path, onJump }: { path: BOMNode[]; onJump: (depth: number) => void }) {
+  return (
+    <div className="px-5 pt-4 pb-1 flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+      <button
+        onClick={() => onJump(0)}
+        className={cn('hover:text-foreground transition-colors cursor-pointer', path.length === 0 ? 'text-foreground font-semibold' : 'font-medium')}
+      >
+        BOM
+      </button>
+      {path.map((node, i) => (
+        <span key={node.id} className="flex items-center gap-1.5">
+          <ChevronRight className="w-3 h-3" />
+          <button
+            onClick={() => onJump(i + 1)}
+            className={cn('hover:text-foreground transition-colors font-mono cursor-pointer', i === path.length - 1 ? 'text-foreground font-semibold' : 'font-medium')}
+          >
+            {node.pn}
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
 
-  if (rows.length === 0) {
-    return (
-      <div className="flex-1 border-t border-border overflow-y-auto">
-        <div className="py-16 text-center text-muted-foreground">
-          <Search className="w-8 h-8 mx-auto mb-3 opacity-30" />
-          <div className="text-sm">No parts match your filters</div>
-        </div>
-      </div>
-    );
-  }
+function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCurrency }: { rows: BOMNode[]; rootNodes: BOMNode[]; filtersActive: boolean; onOpen: (id: string) => void; totalCount: number; formatCurrency: (n: number) => string }) {
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [drillPath, setDrillPath] = useState<BOMNode[]>([]);
+
+  const current = drillPath[drillPath.length - 1];
+  const displayRows = filtersActive ? rows : (current?.children ?? rootNodes);
+
+  const handleCardClick = (row: BOMNode, hasChildren: boolean) => {
+    if (!filtersActive && hasChildren) {
+      setDrillPath(prev => [...prev, row]);
+    } else {
+      onOpen(row.id);
+    }
+  };
 
   return (
     <div className="flex-1 border-t border-border overflow-y-auto">
-      <div className="p-5 grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(248px, 1fr))' }}>
-        {rows.map(row => {
-          const meta = BOM_CAT_META[row.cat] ?? BOM_CAT_META.assembly;
-          const isH = hovered === row.id;
-          return (
-            <div
-              key={row.id}
-              onClick={() => onOpen(row.id)}
-              onMouseEnter={() => setHovered(row.id)}
-              onMouseLeave={() => setHovered(null)}
-              className="bg-card border rounded-xl overflow-hidden cursor-pointer transition-all"
-              style={{
-                borderColor: isH ? 'hsl(var(--foreground) / 0.25)' : 'var(--border)',
-                transform: isH ? 'translateY(-2px)' : undefined,
-              }}
-            >
-              {/* Thumbnail */}
-              <div className="relative p-2.5">
-                <PartThumb cat={row.cat} big />
-                <span className="absolute top-4 left-4 px-1.5 py-0.5 rounded text-[10px] font-semibold"
-                  style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', color: meta.tint, border: `1px solid ${meta.tint}40` }}>
-                  {row.levelLabel ?? `L${row.level}`}
-                </span>
-                <span className="absolute top-4 right-4"><BOMStatusPill status={row.status} /></span>
-              </div>
-              {/* Body */}
-              <div className="px-3.5 pb-3.5 pt-0.5">
-                <div className="text-[11px] font-medium font-mono mb-1" className="text-foreground">{row.pn}</div>
-                <div className="text-[13.5px] font-semibold text-foreground leading-snug mb-2.5 line-clamp-2 min-h-[35px]">
-                  {row.desc}
-                </div>
-                <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 mb-2.5">
-                  <Meta label="Qty" value={`${row.qty} ${row.uom}`} />
-                  <Meta label="Unit Price" value={formatCurrency(row.price)} />
-                  <Meta label="Manufacturer" value={row.manufacturer} />
-                  <Meta label="Lead Time" value={formatLeadTime(row.leadTime)} />
-                </div>
-                {/* Owner row */}
-                <div className="flex items-center gap-1.5 mb-2.5 py-1.5 px-2 rounded-md bg-muted/40 border border-border/50">
-                  <User className="w-3 h-3 text-muted-foreground shrink-0" />
-                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide shrink-0">Owner</span>
-                  <span className="ml-auto">
-                    <OwnerBadge name={row.owner} size="xs" />
-                  </span>
-                </div>
-                <div className="flex items-center justify-between pt-2.5 border-t border-border">
-                  <div className="flex gap-1 flex-wrap overflow-hidden">
-                    {row.req.length === 0
-                      ? <span className="text-[11px] text-muted-foreground">No traceability</span>
-                      : row.req.slice(0, 2).map(r => <ReqTag key={r} label={r} />)}
-                    {row.req.length > 2 && <span className="text-[11px] text-muted-foreground self-center">+{row.req.length - 2}</span>}
+      {!filtersActive && <GridBreadcrumb path={drillPath} onJump={depth => setDrillPath(prev => prev.slice(0, depth))} />}
+      {displayRows.length === 0 ? (
+        <div className="py-16 text-center text-muted-foreground">
+          <Search className="w-8 h-8 mx-auto mb-3 opacity-30" />
+          <div className="text-sm">{filtersActive ? 'No parts match your filters' : 'No sub-components here'}</div>
+        </div>
+      ) : (
+        <>
+          <div className="p-5 grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(248px, 1fr))' }}>
+            {displayRows.map(row => {
+              const meta = BOM_CAT_META[row.cat] ?? BOM_CAT_META.assembly;
+              const isH = hovered === row.id;
+              const hasChildren = !!(row.children?.length);
+              return (
+                <div
+                  key={row.id}
+                  onClick={() => handleCardClick(row, hasChildren)}
+                  onMouseEnter={() => setHovered(row.id)}
+                  onMouseLeave={() => setHovered(null)}
+                  className="bg-card border rounded-xl overflow-hidden cursor-pointer transition-all"
+                  style={{
+                    borderColor: isH ? 'hsl(var(--foreground) / 0.25)' : 'var(--border)',
+                    transform: isH ? 'translateY(-2px)' : undefined,
+                  }}
+                >
+                  {/* Thumbnail */}
+                  <div className="relative p-2.5">
+                    <PartThumb cat={row.cat} big />
+                    <span className="absolute top-4 left-4 px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                      style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', color: meta.tint, border: `1px solid ${meta.tint}40` }}>
+                      {row.levelLabel ?? `L${row.level}`}
+                    </span>
+                    <span className="absolute top-4 right-4"><BOMStatusPill status={row.status} /></span>
+                    {isH && (
+                      <button
+                        onClick={e => { e.stopPropagation(); onOpen(row.id); }}
+                        className="absolute inset-2.5 flex items-center justify-center rounded-lg bg-black/45 transition-opacity"
+                      >
+                        <span className="inline-flex items-center gap-1.5 bg-white text-foreground text-xs font-medium px-3 py-1.5 rounded-md shadow-sm cursor-pointer">
+                          <ExternalLink className="w-3.5 h-3.5" /> Open Details
+                        </span>
+                      </button>
+                    )}
                   </div>
-                  <span className="text-[11px] font-semibold text-muted-foreground bg-muted border border-border rounded px-1.5 py-0.5 shrink-0">{row.rev}</span>
+                  {/* Body */}
+                  <div className="px-3.5 pb-3.5 pt-0.5">
+                    <div className="text-[11px] font-medium font-mono mb-1 text-foreground">{row.pn}</div>
+                    <div className="text-[13.5px] font-semibold text-foreground leading-snug mb-2.5 line-clamp-2 min-h-[35px]">
+                      {row.desc}
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 mb-2.5">
+                      <Meta label="Qty" value={`${row.qty} ${row.uom}`} />
+                      <Meta label="Unit Price" value={formatCurrency(row.price)} />
+                      <Meta label="Manufacturer" value={row.manufacturer} />
+                      <Meta label="Lead Time" value={formatLeadTime(row.leadTime)} />
+                    </div>
+                    {/* Owner row */}
+                    <div className="flex items-center gap-1.5 mb-2.5 py-1.5 px-2 rounded-md bg-muted/40 border border-border/50">
+                      <User className="w-3 h-3 text-muted-foreground shrink-0" />
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wide shrink-0">Owner</span>
+                      <span className="ml-auto">
+                        <OwnerBadge name={row.owner} size="xs" />
+                      </span>
+                    </div>
+                    {hasChildren && !filtersActive && (
+                      <div className="flex items-center gap-1.5 mb-2.5 text-[11px] font-medium text-primary">
+                        <Layers className="w-3 h-3" />
+                        {row.children!.length} sub-component{row.children!.length !== 1 ? 's' : ''}
+                        <ChevronRight className="w-3 h-3 ml-auto" />
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between pt-2.5 border-t border-border">
+                      <div className="flex gap-1 flex-wrap overflow-hidden">
+                        {row.req.length === 0
+                          ? <span className="text-[11px] text-muted-foreground">No traceability</span>
+                          : row.req.slice(0, 2).map(r => <ReqTag key={r} label={r} />)}
+                        {row.req.length > 2 && <span className="text-[11px] text-muted-foreground self-center">+{row.req.length - 2}</span>}
+                      </div>
+                      <span className="text-[11px] font-semibold text-muted-foreground bg-muted border border-border rounded px-1.5 py-0.5 shrink-0">{row.rev}</span>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <div className="px-6 pb-5 text-xs text-muted-foreground">Showing {rows.length} of {totalCount} total parts</div>
+              );
+            })}
+          </div>
+          <div className="px-6 pb-5 text-xs text-muted-foreground">
+            {filtersActive
+              ? `Showing ${displayRows.length} of ${totalCount} total parts`
+              : `Showing ${displayRows.length} component${displayRows.length !== 1 ? 's' : ''}${current ? ` under ${current.pn}` : ''}`}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1116,7 +1173,7 @@ export function BOMView({
         />
       )}
       {view === 'grid' && (
-        <GridView rows={gridRows} onOpen={setSelected} totalCount={totalCount} formatCurrency={formatCurrency} />
+        <GridView rows={gridRows} rootNodes={rootNodes} filtersActive={filtersActive} onOpen={setSelected} totalCount={totalCount} formatCurrency={formatCurrency} />
       )}
       {view === 'map' && (
         <BOMMapView nodes={rootNodes} onOpen={setSelected} pred={pred} filtersActive={filtersActive} />

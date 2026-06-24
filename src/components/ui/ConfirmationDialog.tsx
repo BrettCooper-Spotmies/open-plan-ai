@@ -32,7 +32,17 @@ export function ConfirmationDialog({
 }: ConfirmationDialogProps) {
     return (
         <AlertDialog open={open} onOpenChange={onOpenChange}>
-            <AlertDialogContent className="sm:max-w-[420px]">
+            <AlertDialogContent
+                className="sm:max-w-[420px]"
+                onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        onConfirm();
+                        onOpenChange(false);
+                    }
+                }}
+            >
                 <AlertDialogHeader>
                     <AlertDialogTitle>{title}</AlertDialogTitle>
                     <AlertDialogDescription>

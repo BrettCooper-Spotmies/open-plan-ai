@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { attachmentsService } from '@/services/attachments.service';
-import { format, isBefore, startOfToday, parseISO } from 'date-fns';
+import { format, isBefore, parseISO } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -222,10 +222,13 @@ export const TaskDetailModal = ({
   const [, setIsLoadingComments] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [newComment, setNewComment] = useState('');
-  const [selectedBlockingTask, setSelectedBlockingTask] = useState<string>('');
-  const [selectedBlockedByTask, setSelectedBlockedByTask] = useState<string>('');
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentValue, setEditingCommentValue] = useState('');
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
   const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false);
+  const [isBlockingTaskPopoverOpen, setIsBlockingTaskPopoverOpen] = useState(false);
+  const [isBlockedByTaskPopoverOpen, setIsBlockedByTaskPopoverOpen] = useState(false);
   const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
   const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
@@ -689,6 +692,63 @@ export const TaskDetailModal = ({
       }));
     }
   };
+
+  const handleStartEditComment = (comment: Comment) => {
+    setEditingCommentId(comment.id);
+    setEditingCommentValue(comment.content);
+  };
+
+  const handleCancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingCommentValue('');
+  };
+
+  const handleSaveEditComment = async () => {
+    if (!editingCommentId || !editingCommentValue.trim()) return;
+    const commentId = editingCommentId;
+    const content = editingCommentValue.trim();
+
+    if (mode !== 'create') {
+      try {
+        await commentsService.update(commentId, content);
+      } catch (error) {
+        logger.error('Failed to update comment:', error);
+        toast.error('Failed to update comment');
+        return;
+      }
+    }
+
+    setEditedTask(prev => ({
+      ...prev,
+      comments: (prev.comments || []).map(c =>
+        c.id === commentId ? { ...c, content } : c
+      ),
+    }));
+    setEditingCommentId(null);
+    setEditingCommentValue('');
+  };
+
+  const handleDeleteComment = async () => {
+    if (!deletingCommentId) return;
+    const commentId = deletingCommentId;
+    setDeletingCommentId(null);
+
+    if (mode !== 'create') {
+      try {
+        await commentsService.delete(commentId);
+      } catch (error) {
+        logger.error('Failed to delete comment:', error);
+        toast.error('Failed to delete comment');
+        return;
+      }
+    }
+
+    setEditedTask(prev => ({
+      ...prev,
+      comments: (prev.comments || []).filter(c => c.id !== commentId),
+    }));
+  };
+
   const availableTasksForBlocking = allTasks.filter(
     t => !dependencyExcludedTaskIds.has(t.id)
   );
@@ -704,7 +764,6 @@ export const TaskDetailModal = ({
     if (taskToUpdate && !dependencyExcludedTaskIds.has(taskId)) {
       setLocalBlockingToIds(prev => [...prev, taskId]);
     }
-    setSelectedBlockingTask('');
   };
 
   const handleUpdateTask = async () => {
@@ -890,7 +949,6 @@ export const TaskDetailModal = ({
       };
       return updated;
     });
-    setSelectedBlockedByTask('');
   };
 
   // Removing from "Blocked By" - will be handled in batch updates
@@ -1241,7 +1299,6 @@ export const TaskDetailModal = ({
                         mode="single"
                         selected={editedTask.startDate ? new Date(editedTask.startDate) : undefined}
                         onSelect={(date) => handleFieldChange('startDate', toDateOnly(date || undefined))}
-                        disabled={{ before: startOfToday() }}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
@@ -1277,8 +1334,6 @@ export const TaskDetailModal = ({
                         selected={editedTask.dueDate ? new Date(editedTask.dueDate) : undefined}
                         onSelect={(date) => handleFieldChange('dueDate', toDateOnly(date || undefined))}
                         disabled={(date) => {
-                          const today = startOfToday();
-                          if (isBefore(date, today)) return true;
                           if (editedTask.startDate) {
                             return isBefore(date, parseISO(editedTask.startDate));
                           }
@@ -1645,30 +1700,43 @@ export const TaskDetailModal = ({
 
                   <div className="space-y-2">
                     <div className="flex gap-2">
-                      <Select
-                        value={selectedBlockingTask}
-                        onValueChange={(value) => {
-                          setSelectedBlockingTask(value);
-                          handleAddBlockingTask(value);
-                        }}
-                      >
-                        <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Select task..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableTasksForBlocking.length === 0 ? (
-                            <SelectItem value="__no_tasks_blocking__" disabled>
-                              No tasks registered yet.
-                            </SelectItem>
-                          ) : (
-                            availableTasksForBlocking.map((t) => (
-                              <SelectItem key={t.id} value={t.id}>
-                                {t.title}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={isBlockingTaskPopoverOpen} onOpenChange={setIsBlockingTaskPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={isBlockingTaskPopoverOpen}
+                            className="flex-1 justify-start font-normal text-muted-foreground"
+                          >
+                            Select task...
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search tasks..." />
+                            <CommandList>
+                              <CommandEmpty>
+                                {availableTasksForBlocking.length === 0 ? "No tasks registered yet." : "No results found."}
+                              </CommandEmpty>
+                              <CommandGroup>
+                                {availableTasksForBlocking.map((t) => (
+                                  <CommandItem
+                                    key={t.id}
+                                    value={t.title}
+                                    onSelect={() => {
+                                      handleAddBlockingTask(t.id);
+                                      setIsBlockingTaskPopoverOpen(false);
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    {t.title}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
 
                     {blockingToTaskIds.map((taskId) => {
@@ -1710,30 +1778,43 @@ export const TaskDetailModal = ({
 
                   <div className="space-y-2">
                     <div className="flex gap-2">
-                      <Select
-                        value={selectedBlockedByTask}
-                        onValueChange={(value) => {
-                          setSelectedBlockedByTask(value);
-                          handleAddBlockedByTask(value);
-                        }}
-                      >
-                        <SelectTrigger className="flex-1">
-                          <SelectValue placeholder="Select task..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableTasksForBlockedBy.length === 0 ? (
-                            <SelectItem value="__no_tasks_blocked_by__" disabled>
-                              No tasks registered yet.
-                            </SelectItem>
-                          ) : (
-                            availableTasksForBlockedBy.map((t) => (
-                              <SelectItem key={t.id} value={t.id}>
-                                {t.title}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={isBlockedByTaskPopoverOpen} onOpenChange={setIsBlockedByTaskPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={isBlockedByTaskPopoverOpen}
+                            className="flex-1 justify-start font-normal text-muted-foreground"
+                          >
+                            Select task...
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search tasks..." />
+                            <CommandList>
+                              <CommandEmpty>
+                                {availableTasksForBlockedBy.length === 0 ? "No tasks registered yet." : "No results found."}
+                              </CommandEmpty>
+                              <CommandGroup>
+                                {availableTasksForBlockedBy.map((t) => (
+                                  <CommandItem
+                                    key={t.id}
+                                    value={t.title}
+                                    onSelect={() => {
+                                      handleAddBlockedByTask(t.id);
+                                      setIsBlockedByTaskPopoverOpen(false);
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    {t.title}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
 
                     {editedTask.blockedBy.map((taskId) => {
@@ -1783,24 +1864,73 @@ export const TaskDetailModal = ({
                   </p>
                 )} */}
 
-                {comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="text-xs">
-                        {comment.author.initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{comment.author.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}
-                        </span>
+                {comments.map((comment) => {
+                  const isOwnComment = profile?.id === comment.author.id;
+                  const isEditingThisComment = editingCommentId === comment.id;
+                  return (
+                    <div key={comment.id} className="flex gap-3 group">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs">
+                          {comment.author.initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{comment.author.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}
+                          </span>
+                          {isOwnComment && !isEditingThisComment && (
+                            <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                className="rounded p-0.5 text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground"
+                                onClick={() => handleStartEditComment(comment)}
+                                aria-label="Edit comment"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded p-0.5 text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
+                                onClick={() => setDeletingCommentId(comment.id)}
+                                aria-label="Delete comment"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {isEditingThisComment ? (
+                          <div className="mt-1 space-y-2">
+                            <Textarea
+                              autoFocus
+                              value={editingCommentValue}
+                              onChange={(e) => setEditingCommentValue(e.target.value)}
+                              className="min-h-[60px] text-sm"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                  e.preventDefault();
+                                  handleSaveEditComment();
+                                }
+                              }}
+                            />
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={handleSaveEditComment} disabled={!editingCommentValue.trim()}>
+                                Save
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={handleCancelEditComment}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground mt-1">{comment.content}</p>
+                        )}
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1">{comment.content}</p>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 <div className="flex gap-3">
                   <Avatar className="h-8 w-8">
@@ -1866,6 +1996,15 @@ export const TaskDetailModal = ({
         onConfirm={handleDelete}
         title="Delete Task"
         description="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+        variant="destructive"
+      />
+      <ConfirmationDialog
+        open={!!deletingCommentId}
+        onOpenChange={(open) => !open && setDeletingCommentId(null)}
+        onConfirm={handleDeleteComment}
+        title="Delete Comment"
+        description="Are you sure you want to delete this comment? This action cannot be undone."
         confirmText="Delete"
         variant="destructive"
       />

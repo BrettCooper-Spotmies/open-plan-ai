@@ -526,9 +526,7 @@ export default function ProjectDetail() {
     if (!project?.tasks || !searchQuery.trim()) return project?.tasks || [];
     const query = searchQuery.toLowerCase();
     return project.tasks.filter(task =>
-      task.title.toLowerCase().includes(query) ||
-      task.description?.toLowerCase().includes(query) ||
-      task.tags?.some(tag => tag.toLowerCase().includes(query))
+      task.title.toLowerCase().includes(query)
     );
   }, [project?.tasks, searchQuery]);
 

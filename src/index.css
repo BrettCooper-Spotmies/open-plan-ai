@@ -244,4 +244,10 @@
     max-width: 100% !important;
     padding: 0 !important;
   }
+
+  /* Hide browser-native password reveal button (Edge/IE) so only the custom one shows */
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear {
+    display: none;
+  }
 }

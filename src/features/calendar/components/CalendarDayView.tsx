@@ -19,6 +19,7 @@ export const CalendarDayView: React.FC<CalendarDayViewProps> = ({
   onEventClick,
 }) => {
   const dayEvents = getEventsForDate(events, date);
+  const isPast = date < new Date(new Date().setHours(0, 0, 0, 0));
 
   // Group by type
   const milestones = dayEvents.filter((e) => e.type === 'milestone');
@@ -70,7 +71,9 @@ export const CalendarDayView: React.FC<CalendarDayViewProps> = ({
             </div>
             <h3 className="font-medium text-foreground mb-1">No events scheduled</h3>
             <p className="text-sm text-muted-foreground">
-              There are no tasks, milestones, or issues due on this day.
+              {isPast
+                ? 'There were no tasks, milestones, or issues on this day.'
+                : 'There are no tasks, milestones, or issues due on this day.'}
             </p>
           </div>
         ) : (
