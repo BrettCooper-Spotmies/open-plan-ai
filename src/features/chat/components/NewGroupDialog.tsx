@@ -83,6 +83,9 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
 
   const reset = () => {
     setStep(1);
+    setName('');
+    setDescription('');
+    setSelectedIds(new Set());
     setSearch('');
     setAvatarUrl('');
     setAvatarError(false);
