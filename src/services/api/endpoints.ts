@@ -50,6 +50,7 @@ export const ENDPOINTS = {
     STAGE: (id: string) => `/projects/${id}/stage`,
     MEMBERS: (id: string) => `/projects/${id}/members`,
     MEMBER: (projectId: string, userId: string) => `/projects/${projectId}/members/${userId}`,
+    CHAT: (id: string) => `/projects/${id}/chat`,
     TEAM: (id: string) => `/projects/${id}/team`,
     LINKS: (id: string) => `/projects/${id}/links`,
     ACTIVITIES: (id: string) => `/projects/${id}/activities`,
@@ -89,6 +90,13 @@ export const ENDPOINTS = {
     TASKS: (id: string) => `/milestones/${id}/tasks`,
     TASK: (milestoneId: string, taskId: string) => `/milestones/${milestoneId}/tasks/${taskId}`,
     GENERATE_TASKS: (id: string) => `/milestones/${id}/generate-tasks`,
+  },
+  // Task Columns
+  TASK_COLUMNS: {
+    LIST: (projectId: string) => `/projects/${projectId}/task-columns`,
+    CREATE: (projectId: string) => `/projects/${projectId}/task-columns`,
+    REORDER: (projectId: string) => `/projects/${projectId}/task-columns/reorder`,
+    BY_ID: (id: string) => `/task-columns/${id}`,
   },
   // Issues
   ISSUES: {
@@ -178,6 +186,7 @@ export const ENDPOINTS = {
   // Uploads
   UPLOADS: {
     AVATAR: '/uploads/avatar',
+    GROUP_AVATAR: '/uploads/group-avatar',
     ATTACHMENTS: '/uploads/attachments',
     ATTACHMENT_LINK: '/uploads/attachments/link',
     ATTACHMENT: (id: string) => `/uploads/attachments/${id}`,

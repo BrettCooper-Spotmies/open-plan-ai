@@ -512,15 +512,15 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
           </Button>
 
           {/* Textarea */}
-          <div className="flex-1 min-w-0 relative px-0.5">
+          <div className="flex-1 min-w-0 relative px-0.5 flex items-center min-h-[28px] md:min-h-[32px]">
             <textarea
               ref={textareaRef}
               value={value}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
-              placeholder={isMobile ? 'Type a message...' : 'Type a message... Use @ to mention'}
+              placeholder={isMobile || otherMembers.length <= 1 ? 'Type a message...' : 'Type a message... Use @ to mention'}
               rows={1}
-              className="w-full resize-none bg-transparent py-1.5 text-sm leading-5 min-h-[32px] max-h-[140px] placeholder:text-muted-foreground/90 focus-visible:outline-none"
+              className="w-full resize-none bg-transparent text-sm leading-5 max-h-[140px] placeholder:text-muted-foreground/90 focus-visible:outline-none"
               disabled={readOnly}
             />
             {showCharCount && (

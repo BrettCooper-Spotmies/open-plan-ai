@@ -127,9 +127,7 @@ const Team = () => {
   const filteredMembers = members.filter(
     (member) =>
       member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      member.department?.toLowerCase().includes(searchQuery.toLowerCase())
+      member.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const stats = {
@@ -461,7 +459,7 @@ const Team = () => {
           <div className="relative w-full sm:w-80">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search members..."
+              placeholder="Search by Name or Email"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"

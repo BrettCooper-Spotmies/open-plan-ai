@@ -179,10 +179,7 @@ export default function Integrations() {
     return SECTIONS.map((section) => ({
       title: section.title,
       items: query
-        ? section.items.filter(
-            (item) =>
-              item.name.toLowerCase().includes(query) || item.description.toLowerCase().includes(query)
-          )
+        ? section.items.filter((item) => item.name.toLowerCase().includes(query))
         : section.items,
     })).filter((section) => section.items.length > 0);
   }, [search]);

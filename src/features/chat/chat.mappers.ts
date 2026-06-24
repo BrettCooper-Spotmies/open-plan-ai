@@ -86,6 +86,9 @@ export function mapMessage(
   const senderAvatar = resolveFileUrl(rawSenderAvatar) ?? rawSenderAvatar ?? undefined;
   const senderInitials = senderProfile?.initials ?? m.sender?.initials ?? senderName?.slice(0, 2)?.toUpperCase() ?? '??';
 
+  const fileUrl = m.fileUrl ?? m.file_url ?? null;
+  const resolvedFileUrl = fileUrl ? (resolveFileUrl(fileUrl) ?? fileUrl) : undefined;
+
   return {
     id: m.id,
     conversationId,
@@ -95,7 +98,14 @@ export function mapMessage(
     senderInitials,
     contentType: contentType as MessageContentType,
     content: m.content,
-    attachments: [],
+    attachments: resolvedFileUrl ? [{
+      id: m.id,
+      type: contentType === 'image' ? 'image' : 'file',
+      url: resolvedFileUrl,
+      name: m.fileName ?? m.file_name ?? m.content ?? 'file',
+      size: m.fileSize ?? m.file_size ?? 0,
+      mimeType: m.fileMimeType ?? m.file_mime_type ?? '',
+    }] : (m.attachments ?? []),
     createdAt,
     updatedAt,
     isEdited: updatedAt !== createdAt && !deletedAt,

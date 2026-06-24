@@ -33,7 +33,12 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { TaskDetailModal } from './TaskDetailModal';
-import { useProjectTaskColumns, useSaveProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
+import {
+  useProjectTaskColumns,
+  useCreateTaskColumn,
+  useDeleteTaskColumn,
+  useReorderTaskColumns,
+} from '@/hooks/useProjectTaskColumns';
 
 // Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
 const toDateOnly = (date: Date | undefined | null): string | undefined => {
@@ -169,7 +174,9 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
 }: KanbanViewProps) {
   const [columns, setColumns] = useState<KanbanColumn[]>(defaultColumns);
   const { data: persistedColumns } = useProjectTaskColumns(projectId);
-  const saveProjectTaskColumns = useSaveProjectTaskColumns(projectId);
+  const createTaskColumn = useCreateTaskColumn(projectId);
+  const deleteTaskColumn = useDeleteTaskColumn(projectId);
+  const reorderTaskColumns = useReorderTaskColumns(projectId);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
   const effectiveAllTasks = useMemo(() => {
     const byId = new Map<string, Task>();
@@ -200,18 +207,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     setColumns(persistedColumns.length > 0 ? persistedColumns : defaultColumns);
   }, [projectId, persistedColumns]);
 
-  const updateColumns = (nextColumns: KanbanColumn[]) => {
+  const reorderColumns = (nextColumns: KanbanColumn[]) => {
     setColumns(nextColumns);
     if (!projectId) return;
-    saveProjectTaskColumns.mutate(
-      nextColumns.map((column) => ({
-        id: column.id,
-        status: String(column.status),
-        label: column.label,
-        color: column.color,
-        isSpecial: column.isSpecial ?? false,
-      }))
-    );
+    reorderTaskColumns.mutate(nextColumns.map((column) => column.id));
   };
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
@@ -391,7 +390,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       const newColumns = Array.from(columns);
       const [removed] = newColumns.splice(source.index, 1);
       newColumns.splice(destination.index, 0, removed);
-      updateColumns(newColumns);
+      reorderColumns(newColumns);
       return;
     }
 
@@ -463,19 +462,18 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   };
 
   const handleAddColumn = () => {
-    if (!newColumnName.trim()) return;
+    if (!newColumnName.trim() || !projectId) return;
 
-    const newColumn: KanbanColumn = {
-      id: `col-${Date.now()}`,
-      status: newColumnName.toLowerCase().replace(/\s+/g, '-'),
-      label: newColumnName,
-      color: newColumnColor,
-    };
-
-    updateColumns([...columns, newColumn]);
-    setNewColumnName('');
-    setNewColumnColor('bg-status-todo');
-    setIsAddColumnOpen(false);
+    createTaskColumn.mutate(
+      { label: newColumnName, color: newColumnColor },
+      {
+        onSuccess: () => {
+          setNewColumnName('');
+          setNewColumnColor('bg-status-todo');
+          setIsAddColumnOpen(false);
+        },
+      }
+    );
   };
 
   const handleRemoveColumn = (columnId: string) => {
@@ -485,7 +483,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     if (column && tasks.some(t => t.status === column.status)) {
       return;
     }
-    updateColumns(columns.filter(c => c.id !== columnId));
+    deleteTaskColumn.mutate(columnId);
   };
 
   const handleAddTask = (taskOverride?: Partial<Task>) => {

@@ -54,7 +54,7 @@ import {
   Smile
 } from "lucide-react";
 import { format, isBefore, startOfMonth, startOfToday } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, isValidPhoneNumber, sanitizePhoneInput } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -201,6 +201,8 @@ const NewProject = () => {
   const [clientOrganization, setClientOrganization] = useState("");
   const [clientContact, setClientContact] = useState("");
   const [notes, setNotes] = useState("");
+  const [clientContactError, setClientContactError] = useState("");
+  const [clientOrgError, setClientOrgError] = useState("");
 
   // Team Members
   const [assignedMembers, setAssignedMembers] = useState<TeamMemberAssignment[]>([]);
@@ -602,6 +604,18 @@ const NewProject = () => {
       return;
     }
 
+    if (clientContact && !isValidPhoneNumber(clientContact)) {
+      toast.error('Please enter a valid phone number');
+      setShowOptionalDetails(true);
+      return;
+    }
+
+    if (clientOrganization && /[^a-zA-Z\s\-'.]/.test(clientOrganization)) {
+      toast.error('Organisation name must contain only letters and spaces');
+      setShowOptionalDetails(true);
+      return;
+    }
+
     setIsCreating(true);
 
     try {
@@ -938,21 +952,28 @@ const NewProject = () => {
                       placeholder="Organisation"
                       value={clientOrganization}
                       maxLength={100}
-                      onChange={(e) => setClientOrganization(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="clientContact">Contact Number (10 digits)</Label>
-                    <Input
-                      id="clientContact"
-                      placeholder="e.g. 1234567890"
-                      value={clientContact}
-                      maxLength={10}
                       onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, "");
-                        setClientContact(val);
+                        const filtered = e.target.value.replace(/[^a-zA-Z\s\-'.]/g, "");
+                        setClientOrganization(filtered);
+                        setClientOrgError(filtered !== e.target.value ? "Only letters and spaces are allowed" : "");
                       }}
                     />
+                    {clientOrgError && <p className="text-xs text-destructive">{clientOrgError}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="clientContact">Contact Number</Label>
+                    <Input
+                      id="clientContact"
+                      placeholder="e.g. +1 4155552671"
+                      value={clientContact}
+                      maxLength={16}
+                      onChange={(e) => {
+                        const val = sanitizePhoneInput(e.target.value);
+                        setClientContact(val);
+                        setClientContactError(val.length > 0 && !isValidPhoneNumber(val) ? "Please enter a valid phone number (with country code)" : "");
+                      }}
+                    />
+                    {clientContactError && <p className="text-xs text-destructive">{clientContactError}</p>}
                   </div>
                 </div>
                 <div className="space-y-2">

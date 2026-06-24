@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { ReachableUser } from '../types';
 import { logger } from '@/services/monitoring/logger';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 interface NewGroupDialogProps {
   open: boolean;
@@ -82,6 +83,9 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
 
   const reset = () => {
     setStep(1);
+    setName('');
+    setDescription('');
+    setSelectedIds(new Set());
     setSearch('');
     setAvatarUrl('');
     setAvatarError(false);
@@ -132,7 +136,7 @@ export function NewGroupDialog({ open, onOpenChange, onSelect, onConversationCre
                 <Avatar className="h-20 w-20 mx-auto border-4 border-primary/10 shadow-sm">
                   {avatarUrl && !isEmoji(avatarUrl) && !avatarError ? (
                     <AvatarImage
-                      src={avatarUrl}
+                      src={resolveFileUrl(avatarUrl) ?? avatarUrl}
                       onError={() => setAvatarError(true)}
                       className="object-cover"
                     />

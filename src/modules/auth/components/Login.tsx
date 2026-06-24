@@ -9,6 +9,7 @@ import { Logo } from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { teamService } from "@/services/team.service";
+import { authService } from "@/services/auth.service";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -60,7 +61,6 @@ const Login = () => {
       // Check if the error is "Email not confirmed" - redirect to verify page
       const errorMessage = result.error.message.toLowerCase();
       if (errorMessage.includes("email not confirmed") || errorMessage.includes("email_not_confirmed")) {
-        const { authService } = await import("@/services/auth.service");
         await authService.sendOtp(email);
         try {
           sessionStorage.setItem(
