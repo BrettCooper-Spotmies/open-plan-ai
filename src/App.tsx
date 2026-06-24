@@ -4,7 +4,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useParams, useSearchParams } from "react-router-dom";
 import { queryClient } from "@/lib/queryClient";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppLayoutSkeleton } from "@/components/layout/AppLayoutSkeleton";
@@ -51,6 +51,16 @@ const ReactQueryDevtools = import.meta.env.DEV
       }))
     )
   : null;
+
+// Normalizes legacy `/projects/:id?tab=X` links to the canonical `/projects/:id/X` path.
+const PROJECT_SECTIONS = ['bom', 'eng-changes', 'tasks', 'modules', 'milestones', 'issues', 'gate-reviews', 'risk'];
+function ProjectLegacyTabRedirect() {
+  const { id } = useParams();
+  const [searchParams] = useSearchParams();
+  const tab = searchParams.get('tab');
+  const target = tab && PROJECT_SECTIONS.includes(tab) ? tab : 'bom';
+  return <Navigate to={`/projects/${id}/${target}`} replace />;
+}
 
 const App = () => {
   const storedTheme = useUserStore.getState().preferences.theme;
@@ -111,6 +121,26 @@ const App = () => {
                         />
                         <Route
                           path="/projects/:id"
+                          element={<ProjectLegacyTabRedirect />}
+                        />
+                        <Route
+                          path="/projects/:id/:tab"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="project-detail" />}>
+                              <ProjectDetail />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/projects/:id/bom/:partId"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="project-detail" />}>
+                              <ProjectDetail />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/projects/:id/eng-changes/:ecoId"
                           element={
                             <Suspense fallback={<AppLayoutSkeleton variant="project-detail" />}>
                               <ProjectDetail />
