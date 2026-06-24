@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { attachmentsService } from '@/services/attachments.service';
-import { format, isBefore, startOfToday, parseISO } from 'date-fns';
+import { format, isBefore, parseISO } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -1299,7 +1299,6 @@ export const TaskDetailModal = ({
                         mode="single"
                         selected={editedTask.startDate ? new Date(editedTask.startDate) : undefined}
                         onSelect={(date) => handleFieldChange('startDate', toDateOnly(date || undefined))}
-                        disabled={{ before: startOfToday() }}
                         initialFocus
                         className="p-3 pointer-events-auto"
                       />
@@ -1335,8 +1334,6 @@ export const TaskDetailModal = ({
                         selected={editedTask.dueDate ? new Date(editedTask.dueDate) : undefined}
                         onSelect={(date) => handleFieldChange('dueDate', toDateOnly(date || undefined))}
                         disabled={(date) => {
-                          const today = startOfToday();
-                          if (isBefore(date, today)) return true;
                           if (editedTask.startDate) {
                             return isBefore(date, parseISO(editedTask.startDate));
                           }

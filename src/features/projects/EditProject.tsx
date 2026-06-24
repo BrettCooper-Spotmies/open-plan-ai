@@ -54,7 +54,7 @@ import {
     ChevronUp,
     Palette
 } from "lucide-react";
-import { format, isBefore, startOfMonth, startOfToday } from "date-fns";
+import { format, isBefore, startOfMonth } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -412,14 +412,6 @@ const EditProject = () => {
     };
 
     const handleAddMilestone = () => {
-        if (startDate && newMilestoneStart && isBefore(newMilestoneStart, startDate)) {
-            toast.error("Milestone start date cannot be earlier than project start date");
-            return;
-        }
-        if (targetDate && newMilestoneEnd && isBefore(targetDate, newMilestoneEnd)) {
-            toast.error("Milestone end date cannot be later than project target date");
-            return;
-        }
         if (newMilestoneName.trim() && newMilestoneStart && newMilestoneEnd) {
             setMilestones([
                 ...milestones,
@@ -445,14 +437,6 @@ const EditProject = () => {
 
     const handleSaveMilestoneEdit = () => {
         if (!editingMilestoneId) return;
-        if (startDate && editingMilestoneStart && isBefore(editingMilestoneStart, startDate)) {
-            toast.error("Milestone start date cannot be earlier than project start date");
-            return;
-        }
-        if (targetDate && editingMilestoneEnd && isBefore(targetDate, editingMilestoneEnd)) {
-            toast.error("Milestone end date cannot be later than project target date");
-            return;
-        }
         if (editingMilestoneName.trim() && editingMilestoneStart && editingMilestoneEnd) {
             setMilestones(milestones.map(m => m.id === editingMilestoneId ? {
                 ...m,
@@ -1209,7 +1193,6 @@ const EditProject = () => {
                                                 setStartDate(date);
                                                 setIsStartDateOpen(false);
                                             }}
-                                            disabled={{ before: startOfToday() }}
                                             initialFocus
                                         />
                                     </PopoverContent>
@@ -1238,7 +1221,7 @@ const EditProject = () => {
                                                 setTargetDate(date);
                                                 setIsTargetDateOpen(false);
                                             }}
-                                            disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false)}
+                                            disabled={(date) => (startDate ? isBefore(date, startDate) : false)}
                                             initialFocus
                                         />
                                     </PopoverContent>
@@ -1657,11 +1640,6 @@ const EditProject = () => {
                                                     setNewMilestoneStart(date);
                                                     setIsMilestoneStartOpen(false);
                                                 }}
-                                                disabled={(date) =>
-                                                    isBefore(date, startOfToday()) ||
-                                                    (startDate ? isBefore(date, startDate) : false) ||
-                                                    (targetDate ? isBefore(targetDate, date) : false)
-                                                }
                                             />
                                         )}
                                     </PopoverContent>
@@ -1685,10 +1663,7 @@ const EditProject = () => {
                                                     setIsMilestoneEndOpen(false);
                                                 }}
                                                 disabled={(date) =>
-                                                    isBefore(date, startOfToday()) ||
-                                                    (newMilestoneStart ? isBefore(date, newMilestoneStart) : false) ||
-                                                    (startDate ? isBefore(date, startDate) : false) ||
-                                                    (targetDate ? isBefore(targetDate, date) : false)
+                                                    newMilestoneStart ? isBefore(date, newMilestoneStart) : false
                                                 }
                                             />
                                         )}
@@ -1736,11 +1711,6 @@ const EditProject = () => {
                                                                         setEditingMilestoneStart(date);
                                                                         setIsEditMilestoneStartOpen(false);
                                                                     }}
-                                                                    disabled={(date) =>
-                                                                        isBefore(date, startOfToday()) ||
-                                                                        (startDate ? isBefore(date, startDate) : false) ||
-                                                                        (targetDate ? isBefore(targetDate, date) : false)
-                                                                    }
                                                                 />
                                                             )}
                                                         </PopoverContent>
@@ -1764,10 +1734,7 @@ const EditProject = () => {
                                                                         setIsEditMilestoneEndOpen(false);
                                                                     }}
                                                                     disabled={(date) =>
-                                                                        isBefore(date, startOfToday()) ||
-                                                                        (editingMilestoneStart ? isBefore(date, editingMilestoneStart) : false) ||
-                                                                        (startDate ? isBefore(date, startDate) : false) ||
-                                                                        (targetDate ? isBefore(targetDate, date) : false)
+                                                                        editingMilestoneStart ? isBefore(date, editingMilestoneStart) : false
                                                                     }
                                                                 />
                                                             )}
