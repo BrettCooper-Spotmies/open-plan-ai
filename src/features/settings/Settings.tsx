@@ -278,6 +278,20 @@ const Settings = () => {
     fileInputRef.current?.click();
   };
 
+  const handleRemoveAvatar = async () => {
+    setAvatarLoading(true);
+    try {
+      await profileService.deleteAvatar();
+      await refreshProfile();
+      toast.success('Avatar removed successfully');
+    } catch (error) {
+      logger.error('Error removing avatar:', error);
+      toast.error('Failed to remove avatar');
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
+
   const handleLogoClick = () => {
     if (!canEditOrganizationSettings) return;
     logoInputRef.current?.click();
@@ -762,10 +776,18 @@ const Settings = () => {
                       accept="image/png, image/jpeg, image/webp"
                         onChange={handleAvatarChange}
                       />
-                      <Button variant="outline" size="sm" onClick={handleAvatarClick} disabled={avatarLoading}>
-                        <Upload className="h-4 w-4 mr-2" />
-                        Change Avatar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={handleAvatarClick} disabled={avatarLoading}>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Change Avatar
+                        </Button>
+                        {(profile?.avatar_url || (profile as any)?.avatarUrl) && (
+                          <Button variant="outline" size="sm" onClick={handleRemoveAvatar} disabled={avatarLoading}>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Remove
+                          </Button>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         JPG, PNG or GIF. Max 2MB.
                       </p>
