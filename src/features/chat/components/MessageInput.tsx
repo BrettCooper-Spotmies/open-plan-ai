@@ -518,7 +518,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
               value={value}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
-              placeholder={isMobile ? 'Type a message...' : 'Type a message... Use @ to mention'}
+              placeholder={isMobile || otherMembers.length <= 1 ? 'Type a message...' : 'Type a message... Use @ to mention'}
               rows={1}
               className="w-full resize-none bg-transparent text-sm leading-5 max-h-[140px] placeholder:text-muted-foreground/90 focus-visible:outline-none"
               disabled={readOnly}
