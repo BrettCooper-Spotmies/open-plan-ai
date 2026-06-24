@@ -222,6 +222,9 @@ export const TaskDetailModal = ({
   const [, setIsLoadingComments] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [newComment, setNewComment] = useState('');
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentValue, setEditingCommentValue] = useState('');
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
   const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false);
   const [isBlockingTaskPopoverOpen, setIsBlockingTaskPopoverOpen] = useState(false);
@@ -689,6 +692,63 @@ export const TaskDetailModal = ({
       }));
     }
   };
+
+  const handleStartEditComment = (comment: Comment) => {
+    setEditingCommentId(comment.id);
+    setEditingCommentValue(comment.content);
+  };
+
+  const handleCancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditingCommentValue('');
+  };
+
+  const handleSaveEditComment = async () => {
+    if (!editingCommentId || !editingCommentValue.trim()) return;
+    const commentId = editingCommentId;
+    const content = editingCommentValue.trim();
+
+    if (mode !== 'create') {
+      try {
+        await commentsService.update(commentId, content);
+      } catch (error) {
+        logger.error('Failed to update comment:', error);
+        toast.error('Failed to update comment');
+        return;
+      }
+    }
+
+    setEditedTask(prev => ({
+      ...prev,
+      comments: (prev.comments || []).map(c =>
+        c.id === commentId ? { ...c, content } : c
+      ),
+    }));
+    setEditingCommentId(null);
+    setEditingCommentValue('');
+  };
+
+  const handleDeleteComment = async () => {
+    if (!deletingCommentId) return;
+    const commentId = deletingCommentId;
+    setDeletingCommentId(null);
+
+    if (mode !== 'create') {
+      try {
+        await commentsService.delete(commentId);
+      } catch (error) {
+        logger.error('Failed to delete comment:', error);
+        toast.error('Failed to delete comment');
+        return;
+      }
+    }
+
+    setEditedTask(prev => ({
+      ...prev,
+      comments: (prev.comments || []).filter(c => c.id !== commentId),
+    }));
+  };
+
   const availableTasksForBlocking = allTasks.filter(
     t => !dependencyExcludedTaskIds.has(t.id)
   );
@@ -1807,24 +1867,73 @@ export const TaskDetailModal = ({
                   </p>
                 )} */}
 
-                {comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className="text-xs">
-                        {comment.author.initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{comment.author.name}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}
-                        </span>
+                {comments.map((comment) => {
+                  const isOwnComment = profile?.id === comment.author.id;
+                  const isEditingThisComment = editingCommentId === comment.id;
+                  return (
+                    <div key={comment.id} className="flex gap-3 group">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs">
+                          {comment.author.initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{comment.author.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}
+                          </span>
+                          {isOwnComment && !isEditingThisComment && (
+                            <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                className="rounded p-0.5 text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground"
+                                onClick={() => handleStartEditComment(comment)}
+                                aria-label="Edit comment"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                className="rounded p-0.5 text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
+                                onClick={() => setDeletingCommentId(comment.id)}
+                                aria-label="Delete comment"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {isEditingThisComment ? (
+                          <div className="mt-1 space-y-2">
+                            <Textarea
+                              autoFocus
+                              value={editingCommentValue}
+                              onChange={(e) => setEditingCommentValue(e.target.value)}
+                              className="min-h-[60px] text-sm"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                                  e.preventDefault();
+                                  handleSaveEditComment();
+                                }
+                              }}
+                            />
+                            <div className="flex gap-2">
+                              <Button size="sm" onClick={handleSaveEditComment} disabled={!editingCommentValue.trim()}>
+                                Save
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={handleCancelEditComment}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground mt-1">{comment.content}</p>
+                        )}
                       </div>
-                      <p className="text-sm text-muted-foreground mt-1">{comment.content}</p>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 <div className="flex gap-3">
                   <Avatar className="h-8 w-8">
@@ -1890,6 +1999,15 @@ export const TaskDetailModal = ({
         onConfirm={handleDelete}
         title="Delete Task"
         description="Are you sure you want to delete this task? This action cannot be undone."
+        confirmText="Delete"
+        variant="destructive"
+      />
+      <ConfirmationDialog
+        open={!!deletingCommentId}
+        onOpenChange={(open) => !open && setDeletingCommentId(null)}
+        onConfirm={handleDeleteComment}
+        title="Delete Comment"
+        description="Are you sure you want to delete this comment? This action cannot be undone."
         confirmText="Delete"
         variant="destructive"
       />
