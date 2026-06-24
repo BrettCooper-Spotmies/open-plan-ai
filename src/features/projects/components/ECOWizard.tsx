@@ -119,13 +119,15 @@ interface BasicsState {
   title: string; description: string;
   type: ECOType; priority: ECOPriority; reason: ECOReason;
   changeClass: ChangeClass;
-  revFrom: string; revTo: string; ecr: string;
+  ecr: string;
   effType: EffectivityType; effValue: string;
 }
 
 interface ItemState {
   pn: string; desc: string; impact: ImpactLevel;
   disp: ECODisposition; whereUsed: string[];
+  partId: string; nodeId: string;
+  revFrom: string; revTo: string;
 }
 
 interface DiffRowState {
@@ -151,7 +153,7 @@ export function ECOWizard({
   onClose,
 }: {
   projectId: string;
-  seed: null | { title?: string; desc?: string; type?: ECOType; priority?: ECOPriority; reason?: ECOReason; revFrom?: string; revTo?: string; ecr?: string; changeClass?: ChangeClass };
+  seed: null | { title?: string; desc?: string; type?: ECOType; priority?: ECOPriority; reason?: ECOReason; ecr?: string; changeClass?: ChangeClass };
   onClose: (result?: { saved: boolean }) => void;
 }) {
   const createMutation = useCreateECO(projectId);
@@ -164,7 +166,7 @@ export function ECOWizard({
     title: seed?.title ?? '', description: seed?.desc ?? '',
     type: seed?.type ?? 'DESIGN_CHANGE', priority: seed?.priority ?? 'MEDIUM',
     reason: seed?.reason ?? 'PERFORMANCE', changeClass: seed?.changeClass ?? 'II',
-    revFrom: seed?.revFrom ?? 'A', revTo: seed?.revTo ?? 'B', ecr: seed?.ecr ?? '',
+    ecr: seed?.ecr ?? '',
     effType: 'DATE', effValue: '',
   });
 
@@ -175,6 +177,9 @@ export function ECOWizard({
     () => bomFlatAll(bomRootNodes).map(n => ({
       pn: n.pn,
       desc: n.desc,
+      rev: n.rev,
+      partId: n._partId ?? '',
+      nodeId: n.id,
       whereUsed: (bomPath(n.id, bomRootNodes) ?? []).slice(0, -1).map(a => `${a.pn} ${a.desc}`),
     })),
     [bomRootNodes],
@@ -183,11 +188,17 @@ export function ECOWizard({
   const [items, setItems] = useState<ItemState[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // Selecting a part auto-populates Rev From from its current BOM revision;
+  // Rev To is left for the user to fill in once the target rev is known.
   const addItem = (p: typeof bomPool[number]) => {
     setItems(prev =>
       prev.find(x => x.pn === p.pn)
         ? prev
-        : [...prev, { pn: p.pn, desc: p.desc, impact: 'MEDIUM', disp: 'REWORK', whereUsed: p.whereUsed }],
+        : [...prev, {
+            pn: p.pn, desc: p.desc, impact: 'MEDIUM', disp: 'REWORK', whereUsed: p.whereUsed,
+            partId: p.partId, nodeId: p.nodeId,
+            revFrom: p.rev, revTo: '',
+          }],
     );
     setPickerOpen(false);
   };
@@ -333,19 +344,9 @@ export function ECOWizard({
           Class I locks QA &amp; Final Approval as mandatory in the pipeline.
         </div>
       )}
-      <div className="grid grid-cols-[80px_80px_1fr] gap-3">
-        <div>
-          <FieldLabel>Rev From</FieldLabel>
-          <input value={basics.revFrom} onChange={e => setBasics({ ...basics, revFrom: e.target.value })} className={inputCls} />
-        </div>
-        <div>
-          <FieldLabel>Rev To</FieldLabel>
-          <input value={basics.revTo} onChange={e => setBasics({ ...basics, revTo: e.target.value })} className={inputCls} />
-        </div>
-        <div>
-          <FieldLabel>Originating ECR</FieldLabel>
-          <input value={basics.ecr} onChange={e => setBasics({ ...basics, ecr: e.target.value })} placeholder="ECR-2026-088 (optional)" className={inputCls} />
-        </div>
+      <div>
+        <FieldLabel>Originating ECR</FieldLabel>
+        <input value={basics.ecr} onChange={e => setBasics({ ...basics, ecr: e.target.value })} placeholder="ECR-2026-088 (optional)" className={inputCls} />
       </div>
       {/* Effectivity */}
       <div>
@@ -446,6 +447,21 @@ export function ECOWizard({
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
+          <div className="flex gap-2 mb-2">
+            <div className="flex-1">
+              <FieldLabel>Rev From</FieldLabel>
+              <input value={it.revFrom} disabled className={cn(inputCls, 'font-mono text-center cursor-not-allowed opacity-70')} />
+            </div>
+            <div className="flex-1">
+              <FieldLabel>Rev To</FieldLabel>
+              <input
+                value={it.revTo}
+                onChange={e => upItem(idx, 'revTo', e.target.value)}
+                placeholder="e.g. B"
+                className={cn(inputCls, 'font-mono text-center')}
+              />
+            </div>
+          </div>
           <div className="flex gap-2">
             <div className="flex-1">
               <EcoSelect value={it.impact} onChange={v => upItem(idx, 'impact', v)} options={Object.keys(IMPACT_LABEL) as ImpactLevel[]} labels={IMPACT_LABEL} />
@@ -471,7 +487,7 @@ export function ECOWizard({
       {/* Diff rows */}
       <div className="flex items-center justify-between">
         <div className="text-[13px] text-muted-foreground">
-          Field-level Rev {basics.revFrom} → {basics.revTo} diff · {diffRows.length} row{diffRows.length !== 1 ? 's' : ''}
+          Field-level diff · {diffRows.length} row{diffRows.length !== 1 ? 's' : ''}
         </div>
         <button
           onClick={() => setDiffRows(r => [...r, { param: '', from: '', to: '', cls: 'MODIFIED' }])}
@@ -484,8 +500,8 @@ export function ECOWizard({
       {diffRows.length > 0 && (
         <div className="flex gap-2 text-[10px] text-muted-foreground uppercase tracking-wider">
           <div className="flex-[1.2]">Parameter</div>
-          <div className="flex-1">Rev {basics.revFrom}</div>
-          <div className="flex-1">Rev {basics.revTo}</div>
+          <div className="flex-1">From</div>
+          <div className="flex-1">To</div>
           <div className="w-32">Class</div>
           <div className="w-5" />
         </div>
@@ -874,13 +890,19 @@ export function ECOWizard({
                       effectivityType:  basics.effType.toLowerCase() as any,
                       effectivityValue: basics.effValue || null,
                       originatingEcr:   basics.ecr || null,
-                      revFrom:     basics.revFrom || null,
-                      revTo:       basics.revTo || null,
                       scheduleImpact:   impact.schedule.toLowerCase() as any,
                       requiresRecertification: impact.recert,
                       firmwareCoupling: impact.firmware,
                       unitCostDelta:    impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
                       oneTimeCost:      impact.oneTimeCost  ? parseFloat(impact.oneTimeCost)  : null,
+                      parts: items.map(it => ({
+                        partId:      it.partId,
+                        bomNodeId:   it.nodeId || null,
+                        revFrom:     it.revFrom || null,
+                        revTo:       it.revTo || null,
+                        impactLevel: it.impact.toLowerCase() as any,
+                        disposition: it.disp.toLowerCase() as any,
+                      })),
                       diffRows: diffRows.map((r, i) => ({
                         order:       i,
                         parameter:   r.param,
