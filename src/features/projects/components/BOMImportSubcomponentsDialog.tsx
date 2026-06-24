@@ -3,8 +3,7 @@
  * Stages: upload (template + file picker) → preview (validated rows) → result (import progress/summary).
  */
 import { useRef, useState } from 'react';
-import { Workbook } from 'exceljs';
-import type { Worksheet } from 'exceljs';
+import type { Workbook, Worksheet } from 'exceljs';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -60,6 +59,7 @@ function sheetToRows(sheet: Worksheet): Record<string, unknown>[] {
 }
 
 async function buildTemplateWorkbook(): Promise<Workbook> {
+  const { Workbook } = await import('exceljs');
   const workbook = new Workbook();
 
   const sheet = workbook.addWorksheet('Sub-components');
@@ -131,6 +131,7 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
     setFileName(file.name);
     try {
       const buffer = await file.arrayBuffer();
+      const { Workbook } = await import('exceljs');
       const workbook = new Workbook();
       await workbook.xlsx.load(buffer as unknown as Buffer);
       const sheet = workbook.worksheets[0];

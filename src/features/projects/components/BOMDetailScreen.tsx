@@ -805,14 +805,13 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                         onClick={() => onNavigate(p.id)}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted border border-border cursor-pointer hover:bg-accent transition-colors"
                       >
-                        <span className="text-[11px] font-mono" className="text-foreground">{p.pn}</span>
+                        <span className="text-[11px] font-mono text-foreground">{p.pn}</span>
                         <span className="text-xs text-foreground">{p.desc}</span>
                       </button>
                       <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
                     </div>
                   ))}
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg"
-                    className="bg-muted border border-border">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted border border-border">
                     <span className="text-[11px] font-mono text-foreground">{node.pn}</span>
                     <span className="text-xs text-foreground font-medium">{node.desc}</span>
                   </span>

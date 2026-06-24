@@ -1,3 +1,5 @@
+import { captureException } from '@/infrastructure/monitoring/sentry';
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 interface LogEntry {
@@ -73,25 +75,20 @@ class Logger {
 
   private sendToLogSink(entry: LogEntry): void {
     try {
-      // Dynamic import avoids a circular dependency at module load time.
-      import('@/infrastructure/monitoring/sentry').then(({ captureException }) => {
-        captureException(new Error(entry.message), {
-          level: entry.level,
-          context: entry.context ?? {},
-          timestamp: entry.timestamp,
-          page_url: window.location.pathname,
-        });
-      }).catch(() => {
-        // Sentry unavailable — structured fallback so log aggregators can still parse it.
-        console.error(JSON.stringify({
-          error_message: `[${entry.level.toUpperCase()}] ${entry.message}`,
-          context: entry.context ?? {},
-          timestamp: entry.timestamp,
-          page_url: window.location.pathname,
-        }));
+      captureException(new Error(entry.message), {
+        level: entry.level as any,
+        context: entry.context ?? {},
+        timestamp: entry.timestamp,
+        page_url: window.location.pathname,
       });
     } catch {
-      // Never throw from the logger — it would cause an infinite loop via ErrorBoundary.
+      // Sentry unavailable — structured fallback so log aggregators can still parse it.
+      console.error(JSON.stringify({
+        error_message: `[${entry.level.toUpperCase()}] ${entry.message}`,
+        context: entry.context ?? {},
+        timestamp: entry.timestamp,
+        page_url: window.location.pathname,
+      }));
     }
   }
 
