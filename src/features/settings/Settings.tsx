@@ -814,19 +814,6 @@ const Settings = () => {
                       onCheckedChange={(checked) => setTempPreferences(prev => ({ ...prev, sidebarCollapsed: checked }))}
                     />
                   </div>
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label>Compact Mode</Label>
-                      <p className="text-sm text-muted-foreground">
-                        Reduce spacing to show more content
-                      </p>
-                    </div>
-                    <Switch
-                      checked={tempPreferences.compactMode}
-                      onCheckedChange={(checked) => setTempPreferences(prev => ({ ...prev, compactMode: checked }))}
-                    />
-                  </div>
                 </div>
 
                 <Button onClick={handleSaveAppearance}>
