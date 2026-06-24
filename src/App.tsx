@@ -38,6 +38,7 @@ const EditProject   = lazy(() => import("./features/projects/EditProject"));
 const IssuePage     = lazy(() => import("./features/projects/IssuePage"));
 const Team          = lazy(() => import("./features/team"));
 const Settings      = lazy(() => import("./features/settings"));
+const EditOrganizationSettings = lazy(() => import("./features/settings/EditOrganizationSettings"));
 const Reports       = lazy(() => import("./features/reports"));
 const Notifications = lazy(() => import("./features/notifications"));
 const Chat          = lazy(() => import("./features/chat"));
@@ -146,6 +147,14 @@ const App = () => {
                           element={
                             <Suspense fallback={<AppLayoutSkeleton variant="settings" />}>
                               <Settings />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/settings/organization/edit"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                              <EditOrganizationSettings />
                             </Suspense>
                           }
                         />
