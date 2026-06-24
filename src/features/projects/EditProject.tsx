@@ -189,6 +189,8 @@ const EditProject = () => {
     const [clientOrganization, setClientOrganization] = useState("");
     const [clientContact, setClientContact] = useState("");
     const [notes, setNotes] = useState("");
+    const [clientContactError, setClientContactError] = useState("");
+    const [clientOrgError, setClientOrgError] = useState("");
 
     // Team Members
     const [assignedMembers, setAssignedMembers] = useState<TeamMemberAssignment[]>([]);
@@ -894,6 +896,18 @@ const EditProject = () => {
             return;
         }
 
+        if (clientContact && clientContact.length !== 10) {
+            toast.error('Contact number must be exactly 10 digits');
+            setShowOptionalDetails(true);
+            return;
+        }
+
+        if (clientOrganization && /[^a-zA-Z\s\-'.]/.test(clientOrganization)) {
+            toast.error('Organisation name must contain only letters and spaces');
+            setShowOptionalDetails(true);
+            return;
+        }
+
         const currentInDbIds = project.team?.map((m: any) => m.id) || [];
         const assignedIds = assignedMembers.map(m => m.memberId);
         const removedMemberIds = currentInDbIds.filter(memberId => !assignedIds.includes(memberId));
@@ -1216,8 +1230,13 @@ const EditProject = () => {
                                         placeholder="e.g. Acme Corp"
                                         value={clientOrganization}
                                         maxLength={100}
-                                        onChange={(e) => setClientOrganization(e.target.value)}
+                                        onChange={(e) => {
+                                            const filtered = e.target.value.replace(/[^a-zA-Z\s\-'.]/g, "");
+                                            setClientOrganization(filtered);
+                                            setClientOrgError(filtered !== e.target.value ? "Only letters and spaces are allowed" : "");
+                                        }}
                                     />
+                                    {clientOrgError && <p className="text-xs text-destructive">{clientOrgError}</p>}
                                 </div>
                             </div>
                             <div className="space-y-2">
@@ -1230,8 +1249,10 @@ const EditProject = () => {
                                     onChange={(e) => {
                                         const val = e.target.value.replace(/\D/g, "");
                                         setClientContact(val);
+                                        setClientContactError(val.length > 0 && val.length < 10 ? "Phone number must be exactly 10 digits" : "");
                                     }}
                                 />
+                                {clientContactError && <p className="text-xs text-destructive">{clientContactError}</p>}
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="notes">Internal Project Notes</Label>
