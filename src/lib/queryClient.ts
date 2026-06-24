@@ -80,6 +80,12 @@ export const queryKeys = {
     detail: (id: string) => [...queryKeys.milestones.all, 'detail', id] as const,
   },
 
+  // Task Columns
+  taskColumns: {
+    all: ['task-columns'] as const,
+    list: (projectId: string) => [...queryKeys.taskColumns.all, 'list', projectId] as const,
+  },
+
   // Team
   team: {
     all: ['team'] as const,

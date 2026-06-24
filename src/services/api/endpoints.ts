@@ -90,6 +90,13 @@ export const ENDPOINTS = {
     TASK: (milestoneId: string, taskId: string) => `/milestones/${milestoneId}/tasks/${taskId}`,
     GENERATE_TASKS: (id: string) => `/milestones/${id}/generate-tasks`,
   },
+  // Task Columns
+  TASK_COLUMNS: {
+    LIST: (projectId: string) => `/projects/${projectId}/task-columns`,
+    CREATE: (projectId: string) => `/projects/${projectId}/task-columns`,
+    REORDER: (projectId: string) => `/projects/${projectId}/task-columns/reorder`,
+    BY_ID: (id: string) => `/task-columns/${id}`,
+  },
   // Issues
   ISSUES: {
     LIST: (projectId: string) => `/projects/${projectId}/issues`,
