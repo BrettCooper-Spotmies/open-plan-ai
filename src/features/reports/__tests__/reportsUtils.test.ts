@@ -357,10 +357,12 @@ describe('reportsUtils', () => {
       ...overrides,
     });
 
-    it('should return empty array for no tasks', () => {
+    it('should still include modules with no tasks at 0% progress', () => {
       const modules = [createModule()];
       const result = getModuleProgress([], modules);
-      expect(result).toEqual([]);
+      expect(result).toHaveLength(1);
+      expect(result[0].progress).toBe(0);
+      expect(result[0].totalTasks).toBe(0);
     });
 
     it('should calculate progress per module', () => {

@@ -351,7 +351,7 @@ export function getModuleProgress(
       totalTasks,
       completedTasks
     };
-  }).filter(item => item.totalTasks > 0 || (item.module.progress && item.module.progress > 0));
+  });
 }
 
 // Get completed tasks trend

@@ -15,6 +15,7 @@ import { Conversation, ReachableUser } from '../types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChatStore } from '../stores/useChatStore';
 import { chatService } from '@/services/chat.service';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -376,7 +377,7 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
                     <Avatar className="h-24 w-24 mx-auto border-4 border-primary/10 shadow-sm">
                       {editAvatarUrl && !isEmoji(editAvatarUrl) && !avatarError ? (
                         <AvatarImage
-                          src={editAvatarUrl}
+                          src={resolveFileUrl(editAvatarUrl) ?? editAvatarUrl}
                           onError={() => setAvatarError(true)}
                         />
                       ) : null}

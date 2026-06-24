@@ -106,13 +106,14 @@ export const chatService = {
     name: string,
     description: string | undefined,
     memberIds: string[],
-    _avatarUrl?: string
+    avatarUrl?: string
   ): Promise<string> {
     const data = await apiClient.post<any>(ENDPOINTS.CONVERSATIONS.CREATE, {
       type: 'group',
       name,
       description,
       memberIds,
+      avatarUrl,
     });
     return mapConversation(data).id;
   },
@@ -181,9 +182,13 @@ export const chatService = {
 
   async updateGroupDetails(
     conversationId: string,
-    updates: { name?: string; description?: string; avatar_url?: string }
+    updates: { name?: string; description?: string; avatar_url?: string | null }
   ): Promise<void> {
-    await apiClient.patch(ENDPOINTS.CONVERSATIONS.BY_ID(conversationId), updates);
+    await apiClient.patch(ENDPOINTS.CONVERSATIONS.BY_ID(conversationId), {
+      ...(updates.name !== undefined && { name: updates.name }),
+      ...(updates.description !== undefined && { description: updates.description }),
+      ...(updates.avatar_url !== undefined && { avatarUrl: updates.avatar_url }),
+    });
   },
 
   async searchUsers(query: string): Promise<ReachableUser[]> {
@@ -263,8 +268,16 @@ export const chatService = {
     setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   },
 
-  async uploadGroupAvatar(_file: File): Promise<string> {
-    throw new Error('Group avatar upload is not yet supported in this backend version.');
+  /** Uploads to storage and returns the raw "serve:" reference — store this as-is; resolve for display with resolveFileUrl(). */
+  async uploadGroupAvatar(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const res = await apiClient.raw.post<{ success: boolean; data: { avatarUrl: string } }>(
+      ENDPOINTS.UPLOADS.GROUP_AVATAR,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    );
+    return res.data.data.avatarUrl;
   },
 
   async sendSystemMessage(conversationId: string, content: string): Promise<void> {
