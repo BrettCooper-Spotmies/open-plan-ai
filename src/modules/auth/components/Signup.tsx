@@ -323,6 +323,7 @@ const Signup = () => {
                       className="pl-10 pr-10"
                       required
                       disabled={isLoading}
+                      autoComplete="new-password"
                     />
                     <button
                       type="button"
@@ -375,6 +376,7 @@ const Signup = () => {
                       )}
                       required
                       disabled={isLoading}
+                      autoComplete="new-password"
                     />
                     <button
                       type="button"
