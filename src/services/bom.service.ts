@@ -26,7 +26,24 @@ export interface UpdateNodeDto {
   notes?: string;
 }
 
+export interface MapColumnsResponse {
+  mapping: Record<string, string>;
+  unmatched: string[];
+}
+
 export const bomService = {
+  async mapImportColumns(
+    headers: string[],
+    sampleRows: Record<string, unknown>[],
+  ): Promise<MapColumnsResponse> {
+    return apiClient.post<MapColumnsResponse>(
+      ENDPOINTS.BOM_IMPORT.MAP_COLUMNS(),
+      { headers, sampleRows },
+      { timeout: 20000 },
+    );
+  },
+
+
   async getTree(projectId: string): Promise<ApiTreeResponse> {
     return apiClient.get<ApiTreeResponse>(ENDPOINTS.BOM.TREE(projectId));
   },

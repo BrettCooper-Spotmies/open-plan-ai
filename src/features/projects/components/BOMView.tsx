@@ -53,7 +53,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from '@/lib/utils';
 import {
   BOMNode, BOMFilters, EMPTY_FILTERS,
-  BOM_CAT_META,
+  getCategoryMeta,
   bomFlatAll, bomFlatten, bomFind,
   bomFilterTree, bomFlattenInclude, bomTypeOf,
   fromApiNode, assignLevelLabels, formatLeadTime,
@@ -677,7 +677,7 @@ function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCu
         <>
           <div className="p-5 grid gap-3.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(248px, 1fr))' }}>
             {displayRows.map(row => {
-              const meta = BOM_CAT_META[row.cat] ?? BOM_CAT_META.assembly;
+              const meta = getCategoryMeta(row.cat);
               const isH = hovered === row.id;
               const hasChildren = !!(row.children?.length);
               return (

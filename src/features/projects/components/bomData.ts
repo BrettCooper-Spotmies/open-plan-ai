@@ -1,7 +1,12 @@
 // BOM types, API response types, adapters, and tree helpers
 
 export type BOMStatus = 'approved' | 'pending' | 'rejected';
-export type BOMCategory = 'power' | 'control' | 'connector' | 'enclosure' | 'hmi' | 'safety' | 'assembly';
+// Free text — not a closed union. Known presets (below) plus any custom
+// category a user adds via the "Other" option when adding/importing parts.
+export type BOMCategory = string;
+export const KNOWN_BOM_CATEGORIES = [
+  'assembly', 'power', 'control', 'connector', 'enclosure', 'hmi', 'safety',
+] as const;
 
 export interface BOMRevision {
   rev: string;
@@ -60,6 +65,25 @@ export const BOM_CAT_META: Record<BOMCategory, { tint: string; label: string; ic
   safety:    { tint: '#DC2626', label: 'Safety & Protection',    iconName: 'Shield' },
   assembly:  { tint: '#2563EB', label: 'Top Assembly',           iconName: 'Layers' },
 };
+
+const CUSTOM_CATEGORY_TINT = '#64748B'; // neutral slate — categories outside the known presets
+
+function humanizeCategory(cat: string): string {
+  return cat
+    .trim()
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ') || 'Uncategorized';
+}
+
+/**
+ * Like BOM_CAT_META[cat], but falls back to a humanized label/neutral tint
+ * for custom categories instead of mislabeling them as "Top Assembly".
+ */
+export function getCategoryMeta(cat: BOMCategory): { tint: string; label: string; iconName: string } {
+  return BOM_CAT_META[cat] ?? { tint: CUSTOM_CATEGORY_TINT, label: humanizeCategory(cat), iconName: 'Tag' };
+}
 
 // Empty fallback — components that previously used BOM_NODES as a default now receive
 // the live rootNodes prop; this empty array prevents import errors during the migration.
@@ -292,7 +316,6 @@ export function assignLevelLabels(nodes: BOMNode[], prefix: number[] = []): void
 
 // ── Sub-component bulk import (Excel/CSV) ─────────────────────────
 
-const IMPORT_CATEGORY_VALUES: BOMCategory[] = ['assembly', 'power', 'control', 'connector', 'enclosure', 'hmi', 'safety'];
 const IMPORT_STATUS_VALUES: BOMStatus[] = ['approved', 'pending'];
 
 interface ImportColumnDef {
@@ -346,6 +369,44 @@ function pickField(row: Record<string, unknown>, aliases: string[]): string {
 const colAliases = (label: string) =>
   SUBCOMPONENT_IMPORT_COLUMNS.find(c => c.label === label)!.aliases;
 
+/**
+ * Checks whether the alias-based fast path can confidently match every
+ * required column. If not, the caller should fall back to the AI-assisted
+ * backend mapping endpoint instead of running parseSubcomponentImportRows
+ * directly against unmatched headers.
+ */
+export function checkColumnMappingConfidence(
+  rawHeaders: string[],
+): { confident: boolean; unmatchedRequired: string[] } {
+  const normalizedHeaders = rawHeaders.map(normalizeKey);
+  const unmatchedRequired = SUBCOMPONENT_IMPORT_COLUMNS
+    .filter(c => c.required)
+    .filter(c => !c.aliases.some(alias => normalizedHeaders.includes(alias)))
+    .map(c => c.label);
+
+  return { confident: unmatchedRequired.length === 0, unmatchedRequired };
+}
+
+/**
+ * Renames raw header keys in each row to their mapped canonical column
+ * label (e.g. "Item No." -> "Part Number"), so the result can be fed into
+ * parseSubcomponentImportRows() unchanged via its existing alias matching.
+ * Headers with no mapping entry are dropped.
+ */
+export function applyColumnMapping(
+  rawRows: Record<string, unknown>[],
+  mapping: Record<string, string>,
+): Record<string, unknown>[] {
+  return rawRows.map(row => {
+    const mapped: Record<string, unknown> = {};
+    for (const [rawKey, value] of Object.entries(row)) {
+      const targetLabel = mapping[rawKey];
+      if (targetLabel) mapped[targetLabel] = value;
+    }
+    return mapped;
+  });
+}
+
 export function parseSubcomponentImportRows(
   rows: Record<string, unknown>[],
   existingParts: ApiPartResponse[],
@@ -368,13 +429,13 @@ export function parseSubcomponentImportRows(
     if (!partNumber) errors.push('Missing Part Number');
     if (!description) errors.push('Missing Description');
 
+    // Category accepts any non-empty value — a known preset (KNOWN_BOM_CATEGORIES)
+    // or a custom category typed/imported by the user.
     let category: BOMCategory | '' = '';
     if (!categoryRaw) {
       errors.push('Missing Category');
-    } else if (!IMPORT_CATEGORY_VALUES.includes(categoryRaw as BOMCategory)) {
-      errors.push(`Category "${categoryRaw}" is not valid`);
     } else {
-      category = categoryRaw as BOMCategory;
+      category = categoryRaw;
     }
 
     let status: BOMStatus = 'pending';

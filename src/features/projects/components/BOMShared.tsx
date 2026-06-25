@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { BOMCategory, BOMStatus, BOM_CAT_META } from './bomData';
+import { BOMCategory, BOMStatus, getCategoryMeta } from './bomData';
 import { Link2 } from 'lucide-react';
 import { useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
 import { resolveFileUrl } from '@/utils/fileUrl';
@@ -17,7 +17,7 @@ const CAT_ICONS: Record<BOMCategory, React.ElementType> = {
 export function PartThumb({
   cat, size = 32, radius = 7, big = false, imageUrl,
 }: { cat: BOMCategory; size?: number; radius?: number; big?: boolean; imageUrl?: string | null }) {
-  const meta = BOM_CAT_META[cat] ?? BOM_CAT_META.assembly;
+  const meta = getCategoryMeta(cat);
   const Icon = CAT_ICONS[cat] ?? Package;
   const iconSize = big ? 34 : Math.round(size * 0.46);
 

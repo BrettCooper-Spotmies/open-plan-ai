@@ -467,8 +467,8 @@ function VersionDiff({ detail }: { detail: ECODetail }) {
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr className="border-b border-border bg-muted/30">
-              {['Parameter', `Rev ${detail.revFrom}`, `Rev ${detail.revTo}`, 'Change'].map(h => (
-                <th key={h} className="px-4 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              {['Parameter', `Rev ${detail.revFrom}`, `Rev ${detail.revTo}`, 'Change'].map((h, idx) => (
+                <th key={idx} className="px-4 py-2 text-left text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
                   {h}
                 </th>
               ))}
@@ -800,7 +800,7 @@ function ECNReleaseModal({
                 {released ? 'ECN Released & Distributed' : 'Generate ECN — Release Change'}
               </div>
               <div className="text-[12px] text-muted-foreground">
-                {detail.num} → {ecn.num} · {released ? 'controlled / released' : 'approved, ready to release'}
+                {detail.num}{ecn ? ` → ${ecn.num}` : ''} · {released ? 'controlled / released' : 'approved, ready to release'}
               </div>
             </div>
           </div>
