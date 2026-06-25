@@ -23,6 +23,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import {
   Calendar as CalendarIcon,
@@ -35,7 +42,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
-import { Milestone, Task, Issue, Module } from '@/types';
+import { Milestone, MilestoneStatus, Task, Issue, Module } from '@/types';
 import { getMilestoneProgress, getMilestoneTasks, getMilestoneIssues, getMilestoneStatus, getModuleProgress } from '../utils/projectUtils';
 
 interface MilestoneDetailModalProps {
@@ -99,11 +106,23 @@ export function MilestoneDetailModal({
   const handleToggleComplete = () => {
     setEditedMilestone(prev => {
       if (!prev) return prev;
+      const completed = !prev.completed;
       return {
         ...prev,
-        completed: !prev.completed,
-        completedAt: !prev.completed ? new Date().toISOString() : undefined,
+        completed,
+        completedAt: completed ? new Date().toISOString() : undefined,
+        status: completed ? 'completed' : prev.status,
       };
+    });
+  };
+
+  const handleStatusChange = (newStatus: MilestoneStatus) => {
+    setEditedMilestone(prev => {
+      if (!prev) return prev;
+      if (newStatus === 'completed') {
+        return { ...prev, completed: true, completedAt: new Date().toISOString(), status: 'completed' };
+      }
+      return { ...prev, completed: false, completedAt: undefined, status: newStatus };
     });
   };
 
@@ -228,9 +247,18 @@ export function MilestoneDetailModal({
                   className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0 flex-1"
                   placeholder="Milestone title..."
                 />
-                <Badge variant="outline" className={cn('text-xs shrink-0', statusConfig[status].textColor)}>
-                  {statusConfig[status].label}
-                </Badge>
+                <Select value={status} onValueChange={(value) => handleStatusChange(value as MilestoneStatus)}>
+                  <SelectTrigger className={cn('w-[130px] h-8 text-xs shrink-0', statusConfig[status].textColor)}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(statusConfig) as MilestoneStatus[]).map((key) => (
+                      <SelectItem key={key} value={key} className={statusConfig[key].textColor}>
+                        {statusConfig[key].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Progress Bar */}

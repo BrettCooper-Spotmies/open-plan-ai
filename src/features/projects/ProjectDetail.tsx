@@ -56,6 +56,7 @@ import {
   useDeleteIssue,
   useCreateMilestone,
   useUpdateMilestone,
+  useToggleMilestoneComplete,
   useDeleteMilestone,
   useCreateModule,
   useUpdateModule,
@@ -75,6 +76,7 @@ import { toast } from 'sonner';
 import { calculateProjectProgress } from './utils/projectUtils';
 import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember } from '@/types';
 import { logger } from '@/services/monitoring/logger';
+import { format } from 'date-fns';
 
 // Issue Filter interface
 interface IssueFilter {
@@ -447,6 +449,7 @@ export default function ProjectDetail() {
   const deleteIssueMutation = useDeleteIssue(id || '');
   const createMilestoneMutation = useCreateMilestone(id || '');
   const updateMilestoneMutation = useUpdateMilestone(id || '');
+  const toggleMilestoneCompleteMutation = useToggleMilestoneComplete(id || '');
   const deleteMilestoneMutation = useDeleteMilestone(id || '');
   const createModuleMutation = useCreateModule(id || '');
   const updateModuleMutation = useUpdateModule(id || '');
@@ -798,6 +801,7 @@ export default function ProjectDetail() {
     const created = await createIssueMutation.mutateAsync({
       title: newIssuePartial.title || 'New Issue',
       description: newIssuePartial.description || '',
+      status: newIssuePartial.status || 'open',
       severity: newIssuePartial.severity || 'minor',
       category: newIssuePartial.category || 'other',
       assignees: newIssuePartial.assignees || [],
@@ -902,9 +906,18 @@ export default function ProjectDetail() {
         name: updatedMilestone.title,
         due_date: updatedMilestone.date || null,
         description: updatedMilestone.description || null,
-        status: updatedMilestone.completed ? 'completed' : 'upcoming',
+        status: updatedMilestone.completed ? undefined : (updatedMilestone.status || null),
       },
     });
+
+    // Completion is a separate endpoint on the backend, not part of the general update.
+    const previousMilestone = (project?.milestones || []).find(m => m.id === updatedMilestone.id);
+    if (previousMilestone && previousMilestone.completed !== updatedMilestone.completed) {
+      toggleMilestoneCompleteMutation.mutate({
+        milestoneId: updatedMilestone.id,
+        completed: updatedMilestone.completed,
+      });
+    }
 
     // Persist linked task changes by updating ONLY each task's milestoneId field
     const previousLinkedTaskIds = (project?.tasks || [])
@@ -1071,7 +1084,7 @@ export default function ProjectDetail() {
                 {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
                 <div className="flex items-center gap-2 whitespace-nowrap">
                   <Calendar className="h-4 w-4 shrink-0" />
-                  <span>Due {project.targetDate ? new Date(project.targetDate).toLocaleDateString() : 'Not set'}</span>
+                  <span>Due {project.targetDate ? format(new Date(project.targetDate), 'dd-MMM-yyyy') : 'Not set'}</span>
                 </div>
                 <Button
                   type="button"
@@ -1161,11 +1174,17 @@ export default function ProjectDetail() {
                                 <SelectValue placeholder="Select organization member" />
                               </SelectTrigger>
                               <SelectContent>
-                                {availableOrganizationMembers.map((member) => (
-                                  <SelectItem key={member.id} value={member.id}>
-                                    {member.name}
-                                  </SelectItem>
-                                ))}
+                                {availableOrganizationMembers.length > 0 ? (
+                                  availableOrganizationMembers.map((member) => (
+                                    <SelectItem key={member.id} value={member.id}>
+                                      {member.name}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                    No members available to add.
+                                  </div>
+                                )}
                               </SelectContent>
                             </Select>
                             {selectedOrganizationMember && (

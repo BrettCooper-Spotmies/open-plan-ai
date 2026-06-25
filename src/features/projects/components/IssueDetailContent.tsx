@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { format, parseISO, startOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -80,6 +80,8 @@ import { toast } from 'sonner';
 import { ISSUE_SEVERITY_DISPLAY, ISSUE_SEVERITY_OPTIONS } from './issueSeverity';
 import { attachmentsService } from '@/services/attachments.service';
 import { useAuth } from '@/contexts/AuthContext';
+import { useProjectTags, useCreateTag } from '@/hooks/useProjectTags';
+import { getFallbackTagColor } from '@/lib/tagColors';
 
 interface IssueDetailContentProps {
     issue: Issue | null;
@@ -111,66 +113,6 @@ const categoryOptions: { value: IssueCategory; label: string; icon: typeof Bug }
     { value: 'design-change', label: 'Design Change', icon: Pencil },
     { value: 'other', label: 'Other', icon: Info },
 ];
-
-// 30 Colors: 15 Primary (Hard) + 15 Light
-const TAG_PALETTE = [
-    // Red
-    { name: 'Red', color: 'bg-red-500 text-white hover:bg-red-600' },
-    { name: 'Light Red', color: 'bg-red-100 text-red-700 hover:bg-red-200' },
-    // Orange
-    { name: 'Orange', color: 'bg-orange-500 text-white hover:bg-orange-600' },
-    { name: 'Light Orange', color: 'bg-orange-100 text-orange-700 hover:bg-orange-200' },
-    // Amber
-    { name: 'Amber', color: 'bg-amber-500 text-white hover:bg-amber-600' },
-    { name: 'Light Amber', color: 'bg-amber-100 text-amber-700 hover:bg-amber-200' },
-    // Yellow
-    { name: 'Yellow', color: 'bg-yellow-500 text-white hover:bg-yellow-600' },
-    { name: 'Light Yellow', color: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
-    // Lime
-    { name: 'Lime', color: 'bg-lime-500 text-white hover:bg-lime-600' },
-    { name: 'Light Lime', color: 'bg-lime-100 text-lime-700 hover:bg-lime-200' },
-    // Green
-    { name: 'Green', color: 'bg-green-500 text-white hover:bg-green-600' },
-    { name: 'Light Green', color: 'bg-green-100 text-green-700 hover:bg-green-200' },
-    // Emerald
-    { name: 'Emerald', color: 'bg-emerald-500 text-white hover:bg-emerald-600' },
-    { name: 'Light Emerald', color: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' },
-    // Teal
-    { name: 'Teal', color: 'bg-teal-500 text-white hover:bg-teal-600' },
-    { name: 'Light Teal', color: 'bg-teal-100 text-teal-700 hover:bg-teal-200' },
-    // Cyan
-    { name: 'Cyan', color: 'bg-cyan-500 text-white hover:bg-cyan-600' },
-    { name: 'Light Cyan', color: 'bg-cyan-100 text-cyan-700 hover:bg-cyan-200' },
-    // Sky
-    { name: 'Sky', color: 'bg-sky-500 text-white hover:bg-sky-600' },
-    { name: 'Light Sky', color: 'bg-sky-100 text-sky-700 hover:bg-sky-200' },
-    // Blue
-    { name: 'Blue', color: 'bg-blue-500 text-white hover:bg-blue-600' },
-    { name: 'Light Blue', color: 'bg-blue-100 text-blue-700 hover:bg-blue-200' },
-    // Indigo
-    { name: 'Indigo', color: 'bg-indigo-500 text-white hover:bg-indigo-600' },
-    { name: 'Light Indigo', color: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' },
-    // Violet
-    { name: 'Violet', color: 'bg-violet-500 text-white hover:bg-violet-600' },
-    { name: 'Light Violet', color: 'bg-violet-100 text-violet-700 hover:bg-violet-200' },
-    // Purple
-    { name: 'Purple', color: 'bg-purple-500 text-white hover:bg-purple-600' },
-    { name: 'Light Purple', color: 'bg-purple-100 text-purple-700 hover:bg-purple-200' },
-    // Fuchsia
-    { name: 'Fuchsia', color: 'bg-fuchsia-500 text-white hover:bg-fuchsia-600' },
-    { name: 'Light Fuchsia', color: 'bg-fuchsia-100 text-fuchsia-700 hover:bg-fuchsia-200' },
-];
-
-const getTagColor = (tag: string) => {
-    const directMatch = TAG_PALETTE.find(p => p.name.toLowerCase() === tag.toLowerCase());
-    if (directMatch) return directMatch.color;
-    let hash = 0;
-    for (let i = 0; i < tag.length; i++) {
-        hash = tag.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const index = Math.abs(hash) % TAG_PALETTE.length;
-    return TAG_PALETTE[index].color;
-};
 
 const getFileIcon = (fileType: string) => {
     if (fileType.startsWith('image/')) return ImageIcon;
@@ -206,13 +148,21 @@ export function IssueDetailContent({
     const [newChecklistItem, setNewChecklistItem] = useState('');
     const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
     const [tagSearch, setTagSearch] = useState('');
-    const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
-    const [editingTagValue, setEditingTagValue] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+
+    const projectId = issue?.projectId;
+    const { data: projectTags = [] } = useProjectTags(projectId);
+    const createTagMutation = useCreateTag(projectId);
+    const tagColorMap = useMemo(() => {
+        const map = new Map<string, string>();
+        projectTags.forEach((t) => map.set(t.name.toLowerCase(), t.color));
+        return map;
+    }, [projectTags]);
+    const getTagColor = (tag: string) => tagColorMap.get(tag.toLowerCase()) ?? getFallbackTagColor(tag);
 
     useEffect(() => {
         onPendingFilesChange?.(pendingFiles);
@@ -222,12 +172,18 @@ export function IssueDetailContent({
     useEffect(() => {
         if (issue) {
             setEditedIssue(issue);
-            // Auto-enable advanced description if blocks exist
-            if (issue.descriptionBlocks && issue.descriptionBlocks.length > 0) {
-                setIsAdvancedDescription(true);
-            }
         }
     }, [issue]);
+
+    useEffect(() => {
+        // Auto-enable advanced description if the loaded issue already has blocks.
+        // Keyed on issue id (not the whole issue object) so this only runs when
+        // switching issues, not on every keystroke while editing a draft.
+        if (issue?.descriptionBlocks && issue.descriptionBlocks.length > 0) {
+            setIsAdvancedDescription(true);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [issue?.id]);
 
     // The issue payload returned by the project/issue endpoints never embeds
     // attachments (they live behind a separate uploads endpoint), so fetch them
@@ -700,7 +656,8 @@ export function IssueDetailContent({
                                 {(editedIssue.tags || []).map((tag) => (
                                     <Badge
                                         key={tag}
-                                        className={cn("text-xs font-normal pl-2 pr-1 gap-1", getTagColor(tag))}
+                                        className="text-xs font-normal pl-2 pr-1 gap-1 text-white border-transparent hover:opacity-90"
+                                        style={{ backgroundColor: getTagColor(tag) }}
                                     >
                                         {tag}
                                         <button
@@ -717,10 +674,7 @@ export function IssueDetailContent({
 
                                 <Popover
                                     open={isTagPopoverOpen}
-                                    onOpenChange={(open) => {
-                                        setIsTagPopoverOpen(open);
-                                        if (!open) setEditingTagIndex(null);
-                                    }}
+                                    onOpenChange={setIsTagPopoverOpen}
                                 >
                                     <PopoverTrigger asChild>
                                         <button className="h-6 w-6 rounded-full border border-dashed text-muted-foreground hover:border-primary hover:text-primary flex items-center justify-center transition-colors">
@@ -742,10 +696,16 @@ export function IssueDetailContent({
                                                     {tagSearch.trim() && (
                                                         <button
                                                             className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                                                            onClick={() => {
-                                                                handleFieldChange('tags', [...(editedIssue.tags || []), tagSearch.trim()]);
+                                                            onClick={async () => {
+                                                                const name = tagSearch.trim();
                                                                 setTagSearch('');
                                                                 setIsTagPopoverOpen(false);
+                                                                try {
+                                                                    const tag = await createTagMutation.mutateAsync({ name });
+                                                                    handleFieldChange('tags', [...(editedIssue.tags || []), tag.name]);
+                                                                } catch {
+                                                                    handleFieldChange('tags', [...(editedIssue.tags || []), name]);
+                                                                }
                                                             }}
                                                         >
                                                             <Plus className="h-3 w-3" />
@@ -753,22 +713,20 @@ export function IssueDetailContent({
                                                         </button>
                                                     )}
                                                 </CommandEmpty>
-                                                {TAG_PALETTE
-                                                    .filter(item => !(editedIssue.tags || []).includes(item.name))
-                                                    .map((item, index) => (
+                                                {projectTags
+                                                    .filter(item => !(editedIssue.tags || []).some(t => t.toLowerCase() === item.name.toLowerCase()))
+                                                    .map((item) => (
                                                         <CommandItem
-                                                            key={index}
+                                                            key={item.id}
                                                             value={item.name}
                                                             onSelect={() => {
-                                                                if (editingTagIndex !== index) {
-                                                                    handleFieldChange('tags', [...(editedIssue.tags || []), item.name]);
-                                                                    setIsTagPopoverOpen(false);
-                                                                }
+                                                                handleFieldChange('tags', [...(editedIssue.tags || []), item.name]);
+                                                                setIsTagPopoverOpen(false);
                                                             }}
                                                             className="cursor-pointer group flex items-center justify-between"
                                                         >
                                                             <div className="flex items-center gap-2">
-                                                                <div className={cn("w-3 h-3 rounded-full shrink-0", item.color.split(' ')[0])} />
+                                                                <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
                                                                 <span>{item.name}</span>
                                                             </div>
                                                         </CommandItem>

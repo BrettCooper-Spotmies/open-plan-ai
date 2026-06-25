@@ -14,7 +14,7 @@ export interface MilestoneUpdate {
   name?: string;
   due_date?: string | null;
   description?: string | null;
-  status?: string;
+  status?: string | null;
 }
 
 // DB-shape type exported for consumers that do their own adapter mapping.
@@ -35,7 +35,7 @@ function toApiPayload(data: MilestoneInsert | MilestoneUpdate): Record<string, u
   if ('name' in data && data.name !== undefined) out.title = data.name;
   if ('due_date' in data && data.due_date != null) out.dueDate = data.due_date;
   if ('description' in data && data.description != null) out.description = data.description;
-  if ('status' in data && data.status != null) out.status = data.status;
+  if ('status' in data && data.status !== undefined) out.status = data.status;
   if ('project_id' in data) out.projectId = (data as MilestoneInsert).project_id;
   return out;
 }
@@ -82,7 +82,8 @@ export const milestonesService = {
   },
 
   async update(id: string, updates: MilestoneUpdate): Promise<Milestone> {
-    const data = await apiClient.patch<Record<string, unknown>>(
+    // Backend only registers PUT for this route (no PATCH handler exists).
+    const data = await apiClient.put<Record<string, unknown>>(
       ENDPOINTS.MILESTONES.BY_ID(id),
       toApiPayload(updates)
     );
@@ -101,8 +102,8 @@ export const milestonesService = {
     await Promise.all(ids.map(id => this.delete(id)));
   },
 
-  async complete(id: string): Promise<Milestone> {
-    const data = await apiClient.patch<Record<string, unknown>>(ENDPOINTS.MILESTONES.COMPLETE(id), {});
+  async complete(id: string, completed: boolean): Promise<Milestone> {
+    const data = await apiClient.patch<Record<string, unknown>>(ENDPOINTS.MILESTONES.COMPLETE(id), { completed });
     return fromApi(data);
   },
 

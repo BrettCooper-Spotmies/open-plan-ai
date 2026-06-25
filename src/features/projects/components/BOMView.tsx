@@ -58,7 +58,7 @@ import {
   bomFilterTree, bomFlattenInclude, bomTypeOf,
   fromApiNode, assignLevelLabels, formatLeadTime,
 } from './bomData';
-import { BOMStatusPill, ReqTag, PartThumb, PartImageThumb } from './BOMShared';
+import { BOMStatusPill, ReqTag, PartImageThumb } from './BOMShared';
 import { BOMDetailScreen, AddSubcomponentDialog } from './BOMDetailScreen';
 import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
@@ -609,7 +609,7 @@ function ListView({
       {rows.length > 0 && (
         <div className="px-6 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground" style={{ minWidth: 1200 }}>
           <span>Showing {rows.length} of {totalCount} total parts</span>
-          <span>Last updated Apr 23, 2026 · Rev C approved by Engineering</span>
+          <span>Last updated 23-Apr-2026 · Rev C approved by Engineering</span>
         </div>
       )}
     </div>
@@ -694,7 +694,7 @@ function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCu
                 >
                   {/* Thumbnail */}
                   <div className="relative p-2.5">
-                    <PartThumb cat={row.cat} big />
+                    <PartImageThumb nodeId={row.id} cat={row.cat} big />
                     <span className="absolute top-4 left-4 px-1.5 py-0.5 rounded text-[10px] font-semibold"
                       style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', color: meta.tint, border: `1px solid ${meta.tint}40` }}>
                       {row.levelLabel ?? `L${row.level}`}

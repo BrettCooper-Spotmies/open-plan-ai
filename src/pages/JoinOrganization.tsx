@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Building2, CheckCircle, AlertTriangle } from 'lucide-react';
+import { format } from 'date-fns';
 
 export default function JoinOrganization() {
   const [searchParams] = useSearchParams();
@@ -138,7 +139,7 @@ export default function JoinOrganization() {
               </div>
               {invitation?.expiresAt && (
                 <p className="text-xs text-muted-foreground">
-                  Invitation expires {new Date(invitation.expiresAt).toLocaleDateString()}
+                  Invitation expires {format(new Date(invitation.expiresAt), "dd- MMM yyyy")}
                 </p>
               )}
             </div>
@@ -176,7 +177,7 @@ export default function JoinOrganization() {
               </Button>
               {invitation?.expiresAt && (
                 <p className="text-xs text-muted-foreground">
-                  Invitation expires {new Date(invitation.expiresAt).toLocaleDateString()}
+                  Invitation expires {format(new Date(invitation.expiresAt), "dd- MMM yyyy")}
                 </p>
               )}
             </div>

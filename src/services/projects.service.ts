@@ -19,6 +19,19 @@ function normaliseIssueStatus(raw: unknown): IssueStatus {
   return 'open';
 }
 
+/** Backend returns `dueDate`; the UI Milestone type uses `date`. */
+function fromApiMilestone(raw: Record<string, unknown>): Milestone {
+  return {
+    id: raw.id as string,
+    title: raw.title as string,
+    description: (raw.description as string) || undefined,
+    date: raw.dueDate as string,
+    completed: Boolean(raw.completed),
+    completedAt: (raw.completedAt as string) || undefined,
+    status: (raw.statusOverride as Milestone['status']) || undefined,
+  };
+}
+
 function fromApiIssue(raw: Record<string, unknown>): Issue {
   const assignees = ((raw.assignees as any[]) || []).map((a: any): TeamMember => ({
     id: a.id,
@@ -142,7 +155,8 @@ export const projectsService = {
    * Get milestones for a project
    */
   async getMilestones(projectId: string, limit = 100): Promise<Milestone[]> {
-    return apiClient.get<Milestone[]>(`${ENDPOINTS.MILESTONES.LIST(projectId)}?limit=${limit}`);
+    const data = await apiClient.get<Record<string, unknown>[]>(`${ENDPOINTS.MILESTONES.LIST(projectId)}?limit=${limit}`);
+    return (data || []).map(fromApiMilestone);
   },
 
   /**
