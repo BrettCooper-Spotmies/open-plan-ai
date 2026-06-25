@@ -2,8 +2,12 @@
 import {
   Zap, Cpu, Package, Box, Monitor, Shield, Layers,
 } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { BOMCategory, BOMStatus, BOM_CAT_META } from './bomData';
 import { Link2 } from 'lucide-react';
+import { useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 const CAT_ICONS: Record<BOMCategory, React.ElementType> = {
   power: Zap, control: Cpu, connector: Package, enclosure: Box,
@@ -50,6 +54,66 @@ export function PartThumb({
         >
           part photo
         </span>
+      )}
+    </div>
+  );
+}
+
+const ZOOM_SIZE = 240;
+const ZOOM_GAP = 10;
+
+// Part thumbnail that fetches the part's uploaded photo (if any) and shows an
+// Amazon-style enlarged preview on hover. Used in List/Map views only — Grid
+// view keeps the plain category-icon `PartThumb`.
+export function PartImageThumb({
+  nodeId, cat, size = 32, radius = 7,
+}: { nodeId: string; cat: BOMCategory; size?: number; radius?: number }) {
+  const { data: docs } = useBomDocuments(nodeId);
+  const imageUrl = useMemo(() => {
+    const photo = (docs ?? []).find(isImageAttachment);
+    return photo ? resolveFileUrl(photo.fileUrl) : null;
+  }, [docs]);
+
+  const anchorRef = useRef<HTMLDivElement>(null);
+  const [zoomPos, setZoomPos] = useState<{ top: number; left: number } | null>(null);
+
+  const handleEnter = () => {
+    if (!imageUrl || !anchorRef.current) return;
+    const r = anchorRef.current.getBoundingClientRect();
+    const openRight = r.right + ZOOM_GAP + ZOOM_SIZE <= window.innerWidth;
+    const left = openRight ? r.right + ZOOM_GAP : r.left - ZOOM_GAP - ZOOM_SIZE;
+    const top = Math.min(Math.max(r.top, 8), window.innerHeight - ZOOM_SIZE - 8);
+    setZoomPos({ top, left });
+  };
+  const handleLeave = () => setZoomPos(null);
+
+  return (
+    <div ref={anchorRef} onMouseEnter={handleEnter} onMouseLeave={handleLeave} style={{ display: 'inline-flex' }}>
+      <PartThumb cat={cat} size={size} radius={radius} imageUrl={imageUrl} />
+      {zoomPos && imageUrl && createPortal(
+        <div
+          style={{
+            position: 'fixed',
+            top: zoomPos.top,
+            left: zoomPos.left,
+            width: ZOOM_SIZE,
+            height: ZOOM_SIZE,
+            padding: 6,
+            background: 'var(--card)',
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            boxShadow: '0 12px 32px rgba(20,24,31,0.25)',
+            zIndex: 1000,
+            pointerEvents: 'none',
+          }}
+        >
+          <img
+            src={imageUrl}
+            alt=""
+            style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 6 }}
+          />
+        </div>,
+        document.body,
       )}
     </div>
   );

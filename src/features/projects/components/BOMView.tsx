@@ -58,7 +58,7 @@ import {
   bomFilterTree, bomFlattenInclude, bomTypeOf,
   fromApiNode, assignLevelLabels, formatLeadTime,
 } from './bomData';
-import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
+import { BOMStatusPill, ReqTag, PartThumb, PartImageThumb } from './BOMShared';
 import { BOMDetailScreen, AddSubcomponentDialog } from './BOMDetailScreen';
 import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
@@ -531,7 +531,7 @@ function ListView({
 
               {/* Part */}
               <div className="flex-1 min-w-0 px-2 flex items-center gap-2.5">
-                <PartThumb cat={row.cat} size={32} />
+                <PartImageThumb nodeId={row.id} cat={row.cat} size={32} />
                 <div className="min-w-0">
                   <span className="text-xs font-medium font-mono block" className="text-foreground">{row.pn}</span>
                   <span className={cn('text-sm block truncate',
