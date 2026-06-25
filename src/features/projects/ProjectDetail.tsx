@@ -1167,11 +1167,17 @@ export default function ProjectDetail() {
                                 <SelectValue placeholder="Select organization member" />
                               </SelectTrigger>
                               <SelectContent>
-                                {availableOrganizationMembers.map((member) => (
-                                  <SelectItem key={member.id} value={member.id}>
-                                    {member.name}
-                                  </SelectItem>
-                                ))}
+                                {availableOrganizationMembers.length > 0 ? (
+                                  availableOrganizationMembers.map((member) => (
+                                    <SelectItem key={member.id} value={member.id}>
+                                      {member.name}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                    No members available to add.
+                                  </div>
+                                )}
                               </SelectContent>
                             </Select>
                             {selectedOrganizationMember && (
