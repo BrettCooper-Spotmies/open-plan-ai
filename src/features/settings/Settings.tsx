@@ -55,12 +55,13 @@ import {
   Eye,
   EyeOff,
   Pencil,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { profileService } from '@/services/profile.service';
-import { OrganizationSettings } from '@/services/organizations.service';
+import { organizationsService, OrganizationSettings } from '@/services/organizations.service';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useUserStore } from '@/stores/useUserStore';
@@ -102,7 +103,7 @@ const Settings = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, refreshProfile, updatePassword, deleteAccount, signOut } = useAuth();
   const profile = user;
-  const { currentOrganization, createOrganization, isLoading: orgContextLoading } = useOrganization();
+  const { currentOrganization, createOrganization, refreshOrganizations, isLoading: orgContextLoading } = useOrganization();
   const { theme, changeTheme } = useAppTheme();
   const preferences = useUserStore((s) => s.preferences);
   const updatePreferences = useUserStore((s) => s.updatePreferences);
@@ -133,6 +134,7 @@ const Settings = () => {
   const [orgForm, setOrgForm] = useState({
     name: '',
     description: '',
+    companyName: '',
     companySize: '',
     timezone: 'America/New_York',
     dateFormat: 'MM/DD/YYYY',
@@ -140,6 +142,10 @@ const Settings = () => {
     logoUrl: '',
   });
   const [localAvatarPreview, setLocalAvatarPreview] = useState<string | null>(null);
+  const [orgLoading, setOrgLoading] = useState(false);
+  const [logoLoading, setLogoLoading] = useState(false);
+  const [isEditingOrg, setIsEditingOrg] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const currentOrgRole = (currentOrganization?.myRole ?? null) as 'admin' | 'manager' | 'member' | 'viewer' | null;
 
   // New organization creation state
@@ -188,13 +194,14 @@ const Settings = () => {
   }, [searchParams]);
 
   // Sync organization data to form - preserve local logoUrl if server hasn't updated yet
-  useEffect(() => {
+  const resetOrgFormFromOrganization = () => {
     if (currentOrganization) {
       const settings = (currentOrganization.settings || {}) as OrganizationSettings;
       setOrgForm(prev => ({
         ...prev,
         name: currentOrganization.name || '',
         description: currentOrganization.description || '',
+        companyName: settings.companyName || '',
         companySize: settings.companySize || '',
         timezone: settings.timezone || 'America/New_York',
         dateFormat: settings.dateFormat || 'MM/DD/YYYY',
@@ -202,6 +209,10 @@ const Settings = () => {
         logoUrl: resolveFileUrl(settings.logoUrl) ?? settings.logoUrl ?? prev.logoUrl,
       }));
     }
+  };
+
+  useEffect(() => {
+    resetOrgFormFromOrganization();
   }, [currentOrganization]);
 
 
@@ -223,6 +234,113 @@ const Settings = () => {
     } finally {
       setIsCreatingOrg(false);
     }
+  };
+
+  const handleLogoClick = () => {
+    if (!canEditOrganizationSettings) return;
+    logoInputRef.current?.click();
+  };
+
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEditOrganizationSettings) {
+      toast.error('Only admins and owners can change the organization logo');
+      return;
+    }
+    if (!currentOrganization) return;
+
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('File size must be less than 5MB');
+        return;
+      }
+
+      const localPreview = URL.createObjectURL(file);
+      setOrgForm(prev => ({ ...prev, logoUrl: localPreview }));
+
+      setLogoLoading(true);
+      try {
+        const logoUrl = await organizationsService.uploadLogo(currentOrganization.id, file);
+        URL.revokeObjectURL(localPreview);
+        setOrgForm(prev => ({ ...prev, logoUrl }));
+        await refreshOrganizations();
+        toast.success('Organization logo updated successfully');
+      } catch (error) {
+        URL.revokeObjectURL(localPreview);
+        setOrgForm(prev => ({ ...prev, logoUrl: '' }));
+        logger.error('Error uploading logo:', error);
+        toast.error('Failed to upload logo');
+      } finally {
+        setLogoLoading(false);
+        if (logoInputRef.current) {
+          logoInputRef.current.value = '';
+        }
+      }
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    if (!canEditOrganizationSettings) {
+      toast.error('Only admins and owners can remove the organization logo');
+      return;
+    }
+    if (!currentOrganization) return;
+
+    setLogoLoading(true);
+    try {
+      await organizationsService.deleteLogo(currentOrganization.id);
+      setOrgForm(prev => ({ ...prev, logoUrl: '' }));
+      await refreshOrganizations();
+      toast.success('Organization logo removed');
+    } catch (error) {
+      logger.error('Error removing logo:', error);
+      toast.error('Failed to remove logo');
+    } finally {
+      setLogoLoading(false);
+    }
+  };
+
+  const handleSaveOrganization = async () => {
+    if (!canEditOrganizationSettings) {
+      toast.error('Only organization admins and owners can edit these settings.');
+      return;
+    }
+    if (!currentOrganization) {
+      toast.error('No organization selected');
+      return;
+    }
+    if (!orgForm.name.trim()) {
+      toast.error('Organization name is required');
+      return;
+    }
+
+    setOrgLoading(true);
+    try {
+      await organizationsService.update(currentOrganization.id, {
+        name: orgForm.name,
+        description: orgForm.description || null,
+        settings: {
+          companyName: orgForm.companyName,
+          companySize: orgForm.companySize,
+          timezone: orgForm.timezone,
+          dateFormat: orgForm.dateFormat,
+          currency: orgForm.currency,
+        },
+      });
+      await refreshOrganizations();
+      toast.success('Workspace settings saved');
+      setIsEditingOrg(false);
+    } catch (error) {
+      logger.error('Error saving workspace settings:', error);
+      toast.error('Failed to save workspace settings');
+    } finally {
+      setOrgLoading(false);
+    }
+  };
+
+  const handleCancelEditOrganization = () => {
+    resetOrgFormFromOrganization();
+    setIsEditingOrg(false);
   };
 
   const handleSaveProfile = async () => {
@@ -475,7 +593,7 @@ const Settings = () => {
                     </div>
                   </div>
                 ) : (
-                  /* Existing Workspace Settings (view-only) */
+                  /* Existing Workspace Settings (editable inline) */
                   <>
                     <div className="flex items-start justify-between gap-4">
                       {!canEditOrganizationSettings ? (
@@ -483,8 +601,8 @@ const Settings = () => {
                           You have view-only access. Only organization admins and owners can edit these settings.
                         </div>
                       ) : <div />}
-                      {canEditOrganizationSettings && (
-                        <Button variant="outline" size="sm" onClick={() => navigate('/settings/organization/edit')} className="shrink-0">
+                      {canEditOrganizationSettings && !isEditingOrg && (
+                        <Button variant="outline" size="sm" onClick={() => setIsEditingOrg(true)} className="shrink-0">
                           <Pencil className="h-4 w-4 mr-2" />
                           Edit
                         </Button>
@@ -496,7 +614,9 @@ const Settings = () => {
                       <Label>Organization Logo</Label>
                       <div className="flex items-center gap-6">
                         <div className="h-20 w-20 rounded-lg border-2 border-dashed border-border flex items-center justify-center bg-muted/30 overflow-hidden">
-                          {orgForm.logoUrl ? (
+                          {logoLoading ? (
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                          ) : orgForm.logoUrl ? (
                             <img
                               src={resolveFileUrl(orgForm.logoUrl) ?? orgForm.logoUrl}
                               alt="Organization logo"
@@ -509,47 +629,160 @@ const Settings = () => {
                             </div>
                           )}
                         </div>
+                        {canEditOrganizationSettings && isEditingOrg && (
+                          <div className="space-y-2">
+                            <input
+                              type="file"
+                              ref={logoInputRef}
+                              className="hidden"
+                              accept="image/png, image/jpeg, image/gif, image/svg+xml"
+                              onChange={handleLogoChange}
+                            />
+                            <div className="flex gap-2">
+                              <Button variant="outline" size="sm" onClick={handleLogoClick} disabled={logoLoading}>
+                                <Upload className="h-4 w-4 mr-2" />
+                                {orgForm.logoUrl ? 'Change Logo' : 'Upload Logo'}
+                              </Button>
+                              {orgForm.logoUrl && (
+                                <Button variant="outline" size="sm" onClick={handleRemoveLogo} disabled={logoLoading}>
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Remove
+                                </Button>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              JPG, PNG, GIF or SVG. Max 2MB. Recommended size: 200x200px.
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     <Separator />
 
                     <div className="space-y-2">
-                      <Label>Organization Name</Label>
-                      <p className="text-sm text-foreground">{orgForm.name || '—'}</p>
+                      <Label htmlFor="org-name">Organization Name</Label>
+                      <Input
+                        id="org-name"
+                        value={orgForm.name}
+                        disabled={!canEditOrganizationSettings || !isEditingOrg}
+                        onChange={(e) => setOrgForm({ ...orgForm, name: e.target.value })}
+                      />
                     </div>
                     <div className="space-y-2">
-                      <Label>Description</Label>
-                      <p className="text-sm text-foreground whitespace-pre-wrap">{orgForm.description || '—'}</p>
+                      <Label htmlFor="org-desc">Description</Label>
+                      <Textarea
+                        id="org-desc"
+                        value={orgForm.description}
+                        disabled={!canEditOrganizationSettings || !isEditingOrg}
+                        onChange={(e) => setOrgForm({ ...orgForm, description: e.target.value })}
+                        rows={3}
+                      />
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Company Size</Label>
-                        <p className="text-sm text-foreground">
-                          {COMPANY_SIZE_LABELS[orgForm.companySize] || orgForm.companySize || '—'}
-                        </p>
+                        <Label htmlFor="org-company-name">Company Name</Label>
+                        <Input
+                          id="org-company-name"
+                          placeholder="e.g. Acme Corp"
+                          value={orgForm.companyName}
+                          disabled={!canEditOrganizationSettings || !isEditingOrg}
+                          onChange={(e) => setOrgForm({ ...orgForm, companyName: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="org-company-size">Company Size</Label>
+                        <Select
+                          value={orgForm.companySize}
+                          disabled={!canEditOrganizationSettings || !isEditingOrg}
+                          onValueChange={(value) => setOrgForm({ ...orgForm, companySize: value })}
+                        >
+                          <SelectTrigger id="org-company-size">
+                            <SelectValue placeholder="Select size" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(COMPANY_SIZE_LABELS).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>{label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Timezone</Label>
-                        <p className="text-sm text-foreground">
-                          {TIMEZONE_LABELS[orgForm.timezone] || orgForm.timezone || '—'}
-                        </p>
+                        <Select
+                          value={orgForm.timezone}
+                          disabled={!canEditOrganizationSettings || !isEditingOrg}
+                          onValueChange={(value) => setOrgForm({ ...orgForm, timezone: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(TIMEZONE_LABELS).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>{label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div className="space-y-2">
                         <Label>Date Format</Label>
-                        <p className="text-sm text-foreground">{orgForm.dateFormat || '—'}</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Currency</Label>
-                        <p className="text-sm text-foreground">
-                          {SUPPORTED_CURRENCIES.find(c => c.code === orgForm.currency)?.label || orgForm.currency || '—'}
-                        </p>
+                        <Select
+                          value={orgForm.dateFormat}
+                          disabled={!canEditOrganizationSettings || !isEditingOrg}
+                          onValueChange={(value) => setOrgForm({ ...orgForm, dateFormat: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="MM/DD/YYYY">MM/DD/YYYY</SelectItem>
+                            <SelectItem value="DD/MM/YYYY">DD/MM/YYYY</SelectItem>
+                            <SelectItem value="YYYY-MM-DD">YYYY-MM-DD</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Currency</Label>
+                        <Select
+                          value={orgForm.currency}
+                          disabled={!canEditOrganizationSettings || !isEditingOrg}
+                          onValueChange={(value) => setOrgForm({ ...orgForm, currency: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SUPPORTED_CURRENCIES.map(c => (
+                              <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {canEditOrganizationSettings && isEditingOrg && (
+                      <div className="flex gap-2">
+                        <Button onClick={handleSaveOrganization} disabled={orgLoading}>
+                          {orgLoading ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4 mr-2" />
+                          )}
+                          Save Changes
+                        </Button>
+                        <Button variant="outline" onClick={handleCancelEditOrganization} disabled={orgLoading}>
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
                   </>
                 )}
               </CardContent>

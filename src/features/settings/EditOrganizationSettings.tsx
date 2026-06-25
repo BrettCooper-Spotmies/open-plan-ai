@@ -32,6 +32,7 @@ const EditOrganizationSettings = () => {
   const [orgForm, setOrgForm] = useState({
     name: '',
     description: '',
+    companyName: '',
     companySize: '',
     timezone: 'America/New_York',
     dateFormat: 'MM/DD/YYYY',
@@ -49,6 +50,7 @@ const EditOrganizationSettings = () => {
         ...prev,
         name: currentOrganization.name || '',
         description: currentOrganization.description || '',
+        companyName: settings.companyName || '',
         companySize: settings.companySize || '',
         timezone: settings.timezone || 'America/New_York',
         dateFormat: settings.dateFormat || 'MM/DD/YYYY',
@@ -146,6 +148,7 @@ const EditOrganizationSettings = () => {
         name: orgForm.name,
         description: orgForm.description || null,
         settings: {
+          companyName: orgForm.companyName,
           companySize: orgForm.companySize,
           timezone: orgForm.timezone,
           dateFormat: orgForm.dateFormat,
@@ -313,6 +316,15 @@ const EditOrganizationSettings = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="company-name">Company Name</Label>
+              <Input
+                id="company-name"
+                placeholder="e.g. Acme Corp"
+                value={orgForm.companyName}
+                onChange={(e) => setOrgForm({ ...orgForm, companyName: e.target.value })}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="company-size">Company Size</Label>
               <Select

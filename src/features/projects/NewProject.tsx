@@ -418,6 +418,12 @@ const NewProject = () => {
     }
   };
 
+  const handleDeleteCustomDepartment = (e: React.MouseEvent, departmentId: string) => {
+    e.stopPropagation();
+    setCustomDepartments(prev => prev.filter(d => d.id !== departmentId));
+    setSelectedDepartments(prev => prev.filter(id => id !== departmentId));
+  };
+
   const handleRemoveAttachment = (fileId: string) => {
     setDeleteConfirmation({ isOpen: true, type: 'attachment', id: fileId });
   };
@@ -1134,7 +1140,7 @@ const NewProject = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5 text-primary" />
-              Departments
+              Departments <span className="text-destructive">*</span>
             </CardTitle>
             <CardDescription>Select the departments involved in this project</CardDescription>
           </CardHeader>
@@ -1168,12 +1174,20 @@ const NewProject = () => {
                   key={dept.id}
                   onClick={() => handleDepartmentToggle(dept.id)}
                   className={cn(
-                    "flex flex-col items-center gap-2 p-4 rounded-lg border-2 cursor-pointer transition-all",
+                    "flex flex-col items-center gap-2 p-4 rounded-lg border-2 cursor-pointer transition-all relative group",
                     selectedDepartments.includes(dept.id)
                       ? "border-primary bg-primary/5"
                       : "border-border hover:border-primary/50 hover:bg-muted/50"
                   )}
                 >
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={(e) => handleDeleteCustomDepartment(e, dept.id)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                   <dept.icon className={cn(
                     "h-8 w-8",
                     selectedDepartments.includes(dept.id) ? "text-primary" : "text-muted-foreground"
@@ -1699,6 +1713,7 @@ const NewProject = () => {
               || !expectedEndDate
               || isCreating
               || !currentOrganization
+              || selectedDepartments.length === 0
             }
           >
             {isCreating ? (
