@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, fromApiRevision, formatLeadTime } from './bomData';
+import { BOMNode, BOMRevision, getCategoryMeta, bomPath, bomTypeOf, fromApiRevision, formatLeadTime } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
@@ -489,7 +489,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     leadTime: activeRev.leadTime,
   };
 
-  const meta = BOM_CAT_META[node.cat] ?? BOM_CAT_META.assembly;
+  const meta = getCategoryMeta(node.cat);
   const path = bomPath(node.id, rootNodes) ?? [node];
   const children = node.children ?? [];
   const extended = node.price * node.qty;
@@ -1014,7 +1014,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               <div className="flex flex-col">
                 {path.map((p, i) => {
                   const isCur = p.id === originalNode.id;
-                  const pm = BOM_CAT_META[p.cat] ?? BOM_CAT_META.assembly;
+                  const pm = getCategoryMeta(p.cat);
                   return (
                     <div key={p.id}
                       onClick={() => !isCur && onNavigate(p.id)}

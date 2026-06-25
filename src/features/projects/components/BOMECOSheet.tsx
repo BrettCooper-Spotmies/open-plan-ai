@@ -18,7 +18,7 @@ import {
 import { ECOAvatar } from './ECOShared';
 import { useCreateECO } from '@/hooks/useECOs';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
-import { BOMNode, BOMStatus, BOM_CAT_META } from './bomData';
+import { BOMNode, BOMStatus, getCategoryMeta } from './bomData';
 import { toast } from 'sonner';
 
 // ── Local helpers ─────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ export function BOMECOSheet({
   projectId: string;
 }) {
   const createMutation = useCreateECO(projectId);
-  const meta = BOM_CAT_META[node.cat] ?? BOM_CAT_META.assembly;
+  const meta = getCategoryMeta(node.cat);
 
   const [activeTab, setActiveTab] = useState<TabId>('part');
   const [errors, setErrors] = useState<Record<string, string>>({});

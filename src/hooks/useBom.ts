@@ -112,6 +112,13 @@ export function useRejectBomNode(projectId: string) {
   });
 }
 
+export function useMapImportColumns() {
+  return useMutation({
+    mutationFn: ({ headers, sampleRows }: { headers: string[]; sampleRows: Record<string, unknown>[] }) =>
+      bomService.mapImportColumns(headers, sampleRows),
+  });
+}
+
 export function useBomNodeApprovals(nodeId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.bom.approvals(nodeId ?? ''),

@@ -124,6 +124,10 @@ export const ENDPOINTS = {
     REJECT_NODE:       (nodeId: string) => `/bom/nodes/${nodeId}/reject`,
     NODE_APPROVALS:    (nodeId: string) => `/bom/nodes/${nodeId}/approvals`,
   },
+  // BOM import — AI-assisted column mapping fallback for Excel import
+  BOM_IMPORT: {
+    MAP_COLUMNS: () => `/bom/import/map-columns`,
+  },
   // Parts catalog (org-scoped)
   PARTS: {
     LIST:      (orgId: string)  => `/organizations/${orgId}/parts`,

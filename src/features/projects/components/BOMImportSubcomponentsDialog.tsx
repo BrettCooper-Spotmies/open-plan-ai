@@ -16,12 +16,13 @@ import {
 import {
   BOMNode, ApiPartResponse, ParsedImportRow,
   SUBCOMPONENT_IMPORT_COLUMNS, parseSubcomponentImportRows,
+  checkColumnMappingConfidence, applyColumnMapping,
 } from './bomData';
 import { useOrgParts, useCreatePart } from '@/hooks/useParts';
-import { useCreateBomNode } from '@/hooks/useBom';
+import { useCreateBomNode, useMapImportColumns } from '@/hooks/useBom';
 
 const MAX_IMPORT_ROWS = 200;
-const CATEGORY_NOTE = 'assembly, power, control, connector, enclosure, hmi, safety';
+const CATEGORY_NOTE = 'assembly, power, control, connector, enclosure, hmi, safety — or any custom category';
 const STATUS_NOTE = 'approved, pending (default: pending)';
 
 interface ImportResult {
@@ -38,24 +39,25 @@ interface Props {
   orgId: string;
 }
 
-function sheetToRows(sheet: Worksheet): Record<string, unknown>[] {
-  const headers: string[] = [];
+function sheetToRows(sheet: Worksheet): { headers: string[]; rows: Record<string, unknown>[] } {
+  const headerCells: string[] = [];
   sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, colNumber) => {
-    headers[colNumber] = String(cell.value ?? '').trim();
+    headerCells[colNumber] = String(cell.value ?? '').trim();
   });
+  const headers = headerCells.filter(Boolean);
 
   const rows: Record<string, unknown>[] = [];
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
     const obj: Record<string, unknown> = {};
     row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-      const header = headers[colNumber];
+      const header = headerCells[colNumber];
       if (header) obj[header] = cell.value;
     });
     const hasData = Object.values(obj).some(v => v != null && String(v).trim() !== '');
     if (hasData) rows.push(obj);
   });
-  return rows;
+  return { headers, rows };
 }
 
 async function buildTemplateWorkbook(): Promise<Workbook> {
@@ -111,6 +113,7 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
   const [parsedRows, setParsedRows] = useState<ParsedImportRow[]>([]);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [results, setResults] = useState<ImportResult[]>([]);
+  const [mappingInProgress, setMappingInProgress] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: partsData } = useOrgParts(orgId, { limit: 100 });
@@ -118,10 +121,12 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
 
   const createPart = useCreatePart(orgId);
   const createNode = useCreateBomNode(projectId);
+  const mapImportColumns = useMapImportColumns();
 
   const reset = () => {
     setStage('upload'); setFileName(null); setFileError(null);
     setParsedRows([]); setProgress({ done: 0, total: 0 }); setResults([]);
+    setMappingInProgress(false);
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -137,14 +142,37 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
       const sheet = workbook.worksheets[0];
       if (!sheet) throw new Error('No sheet found in this file.');
 
-      const rawRows = sheetToRows(sheet);
+      const { headers, rows: rawRows } = sheetToRows(sheet);
       if (rawRows.length === 0) throw new Error('No data rows found below the header.');
       if (rawRows.length > MAX_IMPORT_ROWS) {
         throw new Error(`This file has ${rawRows.length} rows — imports are capped at ${MAX_IMPORT_ROWS} rows per file.`);
       }
 
-      setParsedRows(parseSubcomponentImportRows(rawRows, existingParts));
-      setStage('preview');
+      const { confident } = checkColumnMappingConfidence(headers);
+      if (confident) {
+        setParsedRows(parseSubcomponentImportRows(rawRows, existingParts));
+        setStage('preview');
+        return;
+      }
+
+      setMappingInProgress(true);
+      try {
+        const { mapping } = await mapImportColumns.mutateAsync({ headers, sampleRows: rawRows.slice(0, 3) });
+        const remappedRows = applyColumnMapping(rawRows, mapping);
+        setParsedRows(parseSubcomponentImportRows(remappedRows, existingParts));
+        setStage('preview');
+      } catch (mapErr) {
+        // 422 means the backend rejected the file as not BOM/parts-related —
+        // surface that specific reason. Any other failure (timeout, 5xx,
+        // misconfigured Azure OpenAI) gets a generic fallback message.
+        const status = (mapErr as { response?: { status?: number } })?.response?.status;
+        if (status === 422 && mapErr instanceof Error && mapErr.message) {
+          throw mapErr;
+        }
+        throw new Error("Couldn't automatically map these columns. Please use the template format and try again.");
+      } finally {
+        setMappingInProgress(false);
+      }
     } catch (err) {
       setFileError(err instanceof Error ? err.message : 'Could not read this file.');
       setFileName(null);
@@ -216,17 +244,30 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
             </div>
 
             <div
-              onClick={() => fileInputRef.current?.click()}
-              className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 hover:bg-muted/40 hover:border-primary/30 transition-colors cursor-pointer"
+              onClick={() => { if (!mappingInProgress) fileInputRef.current?.click(); }}
+              className={cn(
+                'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 transition-colors',
+                mappingInProgress ? 'cursor-not-allowed opacity-70' : 'hover:bg-muted/40 hover:border-primary/30 cursor-pointer',
+              )}
               style={{ height: 160 }}
             >
-              <Upload className="w-7 h-7 text-muted-foreground/50" />
-              <span className="text-sm text-foreground font-medium">Click to upload a spreadsheet</span>
-              <span className="text-[11px] text-muted-foreground">.xlsx or .xls · up to {MAX_IMPORT_ROWS} rows</span>
-              {fileName && !fileError && <span className="text-[11px] text-primary mt-1">{fileName}</span>}
+              {mappingInProgress ? (
+                <>
+                  <Loader2 className="w-7 h-7 text-primary animate-spin" />
+                  <span className="text-sm text-foreground font-medium">Analyzing column headers with AI…</span>
+                  <span className="text-[11px] text-muted-foreground">These headers don't match our template — mapping them automatically</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="w-7 h-7 text-muted-foreground/50" />
+                  <span className="text-sm text-foreground font-medium">Click to upload a spreadsheet</span>
+                  <span className="text-[11px] text-muted-foreground">.xlsx or .xls · up to {MAX_IMPORT_ROWS} rows</span>
+                  {fileName && !fileError && <span className="text-[11px] text-primary mt-1">{fileName}</span>}
+                </>
+              )}
             </div>
             <input
-              ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden"
+              ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" disabled={mappingInProgress}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
             />
 

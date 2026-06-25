@@ -19,13 +19,13 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import {
-  Zap, Cpu, Package, Box, Monitor, Shield, Layers, ChevronsUpDown,
+  Zap, Cpu, Package, Box, Monitor, Shield, Layers, ChevronsUpDown, Tag,
   CheckCircle, Clock, GitBranch, Save, Plus, X, ChevronRight, ChevronLeft,
   FileText, ImageIcon, Upload, Paperclip, AlertCircle, Link as LinkIcon,
   Check, XCircle, History, Loader2,
 } from 'lucide-react';
 import {
-  BOMNode, BOMStatus, BOMCategory, BOM_CAT_META,
+  BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, KNOWN_BOM_CATEGORIES,
 } from './bomData';
 import { BOMStatusPill } from './BOMShared';
 import { BOMRejectDialog } from './BOMRejectDialog';
@@ -84,11 +84,12 @@ type TabId = WizardTabId | 'history';
 const wizardIndex = (t: TabId) => (t === 'history' ? -1 : TABS.indexOf(t));
 
 const LETTERS = 'ABCDEFGHIJ';
-const CATEGORIES: BOMCategory[] = ['assembly', 'power', 'control', 'connector', 'enclosure', 'hmi', 'safety'];
+const CATEGORIES: BOMCategory[] = [...KNOWN_BOM_CATEGORIES];
 const CAT_ICONS: Record<BOMCategory, React.ElementType> = {
   assembly: Layers, power: Zap, control: Cpu, connector: Package,
   enclosure: Box, hmi: Monitor, safety: Shield,
 };
+const isKnownCategory = (cat: BOMCategory) => (CATEGORIES as string[]).includes(cat);
 const UOM_OPTIONS = ['EA', 'SET', 'LIC', 'KG', 'M', 'FT', 'PCS', 'LOT'];
 
 type LeadTimeUnit = 'days' | 'weeks' | 'months';
@@ -405,6 +406,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     if (tab === 'details') {
       if (!isEdit && !pn.trim()) e.pn = 'Part number is required';
       if (!desc.trim())          e.desc = 'Description is required';
+      if (!category.trim())     e.category = 'Category is required';
       if (!selectedOwner)        e.owner = 'Owner is required';
     }
     if (tab === 'sourcing') {
@@ -428,6 +430,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     const e: Record<string, string> = {};
     if (!isEdit && !pn.trim())          e.pn = 'Part number is required';
     if (!desc.trim())                   e.desc = 'Description is required';
+    if (!category.trim())               e.category = 'Category is required';
     if (!manufacturer.trim())           e.mfr = 'Manufacturer is required';
     if (!selectedOwner)                 e.owner = 'Owner is required';
     if (isEdit && versionMode === 'new' && !changeNotes.trim()) e.notes = 'Change notes are required when creating a new revision';
@@ -442,7 +445,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
       await onSave({
         mode,
         pn: isEdit ? (node?.pn ?? pn) : pn.trim(),
-        desc, category, status,
+        desc, category: category.trim().toLowerCase(), status,
         rev: isEdit ? (versionMode === 'new' ? (newRevLabel || nextRev(node!.rev)) : node!.rev) : rev,
         qty: parseFloat(qty) || 1,
         uom,
@@ -684,8 +687,8 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
               </div>
 
               {/* Category — full width */}
-              <FL label="Category" className="col-span-2">
-                <div className="grid grid-cols-7 gap-2">
+              <FL label="Category" required className="col-span-2">
+                <div className="grid grid-cols-8 gap-2">
                   {CATEGORIES.map(cat => {
                     const m = BOM_CAT_META[cat];
                     const Icon = CAT_ICONS[cat];
@@ -706,7 +709,30 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                       </button>
                     );
                   })}
+                  <button onClick={() => setCategory('')}
+                    className={cn(
+                      'flex flex-col items-center gap-2 py-3 px-2 rounded-xl border text-center cursor-pointer transition-all',
+                      !isKnownCategory(category) ? 'border-primary/60 bg-primary/5 shadow-sm' : 'border-border hover:bg-muted/50 hover:border-muted-foreground/30'
+                    )}>
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-muted">
+                      <Tag className="w-4.5 h-4.5 text-muted-foreground" style={{ width: 18, height: 18 }} />
+                    </div>
+                    <span className={cn('text-[11px] font-medium leading-tight', !isKnownCategory(category) ? 'text-primary' : 'text-muted-foreground')}>
+                      Other
+                    </span>
+                  </button>
                 </div>
+                {!isKnownCategory(category) && (
+                  <Input
+                    value={category}
+                    onChange={e => setCategory(e.target.value)}
+                    placeholder="Enter a custom category"
+                    className="h-9 mt-2"
+                    maxLength={50}
+                    autoFocus
+                  />
+                )}
+                {errors.category && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.category}</p>}
               </FL>
             </div>
           </TabsContent>
