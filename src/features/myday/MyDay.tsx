@@ -35,7 +35,7 @@ export default function MyDay() {
   const updateIssueMutation = useUpdateIssue();
 
   const allTasks = useMemo(() => {
-    return projects.flatMap(p => p.tasks);
+    return projects.flatMap(p => p.tasks || []);
   }, [projects]);
 
   const { needsAttention, readyToWork, waitingBlocked } = useMemo(() => {

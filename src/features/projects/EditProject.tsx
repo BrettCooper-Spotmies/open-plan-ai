@@ -1042,7 +1042,7 @@ const EditProject = () => {
                         <Button variant="outline" onClick={() => navigate(`/projects/${id}`)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleSave} disabled={isSaving}>
+                        <Button onClick={handleSave} disabled={isSaving || selectedDepartments.length === 0}>
                             {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                             Save Changes
                         </Button>
@@ -1336,7 +1336,7 @@ const EditProject = () => {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Users className="h-5 w-5 text-primary" />
-                            Project Departments
+                            Project Departments <span className="text-destructive">*</span>
                         </CardTitle>
                         <CardDescription>Select which departments are involved in this project</CardDescription>
                     </CardHeader>

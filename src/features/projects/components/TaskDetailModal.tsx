@@ -371,6 +371,31 @@ export const TaskDetailModal = ({
     }
   }, [isOpen, task?.id, mode]);
 
+  // The task payload returned by the project/task endpoints never embeds
+  // attachments (they live behind a separate uploads endpoint), so fetch them
+  // explicitly whenever an existing task is opened.
+  useEffect(() => {
+    if (!isOpen || !task?.id || mode === 'create') return;
+    let cancelled = false;
+    attachmentsService.getByEntity(task.id, 'task').then(records => {
+      if (cancelled) return;
+      const mapped = records.map(r => {
+        const uploader = organizationMembers.find(m => m.id === (r.uploadedBy ?? r.uploaded_by));
+        return {
+          id: r.id,
+          filename: r.fileName ?? r.file_name ?? 'file',
+          url: r.fileUrl ?? r.url ?? '',
+          fileSize: r.fileSize ?? r.file_size ?? 0,
+          fileType: r.mimeType ?? r.mime_type ?? '',
+          uploadedAt: r.createdAt ?? r.uploaded_at ?? new Date().toISOString(),
+          uploadedBy: uploader ?? { id: '', name: 'Unknown', email: '', role: '', initials: '?' },
+        };
+      });
+      setEditedTask(prev => ({ ...prev, attachments: mapped }));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [isOpen, task?.id, mode]);
+
   // Initialize form baselines once per modal session key
   useEffect(() => {
     if (!isOpen) {

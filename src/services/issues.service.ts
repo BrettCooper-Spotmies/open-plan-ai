@@ -53,7 +53,13 @@ export const issuesService = {
    * Update existing issue
    */
   async update(issueId: string, updates: Partial<Issue>): Promise<Issue> {
-    return apiClient.patch<Issue>(ENDPOINTS.ISSUES.BY_ID(issueId), updates);
+    const payload: Record<string, unknown> = { ...updates };
+    // Backend expects assigneeIds (uuid[]); frontend tracks full TeamMember objects.
+    if ('assignees' in updates) {
+      payload.assigneeIds = ((updates as any).assignees || []).map((a: any) => a.id).filter(Boolean);
+      delete payload.assignees;
+    }
+    return apiClient.patch<Issue>(ENDPOINTS.ISSUES.BY_ID(issueId), payload);
   },
 
   /**

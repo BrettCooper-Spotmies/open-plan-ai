@@ -29,7 +29,7 @@ interface IssueDetailModalProps {
   onUpdate: (issue: Issue) => void;
   onDelete?: (issueId: string) => void;
   mode?: 'view' | 'create';
-  onCreate?: (issue: Issue) => void;
+  onCreate?: (issue: Issue, pendingFiles?: File[]) => void;
 }
 
 const severityOptions: { value: IssueSeverity; label: string; color: string }[] = [
@@ -53,6 +53,7 @@ export function IssueDetailModal({
   const navigate = useNavigate();
   const [editedIssue, setEditedIssue] = useState<Issue | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (isOpen && issue) {
@@ -102,6 +103,8 @@ export function IssueDetailModal({
               onUpdate={setEditedIssue}
               onDelete={undefined}
               isDraft={true} // Always pretend it's draft to enable auto-callbacks to onUpdate instead of parent
+              mode={mode}
+              onPendingFilesChange={setPendingFiles}
               onExpand={mode === 'create' ? undefined : () => {
                 const pathParts = window.location.pathname.split('/');
                 const projectIndex = pathParts.indexOf('projects');
@@ -120,8 +123,8 @@ export function IssueDetailModal({
         {mode === 'create' && (
           <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button 
-              onClick={() => onCreate?.(editedIssue!)}
+            <Button
+              onClick={() => onCreate?.(editedIssue!, pendingFiles)}
               disabled={!editedIssue.title.trim()}
             >
               Create Issue

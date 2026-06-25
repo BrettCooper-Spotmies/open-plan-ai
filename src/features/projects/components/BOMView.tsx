@@ -606,10 +606,12 @@ function ListView({
       </div>
 
       {/* Footer */}
-      <div className="px-6 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground" style={{ minWidth: 1200 }}>
-        <span>Showing {rows.length} of {totalCount} total parts</span>
-        <span>Last updated Apr 23, 2026 · Rev C approved by Engineering</span>
-      </div>
+      {rows.length > 0 && (
+        <div className="px-6 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground" style={{ minWidth: 1200 }}>
+          <span>Showing {rows.length} of {totalCount} total parts</span>
+          <span>Last updated Apr 23, 2026 · Rev C approved by Engineering</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -124,8 +124,9 @@ export function MyDayKanbanView({
 
     // Only allow status updates when grouping by progress
     if (groupBy === 'progress') {
+      // 'dependency' is excluded: it's a derived blocked-state, not a real
+      // task_columns key on the backend, and isDropDisabled prevents drops there.
       const statusMap: Record<string, TaskStatus> = {
-        dependency: 'blocked',
         notStarted: 'todo',
         inProgress: 'in-progress',
         completed: 'done',
@@ -237,7 +238,11 @@ export function MyDayKanbanView({
                         </div>
 
                         {/* Tasks Droppable */}
-                        <Droppable droppableId={column.id} type="TASK" isDropDisabled={groupBy !== 'progress'}>
+                        <Droppable
+                          droppableId={column.id}
+                          type="TASK"
+                          isDropDisabled={groupBy !== 'progress' || column.id === 'dependency'}
+                        >
                           {(provided, snapshot) => (
                             <div
                               ref={provided.innerRef}

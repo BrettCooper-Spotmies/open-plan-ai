@@ -78,6 +78,8 @@ import { SlashBlockEditor, EditorBlock } from '@/components/ui/SlashBlockEditor'
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ISSUE_SEVERITY_DISPLAY, ISSUE_SEVERITY_OPTIONS } from './issueSeverity';
+import { attachmentsService } from '@/services/attachments.service';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface IssueDetailContentProps {
     issue: Issue | null;
@@ -88,6 +90,8 @@ interface IssueDetailContentProps {
     onExpand?: () => void; // Optional expanded view action
     isExpanded?: boolean;
     isDraft?: boolean;
+    mode?: 'view' | 'create';
+    onPendingFilesChange?: (files: File[]) => void;
 }
 
 const statusOptions: { value: IssueStatus; label: string; color: string }[] = [
@@ -189,7 +193,10 @@ export function IssueDetailContent({
     onExpand,
     isExpanded = false,
     isDraft = false,
+    mode = 'view',
+    onPendingFilesChange,
 }: IssueDetailContentProps) {
+    const { user: profile } = useAuth();
     const [editedIssue, setEditedIssue] = useState<Issue | null>(issue);
     const [newComment, setNewComment] = useState('');
     const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
@@ -205,6 +212,12 @@ export function IssueDetailContent({
     const [isSaving, setIsSaving] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
+    const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+
+    useEffect(() => {
+        onPendingFilesChange?.(pendingFiles);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pendingFiles]);
 
     useEffect(() => {
         if (issue) {
@@ -215,6 +228,32 @@ export function IssueDetailContent({
             }
         }
     }, [issue]);
+
+    // The issue payload returned by the project/issue endpoints never embeds
+    // attachments (they live behind a separate uploads endpoint), so fetch them
+    // explicitly whenever an existing issue is opened.
+    useEffect(() => {
+        if (mode === 'create' || !issue?.id) return;
+        let cancelled = false;
+        attachmentsService.getByEntity(issue.id, 'issue').then(records => {
+            if (cancelled) return;
+            const mapped = records.map(r => {
+                const uploader = teamMembers.find(m => m.id === (r.uploadedBy ?? r.uploaded_by));
+                return {
+                    id: r.id,
+                    filename: r.fileName ?? r.file_name ?? 'file',
+                    url: r.fileUrl ?? r.url ?? '',
+                    fileSize: r.fileSize ?? r.file_size ?? 0,
+                    fileType: r.mimeType ?? r.mime_type ?? '',
+                    uploadedAt: r.createdAt ?? r.uploaded_at ?? new Date().toISOString(),
+                    uploadedBy: uploader ?? { id: '', name: 'Unknown', email: '', role: '', initials: '?' },
+                };
+            });
+            setEditedIssue(prev => (prev && prev.id === issue.id ? { ...prev, attachments: mapped } : prev));
+        }).catch(() => {});
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [issue?.id, mode]);
 
     if (!editedIssue) return null;
 
@@ -256,12 +295,61 @@ export function IssueDetailContent({
     };
 
     const attachments = editedIssue.attachments || [];
-    const handleFileUpload = async (_e: React.ChangeEvent<HTMLInputElement>) => {
-        // File uploads are not yet supported in this backend version
-        toast.info('File attachments coming soon');
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        // In create mode the issue doesn't exist on the backend yet; queue files
+        // locally and upload them after the issue is actually created.
+        if (mode === 'create') {
+            setPendingFiles(prev => [...prev, ...Array.from(files)]);
+            if (e.target) e.target.value = '';
+            return;
+        }
+        setIsUploading(true);
+        try {
+            const results = await Promise.all(
+                Array.from(files).map(file =>
+                    attachmentsService.upload({
+                        entityId: editedIssue.id,
+                        entityType: 'issue',
+                        projectId: editedIssue.projectId,
+                        file,
+                    })
+                )
+            );
+            handleFieldChange('attachments', [
+                ...attachments,
+                ...results.map(r => ({
+                    id: r.id,
+                    filename: r.fileName ?? r.file_name ?? 'file',
+                    url: r.fileUrl ?? r.url ?? '',
+                    fileSize: r.fileSize ?? r.file_size ?? 0,
+                    fileType: r.mimeType ?? r.mime_type ?? '',
+                    uploadedAt: r.createdAt ?? r.uploaded_at ?? new Date().toISOString(),
+                    uploadedBy: profile
+                        ? { id: profile.id, name: profile.name, email: profile.email, role: '', initials: profile.initials ?? '' }
+                        : { id: '', name: 'You', email: '', role: '', initials: '' },
+                })),
+            ]);
+            toast.success(`${results.length} file(s) uploaded`);
+        } catch (err: any) {
+            toast.error(err?.message || 'Failed to upload file');
+        } finally {
+            setIsUploading(false);
+            if (e.target) e.target.value = '';
+        }
     };
 
-    const handleRemoveAttachment = (attachmentId: string) => {
+    const handleRemovePendingFile = (index: number) => {
+        setPendingFiles(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleRemoveAttachment = async (attachmentId: string) => {
+        try {
+            await attachmentsService.delete(attachmentId);
+        } catch {
+            // Already removed or never persisted server-side; fall through to local removal.
+        }
         handleFieldChange('attachments', attachments.filter(a => a.id !== attachmentId));
     };
 
@@ -831,6 +919,29 @@ export function IssueDetailContent({
                                     </div>
                                 );
                             })}
+
+                            {/* Pending files (create mode only, uploaded once the issue is created) */}
+                            {mode === 'create' && pendingFiles.length > 0 && (
+                                <div className="space-y-1">
+                                    {pendingFiles.map((f, i) => (
+                                        <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                <span className="truncate">{f.name}</span>
+                                                <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 shrink-0"
+                                                onClick={() => handleRemovePendingFile(i)}
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
 
                             <div className="flex items-center justify-center w-full">
                                 <label className={cn(
