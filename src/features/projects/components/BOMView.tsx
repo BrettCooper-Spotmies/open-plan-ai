@@ -58,7 +58,7 @@ import {
   bomFilterTree, bomFlattenInclude, bomTypeOf,
   fromApiNode, assignLevelLabels, formatLeadTime,
 } from './bomData';
-import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
+import { BOMStatusPill, ReqTag, PartThumb, PartImageThumb } from './BOMShared';
 import { BOMDetailScreen, AddSubcomponentDialog } from './BOMDetailScreen';
 import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
@@ -473,7 +473,7 @@ function ListView({
   return (
     <div className="flex-1 overflow-y-auto overflow-x-auto border-t border-border">
       {/* Header */}
-      <div className="flex items-center px-6 border-b border-border bg-muted/40 sticky top-0 z-10" style={{ minWidth: 1200 }}>
+      <div className="flex items-center px-6 border-b border-border bg-background sticky top-0 z-10" style={{ minWidth: 1200 }}>
         {HEADERS.map((c, i) => (
           <div key={c.key}
             style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
@@ -531,7 +531,7 @@ function ListView({
 
               {/* Part */}
               <div className="flex-1 min-w-0 px-2 flex items-center gap-2.5">
-                <PartThumb cat={row.cat} size={32} />
+                <PartImageThumb nodeId={row.id} cat={row.cat} size={32} />
                 <div className="min-w-0">
                   <span className="text-xs font-medium font-mono block" className="text-foreground">{row.pn}</span>
                   <span className={cn('text-sm block truncate',

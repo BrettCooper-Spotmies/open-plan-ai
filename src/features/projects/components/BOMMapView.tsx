@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { Plus, Minus, Maximize, RefreshCw } from 'lucide-react';
 import { BOMNode } from './bomData';
-import { BOMStatusPill, PartThumb } from './BOMShared';
+import { BOMStatusPill, PartImageThumb } from './BOMShared';
 
 interface Props {
   nodes: BOMNode[];
@@ -233,7 +233,7 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
               }}
             >
               <div style={{ display: 'flex', gap: 10, padding: '10px 12px 0' }}>
-                <PartThumb cat={n.cat} size={38} radius={8} />
+                <PartImageThumb nodeId={n.id} cat={n.cat} size={38} radius={8} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 10.5, fontWeight: 500, color: '#2563EB', fontFamily: 'var(--font-mono, monospace)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {n.pn}
