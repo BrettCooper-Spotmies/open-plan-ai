@@ -222,12 +222,18 @@ export function IssueDetailContent({
     useEffect(() => {
         if (issue) {
             setEditedIssue(issue);
-            // Auto-enable advanced description if blocks exist
-            if (issue.descriptionBlocks && issue.descriptionBlocks.length > 0) {
-                setIsAdvancedDescription(true);
-            }
         }
     }, [issue]);
+
+    useEffect(() => {
+        // Auto-enable advanced description if the loaded issue already has blocks.
+        // Keyed on issue id (not the whole issue object) so this only runs when
+        // switching issues, not on every keystroke while editing a draft.
+        if (issue?.descriptionBlocks && issue.descriptionBlocks.length > 0) {
+            setIsAdvancedDescription(true);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [issue?.id]);
 
     // The issue payload returned by the project/issue endpoints never embeds
     // attachments (they live behind a separate uploads endpoint), so fetch them
