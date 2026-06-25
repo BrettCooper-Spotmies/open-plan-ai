@@ -378,10 +378,16 @@ export default function ProjectDetail() {
   const { id, tab: tabParam, partId, ecoId } = useParams();
   const { data: boardColumns } = useProjectTaskColumns(id);
 
+  // The /bom/:partId and /eng-changes/:ecoId routes encode the section as a literal
+  // path segment rather than the generic :tab param, so infer it from which item id is present.
   const ALL_SECTIONS: ProjectSection[] = ['bom', 'eng-changes', 'tasks', 'modules', 'milestones', 'issues', 'gate-reviews', 'risk'];
-  const section: ProjectSection = ALL_SECTIONS.includes(tabParam as ProjectSection)
-    ? (tabParam as ProjectSection)
-    : 'bom';
+  const section: ProjectSection = partId
+    ? 'bom'
+    : ecoId
+      ? 'eng-changes'
+      : ALL_SECTIONS.includes(tabParam as ProjectSection)
+        ? (tabParam as ProjectSection)
+        : 'bom';
 
   const isMobile = useIsMobile();
   const [viewModeStr, setViewModeStr] = useState<TaskViewMode | null>(null);
