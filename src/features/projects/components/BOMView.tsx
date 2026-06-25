@@ -473,7 +473,7 @@ function ListView({
   return (
     <div className="flex-1 overflow-y-auto overflow-x-auto border-t border-border">
       {/* Header */}
-      <div className="flex items-center px-6 border-b border-border bg-muted/40 sticky top-0 z-10" style={{ minWidth: 1200 }}>
+      <div className="flex items-center px-6 border-b border-border bg-background sticky top-0 z-10" style={{ minWidth: 1200 }}>
         {HEADERS.map((c, i) => (
           <div key={c.key}
             style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
