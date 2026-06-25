@@ -10,6 +10,8 @@ import { ReportTeamWorkload } from './components/ReportTeamWorkload';
 import { ReportModuleProgress } from './components/ReportModuleProgress';
 import { ReportOpenIssuesTable } from './components/ReportOpenIssuesTable';
 import { ReportTrendChart } from './components/ReportTrendChart';
+import { ReportBomSection } from './components/ReportBomSection';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { useProjects } from '@/hooks/useProjects';
@@ -18,6 +20,9 @@ import { useOrgAllIssues } from '@/hooks/useIssues';
 import { useAllMilestones } from '@/hooks/useMilestones';
 import { useOrgAllModules } from '@/hooks/useModules';
 import { useTeamMembers } from '@/hooks/useTeam';
+import { useBomTree } from '@/hooks/useBom';
+import { useCurrency } from '@/hooks/useCurrency';
+import { fromApiNode, bomFlatAll } from '@/features/projects/components/bomData';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { TeamMember as ServiceTeamMember } from '@/services/team.service';
 import { Module as DbModule } from '@/services/modules.service';
@@ -88,6 +93,7 @@ export default function Reports() {
   const { data: dbMilestones = [], isLoading: milestonesLoading } = useAllMilestones();
   const { data: dbModules = [], isLoading: modulesLoading } = useOrgAllModules();
   const { data: serviceTeamMembers = [], isLoading: teamLoading } = useTeamMembers(orgId);
+  const { formatCurrency } = useCurrency();
 
   const isLoading = projectsLoading || tasksLoading || issuesLoading || milestonesLoading || modulesLoading || teamLoading;
 
@@ -135,6 +141,13 @@ export default function Reports() {
     if (!filter.projectId) return undefined;
     return allProjects.find(p => p.id === filter.projectId)?.name;
   }, [allProjects, filter.projectId]);
+
+  // ─── BOM (project-scoped only — there is no org-wide BOM tree) ────────────
+  const { data: bomTree } = useBomTree(filter.projectId);
+  const bomNodes = useMemo(() => {
+    if (!bomTree?.roots?.length) return [];
+    return bomFlatAll(bomTree.roots.map(r => fromApiNode(r)));
+  }, [bomTree]);
 
   // ─── Date range ───────────────────────────────────────────────────────────
   const dateRange = useMemo(
@@ -279,6 +292,19 @@ export default function Reports() {
           issues={issues}
           onIssueClick={handleIssueClick}
         />
+
+        {/* Bill of Materials — project-scoped only */}
+        {filter.projectId ? (
+          <ReportBomSection projectName={projectName} nodes={bomNodes} formatCurrency={formatCurrency} />
+        ) : (
+          <div className="pt-6 mt-2 border-t">
+            <Card>
+              <CardContent className="flex items-center justify-center h-[120px] text-muted-foreground text-sm">
+                Select a project above to see its Bill of Materials data.
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </>
   );

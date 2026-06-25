@@ -769,10 +769,20 @@ interface BOMViewProps {
   orgId: string;
   addOpen?: boolean;
   onAddClose?: () => void;
+  selectedId?: string | null;
+  onSelectedIdChange?: (id: string | null) => void;
 }
 
-export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMViewProps) {
-  const [selected, setSelected] = useState<string | null>(null);
+export function BOMView({
+  projectId,
+  orgId,
+  addOpen = false,
+  onAddClose,
+  selectedId = null,
+  onSelectedIdChange,
+}: BOMViewProps) {
+  const selected = selectedId;
+  const setSelected = (id: string | null) => onSelectedIdChange?.(id);
   const [addSubNode, setAddSubNode] = useState<BOMNode | null>(null);
   const [createSubNode, setCreateSubNode] = useState<BOMNode | null>(null);
   const [importSubNode, setImportSubNode] = useState<BOMNode | null>(null);
@@ -1023,6 +1033,14 @@ export function BOMView({ projectId, orgId, addOpen = false, onAddClose }: BOMVi
         onBack={() => setSelected(null)}
         onNavigate={setSelected}
       />
+    );
+    return (
+      <div className="flex flex-col items-center justify-center h-[50vh] gap-3 text-center px-4">
+        <p className="text-sm text-muted-foreground">This part could not be found in the BOM.</p>
+        <Button variant="outline" size="sm" onClick={() => setSelected(null)}>
+          Back to BOM
+        </Button>
+      </div>
     );
   }
 

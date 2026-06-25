@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2, Layers, Upload, Download, GitMerge, ChartGantt, ShieldAlert, ListChecks } from 'lucide-react';
 import { BOMView } from './components/BOMView';
 import RequirementsView from './components/RequirementsView';
@@ -375,14 +375,15 @@ export default function ProjectDetail() {
   const { currentOrganization } = useOrganization();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { id } = useParams();
+  const { id, tab: tabParam, partId, ecoId } = useParams();
   const { data: boardColumns } = useProjectTaskColumns(id);
-  const location = useLocation();
-  const searchParams = new URLSearchParams(location.search);
-  const tabParam = searchParams.get('tab') as ProjectSection;
+
+  const ALL_SECTIONS: ProjectSection[] = ['bom', 'eng-changes', 'tasks', 'modules', 'milestones', 'issues', 'gate-reviews', 'risk'];
+  const section: ProjectSection = ALL_SECTIONS.includes(tabParam as ProjectSection)
+    ? (tabParam as ProjectSection)
+    : 'bom';
 
   const isMobile = useIsMobile();
-  const [section, setSection] = useState<ProjectSection>(tabParam || 'bom');
   const [viewModeStr, setViewModeStr] = useState<TaskViewMode | null>(null);
   const [moduleViewModeStr, setModuleViewModeStr] = useState<ModuleViewMode | null>(null);
   const [issueViewModeStr, setIssueViewModeStr] = useState<'table' | 'kanban' | null>(null);
@@ -447,13 +448,6 @@ export default function ProjectDetail() {
   const batchUpdateTasksMutation = useBatchUpdateTasks(id || '');
   const batchUpdateModulesMutation = useBatchUpdateModules(id || '');
   const updateProjectMutation = useUpdateProject();
-
-  // Update section from URL params
-  useEffect(() => {
-    if (tabParam) {
-      setSection(tabParam);
-    }
-  }, [tabParam]);
 
   // Calculate active filter count - moved before early returns
   const activeFilterCount = useMemo(() => {
@@ -1206,7 +1200,7 @@ export default function ProjectDetail() {
         </div>
 
         {/* Section Tabs - Entity-based navigation */}
-        <Tabs value={section} onValueChange={(v) => setSection(v as ProjectSection)} className="w-full">
+        <Tabs value={section} onValueChange={(v) => navigate(`/projects/${id}/${v}`)} className="w-full">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             {/* Left Side: Tabs and Filters */}
             <div className="w-full py-1 md:mr-auto md:w-auto">
@@ -1476,13 +1470,25 @@ export default function ProjectDetail() {
               orgId={currentOrganization?.id ?? ''}
               addOpen={bomAddOpen}
               onAddClose={() => setBomAddOpen(false)}
+              selectedId={partId ?? null}
+              onSelectedIdChange={(newId) =>
+                navigate(`/projects/${id}/bom${newId ? `/${newId}` : ''}`, { replace: !newId })
+              }
             />
           </TabsContent>
           <TabsContent value="requirements" className="mt-6 -mx-6 -mb-6 flex flex-col">
             <RequirementsView />
           </TabsContent>
           <TabsContent value="eng-changes" className="mt-6 -mx-6 -mb-6 flex flex-col">
-            <ECOView projectId={id!} newTrigger={ecoNewOpen} onNewConsumed={() => setEcoNewOpen(false)} />
+            <ECOView
+              projectId={id!}
+              newTrigger={ecoNewOpen}
+              onNewConsumed={() => setEcoNewOpen(false)}
+              openEcoId={ecoId ?? null}
+              onOpenEcoIdChange={(newId) =>
+                navigate(`/projects/${id}/eng-changes${newId ? `/${newId}` : ''}`, { replace: !newId })
+              }
+            />
           </TabsContent>
           <TabsContent value="gate-reviews" className="mt-6">
             <GateView />
