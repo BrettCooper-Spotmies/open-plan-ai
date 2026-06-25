@@ -93,7 +93,7 @@ export function PartImageThumb({
   const handleLeave = () => setZoomPos(null);
 
   return (
-    <div ref={anchorRef} onMouseEnter={handleEnter} onMouseLeave={handleLeave} style={{ display: 'inline-flex' }}>
+    <div ref={anchorRef} onMouseEnter={handleEnter} onMouseLeave={handleLeave}>
       <PartThumb cat={cat} size={size} radius={radius} big={big} imageUrl={imageUrl} />
       {hoverZoom && zoomPos && imageUrl && createPortal(
         <div
