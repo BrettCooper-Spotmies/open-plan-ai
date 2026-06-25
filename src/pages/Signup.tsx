@@ -451,15 +451,17 @@ const Signup = () => {
                 <span className="text-primary">Privacy Policy</span>
                 {" "}(coming soon)
               </p>
-              <p className="text-sm text-muted-foreground text-center">
-                Already have an account?{" "}
-                <Link
-                  to="/login"
-                  className="text-primary hover:text-primary/80 font-medium transition-colors"
-                >
-                  Sign in
-                </Link>
-              </p>
+              {!isInviteSignup && (
+                <p className="text-sm text-muted-foreground text-center">
+                  Already have an account?{" "}
+                  <Link
+                    to="/login"
+                    className="text-primary hover:text-primary/80 font-medium transition-colors"
+                  >
+                    Sign in
+                  </Link>
+                </p>
+              )}
             </CardFooter>
           </form>
         </Card>

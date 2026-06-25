@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, fromApiRevision, formatLeadTime } from './bomData';
-import { BOMStatusPill, ReqTag, PartThumb } from './BOMShared';
+import { BOMStatusPill, ReqTag, PartThumb, PartImageThumb } from './BOMShared';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
@@ -779,7 +779,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                     className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors"
                     style={{ borderBottom: i < children.length - 1 ? '1px solid var(--border)' : undefined }}
                   >
-                    <PartThumb cat={c.cat} size={34} />
+                    <PartImageThumb nodeId={c.id} cat={c.cat} size={34} />
                     <div className="flex-1 min-w-0">
                       <div className="text-[11px] font-medium font-mono" className="text-foreground">{c.pn}</div>
                       <div className="text-sm font-medium text-foreground truncate">{c.desc}</div>

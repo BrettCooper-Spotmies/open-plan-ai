@@ -62,12 +62,12 @@ export function PartThumb({
 const ZOOM_SIZE = 240;
 const ZOOM_GAP = 10;
 
-// Part thumbnail that fetches the part's uploaded photo (if any) and shows an
-// Amazon-style enlarged preview on hover. Used in List/Map views only — Grid
-// view keeps the plain category-icon `PartThumb`.
+// Part thumbnail that fetches the part's uploaded photo (if any) and falls
+// back to the plain category-icon `PartThumb` when no photo exists. Pass
+// `hoverZoom` to show an Amazon-style enlarged preview on hover (List view).
 export function PartImageThumb({
-  nodeId, cat, size = 32, radius = 7,
-}: { nodeId: string; cat: BOMCategory; size?: number; radius?: number }) {
+  nodeId, cat, size = 32, radius = 7, big = false, hoverZoom = false,
+}: { nodeId: string; cat: BOMCategory; size?: number; radius?: number; big?: boolean; hoverZoom?: boolean }) {
   const { data: docs } = useBomDocuments(nodeId);
   const imageUrl = useMemo(() => {
     const photo = (docs ?? []).find(isImageAttachment);
@@ -78,12 +78,12 @@ export function PartImageThumb({
   const [zoomPos, setZoomPos] = useState<{ top: number; left?: number; right?: number } | null>(null);
 
   const handleEnter = () => {
-    if (!imageUrl || !anchorRef.current) return;
+    if (!hoverZoom || !imageUrl || !anchorRef.current) return;
     const r = anchorRef.current.getBoundingClientRect();
     const openRight = r.right + ZOOM_GAP + ZOOM_SIZE <= window.innerWidth;
-    
+
     const top = Math.min(Math.max(r.top, 8), window.innerHeight - ZOOM_SIZE - 8);
-    
+
     if (openRight) {
       setZoomPos({ top, left: r.right + ZOOM_GAP });
     } else {
@@ -94,8 +94,8 @@ export function PartImageThumb({
 
   return (
     <div ref={anchorRef} onMouseEnter={handleEnter} onMouseLeave={handleLeave} style={{ display: 'inline-flex' }}>
-      <PartThumb cat={cat} size={size} radius={radius} imageUrl={imageUrl} />
-      {zoomPos && imageUrl && createPortal(
+      <PartThumb cat={cat} size={size} radius={radius} big={big} imageUrl={imageUrl} />
+      {hoverZoom && zoomPos && imageUrl && createPortal(
         <div
           style={{
             position: 'fixed',

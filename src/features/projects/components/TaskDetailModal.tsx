@@ -524,10 +524,6 @@ export const TaskDetailModal = ({
       return;
     }
 
-    if (!editedTask.moduleIds || editedTask.moduleIds.length === 0) {
-      return;
-    }
-
     if (isBlockedWithoutDependencies) {
       toast.error('Please add dependencies before creating a blocked task');
       return;
@@ -692,7 +688,6 @@ export const TaskDetailModal = ({
   const canSubmitTask = Boolean(
     editedTask.title &&
       editedTask.dueDate &&
-      hasSelectedModules &&
       !isBlockedWithoutDependencies &&
       (mode === 'create' || isFormDirty)
   );
@@ -1200,7 +1195,7 @@ export const TaskDetailModal = ({
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <Tag className="h-3 w-3" />
-                    Modules <span className="text-destructive">*</span>
+                    Modules
                   </Label>
                   <div
                     className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
