@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Sun, Moon, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -23,6 +24,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationsPopover } from './NotificationsPopover';
+import { useAppTheme } from '@/hooks/useAppTheme';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { resolveFileUrl } from '@/utils/fileUrl';
 
@@ -44,12 +46,19 @@ export function AppHeader() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const { user: profile, signOut } = useAuth();
+  const { theme, changeTheme } = useAppTheme();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const mobileTitle = useMemo(
     () => getMobileHeaderTitle(location.pathname),
     [location.pathname],
   );
+
+  const cycleTheme = () => {
+    if (theme === 'system') changeTheme('light');
+    else if (theme === 'light') changeTheme('dark');
+    else changeTheme('system');
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -70,6 +79,18 @@ export function AppHeader() {
       </div>
 
       <div className="flex items-center gap-2">
+        {/* Theme Toggle */}
+        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={cycleTheme} title={`Theme: ${theme} (click to cycle)`}>
+          {theme === 'dark' ? (
+            <Moon className="h-4 w-4" />
+          ) : theme === 'light' ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Monitor className="h-4 w-4" />
+          )}
+          <span className="sr-only">Toggle theme</span>
+        </Button>
+
         {/* Notifications */}
         <NotificationsPopover />
 
