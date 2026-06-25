@@ -75,15 +75,20 @@ export function PartImageThumb({
   }, [docs]);
 
   const anchorRef = useRef<HTMLDivElement>(null);
-  const [zoomPos, setZoomPos] = useState<{ top: number; left: number } | null>(null);
+  const [zoomPos, setZoomPos] = useState<{ top: number; left?: number; right?: number } | null>(null);
 
   const handleEnter = () => {
     if (!imageUrl || !anchorRef.current) return;
     const r = anchorRef.current.getBoundingClientRect();
     const openRight = r.right + ZOOM_GAP + ZOOM_SIZE <= window.innerWidth;
-    const left = openRight ? r.right + ZOOM_GAP : r.left - ZOOM_GAP - ZOOM_SIZE;
+    
     const top = Math.min(Math.max(r.top, 8), window.innerHeight - ZOOM_SIZE - 8);
-    setZoomPos({ top, left });
+    
+    if (openRight) {
+      setZoomPos({ top, left: r.right + ZOOM_GAP });
+    } else {
+      setZoomPos({ top, right: window.innerWidth - r.left + ZOOM_GAP });
+    }
   };
   const handleLeave = () => setZoomPos(null);
 
@@ -96,8 +101,7 @@ export function PartImageThumb({
             position: 'fixed',
             top: zoomPos.top,
             left: zoomPos.left,
-            width: ZOOM_SIZE,
-            height: ZOOM_SIZE,
+            right: zoomPos.right,
             padding: 6,
             background: 'var(--card)',
             border: '1px solid var(--border)',
@@ -105,12 +109,13 @@ export function PartImageThumb({
             boxShadow: '0 12px 32px rgba(20,24,31,0.25)',
             zIndex: 1000,
             pointerEvents: 'none',
+            display: 'flex',
           }}
         >
           <img
             src={imageUrl}
             alt=""
-            style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 6 }}
+            style={{ maxWidth: ZOOM_SIZE, maxHeight: ZOOM_SIZE, objectFit: 'contain', borderRadius: 6, display: 'block' }}
           />
         </div>,
         document.body,
