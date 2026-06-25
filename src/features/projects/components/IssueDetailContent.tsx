@@ -229,6 +229,32 @@ export function IssueDetailContent({
         }
     }, [issue]);
 
+    // The issue payload returned by the project/issue endpoints never embeds
+    // attachments (they live behind a separate uploads endpoint), so fetch them
+    // explicitly whenever an existing issue is opened.
+    useEffect(() => {
+        if (mode === 'create' || !issue?.id) return;
+        let cancelled = false;
+        attachmentsService.getByEntity(issue.id, 'issue').then(records => {
+            if (cancelled) return;
+            const mapped = records.map(r => {
+                const uploader = teamMembers.find(m => m.id === (r.uploadedBy ?? r.uploaded_by));
+                return {
+                    id: r.id,
+                    filename: r.fileName ?? r.file_name ?? 'file',
+                    url: r.fileUrl ?? r.url ?? '',
+                    fileSize: r.fileSize ?? r.file_size ?? 0,
+                    fileType: r.mimeType ?? r.mime_type ?? '',
+                    uploadedAt: r.createdAt ?? r.uploaded_at ?? new Date().toISOString(),
+                    uploadedBy: uploader ?? { id: '', name: 'Unknown', email: '', role: '', initials: '?' },
+                };
+            });
+            setEditedIssue(prev => (prev && prev.id === issue.id ? { ...prev, attachments: mapped } : prev));
+        }).catch(() => {});
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [issue?.id, mode]);
+
     if (!editedIssue) return null;
 
     const handleFieldChange = <K extends keyof Issue>(field: K, value: Issue[K]) => {
