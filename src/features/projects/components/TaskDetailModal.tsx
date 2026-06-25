@@ -1741,7 +1741,7 @@ export const TaskDetailModal = ({
                             <CommandInput placeholder="Search tasks..." />
                             <CommandList>
                               <CommandEmpty>
-                                {availableTasksForBlocking.length === 0 ? "No tasks registered yet." : "No results found."}
+                                {availableTasksForBlocking.length === 0 ? "No available tasks" : "No results found."}
                               </CommandEmpty>
                               <CommandGroup>
                                 {availableTasksForBlocking.map((t) => (
@@ -1819,7 +1819,7 @@ export const TaskDetailModal = ({
                             <CommandInput placeholder="Search tasks..." />
                             <CommandList>
                               <CommandEmpty>
-                                {availableTasksForBlockedBy.length === 0 ? "No tasks registered yet." : "No results found."}
+                                {availableTasksForBlockedBy.length === 0 ? "No available tasks" : "No results found."}
                               </CommandEmpty>
                               <CommandGroup>
                                 {availableTasksForBlockedBy.map((t) => (
