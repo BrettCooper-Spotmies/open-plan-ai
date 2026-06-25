@@ -76,6 +76,7 @@ import { toast } from 'sonner';
 import { calculateProjectProgress } from './utils/projectUtils';
 import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember } from '@/types';
 import { logger } from '@/services/monitoring/logger';
+import { format } from 'date-fns';
 
 // Issue Filter interface
 interface IssueFilter {
@@ -1077,7 +1078,7 @@ export default function ProjectDetail() {
                 {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
                 <div className="flex items-center gap-2 whitespace-nowrap">
                   <Calendar className="h-4 w-4 shrink-0" />
-                  <span>Due {project.targetDate ? new Date(project.targetDate).toLocaleDateString() : 'Not set'}</span>
+                  <span>Due {project.targetDate ? format(new Date(project.targetDate), 'dd-MMM-yyyy') : 'Not set'}</span>
                 </div>
                 <Button
                   type="button"

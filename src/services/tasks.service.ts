@@ -102,7 +102,12 @@ export const tasksService = {
    * Update existing task
    */
   async update(projectId: string, taskId: string, updates: Partial<Task>): Promise<Task> {
-    const data = await apiClient.patch<any>(ENDPOINTS.TASKS.BY_ID(taskId), updates);
+    const payload: any = { ...updates };
+    if (payload.blockedBy !== undefined) {
+      payload.dependsOnIds = payload.blockedBy;
+      delete payload.blockedBy;
+    }
+    const data = await apiClient.patch<any>(ENDPOINTS.TASKS.BY_ID(taskId), payload);
     return fromApi(data);
   },
 
