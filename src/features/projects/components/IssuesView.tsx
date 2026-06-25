@@ -36,7 +36,7 @@ interface IssuesViewProps {
   isAddDialogOpen?: boolean;
   onAddDialogClose?: () => void;
   onIssueUpdate?: (issue: Issue) => void;
-  onIssueCreate?: (issue: Partial<Issue>) => void;
+  onIssueCreate?: (issue: Partial<Issue>, pendingFiles?: File[]) => void;
   onIssueDelete?: (issueId: string) => void;
 }
 
@@ -206,8 +206,8 @@ export function IssuesView({
     onAddDialogClose?.();
   };
 
-  const handleCreateSubmit = (issueToCreate: Issue) => {
-    onIssueCreate?.(issueToCreate);
+  const handleCreateSubmit = (issueToCreate: Issue, pendingFiles?: File[]) => {
+    onIssueCreate?.(issueToCreate, pendingFiles);
     setIsModalOpen(false);
     onAddDialogClose?.();
   };

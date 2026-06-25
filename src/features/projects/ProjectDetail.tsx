@@ -786,10 +786,10 @@ export default function ProjectDetail() {
     }
   };
 
-  const handleIssueCreate = (newIssuePartial: Partial<Issue>) => {
+  const handleIssueCreate = async (newIssuePartial: Partial<Issue>, pendingFiles?: File[]) => {
     if (!project) return;
 
-    createIssueMutation.mutate({
+    const created = await createIssueMutation.mutateAsync({
       title: newIssuePartial.title || 'New Issue',
       description: newIssuePartial.description || '',
       severity: newIssuePartial.severity || 'minor',
@@ -797,6 +797,23 @@ export default function ProjectDetail() {
       assignees: newIssuePartial.assignees || [],
       reportedBy: { id: '', name: '', email: '', role: 'Member', initials: '' },
     } as Omit<Issue, 'id' | 'reportedAt'>);
+
+    if (pendingFiles && pendingFiles.length > 0 && created?.id) {
+      try {
+        await Promise.all(
+          pendingFiles.map(file =>
+            attachmentsService.upload({
+              entityId: created.id,
+              entityType: 'issue',
+              projectId: project.id,
+              file,
+            })
+          )
+        );
+      } catch {
+        toast.warning('Issue created but some attachments failed to upload');
+      }
+    }
   };
 
   const handleIssueUpdate = (updatedIssue: Issue) => {
