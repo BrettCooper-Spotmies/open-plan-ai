@@ -81,6 +81,8 @@ import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { FilePreviewDialog, FilePreviewTarget } from '@/components/FilePreviewDialog';
+import { useProjectTags, useCreateTag, useUpdateTag } from '@/hooks/useProjectTags';
+import { getFallbackTagColor } from '@/lib/tagColors';
 
 // Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
 const toDateOnly = (date: Date | undefined | null): string | undefined => {
@@ -234,7 +236,6 @@ export const TaskDetailModal = ({
   const [editingTagIndex, setEditingTagIndex] = useState<number | null>(null);
   const [editingTagValue, setEditingTagValue] = useState('');
   const [editingTagOriginal, setEditingTagOriginal] = useState<string | null>(null);
-  const [pendingTagRenames, setPendingTagRenames] = useState<Array<{ from: string; to: string }>>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -267,8 +268,25 @@ export const TaskDetailModal = ({
     currentStatusOption?.label ||
     editedTask.status.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
   const currentStatusColor = currentStatusOption?.color || 'bg-muted-foreground/60';
+  const effectiveProjectId = editedTask.projectId ?? projectId;
+  const { data: projectTags = [] } = useProjectTags(effectiveProjectId);
+  const createTagMutation = useCreateTag(effectiveProjectId);
+  const updateTagMutation = useUpdateTag(effectiveProjectId);
+  const tagColorMap = useMemo(() => {
+    const map = new Map<string, string>();
+    projectTags.forEach((t) => map.set(t.name.toLowerCase(), t.color));
+    return map;
+  }, [projectTags]);
+  const tagIdByName = useMemo(() => {
+    const map = new Map<string, string>();
+    projectTags.forEach((t) => map.set(t.name.toLowerCase(), t.id));
+    return map;
+  }, [projectTags]);
+  const getTagColor = (tag: string) => tagColorMap.get(tag.toLowerCase()) ?? getFallbackTagColor(tag);
+
   const tagSuggestions = useMemo(() => {
     const pool = new Set<string>();
+    projectTags.forEach((t) => pool.add(t.name));
     allTasks.forEach((t) => {
       (t.tags || []).forEach((tag) => {
         const normalized = tag.trim();
@@ -280,7 +298,7 @@ export const TaskDetailModal = ({
       if (normalized) pool.add(normalized);
     });
     return Array.from(pool).sort((a, b) => a.localeCompare(b));
-  }, [allTasks, editedTask.tags]);
+  }, [projectTags, allTasks, editedTask.tags]);
   const availableTagSuggestions = useMemo(
     () =>
       tagSuggestions.filter(
@@ -289,16 +307,25 @@ export const TaskDetailModal = ({
     [editedTask.tags, tagSuggestions]
   );
 
-  const addTag = (rawValue: string) => {
+  // Always upserts against the shared project tag registry first — this is
+  // what makes a tag created here show up (with the same color) when adding
+  // tags to an issue, or any other task, in the same project.
+  const addTag = async (rawValue: string) => {
     const value = rawValue.trim();
     if (!value) return;
 
-    const exists = editedTask.tags.some((tag) => tag.toLowerCase() === value.toLowerCase());
-    if (!exists) {
-      handleFieldChange('tags', [...editedTask.tags, value]);
-    }
     setTagSearch('');
     setIsTagPopoverOpen(false);
+
+    const exists = editedTask.tags.some((tag) => tag.toLowerCase() === value.toLowerCase());
+    if (exists) return;
+
+    try {
+      const tag = await createTagMutation.mutateAsync({ name: value });
+      handleFieldChange('tags', [...editedTask.tags, tag.name]);
+    } catch {
+      handleFieldChange('tags', [...editedTask.tags, value]);
+    }
   };
 
   const saveEditedTag = () => {
@@ -318,17 +345,12 @@ export const TaskDetailModal = ({
       return;
     }
 
+    const renamed = !!(editingTagOriginal && value && editingTagOriginal.toLowerCase() !== value.toLowerCase());
+
     if (!value) {
       nextTags.splice(targetIndex, 1);
     } else {
       nextTags[targetIndex] = value;
-    }
-
-    if (editingTagOriginal && value && editingTagOriginal.toLowerCase() !== value.toLowerCase()) {
-      setPendingTagRenames((prev) => {
-        const withoutSource = prev.filter((rename) => rename.from.toLowerCase() !== editingTagOriginal.toLowerCase());
-        return [...withoutSource, { from: editingTagOriginal, to: value }];
-      });
     }
 
     const deduped: string[] = [];
@@ -341,6 +363,16 @@ export const TaskDetailModal = ({
     });
 
     handleFieldChange('tags', deduped);
+
+    // Renaming the registry entry cascades the new name into every other
+    // task/issue in the project that referenced the old one.
+    if (renamed && editingTagOriginal) {
+      const tagId = tagIdByName.get(editingTagOriginal.toLowerCase());
+      if (tagId) {
+        updateTagMutation.mutate({ id: tagId, input: { name: value } });
+      }
+    }
+
     setEditingTagIndex(null);
     setEditingTagValue('');
     setEditingTagOriginal(null);
@@ -478,7 +510,6 @@ export const TaskDetailModal = ({
     if (task) {
       setEditedTask(task);
     }
-    setPendingTagRenames([]);
     onClose();
   };
 
@@ -888,38 +919,8 @@ export const TaskDetailModal = ({
         }
       }
 
-      // Propagate edited tag names across tasks in the same project
-      if (pendingTagRenames.length > 0) {
-        allTasks.forEach((taskItem) => {
-          if (taskItem.id === editedTask.id) return;
-          const currentTags = taskItem.tags || [];
-          if (currentTags.length === 0) return;
-
-          let changed = false;
-          let nextTags = [...currentTags];
-
-          pendingTagRenames.forEach(({ from, to }) => {
-            const hasSourceTag = nextTags.some((tag) => tag.toLowerCase() === from.toLowerCase());
-            if (!hasSourceTag) return;
-
-            changed = true;
-            nextTags = nextTags.map((tag) => (tag.toLowerCase() === from.toLowerCase() ? to : tag));
-          });
-
-          if (!changed) return;
-
-          const deduped: string[] = [];
-          nextTags.forEach((tag) => {
-            const normalized = tag.trim();
-            if (!normalized) return;
-            if (!deduped.some((existingTag) => existingTag.toLowerCase() === normalized.toLowerCase())) {
-              deduped.push(normalized);
-            }
-          });
-
-          mergeBatchUpdate(taskItem.id, { tags: deduped });
-        });
-      }
+      // Tag renames now cascade server-side via the project tag registry
+      // (see saveEditedTag), so no client-side propagation across tasks is needed.
 
       if (batchUpdates.length > 0) {
         if (onBatchUpdate) {
@@ -935,7 +936,6 @@ export const TaskDetailModal = ({
         }
       }
 
-      setPendingTagRenames([]);
       onClose();
     } catch (error) {
       logger.error('Failed to update task:', error);
@@ -1391,7 +1391,6 @@ export const TaskDetailModal = ({
               </div>
 
               {/* Tags */}
-              {/* Tags */}
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <Tag className="h-3 w-3" />
@@ -1400,7 +1399,11 @@ export const TaskDetailModal = ({
                 <div className="space-y-2 rounded-md border border-input px-3 py-2">
                   <div className="flex flex-wrap items-center gap-2">
                     {editedTask.tags.map((tag, index) => (
-                      <Badge key={`${tag}-${index}`} variant="secondary" className="gap-1 pr-1.5">
+                      <Badge
+                        key={`${tag}-${index}`}
+                        className="gap-1 pr-1.5 text-white border-transparent hover:opacity-90"
+                        style={{ backgroundColor: getTagColor(tag) }}
+                      >
                         {editingTagIndex === index ? (
                           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                             <Input
@@ -1413,9 +1416,9 @@ export const TaskDetailModal = ({
                                   saveEditedTag();
                                 }
                               }}
-                              className="h-6 w-28 bg-background px-2 text-xs"
+                              className="h-6 w-28 bg-background px-2 text-xs text-foreground"
                             />
-                            <Button type="button" size="icon" variant="ghost" className="h-5 w-5" onClick={saveEditedTag}>
+                            <Button type="button" size="icon" variant="ghost" className="h-5 w-5 hover:bg-black/10" onClick={saveEditedTag}>
                               <Check className="h-3 w-3" />
                             </Button>
                           </div>
@@ -1424,7 +1427,7 @@ export const TaskDetailModal = ({
                             <span>{tag}</span>
                             <button
                               type="button"
-                              className="rounded p-0.5 hover:bg-muted-foreground/20"
+                              className="rounded p-0.5 hover:bg-black/10"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setEditingTagIndex(index);
@@ -1437,7 +1440,7 @@ export const TaskDetailModal = ({
                             </button>
                             <button
                               type="button"
-                              className="rounded p-0.5 hover:bg-muted-foreground/20"
+                              className="rounded p-0.5 hover:bg-black/10"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleFieldChange('tags', editedTask.tags.filter((_, tagIndex) => tagIndex !== index));
@@ -1504,9 +1507,10 @@ export const TaskDetailModal = ({
                                   <button
                                     key={tag}
                                     type="button"
-                                    className="w-full rounded px-2 py-1 text-left text-sm hover:bg-accent"
+                                    className="w-full rounded px-2 py-1 text-left text-sm hover:bg-accent flex items-center gap-2"
                                     onClick={() => addTag(tag)}
                                   >
+                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getTagColor(tag) }} />
                                     {tag}
                                   </button>
                                 ))}

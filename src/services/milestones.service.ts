@@ -82,7 +82,8 @@ export const milestonesService = {
   },
 
   async update(id: string, updates: MilestoneUpdate): Promise<Milestone> {
-    const data = await apiClient.patch<Record<string, unknown>>(
+    // Backend only registers PUT for this route (no PATCH handler exists).
+    const data = await apiClient.put<Record<string, unknown>>(
       ENDPOINTS.MILESTONES.BY_ID(id),
       toApiPayload(updates)
     );
@@ -101,8 +102,8 @@ export const milestonesService = {
     await Promise.all(ids.map(id => this.delete(id)));
   },
 
-  async complete(id: string): Promise<Milestone> {
-    const data = await apiClient.patch<Record<string, unknown>>(ENDPOINTS.MILESTONES.COMPLETE(id), {});
+  async complete(id: string, completed: boolean): Promise<Milestone> {
+    const data = await apiClient.patch<Record<string, unknown>>(ENDPOINTS.MILESTONES.COMPLETE(id), { completed });
     return fromApi(data);
   },
 

@@ -98,6 +98,12 @@ export const ENDPOINTS = {
     REORDER: (projectId: string) => `/projects/${projectId}/task-columns/reorder`,
     BY_ID: (id: string) => `/task-columns/${id}`,
   },
+  // Tags (shared project-wide registry — reused by issues, tasks, and any future entity)
+  TAGS: {
+    LIST: (projectId: string) => `/projects/${projectId}/tags`,
+    CREATE: (projectId: string) => `/projects/${projectId}/tags`,
+    BY_ID: (id: string) => `/tags/${id}`,
+  },
   // Issues
   ISSUES: {
     LIST: (projectId: string) => `/projects/${projectId}/issues`,

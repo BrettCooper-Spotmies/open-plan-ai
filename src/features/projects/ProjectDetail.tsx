@@ -56,6 +56,7 @@ import {
   useDeleteIssue,
   useCreateMilestone,
   useUpdateMilestone,
+  useToggleMilestoneComplete,
   useDeleteMilestone,
   useCreateModule,
   useUpdateModule,
@@ -441,6 +442,7 @@ export default function ProjectDetail() {
   const deleteIssueMutation = useDeleteIssue(id || '');
   const createMilestoneMutation = useCreateMilestone(id || '');
   const updateMilestoneMutation = useUpdateMilestone(id || '');
+  const toggleMilestoneCompleteMutation = useToggleMilestoneComplete(id || '');
   const deleteMilestoneMutation = useDeleteMilestone(id || '');
   const createModuleMutation = useCreateModule(id || '');
   const updateModuleMutation = useUpdateModule(id || '');
@@ -897,9 +899,17 @@ export default function ProjectDetail() {
         name: updatedMilestone.title,
         due_date: updatedMilestone.date || null,
         description: updatedMilestone.description || null,
-        status: updatedMilestone.completed ? 'completed' : 'upcoming',
       },
     });
+
+    // Completion is a separate endpoint on the backend, not part of the general update.
+    const previousMilestone = (project?.milestones || []).find(m => m.id === updatedMilestone.id);
+    if (previousMilestone && previousMilestone.completed !== updatedMilestone.completed) {
+      toggleMilestoneCompleteMutation.mutate({
+        milestoneId: updatedMilestone.id,
+        completed: updatedMilestone.completed,
+      });
+    }
 
     // Persist linked task changes by updating ONLY each task's milestoneId field
     const previousLinkedTaskIds = (project?.tasks || [])

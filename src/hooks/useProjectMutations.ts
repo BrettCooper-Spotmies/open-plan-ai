@@ -324,6 +324,24 @@ export function useUpdateMilestone(projectId: string) {
   });
 }
 
+export function useToggleMilestoneComplete(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ milestoneId, completed }: { milestoneId: string; completed: boolean }) =>
+      milestonesService.complete(milestoneId, completed),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.milestones.list(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
+    },
+    onError: () => {
+      toast.error('Failed to update milestone status');
+    },
+  });
+}
+
 export function useDeleteMilestone(projectId: string) {
   const queryClient = useQueryClient();
 
