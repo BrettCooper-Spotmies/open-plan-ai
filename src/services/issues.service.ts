@@ -40,6 +40,7 @@ export const issuesService = {
     };
     if (issue.description) payload.description = issue.description;
     if (issue.severity) payload.severity = issue.severity;
+    if (issue.status) payload.status = issue.status;
     if ((issue as any).moduleId) payload.moduleId = (issue as any).moduleId;
     if ((issue as any).dueDate) payload.dueDate = (issue as any).dueDate;
     const assigneeIds = ((issue as any).assignees || []).map((a: any) => a.id).filter(Boolean);

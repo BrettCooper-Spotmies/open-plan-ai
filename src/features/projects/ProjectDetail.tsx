@@ -792,6 +792,7 @@ export default function ProjectDetail() {
     const created = await createIssueMutation.mutateAsync({
       title: newIssuePartial.title || 'New Issue',
       description: newIssuePartial.description || '',
+      status: newIssuePartial.status || 'open',
       severity: newIssuePartial.severity || 'minor',
       category: newIssuePartial.category || 'other',
       assignees: newIssuePartial.assignees || [],
