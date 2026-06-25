@@ -54,6 +54,8 @@ import {
   Moon,
   Eye,
   EyeOff,
+  Pencil,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -142,6 +144,7 @@ const Settings = () => {
   const [localAvatarPreview, setLocalAvatarPreview] = useState<string | null>(null);
   const [orgLoading, setOrgLoading] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
+  const [isEditingOrg, setIsEditingOrg] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const currentOrgRole = (currentOrganization?.myRole ?? null) as 'admin' | 'manager' | 'member' | 'viewer' | null;
 
@@ -191,7 +194,7 @@ const Settings = () => {
   }, [searchParams]);
 
   // Sync organization data to form - preserve local logoUrl if server hasn't updated yet
-  useEffect(() => {
+  const resetOrgFormFromOrganization = () => {
     if (currentOrganization) {
       const settings = (currentOrganization.settings || {}) as OrganizationSettings;
       setOrgForm(prev => ({
@@ -206,6 +209,10 @@ const Settings = () => {
         logoUrl: resolveFileUrl(settings.logoUrl) ?? settings.logoUrl ?? prev.logoUrl,
       }));
     }
+  };
+
+  useEffect(() => {
+    resetOrgFormFromOrganization();
   }, [currentOrganization]);
 
 
@@ -322,12 +329,18 @@ const Settings = () => {
       });
       await refreshOrganizations();
       toast.success('Workspace settings saved');
+      setIsEditingOrg(false);
     } catch (error) {
       logger.error('Error saving workspace settings:', error);
       toast.error('Failed to save workspace settings');
     } finally {
       setOrgLoading(false);
     }
+  };
+
+  const handleCancelEditOrganization = () => {
+    resetOrgFormFromOrganization();
+    setIsEditingOrg(false);
   };
 
   const handleSaveProfile = async () => {
@@ -582,11 +595,19 @@ const Settings = () => {
                 ) : (
                   /* Existing Workspace Settings (editable inline) */
                   <>
-                    {!canEditOrganizationSettings && (
-                      <div className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
-                        You have view-only access. Only organization admins and owners can edit these settings.
-                      </div>
-                    )}
+                    <div className="flex items-start justify-between gap-4">
+                      {!canEditOrganizationSettings ? (
+                        <div className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                          You have view-only access. Only organization admins and owners can edit these settings.
+                        </div>
+                      ) : <div />}
+                      {canEditOrganizationSettings && !isEditingOrg && (
+                        <Button variant="outline" size="sm" onClick={() => setIsEditingOrg(true)} className="shrink-0">
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit
+                        </Button>
+                      )}
+                    </div>
 
                     {/* Organization Logo */}
                     <div className="space-y-2">
@@ -608,7 +629,7 @@ const Settings = () => {
                             </div>
                           )}
                         </div>
-                        {canEditOrganizationSettings && (
+                        {canEditOrganizationSettings && isEditingOrg && (
                           <div className="space-y-2">
                             <input
                               type="file"
@@ -644,7 +665,7 @@ const Settings = () => {
                       <Input
                         id="org-name"
                         value={orgForm.name}
-                        disabled={!canEditOrganizationSettings}
+                        disabled={!canEditOrganizationSettings || !isEditingOrg}
                         onChange={(e) => setOrgForm({ ...orgForm, name: e.target.value })}
                       />
                     </div>
@@ -653,7 +674,7 @@ const Settings = () => {
                       <Textarea
                         id="org-desc"
                         value={orgForm.description}
-                        disabled={!canEditOrganizationSettings}
+                        disabled={!canEditOrganizationSettings || !isEditingOrg}
                         onChange={(e) => setOrgForm({ ...orgForm, description: e.target.value })}
                         rows={3}
                       />
@@ -666,7 +687,7 @@ const Settings = () => {
                           id="org-company-name"
                           placeholder="e.g. Acme Corp"
                           value={orgForm.companyName}
-                          disabled={!canEditOrganizationSettings}
+                          disabled={!canEditOrganizationSettings || !isEditingOrg}
                           onChange={(e) => setOrgForm({ ...orgForm, companyName: e.target.value })}
                         />
                       </div>
@@ -674,7 +695,7 @@ const Settings = () => {
                         <Label htmlFor="org-company-size">Company Size</Label>
                         <Select
                           value={orgForm.companySize}
-                          disabled={!canEditOrganizationSettings}
+                          disabled={!canEditOrganizationSettings || !isEditingOrg}
                           onValueChange={(value) => setOrgForm({ ...orgForm, companySize: value })}
                         >
                           <SelectTrigger id="org-company-size">
@@ -694,7 +715,7 @@ const Settings = () => {
                         <Label>Timezone</Label>
                         <Select
                           value={orgForm.timezone}
-                          disabled={!canEditOrganizationSettings}
+                          disabled={!canEditOrganizationSettings || !isEditingOrg}
                           onValueChange={(value) => setOrgForm({ ...orgForm, timezone: value })}
                         >
                           <SelectTrigger>
@@ -711,7 +732,7 @@ const Settings = () => {
                         <Label>Date Format</Label>
                         <Select
                           value={orgForm.dateFormat}
-                          disabled={!canEditOrganizationSettings}
+                          disabled={!canEditOrganizationSettings || !isEditingOrg}
                           onValueChange={(value) => setOrgForm({ ...orgForm, dateFormat: value })}
                         >
                           <SelectTrigger>
@@ -731,7 +752,7 @@ const Settings = () => {
                         <Label>Currency</Label>
                         <Select
                           value={orgForm.currency}
-                          disabled={!canEditOrganizationSettings}
+                          disabled={!canEditOrganizationSettings || !isEditingOrg}
                           onValueChange={(value) => setOrgForm({ ...orgForm, currency: value })}
                         >
                           <SelectTrigger>
@@ -746,15 +767,21 @@ const Settings = () => {
                       </div>
                     </div>
 
-                    {canEditOrganizationSettings && (
-                      <Button onClick={handleSaveOrganization} disabled={orgLoading}>
-                        {orgLoading ? (
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        ) : (
-                          <Save className="h-4 w-4 mr-2" />
-                        )}
-                        Save Changes
-                      </Button>
+                    {canEditOrganizationSettings && isEditingOrg && (
+                      <div className="flex gap-2">
+                        <Button onClick={handleSaveOrganization} disabled={orgLoading}>
+                          {orgLoading ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4 mr-2" />
+                          )}
+                          Save Changes
+                        </Button>
+                        <Button variant="outline" onClick={handleCancelEditOrganization} disabled={orgLoading}>
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
                     )}
                   </>
                 )}
