@@ -28,6 +28,7 @@ function fromApiMilestone(raw: Record<string, unknown>): Milestone {
     date: raw.dueDate as string,
     completed: Boolean(raw.completed),
     completedAt: (raw.completedAt as string) || undefined,
+    status: (raw.statusOverride as Milestone['status']) || undefined,
   };
 }
 

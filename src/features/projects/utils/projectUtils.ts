@@ -105,6 +105,9 @@ export function getIssueCounts(issues: Issue[]): Record<string, number> {
 export function getMilestoneStatus(milestone: Milestone, tasks: Task[], issues: Issue[]): 'completed' | 'blocked' | 'at-risk' | 'on-track' {
   if (milestone.completed) return 'completed';
 
+  // A manually-selected status takes precedence over the computed one.
+  if (milestone.status && milestone.status !== 'completed') return milestone.status;
+
   if (isMilestoneBlockedByIssues(milestone.id, issues)) return 'blocked';
 
   const progress = getMilestoneProgress(milestone, tasks);

@@ -84,6 +84,8 @@ export interface Module {
 }
 
 // Enhanced Milestone interface
+export type MilestoneStatus = 'completed' | 'blocked' | 'at-risk' | 'on-track';
+
 export interface Milestone {
   id: string;
   title: string;
@@ -91,6 +93,7 @@ export interface Milestone {
   date: string;              // Target date
   completed: boolean;
   completedAt?: string;      // Actual completion date
+  status?: MilestoneStatus;  // Manual status override; falls back to computed status when unset
   linkedTaskIds?: string[];  // Tasks linked to this milestone
   linkedModuleIds?: string[]; // Modules linked to this milestone
   createdBy?: TeamMember;  // Who created this milestone

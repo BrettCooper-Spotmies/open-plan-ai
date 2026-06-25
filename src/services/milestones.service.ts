@@ -14,7 +14,7 @@ export interface MilestoneUpdate {
   name?: string;
   due_date?: string | null;
   description?: string | null;
-  status?: string;
+  status?: string | null;
 }
 
 // DB-shape type exported for consumers that do their own adapter mapping.
@@ -35,7 +35,7 @@ function toApiPayload(data: MilestoneInsert | MilestoneUpdate): Record<string, u
   if ('name' in data && data.name !== undefined) out.title = data.name;
   if ('due_date' in data && data.due_date != null) out.dueDate = data.due_date;
   if ('description' in data && data.description != null) out.description = data.description;
-  if ('status' in data && data.status != null) out.status = data.status;
+  if ('status' in data && data.status !== undefined) out.status = data.status;
   if ('project_id' in data) out.projectId = (data as MilestoneInsert).project_id;
   return out;
 }

@@ -899,6 +899,7 @@ export default function ProjectDetail() {
         name: updatedMilestone.title,
         due_date: updatedMilestone.date || null,
         description: updatedMilestone.description || null,
+        status: updatedMilestone.completed ? undefined : (updatedMilestone.status || null),
       },
     });
 
