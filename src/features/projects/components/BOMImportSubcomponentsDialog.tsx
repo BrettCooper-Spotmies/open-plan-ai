@@ -20,6 +20,7 @@ import {
 } from './bomData';
 import { useOrgParts, useCreatePart } from '@/hooks/useParts';
 import { useCreateBomNode, useMapImportColumns } from '@/hooks/useBom';
+import { useAuth } from '@/modules/auth';
 
 const MAX_IMPORT_ROWS = 200;
 const CATEGORY_NOTE = 'assembly, power, control, connector, enclosure, hmi, safety — or any custom category';
@@ -122,6 +123,7 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
   const createPart = useCreatePart(orgId);
   const createNode = useCreateBomNode(projectId);
   const mapImportColumns = useMapImportColumns();
+  const { user } = useAuth();
 
   const reset = () => {
     setStage('upload'); setFileName(null); setFileError(null);
@@ -206,6 +208,8 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
         await createNode.mutateAsync({
           partId, quantity: row.quantity, unit: row.uom,
           status: row.status, parentId: parentNode.id,
+          // Imported rows have no per-row owner picker — default to whoever ran the import.
+          ownerId: user?.id,
         });
         acc.push({ row, success: true });
       } catch (err) {
