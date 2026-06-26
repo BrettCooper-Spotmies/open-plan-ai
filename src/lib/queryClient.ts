@@ -149,7 +149,8 @@ export const queryKeys = {
     tree:      (projectId: string) => ['bom', 'tree', projectId] as const,
     summary:   (projectId: string) => ['bom', 'summary', projectId] as const,
     node:      (nodeId: string)    => ['bom', 'node', nodeId] as const,
-    approvals: (nodeId: string)    => ['bom', 'approvals', nodeId] as const,
+    approvals:  (nodeId: string)    => ['bom', 'approvals', nodeId] as const,
+    costTrend:  (projectId: string, granularity: string) => ['bom', 'cost-trend', projectId, granularity] as const,
   },
 
   // Parts catalog

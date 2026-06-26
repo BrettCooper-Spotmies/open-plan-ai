@@ -20,9 +20,9 @@ import { useOrgAllIssues } from '@/hooks/useIssues';
 import { useAllMilestones } from '@/hooks/useMilestones';
 import { useOrgAllModules } from '@/hooks/useModules';
 import { useTeamMembers } from '@/hooks/useTeam';
-import { useBomTree } from '@/hooks/useBom';
+import { useBomTree, useBomCostTrend } from '@/hooks/useBom';
 import { useCurrency } from '@/hooks/useCurrency';
-import { fromApiNode, bomFlatAll } from '@/features/projects/components/bomData';
+import { fromApiNode, bomFlatAll, applyPriceRollup } from '@/features/projects/components/bomData';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { TeamMember as ServiceTeamMember } from '@/services/team.service';
 import { Module as DbModule } from '@/services/modules.service';
@@ -144,9 +144,12 @@ export default function Reports() {
 
   // ─── BOM (project-scoped only — there is no org-wide BOM tree) ────────────
   const { data: bomTree } = useBomTree(filter.projectId);
+  const [bomCostTrendGranularity, setBomCostTrendGranularity] = useState<'daily' | 'weekly' | 'monthly'>('monthly');
+  const { data: bomCostTrend, isLoading: bomCostTrendLoading } = useBomCostTrend(filter.projectId, bomCostTrendGranularity);
   const bomNodes = useMemo(() => {
     if (!bomTree?.roots?.length) return [];
-    return bomFlatAll(bomTree.roots.map(r => fromApiNode(r)));
+    const roots = bomTree.roots.map(r => applyPriceRollup(fromApiNode(r)));
+    return bomFlatAll(roots);
   }, [bomTree]);
 
   // ─── Date range ───────────────────────────────────────────────────────────
@@ -295,7 +298,15 @@ export default function Reports() {
 
         {/* Bill of Materials — project-scoped only */}
         {filter.projectId ? (
-          <ReportBomSection projectName={projectName} nodes={bomNodes} formatCurrency={formatCurrency} />
+          <ReportBomSection
+            projectName={projectName}
+            nodes={bomNodes}
+            formatCurrency={formatCurrency}
+            costTrendData={bomCostTrend?.data}
+            costTrendLoading={bomCostTrendLoading}
+            costTrendGranularity={bomCostTrendGranularity}
+            onCostTrendGranularityChange={setBomCostTrendGranularity}
+          />
         ) : (
           <div className="pt-6 mt-2 border-t">
             <Card>

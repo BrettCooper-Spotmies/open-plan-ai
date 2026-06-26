@@ -214,6 +214,17 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
   };
 }
 
+/**
+ * Post-pass: if a node has children, its unit price = sum(child.qty × child.price).
+ * Leaf nodes keep their own revision price. Applied bottom-up (children first).
+ */
+export function applyPriceRollup(node: BOMNode): BOMNode {
+  if (!node.children?.length) return node;
+  const rolledChildren = node.children.map(applyPriceRollup);
+  const rollupPrice = rolledChildren.reduce((sum, c) => sum + c.qty * c.price, 0);
+  return { ...node, price: rollupPrice, children: rolledChildren };
+}
+
 export function fromApiRevision(r: ApiRevisionResponse): BOMRevision {
   return {
     rev:      r.rev,
