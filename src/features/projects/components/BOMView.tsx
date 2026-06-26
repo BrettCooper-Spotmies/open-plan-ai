@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useBomTree, useCreateBomNode, useApproveBomNode, useRejectBomNode } from '@/hooks/useBom';
+import { useBomTree, useCreateBomNode, useApproveBomNode, useRejectBomNode, useAddRequirement } from '@/hooks/useBom';
 import { useCreatePart } from '@/hooks/useParts';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
@@ -506,7 +506,7 @@ function ListView({
               className="flex items-center px-6 border-b border-border cursor-pointer transition-colors"
               style={{
                 height: rowH,
-                background: isHovered ? 'var(--card)' : row.status === 'pending' ? 'rgba(245,158,11,0.03)' : 'transparent',
+                background: isHovered ? 'hsl(var(--card))' : row.status === 'pending' ? 'rgba(245,158,11,0.03)' : 'transparent',
               }}
             >
               {/* Level */}
@@ -688,7 +688,7 @@ function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCu
                   onMouseLeave={() => setHovered(null)}
                   className="bg-card border rounded-xl overflow-hidden cursor-pointer transition-all"
                   style={{
-                    borderColor: isH ? 'hsl(var(--foreground) / 0.25)' : 'var(--border)',
+                    borderColor: isH ? 'hsl(var(--foreground) / 0.25)' : 'hsl(var(--border))',
                     transform: isH ? 'translateY(-2px)' : undefined,
                   }}
                 >
@@ -809,6 +809,7 @@ export function BOMView({
   const createNode = useCreateBomNode(projectId);
   const approveBomNode = useApproveBomNode(projectId);
   const rejectBomNode = useRejectBomNode(projectId);
+  const addRequirement = useAddRequirement(projectId);
 
   const projectRole = (project?.myRole || '').toLowerCase();
   const canApprove = projectRole === 'admin' || projectRole === 'manager';
@@ -881,6 +882,8 @@ export function BOMView({
       });
       // Upload any documents attached in the form
       await saveBomDocs(node.id, payload);
+      // Link any requirements added in the Traceability tab
+      await Promise.all(payload.req.map(requirementId => addRequirement.mutateAsync({ nodeId: node.id, requirementId })));
       toast.success('Part added to BOM');
       if (onAddClose) onAddClose();
     } catch (err) {
@@ -917,6 +920,7 @@ export function BOMView({
         ownerId:  payload.ownerId ?? null,
       });
       await saveBomDocs(node.id, payload);
+      await Promise.all(payload.req.map(requirementId => addRequirement.mutateAsync({ nodeId: node.id, requirementId })));
       setCreateSubNode(null);
     } catch {
       // errors are logged by React Query's MutationCache; no further action needed

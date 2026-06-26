@@ -29,7 +29,7 @@ export function PartThumb({
     position: 'relative',
     overflow: 'hidden',
     flexShrink: 0,
-    border: '1px solid var(--border)',
+    border: '1px solid hsl(var(--border))',
     background: `${meta.tint}0d`,
     backgroundImage: imageUrl ? undefined : `repeating-linear-gradient(135deg, ${meta.tint}1f 0, ${meta.tint}1f 1px, transparent 1px, transparent ${patternSize}px)`,
     display: 'flex',
@@ -103,8 +103,8 @@ export function PartImageThumb({
             left: zoomPos.left,
             right: zoomPos.right,
             padding: 6,
-            background: 'var(--card)',
-            border: '1px solid var(--border)',
+            background: 'hsl(var(--card))',
+            border: '1px solid hsl(var(--border))',
             borderRadius: 10,
             boxShadow: '0 12px 32px rgba(20,24,31,0.25)',
             zIndex: 1000,
@@ -115,7 +115,7 @@ export function PartImageThumb({
           <img
             src={imageUrl}
             alt=""
-            style={{ maxWidth: ZOOM_SIZE, maxHeight: ZOOM_SIZE, objectFit: 'contain', borderRadius: 6, display: 'block' }}
+            style={{ maxWidth: ZOOM_SIZE, maxHeight: ZOOM_SIZE, objectFit: 'contain', borderRadius: 6, display: 'block', background: 'hsl(var(--background))' }}
           />
         </div>,
         document.body,
