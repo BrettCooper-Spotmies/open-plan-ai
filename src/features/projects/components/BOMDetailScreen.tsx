@@ -519,11 +519,6 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     setShowCreateNewSub(false);
   };
 
-  const typeText =
-    bomTypeOf(originalNode) === 'top' ? 'Top-Level Assembly'
-      : bomTypeOf(originalNode) === 'catalog' ? 'Catalog Part'
-        : 'Sub-Assembly';
-
   // ── Save handler ──
   const handleSave = async (payload: BOMPartPayload) => {
     if (!originalNode._partId) return;
@@ -634,7 +629,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
-                <h1 className="text-xl font-semibold text-foreground">{node.desc}</h1>
+                <h1 className="text-xl font-semibold text-foreground">{node.pn}</h1>
                 <BOMStatusPill status={node.status} />
                 {/* ── Version toggle ── */}
                 <RevisionToggle
@@ -644,14 +639,12 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                 />
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-                <span className="font-mono font-medium text-foreground">{node.pn}</span>
-                <span>·</span>
                 <span className="inline-flex items-center gap-1.5" style={{ color: meta.tint }}>
                   <span className="w-2 h-2 rounded-sm inline-block" style={{ background: meta.tint }} />
                   {meta.label}
                 </span>
                 <span>·</span>
-                <span>{typeText}</span>
+                <span className="text-foreground font-medium">{node.desc}</span>
               </div>
             </div>
           </div>

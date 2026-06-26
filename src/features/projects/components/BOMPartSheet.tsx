@@ -394,6 +394,13 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     setActiveTab('details');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Pre-populate selectedOwner in edit mode once project members are available
+  useEffect(() => {
+    if (!open || !isEdit || !node?.owner || selectedOwner) return;
+    const match = projectMembers.find(m => m.name === node.owner);
+    if (match) setSelectedOwner(match);
+  }, [open, isEdit, node?.owner, projectMembers, selectedOwner]);
+
   const addReq = () => {
     const v = reqInput.trim().toUpperCase();
     if (v && !req.includes(v)) { setReq(r => [...r, v]); }
@@ -407,7 +414,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
       if (!isEdit && !pn.trim()) e.pn = 'Part number is required';
       if (!desc.trim())          e.desc = 'Description is required';
       if (!category.trim())     e.category = 'Category is required';
-      if (!selectedOwner)        e.owner = 'Owner is required';
+      if (!selectedOwner && !(isEdit && node?.owner)) e.owner = 'Owner is required';
     }
     if (tab === 'sourcing') {
       if (!manufacturer.trim())  e.mfr = 'Manufacturer is required';
@@ -432,7 +439,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     if (!desc.trim())                   e.desc = 'Description is required';
     if (!category.trim())               e.category = 'Category is required';
     if (!manufacturer.trim())           e.mfr = 'Manufacturer is required';
-    if (!selectedOwner)                 e.owner = 'Owner is required';
+    if (!selectedOwner && !(isEdit && node?.owner)) e.owner = 'Owner is required';
     if (isEdit && versionMode === 'new' && !changeNotes.trim()) e.notes = 'Change notes are required when creating a new revision';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -453,7 +460,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
         price: parseFloat(price) || 0,
         leadTime: Math.round((parseFloat(leadTime) || 0) * LEAD_TIME_UNITS.find(u => u.id === leadTimeUnit)!.toDays),
         mpn,
-        owner: selectedOwner?.name ?? '',
+        owner: selectedOwner?.name ?? (isEdit ? node?.owner ?? '' : ''),
         ownerId: selectedOwner?.id,
         req,
         docPhoto, docDatasheet, doc3DModel, docFootprint,
@@ -632,6 +639,15 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                               </AvatarFallback>
                             </Avatar>
                             <span className="flex-1 text-left truncate">{selectedOwner.name}</span>
+                          </>
+                        ) : isEdit && node?.owner ? (
+                          <>
+                            <Avatar className="h-5 w-5 shrink-0">
+                              <AvatarFallback className="text-[9px] bg-primary/20 text-primary">
+                                {node.owner.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="flex-1 text-left truncate">{node.owner}</span>
                           </>
                         ) : (
                           <>
