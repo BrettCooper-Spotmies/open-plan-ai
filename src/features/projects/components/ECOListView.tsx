@@ -201,7 +201,7 @@ function ECORow({
         </span>
         <span className="flex items-center gap-1">
           <Calendar className="w-3 h-3" />
-          {eco.target}
+          {eco.created}
         </span>
         {eco.revFrom && eco.revTo && (
           <span className="font-mono text-muted-foreground/70">Rev {eco.revFrom}→{eco.revTo}</span>
