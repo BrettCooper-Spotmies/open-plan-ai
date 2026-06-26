@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Zap, Cpu, Package, Box, Monitor, Shield, Layers, ChevronsUpDown, Tag,
   CheckCircle, Clock, GitBranch, Save, Plus, X, ChevronRight, ChevronLeft,
@@ -422,6 +423,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   const [manufacturer, setManufacturer] = useState(node?.manufacturer ?? '');
   const [distributor, setDistributor] = useState(node?.distributor ?? '');
   const [price, setPrice] = useState(String(node?.price ?? ''));
+  const [calcFromSubparts, setCalcFromSubparts] = useState(isEdit ? (node?.price === 0) : false);
   const initialLeadTime = deriveLeadTime(node?.leadTime ?? 0);
   const [leadTime, setLeadTime] = useState(initialLeadTime.value);
   const [leadTimeUnit, setLeadTimeUnit] = useState<LeadTimeUnit>(initialLeadTime.unit);
@@ -457,6 +459,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     setManufacturer(node?.manufacturer ?? '');
     setDistributor(node?.distributor ?? '');
     setPrice(String(node?.price ?? ''));
+    setCalcFromSubparts(node?.price === 0);
     const lt = deriveLeadTime(node?.leadTime ?? 0);
     setLeadTime(lt.value);
     setLeadTimeUnit(lt.unit);
@@ -547,7 +550,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
         qty: parseFloat(qty) || 1,
         uom,
         manufacturer, distributor,
-        price: parseFloat(price) || 0,
+        price: calcFromSubparts ? 0 : (parseFloat(price) || 0),
         leadTime: (parseFloat(leadTime) || 0) * LEAD_TIME_UNITS.find(u => u.id === leadTimeUnit)!.toDays,
         mpn,
         owner: selectedOwner?.name ?? (isEdit ? node?.owner ?? '' : ''),
@@ -864,13 +867,26 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                     placeholder="e.g. Digi-Key" className="h-9" />
                 </FL>
                 <FL label="Unit Price">
-                  <FInput value={price} onChange={e => {
-                    let val = e.target.value.replace(/[^0-9.]/g, '');
-                    const parts = val.split('.');
-                    if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
-                    setPrice(val);
-                  }}
-                    type="text" placeholder="0.00" className="h-9" />
+                  <div className="flex flex-col gap-2 pt-1">
+                    <FInput value={calcFromSubparts ? '0.00' : price} onChange={e => {
+                      let val = e.target.value.replace(/[^0-9.]/g, '');
+                      const parts = val.split('.');
+                      if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                      setPrice(val);
+                    }}
+                      disabled={calcFromSubparts}
+                      type="text" placeholder="0.00" className="h-9" />
+                    <div className="flex items-center gap-2">
+                      <Checkbox 
+                        id="calcFromSubparts" 
+                        checked={calcFromSubparts} 
+                        onCheckedChange={(c) => setCalcFromSubparts(!!c)} 
+                      />
+                      <label htmlFor="calcFromSubparts" className="text-[11px] font-medium leading-none text-muted-foreground cursor-pointer select-none">
+                        Calculate from sub-parts
+                      </label>
+                    </div>
+                  </div>
                 </FL>
                 <FL label="Lead Time">
                   <div className="flex gap-1.5">

@@ -223,7 +223,8 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
 export function applyPriceRollup(node: BOMNode): BOMNode {
   if (!node.children?.length) return node;
   const rolledChildren = node.children.map(applyPriceRollup);
-  const rollupPrice = rolledChildren.reduce((sum, c) => sum + c.qty * c.price, 0);
+  const childrenPrice = rolledChildren.reduce((sum, c) => sum + c.qty * c.price, 0);
+  const rollupPrice = node.price + childrenPrice;
   return { ...node, price: rollupPrice, children: rolledChildren };
 }
 
