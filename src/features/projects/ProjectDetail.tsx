@@ -989,8 +989,9 @@ export default function ProjectDetail() {
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => navigate(`/projects/${id}/${v}`)} className="w-full">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            {/* Left Side: Tabs */}
+          {!partId && !ecoId && (
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              {/* Left Side: Tabs */}
             <div className="w-full py-1 md:mr-auto md:w-auto">
               <TabsList className="bg-muted/50 grid grid-cols-8 w-full h-9 md:w-auto md:flex md:shrink-0">
                 <TabsTrigger value="bom" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Bill of Materials">
@@ -1258,6 +1259,7 @@ export default function ProjectDetail() {
               )}
             </div>
           </div>
+          )}
 
           {/* Second Row: Search + View Toggle + Filter toolbar (below tabs, like BOM UI) */}
           {(section === 'tasks' || section === 'modules' || section === 'milestones' || section === 'issues') && (

@@ -234,7 +234,7 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
               style={{
                 position: 'absolute', left: p.x, top: p.y, width: NW, minHeight: NH,
                 background: 'var(--card)',
-                border: `1px solid ${isH || isDrag ? st.soft : 'var(--border)'}`,
+                border: `1.5px solid ${isH || isDrag ? st.color : st.soft}`,
                 borderLeft: `3px solid ${st.color}`,
                 borderRadius: 11,
                 boxShadow: isDrag ? '0 12px 28px rgba(20,24,31,0.18)' : isH ? '0 6px 16px rgba(20,24,31,0.12)' : '0 1px 3px rgba(20,24,31,0.07)',
