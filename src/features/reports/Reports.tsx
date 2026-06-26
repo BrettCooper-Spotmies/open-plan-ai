@@ -81,7 +81,7 @@ function serviceTeamMemberToFrontend(m: ServiceTeamMember): TeamMember {
 
 export default function Reports() {
   const navigate = useNavigate();
-  const { currentOrganization } = useOrganization();
+  const { currentOrganization, isLoading: orgLoading } = useOrganization();
   const orgId = currentOrganization?.id;
 
   const [filter, setFilter] = useState<ReportFilter>({ timeRange: '30d' });
@@ -95,7 +95,7 @@ export default function Reports() {
   const { data: serviceTeamMembers = [], isLoading: teamLoading } = useTeamMembers(orgId);
   const { formatCurrency } = useCurrency();
 
-  const isLoading = projectsLoading || tasksLoading || issuesLoading || milestonesLoading || modulesLoading || teamLoading;
+  const isLoading = orgLoading || projectsLoading || tasksLoading || issuesLoading || milestonesLoading || modulesLoading || teamLoading;
 
   // ─── Adapted frontend types ───────────────────────────────────────────────
   const allAdaptedMilestones = useMemo(
