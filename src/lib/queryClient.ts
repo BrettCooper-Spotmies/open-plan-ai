@@ -139,6 +139,7 @@ export const queryKeys = {
   myDay: {
     all: ['myDay'] as const,
     tasks: (userId: string) => [...queryKeys.myDay.all, 'tasks', userId] as const,
+    issues: (userId: string) => [...queryKeys.myDay.all, 'issues', userId] as const,
     completedToday: (userId: string) => [...queryKeys.myDay.all, 'completedToday', userId] as const,
   },
 

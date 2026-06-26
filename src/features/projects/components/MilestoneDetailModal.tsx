@@ -238,28 +238,14 @@ export function MilestoneDetailModal({
 
         <ScrollArea className="flex-1 overflow-y-auto w-full">
           <div className="p-6 space-y-6">
-            {/* Title + Status Badge Row */}
+            {/* Title Row */}
             <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <Input
-                  value={editedMilestone.title}
-                  onChange={(e) => handleFieldChange('title', e.target.value)}
-                  className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0 flex-1"
-                  placeholder="Milestone title..."
-                />
-                <Select value={status} onValueChange={(value) => handleStatusChange(value as MilestoneStatus)}>
-                  <SelectTrigger className={cn('w-[130px] h-8 text-xs shrink-0', statusConfig[status].textColor)}>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(statusConfig) as MilestoneStatus[]).map((key) => (
-                      <SelectItem key={key} value={key} className={statusConfig[key].textColor}>
-                        {statusConfig[key].label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <Input
+                value={editedMilestone.title}
+                onChange={(e) => handleFieldChange('title', e.target.value)}
+                className="text-xl font-semibold border-none shadow-none p-0 h-auto focus-visible:ring-0 w-full"
+                placeholder="Milestone title..."
+              />
 
               {/* Progress Bar */}
               <div className="flex items-center gap-3">
@@ -361,23 +347,44 @@ export function MilestoneDetailModal({
               </div>
             </div>
 
-            {/* Created By */}
-            {editedMilestone.createdBy && (
+            {/* Status + Created By */}
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <User className="h-3 w-3" />
-                  Created By
-                </Label>
-                <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-input bg-muted/30">
-                  <Avatar className="h-5 w-5">
-                    <AvatarFallback className="text-[9px]">
-                      {editedMilestone.createdBy.initials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm">{editedMilestone.createdBy.name}</span>
-                </div>
+                <Label className="text-xs text-muted-foreground">Status</Label>
+                <Select value={status} onValueChange={(value) => handleStatusChange(value as MilestoneStatus)}>
+                  <SelectTrigger className="w-full h-10 px-3 text-sm font-normal bg-muted/30">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(statusConfig) as MilestoneStatus[]).map((key) => (
+                      <SelectItem key={key} value={key}>
+                        <div className="flex items-center gap-2">
+                          <span className={cn('h-2 w-2 rounded-full shrink-0', statusConfig[key].color)} />
+                          {statusConfig[key].label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            )}
+
+              {editedMilestone.createdBy && (
+                <div className="space-y-2">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <User className="h-3 w-3" />
+                    Created By
+                  </Label>
+                  <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-input bg-muted/30">
+                    <Avatar className="h-5 w-5">
+                      <AvatarFallback className="text-[9px]">
+                        {editedMilestone.createdBy.initials}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm">{editedMilestone.createdBy.name}</span>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Description */}
             <div className="space-y-3">

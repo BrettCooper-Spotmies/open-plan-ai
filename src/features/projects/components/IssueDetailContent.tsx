@@ -367,7 +367,7 @@ export function IssueDetailContent({
                         <Input
                             value={editedIssue.title}
                             onChange={(e) => handleFieldChange('title', e.target.value)}
-                            className="text-2xl font-bold border-none shadow-none p-0 h-auto focus-visible:ring-0 bg-transparent"
+                            className="text-base font-semibold w-full"
                             placeholder="Issue title..."
                             aria-required="true"
                         />

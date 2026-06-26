@@ -422,17 +422,38 @@ export default function ProjectDetail() {
 
   // Map database modules to frontend Module type
   const modules: Module[] = useMemo(() => {
-    return projectModules.map((m) => ({
-      id: m.id,
-      name: m.name,
-      type: m.module_type,
-      description: m.description || '',
-      progress: m.progress || 0,
-      status: m.status || 'active',
-      owner: m.owner_id ? { id: m.owner_id, name: '', initials: '', email: '', role: 'member' } : undefined,
-      createdAt: m.created_at || new Date().toISOString(),
-    }));
-  }, [projectModules]);
+    return projectModules.map((m) => {
+      const owner = m.owner_id
+        ? organizationMembers.find((member) => member.id === m.owner_id) ?? {
+            id: m.owner_id,
+            name: m.owner?.name || 'Unknown',
+            initials: (m.owner?.name || '?').slice(0, 2).toUpperCase(),
+            email: '',
+            role: 'member',
+          }
+        : undefined;
+      const createdBy = m.created_by
+        ? organizationMembers.find((member) => member.id === m.created_by!.id) ?? {
+            id: m.created_by.id,
+            name: m.created_by.name || 'Unknown',
+            initials: (m.created_by.name || '?').slice(0, 2).toUpperCase(),
+            email: '',
+            role: 'member',
+          }
+        : undefined;
+      return {
+        id: m.id,
+        name: m.name,
+        type: m.module_type,
+        description: m.description || '',
+        progress: m.progress || 0,
+        status: m.status || 'active',
+        owner,
+        createdBy,
+        createdAt: m.created_at || new Date().toISOString(),
+      };
+    });
+  }, [projectModules, organizationMembers]);
 
   const existingModuleNames = useMemo(() => modules.map(m => m.name), [modules]);
 
@@ -766,6 +787,7 @@ export default function ProjectDetail() {
       description: newModule.description || undefined,
       status: 'active',
       progress: 0,
+      owner_id: newModule.owner?.id || null,
     });
     setIsAddModuleDialogOpen(false);
   };
@@ -958,8 +980,8 @@ export default function ProjectDetail() {
     );
   }
 
-  const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'closed').length || 0;
-  const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed').length || 0;
+  const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix').length || 0;
+  const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix').length || 0;
 
   return (
     <>
@@ -967,8 +989,9 @@ export default function ProjectDetail() {
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => navigate(`/projects/${id}/${v}`)} className="w-full">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            {/* Left Side: Tabs */}
+          {!partId && !ecoId && (
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              {/* Left Side: Tabs */}
             <div className="w-full py-1 md:mr-auto md:w-auto">
               <TabsList className="bg-muted/50 grid grid-cols-8 w-full h-9 md:w-auto md:flex md:shrink-0">
                 <TabsTrigger value="bom" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Bill of Materials">
@@ -1236,6 +1259,7 @@ export default function ProjectDetail() {
               )}
             </div>
           </div>
+          )}
 
           {/* Second Row: Search + View Toggle + Filter toolbar (below tabs, like BOM UI) */}
           {(section === 'tasks' || section === 'modules' || section === 'milestones' || section === 'issues') && (

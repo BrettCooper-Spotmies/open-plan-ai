@@ -54,11 +54,15 @@ const priorityColumnConfig = [
   { id: 'low', label: 'Low', color: 'bg-priority-low' },
 ];
 
-const priorityColors = {
+const priorityColors: Record<string, string> = {
   critical: 'bg-priority-critical text-white',
   high: 'bg-priority-high text-white',
   medium: 'bg-priority-medium text-white',
   low: 'bg-priority-low text-white',
+  // Issue severities
+  major: 'bg-orange-500 text-white',
+  minor: 'bg-yellow-500 text-white',
+  trivial: 'bg-muted-foreground text-white',
 };
 
 const moduleColors = {
