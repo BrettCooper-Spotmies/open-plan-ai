@@ -150,7 +150,7 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
             </p>
           </div>
         ) : (
-          activities.map((activity) => {
+          activities.slice(0, 4).map((activity) => {
             const Icon = activityIcons[activity.type] || ActivityIcon;
             const colorClass = activityColors[activity.type] || 'text-muted-foreground bg-muted';
             const label = activityLabels[activity.type] || 'Unknown Activity';

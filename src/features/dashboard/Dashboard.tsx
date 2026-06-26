@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { DashboardStats } from './components/DashboardStats';
 import { ActivityFeed } from './components/ActivityFeed';
 import { ProjectsOverview } from './components/ProjectsOverview';
-import { UpcomingMilestones } from './components/UpcomingMilestones';
-import { useDashboardStats, useRecentActivity, useUpcomingDashboardMilestones, useProjectSummaries } from '@/hooks/useDashboard';
+import { EngineeringChangesSummary } from './components/EngineeringChangesSummary';
+import { BomReadiness } from './components/BomReadiness';
+import { useOrgEcoAggregate, useOrgBomAggregate } from './hooks/useOrgAggregates';
+import { useRecentActivity, useUpcomingDashboardMilestones } from '@/hooks/useDashboard';
+import { useProjects } from '@/hooks/useProjects';
+import { projectHealth } from './utils/projectHealth';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
-import { Activity, Milestone, Project } from '@/types';
+import { Activity } from '@/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -30,14 +34,17 @@ export default function Dashboard() {
   const [isCreating, setIsCreating] = useState(false);
   const [newOrgForm, setNewOrgForm] = useState({ name: '', description: '' });
 
-  const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: activities, isLoading: activitiesLoading } = useRecentActivity(10);
-  const { data: milestones, isLoading: milestonesLoading } = useUpcomingDashboardMilestones(4);
-  const { data: projectSummaries, isLoading: projectsLoading } = useProjectSummaries();
+  const { data: milestones, isLoading: milestonesLoading } = useUpcomingDashboardMilestones(50);
+  const { data: projects, isLoading: projectsLoading } = useProjects();
+
+  const projectIds = useMemo(() => (projects ?? []).map((p) => p.id), [projects]);
+  const ecoAgg = useOrgEcoAggregate(projectIds);
+  const bomAgg = useOrgBomAggregate(projectIds);
 
   // Include org loading so we show the skeleton (not a flash of zeros / empty
   // states) while the org resolves and the org-scoped queries are still disabled.
-  const isLoading = orgLoading || statsLoading || activitiesLoading || milestonesLoading || projectsLoading;
+  const isLoading = orgLoading || activitiesLoading || milestonesLoading || projectsLoading;
 
   const handleCreateOrg = async () => {
     if (!newOrgForm.name.trim()) {
@@ -95,23 +102,6 @@ export default function Dashboard() {
     }
   };
 
-  // Transform data for DashboardStats component
-  const dashboardStats = stats ? {
-    totalProjects: stats.activeProjects,
-    activeProjects: stats.activeProjects,
-    totalTasks: stats.totalTasks,
-    completedTasks: stats.completedTasks,
-    inProgressTasks: stats.inProgressTasks,
-    blockedTasks: stats.overdueItems,
-  } : {
-    totalProjects: 0,
-    activeProjects: 0,
-    totalTasks: 0,
-    completedTasks: 0,
-    inProgressTasks: 0,
-    blockedTasks: 0,
-  };
-
   // Transform activities for ActivityFeed (Activity type)
   const activityItems: Activity[] = (activities || []).map((activity: any) => {
     const userName: string = activity.user?.name || 'Team Member';
@@ -139,37 +129,38 @@ export default function Dashboard() {
     };
   });
 
-  // Transform milestones for UpcomingMilestones (Milestone type)
-  const milestoneItems: (Milestone & { projectName?: string })[] = (milestones || []).map(m => ({
-    id: m.id,
-    title: m.name,
-    description: m.description || undefined,
-    date: m.due_date || new Date().toISOString(),
-    completed: m.status === 'completed',
-    projectName: '', // Would need to join with projects
-  }));
+  // Projects with an overdue, incomplete milestone are flagged "at risk" for the
+  // Project Management RAG calc — the dashboard milestones API has no atRisk flag,
+  // so derive it from due date the same way UpcomingMilestones does inline.
+  const atRiskProjectIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const m of milestones ?? []) {
+      const dueIso = m.due_date ?? m.dueDate;
+      const pid = m.project_id ?? m.projectId;
+      if (!dueIso || !pid || m.status === 'completed') continue;
+      if (new Date(dueIso).getTime() < Date.now()) ids.add(pid);
+    }
+    return ids;
+  }, [milestones]);
 
-  // Transform project summaries for ProjectsOverview (Project type)
-  const projectItems: Project[] = (projectSummaries || []).map(p => ({
-    id: p.id,
-    name: p.name,
-    description: p.description || '',
-    progress: p.progress || 0,
-    stage: p.stage as 'concept' | 'design' | 'development' | 'testing' | 'production',
-    tasks: [],
-    milestones: [],
-    team: [],
-    modules: [],
-    issues: [],
-    projectModules: [],
-    startDate: '',
-    targetDate: new Date().toISOString(),
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  }));
+  const nextGate = useMemo(() => {
+    const upcoming = (milestones ?? [])
+      .map((m) => {
+        const dueIso = m.due_date ?? m.dueDate;
+        if (!dueIso) return null;
+        const days = Math.round((new Date(dueIso).getTime() - Date.now()) / 86400000);
+        return days >= 0 ? { days, name: m.name } : null;
+      })
+      .filter((x): x is { days: number; name: string } => x != null)
+      .sort((a, b) => a.days - b.days);
+    return upcoming[0] ?? null;
+  }, [milestones]);
 
-  const dashboardProjects = isMobile ? projectItems.slice(0, 3) : projectItems;
-  const dashboardMilestones = isMobile ? milestoneItems.slice(0, 3) : milestoneItems;
+  const dashboardProjects = useMemo(() => projects ?? [], [projects]);
+  const onTrackCount = useMemo(
+    () => dashboardProjects.filter((p) => projectHealth(p, atRiskProjectIds.has(p.id)).rag === 'green').length,
+    [dashboardProjects, atRiskProjectIds],
+  );
   const dashboardActivities = isMobile ? activityItems.slice(0, 4) : activityItems;
 
   // Show "Create Organization" card when no org exists
@@ -244,14 +235,22 @@ export default function Dashboard() {
           <AppLayoutSkeleton variant="dashboard" />
         ) : (
           <>
-            <DashboardStats stats={dashboardStats} />
+            <DashboardStats
+              portfolio={{ onTrack: onTrackCount, total: dashboardProjects.length }}
+              eco={{ open: ecoAgg.open, awaitingMyAction: ecoAgg.awaitingMyAction }}
+              bom={{ pct: bomAgg.pct, pending: bomAgg.pending }}
+              nextGate={nextGate ? { days: nextGate.days, label: nextGate.name } : null}
+            />
 
             <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
-              <div className="lg:col-span-2 h-full">
-                <ProjectsOverview projects={dashboardProjects} />
+              <div className="lg:col-span-1 h-full">
+                <ProjectsOverview projects={dashboardProjects} atRiskProjectIds={atRiskProjectIds} />
+              </div>
+              <div className="lg:col-span-1 h-full">
+                <EngineeringChangesSummary projectIds={projectIds} />
               </div>
               <div className="space-y-4 md:space-y-6">
-                <UpcomingMilestones milestones={dashboardMilestones} />
+                <BomReadiness projectIds={projectIds} />
                 <ActivityFeed activities={dashboardActivities} isLoading={activitiesLoading || isLoading} />
               </div>
             </div>

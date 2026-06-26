@@ -1,25 +1,17 @@
-import { FolderKanban, CheckCircle2, Clock, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Gauge, GitMerge, Layers, Flag } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-
 
 interface StatCardProps {
   title: string;
   value: string | number;
+  unit?: string;
   subtitle?: string;
   icon: React.ReactNode;
-  trend?: {
-    value: number;
-    label: string;
-  };
-  progress?: {
-    value: number;
-    color: string;
-  };
   variant?: 'default' | 'success' | 'warning' | 'info';
 }
 
-function StatCard({ title, value, subtitle, icon, trend, progress, variant = 'default' }: StatCardProps) {
+function StatCard({ title, value, unit, subtitle, icon, variant = 'default' }: StatCardProps) {
   const variantStyles = {
     default: 'text-foreground',
     success: 'text-status-done',
@@ -31,96 +23,64 @@ function StatCard({ title, value, subtitle, icon, trend, progress, variant = 'de
     <Card className="h-full shadow-sm hover:shadow-md transition-shadow">
       <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
         <CardTitle className="text-sm font-medium text-muted-foreground/80">{title}</CardTitle>
-        <div className={cn('h-4 w-4 opacity-80', variantStyles[variant])}>
-          {icon}
-        </div>
+        <div className={cn('h-4 w-4 opacity-80', variantStyles[variant])}>{icon}</div>
       </CardHeader>
       <CardContent>
-        <div className="flex items-baseline gap-2">
-          <span className="text-3xl font-bold tracking-tight">{value}</span>
+        <div className="flex items-baseline gap-1.5">
+          <span className="text-3xl font-bold tracking-tight tabular-nums">{value}</span>
+          {unit && <span className="text-sm font-medium text-muted-foreground">{unit}</span>}
         </div>
-
-        <div className="mt-1 flex items-center justify-between gap-2 text-xs">
-          <span className="text-muted-foreground truncate">{subtitle}</span>
-          {progress && trend && (
-            <div className="flex items-center gap-1 shrink-0">
-              <TrendingUp className="h-3 w-3 text-status-done" />
-              <span className="text-status-done font-medium">+{trend.value}%</span>
-              <span className="text-muted-foreground hidden sm:inline">{trend.label}</span>
-            </div>
-          )}
-        </div>
-
-        {progress && (
-          <div className="mt-2">
-            <div className="h-1.5 w-full rounded-full bg-secondary overflow-hidden">
-              <div
-                className={cn("h-full rounded-full transition-all duration-500", progress.color)}
-                style={{ width: `${Math.min(100, Math.max(0, progress.value))}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {!progress && trend && (
-          <div className="flex items-center gap-1.5 text-xs mt-3">
-            <TrendingUp className="h-3 w-3 text-status-done" />
-            <span className="text-status-done font-medium">+{trend.value}%</span>
-            <span className="text-muted-foreground">{trend.label}</span>
-          </div>
-        )}
+        <span className="mt-1 block text-xs text-muted-foreground truncate">{subtitle}</span>
       </CardContent>
     </Card>
   );
 }
 
 interface DashboardStatsProps {
-  stats: {
-    totalProjects: number;
-    activeProjects: number;
-    totalTasks: number;
-    completedTasks: number;
-    inProgressTasks: number;
-    blockedTasks: number;
-  };
+  isLoading?: boolean;
+  portfolio: { onTrack: number; total: number };
+  eco: { open: number; awaitingMyAction: number };
+  bom: { pct: number; pending: number };
+  nextGate: { days: number; label: string } | null;
 }
 
-export function DashboardStats({ stats }: DashboardStatsProps) {
-  const completionRate = stats.totalTasks > 0 ? (stats.completedTasks / stats.totalTasks) * 100 : 0;
-  const inProgressRate = stats.totalTasks > 0 ? (stats.inProgressTasks / stats.totalTasks) * 100 : 0;
+export function DashboardStats({ isLoading, portfolio, eco, bom, nextGate }: DashboardStatsProps) {
+  const dash = isLoading ? '—' : undefined;
+  const atRisk = portfolio.total - portfolio.onTrack;
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <StatCard
-        title="Active Projects"
-        value={stats.activeProjects}
-        subtitle={`${stats.totalProjects} total projects`}
-        icon={<FolderKanban className="h-full w-full" />}
-        variant="info"
+        title="Portfolio"
+        value={dash ?? portfolio.onTrack}
+        unit={`/ ${portfolio.total} on track`}
+        subtitle={`${atRisk} need attention`}
+        icon={<Gauge className="h-full w-full" />}
+        variant={atRisk > 0 ? 'warning' : 'success'}
       />
       <StatCard
-        title="Tasks Completed"
-        value={stats.completedTasks}
-        subtitle={`of ${stats.totalTasks} tasks`}
-        icon={<CheckCircle2 className="h-full w-full" />}
-        progress={{ value: completionRate, color: 'bg-status-done' }}
-        trend={{ value: Math.round(completionRate), label: 'completion rate' }}
-        variant="success"
+        title="Open changes"
+        value={dash ?? eco.open}
+        unit="ECOs"
+        subtitle={`${eco.awaitingMyAction} awaiting you`}
+        icon={<GitMerge className="h-full w-full" />}
+        variant={eco.awaitingMyAction > 0 ? 'warning' : 'default'}
       />
       <StatCard
-        title="In Progress"
-        value={stats.inProgressTasks}
-        subtitle="Current workload"
-        icon={<Clock className="h-full w-full" />}
-        progress={{ value: inProgressRate, color: 'bg-status-in-progress' }}
-        variant="info"
+        title="BOM released"
+        value={dash ?? bom.pct}
+        unit="%"
+        subtitle={`${bom.pending} parts pending`}
+        icon={<Layers className="h-full w-full" />}
+        variant="default"
       />
       <StatCard
-        title="Blocked"
-        value={stats.blockedTasks}
-        subtitle="Issues requiring attention"
-        icon={<AlertTriangle className="h-full w-full" />}
-        variant="warning"
+        title="Next gate"
+        value={dash ?? (nextGate ? nextGate.days : '—')}
+        unit={nextGate ? 'days' : undefined}
+        subtitle={nextGate ? nextGate.label : 'No upcoming gate'}
+        icon={<Flag className="h-full w-full" />}
+        variant="default"
       />
     </div>
   );
