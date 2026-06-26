@@ -500,17 +500,28 @@ export default function ProjectDetail() {
 
   // Map database modules to frontend Module type
   const modules: Module[] = useMemo(() => {
-    return projectModules.map((m) => ({
-      id: m.id,
-      name: m.name,
-      type: m.module_type,
-      description: m.description || '',
-      progress: m.progress || 0,
-      status: m.status || 'active',
-      owner: m.owner_id ? { id: m.owner_id, name: '', initials: '', email: '', role: 'member' } : undefined,
-      createdAt: m.created_at || new Date().toISOString(),
-    }));
-  }, [projectModules]);
+    return projectModules.map((m) => {
+      const owner = m.owner_id
+        ? organizationMembers.find((member) => member.id === m.owner_id) ?? {
+            id: m.owner_id,
+            name: m.owner?.name || 'Unknown',
+            initials: (m.owner?.name || '?').slice(0, 2).toUpperCase(),
+            email: '',
+            role: 'member',
+          }
+        : undefined;
+      return {
+        id: m.id,
+        name: m.name,
+        type: m.module_type,
+        description: m.description || '',
+        progress: m.progress || 0,
+        status: m.status || 'active',
+        owner,
+        createdAt: m.created_at || new Date().toISOString(),
+      };
+    });
+  }, [projectModules, organizationMembers]);
 
   const existingModuleNames = useMemo(() => modules.map(m => m.name), [modules]);
 
@@ -844,6 +855,7 @@ export default function ProjectDetail() {
       description: newModule.description || undefined,
       status: 'active',
       progress: 0,
+      owner_id: newModule.owner?.id || null,
     });
     setIsAddModuleDialogOpen(false);
   };
