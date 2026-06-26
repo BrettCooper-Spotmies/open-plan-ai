@@ -890,7 +890,6 @@ const NewProject = () => {
                         setStartDate(date);
                         setIsStartDateOpen(false);
                       }}
-                      disabled={{ before: startOfToday() }}
                       initialFocus
                     />
                   </PopoverContent>
