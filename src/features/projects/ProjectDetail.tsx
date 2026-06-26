@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, ChevronLeft, LayoutGrid, List, Loader2, MessageCircle, Trash2, Layers, Upload, Download, GitMerge, ChartGantt, ShieldAlert, ListChecks } from 'lucide-react';
+import { ListTodo, Boxes, Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, LayoutGrid, List, Loader2, MessageCircle, Trash2, Layers, Upload, Download, GitMerge, ChartGantt, ShieldAlert, ListChecks } from 'lucide-react';
 import { BOMView } from './components/BOMView';
 import RequirementsView from './components/RequirementsView';
 import { ECOView } from './components/ECOView';
@@ -9,7 +9,7 @@ import { RiskView } from './components/RiskView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
+
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -86,13 +86,7 @@ interface IssueFilter {
   hasDueDate?: boolean | 'all';
 }
 
-const stageColors = {
-  concept: 'bg-muted text-muted-foreground',
-  design: 'bg-chart-1/10 text-chart-1',
-  development: 'bg-chart-2/10 text-chart-2',
-  testing: 'bg-chart-4/10 text-chart-4',
-  production: 'bg-chart-3/10 text-chart-3',
-};
+
 
 const DEFAULT_MEMBER_REMOVAL_PROMPT: {
   open: boolean;
@@ -104,270 +98,198 @@ const DEFAULT_MEMBER_REMOVAL_PROMPT: {
   memberName: '',
 };
 
-// Milestone View Controls Component
+// Milestone View Controls Component — only the toggle (search is in parent)
 function MilestoneViewControls({
   viewMode,
   onViewModeChange,
-  searchQuery,
-  onSearchQueryChange,
-  onAddMilestone,
 }: {
   viewMode: 'list' | 'kanban';
   onViewModeChange: (mode: 'list' | 'kanban') => void;
-  searchQuery: string;
-  onSearchQueryChange: (query: string) => void;
-  onAddMilestone?: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 w-full justify-between md:justify-end">
-      <div className="flex items-center gap-2 flex-1 min-w-0 md:flex-none">
-        <div className="relative flex items-center flex-1 md:flex-none min-w-0">
-          <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search milestones..."
-            value={searchQuery}
-            onChange={(e) => onSearchQueryChange(e.target.value)}
-            className="pl-9 w-full md:w-[200px] h-8"
-          />
-          {searchQuery && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={() => onSearchQueryChange('')}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-
-        <div className="flex items-center rounded-md border p-1">
-          <Button
-            variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 px-2"
-            onClick={() => onViewModeChange('kanban')}
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 px-2"
-            onClick={() => onViewModeChange('list')}
-          >
-            <List className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {onAddMilestone && (
-        <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={onAddMilestone}>
-          <Plus className="h-4 w-4" />
-          <span className="hidden md:inline">Add Milestone</span>
-        </Button>
-      )}
+    <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
+      <Button
+        variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+        size="sm"
+        className="h-8 w-8 p-0"
+        onClick={() => onViewModeChange('kanban')}
+      >
+        <LayoutGrid className="h-4 w-4" />
+      </Button>
+      <Button
+        variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+        size="sm"
+        className="h-8 w-8 p-0"
+        onClick={() => onViewModeChange('list')}
+      >
+        <List className="h-4 w-4" />
+      </Button>
     </div>
   );
 }
 
-// Issue View Controls Component
+// Issue View Controls Component — view toggle + filter only (search is in parent)
 function IssueViewControls({
   viewMode,
   onViewModeChange,
-  searchQuery,
-  onSearchQueryChange,
   filters,
   onFiltersChange,
   teamMembers,
   activeFilterCount,
   onClearFilters,
-  onReportIssue,
 }: {
   viewMode: 'table' | 'kanban';
   onViewModeChange: (mode: 'table' | 'kanban') => void;
-  searchQuery: string;
-  onSearchQueryChange: (query: string) => void;
   filters: IssueFilter;
   onFiltersChange: (filters: IssueFilter) => void;
   teamMembers: TeamMember[];
   activeFilterCount: number;
   onClearFilters: () => void;
-  onReportIssue: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 w-full justify-between md:justify-end">
-      <div className="flex items-center gap-2 flex-1 min-w-0 md:flex-none">
-        {/* Search Input */}
-        <div className="relative flex items-center flex-1 md:flex-none">
-          <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search issues..."
-            value={searchQuery}
-            onChange={(e) => onSearchQueryChange(e.target.value)}
-            className="pl-9 w-full md:w-[200px] h-8"
-          />
-          {searchQuery && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
-              onClick={() => onSearchQueryChange('')}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-
-        <div className="flex items-center rounded-md border p-1">
-          <Button
-            variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 px-2"
-            onClick={() => onViewModeChange('kanban')}
-          >
-            <LayoutGrid className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === 'table' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 px-2"
-            onClick={() => onViewModeChange('table')}
-          >
-            <List className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* Filter Dropdown */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="gap-2 relative">
-              <Filter className="h-4 w-4" />
-              Filter
-              {activeFilterCount > 0 && (
-                <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
-                  {activeFilterCount}
-                </Badge>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-72" align="end">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium text-sm">Filter Issues</h4>
-                {activeFilterCount > 0 && (
-                  <Button variant="ghost" size="sm" onClick={onClearFilters} className="h-6 px-2 text-xs">
-                    Clear all
-                  </Button>
-                )}
-              </div>
-
-              {/* Status Filter */}
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  Status
-                </Label>
-                <Select
-                  value={filters.status || 'all'}
-                  onValueChange={(v) => onFiltersChange({ ...filters, status: v as IssueStatus | 'all' })}
-                >
-                  <SelectTrigger className="h-8">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="investigating">Investigating</SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
-                    <SelectItem value="wont-fix">Won't Fix</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Severity Filter */}
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-1">
-                  <Flag className="h-3 w-3" />
-                  Severity
-                </Label>
-                <Select
-                  value={filters.severity || 'all'}
-                  onValueChange={(v) => onFiltersChange({ ...filters, severity: v as IssueSeverity | 'all' })}
-                >
-                  <SelectTrigger className="h-8">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Severity</SelectItem>
-                    <SelectItem value="critical">Critical</SelectItem>
-                    <SelectItem value="major">Major</SelectItem>
-                    <SelectItem value="minor">Minor</SelectItem>
-                    <SelectItem value="trivial">Trivial</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Assignee Filter */}
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-1">
-                  <User className="h-3 w-3" />
-                  Assignee
-                </Label>
-                <Select
-                  value={filters.assigneeId || 'all'}
-                  onValueChange={(v) => onFiltersChange({ ...filters, assigneeId: v })}
-                >
-                  <SelectTrigger className="h-8">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Assignees</SelectItem>
-                    <SelectItem value="unassigned">Unassigned</SelectItem>
-                    {teamMembers.map((member) => (
-                      <SelectItem key={member.id} value={member.id}>
-                        {member.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Due Date Filter */}
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  Due Date
-                </Label>
-                <Select
-                  value={filters.hasDueDate === undefined || filters.hasDueDate === 'all' ? 'all' : filters.hasDueDate ? 'has-due' : 'no-due'}
-                  onValueChange={(v) => onFiltersChange({
-                    ...filters,
-                    hasDueDate: v === 'all' ? 'all' : v === 'has-due'
-                  })}
-                >
-                  <SelectTrigger className="h-8">
-                    <SelectValue placeholder="All" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="has-due">Has Due Date</SelectItem>
-                    <SelectItem value="no-due">No Due Date</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+    <div className="flex items-center gap-2">
+      {/* View Toggle */}
+      <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
+        <Button
+          variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => onViewModeChange('kanban')}
+        >
+          <LayoutGrid className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-8 w-8 p-0"
+          onClick={() => onViewModeChange('table')}
+        >
+          <List className="h-4 w-4" />
+        </Button>
       </div>
 
-      <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={onReportIssue}>
-        <Plus className="h-4 w-4" />
-        <span className="hidden md:inline">Report Issue</span>
-      </Button>
+      {/* Filter Dropdown */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-2 h-9 rounded-lg">
+            <Filter className="h-4 w-4" />
+            Filter
+            {activeFilterCount > 0 && (
+              <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+                {activeFilterCount}
+              </Badge>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-72" align="end">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-sm">Filter Issues</h4>
+              {activeFilterCount > 0 && (
+                <Button variant="ghost" size="sm" onClick={onClearFilters} className="h-6 px-2 text-xs">
+                  Clear all
+                </Button>
+              )}
+            </div>
+
+            {/* Status Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Status
+              </Label>
+              <Select
+                value={filters.status || 'all'}
+                onValueChange={(v) => onFiltersChange({ ...filters, status: v as IssueStatus | 'all' })}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="investigating">Investigating</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                  <SelectItem value="wont-fix">Won't Fix</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Severity Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <Flag className="h-3 w-3" />
+                Severity
+              </Label>
+              <Select
+                value={filters.severity || 'all'}
+                onValueChange={(v) => onFiltersChange({ ...filters, severity: v as IssueSeverity | 'all' })}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Severity</SelectItem>
+                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="major">Major</SelectItem>
+                  <SelectItem value="minor">Minor</SelectItem>
+                  <SelectItem value="trivial">Trivial</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Assignee Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <User className="h-3 w-3" />
+                Assignee
+              </Label>
+              <Select
+                value={filters.assigneeId || 'all'}
+                onValueChange={(v) => onFiltersChange({ ...filters, assigneeId: v })}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Assignees</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {teamMembers.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Due Date Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Due Date
+              </Label>
+              <Select
+                value={filters.hasDueDate === undefined || filters.hasDueDate === 'all' ? 'all' : filters.hasDueDate ? 'has-due' : 'no-due'}
+                onValueChange={(v) => onFiltersChange({
+                  ...filters,
+                  hasDueDate: v === 'all' ? 'all' : v === 'has-due'
+                })}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="All" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  <SelectItem value="has-due">Has Due Date</SelectItem>
+                  <SelectItem value="no-due">No Due Date</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }
@@ -1064,209 +986,11 @@ export default function ProjectDetail() {
   return (
     <>
       <div className="grid grid-cols-1 gap-6 animate-fade-in w-full min-w-0">
-        {/* Project Stats with Title */}
-        <div className={cn(
-          "flex flex-col md:flex-row md:items-center md:justify-between gap-3 py-3 border-y",
-          isMobile && "rounded-xl border bg-card/60 px-3 py-3"
-        )}>
-          {/* Left: Project Title and Stage */}
-          <div className={cn("flex items-center gap-2 sm:gap-3 min-w-0 w-full md:w-auto md:flex-1", isMobile && "pb-1")}>
-            <Button variant="ghost" size="sm" asChild className="shrink-0 gap-1 -ml-2 h-8 px-2 text-muted-foreground hover:text-foreground">
-              <Link to="/projects">
-                <ChevronLeft className="h-4 w-4" />
-                <span className="hidden sm:inline">Back</span>
-              </Link>
-            </Button>
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <h1 className="text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate">{project.name}</h1>
-              <Badge variant="secondary" className={cn(stageColors[project.stage], "shrink-0")}>
-                {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
-              </Badge>
-            </div>
-            {isMobile && (
-              <div className="ml-1 flex items-center justify-end gap-2 shrink-0 rounded-lg border border-border/70 bg-background/80 px-2 py-1.5">
-                <Progress value={progressBreakdown.overallProgress} className="w-16 h-2" />
-                <span className="text-xs font-semibold text-muted-foreground leading-none">
-                  {progressBreakdown.overallProgress}%
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Right: Stats */}
-          <div className="w-full md:w-auto overflow-visible md:overflow-x-auto md:pl-4">
-            <div className={cn(
-              "flex flex-wrap md:flex-nowrap items-center gap-3 sm:gap-4 md:gap-6 w-full text-xs sm:text-sm text-muted-foreground pb-1 md:pb-0",
-              isMobile && "gap-2"
-            )}>
-              <div className={cn(
-                "flex flex-wrap items-center gap-2 sm:gap-4 md:gap-6 w-full md:w-auto md:ml-auto",
-                isMobile && "order-1 rounded-lg border bg-background/70 px-2 py-2"
-              )}>
-                {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
-                <div className="flex items-center gap-2 whitespace-nowrap">
-                  <Calendar className="h-4 w-4 shrink-0" />
-                  <span>Due {project.targetDate ? format(new Date(project.targetDate), 'dd-MMM-yyyy') : 'Not set'}</span>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className={cn("h-8 gap-1.5 whitespace-nowrap", isMobile && "h-9 rounded-lg")}
-                  onClick={handleStartProjectChat}
-                  disabled={isStartingChat || !canStartProjectChat}
-                >
-                  {isStartingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                  <span>Start Chat</span>
-                </Button>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className={cn(
-                        "flex items-center gap-2 whitespace-nowrap cursor-pointer rounded-md border border-foreground/50 px-2 py-1 text-foreground hover:bg-muted transition-colors",
-                        isMobile && "h-9 rounded-lg border-border px-2.5"
-                      )}
-                    >
-                      <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="text-xs font-medium">Team</span>
-                      <span className="text-xs">{projectMembers.length}</span>
-                      <div className="hidden md:flex -space-x-2">
-                        {projectMembers.slice(0, 5).map((member) => (
-                          <Avatar key={member.id} className="h-5 w-5 md:h-6 md:w-6 border-2 border-background">
-                            <AvatarFallback className="text-[10px] bg-muted">
-                              {member.initials}
-                            </AvatarFallback>
-                          </Avatar>
-                        ))}
-                      </div>
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80" align="end">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Project Team</p>
-                      {projectMembers.length > 0 ? (
-                        <div className="space-y-2 max-h-52 overflow-y-auto">
-                          {projectMembers.map((member) => (
-                            <div key={member.id} className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <Avatar className="h-7 w-7">
-                                  <AvatarFallback className="text-[11px]">
-                                    {member.initials}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span className="text-sm truncate">{member.name}</span>
-                              </div>
-                              <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
-                                {member.role || 'Member'}
-                              </Badge>
-                              {canManageProjectMembers && member.role?.toLowerCase() !== 'admin' && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => {
-                                    const memberId = member.id;
-                                    const memberName = typeof member.name === 'string' ? member.name : '';
-                                    if (!memberId) return;
-                                    setMemberRemovalPrompt({
-                                      open: true,
-                                      memberId,
-                                      memberName,
-                                    });
-                                  }}
-                                  title="Remove member"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">No team members assigned yet.</p>
-                      )}
-
-                      {canManageProjectMembers ? (
-                        <div className="pt-3 mt-2 border-t space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground">Add Member</p>
-                          <div className="space-y-2">
-                            <Select value={selectedMemberToAdd} onValueChange={setSelectedMemberToAdd}>
-                              <SelectTrigger className="h-8">
-                                <SelectValue placeholder="Select organization member" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {availableOrganizationMembers.length > 0 ? (
-                                  availableOrganizationMembers.map((member) => (
-                                    <SelectItem key={member.id} value={member.id}>
-                                      {member.name}
-                                    </SelectItem>
-                                  ))
-                                ) : (
-                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                    No members available to add.
-                                  </div>
-                                )}
-                              </SelectContent>
-                            </Select>
-                            {selectedOrganizationMember && (
-                              <p className="text-[11px] text-muted-foreground">
-                                Role will be inherited automatically from organization:{" "}
-                                <span className="font-medium text-foreground capitalize">
-                                  {selectedOrganizationMember.role || 'member'}
-                                </span>
-                              </p>
-                            )}
-                            <Button
-                              size="sm"
-                              className="w-full"
-                              onClick={handleAddProjectMember}
-                              disabled={
-                                isAddingProjectMember ||
-                                !selectedMemberToAdd ||
-                                availableOrganizationMembers.length === 0
-                              }
-                              title={
-                                availableOrganizationMembers.length === 0
-                                  ? 'All organization members are already in this project'
-                                  : undefined
-                              }
-                            >
-                              {isAddingProjectMember && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                              Add Member
-                            </Button>
-                            {availableOrganizationMembers.length === 0 && (
-                              <p className="text-[11px] text-muted-foreground">
-                                All organization members are already in this project.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="pt-3 mt-2 border-t">
-                          <p className="text-[11px] text-muted-foreground">
-                            Only the project creator or an Admin can add or remove project members.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              {criticalIssuesCount > 0 && (
-                <Badge variant="destructive" className="gap-1 shrink-0 hidden sm:inline-flex">
-                  <AlertTriangle className="h-3 w-3 shrink-0" />
-                  {criticalIssuesCount} Critical Issue{criticalIssuesCount > 1 ? 's' : ''}
-                </Badge>
-              )}
-            </div>
-          </div>
-        </div>
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => navigate(`/projects/${id}/${v}`)} className="w-full">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            {/* Left Side: Tabs and Filters */}
+            {/* Left Side: Tabs */}
             <div className="w-full py-1 md:mr-auto md:w-auto">
               <TabsList className="bg-muted/50 grid grid-cols-8 w-full h-9 md:w-auto md:flex md:shrink-0">
                 <TabsTrigger value="bom" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Bill of Materials">
@@ -1328,114 +1052,188 @@ export default function ProjectDetail() {
               </TabsList>
             </div>
 
-            {/* Right Side: View Controls */}
-            <div className="flex-1 min-w-0 md:max-w-[60%]">
-              {section === 'tasks' && (
-                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
-                  <ViewControls
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
-                    searchQuery={searchQuery}
-                    onSearchQueryChange={setSearchQuery}
-                  />
-                  <TaskFiltersDropdown
-                    milestones={project.milestones || []}
-                    modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
-                    teamMembers={teamMembers}
-                    allTags={allTags}
-                    filters={filters}
-                    onFiltersChange={setFilters}
-                    activeFilterCount={activeFilterCount}
-                  />
-                  {activeFilterCount > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="gap-1 text-muted-foreground hover:text-foreground h-9 px-2 shrink-0"
-                    >
-                      <X className="h-4 w-4" />
-                      <span className="hidden sm:inline">Clear</span>
-                    </Button>
-                  )}
-                  <Button
-                    size="sm"
-                    onClick={() => setIsAddTaskDialogOpen(true)}
-                    className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg"
+            {/* Right Side: Team + Chat + Add Button */}
+            <div className="flex items-center gap-2 shrink-0">
+              {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
+              {/* Start Chat */}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 whitespace-nowrap rounded-lg hidden sm:flex"
+                onClick={handleStartProjectChat}
+                disabled={isStartingChat || !canStartProjectChat}
+              >
+                {isStartingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                <span className="hidden md:inline">Chat</span>
+              </Button>
+              {/* Team Popover */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex items-center gap-2 whitespace-nowrap cursor-pointer rounded-md border border-border px-2 py-1.5 text-foreground hover:bg-muted transition-colors h-9"
                   >
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Create Task</span>
-                  </Button>
-                </div>
+                    <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <span className="text-xs font-medium">Team</span>
+                    <span className="text-xs text-muted-foreground">{projectMembers.length}</span>
+                    {/* <div className="hidden md:flex -space-x-2">
+                      {projectMembers.slice(0, 4).map((member) => (
+                        <Avatar key={member.id} className="h-5 w-5 border-2 border-background">
+                          <AvatarFallback className="text-[10px] bg-muted">
+                            {member.initials}
+                          </AvatarFallback>
+                        </Avatar>
+                      ))}
+                    </div> */}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80" align="end">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Project Team</p>
+                    {projectMembers.length > 0 ? (
+                      <div className="space-y-2 max-h-52 overflow-y-auto">
+                        {projectMembers.map((member) => (
+                          <div key={member.id} className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Avatar className="h-7 w-7">
+                                <AvatarFallback className="text-[11px]">
+                                  {member.initials}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm truncate">{member.name}</span>
+                            </div>
+                            <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
+                              {member.role || 'Member'}
+                            </Badge>
+                            {canManageProjectMembers && member.role?.toLowerCase() !== 'admin' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                onClick={() => {
+                                  const memberId = member.id;
+                                  const memberName = typeof member.name === 'string' ? member.name : '';
+                                  if (!memberId) return;
+                                  setMemberRemovalPrompt({ open: true, memberId, memberName });
+                                }}
+                                title="Remove member"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">No team members assigned yet.</p>
+                    )}
+                    {canManageProjectMembers ? (
+                      <div className="pt-3 mt-2 border-t space-y-2">
+                        <p className="text-xs font-medium text-muted-foreground">Add Member</p>
+                        <div className="space-y-2">
+                          <Select value={selectedMemberToAdd} onValueChange={setSelectedMemberToAdd}>
+                            <SelectTrigger className="h-8">
+                              <SelectValue placeholder="Select organization member" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {availableOrganizationMembers.length > 0 ? (
+                                availableOrganizationMembers.map((member) => (
+                                  <SelectItem key={member.id} value={member.id}>
+                                    {member.name}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                  No members available to add.
+                                </div>
+                              )}
+                            </SelectContent>
+                          </Select>
+                          {selectedOrganizationMember && (
+                            <p className="text-[11px] text-muted-foreground">
+                              Role will be inherited automatically from organization:{" "}
+                              <span className="font-medium text-foreground capitalize">
+                                {selectedOrganizationMember.role || 'member'}
+                              </span>
+                            </p>
+                          )}
+                          <Button
+                            size="sm"
+                            className="w-full"
+                            onClick={handleAddProjectMember}
+                            disabled={isAddingProjectMember || !selectedMemberToAdd || availableOrganizationMembers.length === 0}
+                          >
+                            {isAddingProjectMember && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Add Member
+                          </Button>
+                          {availableOrganizationMembers.length === 0 && (
+                            <p className="text-[11px] text-muted-foreground">
+                              All organization members are already in this project.
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="pt-3 mt-2 border-t">
+                        <p className="text-[11px] text-muted-foreground">
+                          Only the project creator or an Admin can add or remove project members.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              {/* Critical Issues Badge */}
+              {criticalIssuesCount > 0 && (
+                <Badge variant="destructive" className="gap-1 shrink-0 hidden sm:inline-flex">
+                  <AlertTriangle className="h-3 w-3 shrink-0" />
+                  {criticalIssuesCount} Critical
+                </Badge>
               )}
-              {section === 'modules' && (
-                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
-                  <ModuleViewControls
-                    viewMode={moduleViewMode}
-                    onViewModeChange={setModuleViewMode}
-                    searchQuery={moduleSearchQuery}
-                    onSearchQueryChange={setModuleSearchQuery}
-                    onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
-                  />
-                </div>
+              {/* Section Add/Action Buttons */}
+              {section === 'tasks' && (
+                <Button
+                  size="sm"
+                  onClick={() => setIsAddTaskDialogOpen(true)}
+                  className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Create Task</span>
+                </Button>
               )}
-              {section === 'milestones' && (
-                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
-                  <MilestoneViewControls
-                    viewMode={milestoneViewMode}
-                    onViewModeChange={setMilestoneViewMode}
-                    searchQuery={milestoneSearchQuery}
-                    onSearchQueryChange={setMilestoneSearchQuery}
-                    onAddMilestone={canAddModulesAndMilestones ? () => setIsAddMilestoneDialogOpen(true) : undefined}
-                  />
-                </div>
+              {section === 'modules' && canAddModulesAndMilestones && (
+                <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={handleAddModule}>
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden md:inline">Add Module</span>
+                </Button>
+              )}
+              {section === 'milestones' && canAddModulesAndMilestones && (
+                <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddMilestoneDialogOpen(true)}>
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden md:inline">Add Milestone</span>
+                </Button>
               )}
               {section === 'issues' && (
-                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
-                  <IssueViewControls
-                    viewMode={issueViewMode}
-                    onViewModeChange={setIssueViewMode}
-                    searchQuery={issueSearchQuery}
-                    onSearchQueryChange={setIssueSearchQuery}
-                    filters={issueFilters}
-                    onFiltersChange={setIssueFilters}
-                    teamMembers={organizationMembers}
-                    activeFilterCount={activeIssueFilterCount}
-                    onClearFilters={clearIssueFilters}
-                    onReportIssue={() => setIsAddIssueDialogOpen(true)}
-                  />
-                </div>
+                <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddIssueDialogOpen(true)}>
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden md:inline">Report Issue</span>
+                </Button>
               )}
               {section === 'bom' && (
-                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
-                  {/* <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
-                    <Upload className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Import</span>
-                  </Button> */}
-                  {/* <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
-                    <Download className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Export</span>
-                  </Button> */}
-                  <Button size="sm" onClick={() => setBomAddOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Add Part</span>
-                  </Button>
-                </div>
+                <Button size="sm" onClick={() => setBomAddOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Add Part</span>
+                </Button>
               )}
               {section === 'eng-changes' && (
-                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
-                  {/* <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
-                    <Download className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Export</span>
-                  </Button> */}
-                  <Button size="sm" onClick={() => setEcoNewOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">New ECO</span>
-                  </Button>
-                </div>
+                <Button size="sm" onClick={() => setEcoNewOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">New ECO</span>
+                </Button>
               )}
               {section === 'gate-reviews' && (
-                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
+                <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
                     <Download className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Export</span>
@@ -1447,7 +1245,7 @@ export default function ProjectDetail() {
                 </div>
               )}
               {section === 'risk' && (
-                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
+                <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
                     <Download className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">Export</span>
@@ -1460,6 +1258,161 @@ export default function ProjectDetail() {
               )}
             </div>
           </div>
+
+          {/* Second Row: Search + View Toggle + Filter toolbar (below tabs, like BOM UI) */}
+          {(section === 'tasks' || section === 'modules' || section === 'milestones' || section === 'issues') && (
+            <div className="flex items-center justify-between gap-3 mt-3 pb-3 border-b w-full">
+              {section === 'tasks' && (
+                <>
+                  {/* Left: Search */}
+                  <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
+                    <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
+                    <Input
+                      placeholder="Search tasks..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-9 h-9 w-full bg-background rounded-lg"
+                    />
+                    {searchQuery && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                        onClick={() => setSearchQuery('')}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  {/* Right: View toggle + Filter + Clear */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <ViewControls
+                      viewMode={viewMode}
+                      onViewModeChange={setViewMode}
+                    />
+                    <TaskFiltersDropdown
+                      milestones={project.milestones || []}
+                      modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+                      teamMembers={teamMembers}
+                      allTags={allTags}
+                      filters={filters}
+                      onFiltersChange={setFilters}
+                      activeFilterCount={activeFilterCount}
+                    />
+                    {activeFilterCount > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearFilters}
+                        className="gap-1 text-muted-foreground hover:text-foreground h-9 px-2 shrink-0"
+                      >
+                        <X className="h-4 w-4" />
+                        <span className="hidden sm:inline">Clear</span>
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
+              {section === 'modules' && (
+                <>
+                  {/* Left: Search */}
+                  <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
+                    <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
+                    <Input
+                      placeholder="Search modules..."
+                      value={moduleSearchQuery}
+                      onChange={(e) => setModuleSearchQuery(e.target.value)}
+                      className="pl-9 h-9 w-full bg-background rounded-lg"
+                    />
+                    {moduleSearchQuery && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                        onClick={() => setModuleSearchQuery('')}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  {/* Right: View toggle */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <ModuleViewControls
+                      viewMode={moduleViewMode}
+                      onViewModeChange={setModuleViewMode}
+                    />
+                  </div>
+                </>
+              )}
+              {section === 'milestones' && (
+                <>
+                  {/* Left: Search */}
+                  <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
+                    <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
+                    <Input
+                      placeholder="Search milestones..."
+                      value={milestoneSearchQuery}
+                      onChange={(e) => setMilestoneSearchQuery(e.target.value)}
+                      className="pl-9 h-9 w-full bg-background rounded-lg"
+                    />
+                    {milestoneSearchQuery && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                        onClick={() => setMilestoneSearchQuery('')}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  {/* Right: View toggle */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <MilestoneViewControls
+                      viewMode={milestoneViewMode}
+                      onViewModeChange={setMilestoneViewMode}
+                    />
+                  </div>
+                </>
+              )}
+              {section === 'issues' && (
+                <>
+                  {/* Left: Search */}
+                  <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
+                    <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
+                    <Input
+                      placeholder="Search issues..."
+                      value={issueSearchQuery}
+                      onChange={(e) => setIssueSearchQuery(e.target.value)}
+                      className="pl-9 h-9 w-full bg-background rounded-lg"
+                    />
+                    {issueSearchQuery && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                        onClick={() => setIssueSearchQuery('')}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  {/* Right: View toggle + Filter */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <IssueViewControls
+                      viewMode={issueViewMode}
+                      onViewModeChange={setIssueViewMode}
+                      filters={issueFilters}
+                      onFiltersChange={setIssueFilters}
+                      teamMembers={organizationMembers}
+                      activeFilterCount={activeIssueFilterCount}
+                      onClearFilters={clearIssueFilters}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <TabsContent value="tasks" className="mt-6">
             <TasksSection

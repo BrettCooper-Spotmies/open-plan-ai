@@ -1187,20 +1187,20 @@ export function ECODetailView({
     <div className="flex-1 overflow-y-auto bg-background px-6 py-5 pb-12 h-full">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground mb-3">
-        <span className="text-muted-foreground/70 cursor-pointer hover:text-foreground transition-colors">EV Charging Station</span>
-        <ChevronRight className="w-3 h-3" />
-        <span onClick={onBack} className="text-blue-500 cursor-pointer hover:underline">Engineering Changes</span>
+        <span onClick={onBack} className="text-muted-foreground/70 cursor-pointer hover:text-foreground transition-colors">EV Charging Station</span>
+        {/* <ChevronRight className="w-3 h-3" />
+        <span onClick={onBack} className="text-blue-500 cursor-pointer hover:underline">Engineering Changes</span> */}
         <ChevronRight className="w-3 h-3" />
         <span className="text-foreground font-medium">{detail.num}</span>
       </div>
 
-      <button
+      {/* <button
         onClick={onBack}
         className="inline-flex items-center gap-1.5 mb-4 px-2.5 py-1 rounded-md text-[12px] font-medium bg-card text-muted-foreground border border-border hover:bg-accent/50 transition-colors"
       >
         <ChevronLeft className="w-3.5 h-3.5" />
         Back to changes
-      </button>
+      </button> */}
 
       {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-2 flex-wrap">

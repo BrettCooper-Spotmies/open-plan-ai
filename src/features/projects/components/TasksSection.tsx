@@ -47,7 +47,7 @@ export function ViewControls({
   return (
     <div className="flex items-center gap-2 flex-1 min-w-0 md:flex-none">
       {/* Search Input */}
-      <div className="relative flex items-center flex-1 md:flex-none min-w-0 max-w-none sm:max-w-[240px]">
+      {/* <div className="relative flex items-center flex-1 md:flex-none min-w-0 max-w-none sm:max-w-[240px]">
         <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
         <Input
           placeholder="Search tasks..."
@@ -67,13 +67,13 @@ export function ViewControls({
             <X className="h-4 w-4" />
           </Button>
         )}
-      </div>
+      </div> */}
 
       {/* View Toggle */}
       <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
-        <Button 
+        <Button
           variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
-          size="sm" 
+          size="sm"
           onClick={() => onViewModeChange('kanban')}
           className={cn(
             "h-8 w-8 p-0",

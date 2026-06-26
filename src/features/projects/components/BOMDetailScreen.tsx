@@ -601,7 +601,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
       {/* Breadcrumb */}
-      <div className="px-6 pt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+      <div className="px-6 pt-3 flex items-center m-2 gap-1.5 text-xs text-muted-foreground">
         <span className="cursor-pointer hover:text-foreground transition-colors" onClick={onBack}>BOM</span>
         <ChevronRight className="w-3 h-3" />
         <span className="font-mono text-foreground font-medium">{node.pn}</span>
@@ -615,14 +615,14 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       {/* Scrollable body */}
       <div className="flex-1 overflow-y-auto">
         {/* Back button */}
-        <div className="px-6 pt-3">
+        {/* <div className="px-6 pt-3">
           <button
             onClick={onBack}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 mb-3 rounded-md text-xs font-medium text-muted-foreground border border-border bg-transparent hover:text-foreground hover:bg-muted transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" /> Back to BOM
           </button>
-        </div>
+        </div> */}
 
         {/* Part header */}
         <div className="px-6 pb-4 flex items-start justify-between gap-5">

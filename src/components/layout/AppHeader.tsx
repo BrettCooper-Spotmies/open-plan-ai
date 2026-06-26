@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { Sun, Moon, Monitor } from 'lucide-react';
+import { useLocation, useMatch, useNavigate } from 'react-router-dom';
+import { Sun, Moon, Monitor, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Badge } from '@/components/ui/badge';
+
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -27,6 +28,16 @@ import { NotificationsPopover } from './NotificationsPopover';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { cn } from '@/lib/utils';
+
+const stageColors: Record<string, string> = {
+  concept: 'bg-muted text-muted-foreground',
+  design: 'bg-chart-1/10 text-chart-1',
+  development: 'bg-chart-2/10 text-chart-2',
+  testing: 'bg-chart-4/10 text-chart-4',
+  production: 'bg-chart-3/10 text-chart-3',
+};
 
 function getMobileHeaderTitle(pathname: string): string {
   if (pathname === '/') return 'Dashboard';
@@ -49,6 +60,11 @@ export function AppHeader() {
   const { theme, changeTheme } = useAppTheme();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
+  // Detect project detail route to show project name in header
+  const projectMatch = useMatch('/projects/:id/*');
+  const projectId = projectMatch?.params?.id;
+  const { data: project } = useProjectDetail(projectId, { enabled: !!projectId });
+
   const mobileTitle = useMemo(
     () => getMobileHeaderTitle(location.pathname),
     [location.pathname],
@@ -67,15 +83,34 @@ export function AppHeader() {
 
   return (
     <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex items-center gap-4">
-        {!isMobile && <SidebarTrigger className="-ml-1" />}
+      <div className="flex items-center gap-3 min-w-0">
 
-        {isMobile && (
+        {/* Project detail: Back + Name + Stage */}
+        {project ? (
+          <div className="flex items-center gap-2 min-w-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 gap-1 h-8 px-2 text-muted-foreground hover:text-foreground"
+              onClick={() => navigate('/projects')}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <h1 className="text-base sm:text-lg font-semibold tracking-tight truncate">
+              {project.name}
+            </h1>
+            <Badge
+              variant="secondary"
+              className={cn(stageColors[project.stage] ?? '', 'shrink-0')}
+            >
+              {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
+            </Badge>
+          </div>
+        ) : isMobile ? (
           <h1 className="text-base font-semibold text-foreground leading-none">
             {mobileTitle}
           </h1>
-        )}
-
+        ) : null}
       </div>
 
       <div className="flex items-center gap-2">
