@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { chatService } from '@/services/chat.service';
 import { useUserTimezone } from '@/hooks/useUserTimezone';
-import { formatTimeInTimezone } from '@/utils/dateTime';
+import { formatMessageTimestamp } from '@/utils/dateTime';
 
 const EMOJI_SET = ['👍', '❤️', '😂', '😮', '🔥', '💯'];
 const EXTENDED_EMOJI_SET = [
@@ -35,6 +35,7 @@ interface MessageBubbleProps {
   isGroupChat: boolean;
   currentUserId?: string;
   searchQuery?: string;
+  memberNames?: string[];
   readReceipts?: ReadReceipt[];
   reactions?: MessageReaction[];
   onEdit?: (messageId: string, newContent: string) => void;
@@ -68,7 +69,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-function ExpandableText({ text, query, isOwn = false }: { text: string; query?: string; isOwn?: boolean }) {
+function ExpandableText({ text, query, isOwn = false, memberNames }: { text: string; query?: string; isOwn?: boolean; memberNames?: string[] }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isLong = text.length > 300 || (text.match(/\n/g) || []).length > 5;
@@ -80,7 +81,7 @@ function ExpandableText({ text, query, isOwn = false }: { text: string; query?: 
   const renderText = (content: string) => {
     return content.split('\n').map((line, i) => (
       <span key={i}>
-        <MentionHighlightedText text={line} query={query} isOwn={isOwn} />
+        <MentionHighlightedText text={line} query={query} isOwn={isOwn} memberNames={memberNames} />
         {i < content.split('\n').length - 1 && <br />}
       </span>
     ));
@@ -103,23 +104,43 @@ function ExpandableText({ text, query, isOwn = false }: { text: string; query?: 
   );
 }
 
-function MentionHighlightedText({ text, query, isOwn = false }: { text: string; query?: string; isOwn?: boolean }) {
-  // Split on @mentions first, then apply search highlighting
-  const mentionRegex = /(@\w[\w\s]*?\w)(?=\s|$|[.,!?])/g;
+function MentionHighlightedText({ text, query, isOwn = false, memberNames }: { text: string; query?: string; isOwn?: boolean; memberNames?: string[] }) {
   const parts: { text: string; isMention: boolean }[] = [];
-  let lastIndex = 0;
-  let match;
 
-  while ((match = mentionRegex.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push({ text: text.slice(lastIndex, match.index), isMention: false });
+  if (memberNames && memberNames.length > 0) {
+    // Sort by length descending so longer names are matched first (e.g. "Jagan Tripuragiri" before "Jagan")
+    const sorted = [...memberNames].sort((a, b) => b.length - a.length);
+    const escaped = sorted.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const mentionRegex = new RegExp(`(@(?:${escaped.join('|')}))(?=\\s|$|[.,!?])`, 'g');
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = mentionRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({ text: text.slice(lastIndex, match.index), isMention: false });
+      }
+      parts.push({ text: match[1], isMention: true });
+      lastIndex = match.index + match[0].length;
     }
-    parts.push({ text: match[1], isMention: true });
-    lastIndex = match.index + match[0].length;
+    if (lastIndex < text.length) {
+      parts.push({ text: text.slice(lastIndex), isMention: false });
+    }
+  } else {
+    // Fallback: match @Word or @Word Word (up to two words) when no member list available
+    const mentionRegex = /(@\w+(?:\s\w+)?)(?=\s|$|[.,!?])/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = mentionRegex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({ text: text.slice(lastIndex, match.index), isMention: false });
+      }
+      parts.push({ text: match[1], isMention: true });
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) {
+      parts.push({ text: text.slice(lastIndex), isMention: false });
+    }
   }
-  if (lastIndex < text.length) {
-    parts.push({ text: text.slice(lastIndex), isMention: false });
-  }
+
   if (parts.length === 0) parts.push({ text, isMention: false });
 
   return (
@@ -296,7 +317,7 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
 
 export function MessageBubble({
   message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
-  searchQuery, readReceipts, reactions, onEdit, onDelete, onToggleReaction, onReply,
+  searchQuery, memberNames, readReceipts, reactions, onEdit, onDelete, onToggleReaction, onReply,
 }: MessageBubbleProps) {
   const timezone = useUserTimezone();
   const isOwn = message.senderId === currentUserId;
@@ -418,7 +439,7 @@ export function MessageBubble({
           </div>
           {showTimestamp && (
             <span className="text-[10px] text-muted-foreground mt-0.5 px-1">
-              {formatTimeInTimezone(message.createdAt, timezone)}
+              {formatMessageTimestamp(message.createdAt, timezone)}
             </span>
           )}
         </div>
@@ -593,7 +614,7 @@ export function MessageBubble({
               {isFile && fileData ? (
                 <FileAttachment file={fileData} isOwn={isOwn} />
               ) : (
-                <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} />
+                <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} memberNames={memberNames} />
               )}
             </div>
           )}
@@ -645,7 +666,7 @@ export function MessageBubble({
 
         {showTimestamp && (
           <span className="text-[10px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1">
-            {formatTimeInTimezone(message.createdAt, timezone)}
+            {formatMessageTimestamp(message.createdAt, timezone)}
             {message.isEdited && ' (edited)'}
             {isOwn && (() => {
               const otherReads = (readReceipts ?? []).filter(

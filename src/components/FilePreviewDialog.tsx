@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Download, File as FileIcon, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Download, File as FileIcon, ExternalLink, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'avif'];
 
@@ -83,7 +83,7 @@ export function FilePreviewDialog({
         className={
           kind === 'other'
             ? 'max-w-md'
-            : 'max-w-[90vw] max-h-[90vh] w-full h-full sm:w-[90vw] sm:h-[90vh] p-0 flex flex-col overflow-hidden'
+            : 'max-w-[90vw] max-h-[90vh] w-full h-full sm:w-[90vw] sm:h-[90vh] p-0 flex flex-col overflow-hidden [&>button]:hidden'
         }
       >
         {kind === 'other' ? (
@@ -115,7 +115,7 @@ export function FilePreviewDialog({
               <DialogTitle className="text-sm font-medium text-foreground truncate pr-4">
                 {current.fileName}
               </DialogTitle>
-              <div className="flex items-center gap-3 shrink-0 pr-8">
+              <div className="flex items-center gap-3 shrink-0">
                 {list && (
                   <span className="text-xs text-muted-foreground">
                     {currentIdx + 1} / {list.length}
@@ -129,6 +129,13 @@ export function FilePreviewDialog({
                 >
                   <Download className="w-4 h-4" />
                 </a>
+                <button
+                  onClick={onClose}
+                  className="text-muted-foreground hover:text-foreground transition-colors ml-1"
+                  aria-label="Close"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             </div>
             <div className="relative flex-1 min-h-0 bg-muted/30 flex items-center justify-center overflow-auto">

@@ -34,6 +34,17 @@ function toLocalDateString(date: Date, timezone: string): string {
   }
 }
 
+/** Format like Teams: "3:42 PM" for today, "Jun 24, 3:42 PM" for other days */
+export function formatMessageTimestamp(date: Date | string, timezone: string): string {
+  const d = toDate(date);
+  const time = safeFormat(d, { hour: 'numeric', minute: '2-digit', hour12: true }, timezone);
+  if (toLocalDateString(d, timezone) === toLocalDateString(new Date(), timezone)) {
+    return time;
+  }
+  const datePart = safeFormat(d, { month: 'short', day: 'numeric' }, timezone);
+  return `${datePart}, ${time}`;
+}
+
 export function isTodayInTimezone(date: Date | string, timezone: string): boolean {
   const d = toDate(date);
   return toLocalDateString(d, timezone) === toLocalDateString(new Date(), timezone);
