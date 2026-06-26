@@ -148,8 +148,15 @@ function FileRow({ icon: Icon, label, hint, accept, value, onChange }: FileRowPr
     onChange([...value, ...Array.from(files).map(file => ({ kind: 'file', file }) as DocValue)]);
   };
   const addUrl = () => {
-    const u = urlInput.trim();
+    let u = urlInput.trim();
     if (!u) return;
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    try {
+      new URL(u);
+    } catch {
+      toast.error('Please enter a valid URL');
+      return;
+    }
     onChange([...value, { kind: 'url', url: u }]);
     setUrlInput('');
     setShowUrlInput(false);
@@ -234,8 +241,15 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
   const preview = value?.kind === 'file' ? URL.createObjectURL(value.file) : value?.kind === 'url' ? value.url : null;
 
   const addUrl = () => {
-    const u = urlInput.trim();
+    let u = urlInput.trim();
     if (!u) return;
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    try {
+      new URL(u);
+    } catch {
+      toast.error('Please enter a valid URL');
+      return;
+    }
     onChange({ kind: 'url', url: u });
     setUrlInput('');
   };
@@ -256,7 +270,7 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
       >
         {preview ? (
           <>
-            <img src={preview} alt="preview" className="w-full h-full object-cover rounded-xl opacity-80" />
+            <img src={preview} alt="preview" className="w-full h-full object-contain rounded-xl opacity-80" />
             {value?.kind === 'file' && (
               <div onClick={() => ref.current?.click()}
                 className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30 rounded-xl cursor-pointer">
@@ -394,12 +408,19 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     setActiveTab('details');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Pre-populate selectedOwner in edit mode once project members are available
+  // Map the node's owner to a project member once members are loaded
   useEffect(() => {
-    if (!open || !isEdit || !node?.owner || selectedOwner) return;
-    const match = projectMembers.find(m => m.name === node.owner);
-    if (match) setSelectedOwner(match);
-  }, [open, isEdit, node?.owner, projectMembers, selectedOwner]);
+    if (open && isEdit && node && !selectedOwner && projectMembers.length > 0) {
+      const match = node.ownerId
+        ? projectMembers.find(m => m.id === node.ownerId)
+        : node.owner
+          ? projectMembers.find(m => m.name === node.owner)
+          : null;
+      if (match) {
+        setSelectedOwner(match);
+      }
+    }
+  }, [open, isEdit, node, projectMembers, selectedOwner]);
 
   const addReq = () => {
     const v = reqInput.trim().toUpperCase();

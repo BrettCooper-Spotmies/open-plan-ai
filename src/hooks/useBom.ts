@@ -2,6 +2,28 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryClient';
 import { bomService, type CreateNodeDto, type UpdateNodeDto } from '@/services/bom.service';
 import { fromApiApproval } from '@/features/projects/components/bomData';
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
+
+export interface BomCostTrendPoint {
+  date: string;
+  totalCost: number;
+}
+
+export function useBomCostTrend(
+  projectId: string | undefined,
+  granularity: 'daily' | 'weekly' | 'monthly',
+) {
+  return useQuery({
+    queryKey: queryKeys.bom.costTrend(projectId ?? '', granularity),
+    queryFn: () =>
+      apiClient.get<{ data: BomCostTrendPoint[] }>(
+        `${ENDPOINTS.PROJECTS.REPORTS_BOM_COST_TREND(projectId!)}?granularity=${granularity}`,
+      ),
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000, // 5 min — historical data doesn't change often
+  });
+}
 
 export function useBomTree(projectId: string | undefined) {
   return useQuery({

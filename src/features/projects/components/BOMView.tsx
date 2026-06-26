@@ -56,7 +56,7 @@ import {
   getCategoryMeta,
   bomFlatAll, bomFlatten, bomFind,
   bomFilterTree, bomFlattenInclude, bomTypeOf,
-  fromApiNode, assignLevelLabels, formatLeadTime,
+  fromApiNode, applyPriceRollup, assignLevelLabels, formatLeadTime,
 } from './bomData';
 import { BOMStatusPill, ReqTag, PartImageThumb } from './BOMShared';
 import { BOMDetailScreen, AddSubcomponentDialog } from './BOMDetailScreen';
@@ -840,7 +840,7 @@ export function BOMView({
 
   const rootNodes = useMemo(() => {
     if (!bomTree?.roots?.length) return [];
-    const nodes = bomTree.roots.map(r => fromApiNode(r));
+    const nodes = bomTree.roots.map(r => applyPriceRollup(fromApiNode(r)));
     assignLevelLabels(nodes);
     return nodes;
   }, [bomTree]);

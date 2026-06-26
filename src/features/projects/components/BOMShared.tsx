@@ -40,7 +40,7 @@ export function PartThumb({
   if (imageUrl) {
     return (
       <div style={containerStyle}>
-        <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+        <img src={imageUrl} alt="" className="w-full h-full object-contain" />
       </div>
     );
   }

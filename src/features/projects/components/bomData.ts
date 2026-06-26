@@ -37,6 +37,7 @@ export interface BOMNode {
   leadTime: number;   // days — mirrors backend leadTimeDays 1:1, no unit conversion
   mpn: string;
   owner: string;
+  ownerId?: string;
   revHistory: BOMRevision[];
   children?: BOMNode[];
   _x?: number;
@@ -208,10 +209,22 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     leadTime:     rev?.leadTimeDays ?? 0,
     mpn:          node.part.mpn ?? '',
     owner:        node.owner?.name ?? '',
+    ownerId:      node.owner?.id,
     revHistory:   [],  // loaded on demand via usePartRevisions
     children:     node.children?.map(c => fromApiNode(c, depth + 1)),
     _partId:      node.part.id,
   };
+}
+
+/**
+ * Post-pass: if a node has children, its unit price = sum(child.qty × child.price).
+ * Leaf nodes keep their own revision price. Applied bottom-up (children first).
+ */
+export function applyPriceRollup(node: BOMNode): BOMNode {
+  if (!node.children?.length) return node;
+  const rolledChildren = node.children.map(applyPriceRollup);
+  const rollupPrice = rolledChildren.reduce((sum, c) => sum + c.qty * c.price, 0);
+  return { ...node, price: rollupPrice, children: rolledChildren };
 }
 
 export function fromApiRevision(r: ApiRevisionResponse): BOMRevision {

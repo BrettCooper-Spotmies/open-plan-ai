@@ -4,6 +4,7 @@
  */
 import { useRef, useState } from 'react';
 import type { Workbook, Worksheet } from 'exceljs';
+import Papa from 'papaparse';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -137,14 +138,37 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
     setFileError(null);
     setFileName(file.name);
     try {
-      const buffer = await file.arrayBuffer();
-      const { Workbook } = await import('exceljs');
-      const workbook = new Workbook();
-      await workbook.xlsx.load(buffer as unknown as Buffer);
-      const sheet = workbook.worksheets[0];
-      if (!sheet) throw new Error('No sheet found in this file.');
+      let headers: string[] = [];
+      let rawRows: Record<string, unknown>[] = [];
+      
+      const isCsv = file.name.toLowerCase().endsWith('.csv');
+      
+      if (isCsv) {
+        const text = await file.text();
+        const result = Papa.parse(text, {
+          header: true,
+          skipEmptyLines: true,
+        });
+        
+        if (result.errors.length > 0 && result.data.length === 0) {
+          throw new Error('Failed to parse CSV file: ' + result.errors[0].message);
+        }
+        
+        headers = result.meta.fields || [];
+        rawRows = result.data as Record<string, unknown>[];
+      } else {
+        const buffer = await file.arrayBuffer();
+        const { Workbook } = await import('exceljs');
+        const workbook = new Workbook();
+        await workbook.xlsx.load(buffer as unknown as Buffer);
+        const sheet = workbook.worksheets[0];
+        if (!sheet) throw new Error('No sheet found in this file.');
 
-      const { headers, rows: rawRows } = sheetToRows(sheet);
+        const parsed = sheetToRows(sheet);
+        headers = parsed.headers;
+        rawRows = parsed.rows;
+      }
+
       if (rawRows.length === 0) throw new Error('No data rows found below the header.');
       if (rawRows.length > MAX_IMPORT_ROWS) {
         throw new Error(`This file has ${rawRows.length} rows — imports are capped at ${MAX_IMPORT_ROWS} rows per file.`);
@@ -230,7 +254,7 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
         <DialogHeader className="px-5 pt-5 pb-3 border-b border-border shrink-0">
           <DialogTitle className="text-base font-semibold flex items-center gap-2">
             <FileSpreadsheet className="w-4 h-4 text-primary" />
-            Import Sub-components from Excel
+            Import Sub-components
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             Bulk-add sub-components to <span className="font-mono text-foreground">{parentNode.pn}</span> from a spreadsheet.
@@ -265,13 +289,13 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
                 <>
                   <Upload className="w-7 h-7 text-muted-foreground/50" />
                   <span className="text-sm text-foreground font-medium">Click to upload a spreadsheet</span>
-                  <span className="text-[11px] text-muted-foreground">.xlsx or .xls · up to {MAX_IMPORT_ROWS} rows</span>
+                  <span className="text-[11px] text-muted-foreground">.xlsx, .xls, or .csv · up to {MAX_IMPORT_ROWS} rows</span>
                   {fileName && !fileError && <span className="text-[11px] text-primary mt-1">{fileName}</span>}
                 </>
               )}
             </div>
             <input
-              ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" disabled={mappingInProgress}
+              ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" disabled={mappingInProgress}
               onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
             />
 

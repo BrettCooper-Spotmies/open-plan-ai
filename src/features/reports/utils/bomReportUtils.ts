@@ -67,8 +67,12 @@ export function getBomBlockingCount(nodes: BOMNode[]): number {
   return nodes.filter((n) => n.status === 'pending' || n.status === 'rejected').length;
 }
 
+// Only sum root-level nodes (depth === 0) — their prices already include child rollup,
+// so summing all flat nodes would double-count assembly costs.
 export function getBomTotalCost(nodes: BOMNode[]): number {
-  return Math.round(nodes.reduce((sum, n) => sum + extCost(n), 0) * 100) / 100;
+  const roots = nodes.filter((n) => n.level === 0);
+  const source = roots.length > 0 ? roots : nodes;
+  return Math.round(source.reduce((sum, n) => sum + extCost(n), 0) * 100) / 100;
 }
 
 export function getBomCostDrivers(nodes: BOMNode[], limit = 10): BomCostDriver[] {

@@ -59,6 +59,7 @@ export const ENDPOINTS = {
     REPORTS_TASK_DISTRIBUTION: (id: string) => `/projects/${id}/reports/task-distribution`,
     REPORTS_TEAM_WORKLOAD: (id: string) => `/projects/${id}/reports/team-workload`,
     REPORTS_BURNDOWN: (id: string) => `/projects/${id}/reports/burndown`,
+    REPORTS_BOM_COST_TREND: (id: string) => `/projects/${id}/reports/bom-cost-trend`,
   },
   // Tasks
   TASKS: {
