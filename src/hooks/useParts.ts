@@ -39,6 +39,7 @@ export function useUpdatePart() {
     onSuccess: (_data, { partId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.parts.detail(partId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.bom.all });
     },
   });
 }
