@@ -1,12 +1,14 @@
-import { ArrowLeft, Info, Phone, Search, UserPlus, Video } from 'lucide-react';
+import { ArrowLeft, Info, Phone, Search, UserPlus, Video, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { OnlineStatus } from './OnlineStatus';
 import { Conversation } from '../types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChatStore } from '../stores/useChatStore';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNowStrict } from 'date-fns';
+import { useEffect, useRef } from 'react';
 
 interface ChatHeaderProps {
   conversation: Conversation;
@@ -22,6 +24,18 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText, on
   const toggleDetailPanel = useChatStore((s) => s.toggleDetailPanel);
   const setDetailPanelOpen = useChatStore((s) => s.setDetailPanelOpen);
   const isDetailOpen = useChatStore((s) => s.isDetailPanelOpen);
+  
+  const isMessageSearchOpen = useChatStore((s) => s.isMessageSearchOpen);
+  const messageSearchQuery = useChatStore((s) => s.messageSearchQuery);
+  const setMessageSearchQuery = useChatStore((s) => s.setMessageSearchQuery);
+  const toggleMessageSearch = useChatStore((s) => s.toggleMessageSearch);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isMessageSearchOpen) {
+      searchInputRef.current?.focus();
+    }
+  }, [isMessageSearchOpen]);
 
   const currentMember = conversation.members.find((m) => m.id === currentUserId);
   const isOwner = currentMember?.role === 'owner';
@@ -45,7 +59,7 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText, on
   const avatarUrl = conversation.type === 'dm' ? otherMember?.avatarUrl : conversation.avatarUrl;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+    <div className="flex items-center gap-3 px-4 py-3 border-b border-border min-h-[61px]">
       {onBack && (
         <Button variant="ghost" size="icon" className="h-8 w-8 md:hidden" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" />
@@ -53,7 +67,10 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText, on
       )}
 
       <div
-        className="flex flex-1 min-w-0 items-center gap-3 cursor-pointer hover:bg-accent/50 p-1 -ml-1 rounded-lg transition-colors group"
+        className={cn(
+          "flex items-center gap-3 cursor-pointer hover:bg-accent/50 p-1 -ml-1 rounded-lg transition-colors group",
+          isMessageSearchOpen ? "shrink min-w-0 max-w-[130px] md:max-w-[200px]" : "flex-1 min-w-0"
+        )}
         onClick={() => setDetailPanelOpen(true)}
       >
         <div className="relative shrink-0">
@@ -87,8 +104,33 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText, on
         </div>
       </div>
 
-      <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon" className="h-8 w-8" title="Search" onClick={() => useChatStore.getState().toggleMessageSearch()}><Search className="h-4 w-4" /></Button>
+      {isMessageSearchOpen && (
+        <div className="flex-1 relative flex items-center min-w-0 animate-in fade-in zoom-in-95 duration-200">
+           <Search className="h-4 w-4 text-muted-foreground absolute left-3" />
+           <Input
+             ref={searchInputRef}
+             value={messageSearchQuery}
+             onChange={(e) => setMessageSearchQuery(e.target.value)}
+             placeholder="Search..."
+             className="w-full h-9 pl-9 pr-9 bg-muted/30 focus-visible:bg-transparent transition-colors"
+           />
+           <Button 
+             variant="ghost" 
+             size="icon" 
+             className="h-7 w-7 absolute right-1 text-muted-foreground hover:text-foreground" 
+             onClick={toggleMessageSearch}
+           >
+             <X className="h-4 w-4" />
+           </Button>
+        </div>
+      )}
+
+      <div className="flex items-center gap-1 shrink-0">
+        {!isMessageSearchOpen && (
+          <Button variant="ghost" size="icon" className="h-8 w-8" title="Search" onClick={() => toggleMessageSearch()}>
+            <Search className="h-4 w-4" />
+          </Button>
+        )}
         {conversation.type === 'group' && isOwner && onAddMember && (
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Add member" onClick={onAddMember}>
             <UserPlus className="h-4 w-4" />

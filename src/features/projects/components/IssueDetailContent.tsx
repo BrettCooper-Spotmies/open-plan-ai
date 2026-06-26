@@ -1145,7 +1145,11 @@ export function IssueDetailContent({
                 </div>
 
             </div>
-            <FilePreviewDialog file={previewingFile} onClose={() => setPreviewingFile(null)} />
+            <FilePreviewDialog
+                file={previewingFile}
+                files={attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType }))}
+                onClose={() => setPreviewingFile(null)}
+            />
         </div >
     );
 }

@@ -434,6 +434,7 @@ export const TaskDetailModal = ({
   useEffect(() => {
     if (!isOpen) {
       setInitializedForKey(null);
+      setPreviewingFile(null);
       return;
     }
 
@@ -2129,7 +2130,11 @@ export const TaskDetailModal = ({
         variant="destructive"
       />
     </Dialog>
-    <FilePreviewDialog file={previewingFile} onClose={() => setPreviewingFile(null)} />
+    <FilePreviewDialog
+      file={previewingFile}
+      files={attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType }))}
+      onClose={() => setPreviewingFile(null)}
+    />
     </>
   );
 }
