@@ -21,6 +21,8 @@ function normaliseIssueStatus(raw: unknown): IssueStatus {
 
 /** Backend returns `dueDate`; the UI Milestone type uses `date`. */
 function fromApiMilestone(raw: Record<string, unknown>): Milestone {
+  const creator = raw.createdBy as { id: string; name: string; avatarUrl?: string | null } | null | undefined;
+
   return {
     id: raw.id as string,
     title: raw.title as string,
@@ -29,6 +31,16 @@ function fromApiMilestone(raw: Record<string, unknown>): Milestone {
     completed: Boolean(raw.completed),
     completedAt: (raw.completedAt as string) || undefined,
     status: (raw.statusOverride as Milestone['status']) || undefined,
+    createdBy: creator
+      ? {
+          id: creator.id,
+          name: creator.name || 'Unknown',
+          email: '',
+          role: 'member',
+          initials: (creator.name || '?').slice(0, 2).toUpperCase(),
+          avatar: creator.avatarUrl || '',
+        }
+      : undefined,
   };
 }
 

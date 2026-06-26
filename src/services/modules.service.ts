@@ -10,6 +10,7 @@ export interface ModuleInsert {
   status?: string;
   progress?: number;
   milestone_id?: string | null;
+  owner_id?: string | null;
 }
 
 export interface ModuleUpdate {
@@ -19,6 +20,7 @@ export interface ModuleUpdate {
   status?: string;
   progress?: number;
   milestone_id?: string | null;
+  owner_id?: string | null;
 }
 
 // DB-shape type exported for consumers that do their own adapter mapping.
@@ -33,6 +35,9 @@ export interface Module {
   milestone_id: string | null;
   created_at: string | null;
   updated_at: string | null;
+  owner_id: string | null;
+  owner: { name: string; avatarUrl: string | null } | null;
+  created_by: { id: string; name: string; avatarUrl: string | null } | null;
 }
 
 /** Map snake_case insert payload to camelCase for the REST backend. */
@@ -44,6 +49,7 @@ function toApiPayload(data: ModuleInsert | ModuleUpdate): Record<string, unknown
   if ('status' in data) out.status = data.status;
   if ('progress' in data) out.progress = data.progress;
   if ('milestone_id' in data) out.milestoneId = data.milestone_id;
+  if ('owner_id' in data) out.ownerId = data.owner_id;
   if ('project_id' in data) out.projectId = (data as ModuleInsert).project_id;
   return out;
 }
@@ -61,6 +67,9 @@ function fromApi(raw: Record<string, unknown>): Module {
     milestone_id: (raw.milestoneId ?? raw.milestone_id ?? null) as string | null,
     created_at: (raw.createdAt ?? raw.created_at ?? null) as string | null,
     updated_at: (raw.updatedAt ?? raw.updated_at ?? null) as string | null,
+    owner_id: (raw.ownerId ?? raw.owner_id ?? null) as string | null,
+    owner: (raw.owner ?? null) as { name: string; avatarUrl: string | null } | null,
+    created_by: (raw.createdBy ?? raw.created_by ?? null) as { id: string; name: string; avatarUrl: string | null } | null,
   };
 }
 
