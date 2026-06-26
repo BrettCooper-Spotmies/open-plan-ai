@@ -544,7 +544,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     try {
       await onSave({
         mode,
-        pn: isEdit ? (node?.pn ?? pn) : pn.trim(),
+        pn: isEdit ? (node?.pn ?? pn) : pn.trim().toUpperCase(),
         desc, category: category.trim().toLowerCase(), status,
         rev: isEdit ? (versionMode === 'new' ? (newRevLabel || nextRev(node!.rev)) : node!.rev) : rev,
         qty: parseFloat(qty) || 1,
@@ -650,8 +650,8 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                       </div>
                     ) : (
                       <>
-                        <FInput value={pn} onChange={e => setPn(e.target.value.toUpperCase())}
-                          placeholder="e.g. EV-PWR-020" className="h-9 font-mono" />
+                        <FInput value={pn} onChange={e => setPn(e.target.value)}
+                          placeholder="e.g. EV-PWR-020" className="h-9 font-mono uppercase" />
                         {errors.pn && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.pn}</p>}
                       </>
                     )}
@@ -947,10 +947,10 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                     Link this part to system requirements it satisfies (e.g. SYS-001, PWR-003).
                   </p>
                   <div className="flex gap-2 mb-4">
-                    <Input value={reqInput} onChange={e => setReqInput(e.target.value.toUpperCase())}
+                    <Input value={reqInput} onChange={e => setReqInput(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addReq(); } }}
                       placeholder="e.g. SYS-001"
-                      className="h-9 text-sm bg-muted border-border font-mono flex-1" />
+                      className="h-9 text-sm bg-muted border-border font-mono flex-1 uppercase" />
                     <Button size="sm" variant="outline" className="h-9 gap-1.5 px-4 shrink-0" onClick={addReq}
                       disabled={!reqInput.trim()}>
                       <Plus className="w-3.5 h-3.5" /> Add
