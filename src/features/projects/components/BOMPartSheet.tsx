@@ -163,8 +163,31 @@ function FileRow({ icon: Icon, label, hint, accept, value, onChange }: FileRowPr
   };
   const removeAt = (i: number) => onChange(value.filter((_, idx) => idx !== i));
 
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
+    }
+  };
+
   return (
-    <div className="rounded-lg border border-border bg-card hover:bg-muted/30 transition-colors">
+    <div 
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      className={cn("rounded-lg border transition-colors", isDragging ? "border-primary bg-primary/5" : "border-border bg-card hover:bg-muted/30")}
+    >
       <div className="flex items-center gap-3 p-3">
         <div className="w-9 h-9 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0">
           <Icon className="w-4 h-4 text-muted-foreground" />
@@ -254,16 +277,45 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
     setUrlInput('');
   };
 
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (mode !== 'file' || value) return;
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (mode !== 'file' || value) return;
+    e.preventDefault();
+    setIsDragging(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    if (mode !== 'file' || value) return;
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const file = e.dataTransfer.files[0];
+      if (file.type.startsWith('image/')) {
+        onChange({ kind: 'file', file });
+      } else {
+        toast.error('Please upload an image file');
+      }
+    }
+  };
+
   return (
     <div className="space-y-2">
       <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         Product Photo
       </Label>
       <div
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         onClick={() => { if (!value && mode === 'file') ref.current?.click(); }}
         className={cn(
           'relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed transition-colors',
-          value ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/30 hover:bg-muted/60 hover:border-primary/30',
+          value ? 'border-primary/40 bg-primary/5' : isDragging ? 'border-primary bg-primary/10' : 'border-border bg-muted/30 hover:bg-muted/60 hover:border-primary/30',
           !value && mode === 'file' && 'cursor-pointer',
         )}
         style={{ height: 140 }}

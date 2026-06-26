@@ -620,13 +620,24 @@ export const TaskDetailModal = ({
   const attachments = editedTask.attachments || [];
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (isUploading) return;
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (isUploading) return;
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const processFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    // In create mode queue files locally; they are uploaded after the task is saved
     if (mode === 'create') {
       setPendingFiles(prev => [...prev, ...Array.from(files)]);
-      if (e.target) e.target.value = '';
       return;
     }
     setIsUploading(true);
@@ -660,8 +671,19 @@ export const TaskDetailModal = ({
       toast.error(err?.message || 'Failed to upload file');
     } finally {
       setIsUploading(false);
-      if (e.target) e.target.value = '';
     }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (isUploading) return;
+    e.preventDefault();
+    setIsDragging(false);
+    processFiles(e.dataTransfer.files);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    await processFiles(e.target.files);
+    if (e.target) e.target.value = '';
   };
 
   const handleRemoveAttachment = async (attachmentId: string) => {
@@ -1783,8 +1805,13 @@ export const TaskDetailModal = ({
                   </div>
                 )}
 
-                <label className={cn(
-                  "flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded-lg cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-colors",
+                <label 
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={cn(
+                  "flex items-center justify-center gap-2 p-4 border-2 border-dashed rounded-lg cursor-pointer transition-colors",
+                  isDragging ? "border-primary bg-primary/10" : "hover:border-primary/50 hover:bg-muted/30",
                   isUploading && "opacity-50 pointer-events-none"
                 )}>
                   {isUploading ? (

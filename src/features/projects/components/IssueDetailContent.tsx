@@ -251,14 +251,24 @@ export function IssueDetailContent({
     };
 
     const attachments = editedIssue.attachments || [];
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
+    const [isDragging, setIsDragging] = useState(false);
+
+    const handleDragOver = (e: React.DragEvent) => {
+        if (isUploading) return;
+        e.preventDefault();
+        setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent) => {
+        if (isUploading) return;
+        e.preventDefault();
+        setIsDragging(false);
+    };
+
+    const processFiles = async (files: FileList | null) => {
         if (!files || files.length === 0) return;
-        // In create mode the issue doesn't exist on the backend yet; queue files
-        // locally and upload them after the issue is actually created.
         if (mode === 'create') {
             setPendingFiles(prev => [...prev, ...Array.from(files)]);
-            if (e.target) e.target.value = '';
             return;
         }
         setIsUploading(true);
@@ -292,8 +302,19 @@ export function IssueDetailContent({
             toast.error(err?.message || 'Failed to upload file');
         } finally {
             setIsUploading(false);
-            if (e.target) e.target.value = '';
         }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        if (isUploading) return;
+        e.preventDefault();
+        setIsDragging(false);
+        processFiles(e.dataTransfer.files);
+    };
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        await processFiles(e.target.files);
+        if (e.target) e.target.value = '';
     };
 
     const handleRemovePendingFile = (index: number) => {
@@ -902,8 +923,13 @@ export function IssueDetailContent({
                             )}
 
                             <div className="flex items-center justify-center w-full">
-                                <label className={cn(
-                                    "flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-lg cursor-pointer bg-muted/20 hover:bg-muted/40 transition-colors",
+                                <label 
+                                    onDragOver={handleDragOver}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={handleDrop}
+                                    className={cn(
+                                    "flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-lg cursor-pointer transition-colors",
+                                    isDragging ? "border-primary bg-primary/10" : "bg-muted/20 hover:bg-muted/40",
                                     isUploading && "opacity-50 pointer-events-none"
                                 )}>
                                     <div className="flex flex-col items-center justify-center pt-5 pb-6">

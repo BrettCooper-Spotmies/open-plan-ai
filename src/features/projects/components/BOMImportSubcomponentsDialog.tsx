@@ -116,6 +116,7 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [results, setResults] = useState<ImportResult[]>([]);
   const [mappingInProgress, setMappingInProgress] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: partsData } = useOrgParts(orgId, { limit: 100 });
@@ -130,9 +131,31 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
     setStage('upload'); setFileName(null); setFileError(null);
     setParsedRows([]); setProgress({ done: 0, total: 0 }); setResults([]);
     setMappingInProgress(false);
+    setIsDragging(false);
   };
 
   const handleClose = () => { reset(); onClose(); };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (mappingInProgress) return;
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (mappingInProgress) return;
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (mappingInProgress) return;
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  };
 
   const handleFile = async (file: File) => {
     setFileError(null);
@@ -272,10 +295,14 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
             </div>
 
             <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
               onClick={() => { if (!mappingInProgress) fileInputRef.current?.click(); }}
               className={cn(
-                'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-muted/20 transition-colors',
-                mappingInProgress ? 'cursor-not-allowed opacity-70' : 'hover:bg-muted/40 hover:border-primary/30 cursor-pointer',
+                'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed transition-colors',
+                mappingInProgress ? 'cursor-not-allowed opacity-70 border-border bg-muted/20' : 
+                isDragging ? 'border-primary bg-primary/10' : 'border-border bg-muted/20 hover:bg-muted/40 hover:border-primary/30 cursor-pointer',
               )}
               style={{ height: 160 }}
             >
