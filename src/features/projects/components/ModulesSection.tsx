@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
-import { LayoutGrid, List, Plus, Search, X } from 'lucide-react';
+import { LayoutGrid, List, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Module, ModuleViewMode, Task, Issue, TeamMember, ModuleType } from '@/types';
 import { ModulesKanbanView } from './ModulesKanbanView';
@@ -9,7 +8,7 @@ import { ModulesListView } from './ModulesListView';
 import { ModuleDetailModal } from './ModuleDetailModal';
 import { AddModuleDialog } from './AddModuleDialog';
 import { getModuleTasks, getModuleProgress } from '../utils/projectUtils';
-import { logger } from '@/services/monitoring/logger';
+
 
 interface ModuleWithStats extends Module {
   taskCount: number;
@@ -41,57 +40,26 @@ export function ModuleViewControls({
   viewMode,
   onViewModeChange,
   onAddModule,
-  searchQuery = '',
-  onSearchQueryChange,
 }: {
   viewMode: ModuleViewMode;
   onViewModeChange: (mode: ModuleViewMode) => void;
   onAddModule?: () => void;
-  searchQuery?: string;
-  onSearchQueryChange?: (query: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-2 w-full justify-between md:justify-end">
-      <div className="flex items-center gap-2 flex-1 min-w-0 md:flex-none">
-        {/* Search Input */}
-        <div className="relative flex items-center flex-1 md:flex-none min-w-0">
-          <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
-          <Input
-            type="text"
-            placeholder="Search modules..."
-            value={searchQuery}
-            onChange={(e) => onSearchQueryChange?.(e.target.value)}
-            className="pl-9 w-full md:w-[200px] h-8 min-w-0"
-          />
-        {searchQuery && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-0 h-8 w-8 text-muted-foreground hover:text-foreground"
-            onClick={() => {
-              if (onSearchQueryChange) onSearchQueryChange('');
-              else if (import.meta.env.DEV) logger.warn('[ModulesSection] onSearchQueryChange undefined');
-            }}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        )}
-      </div>
-
+    <div className="flex items-center gap-2">
       <ToggleGroup
         type="single"
         value={viewMode}
         onValueChange={(value) => value && onViewModeChange(value as ModuleViewMode)}
         className="bg-muted/50 p-1 rounded-lg"
       >
-        <ToggleGroupItem value="kanban" aria-label="Kanban view" className="px-2 data-[state=on]:bg-background">
+        <ToggleGroupItem value="kanban" aria-label="Kanban view" className="h-8 w-8 p-0 data-[state=on]:bg-background">
           <LayoutGrid className="h-4 w-4" />
         </ToggleGroupItem>
-        <ToggleGroupItem value="list" aria-label="List view" className="px-2 data-[state=on]:bg-background">
+        <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 p-0 data-[state=on]:bg-background">
           <List className="h-4 w-4" />
         </ToggleGroupItem>
       </ToggleGroup>
-      </div>
 
       {onAddModule && (
         <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={onAddModule}>
