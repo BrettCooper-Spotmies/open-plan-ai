@@ -334,13 +334,11 @@ export function ECOListView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [fStatus, setFStatus]     = useState<string>('ALL');
   const [fPriority, setFPriority] = useState<string>('ALL');
-  const [exportOpen, setExportOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
-  const exportSummaryCsv = useExportEcoSummaryCsv(projectId);
   const exportDetailedCsv = useExportEcoDetailedCsv(projectId);
-  const exporting = exportSummaryCsv.isPending || exportDetailedCsv.isPending;
+  const exporting = exportDetailedCsv.isPending;
 
   const apiFilters: Record<string, string> = {};
   if (fStatus   !== 'ALL') apiFilters.status   = fStatus.toLowerCase();
@@ -354,15 +352,13 @@ export function ECOListView({
   const effectiveSelectedId = selectedId ?? list[0]?.id ?? null;
   const selected = list.find(e => e.id === effectiveSelectedId) ?? list[0] ?? null;
 
-  const handleExport = async (kind: 'summary' | 'detailed') => {
-    if (!selected) return;
-    setExportOpen(false);
+  const handleExport = async () => {
+    if (list.length === 0) return;
     try {
-      const blob = kind === 'summary'
-        ? await exportSummaryCsv.mutateAsync([selected.id])
-        : await exportDetailedCsv.mutateAsync([selected.id]);
-      downloadEcoCsv(blob, kind, 1);
-      flash(`${selected.num} exported as CSV`);
+      const ids = list.map(e => e.id);
+      const blob = await exportDetailedCsv.mutateAsync(ids);
+      downloadEcoCsv(blob, 'detailed', ids.length);
+      flash(`Exported ${ids.length} change order(s)`);
     } catch {
       flash('Failed to export');
     }
@@ -422,28 +418,17 @@ export function ECOListView({
               <div className="flex gap-2 items-center">
                 <Sel value={fStatus}   onChange={setFStatus}   opts={MAIN_STATUSES}                          allLabel="All statuses" />
                 <Sel value={fPriority} onChange={setFPriority} opts={['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']} allLabel="All priorities" />
-                <DropdownMenu open={exportOpen} onOpenChange={setExportOpen}>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      disabled={!selected || exporting}
-                      title={selected ? `Export ${selected.num}` : 'Select a change order to export'}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-medium bg-card text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit] disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {exporting
-                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        : <Download className="w-3.5 h-3.5" />}
-                      Export
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleExport('summary')}>
-                      Export as CSV (Summary)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExport('detailed')}>
-                      Export as CSV (Detailed)
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <button
+                  onClick={handleExport}
+                  disabled={list.length === 0 || exporting}
+                  title="Export complete ECO list"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-medium bg-card text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {exporting
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Download className="w-3.5 h-3.5" />}
+                  Export
+                </button>
               </div>
             </div>
             <div className="p-2.5 flex flex-col gap-2">

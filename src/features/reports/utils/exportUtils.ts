@@ -194,11 +194,11 @@ export function downloadCsvBlob(blob: Blob, filename: string): void {
  * @param format 'summary' | 'detailed'
  * @param ecoCount Number of ECOs being exported
  */
-export function downloadEcoCsv(blob: Blob, format: 'summary' | 'detailed', ecoCount: number): void {
+export function downloadEcoCsv(blob: Blob, exportFormat: 'summary' | 'detailed', ecoCount: number): void {
   const dateStr = format(new Date(), 'yyyy-MM-dd');
   const filename = ecoCount === 1
-    ? `eco-${format}-${dateStr}.csv`
-    : `ecos-${format}-${ecoCount}-${dateStr}.csv`;
+    ? `eco-${exportFormat}-${dateStr}.csv`
+    : `ecos-${exportFormat}-${ecoCount}-${dateStr}.csv`;
   downloadCsvBlob(blob, filename);
 }
 
