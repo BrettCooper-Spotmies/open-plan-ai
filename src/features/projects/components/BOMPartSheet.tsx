@@ -61,6 +61,7 @@ export interface BOMPartPayload {
   docDatasheet?: DocValue[];
   doc3DModel?: DocValue[];
   docFootprint?: DocValue[];
+  docCustom?: DocValue[];
   // edit-only version fields
   versionMode?: 'same' | 'new';
   newRevLabel?: string;
@@ -128,6 +129,21 @@ const FL = ({ label, required, children, className }: {
 const FInput = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
   <Input {...props} className={cn('h-8 text-sm bg-muted border-border focus-visible:ring-1', props.className)} />
 );
+
+export type TechFileSection = {
+  id: string;
+  label: string;
+  hint: string;
+  accept: string;
+  icon: React.ElementType;
+  value: DocValue[];
+};
+
+const DEFAULT_TECH_SECTIONS: TechFileSection[] = [
+  { id: 'datasheet', label: 'Datasheet', hint: 'PDF · Manufacturer datasheet', accept: '.pdf,application/pdf', icon: FileText, value: [] },
+  { id: '3dmodel', label: '3D Model (STEP)', hint: '.step, .stp · CAD model file', accept: '.step,.stp', icon: Paperclip, value: [] },
+  { id: 'footprint', label: 'Footprint Library', hint: '.kicad_mod, .lib · EDA footprint', accept: '.kicad_mod,.lib,.lbr', icon: Paperclip, value: [] }
+];
 
 // ── File upload row (supports multiple uploaded files and/or linked URLs) ──
 interface FileRowProps {
@@ -417,10 +433,10 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   const [reqInput, setReqInput] = useState('');
   // documents
   const [docPhoto, setDocPhoto] = useState<DocValue | null>(null);
-  const [docDatasheet, setDocDatasheet] = useState<DocValue[]>([]);
-  const [doc3DModel, setDoc3DModel] = useState<DocValue[]>([]);
-  const [docFootprint, setDocFootprint] = useState<DocValue[]>([]);
-  // edit: version
+  const [techSections, setTechSections] = useState<TechFileSection[]>(DEFAULT_TECH_SECTIONS);
+  const [isAddingSection, setIsAddingSection] = useState(false);
+  const [newSectionName, setNewSectionName] = useState('');
+  
   const [versionMode, setVersionMode] = useState<'same' | 'new'>('same');
   const [newRevLabel, setNewRevLabel] = useState(node ? nextRev(node.rev) : 'B');
   const [changeNotes, setChangeNotes] = useState('');
@@ -450,9 +466,9 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     setReq(node?.req ?? []);
     setReqInput('');
     setDocPhoto(null);
-    setDocDatasheet([]);
-    setDoc3DModel([]);
-    setDocFootprint([]);
+    setTechSections(DEFAULT_TECH_SECTIONS.map(s => ({ ...s, value: [] })));
+    setIsAddingSection(false);
+    setNewSectionName('');
     setVersionMode('same');
     setNewRevLabel(node ? nextRev(node.rev) : 'B');
     setChangeNotes('');
@@ -537,7 +553,11 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
         owner: selectedOwner?.name ?? (isEdit ? node?.owner ?? '' : ''),
         ownerId: selectedOwner?.id,
         req,
-        docPhoto, docDatasheet, doc3DModel, docFootprint,
+        docPhoto, 
+        docDatasheet: techSections.find(s => s.id === 'datasheet')?.value || [],
+        doc3DModel: techSections.find(s => s.id === '3dmodel')?.value || [],
+        docFootprint: techSections.find(s => s.id === 'footprint')?.value || [],
+        docCustom: techSections.filter(s => !['datasheet', '3dmodel', 'footprint'].includes(s.id)).flatMap(s => s.value),
         versionMode: isEdit ? versionMode : undefined,
         newRevLabel: isEdit && versionMode === 'new' ? newRevLabel : undefined,
         changeNotes: isEdit ? changeNotes : undefined,
@@ -947,15 +967,67 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                   <PhotoUpload value={docPhoto} onChange={setDocPhoto} />
                 </div>
                 <div className="space-y-3">
-                  <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-3">
-                    Technical Files
-                  </Label>
-                  <FileRow icon={FileText} label="Datasheet" hint="PDF · Manufacturer datasheet"
-                    accept=".pdf,application/pdf" value={docDatasheet} onChange={setDocDatasheet} />
-                  <FileRow icon={Paperclip} label="3D Model (STEP)" hint=".step, .stp · CAD model file"
-                    accept=".step,.stp" value={doc3DModel} onChange={setDoc3DModel} />
-                  <FileRow icon={Paperclip} label="Footprint Library" hint=".kicad_mod, .lib · EDA footprint"
-                    accept=".kicad_mod,.lib,.lbr" value={docFootprint} onChange={setDocFootprint} />
+                  <div className="flex items-center justify-between mb-1">
+                    <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block">
+                      Technical Files
+                    </Label>
+                    {!isAddingSection && (
+                      <button type="button" onClick={() => setIsAddingSection(true)}
+                        className="text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1">
+                        <Plus className="w-3 h-3" /> Add Section
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    {techSections.map((section) => (
+                      <div key={section.id} className="relative group">
+                        <FileRow icon={section.icon} label={section.label} hint={section.hint}
+                          accept={section.accept} value={section.value} 
+                          onChange={(v) => setTechSections(ts => ts.map(s => s.id === section.id ? { ...s, value: v } : s))} />
+                        <button type="button" onClick={() => setTechSections(ts => ts.filter(s => s.id !== section.id))}
+                          className="absolute -right-2 -top-2 bg-destructive/10 text-destructive rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove Section">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    
+                    {isAddingSection && (
+                      <div className="flex items-center gap-2 p-3 rounded-xl border-2 border-dashed border-border bg-card">
+                        <FInput 
+                          value={newSectionName} 
+                          onChange={e => setNewSectionName(e.target.value)} 
+                          placeholder="Section Name (e.g. Test Report)" 
+                          className="h-8 flex-1"
+                          autoFocus
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (newSectionName.trim()) {
+                                setTechSections(ts => [...ts, { id: Date.now().toString(), label: newSectionName.trim(), hint: 'Custom file', accept: '*/*', icon: Paperclip, value: [] }]);
+                                setIsAddingSection(false);
+                                setNewSectionName('');
+                              }
+                            } else if (e.key === 'Escape') {
+                              setIsAddingSection(false);
+                              setNewSectionName('');
+                            }
+                          }}
+                        />
+                        <button type="button" onClick={() => {
+                          if (newSectionName.trim()) {
+                            setTechSections(ts => [...ts, { id: Date.now().toString(), label: newSectionName.trim(), hint: 'Custom file', accept: '*/*', icon: Paperclip, value: [] }]);
+                            setIsAddingSection(false);
+                            setNewSectionName('');
+                          }
+                        }} className="px-3 h-8 text-xs font-medium bg-primary text-primary-foreground rounded-md">Add</button>
+                        <button type="button" onClick={() => { setIsAddingSection(false); setNewSectionName(''); }}
+                          className="p-1.5 text-muted-foreground hover:text-foreground">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </TabsContent>
