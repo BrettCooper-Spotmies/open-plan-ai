@@ -1359,36 +1359,42 @@ export default function ProjectDetail() {
                 </div>
               )}
               {section === 'modules' && (
-                <ModuleViewControls
-                  viewMode={moduleViewMode}
-                  onViewModeChange={setModuleViewMode}
-                  searchQuery={moduleSearchQuery}
-                  onSearchQueryChange={setModuleSearchQuery}
-                  onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
-                />
+                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
+                  <ModuleViewControls
+                    viewMode={moduleViewMode}
+                    onViewModeChange={setModuleViewMode}
+                    searchQuery={moduleSearchQuery}
+                    onSearchQueryChange={setModuleSearchQuery}
+                    onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
+                  />
+                </div>
               )}
               {section === 'milestones' && (
-                <MilestoneViewControls
-                  viewMode={milestoneViewMode}
-                  onViewModeChange={setMilestoneViewMode}
-                  searchQuery={milestoneSearchQuery}
-                  onSearchQueryChange={setMilestoneSearchQuery}
-                  onAddMilestone={canAddModulesAndMilestones ? () => setIsAddMilestoneDialogOpen(true) : undefined}
-                />
+                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
+                  <MilestoneViewControls
+                    viewMode={milestoneViewMode}
+                    onViewModeChange={setMilestoneViewMode}
+                    searchQuery={milestoneSearchQuery}
+                    onSearchQueryChange={setMilestoneSearchQuery}
+                    onAddMilestone={canAddModulesAndMilestones ? () => setIsAddMilestoneDialogOpen(true) : undefined}
+                  />
+                </div>
               )}
               {section === 'issues' && (
-                <IssueViewControls
-                  viewMode={issueViewMode}
-                  onViewModeChange={setIssueViewMode}
-                  searchQuery={issueSearchQuery}
-                  onSearchQueryChange={setIssueSearchQuery}
-                  filters={issueFilters}
-                  onFiltersChange={setIssueFilters}
-                  teamMembers={organizationMembers}
-                  activeFilterCount={activeIssueFilterCount}
-                  onClearFilters={clearIssueFilters}
-                  onReportIssue={() => setIsAddIssueDialogOpen(true)}
-                />
+                <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
+                  <IssueViewControls
+                    viewMode={issueViewMode}
+                    onViewModeChange={setIssueViewMode}
+                    searchQuery={issueSearchQuery}
+                    onSearchQueryChange={setIssueSearchQuery}
+                    filters={issueFilters}
+                    onFiltersChange={setIssueFilters}
+                    teamMembers={organizationMembers}
+                    activeFilterCount={activeIssueFilterCount}
+                    onClearFilters={clearIssueFilters}
+                    onReportIssue={() => setIsAddIssueDialogOpen(true)}
+                  />
+                </div>
               )}
               {section === 'bom' && (
                 <div className="flex items-center gap-2 w-full justify-end min-w-0 flex-nowrap overflow-x-auto no-scrollbar py-1">
