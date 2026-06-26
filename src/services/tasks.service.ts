@@ -1,6 +1,9 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
-import { Task } from '@/types';
+import { Task, TeamMember } from '@/types';
+
+// Persists creator info across React Query refetches since the backend doesn't return it.
+const creatorByTaskId = new Map<string, TeamMember>();
 
 /** Map legacy underscore status values to the canonical hyphenated DB values. */
 function normalizeStatus(status: string | undefined): string {
@@ -23,12 +26,26 @@ function fromApi(raw: any): Task {
       ? raw.moduleIds
       : apiModules.map((m) => m.id);
 
+  const creator = raw.createdBy as { id?: string; name?: string; avatarUrl?: string | null } | null | undefined;
+  const hasRealCreator = !!(creator?.id && creator?.name && creator.name !== 'Unknown');
+
+  const resolvedCreator = hasRealCreator
+    ? {
+        id: creator!.id!,
+        name: creator!.name!,
+        email: '',
+        role: 'member',
+        initials: creator!.name!.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2),
+        avatar: creator!.avatarUrl || '',
+      }
+    : creatorByTaskId.get(raw.id);
+
   return {
     ...raw,
     moduleIds,
-    // Normalise blockedBy — the API may return it as dependsOn/blockedBy arrays of objects
     blockedBy: (raw.blockedBy || []).map((d: any) => (typeof d === 'string' ? d : d.id)),
     checklist: Array.isArray(raw.checklist) ? raw.checklist : [],
+    createdBy: resolvedCreator,
   };
 }
 
@@ -36,7 +53,7 @@ function fromApi(raw: any): Task {
 function toCreatePayload(task: Partial<Task>): Record<string, unknown> {
   return {
     title: task.title?.trim() || '',
-    description: task.description || undefined,  // convert null/'' to undefined
+    description: task.description || undefined,
     status: normalizeStatus(task.status),
     priority: task.priority ?? 'medium',
     milestoneId: task.milestoneId ?? task.milestone?.id ?? undefined,
@@ -46,6 +63,7 @@ function toCreatePayload(task: Partial<Task>): Record<string, unknown> {
     assigneeIds: (task.assignees ?? []).map((a: any) => a.id ?? a).filter(Boolean),
     moduleIds: task.moduleIds ?? [],
     dependsOnIds: task.blockedBy ?? [],
+    createdById: task.createdBy?.id ?? undefined,
     checklist: (task.checklist ?? []).map((item: any) => ({
       id: item.id,
       text: item.text,
@@ -95,7 +113,13 @@ export const tasksService = {
    */
   async create(projectId: string, task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>): Promise<Task> {
     const data = await apiClient.post<any>(ENDPOINTS.TASKS.LIST(projectId), toCreatePayload(task));
-    return fromApi(data);
+    const created = fromApi(data);
+    if (task.createdBy && !created.createdBy) {
+      created.createdBy = task.createdBy;
+      // Cache so every future refetch of this task still shows the creator
+      creatorByTaskId.set(created.id, task.createdBy);
+    }
+    return created;
   },
 
   /**
