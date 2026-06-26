@@ -903,13 +903,15 @@ export function ECOWizard({
                         impactLevel: it.impact.toLowerCase() as any,
                         disposition: it.disp.toLowerCase() as any,
                       })),
-                      diffRows: diffRows.map((r, i) => ({
-                        order:       i,
-                        parameter:   r.param,
-                        fromValue:   r.from || null,
-                        toValue:     r.to   || null,
-                        changeLabel: r.cls.toLowerCase() as any,
-                      })),
+                      diffRows: diffRows
+                        .filter(r => r.param.trim() !== '')
+                        .map((r, i) => ({
+                          order:       i,
+                          parameter:   r.param,
+                          fromValue:   r.from || null,
+                          toValue:     r.to   || null,
+                          changeLabel: r.cls.toLowerCase() as any,
+                        })),
                       pipelineSteps: pipeline.map((p, i) => ({
                         order:          i + 1,
                         stage:          p.stage,
