@@ -3,7 +3,7 @@ import { useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { Sun, Moon, Monitor, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { SidebarTrigger } from '@/components/ui/sidebar';
+
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -84,7 +84,6 @@ export function AppHeader() {
   return (
     <header className="h-14 border-b border-border flex items-center justify-between px-4 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex items-center gap-3 min-w-0">
-        {!isMobile && <SidebarTrigger className="-ml-1 shrink-0" />}
 
         {/* Project detail: Back + Name + Stage */}
         {project ? (
