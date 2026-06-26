@@ -95,6 +95,9 @@ export function useApproveBomNode(projectId: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.tree(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.summary(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.approvals(nodeId) });
+      // Approval updates the revision's status — bust the parts revisions cache so
+      // BOMDetailScreen re-derives node.status from fresh revision data.
+      queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
     },
   });
 }
@@ -108,6 +111,7 @@ export function useRejectBomNode(projectId: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.tree(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.summary(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.approvals(nodeId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
     },
   });
 }
