@@ -352,13 +352,16 @@ export function MilestoneDetailModal({
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">Status</Label>
                 <Select value={status} onValueChange={(value) => handleStatusChange(value as MilestoneStatus)}>
-                  <SelectTrigger className={cn('w-full h-10 text-sm', statusConfig[status].textColor)}>
+                  <SelectTrigger className="w-full h-10 px-3 text-sm font-normal bg-muted/30">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {(Object.keys(statusConfig) as MilestoneStatus[]).map((key) => (
-                      <SelectItem key={key} value={key} className={statusConfig[key].textColor}>
-                        {statusConfig[key].label}
+                      <SelectItem key={key} value={key}>
+                        <div className="flex items-center gap-2">
+                          <span className={cn('h-2 w-2 rounded-full shrink-0', statusConfig[key].color)} />
+                          {statusConfig[key].label}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
