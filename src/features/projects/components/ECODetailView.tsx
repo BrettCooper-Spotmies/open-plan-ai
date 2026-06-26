@@ -1036,11 +1036,17 @@ function VerifyModal({
 
 // ── Header action definitions ─────────────────────────────────────────────────
 
-function headerActions(status: ECOStatus) {
+function headerActions(status: ECOStatus, isOriginator: boolean) {
   const ghost = 'ghost' as const;
   const primary = 'primary' as const;
   switch (status) {
-    case 'DRAFT': return [{ k: 'edit', label: 'Edit Draft', icon: Edit, kind: ghost }, { k: 'submit', label: 'Submit for Review', icon: Send, kind: primary }];
+    case 'DRAFT': {
+      const actions: any[] = [{ k: 'edit', label: 'Edit Draft', icon: Edit, kind: ghost }];
+      if (isOriginator) {
+        actions.push({ k: 'submit', label: 'Submit for Review', icon: Send, kind: primary });
+      }
+      return actions;
+    }
     case 'IN_REVIEW': return [{ k: 'export', label: 'Export PDF', icon: Download, kind: ghost }];
     case 'ON_HOLD': return [{ k: 'resume', label: 'Resume Review', icon: RefreshCw, kind: primary }];
     case 'REWORK': return [{ k: 'resubmit', label: 'Revise & Resubmit', icon: RefreshCw, kind: primary }];
@@ -1230,7 +1236,7 @@ export function ECODetailView({
           <p className="text-[13px] text-muted-foreground max-w-3xl leading-relaxed">{detail.desc}</p>
         </div>
         <div className="flex gap-2 shrink-0">
-          {headerActions(detail.status).map(a => {
+          {headerActions(detail.status, detail.originator === user?.name).map(a => {
             const thisLoading = !!actionPending[a.k];
 
             // Special handling for export button
