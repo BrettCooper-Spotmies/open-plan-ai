@@ -531,7 +531,7 @@ function ListView({
 
               {/* Part */}
               <div className="flex-1 min-w-0 px-2 flex items-center gap-2.5">
-                <PartImageThumb nodeId={row.id} cat={row.cat} size={32} />
+                <PartImageThumb nodeId={row.id} cat={row.cat} size={32} hoverZoom />
                 <div className="min-w-0">
                   <span className="text-xs font-medium font-mono block" className="text-foreground">{row.pn}</span>
                   <span className={cn('text-sm block truncate',
