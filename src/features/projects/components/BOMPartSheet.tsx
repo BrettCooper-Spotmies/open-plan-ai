@@ -394,6 +394,20 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     setActiveTab('details');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Map the node's owner to a project member once members are loaded
+  useEffect(() => {
+    if (open && isEdit && node && !selectedOwner && projectMembers.length > 0) {
+      const match = node.ownerId
+        ? projectMembers.find(m => m.id === node.ownerId)
+        : node.owner
+          ? projectMembers.find(m => m.name === node.owner)
+          : null;
+      if (match) {
+        setSelectedOwner(match);
+      }
+    }
+  }, [open, isEdit, node, projectMembers, selectedOwner]);
+
   const addReq = () => {
     const v = reqInput.trim().toUpperCase();
     if (v && !req.includes(v)) { setReq(r => [...r, v]); }
