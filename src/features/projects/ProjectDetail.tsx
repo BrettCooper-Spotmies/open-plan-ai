@@ -42,6 +42,7 @@ import { ProjectProgressPopover } from './components/ProjectProgressPopover';
 import { AddModuleDialog } from './components/AddModuleDialog';
 import { TaskDetailModal } from './components/TaskDetailModal';
 import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
 import { useOrganizationMembers, useProjectMembers } from '@/hooks/useProjectTeam';
 import { useProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
@@ -80,9 +81,9 @@ import { format } from 'date-fns';
 
 // Issue Filter interface
 interface IssueFilter {
-  status?: IssueStatus | 'all';
-  severity?: IssueSeverity | 'all';
-  assigneeId?: string | 'all';
+  status?: IssueStatus[];
+  severity?: IssueSeverity[];
+  assigneeId?: string[];
   hasDueDate?: boolean | 'all';
 }
 
@@ -198,22 +199,18 @@ function IssueViewControls({
                 <AlertTriangle className="h-3 w-3" />
                 Status
               </Label>
-              <Select
-                value={filters.status || 'all'}
-                onValueChange={(v) => onFiltersChange({ ...filters, status: v as IssueStatus | 'all' })}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="investigating">Investigating</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                  <SelectItem value="wont-fix">Won't Fix</SelectItem>
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={[
+                  { value: 'open', label: 'Open' },
+                  { value: 'investigating', label: 'Investigating' },
+                  { value: 'resolved', label: 'Resolved' },
+                  { value: 'closed', label: 'Closed' },
+                  { value: 'wont-fix', label: "Won't Fix" },
+                ]}
+                selected={filters.status || []}
+                onChange={(values) => onFiltersChange({ ...filters, status: values.length ? (values as IssueStatus[]) : undefined })}
+                placeholder="All Status"
+              />
             </div>
 
             {/* Severity Filter */}
@@ -222,21 +219,17 @@ function IssueViewControls({
                 <Flag className="h-3 w-3" />
                 Severity
               </Label>
-              <Select
-                value={filters.severity || 'all'}
-                onValueChange={(v) => onFiltersChange({ ...filters, severity: v as IssueSeverity | 'all' })}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Severity</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                  <SelectItem value="major">Major</SelectItem>
-                  <SelectItem value="minor">Minor</SelectItem>
-                  <SelectItem value="trivial">Trivial</SelectItem>
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={[
+                  { value: 'critical', label: 'Critical' },
+                  { value: 'major', label: 'Major' },
+                  { value: 'minor', label: 'Minor' },
+                  { value: 'trivial', label: 'Trivial' },
+                ]}
+                selected={filters.severity || []}
+                onChange={(values) => onFiltersChange({ ...filters, severity: values.length ? (values as IssueSeverity[]) : undefined })}
+                placeholder="All Severity"
+              />
             </div>
 
             {/* Assignee Filter */}
@@ -245,23 +238,15 @@ function IssueViewControls({
                 <User className="h-3 w-3" />
                 Assignee
               </Label>
-              <Select
-                value={filters.assigneeId || 'all'}
-                onValueChange={(v) => onFiltersChange({ ...filters, assigneeId: v })}
-              >
-                <SelectTrigger className="h-8">
-                  <SelectValue placeholder="All" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Assignees</SelectItem>
-                  <SelectItem value="unassigned">Unassigned</SelectItem>
-                  {teamMembers.map((member) => (
-                    <SelectItem key={member.id} value={member.id}>
-                      {member.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelect
+                options={[
+                  { value: 'unassigned', label: 'Unassigned' },
+                  ...teamMembers.map(member => ({ value: member.id, label: member.name }))
+                ]}
+                selected={filters.assigneeId || []}
+                onChange={(values) => onFiltersChange({ ...filters, assigneeId: values.length ? values : undefined })}
+                placeholder="All Assignees"
+              />
             </div>
 
             {/* Due Date Filter */}
@@ -489,9 +474,9 @@ export default function ProjectDetail() {
   // Calculate active issue filter count
   const activeIssueFilterCount = useMemo(() => {
     let count = 0;
-    if (issueFilters.status && issueFilters.status !== 'all') count++;
-    if (issueFilters.severity && issueFilters.severity !== 'all') count++;
-    if (issueFilters.assigneeId && issueFilters.assigneeId !== 'all') count++;
+    if (issueFilters.status?.length) count++;
+    if (issueFilters.severity?.length) count++;
+    if (issueFilters.assigneeId?.length) count++;
     if (issueFilters.hasDueDate !== undefined && issueFilters.hasDueDate !== 'all') count++;
     return count;
   }, [issueFilters]);
