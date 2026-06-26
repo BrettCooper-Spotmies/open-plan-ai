@@ -11,6 +11,7 @@ interface Props {
 }
 
 const NW = 216, NH = 98, HGAP = 104, VGAP = 22;
+const MM_W = 168, MM_H = 110, MM_PAD = 8, MM_GRID = 240;
 
 const STATUS_COLORS = {
   approved: { color: '#16A34A', soft: 'rgba(34,197,94,0.5)' },
@@ -29,6 +30,7 @@ interface DragState {
 
 export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const mmRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
 
   const [zoom, setZoom] = useState(0.85);
@@ -41,6 +43,14 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
   });
   const [hovered, setHovered] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
+  const [vp, setVp] = useState({ w: 0, h: 0 });
+
+  useEffect(() => {
+    const el = containerRef.current; if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setVp({ w: entry.contentRect.width, h: entry.contentRect.height }));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('bom_map_collapsed', JSON.stringify(collapsed));
@@ -84,6 +94,9 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
     (b, n) => { const p = eff(n); return { w: Math.max(b.w, p.x + NW), h: Math.max(b.h, p.y + NH) }; },
     { w: 600, h: 400 }
   );
+
+  const mmScale = Math.min((MM_W - MM_PAD * 2) / bounds.w, (MM_H - MM_PAD * 2) / bounds.h, 1);
+  const viewportRect = vp.w ? { x: -pan.x / zoom, y: -pan.y / zoom, w: vp.w / zoom, h: vp.h / zoom } : null;
 
   // drag/pan
   useEffect(() => {
@@ -295,6 +308,67 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
         </div>
         <div className="w-px h-3.5 bg-border" />
         <span className="text-[11px] text-muted-foreground">Drag nodes · scroll to zoom · click to open</span>
+      </div>
+
+      {/* Minimap */}
+      <div
+        ref={mmRef}
+        onMouseDown={e => {
+          e.stopPropagation();
+          const rect = mmRef.current!.getBoundingClientRect();
+          const cx = (e.clientX - rect.left - MM_PAD) / mmScale;
+          const cy = (e.clientY - rect.top - MM_PAD) / mmScale;
+          const cr = containerRef.current?.getBoundingClientRect();
+          if (cr) setPan({ x: cr.width / 2 - cx * zoom, y: cr.height / 2 - cy * zoom });
+        }}
+        title="Click to jump to area"
+        className="absolute bottom-3.5 right-4 bg-card border border-border rounded-lg overflow-hidden cursor-pointer z-50"
+        style={{ width: MM_W, height: MM_H }}
+      >
+        {/* Grid (anchored to canvas origin, same as main canvas) */}
+        <div
+          style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none',
+            backgroundImage:
+              'linear-gradient(to right, var(--border) 1px, transparent 1px), linear-gradient(to bottom, var(--border) 1px, transparent 1px)',
+            backgroundSize: `${MM_GRID * mmScale}px ${MM_GRID * mmScale}px`,
+            backgroundPosition: `${MM_PAD}px ${MM_PAD}px`,
+            opacity: 0.6,
+          }}
+        />
+        {visible.map(n => {
+          const p = eff(n);
+          return (
+            <div
+              key={n.id}
+              style={{
+                position: 'absolute',
+                left: MM_PAD + p.x * mmScale,
+                top: MM_PAD + p.y * mmScale,
+                width: Math.max(3, NW * mmScale),
+                height: Math.max(2, NH * mmScale),
+                background: stOf(n).color,
+                opacity: dim(n) ? 0.25 : 0.8,
+                borderRadius: 1.5,
+              }}
+            />
+          );
+        })}
+        {viewportRect && (
+          <div
+            style={{
+              position: 'absolute',
+              left: MM_PAD + viewportRect.x * mmScale,
+              top: MM_PAD + viewportRect.y * mmScale,
+              width: viewportRect.w * mmScale,
+              height: viewportRect.h * mmScale,
+              border: '1.5px solid var(--foreground)',
+              opacity: 0.55,
+              borderRadius: 2,
+              pointerEvents: 'none',
+            }}
+          />
+        )}
       </div>
     </div>
   );
