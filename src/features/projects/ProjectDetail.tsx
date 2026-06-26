@@ -980,8 +980,8 @@ export default function ProjectDetail() {
     );
   }
 
-  const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'closed').length || 0;
-  const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed').length || 0;
+  const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix').length || 0;
+  const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix').length || 0;
 
   return (
     <>
