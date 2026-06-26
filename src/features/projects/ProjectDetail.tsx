@@ -510,6 +510,15 @@ export default function ProjectDetail() {
             role: 'member',
           }
         : undefined;
+      const createdBy = m.created_by
+        ? organizationMembers.find((member) => member.id === m.created_by!.id) ?? {
+            id: m.created_by.id,
+            name: m.created_by.name || 'Unknown',
+            initials: (m.created_by.name || '?').slice(0, 2).toUpperCase(),
+            email: '',
+            role: 'member',
+          }
+        : undefined;
       return {
         id: m.id,
         name: m.name,
@@ -518,6 +527,7 @@ export default function ProjectDetail() {
         progress: m.progress || 0,
         status: m.status || 'active',
         owner,
+        createdBy,
         createdAt: m.created_at || new Date().toISOString(),
       };
     });

@@ -37,6 +37,7 @@ export interface Module {
   updated_at: string | null;
   owner_id: string | null;
   owner: { name: string; avatarUrl: string | null } | null;
+  created_by: { id: string; name: string; avatarUrl: string | null } | null;
 }
 
 /** Map snake_case insert payload to camelCase for the REST backend. */
@@ -68,6 +69,7 @@ function fromApi(raw: Record<string, unknown>): Module {
     updated_at: (raw.updatedAt ?? raw.updated_at ?? null) as string | null,
     owner_id: (raw.ownerId ?? raw.owner_id ?? null) as string | null,
     owner: (raw.owner ?? null) as { name: string; avatarUrl: string | null } | null,
+    created_by: (raw.createdBy ?? raw.created_by ?? null) as { id: string; name: string; avatarUrl: string | null } | null,
   };
 }
 
