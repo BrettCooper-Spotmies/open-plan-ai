@@ -62,6 +62,9 @@ import { toast } from 'sonner';
 
 const DEPARTMENTS = ['Engineering', 'Design', 'Management', 'Quality Assurance', 'Operations', 'Sales', 'Marketing', 'Support'];
 
+const ROLE_RANK: Record<string, number> = { admin: 3, manager: 2, member: 1, viewer: 0 };
+const ASSIGNABLE_ROLES = ['admin', 'manager', 'member', 'viewer'] as const;
+
 const formatUiDate = (value?: string | null) => {
   if (!value) return 'N/A';
   const parsed = new Date(value);
@@ -103,10 +106,23 @@ const Team = () => {
 
   // Check if current user has management privileges
   const currentMember = teamMembers?.find(m => m.userId === user?.id || m.email === user?.email);
-  const isAdminOrOwner = (() => {
-    const role = normalizeRole(currentMember?.role);
-    return role === 'admin' || role === 'manager';
-  })();
+  const currentRole = normalizeRole(currentMember?.role);
+  const isAdminOrOwner = currentRole === 'admin' || currentRole === 'manager';
+
+  // Hierarchy: admins can manage everyone; managers can only manage members
+  // ranked below them (member, viewer) — never admins or other managers.
+  const canManageMember = (member: TeamMember): boolean => {
+    if (currentRole === 'admin') return true;
+    if (currentRole !== 'manager') return false;
+    const targetRole = normalizeRole(member.role);
+    return ROLE_RANK[currentRole] > (ROLE_RANK[targetRole] ?? 0);
+  };
+
+  // Roles the current user is allowed to assign to others (must rank below
+  // their own, unless they're an admin who can assign any role).
+  const assignableRoles = currentRole === 'admin'
+    ? ASSIGNABLE_ROLES
+    : ASSIGNABLE_ROLES.filter((r) => ROLE_RANK[r] < (ROLE_RANK[currentRole] ?? 0));
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -543,7 +559,7 @@ const Team = () => {
                           <MessageSquare className="h-4 w-4" />
                         </Button>
                       )}
-                      {isAdminOrOwner && member.userId !== user?.id && (
+                      {canManageMember(member) && member.userId !== user?.id && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -627,14 +643,16 @@ const Team = () => {
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="viewer">Viewer</SelectItem>
+                  {assignableRoles.map((r) => (
+                    <SelectItem key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               {editMember?.userId === user?.id && (
                 <p className="text-xs text-muted-foreground">You cannot change your own role.</p>
+              )}
+              {currentRole === 'manager' && (
+                <p className="text-xs text-muted-foreground">Managers can only assign Member or Viewer roles.</p>
               )}
             </div>
           </div>
