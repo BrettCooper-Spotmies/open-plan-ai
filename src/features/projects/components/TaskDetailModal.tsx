@@ -434,6 +434,7 @@ export const TaskDetailModal = ({
   useEffect(() => {
     if (!isOpen) {
       setInitializedForKey(null);
+      setPreviewingFile(null);
       return;
     }
 
@@ -456,6 +457,16 @@ export const TaskDetailModal = ({
       attachments: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      createdBy: profile
+        ? {
+            id: profile.id,
+            name: profile.name || profile.email,
+            email: profile.email,
+            role: profile.role || 'member',
+            initials: profile.initials || (profile.name || profile.email || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2),
+            avatar: profile.avatarUrl || profile.avatar_url || '',
+          }
+        : undefined,
     } : editedTask);
     setEditedTask(baseTask);
     setPendingFiles([]);
@@ -531,7 +542,20 @@ export const TaskDetailModal = ({
 
     if (editedTask && onCreate) {
       setIsSaving(true);
-      onCreate(editedTask, pendingFiles.length > 0 ? pendingFiles : undefined);
+      const taskWithCreator: Task = {
+        ...editedTask,
+        createdBy: profile
+          ? {
+              id: profile.id,
+              name: profile.name || profile.email,
+              email: profile.email,
+              role: profile.role || 'member',
+              initials: profile.initials || (profile.name || profile.email || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2),
+              avatar: profile.avatarUrl || profile.avatar_url || '',
+            }
+          : editedTask.createdBy,
+      };
+      onCreate(taskWithCreator, pendingFiles.length > 0 ? pendingFiles : undefined);
       setPendingFiles([]);
       onClose();
     }
@@ -1399,20 +1423,26 @@ export const TaskDetailModal = ({
                   </Popover>
                 </div>
 
-                {/* Created By */}
-                {mode !== 'create' && editedTask.createdBy && (
+                {/* Reported By */}
+                {(mode === 'create' ? profile : editedTask.createdBy) && (
                   <div className="space-y-2">
                     <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                       <User className="h-3 w-3" />
-                      Created By
+                      Reported By
                     </Label>
                     <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-input bg-muted/30">
                       <Avatar className="h-5 w-5">
                         <AvatarFallback className="text-[9px]">
-                          {editedTask.createdBy.initials}
+                          {mode === 'create'
+                            ? (profile?.initials || (profile?.name || '').slice(0, 2).toUpperCase())
+                            : editedTask.createdBy?.initials}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-sm">{editedTask.createdBy.name}</span>
+                      <span className="text-sm">
+                        {mode === 'create'
+                          ? (profile?.name || profile?.email)
+                          : editedTask.createdBy?.name}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -2100,7 +2130,11 @@ export const TaskDetailModal = ({
         variant="destructive"
       />
     </Dialog>
-    <FilePreviewDialog file={previewingFile} onClose={() => setPreviewingFile(null)} />
+    <FilePreviewDialog
+      file={previewingFile}
+      files={attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType }))}
+      onClose={() => setPreviewingFile(null)}
+    />
     </>
   );
 }

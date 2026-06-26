@@ -29,9 +29,9 @@ interface IssuesViewProps {
   tasks?: Task[];
   teamMembers?: TeamMember[];
   searchQuery?: string;
-  severityFilter?: IssueSeverity | 'all';
-  statusFilter?: IssueStatus | 'all';
-  assigneeFilter?: string | 'all';
+  severityFilter?: IssueSeverity[];
+  statusFilter?: IssueStatus[];
+  assigneeFilter?: string[];
   dueDateFilter?: boolean | 'all';
   isAddDialogOpen?: boolean;
   onAddDialogClose?: () => void;
@@ -88,9 +88,9 @@ export function IssuesView({
   tasks = [],
   teamMembers = [],
   searchQuery: externalSearchQuery,
-  severityFilter: externalSeverityFilter = 'all',
-  statusFilter: externalStatusFilter = 'all',
-  assigneeFilter: externalAssigneeFilter = 'all',
+  severityFilter: externalSeverityFilter = [],
+  statusFilter: externalStatusFilter = [],
+  assigneeFilter: externalAssigneeFilter = [],
   dueDateFilter: externalDueDateFilter = 'all',
   isAddDialogOpen: externalIsAddDialogOpen,
   onAddDialogClose,
@@ -99,8 +99,8 @@ export function IssuesView({
   onIssueDelete,
 }: IssuesViewProps) {
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
-  const [internalSeverityFilter, setInternalSeverityFilter] = useState<IssueSeverity | 'all'>('all');
-  const [internalStatusFilter, setInternalStatusFilter] = useState<IssueStatus | 'all'>('all');
+  const [internalSeverityFilter, setInternalSeverityFilter] = useState<IssueSeverity[]>([]);
+  const [internalStatusFilter, setInternalStatusFilter] = useState<IssueStatus[]>([]);
   const [localIssues, setLocalIssues] = useState<Issue[]>(issues);
   const [columns, setColumns] = useState<IssuesKanbanColumn[]>(defaultIssueColumns);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
@@ -123,10 +123,11 @@ export function IssuesView({
   const filteredIssues = localIssues.filter(issue => {
     const matchesSearch = (issue.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (issue.description || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesSeverity = severityFilter === 'all' || issue.severity === severityFilter;
-    const matchesStatus = statusFilter === 'all' || issue.status === statusFilter;
-    const matchesAssignee = assigneeFilter === 'all' ||
-      (assigneeFilter === 'unassigned' ? (issue.assignees?.length === 0) : issue.assignees?.some(a => a.id === assigneeFilter));
+    const matchesSeverity = !severityFilter.length || severityFilter.includes(issue.severity);
+    const matchesStatus = !statusFilter.length || statusFilter.includes(issue.status);
+    const matchesAssignee = !assigneeFilter.length ||
+      (assigneeFilter.includes('unassigned') && (!issue.assignees || issue.assignees.length === 0)) ||
+      (issue.assignees?.some(a => assigneeFilter.includes(a.id)));
     const matchesDueDate = dueDateFilter === 'all' ||
       (dueDateFilter ? !!issue.dueDate : !issue.dueDate);
 

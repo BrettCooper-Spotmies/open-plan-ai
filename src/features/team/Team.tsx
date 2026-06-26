@@ -74,8 +74,8 @@ const formatUiDate = (value?: string | null) => {
 const normalizeEmail = (value?: string | null) => (value || '').trim().toLowerCase();
 
 const Team = () => {
-  const { currentOrganization } = useOrganization();
-  const { data: teamMembers, isLoading, error } = useTeamMembers(currentOrganization?.id);
+  const { currentOrganization, isLoading: isOrgLoading } = useOrganization();
+  const { data: teamMembers, isLoading: isTeamLoading, error } = useTeamMembers(currentOrganization?.id);
   const { user } = useAuth();
   const navigate = useNavigate();
   const inviteMutation = useInviteTeamMember();
@@ -284,7 +284,7 @@ const Team = () => {
     }
   };
 
-  if (isLoading) {
+  if (isOrgLoading || (currentOrganization?.id && isTeamLoading)) {
     return <AppLayoutSkeleton variant="team" />;
   }
 

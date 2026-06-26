@@ -510,7 +510,7 @@ export function IssueDetailContent({
                                 Reported
                             </Label>
                             <div className="text-sm py-2 px-3 h-9 flex items-center border rounded-md bg-muted/20 text-muted-foreground">
-                                {format(new Date(editedIssue.reportedAt), 'PPP')}
+                                {format(new Date(editedIssue.reportedAt || (editedIssue as any).createdAt || new Date()), 'PPP')}
                             </div>
                         </div>
 
@@ -1145,7 +1145,11 @@ export function IssueDetailContent({
                 </div>
 
             </div>
-            <FilePreviewDialog file={previewingFile} onClose={() => setPreviewingFile(null)} />
+            <FilePreviewDialog
+                file={previewingFile}
+                files={attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType }))}
+                onClose={() => setPreviewingFile(null)}
+            />
         </div >
     );
 }

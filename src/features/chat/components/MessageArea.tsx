@@ -145,6 +145,7 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore, readR
                   isGroupChat={isGroup}
                   currentUserId={user?.id}
                   searchQuery={searchQuery}
+                  memberNames={conversation.members.map((m) => m.name)}
                   readReceipts={readReceiptMap?.[msg.id]}
                   reactions={reactionMap?.[msg.id]}
                   onEdit={onEditMessage}

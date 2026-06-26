@@ -43,8 +43,8 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter((c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.members.some(m => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q))
+        (c.name ?? '').toLowerCase().includes(q) ||
+        c.members.some(m => (m.name ?? '').toLowerCase().includes(q) || (m.email ?? '').toLowerCase().includes(q))
       );
     }
     return list.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
@@ -55,7 +55,7 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
     const q = searchQuery.toLowerCase();
     // Only show people who don't already have a DM in the list (or filter them visually later)
     return reachableUsers.filter(u =>
-      (u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) &&
+      ((u.name ?? '').toLowerCase().includes(q) || (u.email ?? '').toLowerCase().includes(q)) &&
       !conversations.some(c => c.type === 'dm' && c.members.some(m => m.id === u.id))
     );
   }, [searchQuery, reachableUsers, conversations, conversationFilter]);
