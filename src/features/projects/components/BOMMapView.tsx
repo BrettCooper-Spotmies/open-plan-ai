@@ -280,7 +280,7 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
         <div className="text-center text-[10.5px] text-muted-foreground tabular-nums">{Math.round(zoom * 100)}%</div>
         <CtrlBtn onClick={() => zoomBy(0.87)} title="Zoom out"><Minus className="w-4 h-4" /></CtrlBtn>
         <CtrlBtn onClick={fit} title="Fit to screen"><Maximize className="w-3.5 h-3.5" /></CtrlBtn>
-        <CtrlBtn onClick={resetLayout} title="Reset positions"><RefreshCw className="w-3 h-3" /></CtrlBtn>
+        <CtrlBtn onClick={resetLayout} title="Tidy up (auto-arrange nodes)"><RefreshCw className="w-4 h-4" /></CtrlBtn>
       </div>
 
       {/* Legend */}
