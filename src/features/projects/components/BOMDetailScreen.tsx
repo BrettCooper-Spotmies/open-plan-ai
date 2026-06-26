@@ -480,11 +480,13 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const activeRev = revHistory[activeRevIdx] ?? { rev: originalNode.rev, status: originalNode.status, price: originalNode.price, leadTime: originalNode.leadTime, date: '', author: '', changes: '' } as BOMRevision;
   const isLatest = revHistory.length === 0 || activeRevIdx === revHistory.length - 1;
 
-  // Build a synthetic "view node" that reflects the active revision's data
+  // Build a synthetic "view node" that reflects the active revision's data.
+  // For the latest revision, status must come from originalNode (the BOM node) because
+  // the approve/reject endpoints update the node's status, not the revision record.
   const node: BOMNode = {
     ...originalNode,
     rev: activeRev.rev,
-    status: activeRev.status,
+    status: isLatest ? originalNode.status : activeRev.status,
     price: activeRev.price,
     leadTime: activeRev.leadTime,
   };

@@ -11,7 +11,6 @@ import { AddMemberDialog } from './components/AddMemberDialog';
 import { EmptyState } from './components/EmptyState';
 import { TypingIndicator } from './components/TypingIndicator';
 import { MessageAreaSkeleton } from './components/MessageAreaSkeleton';
-import { MessageSearchBar } from './components/MessageSearchBar';
 import { useChatStore } from './stores/useChatStore';
 import { useConversations, useMessages, useReactions } from './hooks/useChatData';
 import { useTypingIndicator } from './hooks/useTypingIndicator';
@@ -172,7 +171,6 @@ export default function Chat() {
                   typingText={typingText}
                   onAddMember={() => setAddMemberOpen(true)}
                 />
-                {isMessageSearchOpen && <MessageSearchBar />}
                 {msgsLoading ? (
                   <MessageAreaSkeleton />
                 ) : (
