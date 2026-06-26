@@ -394,7 +394,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
                 className="relative group w-16 h-16 rounded-lg border bg-muted overflow-hidden shrink-0 flex items-center justify-center"
               >
                 {isImage && previewUrl ? (
-                  <img src={previewUrl} alt={file.name} className="w-full h-full object-cover" />
+                  <img src={previewUrl} alt={file.name} className="w-full h-full object-contain" />
                 ) : isVideo && previewUrl ? (
                   <video src={previewUrl} className="w-full h-full object-cover" />
                 ) : (

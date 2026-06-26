@@ -270,7 +270,7 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
       >
         {preview ? (
           <>
-            <img src={preview} alt="preview" className="w-full h-full object-cover rounded-xl opacity-80" />
+            <img src={preview} alt="preview" className="w-full h-full object-contain rounded-xl opacity-80" />
             {value?.kind === 'file' && (
               <div onClick={() => ref.current?.click()}
                 className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30 rounded-xl cursor-pointer">

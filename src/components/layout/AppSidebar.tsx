@@ -147,7 +147,7 @@ export function AppSidebar() {
                     {/* Logo — always visible when expanded; fades on hover when collapsed */}
                     <div className={`flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 border border-primary/20 overflow-hidden transition-opacity duration-150 ${collapsed ? 'group-hover/orgtrigger:opacity-0' : ''}`}>
                       {orgLogo ? (
-                        <img src={orgLogo} alt="Org logo" className="h-full w-full object-cover" />
+                        <img src={orgLogo} alt="Org logo" className="h-full w-full object-contain" />
                       ) : (
                         <Logo className="h-3.5 w-3.5 text-primary" />
                       )}
@@ -214,7 +214,7 @@ export function AppSidebar() {
                         >
                           <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 border border-primary/20 overflow-hidden">
                             {resolvedLogoUrl ? (
-                              <img src={resolvedLogoUrl} alt="" className="h-full w-full object-cover" />
+                              <img src={resolvedLogoUrl} alt="" className="h-full w-full object-contain" />
                             ) : (
                               <Logo className="h-3.5 w-3.5 text-primary" />
                             )}
