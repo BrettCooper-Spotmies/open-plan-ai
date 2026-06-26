@@ -24,10 +24,16 @@ function fetchEcoStats(projectId: string): Promise<ApiEcoStats> {
   return apiClient.get<ApiEcoStats>(ENDPOINTS.ECOS.STATS(projectId));
 }
 
+export type EcoWithProject = ApiEcoListItem & { projectId: string };
+
 function fetchEcoList(projectId: string): Promise<PaginatedResponse<ApiEcoListItem>> {
   return apiClient.raw
     .get(ENDPOINTS.ECOS.LIST(projectId), { params: { limit: 100 } })
     .then((r) => ({ data: r.data.data, meta: r.data.meta }));
+}
+
+function fetchEcoListWithProject(projectId: string): Promise<EcoWithProject[]> {
+  return fetchEcoList(projectId).then((res) => res.data.map((e) => ({ ...e, projectId })));
 }
 
 export function useOrgEcoAggregate(projectIds: string[]): OrgEcoAggregate {
@@ -83,6 +89,21 @@ export function useOrgEcoStatusCounts(projectIds: string[]) {
   const isLoading = listQueries.some((q) => q.isLoading);
   const allEcos = listQueries.flatMap((q) => q.data?.data ?? []);
   return { isLoading, ecos: allEcos };
+}
+
+// ── ECOs awaiting the current user's approval, across all org projects ─────────
+
+export function useOrgAwaitingEcos(projectIds: string[]) {
+  const listQueries = useQueries({
+    queries: projectIds.map((id) => ({
+      queryKey: [...queryKeys.ecos.list(id, { limit: 100 }), 'withProject'],
+      queryFn: () => fetchEcoListWithProject(id),
+    })),
+  });
+
+  const isLoading = listQueries.some((q) => q.isLoading);
+  const awaiting = listQueries.flatMap((q) => q.data ?? []).filter((e) => e.awaitingMe);
+  return { isLoading, awaiting };
 }
 
 // ── BOM aggregate across all org projects ──────────────────────────────────────

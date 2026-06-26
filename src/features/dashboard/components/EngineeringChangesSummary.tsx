@@ -2,9 +2,10 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, GitMerge, GitPullRequest } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useOrgEcoAggregate, useOrgEcoStatusCounts } from '../hooks/useOrgAggregates';
+import { useOrgEcoAggregate, useOrgEcoStatusCounts, useOrgAwaitingEcos } from '../hooks/useOrgAggregates';
 import { MAIN_STATUSES, STATUS_LABEL, statusMeta, type ECOStatus } from '@/features/projects/components/ecoData';
 import type { ApiEcoListItem } from '@/hooks/useECOs';
+import { PanelIcon } from './PanelIcon';
 
 interface EngineeringChangesSummaryProps {
   projectIds: string[];
@@ -27,8 +28,9 @@ function StageBar({ status, count, max }: { status: ECOStatus; count: number; ma
 }
 
 export function EngineeringChangesSummary({ projectIds }: EngineeringChangesSummaryProps) {
-  const { isLoading: aggLoading, open, awaitingMyAction, firstPassPct, avgCycleDays } = useOrgEcoAggregate(projectIds);
+  const { isLoading: aggLoading, open, firstPassPct, avgCycleDays } = useOrgEcoAggregate(projectIds);
   const { isLoading: statusLoading, ecos } = useOrgEcoStatusCounts(projectIds);
+  const { isLoading: awaitingLoading, awaiting } = useOrgAwaitingEcos(projectIds);
 
   const counts = MAIN_STATUSES.map((s) => ({
     status: s,
@@ -40,9 +42,9 @@ export function EngineeringChangesSummary({ projectIds }: EngineeringChangesSumm
 
   return (
     <Card className="h-full flex flex-col">
-      <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
+      <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
         <CardTitle className="text-base font-medium flex items-center gap-2">
-          <GitMerge className="h-4 w-4 text-chart-2" />
+          <PanelIcon icon={GitMerge} color="#9333EA" />
           Engineering Changes
         </CardTitle>
         <Button variant="ghost" size="sm" asChild>
@@ -83,15 +85,26 @@ export function EngineeringChangesSummary({ projectIds }: EngineeringChangesSumm
           </div>
         </div>
 
-        {!isLoading && awaitingMyAction > 0 && (
-          <Link
-            to="/projects"
-            className="flex items-center gap-2.5 rounded-lg border border-status-blocked/30 bg-status-blocked/[0.07] px-3 py-2.5 text-sm hover:bg-status-blocked/[0.12] transition-colors"
-          >
-            <GitPullRequest className="h-4 w-4 text-status-blocked shrink-0" />
-            <span className="flex-1 font-medium">{awaitingMyAction} awaiting your approval</span>
-            <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          </Link>
+        {!awaitingLoading && awaiting.length > 0 && (
+          <div>
+            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-status-blocked mb-2.5">
+              <GitPullRequest className="h-3 w-3" />
+              Awaiting your approval
+            </span>
+            <div className="space-y-1.5">
+              {awaiting.map((eco) => (
+                <Link
+                  key={eco.id}
+                  to={`/projects/${eco.projectId}/eng-changes`}
+                  className="flex items-center gap-2.5 rounded-lg border border-status-blocked/30 bg-status-blocked/[0.07] px-3 py-2 text-sm hover:bg-status-blocked/[0.12] transition-colors"
+                >
+                  <span className="font-mono text-[11px] font-semibold text-status-blocked shrink-0">{eco.num}</span>
+                  <span className="flex-1 min-w-0 truncate">{eco.title}</span>
+                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                </Link>
+              ))}
+            </div>
+          </div>
         )}
       </CardContent>
     </Card>

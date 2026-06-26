@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useOrgBomAggregate } from '../hooks/useOrgAggregates';
+import { PanelIcon } from './PanelIcon';
 
 interface BomReadinessProps {
   projectIds: string[];
@@ -34,9 +35,9 @@ export function BomReadiness({ projectIds }: BomReadinessProps) {
 
   return (
     <Card>
-      <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
+      <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
         <CardTitle className="text-base font-medium flex items-center gap-2">
-          <Layers className="h-4 w-4 text-chart-4" />
+          <PanelIcon icon={Layers} color="#EA580C" />
           Bill of Materials
         </CardTitle>
         <Button variant="ghost" size="sm" asChild>
@@ -62,7 +63,7 @@ export function BomReadiness({ projectIds }: BomReadinessProps) {
                 <span className="h-1.5 w-1.5 rounded-full bg-priority-medium" />
                 Pending review
               </span>
-              <span className="font-semibold tnum text-priority-medium">{isLoading ? '—' : pending}</span>
+              <span className="font-semibold tabular-nums text-priority-medium">{isLoading ? '—' : pending}</span>
             </div>
             <div className="flex items-center justify-between text-[12.5px] text-muted-foreground">
               <span>Total parts</span>

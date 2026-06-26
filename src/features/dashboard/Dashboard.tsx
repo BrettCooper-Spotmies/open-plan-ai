@@ -242,14 +242,14 @@ export default function Dashboard() {
               nextGate={nextGate ? { days: nextGate.days, label: nextGate.name } : null}
             />
 
-            <div className="grid gap-4 md:gap-6 lg:grid-cols-3">
+            <div className="grid gap-3 md:gap-3 lg:grid-cols-3">
               <div className="lg:col-span-1 h-full">
                 <ProjectsOverview projects={dashboardProjects} atRiskProjectIds={atRiskProjectIds} />
               </div>
               <div className="lg:col-span-1 h-full">
                 <EngineeringChangesSummary projectIds={projectIds} />
               </div>
-              <div className="space-y-4 md:space-y-6">
+              <div className="space-y-4 md:space-y-3">
                 <BomReadiness projectIds={projectIds} />
                 <ActivityFeed activities={dashboardActivities} isLoading={activitiesLoading || isLoading} />
               </div>

@@ -23,6 +23,7 @@ import { Activity } from '@/types';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { PanelIcon } from './PanelIcon';
 
 interface ActivityFeedProps {
   activities: Activity[];
@@ -114,8 +115,11 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
   if (isLoading) {
     return (
       <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base font-medium">Recent Activity</CardTitle>
+        <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
+          <CardTitle className="text-base font-medium flex items-center gap-2">
+            <PanelIcon icon={ActivityIcon} color="#2563EB" />
+            Recent Activity
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-1">
           {/* Placeholder for loading state */}
@@ -136,7 +140,10 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
   return (
     <Card>
       <CardHeader className="pb-4">
-        <CardTitle className="text-base font-medium">Recent Activity</CardTitle>
+        <CardTitle className="text-base font-medium flex items-center gap-2">
+          <PanelIcon icon={ActivityIcon} color="#2563EB" />
+          Recent Activity
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-1 px-3 md:px-6 overflow-x-hidden">
         {activities.length === 0 ? (

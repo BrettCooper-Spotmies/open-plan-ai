@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, AlertTriangle, FolderOpen } from 'lucide-react';
+import { ArrowRight, AlertTriangle, FolderOpen, FolderKanban } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Project } from '@/types';
 import { cn } from '@/lib/utils';
 import { projectHealth, varianceLabel, RAG_DOT_CLASS, RAG_BAR_CLASS, RAG_LABEL } from '../utils/projectHealth';
+import { PanelIcon } from './PanelIcon';
 
 interface ProjectsOverviewProps {
   projects: Project[];
@@ -39,8 +40,11 @@ export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOvervie
 
   return (
     <Card className="h-full flex flex-col overflow-hidden">
-      <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
-        <CardTitle className="text-base font-medium">Project Management</CardTitle>
+      <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
+        <CardTitle className="text-base font-medium flex items-center gap-2">
+          <PanelIcon icon={FolderKanban} color="#2563EB" />
+          Project Management
+        </CardTitle>
         <Button variant="ghost" size="sm" asChild>
           <Link to="/projects" className="text-muted-foreground hover:text-foreground">
             All projects

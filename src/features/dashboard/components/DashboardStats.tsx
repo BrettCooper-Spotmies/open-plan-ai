@@ -1,38 +1,36 @@
 import { Gauge, GitMerge, Layers, Flag } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { softTint } from '../utils/colors';
 
 interface StatCardProps {
-  title: string;
+  label: string;
   value: string | number;
   unit?: string;
   subtitle?: string;
-  icon: React.ReactNode;
-  variant?: 'default' | 'success' | 'warning' | 'info';
+  icon: React.ElementType;
+  iconColor: string;
+  accent?: boolean;
 }
 
-function StatCard({ title, value, unit, subtitle, icon, variant = 'default' }: StatCardProps) {
-  const variantStyles = {
-    default: 'text-foreground',
-    success: 'text-status-done',
-    warning: 'text-status-blocked',
-    info: 'text-status-in-progress',
-  };
-
+function StatCard({ label, value, unit, subtitle, icon: Icon, iconColor, accent }: StatCardProps) {
   return (
-    <Card className="h-full shadow-sm hover:shadow-md transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-        <CardTitle className="text-sm font-medium text-muted-foreground/80">{title}</CardTitle>
-        <div className={cn('h-4 w-4 opacity-80', variantStyles[variant])}>{icon}</div>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-3xl font-bold tracking-tight tabular-nums">{value}</span>
-          {unit && <span className="text-sm font-medium text-muted-foreground">{unit}</span>}
-        </div>
-        <span className="mt-1 block text-xs text-muted-foreground truncate">{subtitle}</span>
-      </CardContent>
-    </Card>
+    <div className={cn('bg-card rounded-lg px-3.5 py-2.5 flex-1 min-w-0 border flex items-center gap-2.5', accent ? 'border-primary/25' : 'border-border')}>
+      <span
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        style={{ backgroundColor: softTint(iconColor, 0.12) }}
+      >
+        <Icon className="w-4 h-4" style={{ color: iconColor }} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline gap-1">
+          <span className="text-lg font-bold leading-tight tabular-nums truncate" style={{ color: accent ? iconColor : undefined }}>
+            {value}
+          </span>
+          {unit && <span className="text-[11px] font-medium text-muted-foreground truncate">{unit}</span>}
+        </span>
+        <span className="block text-[11px] text-muted-foreground truncate">{subtitle ?? label}</span>
+      </span>
+    </div>
   );
 }
 
@@ -49,38 +47,40 @@ export function DashboardStats({ isLoading, portfolio, eco, bom, nextGate }: Das
   const atRisk = portfolio.total - portfolio.onTrack;
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="flex gap-3 flex-wrap md:flex-nowrap">
       <StatCard
-        title="Portfolio"
+        label="Portfolio"
         value={dash ?? portfolio.onTrack}
         unit={`/ ${portfolio.total} on track`}
         subtitle={`${atRisk} need attention`}
-        icon={<Gauge className="h-full w-full" />}
-        variant={atRisk > 0 ? 'warning' : 'success'}
+        icon={Gauge}
+        iconColor={atRisk > 0 ? '#D97706' : '#16A34A'}
+        accent={atRisk > 0}
       />
       <StatCard
-        title="Open changes"
+        label="Open changes"
         value={dash ?? eco.open}
         unit="ECOs"
         subtitle={`${eco.awaitingMyAction} awaiting you`}
-        icon={<GitMerge className="h-full w-full" />}
-        variant={eco.awaitingMyAction > 0 ? 'warning' : 'default'}
+        icon={GitMerge}
+        iconColor={eco.awaitingMyAction > 0 ? '#DC2626' : '#2563EB'}
+        accent={eco.awaitingMyAction > 0}
       />
       <StatCard
-        title="BOM released"
+        label="BOM released"
         value={dash ?? bom.pct}
         unit="%"
         subtitle={`${bom.pending} parts pending`}
-        icon={<Layers className="h-full w-full" />}
-        variant="default"
+        icon={Layers}
+        iconColor="#9333EA"
       />
       <StatCard
-        title="Next gate"
+        label="Next gate"
         value={dash ?? (nextGate ? nextGate.days : '—')}
         unit={nextGate ? 'days' : undefined}
         subtitle={nextGate ? nextGate.label : 'No upcoming gate'}
-        icon={<Flag className="h-full w-full" />}
-        variant="default"
+        icon={Flag}
+        iconColor="#0D9488"
       />
     </div>
   );
