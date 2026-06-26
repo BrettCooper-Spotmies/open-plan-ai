@@ -148,8 +148,15 @@ function FileRow({ icon: Icon, label, hint, accept, value, onChange }: FileRowPr
     onChange([...value, ...Array.from(files).map(file => ({ kind: 'file', file }) as DocValue)]);
   };
   const addUrl = () => {
-    const u = urlInput.trim();
+    let u = urlInput.trim();
     if (!u) return;
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    try {
+      new URL(u);
+    } catch {
+      toast.error('Please enter a valid URL');
+      return;
+    }
     onChange([...value, { kind: 'url', url: u }]);
     setUrlInput('');
     setShowUrlInput(false);
@@ -234,8 +241,15 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
   const preview = value?.kind === 'file' ? URL.createObjectURL(value.file) : value?.kind === 'url' ? value.url : null;
 
   const addUrl = () => {
-    const u = urlInput.trim();
+    let u = urlInput.trim();
     if (!u) return;
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    try {
+      new URL(u);
+    } catch {
+      toast.error('Please enter a valid URL');
+      return;
+    }
     onChange({ kind: 'url', url: u });
     setUrlInput('');
   };
