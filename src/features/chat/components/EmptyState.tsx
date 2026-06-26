@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button';
 interface EmptyStateProps {
   type: 'no-selection' | 'no-conversations' | 'no-messages';
   onCreateGroup?: () => void;
+  description?: string;
 }
 
-export function EmptyState({ type, onCreateGroup }: EmptyStateProps) {
+export function EmptyState({ type, onCreateGroup, description }: EmptyStateProps) {
   const config = {
     'no-selection': {
       icon: MessageSquare,
@@ -34,7 +35,7 @@ export function EmptyState({ type, onCreateGroup }: EmptyStateProps) {
       </div>
       <div>
         <h3 className="font-semibold text-foreground">{config.title}</h3>
-        <p className="text-sm text-muted-foreground mt-1">{config.description}</p>
+        <p className="text-sm text-muted-foreground mt-1">{description || config.description}</p>
         {type === 'no-conversations' && onCreateGroup && (
           <Button
             type="button"

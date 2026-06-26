@@ -134,7 +134,11 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
               </div>
             ))
           ) : filtered.length === 0 && filteredPeople.length === 0 ? (
-            <EmptyState type="no-conversations" onCreateGroup={() => setGroupDialogOpen(true)} />
+            <EmptyState 
+              type="no-conversations" 
+              onCreateGroup={conversationFilter !== 'dms' ? () => setGroupDialogOpen(true) : undefined}
+              description={conversationFilter === 'dms' ? "Start a new direct message to get started" : undefined}
+            />
           ) : (
             <>
               {filtered.map((conv) => (
