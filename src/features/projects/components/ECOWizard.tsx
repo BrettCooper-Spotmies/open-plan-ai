@@ -650,15 +650,17 @@ export function ECOWizard({
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div className="text-[13px] text-muted-foreground">
-          {items.length} affected part{items.length !== 1 ? 's' : ''} · where-used auto-rolls up from BOM
+          {items.length === 0 ? 'No part selected yet' : '1 affected part · where-used auto-rolls up from BOM'}
         </div>
-        <button
-          onClick={() => setPickerOpen(p => !p)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors font-[inherit]"
-        >
-          <Plus className="w-3 h-3" />
-          Add part
-        </button>
+        {items.length === 0 && (
+          <button
+            onClick={() => setPickerOpen(p => !p)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors font-[inherit]"
+          >
+            <Plus className="w-3 h-3" />
+            Add part
+          </button>
+        )}
       </div>
       {pickerOpen && (
         <div className="border border-border rounded-lg overflow-hidden">
