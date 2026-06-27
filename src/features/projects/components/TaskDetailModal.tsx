@@ -1552,51 +1552,61 @@ export const TaskDetailModal = ({
                           Add tag
                         </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-[280px] p-3" align="start">
-                        <div className="space-y-3">
-                          <div className="space-y-2">
-                            <Label className="text-xs text-muted-foreground">Tag name</Label>
-                            <div className="flex items-center gap-2">
-                              <Input
-                                placeholder="Enter tag name"
-                                value={tagSearch}
-                                onChange={(e) => setTagSearch(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') {
-                                    e.preventDefault();
-                                    addTag(tagSearch);
-                                  }
-                                }}
-                              />
-                              <Button
-                                type="button"
-                                size="sm"
-                                onClick={() => addTag(tagSearch)}
-                                disabled={!tagSearch.trim()}
-                              >
-                                Add
-                              </Button>
-                            </div>
+                      <PopoverContent className="p-0 w-[240px] flex flex-col overflow-hidden" align="start">
+                        <div className="p-2 border-b">
+                          <div className="flex items-center gap-2">
+                            <Input
+                              placeholder="Search or create tag…"
+                              value={tagSearch}
+                              onChange={(e) => setTagSearch(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  addTag(tagSearch);
+                                }
+                              }}
+                              className="h-7 text-sm"
+                              autoFocus
+                            />
                           </div>
+                        </div>
 
-                          {availableTagSuggestions.length > 0 && (
-                            <div className="space-y-1">
-                              <p className="text-xs text-muted-foreground">Existing tags</p>
-                              <div className="max-h-32 overflow-y-auto space-y-1">
-                                {availableTagSuggestions.map((tag) => (
-                                  <button
-                                    key={tag}
-                                    type="button"
-                                    className="w-full rounded px-2 py-1 text-left text-sm hover:bg-accent flex items-center gap-2"
-                                    onClick={() => addTag(tag)}
-                                  >
-                                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getTagColor(tag) }} />
-                                    {tag}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                        {availableTagSuggestions.length > 0 && (
+                          <div className="max-h-[180px] overflow-y-auto p-1">
+                            {availableTagSuggestions
+                              .filter(tag => !tagSearch.trim() || tag.toLowerCase().includes(tagSearch.toLowerCase()))
+                              .map((tag) => (
+                                <button
+                                  key={tag}
+                                  type="button"
+                                  className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"
+                                  onClick={() => addTag(tag)}
+                                >
+                                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getTagColor(tag) }} />
+                                  {tag}
+                                </button>
+                              ))}
+                          </div>
+                        )}
+
+                        {/* Persistent "Create new tag" footer — always visible */}
+                        <div className="border-t p-1.5">
+                          <button
+                            type="button"
+                            className={cn(
+                              "w-full flex items-center gap-2 text-sm px-2 py-1.5 rounded transition-colors",
+                              tagSearch.trim() && !availableTagSuggestions.some(t => t.toLowerCase() === tagSearch.trim().toLowerCase())
+                                ? "text-primary hover:bg-primary/10 cursor-pointer"
+                                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                            )}
+                            onClick={() => addTag(tagSearch)}
+                          >
+                            <Plus className="h-3 w-3 shrink-0" />
+                            {tagSearch.trim() && !availableTagSuggestions.some(t => t.toLowerCase() === tagSearch.trim().toLowerCase())
+                              ? <span>Create <strong>"{tagSearch.trim()}"</strong></span>
+                              : <span>Create new tag…</span>
+                            }
+                          </button>
                         </div>
                       </PopoverContent>
                     </Popover>

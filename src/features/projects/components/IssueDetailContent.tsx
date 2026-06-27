@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { format, parseISO, startOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -149,6 +149,7 @@ export function IssueDetailContent({
     const [newChecklistItem, setNewChecklistItem] = useState('');
     const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
     const [tagSearch, setTagSearch] = useState('');
+    const tagSearchInputRef = useRef<HTMLInputElement>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -696,44 +697,27 @@ export function IssueDetailContent({
 
                                 <Popover
                                     open={isTagPopoverOpen}
-                                    onOpenChange={setIsTagPopoverOpen}
+                                    onOpenChange={(open) => {
+                                        setIsTagPopoverOpen(open);
+                                        if (!open) setTagSearch('');
+                                    }}
                                 >
                                     <PopoverTrigger asChild>
                                         <button className="h-6 w-6 rounded-full border border-dashed text-muted-foreground hover:border-primary hover:text-primary flex items-center justify-center transition-colors">
                                             <Plus className="h-3 w-3" />
                                         </button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="p-0 w-[240px] max-h-[350px] flex flex-col overflow-hidden" align="start">
-                                        <Command className="flex-1 min-h-0">
+                                    <PopoverContent className="p-0 w-[240px] flex flex-col overflow-hidden" align="start">
+                                        <Command>
                                             <CommandInput
+                                                ref={tagSearchInputRef}
                                                 placeholder="Search tags..."
                                                 value={tagSearch}
                                                 onValueChange={setTagSearch}
                                             />
-                                            <CommandList className="flex-1 overflow-y-auto min-h-0">
-                                                <CommandEmpty className="py-2 px-2">
-                                                    <div className="text-sm text-center py-2 text-muted-foreground">
-                                                        No matching tags.
-                                                    </div>
-                                                    {tagSearch.trim() && (
-                                                        <button
-                                                            className="w-full text-left text-sm px-2 py-1.5 rounded hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                                                            onClick={async () => {
-                                                                const name = tagSearch.trim();
-                                                                setTagSearch('');
-                                                                setIsTagPopoverOpen(false);
-                                                                try {
-                                                                    const tag = await createTagMutation.mutateAsync({ name });
-                                                                    handleFieldChange('tags', [...(editedIssue.tags || []), tag.name]);
-                                                                } catch {
-                                                                    handleFieldChange('tags', [...(editedIssue.tags || []), name]);
-                                                                }
-                                                            }}
-                                                        >
-                                                            <Plus className="h-3 w-3" />
-                                                            Create "{tagSearch}"
-                                                        </button>
-                                                    )}
+                                            <CommandList className="max-h-[180px] overflow-y-auto">
+                                                <CommandEmpty className="py-3 text-center text-sm text-muted-foreground">
+                                                    No matching tags.
                                                 </CommandEmpty>
                                                 {projectTags
                                                     .filter(item => !(editedIssue.tags || []).some(t => t.toLowerCase() === item.name.toLowerCase()))
@@ -744,17 +728,51 @@ export function IssueDetailContent({
                                                             onSelect={() => {
                                                                 handleFieldChange('tags', [...(editedIssue.tags || []), item.name]);
                                                                 setIsTagPopoverOpen(false);
+                                                                setTagSearch('');
                                                             }}
-                                                            className="cursor-pointer group flex items-center justify-between"
+                                                            className="cursor-pointer flex items-center gap-2"
                                                         >
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                                                                <span>{item.name}</span>
-                                                            </div>
+                                                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                                                            <span>{item.name}</span>
                                                         </CommandItem>
                                                     ))}
                                             </CommandList>
                                         </Command>
+                                        {/* Persistent "Create new tag" footer — always visible */}
+                                        <div className="border-t p-1.5">
+                                            <button
+                                                className={cn(
+                                                    "w-full flex items-center gap-2 text-sm px-2 py-1.5 rounded transition-colors",
+                                                    tagSearch.trim() &&
+                                                    !projectTags.some(t => t.name.toLowerCase() === tagSearch.trim().toLowerCase())
+                                                        ? "text-primary hover:bg-primary/10 cursor-pointer"
+                                                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                                                )}
+                                                onClick={async () => {
+                                                    const name = tagSearch.trim();
+                                                    if (!name) {
+                                                        tagSearchInputRef.current?.focus();
+                                                        return;
+                                                    }
+                                                    if (projectTags.some(t => t.name.toLowerCase() === name.toLowerCase())) return;
+                                                    setTagSearch('');
+                                                    setIsTagPopoverOpen(false);
+                                                    try {
+                                                        const tag = await createTagMutation.mutateAsync({ name });
+                                                        handleFieldChange('tags', [...(editedIssue.tags || []), tag.name]);
+                                                    } catch {
+                                                        handleFieldChange('tags', [...(editedIssue.tags || []), name]);
+                                                    }
+                                                }}
+                                            >
+                                                <Plus className="h-3 w-3 shrink-0" />
+                                                {tagSearch.trim() &&
+                                                !projectTags.some(t => t.name.toLowerCase() === tagSearch.trim().toLowerCase())
+                                                    ? <span>Create <strong>"{tagSearch.trim()}"</strong></span>
+                                                    : <span>Create new tag…</span>
+                                                }
+                                            </button>
+                                        </div>
                                     </PopoverContent>
                                 </Popover>
                             </div>

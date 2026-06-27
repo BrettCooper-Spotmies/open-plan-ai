@@ -55,12 +55,39 @@ export const issuesService = {
    * Update existing issue
    */
   async update(issueId: string, updates: Partial<Issue>): Promise<Issue> {
-    const payload: Record<string, unknown> = { ...updates };
-    // Backend expects assigneeIds (uuid[]); frontend tracks full TeamMember objects.
-    if ('assignees' in updates) {
-      payload.assigneeIds = ((updates as any).assignees || []).map((a: any) => a.id).filter(Boolean);
-      delete payload.assignees;
+    // Only send fields the backend update schema accepts — sending the full
+    // Issue object can trigger Zod validation errors (e.g. dueDate as an ISO
+    // timestamp instead of YYYY-MM-DD, or unknown fields).
+    const payload: Record<string, unknown> = {};
+    const u = updates as any;
+
+    if (u.title !== undefined) payload.title = u.title;
+    if (u.description !== undefined) payload.description = u.description;
+    if (u.category !== undefined) payload.category = u.category;
+    if (u.severity !== undefined) payload.severity = u.severity;
+    if (u.status !== undefined) payload.status = u.status;
+    if ('moduleId' in updates) payload.moduleId = u.moduleId ?? null;
+    if ('resolution' in updates) payload.resolution = u.resolution ?? null;
+    if (u.tags !== undefined) payload.tags = u.tags;
+
+    // Normalise dueDate to YYYY-MM-DD (server may return full ISO timestamps)
+    if ('dueDate' in updates) {
+      payload.dueDate = u.dueDate
+        ? String(u.dueDate).substring(0, 10)
+        : null;
     }
+
+    // Backend expects assigneeIds (uuid[]); frontend tracks full TeamMember objects.
+    if (u.assignees !== undefined) {
+      payload.assigneeIds = (u.assignees || []).map((a: any) => a.id).filter(Boolean);
+    } else if (u.assigneeIds !== undefined) {
+      payload.assigneeIds = u.assigneeIds;
+    }
+
+    if (u.blocksTaskIds !== undefined) {
+      payload.blocksTaskIds = u.blocksTaskIds;
+    }
+
     return apiClient.patch<Issue>(ENDPOINTS.ISSUES.BY_ID(issueId), payload);
   },
 
