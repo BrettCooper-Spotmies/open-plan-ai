@@ -47,6 +47,7 @@ import {
     Trash2,
     Paperclip,
     Download,
+    Copy,
     Image as ImageIcon,
     File,
     Check,
@@ -873,15 +874,56 @@ export function IssueDetailContent({
                                                 variant="ghost"
                                                 size="icon"
                                                 className="h-7 w-7"
-                                                onClick={(e) => {
+                                                title="Download"
+                                                onClick={async (e) => {
                                                     e.stopPropagation();
-                                                    const a = document.createElement('a');
-                                                    a.href = viewUrl;
-                                                    a.download = attachment.filename;
-                                                    a.click();
+                                                    try {
+                                                        const res = await fetch(viewUrl);
+                                                        const blob = await res.blob();
+                                                        const blobUrl = URL.createObjectURL(blob);
+                                                        const a = document.createElement('a');
+                                                        a.href = blobUrl;
+                                                        a.download = attachment.filename;
+                                                        a.click();
+                                                        URL.revokeObjectURL(blobUrl);
+                                                    } catch {
+                                                        window.open(viewUrl, '_blank');
+                                                    }
                                                 }}
                                             >
                                                 <Download className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                                title={attachment.fileType.startsWith('image/') ? 'Copy image to clipboard' : 'Copy link to clipboard'}
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    try {
+                                                        if (attachment.fileType.startsWith('image/')) {
+                                                            const res = await fetch(viewUrl);
+                                                            const blob = await res.blob();
+                                                            const bitmap = await createImageBitmap(blob);
+                                                            const canvas = document.createElement('canvas');
+                                                            canvas.width = bitmap.width;
+                                                            canvas.height = bitmap.height;
+                                                            canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+                                                            const pngBlob = await new Promise<Blob>((res, rej) =>
+                                                                canvas.toBlob(b => b ? res(b) : rej(new Error('toBlob failed')), 'image/png')
+                                                            );
+                                                            await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+                                                            toast.success('Image copied to clipboard');
+                                                        } else {
+                                                            await navigator.clipboard.writeText(viewUrl);
+                                                            toast.success('Link copied to clipboard');
+                                                        }
+                                                    } catch {
+                                                        toast.error('Failed to copy');
+                                                    }
+                                                }}
+                                            >
+                                                <Copy className="h-4 w-4" />
                                             </Button>
                                             <Button
                                                 variant="ghost"
