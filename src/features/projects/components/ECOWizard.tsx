@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   GitMerge, Check, X, Plus, ChevronDown, Lock, AlertCircle,
@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { useCreateECO } from '@/hooks/useECOs';
 import { useBomTree } from '@/hooks/useBom';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
+import { useAuth } from '@/modules/auth';
 import { fromApiNode, bomFlatAll, bomPath } from './bomData';
 import { REQS } from './requirementsData';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -437,6 +438,7 @@ export function ECOWizard({
   });
 
   // Step 5 — Pipeline (approvers are real project members, picked by the user)
+  const { user: currentUser } = useAuth();
   const { data: projectMembers = [] } = useProjectMembers(projectId);
 
   const defaultOrder = useMemo(() => {
@@ -448,6 +450,18 @@ export function ECOWizard({
   const [pipeline, setPipeline] = useState<PipelineStepWizard[]>(
     PIPELINE_STAGE_DEFS.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
   );
+
+  // Auto-fill Originator slot with the current user once members load
+  useEffect(() => {
+    if (!currentUser || projectMembers.length === 0) return;
+    const me = projectMembers.find(m => m.id === currentUser.id);
+    if (!me) return;
+    setPipeline(pl => pl.map((x, i) =>
+      i === 0 && !x.approverId
+        ? { ...x, approverId: me.id, name: me.name, role: me.role ?? '' }
+        : x,
+    ));
+  }, [currentUser, projectMembers]);
 
   const assignApprover = (idx: number, memberId: string) => {
     const member = projectMembers.find(m => m.id === memberId);
@@ -480,6 +494,7 @@ export function ECOWizard({
       if (basics.scope === 'BOM_PART' && items.length < 1) e.items = 'At least 1 affected part is required';
       if (basics.scope === 'REQUIREMENT' && reqItems.length < 1) e.items = 'At least 1 affected requirement is required';
     }
+    if (s === 2 && !diffRows.some(r => r.param.trim())) e.details = 'At least 1 parameter is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -874,6 +889,7 @@ export function ECOWizard({
                   <option value="__other__" className="bg-card">Other…</option>
                 </optgroup>
               </select>
+
             )
           ) : (
             <input value={r.param} onChange={e => upRow(idx, 'param', e.target.value)} placeholder="Parameter" className={cn(inputCls, 'flex-[1.2]')} />
@@ -888,6 +904,11 @@ export function ECOWizard({
           </button>
         </div>
       ))}
+      {errors.details && (
+        <p className="text-[11px] text-destructive flex items-center gap-1 -mt-1">
+          <AlertCircle className="w-3 h-3 shrink-0" />{errors.details}
+        </p>
+      )}
       {diffRows.length === 0 && (
         <div className="py-6 text-center border border-dashed border-border rounded-lg text-[12px] text-muted-foreground">
           Add the parameters that change between revisions.
