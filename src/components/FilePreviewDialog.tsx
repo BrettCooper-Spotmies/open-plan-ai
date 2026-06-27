@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Download, Copy, File as FileIcon, ExternalLink, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Download, Copy, File as FileIcon, ExternalLink, ChevronLeft, ChevronRight, X, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'avif'];
@@ -74,6 +74,46 @@ export function FilePreviewDialog({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [list, goPrev, goNext]);
+
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [blobLoading, setBlobLoading] = useState(false);
+  const blobUrlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!current) return;
+    const kind = kindOf(current.fileName, current.url, current.mimeType);
+    if (kind !== 'pdf') return;
+
+    setBlobUrl(null);
+    setBlobLoading(true);
+    let cancelled = false;
+
+    fetch(current.url, { credentials: 'include' })
+      .then(r => r.blob())
+      .then(blob => {
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = url;
+        setBlobUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setBlobUrl(null);
+      })
+      .finally(() => {
+        if (!cancelled) setBlobLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [current?.url]);
+
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+    };
+  }, []);
 
   if (!current) return null;
   const kind = kindOf(current.fileName, current.url, current.mimeType);
@@ -189,8 +229,21 @@ export function FilePreviewDialog({
               )}
               {kind === 'image' ? (
                 <img src={current.url} alt={current.fileName} className="max-w-full max-h-full object-contain" />
+              ) : blobLoading ? (
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+              ) : blobUrl ? (
+                <iframe src={blobUrl} title={current.fileName} className="w-full h-full border-0" />
               ) : (
-                <iframe src={current.url} title={current.fileName} className="w-full h-full border-0" />
+                <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                  <FileIcon className="w-10 h-10" />
+                  <p className="text-sm">Unable to preview this file.</p>
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={current.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                      Open in new tab
+                    </a>
+                  </Button>
+                </div>
               )}
               {list && (
                 <button
