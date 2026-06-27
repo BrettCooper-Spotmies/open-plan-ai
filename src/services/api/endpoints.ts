@@ -197,6 +197,7 @@ export const ENDPOINTS = {
     HOLD:     (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/hold`,
     RESUME:   (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/resume`,
     ECN:      (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/ecn`,
+    ECN_PDF:  (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}/ecn/pdf`,
   },
   // Links
   LINKS: {

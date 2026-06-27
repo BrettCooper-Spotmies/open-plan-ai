@@ -219,6 +219,9 @@ export function useECODecision(projectId: string, ecoId: string) {
       qc.invalidateQueries({ queryKey: queryKeys.ecos.detail(ecoId) });
       qc.invalidateQueries({ queryKey: queryKeys.ecos.listRoot(projectId) });
       qc.invalidateQueries({ queryKey: queryKeys.ecos.stats(projectId) });
+      // BOM revisions are auto-created on final approval — refresh BOM tree and parts cache
+      qc.invalidateQueries({ queryKey: queryKeys.bom.all });
+      qc.invalidateQueries({ queryKey: queryKeys.parts.all });
     },
   });
 }
@@ -295,6 +298,23 @@ export function useGetECN(projectId: string | undefined, ecoId: string | undefin
     queryFn: (): Promise<ApiEcn> =>
       apiClient.get<ApiEcn>(ENDPOINTS.ECOS.ECN(projectId!, ecoId!)),
     enabled: !!projectId && !!ecoId,
+  });
+}
+
+export function useDownloadEcnPdf(projectId: string, ecoId: string) {
+  return useMutation({
+    mutationFn: async () => {
+      const res = await apiClient.raw.get(
+        ENDPOINTS.ECOS.ECN_PDF(projectId, ecoId),
+        { responseType: 'blob' },
+      );
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ECN-${ecoId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
   });
 }
 

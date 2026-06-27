@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 import {
   useECODetail, useECODecision, useSubmitECO,
   useReleaseECO, useVerifyECO, useCloseECO, useHoldECO, useResumeECO,
-  useExportEcoSummaryCsv, useExportEcoDetailedCsv,
+  useExportEcoSummaryCsv, useExportEcoDetailedCsv, useDownloadEcnPdf,
 } from '@/hooks/useECOs';
 import { downloadEcoCsv } from '@/features/reports/utils/exportUtils';
 import { useAuth } from '@/modules/auth';
@@ -766,10 +766,12 @@ function ECNReleaseModal({
   detail,
   onClose,
   onRelease,
+  onDownloadPdf,
 }: {
   detail: ECODetail;
   onClose: () => void;
   onRelease: () => Promise<void>;
+  onDownloadPdf?: () => void;
 }) {
   const [releasing, setReleasing] = useState(false);
   const [released, setReleased] = useState(detail.status !== 'APPROVED');
@@ -956,13 +958,24 @@ function ECNReleaseModal({
             </button>
           )}
           {released && (
-            <span
-              className="flex items-center gap-2 px-4 py-2 rounded-md text-[13px] font-semibold text-white"
-              style={{ background: '#16A34A' }}
-            >
-              <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-              Released{ecn ? ` · ${ecn.num} distributed` : ''}
-            </span>
+            <>
+              {onDownloadPdf && (
+                <button
+                  onClick={onDownloadPdf}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-medium bg-muted/50 text-foreground border border-border hover:bg-accent transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download ECN PDF
+                </button>
+              )}
+              <span
+                className="flex items-center gap-2 px-4 py-2 rounded-md text-[13px] font-semibold text-white"
+                style={{ background: '#16A34A' }}
+              >
+                <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+                Released{ecn ? ` · ${ecn.num} distributed` : ''}
+              </span>
+            </>
           )}
         </div>
       </div>
@@ -1051,8 +1064,8 @@ function headerActions(status: ECOStatus, isOriginator: boolean) {
     case 'ON_HOLD': return [{ k: 'resume', label: 'Resume Review', icon: RefreshCw, kind: primary }];
     case 'REWORK': return [{ k: 'resubmit', label: 'Revise & Resubmit', icon: RefreshCw, kind: primary }];
     case 'APPROVED': return [{ k: 'generate', label: 'Generate ECN', icon: GitBranch, kind: primary }];
-    case 'RELEASED': return [{ k: 'ecn', label: 'View ECN', icon: Download, kind: ghost }, { k: 'verify', label: 'Mark Verified', icon: Shield, kind: primary }];
-    case 'VERIFIED': return [{ k: 'ecn', label: 'View ECN', icon: Download, kind: ghost }, { k: 'close', label: 'Close ECO', icon: Check, kind: primary }];
+    case 'RELEASED': return [{ k: 'ecn', label: 'View ECN', icon: Download, kind: ghost }, { k: 'downloadPdf', label: 'Download ECN PDF', icon: Download, kind: ghost }, { k: 'verify', label: 'Mark Verified', icon: Shield, kind: primary }];
+    case 'VERIFIED': return [{ k: 'ecn', label: 'View ECN', icon: Download, kind: ghost }, { k: 'downloadPdf', label: 'Download ECN PDF', icon: Download, kind: ghost }, { k: 'close', label: 'Close ECO', icon: Check, kind: primary }];
     default: return [];
   }
 }
@@ -1112,6 +1125,7 @@ export function ECODetailView({
   const resumeMutation = useResumeECO(projectId, eco.id);
   const exportSummaryCsv = useExportEcoSummaryCsv(projectId);
   const exportDetailedCsv = useExportEcoDetailedCsv(projectId);
+  const downloadEcnPdfMutation = useDownloadEcnPdf(projectId, eco.id);
 
   // Export dropdown state
   const [exportOpen, setExportOpen] = useState(false);
@@ -1144,6 +1158,15 @@ export function ECODetailView({
   const onAction = async (k: string) => {
     if (k === 'edit') { onEdit?.(eco); return; }
     if (k === 'generate' || k === 'ecn') { setEcnOpen(true); return; }
+    if (k === 'downloadPdf') {
+      try {
+        await downloadEcnPdfMutation.mutateAsync();
+        flash('ECN PDF downloaded');
+      } catch {
+        flash('Failed to download ECN PDF');
+      }
+      return;
+    }
     if (k === 'verify') { setVerifyOpen(true); return; }
     if (k === 'export') { setExportOpen(true); return; }
     if (k === 'exportSummaryCsv') {
@@ -1374,6 +1397,7 @@ export function ECODetailView({
             await releaseMutation.mutateAsync({});
             flash('ECN generated & released');
           }}
+          onDownloadPdf={detail.ecn ? () => downloadEcnPdfMutation.mutate() : undefined}
         />
       )}
 

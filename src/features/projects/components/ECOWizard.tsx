@@ -287,8 +287,8 @@ function Stepper({ step, maxStepReached, onStepClick }: { step: number; maxStepR
               <div
                 className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[11px] font-semibold"
                 style={{
-                  background: i < step ? '#16A34A' : i === step ? '#2563EB' : 'hsl(var(--muted))',
-                  color: i <= step ? '#fff' : undefined,
+                  background: i < step ? 'hsl(var(--primary))' : i === step ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
+                  color: i <= step ? 'hsl(var(--primary-foreground))' : undefined,
                   border: i > step ? '1px solid hsl(var(--border))' : 'none',
                 }}
               >
@@ -303,7 +303,7 @@ function Stepper({ step, maxStepReached, onStepClick }: { step: number; maxStepR
             </div>
             <div
               className="h-0.5 rounded"
-              style={{ background: i <= step ? '#2563EB' : 'hsl(var(--border))' }}
+              style={{ background: i <= step ? 'hsl(var(--primary))' : 'hsl(var(--border))' }}
             />
           </div>
         );
@@ -644,8 +644,8 @@ export function ECOWizard({
               }}
               className="px-3 py-1.5 rounded text-[12px] font-semibold transition-colors font-[inherit]"
               style={{
-                background: basics.scope === s ? '#2563EB' : 'transparent',
-                color: basics.scope === s ? '#fff' : undefined,
+                background: basics.scope === s ? 'hsl(var(--primary))' : 'transparent',
+                color: basics.scope === s ? 'hsl(var(--primary-foreground))' : undefined,
                 border: 'none',
                 cursor: 'pointer',
               }}
@@ -696,8 +696,8 @@ export function ECOWizard({
                 onClick={() => setBasics({ ...basics, effType: t, effValue: '' })}
                 className="px-2.5 py-1.5 rounded text-[12px] font-semibold transition-colors font-[inherit]"
                 style={{
-                  background: basics.effType === t ? '#2563EB' : 'transparent',
-                  color: basics.effType === t ? '#fff' : undefined,
+                  background: basics.effType === t ? 'hsl(var(--primary))' : 'transparent',
+                  color: basics.effType === t ? 'hsl(var(--primary-foreground))' : undefined,
                   border: 'none',
                   cursor: 'pointer',
                 }}
@@ -756,7 +756,7 @@ export function ECOWizard({
                 className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
               >
                 <div>
-                  <span className="text-[12px] font-mono font-semibold text-blue-500">{p.pn}</span>
+                  <span className="text-[12px] font-mono font-semibold text-foreground">{p.pn}</span>
                   <span className="text-[12px] text-muted-foreground ml-2.5">{p.desc}</span>
                 </div>
                 <Plus className="w-3.5 h-3.5 text-muted-foreground" />
@@ -780,7 +780,7 @@ export function ECOWizard({
         <div key={it.pn} className="border border-border rounded-lg p-3">
           <div className="flex items-center justify-between mb-2">
             <div>
-              <span className="text-[12px] font-mono font-semibold text-blue-500">{it.pn}</span>
+              <span className="text-[12px] font-mono font-semibold text-foreground">{it.pn}</span>
               <span className="text-[12px] text-muted-foreground ml-2">{it.desc}</span>
             </div>
             <button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -854,7 +854,7 @@ export function ECOWizard({
                 className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-[11px] font-mono font-semibold text-blue-500 shrink-0">{r.key}</span>
+                  <span className="text-[11px] font-mono font-semibold text-foreground shrink-0">{r.key}</span>
                   <span className="text-[12px] text-muted-foreground truncate">{r.title}</span>
                 </div>
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 border border-border shrink-0 ml-2">{r.status}</span>
@@ -877,7 +877,7 @@ export function ECOWizard({
       {reqItems.map((ri, idx) => (
         <div key={ri.key} className="border border-border rounded-lg p-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[11px] font-mono font-semibold text-blue-500 shrink-0">{ri.key}</span>
+            <span className="text-[11px] font-mono font-semibold text-foreground shrink-0">{ri.key}</span>
             <span className="text-[12px] text-foreground truncate">{ri.title}</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -1016,13 +1016,13 @@ export function ECOWizard({
           onDrop={e => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
           className="flex flex-col items-center gap-1.5 p-5 rounded-lg border-2 border-dashed cursor-pointer transition-all"
           style={{
-            borderColor: dragOver ? '#2563EB' : 'hsl(var(--border))',
-            background: dragOver ? 'rgba(37,99,235,0.05)' : 'hsl(var(--muted)/0.3)',
+            borderColor: dragOver ? 'hsl(var(--primary))' : 'hsl(var(--border))',
+            background: dragOver ? 'hsl(var(--primary)/0.05)' : 'hsl(var(--muted)/0.3)',
           }}
         >
-          <Upload className="w-5 h-5" style={{ color: dragOver ? '#2563EB' : undefined }} />
+          <Upload className="w-5 h-5" style={{ color: dragOver ? 'hsl(var(--primary))' : undefined }} />
           <div className="text-[12px] text-muted-foreground text-center">
-            <span className="text-blue-500 font-semibold">Click to upload</span> or drag &amp; drop
+            <span className="text-primary font-semibold">Click to upload</span> or drag &amp; drop
           </div>
           <div className="text-[10px] text-muted-foreground">Drawings, CAD (STEP/SLDPRT), PDFs, test reports, photos</div>
         </div>
@@ -1300,8 +1300,8 @@ export function ECOWizard({
         <div className="px-5 pt-4 pb-0 border-b border-border">
           <div className="flex items-center justify-between mb-3.5">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                <GitMerge className="w-4 h-4 text-blue-500" />
+              <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
+                <GitMerge className="w-4 h-4 text-primary" />
               </div>
               <div>
                 <div className="text-[15px] font-semibold text-foreground">

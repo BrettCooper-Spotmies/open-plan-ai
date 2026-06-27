@@ -709,8 +709,8 @@ function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCu
                   {/* Thumbnail */}
                   <div className="relative p-2.5">
                     <PartImageThumb nodeId={row.id} cat={row.cat} big />
-                    <span className="absolute top-4 left-4 px-1.5 py-0.5 rounded text-[10px] font-semibold"
-                      style={{ background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(4px)', color: meta.tint, border: `1px solid ${meta.tint}40` }}>
+                    <span className="absolute top-4 left-4 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-card/90"
+                      style={{ backdropFilter: 'blur(4px)', color: meta.tint, border: `1px solid ${meta.tint}40` }}>
                       {row.levelLabel ?? `L${row.level}`}
                     </span>
                     <span className="absolute top-4 right-4"><BOMStatusPill status={row.status} /></span>
@@ -719,7 +719,7 @@ function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCu
                         onClick={e => { e.stopPropagation(); onOpen(row.id); }}
                         className="absolute inset-2.5 flex items-center justify-center rounded-lg bg-black/45 transition-opacity"
                       >
-                        <span className="inline-flex items-center gap-1.5 bg-white text-foreground text-xs font-medium px-3 py-1.5 rounded-md shadow-sm cursor-pointer">
+                        <span className="inline-flex items-center gap-1.5 bg-card text-foreground text-xs font-medium px-3 py-1.5 rounded-md shadow-sm cursor-pointer">
                           <ExternalLink className="w-3.5 h-3.5" /> Open Details
                         </span>
                       </button>
