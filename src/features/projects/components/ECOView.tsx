@@ -7,7 +7,7 @@ import { ECOListView } from './ECOListView';
 import { ECODetailView } from './ECODetailView';
 import { ECOWizard } from './ECOWizard';
 
-type WizardState = { seed: ECOListItem | null } | null;
+type WizardState = { ecoId: string | null } | null;
 
 export function ECOView({
   projectId,
@@ -26,7 +26,7 @@ export function ECOView({
 
   useEffect(() => {
     if (newTrigger) {
-      setWizard({ seed: null });
+      setWizard({ ecoId: null });
       onNewConsumed?.();
     }
   }, [newTrigger]);
@@ -49,7 +49,7 @@ export function ECOView({
             eco={resolvedEco}
             projectId={projectId}
             onBack={() => setOpenEco(null)}
-            onEdit={eco => setWizard({ seed: eco })}
+            onEdit={eco => setWizard({ ecoId: eco.id })}
           />
         ) : listLoading ? (
           <div className="flex items-center justify-center h-[50vh]">
@@ -72,7 +72,7 @@ export function ECOView({
       {wizard !== null && (
         <ECOWizard
           projectId={projectId}
-          seed={wizard.seed ? { ...wizard.seed, ecr: wizard.seed.ecr ?? undefined } : null}
+          ecoId={wizard.ecoId ?? undefined}
           onClose={() => setWizard(null)}
         />
       )}

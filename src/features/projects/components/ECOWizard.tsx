@@ -12,7 +12,7 @@ import {
 } from './ecoData';
 import { ECOAvatar } from './ECOShared';
 import { cn } from '@/lib/utils';
-import { useCreateECO } from '@/hooks/useECOs';
+import { useCreateECO, useUpdateECO, useECODetail } from '@/hooks/useECOs';
 import { useBomTree } from '@/hooks/useBom';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { useAuth } from '@/modules/auth';
@@ -359,24 +359,29 @@ interface PipelineStepWizard extends PipelineStep {
 
 export function ECOWizard({
   projectId,
-  seed,
+  ecoId,
   onClose,
 }: {
   projectId: string;
-  seed: null | { title?: string; desc?: string; type?: ECOType; priority?: ECOPriority; reason?: ECOReason; ecr?: string; changeClass?: ChangeClass };
+  ecoId?: string;
   onClose: (result?: { saved: boolean }) => void;
 }) {
+  const isEdit = !!ecoId;
   const createMutation = useCreateECO(projectId);
+  const updateMutation = useUpdateECO(projectId, ecoId ?? '');
+  const { data: editDetail, isLoading: editLoading } = useECODetail(isEdit ? projectId : undefined, ecoId);
+
+  const [seeded, setSeeded] = useState(false);
   const [step, setStep] = useState(0);
   const [maxStepReached, setMaxStepReached] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Step 1 — Basics
   const [basics, setBasics] = useState<BasicsState>({
-    title: seed?.title ?? '', description: seed?.desc ?? '',
-    type: seed?.type ?? 'DESIGN_CHANGE', priority: seed?.priority ?? 'MEDIUM',
-    reason: seed?.reason ?? 'PERFORMANCE', changeClass: seed?.changeClass ?? 'II',
-    ecr: seed?.ecr ?? '',
+    title: '', description: '',
+    type: 'DESIGN_CHANGE', priority: 'MEDIUM',
+    reason: 'PERFORMANCE', changeClass: 'II',
+    ecr: '',
     effType: 'DATE', effValue: '',
     scope: 'BOM_PART',
   });
@@ -421,6 +426,80 @@ export function ECOWizard({
   const [attachments, setAttachments] = useState<AttachmentState[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Pre-populate all steps from the fetched ECO detail (edit mode only)
+  useEffect(() => {
+    if (!editDetail || seeded) return;
+    const d = editDetail;
+    setBasics({
+      title:       d.title,
+      description: d.description ?? '',
+      type:        (d.type?.toUpperCase() ?? 'DESIGN_CHANGE') as ECOType,
+      priority:    (d.priority?.toUpperCase() ?? 'MEDIUM') as ECOPriority,
+      reason:      (d.reason?.toUpperCase() ?? 'PERFORMANCE') as ECOReason,
+      changeClass: (d.changeClass ?? 'II') as ChangeClass,
+      ecr:         d.originatingEcr ?? '',
+      effType:     (d.effectivityType?.toUpperCase() ?? 'DATE') as EffectivityType,
+      effValue:    d.effectivityValue ?? '',
+      scope:       'BOM_PART',
+    });
+    setItems(
+      d.parts.map(p => ({
+        pn:        p.partNumber,
+        desc:      p.description,
+        impact:    (p.impactLevel?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
+        disp:      (p.disposition?.toUpperCase() ?? 'REWORK') as ECODisposition,
+        revFrom:   p.revFrom ?? '',
+        revTo:     p.revTo ?? '',
+        partId:    p.partId,
+        nodeId:    p.bomNodeId ?? '',
+        whereUsed: (p.whereUsedPaths ?? []).map(path => path.join(' › ')),
+      })),
+    );
+    setDiffRows(
+      d.diffRows.length > 0
+        ? d.diffRows
+            .slice()
+            .sort((a, b) => a.order - b.order)
+            .map(r => {
+              const isKnown = ALL_KNOWN_PARAM_LABELS.has(r.parameter ?? '');
+              return {
+                param: r.parameter,
+                from:  r.fromValue ?? '',
+                to:    r.toValue   ?? '',
+                cls:   (r.changeLabel?.toUpperCase() ?? 'MODIFIED') as ChangeLabel,
+                paramIsCustom: !!r.parameter && !isKnown,
+              };
+            })
+        : [{ param: '', from: '', to: '', cls: 'MODIFIED' }],
+    );
+    setImpact({
+      schedule:      (d.scheduleImpact?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
+      recert:        d.requiresRecertification ?? false,
+      firmware:      d.firmwareCoupling ?? false,
+      unitCostDelta: d.unitCostDelta != null ? String(d.unitCostDelta) : '',
+      oneTimeCost:   d.oneTimeCost   != null ? String(d.oneTimeCost)  : '',
+    });
+    if (d.steps?.length) {
+      setPipeline(
+        d.steps
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .map(s => ({
+            stage:          s.stage,
+            stageLabel:     s.stageLabel ?? s.stage,
+            approverId:     s.approverUserId ?? null,
+            name:           s.approverName   ?? '',
+            role:           s.approverRole   ?? '',
+            optional:       s.isOptional,
+            optionalReason: s.optionalReason ?? '',
+            justification:  s.justification  ?? '',
+          })),
+      );
+    }
+    setMaxStepReached(4);
+    setSeeded(true);
+  }, [editDetail, seeded]);
 
   const addFiles = (fileList: FileList | null) => {
     if (!fileList) return;
@@ -479,7 +558,8 @@ export function ECOWizard({
 
   const pipelineValid = true;
 
-  const canSubmit = !createMutation.isPending;
+  const activeMutation = isEdit ? updateMutation : createMutation;
+  const canSubmit = !activeMutation.isPending;
 
   // Auto-fill "From" in Details when scope is BOM_PART
   const firstSelectedNode = useMemo(() => {
@@ -1190,6 +1270,22 @@ export function ECOWizard({
 
   const stepContent = [StepBasics, StepItems, StepDetails, StepImpact, StepApproval][step];
 
+  if (isEdit && editLoading) {
+    return (
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6">
+        <div className="w-[680px] max-w-full flex items-center justify-center bg-card border border-border rounded-xl shadow-2xl h-48">
+          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+            <svg className="animate-spin w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+            <span className="text-sm">Loading ECO…</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       onClick={() => onClose()}
@@ -1209,7 +1305,7 @@ export function ECOWizard({
               </div>
               <div>
                 <div className="text-[15px] font-semibold text-foreground">
-                  {seed ? `Edit ECO` : 'New Engineering Change Order'}
+                  {isEdit ? 'Edit Engineering Change Order' : 'New Engineering Change Order'}
                 </div>
                 <div className="text-[12px] text-muted-foreground">Draft · eco_number assigned on save</div>
               </div>
@@ -1254,71 +1350,72 @@ export function ECOWizard({
               <button
                 onClick={async () => {
                   if (!canSubmit) return;
+                  const payload = {
+                    title: basics.title,
+                    description: basics.description || null,
+                    type: basics.type.toLowerCase() as any,
+                    reason: basics.reason.toLowerCase() as any,
+                    priority: basics.priority.toLowerCase() as any,
+                    changeClass: basics.changeClass as any,
+                    effectivityType: basics.effType.toLowerCase() as any,
+                    effectivityValue: basics.effValue || null,
+                    originatingEcr: basics.ecr || null,
+                    revFrom: items[0]?.revFrom || null,
+                    revTo: items[0]?.revTo || null,
+                    scheduleImpact: impact.schedule.toLowerCase() as any,
+                    requiresRecertification: impact.recert,
+                    firmwareCoupling: impact.firmware,
+                    unitCostDelta: impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
+                    oneTimeCost: impact.oneTimeCost ? parseFloat(impact.oneTimeCost) : null,
+                    parts: items.map(it => ({
+                      partId: it.partId,
+                      bomNodeId: it.nodeId || null,
+                      revFrom: it.revFrom || null,
+                      revTo: it.revTo || null,
+                      impactLevel: it.impact.toLowerCase() as any,
+                      disposition: it.disp.toLowerCase() as any,
+                    })),
+                    diffRows: diffRows
+                      .filter(r => r.param.trim() !== '')
+                      .map((r, i) => ({
+                        order: i,
+                        parameter: r.param,
+                        fromValue: r.from || null,
+                        toValue: r.to || null,
+                        changeLabel: r.cls.toLowerCase() as any,
+                      })),
+                    pipelineSteps: pipeline.map((p, i) => ({
+                      order: i + 1,
+                      stage: p.stage,
+                      stageLabel: p.stage,
+                      approverUserId: p.approverId || null,
+                      approverName: p.name || null,
+                      approverRole: p.role || null,
+                      isOptional: p.optional ?? false,
+                      optionalReason: p.optionalReason || null,
+                      justification: p.justification || null,
+                    })),
+                  };
                   try {
-                    await createMutation.mutateAsync({
-                      title: basics.title,
-                      description: basics.description || null,
-                      type: basics.type.toLowerCase() as any,
-                      reason: basics.reason.toLowerCase() as any,
-                      priority: basics.priority.toLowerCase() as any,
-                      changeClass: basics.changeClass as any,
-                      effectivityType: basics.effType.toLowerCase() as any,
-                      effectivityValue: basics.effValue || null,
-                      originatingEcr: basics.ecr || null,
-                      revFrom: items[0]?.revFrom || null,
-                      revTo: items[0]?.revTo || null,
-                      scheduleImpact: impact.schedule.toLowerCase() as any,
-                      requiresRecertification: impact.recert,
-                      firmwareCoupling: impact.firmware,
-                      unitCostDelta: impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
-                      oneTimeCost: impact.oneTimeCost ? parseFloat(impact.oneTimeCost) : null,
-                      parts: items.map(it => ({
-                        partId: it.partId,
-                        bomNodeId: it.nodeId || null,
-                        revFrom: it.revFrom || null,
-                        revTo: it.revTo || null,
-                        impactLevel: it.impact.toLowerCase() as any,
-                        disposition: it.disp.toLowerCase() as any,
-                      })),
-                      diffRows: diffRows
-                        .filter(r => r.param.trim() !== '')
-                        .map((r, i) => ({
-                          order: i,
-                          parameter: r.param,
-                          fromValue: r.from || null,
-                          toValue: r.to || null,
-                          changeLabel: r.cls.toLowerCase() as any,
-                        })),
-                      pipelineSteps: pipeline.map((p, i) => ({
-                        order: i + 1,
-                        stage: p.stage,
-                        stageLabel: p.stage,
-                        approverUserId: p.approverId || null,
-                        approverName: p.name || null,
-                        approverRole: p.role || null,
-                        isOptional: p.optional ?? false,
-                        optionalReason: p.optionalReason || null,
-                        justification: p.justification || null,
-                      })),
-                    });
-                    toast.success('ECO created');
+                    await activeMutation.mutateAsync(payload);
+                    toast.success(isEdit ? 'ECO updated' : 'ECO created');
                     onClose({ saved: true });
                   } catch (err) {
-                    toast.error('Failed to create ECO', {
+                    toast.error(isEdit ? 'Failed to update ECO' : 'Failed to create ECO', {
                       description: err instanceof Error ? err.message : undefined,
                     });
                   }
                 }}
-                disabled={!canSubmit || createMutation.isPending}
+                disabled={!canSubmit || activeMutation.isPending}
                 className={cn(
                   'flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors font-[inherit]',
-                  canSubmit && !createMutation.isPending
+                  canSubmit && !activeMutation.isPending
                     ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
                     : 'bg-muted/50 text-muted-foreground cursor-default',
                 )}
               >
                 <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-                {createMutation.isPending ? 'Saving…' : 'Save Draft'}
+                {activeMutation.isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Draft'}
               </button>
             )}
           </div>
