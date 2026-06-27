@@ -11,6 +11,7 @@ export interface PaginationMeta {
 
 export interface CreatePartDto {
   partNumber: string;
+  name: string;
   description: string;
   category: BOMCategory;
   manufacturer?: string;

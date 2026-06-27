@@ -499,6 +499,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const handleNewSubSaved = async (payload: BOMPartPayload) => {
     const part = await createPart.mutateAsync({
       partNumber: payload.pn,
+      name: payload.name,
       description: payload.desc,
       category: payload.category,
       manufacturer: payload.manufacturer || undefined,
@@ -542,7 +543,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       const leadTimeChanged = payload.leadTime !== activeRev.leadTime;
       await Promise.all([
         updateNode.mutateAsync({ nodeId: originalNode.id, dto: { quantity: payload.qty, unit: payload.uom, status: payload.status } }),
-        updatePart.mutateAsync({ partId: originalNode._partId, dto: { description: payload.desc, manufacturer: payload.manufacturer || undefined, distributor: payload.distributor || undefined, mpn: payload.mpn || undefined } }),
+        updatePart.mutateAsync({ partId: originalNode._partId, dto: { name: payload.name, description: payload.desc, manufacturer: payload.manufacturer || undefined, distributor: payload.distributor || undefined, mpn: payload.mpn || undefined } }),
         ...(priceChanged || leadTimeChanged ? [createRev.mutateAsync({
           partId: originalNode._partId,
           dto: {
@@ -628,8 +629,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               <PartThumb cat={node.cat} size={64} radius={12} imageUrl={photoUrl} />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2.5 mb-1.5 flex-wrap">
-                <h1 className="text-xl font-semibold text-foreground">{node.pn}</h1>
+              <div className="flex items-center gap-2.5 mb-1 flex-wrap">
+                <h1 className="text-xl font-semibold text-foreground">{node.name || node.pn}</h1>
                 <BOMStatusPill status={node.status} />
                 {/* ── Version toggle ── */}
                 <RevisionToggle
@@ -638,13 +639,12 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   onChange={setActiveRevIdx}
                 />
               </div>
+              <div className="text-xs font-mono text-muted-foreground mb-1">{node.pn}</div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
                 <span className="inline-flex items-center gap-1.5" style={{ color: meta.tint }}>
                   <span className="w-2 h-2 rounded-sm inline-block" style={{ background: meta.tint }} />
                   {meta.label}
                 </span>
-                <span>·</span>
-                <span className="text-foreground font-medium">{node.desc}</span>
               </div>
             </div>
           </div>
@@ -698,6 +698,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         <div className="mx-6 mb-5 px-4 py-3.5 bg-card border border-border rounded-xl grid gap-4"
           style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
           <Field label="Part Number" mono>{node.pn}</Field>
+          <Field label="Part Name">{node.name}</Field>
           <Field label="MPN" mono>{node.mpn}</Field>
           <Field label="Manufacturer">{node.manufacturer}</Field>
           <Field label="Supplier">{node.distributor}</Field>
@@ -724,10 +725,12 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               <div className="flex gap-4">
                 <div className="w-48 shrink-0"><PartThumb cat={node.cat} big imageUrl={photoUrl} /></div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-3.5">
-                    {node.desc} — {meta.label.toLowerCase()} component{node.manufacturer ? ` sourced from ${node.manufacturer}` : ''}.
-                    BOM level {node.level} · quantity {node.qty} {node.uom} per unit.
-                  </p>
+                  {node.desc && (
+                    <div className="mb-3.5">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1">Description</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{node.desc}</p>
+                    </div>
+                  )}
                   <div className="grid grid-cols-3 gap-x-4 gap-y-3.5">
                     <Field label="Extended Price">{formatCurrency(extended)}</Field>
                     <Field label="Status">{node.status === 'approved' ? 'Approved' : 'Pending review'}</Field>
@@ -776,8 +779,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   >
                     <PartImageThumb nodeId={c.id} cat={c.cat} size={34} />
                     <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-medium font-mono text-foreground">{c.pn}</div>
-                      <div className="text-sm font-medium text-foreground truncate">{c.desc}</div>
+                      <div className="text-sm font-medium text-foreground truncate">{c.name || c.desc}</div>
+                      <div className="text-[11px] font-medium font-mono text-muted-foreground">{c.pn}</div>
                     </div>
                     <span className="text-xs text-muted-foreground tabular-nums shrink-0">{c.qty} {c.uom}</span>
                     <span className="text-sm text-foreground tabular-nums w-20 text-right shrink-0">{formatCurrency(c.price)}</span>
@@ -800,15 +803,15 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                         onClick={() => onNavigate(p.id)}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted border border-border cursor-pointer hover:bg-accent transition-colors"
                       >
-                        <span className="text-[11px] font-mono text-foreground">{p.pn}</span>
-                        <span className="text-xs text-foreground">{p.desc}</span>
+                        <span className="text-xs text-foreground">{p.name || p.desc}</span>
+                        <span className="text-[11px] font-mono text-muted-foreground">{p.pn}</span>
                       </button>
                       <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
                     </div>
                   ))}
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted border border-border">
-                    <span className="text-[11px] font-mono text-foreground">{node.pn}</span>
-                    <span className="text-xs text-foreground font-medium">{node.desc}</span>
+                    <span className="text-xs text-foreground font-medium">{node.name || node.desc}</span>
+                    <span className="text-[11px] font-mono text-muted-foreground">{node.pn}</span>
                   </span>
                 </div>
               )}
@@ -1019,10 +1022,10 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                       onMouseLeave={e => { if (!isCur) (e.currentTarget as HTMLElement).style.background = ''; }}
                     >
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: pm.tint }} />
-                      <span className="text-[11px] font-mono shrink-0 text-foreground">{p.pn}</span>
                       <span className={`text-[12.5px] truncate ${isCur ? 'text-foreground font-semibold' : 'text-muted-foreground'}`}>
-                        {p.desc}
+                        {p.name || p.desc}
                       </span>
+                      <span className="text-[11px] font-mono shrink-0 text-muted-foreground">{p.pn}</span>
                     </div>
                   );
                 })}

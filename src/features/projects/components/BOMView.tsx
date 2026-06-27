@@ -547,12 +547,12 @@ function ListView({
               <div className="flex-1 min-w-0 px-2 flex items-center gap-2.5">
                 <PartImageThumb nodeId={row.id} cat={row.cat} size={32} hoverZoom />
                 <div className="min-w-0">
-                  <span className="text-xs font-medium font-mono block" className="text-foreground">{row.pn}</span>
                   <span className={cn('text-sm block truncate',
                     row.level === 0 ? 'font-semibold text-foreground' : row.level === 1 ? 'font-medium text-foreground' : 'text-muted-foreground'
                   )}>
-                    {row.desc}
+                    {row.name || row.desc}
                   </span>
+                  <span className="text-xs font-medium font-mono block text-muted-foreground">{row.pn}</span>
                 </div>
               </div>
 
@@ -727,10 +727,10 @@ function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCu
                   </div>
                   {/* Body */}
                   <div className="px-3.5 pb-3.5 pt-0.5">
-                    <div className="text-[11px] font-medium font-mono mb-1 text-foreground">{row.pn}</div>
-                    <div className="text-[13.5px] font-semibold text-foreground leading-snug mb-2.5 line-clamp-2 min-h-[35px]">
-                      {row.desc}
+                    <div className="text-[13.5px] font-semibold text-foreground leading-snug mb-1 line-clamp-2 min-h-[35px]">
+                      {row.name || row.desc}
                     </div>
+                    <div className="text-[11px] font-medium font-mono mb-2.5 text-muted-foreground">{row.pn}</div>
                     <div className="grid grid-cols-2 gap-x-2.5 gap-y-1.5 mb-2.5">
                       <Meta label="Qty" value={`${row.qty} ${row.uom}`} />
                       <Meta label="Unit Price" value={formatCurrency(row.price)} />
@@ -876,6 +876,7 @@ export function BOMView({
     try {
       const part = await createPart.mutateAsync({
         partNumber:          payload.pn,
+        name:                payload.name,
         description:         payload.desc,
         category:            payload.category,
         manufacturer:        payload.manufacturer || undefined,
@@ -914,6 +915,7 @@ export function BOMView({
     try {
       const part = await createPart.mutateAsync({
         partNumber:          payload.pn,
+        name:                payload.name,
         description:         payload.desc,
         category:            payload.category,
         manufacturer:        payload.manufacturer || undefined,
@@ -1006,7 +1008,7 @@ export function BOMView({
 
   const pred = useCallback((row: BOMNode) => {
     const q = search.toLowerCase();
-    if (q && !(row.pn.toLowerCase().includes(q) || row.desc.toLowerCase().includes(q) ||
+    if (q && !(row.pn.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.desc.toLowerCase().includes(q) ||
       row.manufacturer.toLowerCase().includes(q) || row.mpn.toLowerCase().includes(q))) return false;
     if (filterStatus !== 'all' && row.status !== filterStatus) return false;
     if (filters.statuses.length && !filters.statuses.includes(row.status)) return false;
