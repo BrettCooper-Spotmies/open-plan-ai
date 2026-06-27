@@ -297,7 +297,7 @@ export default function Projects() {
                           }}
                         >
                           <Users className="h-4 w-4" />
-                          <span className="text-xs">{project.team?.length || 0}</span>
+                          <span className="text-xs">{project.memberCount ?? project.team?.length ?? 0}</span>
                           {(project.team?.length || 0) > 0 && (
                             <div className="flex items-center -space-x-2">
                               {project.team.slice(0, 3).map((member) => (

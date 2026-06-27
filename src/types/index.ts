@@ -211,6 +211,7 @@ export interface Project {
   type?: string; // Project Type (e.g., "Hardware Development")
   icon?: string; // Emoji icon for the project
   team: TeamMember[];
+  memberCount?: number;
   tasks: Task[];
   milestones: Milestone[];
   modules: ModuleSummary[];  // Legacy support
