@@ -39,7 +39,7 @@ interface IssuesViewProps {
   severityFilter?: IssueSeverity[];
   statusFilter?: IssueStatus[];
   assigneeFilter?: string[];
-  dueDateFilter?: boolean | 'all';
+  dueDateFilter?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
   isAddDialogOpen?: boolean;
   onAddDialogClose?: () => void;
   onIssueUpdate?: (issue: Issue) => void;
@@ -124,7 +124,7 @@ export function IssuesView({
   severityFilter: externalSeverityFilter = [],
   statusFilter: externalStatusFilter = [],
   assigneeFilter: externalAssigneeFilter = [],
-  dueDateFilter: externalDueDateFilter = 'all',
+  dueDateFilter: externalDueDateFilter,
   isAddDialogOpen: externalIsAddDialogOpen,
   onAddDialogClose,
   onIssueUpdate,
@@ -199,8 +199,34 @@ export function IssuesView({
     const matchesAssignee = !assigneeFilter.length ||
       (assigneeFilter.includes('unassigned') && (!issue.assignees || issue.assignees.length === 0)) ||
       (issue.assignees?.some(a => assigneeFilter.includes(a.id)));
-    const matchesDueDate = dueDateFilter === 'all' ||
-      (dueDateFilter ? !!issue.dueDate : !issue.dueDate);
+    let matchesDueDate = true;
+    if (dueDateFilter) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const issueDueDate = issue.dueDate ? new Date(issue.dueDate) : null;
+      switch (dueDateFilter) {
+        case 'overdue':
+          matchesDueDate = !!issueDueDate && issueDueDate < today;
+          break;
+        case 'today':
+          matchesDueDate = !!issueDueDate && issueDueDate.toDateString() === today.toDateString();
+          break;
+        case 'this-week': {
+          const weekEnd = new Date(today);
+          weekEnd.setDate(today.getDate() + 7);
+          matchesDueDate = !!issueDueDate && issueDueDate >= today && issueDueDate <= weekEnd;
+          break;
+        }
+        case 'this-month': {
+          const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+          matchesDueDate = !!issueDueDate && issueDueDate >= today && issueDueDate <= monthEnd;
+          break;
+        }
+        case 'no-date':
+          matchesDueDate = !issueDueDate;
+          break;
+      }
+    }
 
     return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesDueDate;
   });

@@ -84,7 +84,7 @@ interface IssueFilter {
   status?: IssueStatus[];
   severity?: IssueSeverity[];
   assigneeId?: string[];
-  hasDueDate?: boolean | 'all';
+  dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
 }
 
 
@@ -256,19 +256,22 @@ function IssueViewControls({
                 Due Date
               </Label>
               <Select
-                value={filters.hasDueDate === undefined || filters.hasDueDate === 'all' ? 'all' : filters.hasDueDate ? 'has-due' : 'no-due'}
+                value={filters.dueDate ?? 'all'}
                 onValueChange={(v) => onFiltersChange({
                   ...filters,
-                  hasDueDate: v === 'all' ? 'all' : v === 'has-due'
+                  dueDate: v === 'all' ? undefined : v as IssueFilter['dueDate'],
                 })}
               >
                 <SelectTrigger className="h-8">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder="Any Date" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="has-due">Has Due Date</SelectItem>
-                  <SelectItem value="no-due">No Due Date</SelectItem>
+                  <SelectItem value="all">Any Date</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this-week">This Week</SelectItem>
+                  <SelectItem value="this-month">This Month</SelectItem>
+                  <SelectItem value="no-date">No Date</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -477,7 +480,7 @@ export default function ProjectDetail() {
     if (issueFilters.status?.length) count++;
     if (issueFilters.severity?.length) count++;
     if (issueFilters.assigneeId?.length) count++;
-    if (issueFilters.hasDueDate !== undefined && issueFilters.hasDueDate !== 'all') count++;
+    if (issueFilters.dueDate !== undefined) count++;
     return count;
   }, [issueFilters]);
 
@@ -1467,7 +1470,7 @@ export default function ProjectDetail() {
               severityFilter={issueFilters.severity}
               statusFilter={issueFilters.status}
               assigneeFilter={issueFilters.assigneeId}
-              dueDateFilter={issueFilters.hasDueDate}
+              dueDateFilter={issueFilters.dueDate}
               isAddDialogOpen={isAddIssueDialogOpen}
               onAddDialogClose={() => setIsAddIssueDialogOpen(false)}
               onIssueCreate={handleIssueCreate}
