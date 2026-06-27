@@ -70,6 +70,7 @@ function fromApiIssue(raw: Record<string, unknown>): Issue {
     assignees,
     blocksTaskIds: [],
     tags: (raw.tags as string[]) ?? [],
+    checklist: (raw.checklist as Issue['checklist']) ?? [],
   } as Issue;
 }
 

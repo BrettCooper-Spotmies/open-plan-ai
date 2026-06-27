@@ -88,6 +88,10 @@ export const issuesService = {
       payload.blocksTaskIds = u.blocksTaskIds;
     }
 
+    if (u.checklist !== undefined) {
+      payload.checklist = u.checklist;
+    }
+
     return apiClient.patch<Issue>(ENDPOINTS.ISSUES.BY_ID(issueId), payload);
   },
 
