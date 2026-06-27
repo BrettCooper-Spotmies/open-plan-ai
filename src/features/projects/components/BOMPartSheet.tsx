@@ -535,11 +535,11 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     if (!isEdit && activeTab === 'details') {
       setCheckingPn(true);
       try {
-        const res = await apiClient.get<{ data: { exists: boolean } }>(
+        const res = await apiClient.get<{ exists: boolean }>(
           ENDPOINTS.PARTS.CHECK(orgId),
           { params: { partNumber: pn.trim().toUpperCase() } },
         );
-        if (res.data.exists) {
+        if (res.exists) {
           setErrors(e => ({ ...e, pn: `Part number '${pn.trim().toUpperCase()}' already exists` }));
           return;
         }

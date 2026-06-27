@@ -302,7 +302,7 @@ export default function Reports() {
             projectName={projectName}
             nodes={bomNodes}
             formatCurrency={formatCurrency}
-            costTrendData={bomCostTrend?.data}
+            costTrendData={bomCostTrend}
             costTrendLoading={bomCostTrendLoading}
             costTrendGranularity={bomCostTrendGranularity}
             onCostTrendGranularityChange={setBomCostTrendGranularity}

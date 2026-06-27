@@ -17,7 +17,7 @@ export function useBomCostTrend(
   return useQuery({
     queryKey: queryKeys.bom.costTrend(projectId ?? '', granularity),
     queryFn: () =>
-      apiClient.get<{ data: BomCostTrendPoint[] }>(
+      apiClient.get<BomCostTrendPoint[]>(
         `${ENDPOINTS.PROJECTS.REPORTS_BOM_COST_TREND(projectId!)}?granularity=${granularity}`,
       ),
     enabled: !!projectId,
