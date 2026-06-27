@@ -917,15 +917,15 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
             {/* ── SOURCING ── */}
             <TabsContent value="sourcing" className="flex-1 overflow-y-auto px-7 py-5 mt-0 data-[state=inactive]:hidden">
               <div className="space-y-5">
-                {/* Manufacturer */}
-                <FL label="Manufacturer" required>
-                  <FInput value={manufacturer} onChange={e => setManufacturer(e.target.value)}
-                    placeholder="e.g. Texas Instruments" className="h-9" />
-                  {errors.mfr && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.mfr}</p>}
-                </FL>
 
                 {/* MPN · Quantity · UOM */}
                 <div className="grid grid-cols-3 gap-x-6">
+                  {/* Manufacturer */}
+                  <FL label="Manufacturer" required>
+                    <FInput value={manufacturer} onChange={e => setManufacturer(e.target.value)}
+                      placeholder="e.g. Texas Instruments" className="h-9" />
+                    {errors.mfr && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.mfr}</p>}
+                  </FL>
                   <FL label="Manufacturer PN (MPN)" required>
                     <FInput value={mpn} onChange={e => setMpn(e.target.value)}
                       placeholder="e.g. TI-A4B2C" className="h-9 font-mono" />
@@ -947,20 +947,20 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                       type="text" placeholder="1" className="h-9" maxLength={15} />
                     {errors.qty && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.qty}</p>}
                   </FL>
-                  <FL label="Unit of Measure (UOM)" required>
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {UOM_OPTIONS.map(u => (
-                        <button key={u} onClick={() => setUom(u)}
-                          className={cn(
-                            'px-3 py-1.5 rounded-md text-xs font-medium border cursor-pointer transition-colors',
-                            uom === u ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border hover:bg-muted'
-                          )}>
-                          {u}
-                        </button>
-                      ))}
-                    </div>
-                  </FL>
                 </div>
+                <FL label="Unit of Measure (UOM)" required>
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {UOM_OPTIONS.map(u => (
+                      <button key={u} onClick={() => setUom(u)}
+                        className={cn(
+                          'px-3 py-1.5 rounded-md text-xs font-medium border cursor-pointer transition-colors',
+                          uom === u ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border hover:bg-muted'
+                        )}>
+                        {u}
+                      </button>
+                    ))}
+                  </div>
+                </FL>
 
                 {/* Dynamic supplier list */}
                 <div className="space-y-3">
