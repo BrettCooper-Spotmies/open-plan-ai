@@ -48,6 +48,9 @@ export interface TeamWorkloadItem {
   overdueTasks: number;
   completedTasks: number;
   inProgressTasks: number;
+  totalIssues: number;
+  openIssues: number;
+  resolvedIssues: number;
 }
 
 export interface ModuleProgressItem {
@@ -300,7 +303,8 @@ export function getMilestoneHealth(
 // Get team workload
 export function getTeamWorkload(
   tasks: Task[],
-  teamMembers: TeamMember[]
+  teamMembers: TeamMember[],
+  issues: Issue[] = []
 ): TeamWorkloadItem[] {
   const today = startOfDay(new Date());
 
@@ -317,15 +321,23 @@ export function getTeamWorkload(
     const completedTasks = memberTasks.filter(t => t.status === 'done').length;
     const inProgressTasks = memberTasks.filter(t => t.status === 'in-progress').length;
 
+    const memberIssues = issues.filter(i =>
+      i.assignees?.some((a: { id: string }) => a.id === member.id)
+    );
+    const openIssues = memberIssues.filter(i => i.status === 'open' || i.status === 'investigating').length;
+    const resolvedIssues = memberIssues.filter(i => i.status === 'resolved' || i.status === 'closed' || i.status === 'wont-fix').length;
+
     return {
       member,
       totalTasks: memberTasks.length,
       overdueTasks,
       completedTasks,
-      inProgressTasks
+      inProgressTasks,
+      totalIssues: memberIssues.length,
+      openIssues,
+      resolvedIssues,
     };
-  }).filter(item => item.totalTasks > 0)
-    .sort((a, b) => b.totalTasks - a.totalTasks);
+  }).sort((a, b) => (b.totalTasks + b.totalIssues) - (a.totalTasks + a.totalIssues));
 }
 
 // Get module progress

@@ -68,7 +68,7 @@ function dbModuleToFrontend(dbM: DbModule): Module {
 
 function serviceTeamMemberToFrontend(m: ServiceTeamMember): TeamMember {
   return {
-    id: m.id,
+    id: m.userId,
     name: m.name,
     email: m.email,
     role: m.role,
@@ -175,7 +175,7 @@ export default function Reports() {
   // ─── Chart data ───────────────────────────────────────────────────────────
   const statusBreakdown = useMemo(() => getTaskStatusBreakdown(filteredTasks), [filteredTasks]);
   const milestoneHealth = useMemo(() => getMilestoneHealth(milestones, tasks), [milestones, tasks]);
-  const teamWorkload = useMemo(() => getTeamWorkload(filteredTasks, allAdaptedTeamMembers), [filteredTasks, allAdaptedTeamMembers]);
+  const teamWorkload = useMemo(() => getTeamWorkload(filteredTasks, allAdaptedTeamMembers, issues), [filteredTasks, allAdaptedTeamMembers, issues]);
   const moduleProgress = useMemo(() => getModuleProgress(tasks, modules), [tasks, modules]);
   const trendData = useMemo(() => getCompletedTasksTrend(filteredTasks, dateRange), [filteredTasks, dateRange]);
 
