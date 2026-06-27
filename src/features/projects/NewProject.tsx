@@ -596,6 +596,11 @@ const NewProject = () => {
       return;
     }
 
+    if (isBefore(expectedEndDate, startDate)) {
+      toast.error('Expected completion date must be after the start date');
+      return;
+    }
+
     if (newMilestoneName.trim() || newMilestoneStart || newMilestoneEnd) {
       toast.error("You have an unsaved milestone. Please click '+ Add Milestone' or clear the inputs.");
       return;
@@ -889,6 +894,9 @@ const NewProject = () => {
                       selected={startDate}
                       onSelect={(date) => {
                         setStartDate(date);
+                        if (date && expectedEndDate && isBefore(expectedEndDate, date)) {
+                          setExpectedEndDate(undefined);
+                        }
                         setIsStartDateOpen(false);
                       }}
                       initialFocus
