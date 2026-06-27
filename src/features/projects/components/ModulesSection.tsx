@@ -6,6 +6,7 @@ import { Module, ModuleViewMode, Task, Issue, TeamMember, ModuleType } from '@/t
 import { ModulesKanbanView } from './ModulesKanbanView';
 import { ModulesListView } from './ModulesListView';
 import { ModuleDetailModal } from './ModuleDetailModal';
+import { TaskDetailModal } from './TaskDetailModal';
 import { AddModuleDialog } from './AddModuleDialog';
 import { getModuleTasks, getModuleProgress } from '../utils/projectUtils';
 
@@ -91,6 +92,10 @@ export function ModulesSection({
 }: ModulesSectionProps) {
   const [selectedModule, setSelectedModule] = useState<ModuleWithStats | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  const handleInternalTaskClick = (task: Task) => setSelectedTask(task);
+  const effectiveOnTaskClick = onTaskClick ?? handleInternalTaskClick;
 
   const viewMode = externalViewMode || 'kanban';
 
@@ -240,13 +245,28 @@ export function ModulesSection({
         onClose={handleCloseDetailModal}
         onUpdate={handleModuleUpdateFromModal}
         onDelete={onModuleDelete}
-        onTaskClick={onTaskClick}
+        onTaskClick={effectiveOnTaskClick}
         onIssueClick={onIssueClick}
         onLinkTask={handleLinkTask}
         onUnlinkTask={handleUnlinkTask}
         onLinkIssue={handleLinkIssue}
         onUnlinkIssue={handleUnlinkIssue}
       />
+
+      {!onTaskClick && (
+        <TaskDetailModal
+          task={selectedTask}
+          allTasks={tasks}
+          isOpen={selectedTask !== null}
+          onClose={() => setSelectedTask(null)}
+          onUpdate={(updatedTask) => {
+            onTaskUpdate?.(updatedTask);
+            setSelectedTask(updatedTask);
+          }}
+          modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+          assignableMembers={teamMembers}
+        />
+      )}
     </>
   );
 }
