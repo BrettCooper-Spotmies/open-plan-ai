@@ -63,7 +63,7 @@ export const ReportTeamWorkload = memo(function ReportTeamWorkload({ data, onMem
             {chartData.slice(0, 6).map((member) => (
               <div
                 key={member.memberId}
-                className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 p-2 -mx-2 rounded-lg transition-colors"
+                className="flex items-center gap-3 hover:bg-muted/50 p-2 -mx-2 rounded-lg transition-colors"
                 onClick={() => handleMemberClick(member.memberId)}
               >
                 <Avatar className="h-8 w-8 shrink-0">
