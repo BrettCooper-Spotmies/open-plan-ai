@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
   CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check, Download, ExternalLink,
@@ -198,63 +198,17 @@ function StatCard({ label, value, icon: Icon, iconColor, accent }: {
 }
 
 // ── Filter drawer ──────────────────────────────────────────────────
-function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymbol }: {
-  open: boolean; filters: BOMFilters;
-  setFilters: React.Dispatch<React.SetStateAction<BOMFilters>>;
-  onClose: () => void;
-  facets: { units: string[]; manufacturers: string[]; suppliers: string[]; owners: string[] };
-  currencySymbol: string;
-}) {
-  const [customMfrs, setCustomMfrs] = useState<string[]>([]);
-  const [customSuppliers, setCustomSuppliers] = useState<string[]>([]);
-  const [mfrInput, setMfrInput] = useState('');
-  const [supplierInput, setSupplierInput] = useState('');
-  const [showMfrInput, setShowMfrInput] = useState(false);
-  const [showSupplierInput, setShowSupplierInput] = useState(false);
-
-  if (!open) return null;
-
-  const toggle = (key: 'units' | 'suppliers' | 'manufacturers' | 'statuses' | 'owners', val: string) =>
-    setFilters(f => ({
-      ...f,
-      [key]: (f[key] as string[]).includes(val)
-        ? (f[key] as string[]).filter(x => x !== val)
-        : [...(f[key] as string[]), val],
-    }));
-  const set = <K extends keyof BOMFilters>(key: K, val: BOMFilters[K]) =>
-    setFilters(f => ({ ...f, [key]: val }));
-
-  const addCustomMfr = () => {
-    const v = mfrInput.trim();
-    if (!v) return;
-    if (!customMfrs.includes(v)) setCustomMfrs(m => [...m, v]);
-    setFilters(f => ({
-      ...f,
-      manufacturers: f.manufacturers.includes(v) ? f.manufacturers : [...f.manufacturers, v],
-    }));
-    setMfrInput('');
-    setShowMfrInput(false);
-  };
-
-  const addCustomSupplier = () => {
-    const v = supplierInput.trim();
-    if (!v) return;
-    if (!customSuppliers.includes(v)) setCustomSuppliers(s => [...s, v]);
-    setFilters(f => ({
-      ...f,
-      suppliers: f.suppliers.includes(v) ? f.suppliers : [...f.suppliers, v],
-    }));
-    setSupplierInput('');
-    setShowSupplierInput(false);
-  };
-
-  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
     <div className="px-4 py-4 border-b border-border">
       <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">{title}</div>
       {children}
     </div>
   );
-  const Chip = ({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) => (
+}
+
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
     <button
       onClick={onClick}
       className={cn(
@@ -267,17 +221,77 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
       {children}
     </button>
   );
-  const RangeInput = ({ value, onChange, placeholder, prefix }: {
-    value: string; onChange: (v: string) => void; placeholder: string; prefix?: string;
-  }) => (
+}
+
+function RangeInput({ value, onChange, placeholder, prefix }: {
+  value: string; onChange: (v: string) => void; placeholder: string; prefix?: string;
+}) {
+  return (
     <div className="flex items-center gap-1.5 bg-muted border border-border rounded-md px-2.5 py-1.5 flex-1 min-w-0">
       {prefix && <span className="text-xs text-muted-foreground">{prefix}</span>}
       <input
         type="number" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        onWheel={e => e.currentTarget.blur()}
         className="bg-transparent border-none outline-none text-foreground text-xs w-full"
       />
     </div>
   );
+}
+
+function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymbol }: {
+  open: boolean; filters: BOMFilters;
+  setFilters: React.Dispatch<React.SetStateAction<BOMFilters>>;
+  onClose: () => void;
+  facets: { units: string[]; manufacturers: string[]; suppliers: string[]; owners: string[] };
+  currencySymbol: string;
+}) {
+  const [draft, setDraft] = useState<BOMFilters>({ ...filters });
+  const [customMfrs, setCustomMfrs] = useState<string[]>([]);
+  const [customSuppliers, setCustomSuppliers] = useState<string[]>([]);
+  const [mfrInput, setMfrInput] = useState('');
+  const [supplierInput, setSupplierInput] = useState('');
+  const [showMfrInput, setShowMfrInput] = useState(false);
+  const [showSupplierInput, setShowSupplierInput] = useState(false);
+
+  // Sync draft to committed filters each time the drawer opens
+  useEffect(() => { if (open) setDraft({ ...filters }); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!open) return null;
+
+  const toggle = (key: 'units' | 'suppliers' | 'manufacturers' | 'statuses' | 'owners', val: string) =>
+    setDraft(f => ({
+      ...f,
+      [key]: (f[key] as string[]).includes(val)
+        ? (f[key] as string[]).filter(x => x !== val)
+        : [...(f[key] as string[]), val],
+    }));
+  const set = <K extends keyof BOMFilters>(key: K, val: BOMFilters[K]) =>
+    setDraft(f => ({ ...f, [key]: val }));
+
+  const addCustomMfr = () => {
+    const v = mfrInput.trim();
+    if (!v) return;
+    if (!customMfrs.includes(v)) setCustomMfrs(m => [...m, v]);
+    setDraft(f => ({
+      ...f,
+      manufacturers: f.manufacturers.includes(v) ? f.manufacturers : [...f.manufacturers, v],
+    }));
+    setMfrInput('');
+    setShowMfrInput(false);
+  };
+
+  const addCustomSupplier = () => {
+    const v = supplierInput.trim();
+    if (!v) return;
+    if (!customSuppliers.includes(v)) setCustomSuppliers(s => [...s, v]);
+    setDraft(f => ({
+      ...f,
+      suppliers: f.suppliers.includes(v) ? f.suppliers : [...f.suppliers, v],
+    }));
+    setSupplierInput('');
+    setShowSupplierInput(false);
+  };
+
 
   return (
     <>
@@ -301,8 +315,8 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
               {([['all', 'All BOM'], ['top', 'Top Level'], ['catalog', 'Catalog']] as const).map(([id, label]) => (
                 <button key={id} onClick={() => set('bomType', id)}
                   className={cn('flex-1 py-1.5 rounded-md text-xs font-medium cursor-pointer border-none transition-colors',
-                    filters.bomType === id ? 'text-white' : 'bg-transparent text-muted-foreground hover:text-foreground')}
-                  style={{ background: filters.bomType === id ? 'hsl(var(--foreground))' : undefined }}>
+                    draft.bomType === id ? 'text-white' : 'bg-transparent text-muted-foreground hover:text-foreground')}
+                  style={{ background: draft.bomType === id ? 'hsl(var(--foreground))' : undefined }}>
                   {label}
                 </button>
               ))}
@@ -312,7 +326,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
           <Section title="Status">
             <div className="flex gap-2 flex-wrap">
               {(['approved', 'pending', 'rejected'] as const).map(s => (
-                <Chip key={s} active={filters.statuses.includes(s)} onClick={() => toggle('statuses', s)}>
+                <Chip key={s} active={draft.statuses.includes(s)} onClick={() => toggle('statuses', s)}>
                   {s === 'approved' ? 'Approved' : s === 'pending' ? 'Pending' : 'Rejected'}
                 </Chip>
               ))}
@@ -321,30 +335,30 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
 
           <Section title={`Unit Price (${currencySymbol})`}>
             <div className="flex items-center gap-2">
-              <RangeInput value={filters.priceMin} onChange={v => set('priceMin', v)} placeholder="Min" prefix={currencySymbol} />
+              <RangeInput value={draft.priceMin} onChange={v => set('priceMin', v)} placeholder="Min" prefix={currencySymbol} />
               <span className="text-muted-foreground text-xs">–</span>
-              <RangeInput value={filters.priceMax} onChange={v => set('priceMax', v)} placeholder="Max" prefix={currencySymbol} />
+              <RangeInput value={draft.priceMax} onChange={v => set('priceMax', v)} placeholder="Max" prefix={currencySymbol} />
             </div>
           </Section>
 
           <Section title="Lead Time (days)">
             <div className="flex items-center gap-2">
-              <RangeInput value={filters.leadMin} onChange={v => set('leadMin', v)} placeholder="Min" />
+              <RangeInput value={draft.leadMin} onChange={v => set('leadMin', v)} placeholder="Min" />
               <span className="text-muted-foreground text-xs">–</span>
-              <RangeInput value={filters.leadMax} onChange={v => set('leadMax', v)} placeholder="Max" />
+              <RangeInput value={draft.leadMax} onChange={v => set('leadMax', v)} placeholder="Max" />
             </div>
           </Section>
 
           <Section title="Units (UOM)">
             <div className="flex gap-2 flex-wrap">
-              {facets.units.map(u => <Chip key={u} active={filters.units.includes(u)} onClick={() => toggle('units', u)}>{u}</Chip>)}
+              {facets.units.map(u => <Chip key={u} active={draft.units.includes(u)} onClick={() => toggle('units', u)}>{u}</Chip>)}
             </div>
           </Section>
 
           <Section title="Manufacturer">
             <div className="flex gap-2 flex-wrap">
               {[...facets.manufacturers, ...customMfrs.filter(c => !facets.manufacturers.includes(c))].map(m => (
-                <Chip key={m} active={filters.manufacturers.includes(m)} onClick={() => toggle('manufacturers', m)}>{m}</Chip>
+                <Chip key={m} active={draft.manufacturers.includes(m)} onClick={() => toggle('manufacturers', m)}>{m}</Chip>
               ))}
               {showMfrInput ? (
                 <div className="flex items-center gap-1 bg-muted border border-primary/40 rounded-md px-2 py-0.5">
@@ -372,7 +386,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
           <Section title="Supplier / Distributor">
             <div className="flex gap-2 flex-wrap">
               {[...facets.suppliers, ...customSuppliers.filter(c => !facets.suppliers.includes(c))].map(s => (
-                <Chip key={s} active={filters.suppliers.includes(s)} onClick={() => toggle('suppliers', s)}>{s}</Chip>
+                <Chip key={s} active={draft.suppliers.includes(s)} onClick={() => toggle('suppliers', s)}>{s}</Chip>
               ))}
               {showSupplierInput ? (
                 <div className="flex items-center gap-1 bg-muted border border-primary/40 rounded-md px-2 py-0.5">
@@ -400,7 +414,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
           <Section title="Owner / Handled By">
             <div className="flex gap-2 flex-wrap">
               {facets.owners.map(o => (
-                <Chip key={o} active={filters.owners.includes(o)} onClick={() => toggle('owners', o)}>
+                <Chip key={o} active={draft.owners.includes(o)} onClick={() => toggle('owners', o)}>
                   <span className="inline-flex items-center gap-1.5">
                     <span className="w-4 h-4 rounded-full inline-flex items-center justify-center text-[8px] font-bold text-white shrink-0"
                       style={{ background: ownerColor(o) }}>
@@ -417,7 +431,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
             <div className="flex items-center gap-2 bg-muted border border-border rounded-md px-2.5 py-1.5">
               <Hash className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               <input
-                value={filters.mpn} onChange={e => set('mpn', e.target.value)}
+                value={draft.mpn} onChange={e => set('mpn', e.target.value)}
                 placeholder="e.g. INF-4A29C"
                 className="bg-transparent border-none outline-none text-foreground text-xs w-full font-mono"
               />
@@ -426,8 +440,8 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
         </div>
 
         <div className="flex gap-2.5 px-4 py-3.5 border-t border-border">
-          <Button variant="outline" className="flex-1" onClick={() => setFilters({ ...EMPTY_FILTERS })}>Clear all</Button>
-          <Button className="flex-1" onClick={onClose}>Show results</Button>
+          <Button variant="outline" className="flex-1" onClick={() => setDraft({ ...EMPTY_FILTERS })}>Clear all</Button>
+          <Button className="flex-1" onClick={() => { setFilters(draft); onClose(); }}>Show results</Button>
         </div>
       </div>
     </>
