@@ -83,6 +83,8 @@ import { attachmentsService } from '@/services/attachments.service';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectTags, useCreateTag } from '@/hooks/useProjectTags';
 import { getFallbackTagColor } from '@/lib/tagColors';
+import { useIssueColumns } from '@/hooks/useIssueColumns';
+import { DEFAULT_ISSUE_COLUMNS } from '@/services/issueColumns.service';
 
 interface IssueDetailContentProps {
     issue: Issue | null;
@@ -97,13 +99,6 @@ interface IssueDetailContentProps {
     onPendingFilesChange?: (files: File[]) => void;
 }
 
-const statusOptions: { value: IssueStatus; label: string; color: string }[] = [
-    { value: 'open', label: 'Open', color: 'bg-destructive' },
-    { value: 'investigating', label: 'Investigating', color: 'bg-orange-500' },
-    { value: 'resolved', label: 'Resolved', color: 'bg-status-done' },
-    { value: 'closed', label: 'Closed', color: 'bg-muted-foreground' },
-    { value: 'wont-fix', label: "Won't Fix", color: 'bg-muted-foreground' },
-];
 
 const categoryOptions: { value: IssueCategory; label: string; icon: typeof Bug }[] = [
     { value: 'defect', label: 'Defect', icon: Bug },
@@ -157,6 +152,11 @@ export function IssueDetailContent({
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
     const projectId = issue?.projectId;
+    const { data: apiIssueColumns } = useIssueColumns(projectId);
+    const statusOptions = (apiIssueColumns && apiIssueColumns.length > 0 ? apiIssueColumns : DEFAULT_ISSUE_COLUMNS)
+        .filter((c) => !c.isSpecial || c.status !== 'wont-fix' ? true : true)
+        .map((c) => ({ value: c.status, label: c.label, color: c.color }));
+
     const { data: projectTags = [] } = useProjectTags(projectId);
     const createTagMutation = useCreateTag(projectId);
     const tagColorMap = useMemo(() => {
@@ -318,6 +318,29 @@ export function IssueDetailContent({
         await processFiles(e.target.files);
         if (e.target) e.target.value = '';
     };
+
+    const handlePaste = (e: ClipboardEvent) => {
+        if (isUploading) return;
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        const imageFiles: File[] = [];
+        for (const item of Array.from(items)) {
+            if (item.kind === 'file' && item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                if (file) imageFiles.push(file);
+            }
+        }
+        if (imageFiles.length === 0) return;
+        e.preventDefault();
+        const dt = new DataTransfer();
+        imageFiles.forEach(f => dt.items.add(f));
+        processFiles(dt.files);
+    };
+
+    useEffect(() => {
+        document.addEventListener('paste', handlePaste);
+        return () => document.removeEventListener('paste', handlePaste);
+    });
 
     const handleRemovePendingFile = (index: number) => {
         setPendingFiles(prev => prev.filter((_, i) => i !== index));
@@ -508,8 +531,11 @@ export function IssueDetailContent({
                                 <SelectTrigger className="h-9" aria-required="true">
                                     <SelectValue>
                                         <div className="flex items-center gap-2">
-                                            <div className={cn('w-2 h-2 rounded-full', statusOptions.find(s => s.value === editedIssue.status)?.color)} />
-                                            {statusOptions.find(s => s.value === editedIssue.status)?.label}
+                                            <div
+                                                className="w-2 h-2 rounded-full"
+                                                style={{ backgroundColor: statusOptions.find(s => s.value === editedIssue.status)?.color ?? '#6b7280' }}
+                                            />
+                                            {statusOptions.find(s => s.value === editedIssue.status)?.label ?? editedIssue.status}
                                         </div>
                                     </SelectValue>
                                 </SelectTrigger>
@@ -517,7 +543,7 @@ export function IssueDetailContent({
                                     {statusOptions.map((option) => (
                                         <SelectItem key={option.value} value={option.value}>
                                             <div className="flex items-center gap-2">
-                                                <div className={cn('w-2 h-2 rounded-full', option.color)} />
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: option.color }} />
                                                 {option.label}
                                             </div>
                                         </SelectItem>
@@ -1003,7 +1029,7 @@ export function IssueDetailContent({
                                                 {isUploading ? 'Uploading...' : 'Add Attachment'}
                                             </span>
                                         </div>
-                                        {!isUploading && <p className="text-xs text-muted-foreground mt-1">or drag and drop</p>}
+                                        {!isUploading && <p className="text-xs text-muted-foreground mt-1">or drag and drop, or paste image</p>}
                                     </div>
                                     <input type="file" className="hidden" multiple onChange={handleFileUpload} disabled={isUploading} />
                                 </label>

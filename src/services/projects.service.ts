@@ -3,18 +3,16 @@ import { ENDPOINTS } from '@/services/api/endpoints';
 import { Project, Task, Milestone, Issue, IssueCategory, IssueSeverity, IssueStatus, TeamMember } from '@/types';
 import { tasksService } from '@/services/tasks.service';
 
-const VALID_ISSUE_STATUSES: IssueStatus[] = ['open', 'investigating', 'resolved', 'closed', 'wont-fix'];
+const LEGACY_ISSUE_STATUS_MAP: Record<string, IssueStatus> = {
+  'in-progress': 'investigating',
+  'in_progress': 'investigating',
+  'pending':     'investigating',
+};
 
-/** Map legacy or unknown status values to a safe default. */
-function normaliseIssueStatus(raw: unknown): IssueStatus {
-  const legacy: Record<string, IssueStatus> = {
-    'in-progress': 'investigating',
-    'in_progress': 'investigating',
-    'pending':     'investigating',
-  };
-  if (typeof raw === 'string') {
-    if ((VALID_ISSUE_STATUSES as string[]).includes(raw)) return raw as IssueStatus;
-    if (legacy[raw]) return legacy[raw];
+/** Normalise an issue status value from the API. Passes custom statuses through as-is. */
+function normaliseIssueStatus(raw: unknown): string {
+  if (typeof raw === 'string' && raw.length > 0) {
+    return LEGACY_ISSUE_STATUS_MAP[raw] ?? raw;
   }
   return 'open';
 }
@@ -72,6 +70,8 @@ function fromApiIssue(raw: Record<string, unknown>): Issue {
     assignees,
     blocksTaskIds: [],
     tags: (raw.tags as string[]) ?? [],
+    checklist: (raw.checklist as Issue['checklist']) ?? [],
+    descriptionBlocks: (raw.descriptionBlocks as Issue['descriptionBlocks']) ?? [],
   } as Issue;
 }
 

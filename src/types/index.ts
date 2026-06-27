@@ -137,7 +137,7 @@ export interface Issue {
   descriptionBlocks?: any[]; // For advanced editor state
   category: IssueCategory;
   severity: IssueSeverity;
-  status: IssueStatus;
+  status: string;  // IssueStatus or any custom bucket key
 
   // Relationships
   projectId: string;
@@ -211,6 +211,7 @@ export interface Project {
   type?: string; // Project Type (e.g., "Hardware Development")
   icon?: string; // Emoji icon for the project
   team: TeamMember[];
+  memberCount?: number;
   tasks: Task[];
   milestones: Milestone[];
   modules: ModuleSummary[];  // Legacy support

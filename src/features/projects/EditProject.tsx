@@ -55,7 +55,8 @@ import {
     Palette
 } from "lucide-react";
 import { format, isBefore, startOfMonth } from "date-fns";
-import { cn, isValidPhoneNumber, sanitizePhoneInput } from "@/lib/utils";
+import { cn, isValidPhoneNumber } from "@/lib/utils";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1272,7 +1273,7 @@ const EditProject = () => {
                                         placeholder="e.g. John Doe"
                                         value={clientName}
                                         maxLength={100}
-                                        onChange={(e) => setClientName(e.target.value)}
+                                        onChange={(e) => setClientName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -1292,16 +1293,12 @@ const EditProject = () => {
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="clientContact">Contact Number</Label>
-                                <Input
-                                    id="clientContact"
-                                    placeholder="e.g. +1 4155552671"
+                                <Label>Contact Number</Label>
+                                <PhoneInput
                                     value={clientContact}
-                                    maxLength={16}
-                                    onChange={(e) => {
-                                        const val = sanitizePhoneInput(e.target.value);
-                                        setClientContact(val);
-                                        setClientContactError(val.length > 0 && !isValidPhoneNumber(val) ? "Please enter a valid phone number (with country code)" : "");
+                                    onChange={(fullValue, error) => {
+                                        setClientContact(fullValue);
+                                        setClientContactError(error);
                                     }}
                                 />
                                 {clientContactError && <p className="text-xs text-destructive">{clientContactError}</p>}
@@ -1933,84 +1930,6 @@ const EditProject = () => {
                         )}
                     </CardContent>
                 </Card>
-
-                {isProjectOwner && (
-                    <Card className="border-destructive/40 bg-destructive/5">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-destructive">
-                                <AlertTriangle className="h-5 w-5" />
-                                Danger Zone
-                            </CardTitle>
-                            <CardDescription>
-                                Deleting this project permanently removes project data for everyone in the workspace.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                            <p className="text-sm text-muted-foreground">
-                                This action cannot be undone.
-                            </p>
-                            <Dialog
-                                open={deleteProjectDialogOpen}
-                                onOpenChange={(open) => {
-                                    setDeleteProjectDialogOpen(open);
-                                    if (!open) setDeleteProjectConfirmText("");
-                                }}
-                            >
-                                <DialogTrigger asChild>
-                                    <Button variant="destructive">
-                                        Delete Project
-                                    </Button>
-                                </DialogTrigger>
-                                <DialogContent>
-                                    <DialogHeader>
-                                        <DialogTitle>Delete Project</DialogTitle>
-                                        <DialogDescription>
-                                            To confirm deletion, type <strong>{project.name}</strong> below. This permanently deletes the project and all associated data.
-                                        </DialogDescription>
-                                    </DialogHeader>
-                                    <div className="space-y-2 py-2">
-                                        <Label htmlFor="delete-project-confirmation">Project Name</Label>
-                                        <Input
-                                            id="delete-project-confirmation"
-                                            value={deleteProjectConfirmText}
-                                            onChange={(e) => setDeleteProjectConfirmText(e.target.value)}
-                                            placeholder={project.name}
-                                            autoComplete="off"
-                                        />
-                                    </div>
-                                    <DialogFooter>
-                                        <Button
-                                            variant="outline"
-                                            onClick={() => {
-                                                setDeleteProjectDialogOpen(false);
-                                                setDeleteProjectConfirmText("");
-                                            }}
-                                        >
-                                            Cancel
-                                        </Button>
-                                        <Button
-                                            variant="destructive"
-                                            onClick={handleDeleteProject}
-                                            disabled={
-                                                deleteProjectMutation.isPending ||
-                                                deleteProjectConfirmText.trim() !== project.name
-                                            }
-                                        >
-                                            {deleteProjectMutation.isPending ? (
-                                                <>
-                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                    Deleting...
-                                                </>
-                                            ) : (
-                                                "Delete Permanently"
-                                            )}
-                                        </Button>
-                                    </DialogFooter>
-                                </DialogContent>
-                            </Dialog>
-                        </CardContent>
-                    </Card>
-                )}
 
                 {/* Delete Confirmation Dialog */}
                 <Dialog open={deleteConfirmation.isOpen} onOpenChange={(open) => {

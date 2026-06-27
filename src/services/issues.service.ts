@@ -48,6 +48,7 @@ export const issuesService = {
     const blocksTaskIds = (issue.blocksTaskIds || []).filter(Boolean);
     if (blocksTaskIds.length > 0) payload.blocksTaskIds = blocksTaskIds;
     if (issue.tags && issue.tags.length > 0) payload.tags = issue.tags;
+    if (issue.descriptionBlocks && issue.descriptionBlocks.length > 0) payload.descriptionBlocks = issue.descriptionBlocks;
     return apiClient.post<Issue>(ENDPOINTS.ISSUES.LIST(projectId), payload);
   },
 
@@ -86,6 +87,14 @@ export const issuesService = {
 
     if (u.blocksTaskIds !== undefined) {
       payload.blocksTaskIds = u.blocksTaskIds;
+    }
+
+    if (u.checklist !== undefined) {
+      payload.checklist = u.checklist;
+    }
+
+    if (u.descriptionBlocks !== undefined) {
+      payload.descriptionBlocks = u.descriptionBlocks;
     }
 
     return apiClient.patch<Issue>(ENDPOINTS.ISSUES.BY_ID(issueId), payload);

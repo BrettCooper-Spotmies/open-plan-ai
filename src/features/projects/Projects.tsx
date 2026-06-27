@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ProjectListProgress } from './components/ProjectListProgress';
-import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, FolderOpen, Package, X } from 'lucide-react';
+import { Plus, Search, Grid3X3, List, Users, MoreVertical, Eye, Pencil, Calendar, Link as LinkIcon, Paperclip, FileText, Flag, Target, FolderOpen, Package, X, Trash2, AlertTriangle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -24,7 +25,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useProjects } from '@/hooks/useProjects';
+import { useProjects, useDeleteProject } from '@/hooks/useProjects';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useProjectAttachments } from '@/hooks/useProjectAttachments';
 import { useProjectLinks } from '@/hooks/useProjectLinks';
@@ -33,6 +34,7 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { logger } from '@/services/monitoring/logger';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -88,6 +90,9 @@ export default function Projects() {
   const { data: projectAttachments = [] } = useProjectAttachments(selectedProjectId || undefined);
   const { data: projectLinks = [] } = useProjectLinks(selectedProjectId || undefined);
   const { data: projectFiles = [], isLoading: isLoadingFiles } = useProjectAttachments(selectedFilesProjectId || undefined);
+  const deleteProjectMutation = useDeleteProject();
+  const [deleteProjectDialogOpen, setDeleteProjectDialogOpen] = useState(false);
+  const [deleteProjectConfirmText, setDeleteProjectConfirmText] = useState('');
 
   const projectList = projects || [];
   const currentMembership = organizationMembers.find((member) => member.id === user?.id);
@@ -123,6 +128,32 @@ export default function Projects() {
     e.preventDefault();
     e.stopPropagation();
     navigate(`/projects/${projectId}/edit`);
+  };
+
+  const isProjectOwner = selectedProjectDetails?.createdBy === user?.id;
+
+  const handleDeleteProject = async () => {
+    if (!selectedProjectDetails?.id) return;
+    if (deleteProjectConfirmText.trim() !== selectedProjectDetails.name) {
+      toast.error('Project name does not match.');
+      return;
+    }
+    try {
+      await deleteProjectMutation.mutateAsync(selectedProjectDetails.id);
+      toast.success('Project deleted successfully');
+      setDeleteProjectDialogOpen(false);
+      setDeleteProjectConfirmText('');
+      setDetailsDialogOpen(false);
+      setSelectedProjectId(null);
+    } catch (error) {
+      logger.error('Error deleting project:', error);
+      const errorMessage = error instanceof Error ? error.message : '';
+      if (errorMessage.toLowerCase().includes('access denied')) {
+        toast.error('Only the project owner can delete this project.');
+      } else {
+        toast.error('Failed to delete project');
+      }
+    }
   };
 
   // Show the skeleton while the org is still resolving too — otherwise the
@@ -297,7 +328,7 @@ export default function Projects() {
                           }}
                         >
                           <Users className="h-4 w-4" />
-                          <span className="text-xs">{project.team?.length || 0}</span>
+                          <span className="text-xs">{project.memberCount ?? project.team?.length ?? 0}</span>
                           {(project.team?.length || 0) > 0 && (
                             <div className="flex items-center -space-x-2">
                               {project.team.slice(0, 3).map((member) => (
@@ -570,7 +601,7 @@ export default function Projects() {
           </div>
 
           {selectedProjectDetails && !isLoadingDetails && (
-            <div className="px-6 py-4 border-t bg-background shrink-0">
+            <div className="px-6 py-4 border-t bg-background shrink-0 space-y-2">
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -594,8 +625,77 @@ export default function Projects() {
                   Edit Project
                 </Button>
               </div>
+              {isProjectOwner && (
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  onClick={() => setDeleteProjectDialogOpen(true)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Project
+                </Button>
+              )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Project Confirmation Dialog */}
+      <Dialog
+        open={deleteProjectDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteProjectDialogOpen(open);
+          if (!open) setDeleteProjectConfirmText('');
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Project
+            </DialogTitle>
+            <DialogDescription>
+              To confirm deletion, type <strong>{selectedProjectDetails?.name}</strong> below. This permanently deletes the project and all associated data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-2">
+            <Label htmlFor="delete-project-confirmation">Project Name</Label>
+            <Input
+              id="delete-project-confirmation"
+              value={deleteProjectConfirmText}
+              onChange={(e) => setDeleteProjectConfirmText(e.target.value)}
+              placeholder={selectedProjectDetails?.name}
+              autoComplete="off"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeleteProjectDialogOpen(false);
+                setDeleteProjectConfirmText('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteProject}
+              disabled={
+                deleteProjectMutation.isPending ||
+                deleteProjectConfirmText.trim() !== selectedProjectDetails?.name
+              }
+            >
+              {deleteProjectMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete Permanently'
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

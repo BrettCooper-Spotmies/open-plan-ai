@@ -912,10 +912,11 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                       let val = e.target.value.replace(/[^0-9.]/g, '');
                       const parts = val.split('.');
                       if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                      if (parts[0].length > 10) val = parts.length > 1 ? parts[0].slice(0, 10) + '.' + parts[1] : parts[0].slice(0, 10);
                       setPrice(val);
                     }}
                       disabled={calcFromSubparts}
-                      type="text" placeholder="0.00" className="h-9" />
+                      type="text" placeholder="0.00" className="h-9" maxLength={15} />
                     <div className="flex items-center gap-2">
                       <Checkbox 
                         id="calcFromSubparts" 
@@ -931,10 +932,10 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                 <FL label="Lead Time">
                   <div className="flex gap-1.5">
                     <FInput value={leadTime} onChange={e => {
-                      let val = e.target.value.replace(/[^0-9]/g, '');
+                      let val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
                       setLeadTime(val);
                     }}
-                      type="text" placeholder="8" className="h-9 flex-1" />
+                      type="text" placeholder="8" className="h-9 flex-1" maxLength={6} />
                     <div className="flex gap-1 shrink-0">
                       {LEAD_TIME_UNITS.map(u => (
                         <button key={u.id} onClick={() => setLeadTimeUnit(u.id)}
@@ -952,15 +953,16 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                   <FInput value={qty} onChange={e => {
                     let val = e.target.value;
                     if (['EA', 'SET', 'PCS', 'LOT', 'LIC'].includes(uom)) {
-                      val = val.replace(/[^0-9]/g, '');
+                      val = val.replace(/[^0-9]/g, '').slice(0, 10);
                     } else {
                       val = val.replace(/[^0-9.]/g, '');
                       const parts = val.split('.');
                       if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                      if (parts[0].length > 10) val = parts.length > 1 ? parts[0].slice(0, 10) + '.' + parts[1] : parts[0].slice(0, 10);
                     }
                     setQty(val);
                   }}
-                    type="text" placeholder="1" className="h-9" />
+                    type="text" placeholder="1" className="h-9" maxLength={15} />
                 </FL>
                 <FL label="Unit of Measure (UOM)">
                   <div className="flex flex-wrap gap-1.5 pt-1">

@@ -86,6 +86,12 @@ export const queryKeys = {
     list: (projectId: string) => [...queryKeys.taskColumns.all, 'list', projectId] as const,
   },
 
+  // Issue Columns
+  issueColumns: {
+    all: ['issue-columns'] as const,
+    list: (projectId: string) => [...queryKeys.issueColumns.all, 'list', projectId] as const,
+  },
+
   // Tags (shared project-wide registry)
   tags: {
     all: ['tags'] as const,
