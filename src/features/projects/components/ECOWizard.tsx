@@ -17,40 +17,148 @@ import { useBomTree } from '@/hooks/useBom';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { fromApiNode, bomFlatAll, bomPath } from './bomData';
 import { REQS } from './requirementsData';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 // ── BOM parameter options for Details diff rows ───────────────────────────────
 
 const BOM_PARAM_OPTIONS: { key: string; label: string }[] = [
-  { key: 'name',         label: 'Part Name' },
-  { key: 'desc',         label: 'Description' },
-  { key: 'qty',          label: 'Quantity' },
-  { key: 'uom',          label: 'Unit of Measure' },
-  { key: 'supplier',     label: 'Supplier' },
-  { key: 'rev',          label: 'Revision' },
-  { key: 'cat',          label: 'Category' },
+  { key: 'name', label: 'Part Name' },
+  { key: 'desc', label: 'Description' },
+  { key: 'qty', label: 'Quantity' },
+  { key: 'uom', label: 'Unit of Measure' },
+  { key: 'supplier', label: 'Supplier' },
+  { key: 'rev', label: 'Revision' },
+  { key: 'cat', label: 'Category' },
   { key: 'manufacturer', label: 'Manufacturer' },
-  { key: 'distributor',  label: 'Distributor' },
-  { key: 'price',        label: 'Unit Price' },
-  { key: 'leadTime',     label: 'Lead Time (days)' },
-  { key: 'mpn',          label: 'MPN' },
+  { key: 'distributor', label: 'Distributor' },
+  { key: 'price', label: 'Unit Price' },
+  { key: 'leadTime', label: 'Lead Time (days)' },
+  { key: 'mpn', label: 'MPN' },
 ];
+
+const ECO_RECOMMENDED_PARAMS = [
+  'Drawing Number',
+  'Material',
+  'Tolerance',
+  'Surface Finish',
+  'Coating / Treatment',
+  'Weight (g)',
+  'Operating Temperature',
+  'Voltage Rating',
+  'Current Rating',
+  'Power Rating (W)',
+  'Package Type',
+  'Mounting Type',
+  'Test Procedure',
+  'Country of Origin',
+];
+
+const ALL_KNOWN_PARAM_LABELS = new Set([
+  ...BOM_PARAM_OPTIONS.map(o => o.label),
+  ...ECO_RECOMMENDED_PARAMS,
+]);
+
+// ── Searchable parameter combobox ─────────────────────────────────────────────
+
+function ParamCombobox({
+  value,
+  onChange,
+  onSelectOther,
+  firstSelectedNode,
+}: {
+  value: string;
+  onChange: (label: string, autoFrom: string) => void;
+  onSelectOther: () => void;
+  firstSelectedNode: Record<string, unknown> | null;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const selectedLabel = value || '— select parameter —';
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          className="flex items-center justify-between gap-1 flex-[1.2] bg-muted/40 border border-border rounded-md text-foreground text-[13px] px-3 py-2 outline-none focus:border-primary/40 cursor-pointer font-[inherit] min-w-0"
+          style={{ color: value ? undefined : 'hsl(var(--muted-foreground))' }}
+        >
+          <span className="truncate">{selectedLabel}</span>
+          <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-[260px]" align="start">
+        <Command>
+          <CommandInput placeholder="Search parameters…" />
+          <CommandList>
+            <CommandEmpty>No match — use Other to enter custom.</CommandEmpty>
+            <CommandGroup heading="BOM Fields">
+              {BOM_PARAM_OPTIONS.map(o => (
+                <CommandItem
+                  key={o.key}
+                  value={o.label}
+                  onSelect={() => {
+                    const autoFrom = firstSelectedNode
+                      ? String(firstSelectedNode[o.key] ?? '')
+                      : '';
+                    onChange(o.label, autoFrom);
+                    setOpen(false);
+                  }}
+                >
+                  {value === o.label && <Check className="w-3.5 h-3.5 mr-1.5 shrink-0" />}
+                  {o.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandGroup heading="Recommended">
+              {ECO_RECOMMENDED_PARAMS.map(p => (
+                <CommandItem
+                  key={p}
+                  value={p}
+                  onSelect={() => {
+                    onChange(p, '');
+                    setOpen(false);
+                  }}
+                >
+                  {value === p && <Check className="w-3.5 h-3.5 mr-1.5 shrink-0" />}
+                  {p}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandGroup heading="Custom">
+              <CommandItem
+                value="other"
+                onSelect={() => {
+                  onSelectOther();
+                  setOpen(false);
+                }}
+              >
+                Other…
+              </CommandItem>
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // ── Attachment file type helper ───────────────────────────────────────────────
 
 function fileKind(name: string) {
   const ext = (name.split('.').pop() ?? '').toLowerCase();
-  if (ext === 'pdf')                                    return { Icon: FileText, color: '#DC2626', tag: 'PDF' };
-  if (['png','jpg','jpeg','gif','webp','svg'].includes(ext)) return { Icon: Image,    color: '#9333EA', tag: ext.toUpperCase() };
-  if (['step','stp','iges','igs','sldprt','sldasm','dwg','dxf','3mf','stl'].includes(ext))
-                                                        return { Icon: Box,     color: '#0891B2', tag: 'CAD' };
-  if (['xls','xlsx','csv'].includes(ext))               return { Icon: Boxes,   color: '#16A34A', tag: 'SHEET' };
-  if (['zip','rar','7z'].includes(ext))                 return { Icon: Package, color: '#D97706', tag: 'ZIP' };
+  if (ext === 'pdf') return { Icon: FileText, color: '#DC2626', tag: 'PDF' };
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return { Icon: Image, color: '#9333EA', tag: ext.toUpperCase() };
+  if (['step', 'stp', 'iges', 'igs', 'sldprt', 'sldasm', 'dwg', 'dxf', '3mf', 'stl'].includes(ext))
+    return { Icon: Box, color: '#0891B2', tag: 'CAD' };
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return { Icon: Boxes, color: '#16A34A', tag: 'SHEET' };
+  if (['zip', 'rar', '7z'].includes(ext)) return { Icon: Package, color: '#D97706', tag: 'ZIP' };
   return { Icon: FileText, color: '#6B7280', tag: ext ? ext.toUpperCase() : 'FILE' };
 }
 
 function fmtSize(b: number) {
-  if (b < 1024)     return b + ' B';
-  if (b < 1048576)  return (b / 1024).toFixed(0) + ' KB';
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(0) + ' KB';
   return (b / 1048576).toFixed(1) + ' MB';
 }
 
@@ -232,6 +340,7 @@ interface ItemState {
 
 interface DiffRowState {
   param: string; from: string; to: string; cls: ChangeLabel;
+  paramIsCustom?: boolean;
 }
 
 interface AttachmentState { name: string; size: number }
@@ -298,10 +407,10 @@ export function ECOWizard({
       prev.find(x => x.pn === p.pn)
         ? prev
         : [...prev, {
-            pn: p.pn, desc: p.desc, impact: 'MEDIUM', disp: 'REWORK', whereUsed: p.whereUsed,
-            partId: p.partId, nodeId: p.nodeId,
-            revFrom: p.rev, revTo: '',
-          }],
+          pn: p.pn, desc: p.desc, impact: 'MEDIUM', disp: 'REWORK', whereUsed: p.whereUsed,
+          partId: p.partId, nodeId: p.nodeId,
+          revFrom: p.rev, revTo: '',
+        }],
     );
     setPickerOpen(false);
   };
@@ -508,8 +617,8 @@ export function ECOWizard({
             onChange={e => setBasics({ ...basics, effValue: e.target.value })}
             placeholder={
               basics.effType === 'SERIAL' ? 'Effective from S/N EVC-1450'
-              : basics.effType === 'LOT' ? 'Effective from Lot 2026-W18'
-              : undefined
+                : basics.effType === 'LOT' ? 'Effective from Lot 2026-W18'
+                  : undefined
             }
             className={cn(inputCls, 'flex-1')}
           />
@@ -715,27 +824,62 @@ export function ECOWizard({
       {diffRows.map((r, idx) => (
         <div key={idx} className="flex gap-2 items-center">
           {basics.scope === 'BOM_PART' && items.length > 0 ? (
-            <select
-              value={r.param}
-              onChange={e => {
-                const key = e.target.value;
-                const autoFrom = firstSelectedNode
-                  ? String((firstSelectedNode as Record<string, unknown>)[key] ?? '')
-                  : '';
-                setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: key, from: autoFrom } : x));
-              }}
-              className={cn(ECO_SELECT_CLS, 'flex-[1.2]')}
-            >
-              <option value="" className="bg-card">— select parameter —</option>
-              {BOM_PARAM_OPTIONS.map(o => (
-                <option key={o.key} value={o.key} className="bg-card">{o.label}</option>
-              ))}
-            </select>
+            r.paramIsCustom ? (
+              <input
+                autoFocus
+                value={r.param}
+                onChange={e => setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: e.target.value } : x))}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: false } : x));
+                }}
+                placeholder="Type parameter name…"
+                className={cn(inputCls, 'flex-[1.2]')}
+              />
+            ) : (
+              <select
+                value={
+                  BOM_PARAM_OPTIONS.find(o => o.label === r.param)?.key
+                  ?? (ECO_RECOMMENDED_PARAMS.includes(r.param) ? r.param : '')
+                }
+                onChange={e => {
+                  const val = e.target.value;
+                  if (val === '__other__') {
+                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: true } : x));
+                    return;
+                  }
+                  const bomOpt = BOM_PARAM_OPTIONS.find(o => o.key === val);
+                  if (bomOpt) {
+                    const autoFrom = firstSelectedNode
+                      ? String((firstSelectedNode as Record<string, unknown>)[bomOpt.key] ?? '')
+                      : '';
+                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: bomOpt.label, from: autoFrom, paramIsCustom: false } : x));
+                  } else {
+                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: val, from: '', paramIsCustom: false } : x));
+                  }
+                }}
+                className={cn(ECO_SELECT_CLS, 'flex-[1.2]')}
+              >
+                <option value="" className="bg-card">— select parameter —</option>
+                <optgroup label="BOM Fields">
+                  {BOM_PARAM_OPTIONS.map(o => (
+                    <option key={o.key} value={o.key} className="bg-card">{o.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Recommended">
+                  {ECO_RECOMMENDED_PARAMS.map(p => (
+                    <option key={p} value={p} className="bg-card">{p}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Custom">
+                  <option value="__other__" className="bg-card">Other…</option>
+                </optgroup>
+              </select>
+            )
           ) : (
             <input value={r.param} onChange={e => upRow(idx, 'param', e.target.value)} placeholder="Parameter" className={cn(inputCls, 'flex-[1.2]')} />
           )}
-          <input value={r.from}  onChange={e => upRow(idx, 'from',  e.target.value)} placeholder="from"      className={cn(inputCls, 'flex-1')} />
-          <input value={r.to}    onChange={e => upRow(idx, 'to',    e.target.value)} placeholder="to"        className={cn(inputCls, 'flex-1')} />
+          <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" className={cn(inputCls, 'flex-1')} />
+          <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" className={cn(inputCls, 'flex-1')} />
           <div className="w-32">
             <EcoSelect value={r.cls} onChange={v => upRow(idx, 'cls', v)} options={Object.keys(CHANGE_LABEL_MAP) as ChangeLabel[]} labels={CHANGE_LABEL_MAP} />
           </div>
@@ -827,8 +971,8 @@ export function ECOWizard({
         </div>
       </div>
       {([
-        ['recert',  'Requires Recertification', 'CE / UL / ISO re-test needed'],
-        ['firmware', 'Firmware Coupling',         'SW/FW dependency exists'],
+        ['recert', 'Requires Recertification', 'CE / UL / ISO re-test needed'],
+        ['firmware', 'Firmware Coupling', 'SW/FW dependency exists'],
       ] as [keyof ImpactState, string, string][]).map(([k, label, sub]) => (
         <div
           key={k}
@@ -955,7 +1099,7 @@ export function ECOWizard({
               <div className="flex flex-col gap-0.5">
                 <button
                   disabled={idx === 0}
-                  onClick={() => setPipeline(pl => { const n = [...pl]; [n[idx - 1], n[idx]] = [n[idx], n[idx - 1]]; return n; })}
+                  onClick={() => setPipeline(pl => { const n = [...pl];[n[idx - 1], n[idx]] = [n[idx], n[idx - 1]]; return n; })}
                   className="disabled:opacity-30 cursor-pointer disabled:cursor-default"
                   style={{ background: 'none', border: 'none', padding: 0 }}
                 >
@@ -963,7 +1107,7 @@ export function ECOWizard({
                 </button>
                 <button
                   disabled={idx === pipeline.length - 1}
-                  onClick={() => setPipeline(pl => { const n = [...pl]; [n[idx + 1], n[idx]] = [n[idx], n[idx + 1]]; return n; })}
+                  onClick={() => setPipeline(pl => { const n = [...pl];[n[idx + 1], n[idx]] = [n[idx], n[idx + 1]]; return n; })}
                   className="disabled:opacity-30 cursor-pointer disabled:cursor-default"
                   style={{ background: 'none', border: 'none', padding: 0 }}
                 >
@@ -1089,47 +1233,49 @@ export function ECOWizard({
                   if (!canSubmit) return;
                   try {
                     await createMutation.mutateAsync({
-                      title:       basics.title,
+                      title: basics.title,
                       description: basics.description || null,
-                      type:        basics.type.toLowerCase() as any,
-                      reason:      basics.reason.toLowerCase() as any,
-                      priority:    basics.priority.toLowerCase() as any,
+                      type: basics.type.toLowerCase() as any,
+                      reason: basics.reason.toLowerCase() as any,
+                      priority: basics.priority.toLowerCase() as any,
                       changeClass: basics.changeClass as any,
-                      effectivityType:  basics.effType.toLowerCase() as any,
+                      effectivityType: basics.effType.toLowerCase() as any,
                       effectivityValue: basics.effValue || null,
-                      originatingEcr:   basics.ecr || null,
-                      scheduleImpact:   impact.schedule.toLowerCase() as any,
+                      originatingEcr: basics.ecr || null,
+                      revFrom: items[0]?.revFrom || null,
+                      revTo: items[0]?.revTo || null,
+                      scheduleImpact: impact.schedule.toLowerCase() as any,
                       requiresRecertification: impact.recert,
                       firmwareCoupling: impact.firmware,
-                      unitCostDelta:    impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
-                      oneTimeCost:      impact.oneTimeCost  ? parseFloat(impact.oneTimeCost)  : null,
+                      unitCostDelta: impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
+                      oneTimeCost: impact.oneTimeCost ? parseFloat(impact.oneTimeCost) : null,
                       parts: items.map(it => ({
-                        partId:      it.partId,
-                        bomNodeId:   it.nodeId || null,
-                        revFrom:     it.revFrom || null,
-                        revTo:       it.revTo || null,
+                        partId: it.partId,
+                        bomNodeId: it.nodeId || null,
+                        revFrom: it.revFrom || null,
+                        revTo: it.revTo || null,
                         impactLevel: it.impact.toLowerCase() as any,
                         disposition: it.disp.toLowerCase() as any,
                       })),
                       diffRows: diffRows
                         .filter(r => r.param.trim() !== '')
                         .map((r, i) => ({
-                          order:       i,
-                          parameter:   r.param,
-                          fromValue:   r.from || null,
-                          toValue:     r.to   || null,
+                          order: i,
+                          parameter: r.param,
+                          fromValue: r.from || null,
+                          toValue: r.to || null,
                           changeLabel: r.cls.toLowerCase() as any,
                         })),
                       pipelineSteps: pipeline.map((p, i) => ({
-                        order:          i + 1,
-                        stage:          p.stage,
-                        stageLabel:     p.stage,
+                        order: i + 1,
+                        stage: p.stage,
+                        stageLabel: p.stage,
                         approverUserId: p.approverId || null,
-                        approverName:   p.name  || null,
-                        approverRole:   p.role  || null,
-                        isOptional:     p.optional ?? false,
+                        approverName: p.name || null,
+                        approverRole: p.role || null,
+                        isOptional: p.optional ?? false,
                         optionalReason: p.optionalReason || null,
-                        justification:  p.justification  || null,
+                        justification: p.justification || null,
                       })),
                     });
                     toast.success('ECO created');
