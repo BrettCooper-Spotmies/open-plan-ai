@@ -7,6 +7,7 @@ import { queryKeys } from '@/lib/queryClient';
 import { Task } from '@/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { logger } from '@/services/monitoring/logger';
+import { toast } from 'sonner';
 
 /**
  * Fetch all tasks across all org projects — single aggregated endpoint,
@@ -142,6 +143,7 @@ export function useUpdateTask() {
     },
     onError: (_err, { projectId, taskId }, context) => {
       logger.error('Task update failed, rolling back', _err);
+      toast.error('Failed to update task');
     },
     onSuccess: (updatedTask, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
@@ -149,6 +151,7 @@ export function useUpdateTask() {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(updatedTask.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
+      toast.success('Task updated successfully');
     },
   });
 }
