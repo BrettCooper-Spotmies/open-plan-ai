@@ -38,8 +38,13 @@ function fmtSize(b: number) {
 
 // ── Shared field label ────────────────────────────────────────────────────────
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">{children}</div>;
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-0.5">
+      {children}
+      {required && <span style={{ color: '#DC2626' }}>*</span>}
+    </div>
+  );
 }
 
 // ── Shared select ─────────────────────────────────────────────────────────────
@@ -62,6 +67,73 @@ function EcoSelect<T extends string>({
         <option key={o} value={o} className="bg-card">{labels[o] ?? o}</option>
       ))}
     </select>
+  );
+}
+
+const ECO_SELECT_CLS = 'w-full bg-muted/40 border border-border rounded-md text-foreground text-[13px] px-3 py-2 outline-none focus:border-primary/40 cursor-pointer appearance-none font-[inherit]';
+
+const CUSTOM_SENTINEL = '__custom__';
+
+function EcoSelectWithCustom({
+  value, onChange, options, labels,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  labels: Record<string, string>;
+}) {
+  const isCustom = !!value && !options.includes(value);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    if (e.target.value === CUSTOM_SENTINEL) {
+      setEditing(true);
+      setDraft('');
+    } else {
+      onChange(e.target.value);
+    }
+  }
+
+  function commit() {
+    const v = draft.trim();
+    if (v) onChange(v);
+    setEditing(false);
+    setDraft('');
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <select
+        value={isCustom ? CUSTOM_SENTINEL : value}
+        onChange={handleSelectChange}
+        className={ECO_SELECT_CLS}
+      >
+        {options.map(o => (
+          <option key={o} value={o} className="bg-card">{labels[o] ?? o}</option>
+        ))}
+        {isCustom && (
+          <option value={CUSTOM_SENTINEL} className="bg-card">{value}</option>
+        )}
+        <option value={CUSTOM_SENTINEL} disabled={false} className="bg-card text-muted-foreground">
+          {isCustom ? '✎ Edit custom…' : '+ Custom…'}
+        </option>
+      </select>
+      {editing && (
+        <input
+          autoFocus
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') { setEditing(false); setDraft(''); }
+          }}
+          placeholder="Type custom option and press Enter…"
+          className={inputCls}
+        />
+      )}
+    </div>
   );
 }
 
@@ -117,7 +189,7 @@ function Stepper({ step, maxStepReached, onStepClick }: { step: number; maxStepR
 
 interface BasicsState {
   title: string; description: string;
-  type: ECOType; priority: ECOPriority; reason: ECOReason;
+  type: ECOType | string; priority: ECOPriority; reason: ECOReason | string;
   changeClass: ChangeClass;
   ecr: string;
   effType: EffectivityType; effValue: string;
@@ -251,13 +323,9 @@ export function ECOWizard({
   const stageMoved = (p: PipelineStep, idx: number) =>
     defaultOrder[p.stage] !== undefined && defaultOrder[p.stage] !== idx;
 
-  const pipelineValid = pipeline.every((p, idx) => {
-    const needsReason = p.optional || stageMoved(p, idx);
-    const reasonOk = !needsReason || (p.justification ?? '').trim().length > 0;
-    return reasonOk && !!p.approverId;
-  });
+  const pipelineValid = true;
 
-  const canSubmit = basics.title.trim() && items.length >= 1 && pipeline.length >= 2 && pipelineValid;
+  const canSubmit = !createMutation.isPending;
 
   const validateStep = (s: number): boolean => {
     const e: Record<string, string> = {};
@@ -293,7 +361,7 @@ export function ECOWizard({
   const StepBasics = (
     <div className="flex flex-col gap-3.5">
       <div>
-        <FieldLabel>Title</FieldLabel>
+        <FieldLabel required>Title</FieldLabel>
         <input
           value={basics.title}
           onChange={e => {
@@ -320,21 +388,21 @@ export function ECOWizard({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <FieldLabel>Change Type</FieldLabel>
-          <EcoSelect value={basics.type} onChange={v => setBasics({ ...basics, type: v })} options={Object.keys(ECO_TYPE_LABEL) as ECOType[]} labels={ECO_TYPE_LABEL} />
+          <FieldLabel required>Change Type</FieldLabel>
+          <EcoSelectWithCustom value={basics.type} onChange={v => setBasics({ ...basics, type: v })} options={Object.keys(ECO_TYPE_LABEL)} labels={ECO_TYPE_LABEL} />
         </div>
         <div>
-          <FieldLabel>Reason Code</FieldLabel>
-          <EcoSelect value={basics.reason} onChange={v => setBasics({ ...basics, reason: v })} options={Object.keys(REASON_LABEL) as ECOReason[]} labels={REASON_LABEL} />
+          <FieldLabel required>Reason Code</FieldLabel>
+          <EcoSelectWithCustom value={basics.reason} onChange={v => setBasics({ ...basics, reason: v })} options={Object.keys(REASON_LABEL)} labels={REASON_LABEL} />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <FieldLabel>Priority</FieldLabel>
+          <FieldLabel required>Priority</FieldLabel>
           <EcoSelect value={basics.priority} onChange={v => setBasics({ ...basics, priority: v })} options={Object.keys(PRIORITY_LABEL) as ECOPriority[]} labels={PRIORITY_LABEL} />
         </div>
         <div>
-          <FieldLabel>Change Classification</FieldLabel>
+          <FieldLabel required>Change Classification</FieldLabel>
           <EcoSelect value={basics.changeClass} onChange={v => setBasics({ ...basics, changeClass: v })} options={Object.keys(CHANGE_CLASS_LABEL) as ChangeClass[]} labels={CHANGE_CLASS_LABEL} />
         </div>
       </div>
@@ -370,12 +438,13 @@ export function ECOWizard({
             ))}
           </div>
           <input
+            type={basics.effType === 'DATE' ? 'date' : 'text'}
             value={basics.effValue}
             onChange={e => setBasics({ ...basics, effValue: e.target.value })}
             placeholder={
-              basics.effType === 'DATE' ? 'Jun 02, 2026'
-              : basics.effType === 'SERIAL' ? 'Effective from S/N EVC-1450'
-              : 'Effective from Lot 2026-W18'
+              basics.effType === 'SERIAL' ? 'Effective from S/N EVC-1450'
+              : basics.effType === 'LOT' ? 'Effective from Lot 2026-W18'
+              : undefined
             }
             className={cn(inputCls, 'flex-1')}
           />
@@ -458,6 +527,7 @@ export function ECOWizard({
                 value={it.revTo}
                 onChange={e => upItem(idx, 'revTo', e.target.value)}
                 placeholder="e.g. B"
+                maxLength={3}
                 className={cn(inputCls, 'font-mono text-center')}
               />
             </div>
@@ -527,19 +597,10 @@ export function ECOWizard({
 
       {/* Attachments */}
       <div className="mt-2 pt-4 border-t border-border">
-        <div className="flex items-center justify-between mb-2.5">
-          <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
-            <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-            Attachments
-            <span className="text-muted-foreground font-normal">· {attachments.length}</span>
-          </div>
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold bg-muted/50 text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit]"
-          >
-            <Upload className="w-3 h-3 text-muted-foreground" />
-            Browse
-          </button>
+        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground mb-2.5">
+          <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+          Attachments
+          <span className="text-muted-foreground font-normal">· {attachments.length}</span>
         </div>
         <input
           ref={fileRef} type="file" multiple
@@ -603,11 +664,11 @@ export function ECOWizard({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <FieldLabel>Unit Cost Δ ($/unit)</FieldLabel>
-          <input value={impact.unitCostDelta} onChange={e => setImpact({ ...impact, unitCostDelta: e.target.value })} placeholder="+4.55" className={inputCls} />
+          <input value={impact.unitCostDelta} onChange={e => { const v = e.target.value; if (/^[+-]?\d*\.?\d*$/.test(v)) setImpact({ ...impact, unitCostDelta: v }); }} placeholder="+4.55" className={inputCls} />
         </div>
         <div>
           <FieldLabel>One-Time Cost ($)</FieldLabel>
-          <input value={impact.oneTimeCost} onChange={e => setImpact({ ...impact, oneTimeCost: e.target.value })} placeholder="12400" className={inputCls} />
+          <input value={impact.oneTimeCost} onChange={e => { const v = e.target.value; if (/^\d*\.?\d*$/.test(v)) setImpact({ ...impact, oneTimeCost: v }); }} placeholder="12400" className={inputCls} />
         </div>
       </div>
       {([
@@ -848,16 +909,8 @@ export function ECOWizard({
 
         {/* Footer */}
         <div className="px-5 py-3.5 border-t border-border flex items-center justify-between">
-          <div
-            className="text-[11px] flex items-center gap-1.5"
-            style={{ color: canSubmit ? undefined : '#F59E0B' }}
-          >
-            {!canSubmit && <AlertCircle className="w-3 h-3" style={{ color: '#F59E0B' }} />}
-            {canSubmit
-              ? <span className="text-muted-foreground">Ready to save draft</span>
-              : !pipelineValid
-              ? 'Assign an approver to every stage, and a justification for each optional / reordered stage'
-              : 'Need a title, ≥1 affected item and a pipeline to submit'}
+          <div className="text-[11px] flex items-center gap-1.5">
+            <span className="text-muted-foreground">Ready to save draft</span>
           </div>
           <div className="flex gap-2">
             {step > 0 && (

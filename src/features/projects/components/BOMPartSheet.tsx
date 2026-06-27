@@ -505,7 +505,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     if (tab === 'details') {
       if (!isEdit && !pn.trim()) e.pn = 'Part number is required';
       if (!desc.trim()) e.desc = 'Description is required';
-      if (!category.trim()) e.category = 'Category is required';
+      if (!category.trim()) e.category = !isKnownCategory(category) ? 'Please enter a custom category name' : 'Category is required';
       if (!selectedOwner && !(isEdit && node?.owner)) e.owner = 'Owner is required';
     }
     if (tab === 'sourcing') {
@@ -530,7 +530,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     const e: Record<string, string> = {};
     if (!isEdit && !pn.trim()) e.pn = 'Part number is required';
     if (!desc.trim()) e.desc = 'Description is required';
-    if (!category.trim()) e.category = 'Category is required';
+    if (!category.trim()) e.category = !isKnownCategory(category) ? 'Please enter a custom category name' : 'Category is required';
     if (!manufacturer.trim()) e.mfr = 'Manufacturer is required';
     if (!selectedOwner && !(isEdit && node?.owner)) e.owner = 'Owner is required';
     if (isEdit && versionMode === 'new' && !changeNotes.trim()) e.notes = 'Change notes are required when creating a new revision';
@@ -836,14 +836,19 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                     </button>
                   </div>
                   {!isKnownCategory(category) && (
-                    <Input
-                      value={category}
-                      onChange={e => setCategory(e.target.value)}
-                      placeholder="Enter a custom category"
-                      className="h-9 mt-2"
-                      maxLength={50}
-                      autoFocus
-                    />
+                    <div className="mt-2">
+                      <label className="text-[11px] font-medium text-muted-foreground mb-1 flex items-center gap-0.5">
+                        Custom category name<span className="text-destructive ml-0.5">*</span>
+                      </label>
+                      <Input
+                        value={category}
+                        onChange={e => setCategory(e.target.value)}
+                        placeholder="Enter a custom category"
+                        className={`h-9 ${errors.category ? 'border-destructive focus-visible:ring-destructive' : ''}`}
+                        maxLength={50}
+                        autoFocus
+                      />
+                    </div>
                   )}
                   {errors.category && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.category}</p>}
                 </FL>

@@ -7,6 +7,7 @@ import { queryKeys } from '@/lib/queryClient';
 import { Issue } from '@/types';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { logger } from '@/services/monitoring/logger';
+import { toast } from 'sonner';
 
 /**
  * Fetch all issues across all org projects — single aggregated endpoint,
@@ -157,6 +158,7 @@ export function useUpdateIssue() {
     },
     onError: (_err, { projectId, issueId }, context) => {
       logger.error('Issue update failed, rolling back', _err);
+      toast.error('Failed to update issue');
     },
     onSuccess: (updatedIssue, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.all });
@@ -166,6 +168,7 @@ export function useUpdateIssue() {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
+      toast.success('Issue updated successfully');
     },
   });
 }

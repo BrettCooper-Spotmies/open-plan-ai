@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
-import { Sun, Moon, Monitor, ChevronLeft } from 'lucide-react';
+import { Sun, Moon, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -71,9 +71,7 @@ export function AppHeader() {
   );
 
   const cycleTheme = () => {
-    if (theme === 'system') changeTheme('light');
-    else if (theme === 'light') changeTheme('dark');
-    else changeTheme('system');
+    changeTheme(theme === 'light' ? 'dark' : 'light');
   };
 
   const handleSignOut = async () => {
@@ -118,10 +116,8 @@ export function AppHeader() {
         <Button variant="ghost" size="icon" className="h-9 w-9" onClick={cycleTheme} title={`Theme: ${theme} (click to cycle)`}>
           {theme === 'dark' ? (
             <Moon className="h-4 w-4" />
-          ) : theme === 'light' ? (
-            <Sun className="h-4 w-4" />
           ) : (
-            <Monitor className="h-4 w-4" />
+            <Sun className="h-4 w-4" />
           )}
           <span className="sr-only">Toggle theme</span>
         </Button>

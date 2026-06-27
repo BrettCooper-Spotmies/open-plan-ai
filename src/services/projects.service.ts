@@ -71,6 +71,7 @@ function fromApiIssue(raw: Record<string, unknown>): Issue {
     reportedBy: (raw.reportedBy as TeamMember) ?? { id: '', name: 'Unknown', email: '', role: 'Member', initials: 'U', avatar: '' },
     assignees,
     blocksTaskIds: [],
+    tags: (raw.tags as string[]) ?? [],
   } as Issue;
 }
 
