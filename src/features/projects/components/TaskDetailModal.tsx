@@ -691,6 +691,29 @@ export const TaskDetailModal = ({
     if (e.target) e.target.value = '';
   };
 
+  const handlePaste = (e: ClipboardEvent) => {
+    if (isUploading) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const imageFiles: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) imageFiles.push(file);
+      }
+    }
+    if (imageFiles.length === 0) return;
+    e.preventDefault();
+    const dt = new DataTransfer();
+    imageFiles.forEach(f => dt.items.add(f));
+    processFiles(dt.files);
+  };
+
+  useEffect(() => {
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  });
+
   const handleRemoveAttachment = async (attachmentId: string) => {
     try {
       await attachmentsService.delete(attachmentId);
@@ -1837,7 +1860,7 @@ export const TaskDetailModal = ({
                     <Upload className="h-5 w-5 text-muted-foreground" />
                   )}
                   <span className="text-sm text-muted-foreground">
-                    {isUploading ? "Uploading..." : "Drop files or click to upload"}
+                    {isUploading ? "Uploading..." : "Drop files, click to upload, or paste image"}
                   </span>
                   <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={isUploading} />
                 </label>
