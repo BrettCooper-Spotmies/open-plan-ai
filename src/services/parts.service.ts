@@ -27,7 +27,14 @@ export interface CreatePartDto {
   initialSuppliers?: SupplierEntry[];
 }
 
-export type UpdatePartDto = Partial<Omit<CreatePartDto, 'partNumber'>>;
+export interface CustomFieldEntry {
+  label: string;
+  value: string;
+}
+
+export type UpdatePartDto = Partial<Omit<CreatePartDto, 'partNumber'>> & {
+  customFields?: CustomFieldEntry[] | null;
+};
 
 export interface CreateRevisionDto {
   rev: string;

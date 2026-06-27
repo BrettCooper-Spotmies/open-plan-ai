@@ -26,7 +26,7 @@ import {
   Check, XCircle, History, Loader2,
 } from 'lucide-react';
 import {
-  BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, KNOWN_BOM_CATEGORIES, SupplierEntry,
+  BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, KNOWN_BOM_CATEGORIES, SupplierEntry, CustomFieldEntry,
 } from './bomData';
 import { BOMStatusPill } from './BOMShared';
 import { BOMRejectDialog } from './BOMRejectDialog';
@@ -67,6 +67,7 @@ export interface BOMPartPayload {
   doc3DModel?: DocValue[];
   docFootprint?: DocValue[];
   docCustom?: DocValue[];
+  customFields: CustomFieldEntry[];
   // edit-only version fields
   versionMode?: 'same' | 'new';
   newRevLabel?: string;
@@ -448,6 +449,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
 
+  const [customFields, setCustomFields] = useState<CustomFieldEntry[]>(node?.customFields ?? []);
   const [versionMode, setVersionMode] = useState<'same' | 'new'>('same');
   const [newRevLabel, setNewRevLabel] = useState(node ? nextRev(node.rev) : 'B');
   const [changeNotes, setChangeNotes] = useState('');
@@ -484,6 +486,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     setTechSections(DEFAULT_TECH_SECTIONS.map(s => ({ ...s, value: [] })));
     setIsAddingSection(false);
     setNewSectionName('');
+    setCustomFields(node?.customFields ?? []);
     setVersionMode('same');
     setNewRevLabel(node ? nextRev(node.rev) : 'B');
     setChangeNotes('');
@@ -609,6 +612,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
         owner: selectedOwner?.name ?? (isEdit ? node?.owner ?? '' : ''),
         ownerId: selectedOwner?.id,
         req,
+        customFields: customFields.filter(f => f.label.trim()),
         docPhoto,
         docDatasheet: techSections.find(s => s.id === 'datasheet')?.value || [],
         doc3DModel: techSections.find(s => s.id === '3dmodel')?.value || [],
@@ -919,7 +923,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
               <div className="space-y-5">
 
                 {/* MPN · Quantity · UOM */}
-                <div className="grid grid-cols-3 gap-x-6">
+                <div className="grid gap-y-2 grid-cols-3 gap-x-6">
                   {/* Manufacturer */}
                   <FL label="Manufacturer" required>
                     <FInput value={manufacturer} onChange={e => setManufacturer(e.target.value)}
@@ -947,7 +951,6 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                       type="text" placeholder="1" className="h-9" maxLength={15} />
                     {errors.qty && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.qty}</p>}
                   </FL>
-                </div>
                 <FL label="Unit of Measure (UOM)" required>
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {UOM_OPTIONS.map(u => (
@@ -961,6 +964,29 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                     ))}
                   </div>
                 </FL>
+                 {/* Lead Time */}
+                <FL label="Lead Time" required>
+                  <div className="flex gap-1.5">
+                    <FInput value={leadTime} onChange={e => {
+                      const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                      setLeadTime(val);
+                    }}
+                      type="text" placeholder="8" className="h-9 flex-1" maxLength={6} />
+                    <div className="flex gap-1 shrink-0">
+                      {LEAD_TIME_UNITS.map(u => (
+                        <button key={u.id} onClick={() => setLeadTimeUnit(u.id)}
+                          className={cn(
+                            'px-2.5 h-9 rounded-md text-xs font-medium border cursor-pointer transition-colors',
+                            leadTimeUnit === u.id ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border hover:bg-muted'
+                          )}>
+                          {u.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {errors.leadTime && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.leadTime}</p>}
+                </FL>
+                </div>
 
                 {/* Dynamic supplier list */}
                 <div className="space-y-3">
@@ -1023,28 +1049,44 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                   </button>
                 </div>
 
-                {/* Lead Time */}
-                <FL label="Lead Time" required>
-                  <div className="flex gap-1.5">
-                    <FInput value={leadTime} onChange={e => {
-                      const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
-                      setLeadTime(val);
-                    }}
-                      type="text" placeholder="8" className="h-9 flex-1" maxLength={6} />
-                    <div className="flex gap-1 shrink-0">
-                      {LEAD_TIME_UNITS.map(u => (
-                        <button key={u.id} onClick={() => setLeadTimeUnit(u.id)}
-                          className={cn(
-                            'px-2.5 h-9 rounded-md text-xs font-medium border cursor-pointer transition-colors',
-                            leadTimeUnit === u.id ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border hover:bg-muted'
-                          )}>
-                          {u.label}
-                        </button>
-                      ))}
+                {/* Additional Fields */}
+                <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Additional Fields</span>
+                  {customFields.map((field, i) => (
+                    <div key={i} className="grid grid-cols-2 gap-x-4">
+                      <FL label="Field Label">
+                        <FInput
+                          value={field.label}
+                          onChange={e => setCustomFields(f => f.map((x, idx) => idx === i ? { ...x, label: e.target.value } : x))}
+                          placeholder="e.g. RoHS"
+                          className="h-9"
+                        />
+                      </FL>
+                      <FL label="Value">
+                        <div className="flex items-center gap-1.5">
+                          <FInput
+                            value={field.value}
+                            onChange={e => setCustomFields(f => f.map((x, idx) => idx === i ? { ...x, value: e.target.value } : x))}
+                            placeholder="e.g. Compliant"
+                            className="h-9 flex-1"
+                          />
+                          <button
+                            onClick={() => setCustomFields(f => f.filter((_, idx) => idx !== i))}
+                            className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0 cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </FL>
                     </div>
-                  </div>
-                  {errors.leadTime && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.leadTime}</p>}
-                </FL>
+                  ))}
+                  <button
+                    onClick={() => setCustomFields(f => [...f, { label: '', value: '' }])}
+                    className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors cursor-pointer mt-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Field
+                  </button>
+                </div>
               </div>
             </TabsContent>
 

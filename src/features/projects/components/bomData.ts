@@ -25,6 +25,11 @@ export interface BOMRevision {
   suppliers: SupplierEntry[];
 }
 
+export interface CustomFieldEntry {
+  label: string;
+  value: string;
+}
+
 export interface BOMNode {
   id: string;
   level: number;
@@ -47,6 +52,7 @@ export interface BOMNode {
   suppliers: SupplierEntry[];
   owner: string;
   ownerId?: string;
+  customFields: CustomFieldEntry[];
   revHistory: BOMRevision[];
   children?: BOMNode[];
   _x?: number;
@@ -115,6 +121,11 @@ export interface ApiRevisionResponse {
   createdAt: string;
 }
 
+export interface ApiCustomFieldEntry {
+  label: string;
+  value: string;
+}
+
 export interface ApiPartResponse {
   id: string;
   orgId: string;
@@ -127,6 +138,7 @@ export interface ApiPartResponse {
   mpn: string | null;
   unit: string;
   notes: string | null;
+  customFields: ApiCustomFieldEntry[] | null;
   latestRevision: ApiRevisionResponse | null;
   createdAt: string;
   updatedAt: string;
@@ -223,6 +235,7 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     suppliers:    rev?.suppliers?.map(s => ({ ...s, price: String(s.price) })) ?? [],
     owner:        node.owner?.name ?? '',
     ownerId:      node.owner?.id,
+    customFields: node.part.customFields ?? [],
     revHistory:   [],  // loaded on demand via usePartRevisions
     children:     node.children?.map(c => fromApiNode(c, depth + 1)),
     _partId:      node.part.id,
