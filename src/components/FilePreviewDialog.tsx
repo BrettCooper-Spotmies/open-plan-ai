@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Download, File as FileIcon, ExternalLink, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Download, Copy, File as FileIcon, ExternalLink, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'avif'];
 
@@ -121,14 +122,52 @@ export function FilePreviewDialog({
                     {currentIdx + 1} / {list.length}
                   </span>
                 )}
-                <a
-                  href={current.url}
-                  download={current.fileName}
+                <button
                   className="text-muted-foreground hover:text-foreground transition-colors"
                   title="Download"
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(current.url);
+                      const blob = await res.blob();
+                      const blobUrl = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = blobUrl;
+                      a.download = current.fileName;
+                      a.click();
+                      URL.revokeObjectURL(blobUrl);
+                    } catch {
+                      window.open(current.url, '_blank');
+                    }
+                  }}
                 >
                   <Download className="w-4 h-4" />
-                </a>
+                </button>
+                {kind === 'image' && (
+                  <button
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    title="Copy image to clipboard"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(current.url);
+                        const blob = await res.blob();
+                        const bitmap = await createImageBitmap(blob);
+                        const canvas = document.createElement('canvas');
+                        canvas.width = bitmap.width;
+                        canvas.height = bitmap.height;
+                        canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+                        const pngBlob = await new Promise<Blob>((resolve, reject) =>
+                          canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png')
+                        );
+                        await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+                        toast.success('Image copied to clipboard');
+                      } catch {
+                        toast.error('Failed to copy');
+                      }
+                    }}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                )}
                 <button
                   onClick={onClose}
                   className="text-muted-foreground hover:text-foreground transition-colors ml-1"

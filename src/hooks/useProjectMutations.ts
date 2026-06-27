@@ -143,6 +143,7 @@ export function useUpdateTask(projectId: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
+      toast.success('Task updated successfully');
     },
   });
 }
@@ -242,6 +243,7 @@ export function useUpdateIssue(projectId: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
+      toast.success('Issue updated successfully');
     },
   });
 }

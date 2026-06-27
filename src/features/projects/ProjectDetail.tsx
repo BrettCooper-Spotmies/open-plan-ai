@@ -756,6 +756,7 @@ export default function ProjectDetail() {
 
   const handleIssueUpdate = (updatedIssue: Issue) => {
     updateIssueMutation.mutate({
+      projectId: updatedIssue.projectId || id || '',
       issueId: updatedIssue.id,
       updates: updatedIssue,
     });
