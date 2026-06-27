@@ -137,7 +137,7 @@ export interface Issue {
   descriptionBlocks?: any[]; // For advanced editor state
   category: IssueCategory;
   severity: IssueSeverity;
-  status: IssueStatus;
+  status: string;  // IssueStatus or any custom bucket key
 
   // Relationships
   projectId: string;

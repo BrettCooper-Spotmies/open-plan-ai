@@ -5,6 +5,10 @@ import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -17,11 +21,14 @@ import {
   FlaskConical,
   Pencil,
   Link2,
-  Check,
   GripVertical,
+  Plus,
+  Check,
 } from 'lucide-react';
 import { IssueDetailModal } from './IssueDetailModal';
 import { ISSUE_SEVERITY_DISPLAY } from './issueSeverity';
+import { useIssueColumns, useCreateIssueColumn, useDeleteIssueColumn } from '@/hooks/useIssueColumns';
+import { DEFAULT_ISSUE_COLUMNS } from '@/services/issueColumns.service';
 
 interface IssuesViewProps {
   issues: Issue[];
@@ -42,19 +49,23 @@ interface IssuesViewProps {
 
 interface IssuesKanbanColumn {
   id: string;
-  status: IssueStatus | 'dependencies';
+  status: string;
   label: string;
   color: string;
   isSpecial?: boolean;
 }
 
-const statusConfig: Record<IssueStatus, { color: string; label: string }> = {
+const STATUS_BADGE_CONFIG: Record<string, { color: string; label: string }> = {
   open: { color: 'bg-destructive/20 text-destructive border-destructive/30', label: 'Open' },
   investigating: { color: 'bg-orange-500/20 text-orange-600 border-orange-500/30', label: 'Investigating' },
   resolved: { color: 'bg-status-done/20 text-status-done border-status-done/30', label: 'Resolved' },
   closed: { color: 'bg-muted text-muted-foreground border-muted', label: 'Closed' },
   'wont-fix': { color: 'bg-muted text-muted-foreground border-muted line-through', label: "Won't Fix" },
 };
+
+function getStatusBadge(status: string) {
+  return STATUS_BADGE_CONFIG[status] ?? { color: 'bg-primary/20 text-primary border-primary/30', label: status };
+}
 
 const categoryConfig: Record<IssueCategory, { icon: typeof Bug; label: string }> = {
   defect: { icon: Bug, label: 'Defect' },
@@ -66,14 +77,36 @@ const categoryConfig: Record<IssueCategory, { icon: typeof Bug; label: string }>
   other: { icon: Info, label: 'Other' },
 };
 
-const defaultIssueColumns: IssuesKanbanColumn[] = [
-  { id: 'col-dependencies', status: 'dependencies', label: 'Dependencies', color: 'bg-status-blocked', isSpecial: true },
-  { id: 'col-open', status: 'open', label: 'Open', color: 'bg-destructive' },
-  { id: 'col-investigating', status: 'investigating', label: 'Investigating', color: 'bg-orange-500' },
-  { id: 'col-resolved', status: 'resolved', label: 'Resolved', color: 'bg-status-done' },
-  { id: 'col-closed', status: 'closed', label: 'Closed', color: 'bg-muted-foreground' },
-  { id: 'col-wont-fix', status: 'wont-fix', label: "Won't Fix", color: 'bg-muted-foreground' },
+const COLUMN_COLOR_OPTIONS = [
+  { value: '#ef4444', label: 'Red' },
+  { value: '#f97316', label: 'Orange' },
+  { value: '#eab308', label: 'Yellow' },
+  { value: '#10b981', label: 'Green' },
+  { value: '#3b82f6', label: 'Blue' },
+  { value: '#8b5cf6', label: 'Purple' },
+  { value: '#6b7280', label: 'Gray' },
 ];
+
+const DEPENDENCIES_COLUMN: IssuesKanbanColumn = {
+  id: 'col-dependencies',
+  status: 'dependencies',
+  label: 'Dependencies',
+  color: '#f59e0b',
+  isSpecial: true,
+};
+
+function apiColumnsToKanban(apiCols: typeof DEFAULT_ISSUE_COLUMNS): IssuesKanbanColumn[] {
+  return [
+    DEPENDENCIES_COLUMN,
+    ...apiCols.map((c) => ({
+      id: c.id,
+      status: c.status,
+      label: c.label,
+      color: c.color,
+      isSpecial: c.isSpecial ?? false,
+    })),
+  ];
+}
 
 const issueSeverityBorder: Record<IssueSeverity, string> = {
   critical: 'border-l-destructive',
@@ -98,15 +131,32 @@ export function IssuesView({
   onIssueCreate,
   onIssueDelete,
 }: IssuesViewProps) {
+  const { id: routeProjectId } = useParams();
+  const { data: apiIssueColumns } = useIssueColumns(routeProjectId);
+  const createIssueColumn = useCreateIssueColumn(routeProjectId);
+  const deleteIssueColumn = useDeleteIssueColumn(routeProjectId);
+
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
   const [internalSeverityFilter, setInternalSeverityFilter] = useState<IssueSeverity[]>([]);
   const [internalStatusFilter, setInternalStatusFilter] = useState<IssueStatus[]>([]);
   const [localIssues, setLocalIssues] = useState<Issue[]>(issues);
-  const [columns, setColumns] = useState<IssuesKanbanColumn[]>(defaultIssueColumns);
+  const [columns, setColumns] = useState<IssuesKanbanColumn[]>(() =>
+    apiColumnsToKanban(DEFAULT_ISSUE_COLUMNS),
+  );
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'view' | 'create'>('view');
   const [newIssueDraft, setNewIssueDraft] = useState<Issue | null>(null);
+  const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
+  const [newColumnName, setNewColumnName] = useState('');
+  const [newColumnColor, setNewColumnColor] = useState('#3b82f6');
+
+  // Sync columns from API
+  useEffect(() => {
+    if (apiIssueColumns && apiIssueColumns.length > 0) {
+      setColumns(apiColumnsToKanban(apiIssueColumns));
+    }
+  }, [apiIssueColumns]);
 
   // Use external props if provided
   const searchQuery = externalSearchQuery ?? internalSearchQuery;
@@ -118,6 +168,27 @@ export function IssuesView({
   useEffect(() => {
     setLocalIssues(issues);
   }, [issues]);
+
+  const handleAddColumn = () => {
+    if (!newColumnName.trim() || !routeProjectId) return;
+    createIssueColumn.mutate(
+      { label: newColumnName, color: newColumnColor },
+      {
+        onSuccess: () => {
+          setNewColumnName('');
+          setNewColumnColor('#3b82f6');
+          setIsAddColumnOpen(false);
+        },
+      },
+    );
+  };
+
+  const handleRemoveColumn = (columnId: string) => {
+    const column = columns.find((c) => c.id === columnId);
+    if (column?.isSpecial) return;
+    if (column && localIssues.some((i) => i.status === column.status)) return;
+    deleteIssueColumn.mutate(columnId);
+  };
 
 
   const filteredIssues = localIssues.filter(issue => {
@@ -148,8 +219,6 @@ export function IssuesView({
     setModalMode('view');
     setIsModalOpen(true);
   };
-
-  const { id: routeProjectId } = useParams(); // ProjectDetail uses :id, so we grab that or check parent passes projectId
 
   const handleCreateIssue = (initialStatus: IssueStatus = 'open') => {
     const newId = `issue-${Date.now()}`;
@@ -393,8 +462,8 @@ export function IssuesView({
                                                         {linkedCount}
                                                       </span>
                                                     ) : (
-                                                      <Badge variant="outline" className={cn(statusConfig[issue.status].color)}>
-                                                        {statusConfig[issue.status].label}
+                                                      <Badge variant="outline" className={cn(getStatusBadge(issue.status).color)}>
+                                                        {getStatusBadge(issue.status).label}
                                                       </Badge>
                                                     )}
                                                   </div>
@@ -436,6 +505,71 @@ export function IssuesView({
                     );
                   })}
                   {provided.placeholder}
+
+                  {/* Add Bucket */}
+                  <div className="w-[280px] flex-shrink-0">
+                    <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
+                      <div className="flex items-center gap-2 px-1">
+                        <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                        <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
+                      </div>
+                      <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
+                        <DialogTrigger asChild>
+                          <div className="px-2">
+                            <Button
+                              variant="ghost"
+                              className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                            >
+                              <Plus className="h-3 w-3 mr-1" />
+                              Add New Bucket
+                            </Button>
+                          </div>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Add New Bucket</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4 pt-4">
+                            <div className="space-y-2">
+                              <Label>Bucket Name</Label>
+                              <Input
+                                placeholder="e.g., In Review"
+                                value={newColumnName}
+                                maxLength={30}
+                                onChange={(e) => setNewColumnName(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddColumn()}
+                              />
+                            </div>
+                            <div className="space-y-2">
+                              <Label>Color</Label>
+                              <Select value={newColumnColor} onValueChange={setNewColumnColor}>
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {COLUMN_COLOR_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: option.value }} />
+                                        {option.label}
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              onClick={handleAddColumn}
+                              disabled={!newColumnName.trim() || createIssueColumn.isPending}
+                              className="w-full"
+                            >
+                              Add Bucket
+                            </Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -502,8 +636,8 @@ export function IssuesView({
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={cn(statusConfig[issue.status].color)}>
-                          {statusConfig[issue.status].label}
+                        <Badge variant="outline" className={cn(getStatusBadge(issue.status).color)}>
+                          {getStatusBadge(issue.status).label}
                         </Badge>
                       </TableCell>
                       <TableCell>
