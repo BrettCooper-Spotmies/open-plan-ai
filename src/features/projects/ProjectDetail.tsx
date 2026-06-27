@@ -410,21 +410,21 @@ export default function ProjectDetail() {
     return projectModules.map((m) => {
       const owner = m.owner_id
         ? organizationMembers.find((member) => member.id === m.owner_id) ?? {
-            id: m.owner_id,
-            name: m.owner?.name || 'Unknown',
-            initials: (m.owner?.name || '?').slice(0, 2).toUpperCase(),
-            email: '',
-            role: 'member',
-          }
+          id: m.owner_id,
+          name: m.owner?.name || 'Unknown',
+          initials: (m.owner?.name || '?').slice(0, 2).toUpperCase(),
+          email: '',
+          role: 'member',
+        }
         : undefined;
       const createdBy = m.created_by
         ? organizationMembers.find((member) => member.id === m.created_by!.id) ?? {
-            id: m.created_by.id,
-            name: m.created_by.name || 'Unknown',
-            initials: (m.created_by.name || '?').slice(0, 2).toUpperCase(),
-            email: '',
-            role: 'member',
-          }
+          id: m.created_by.id,
+          name: m.created_by.name || 'Unknown',
+          initials: (m.created_by.name || '?').slice(0, 2).toUpperCase(),
+          email: '',
+          role: 'member',
+        }
         : undefined;
       return {
         id: m.id,
@@ -977,93 +977,93 @@ export default function ProjectDetail() {
           {!partId && !ecoId && (
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               {/* Left Side: Tabs */}
-            <div className="w-full py-1 md:mr-auto md:w-auto">
-              <TabsList className="bg-muted/50 grid grid-cols-8 w-full h-9 md:w-auto md:flex md:shrink-0">
-                <TabsTrigger value="bom" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Bill of Materials">
-                  <Layers className="h-4 w-4 shrink-0" />
-                  {!isMobile && <span className="truncate">BOM</span>}
-                </TabsTrigger>
-                <TabsTrigger value="eng-changes" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Engineering Changes">
-                  <GitMerge className="h-4 w-4 shrink-0" />
-                  {!isMobile && <span className="truncate">Eng. Changes</span>}
-                </TabsTrigger>
-                <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Tasks">
-                  <ListTodo className="h-4 w-4 shrink-0" />
-                  {!isMobile && <span className="truncate">Tasks</span>}
-                  {!isMobile && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {(project.tasks || []).length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="modules" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Modules">
-                  <Boxes className="h-4 w-4 shrink-0" />
-                  {!isMobile && <span className="truncate">Modules</span>}
-                  {!isMobile && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {modules.length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="milestones" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Milestones">
-                  <Flag className="h-4 w-4 shrink-0" />
-                  {!isMobile && <span className="truncate">Milestones</span>}
-                  {!isMobile && (
-                    <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {(project.milestones || []).length}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                <TabsTrigger value="issues" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Issues">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  {!isMobile && <span className="truncate">Issues</span>}
-                  {!isMobile && openIssuesCount > 0 && (
-                    <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                      {openIssuesCount}
-                    </Badge>
-                  )}
-                </TabsTrigger>
-                {/* <TabsTrigger value="requirements" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Requirements">
+              <div className="w-full py-1 md:mr-auto md:w-auto">
+                <TabsList className="bg-muted/50 grid grid-cols-8 w-full h-9 md:w-auto md:flex md:shrink-0">
+                  <TabsTrigger value="bom" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Bill of Materials">
+                    <Layers className="h-4 w-4 shrink-0" />
+                    {!isMobile && <span className="truncate">BOM</span>}
+                  </TabsTrigger>
+                  <TabsTrigger value="eng-changes" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Engineering Changes">
+                    <GitMerge className="h-4 w-4 shrink-0" />
+                    {!isMobile && <span className="truncate">Eng. Changes</span>}
+                  </TabsTrigger>
+                  <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Tasks">
+                    <ListTodo className="h-4 w-4 shrink-0" />
+                    {!isMobile && <span className="truncate">Tasks</span>}
+                    {!isMobile && (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                        {(project.tasks || []).length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="modules" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Modules">
+                    <Boxes className="h-4 w-4 shrink-0" />
+                    {!isMobile && <span className="truncate">Modules</span>}
+                    {!isMobile && (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                        {modules.length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="milestones" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Milestones">
+                    <Flag className="h-4 w-4 shrink-0" />
+                    {!isMobile && <span className="truncate">Milestones</span>}
+                    {!isMobile && (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                        {(project.milestones || []).length}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="issues" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Issues">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    {!isMobile && <span className="truncate">Issues</span>}
+                    {!isMobile && openIssuesCount > 0 && (
+                      <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                        {openIssuesCount}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  {/* <TabsTrigger value="requirements" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Requirements">
                   <ListChecks className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Requirements</span>}
                 </TabsTrigger> */}
-                {/* <TabsTrigger value="gate-reviews" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Phase Gate Tracker">
+                  {/* <TabsTrigger value="gate-reviews" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Phase Gate Tracker">
                   <ChartGantt className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Gates</span>}
                 </TabsTrigger> */}
-                {/* <TabsTrigger value="risk" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Risk & Issue Tracker">
+                  {/* <TabsTrigger value="risk" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Risk & Issue Tracker">
                   <ShieldAlert className="h-4 w-4 shrink-0" />
                   {!isMobile && <span className="truncate">Risk</span>}
                 </TabsTrigger> */}
-              </TabsList>
-            </div>
+                </TabsList>
+              </div>
 
-            {/* Right Side: Team + Chat + Add Button */}
-            <div className="flex items-center gap-2 shrink-0">
-              {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
-              {/* Start Chat */}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-9 gap-1.5 whitespace-nowrap rounded-lg hidden sm:flex"
-                onClick={handleStartProjectChat}
-                disabled={isStartingChat || !canStartProjectChat}
-              >
-                {isStartingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                <span className="hidden md:inline">Chat</span>
-              </Button>
-              {/* Team Popover */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    className="flex items-center gap-2 whitespace-nowrap cursor-pointer rounded-md border border-border px-2 py-1.5 text-foreground hover:bg-muted transition-colors h-9"
-                  >
-                    <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <span className="text-xs font-medium">Team</span>
-                    <span className="text-xs text-muted-foreground">{projectMembers.length}</span>
-                    {/* <div className="hidden md:flex -space-x-2">
+              {/* Right Side: Team + Chat + Add Button */}
+              <div className="flex items-center gap-2 shrink-0">
+                {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
+                {/* Start Chat */}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1.5 whitespace-nowrap rounded-lg hidden sm:flex"
+                  onClick={handleStartProjectChat}
+                  disabled={isStartingChat || !canStartProjectChat}
+                >
+                  {isStartingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                  <span className="hidden md:inline">Chat</span>
+                </Button>
+                {/* Team Popover */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 whitespace-nowrap cursor-pointer rounded-md border border-border px-2 py-1.5 text-foreground hover:bg-muted transition-colors h-9"
+                    >
+                      <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span className="text-xs font-medium">Team</span>
+                      <span className="text-xs text-muted-foreground">{projectMembers.length}</span>
+                      {/* <div className="hidden md:flex -space-x-2">
                       {projectMembers.slice(0, 4).map((member) => (
                         <Avatar key={member.id} className="h-5 w-5 border-2 border-background">
                           <AvatarFallback className="text-[10px] bg-muted">
@@ -1072,178 +1072,178 @@ export default function ProjectDetail() {
                         </Avatar>
                       ))}
                     </div> */}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80" align="end">
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium">Project Team</p>
-                    {projectMembers.length > 0 ? (
-                      <div className="space-y-2 max-h-52 overflow-y-auto">
-                        {projectMembers.map((member) => (
-                          <div key={member.id} className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <Avatar className="h-7 w-7">
-                                <AvatarFallback className="text-[11px]">
-                                  {member.initials}
-                                </AvatarFallback>
-                              </Avatar>
-                              <span className="text-sm truncate">{member.name}</span>
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80" align="end">
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Project Team</p>
+                      {projectMembers.length > 0 ? (
+                        <div className="space-y-2 max-h-52 overflow-y-auto">
+                          {projectMembers.map((member) => (
+                            <div key={member.id} className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Avatar className="h-7 w-7">
+                                  <AvatarFallback className="text-[11px]">
+                                    {member.initials}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <span className="text-sm truncate">{member.name}</span>
+                              </div>
+                              <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
+                                {member.role || 'Member'}
+                              </Badge>
+                              {canManageProjectMembers && member.role?.toLowerCase() !== 'admin' && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  onClick={() => {
+                                    const memberId = member.id;
+                                    const memberName = typeof member.name === 'string' ? member.name : '';
+                                    if (!memberId) return;
+                                    setMemberRemovalPrompt({ open: true, memberId, memberName });
+                                  }}
+                                  title="Remove member"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
                             </div>
-                            <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
-                              {member.role || 'Member'}
-                            </Badge>
-                            {canManageProjectMembers && member.role?.toLowerCase() !== 'admin' && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                onClick={() => {
-                                  const memberId = member.id;
-                                  const memberName = typeof member.name === 'string' ? member.name : '';
-                                  if (!memberId) return;
-                                  setMemberRemovalPrompt({ open: true, memberId, memberName });
-                                }}
-                                title="Remove member"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">No team members assigned yet.</p>
+                      )}
+                      {canManageProjectMembers ? (
+                        <div className="pt-3 mt-2 border-t space-y-2">
+                          <p className="text-xs font-medium text-muted-foreground">Add Member</p>
+                          <div className="space-y-2">
+                            <Select value={selectedMemberToAdd} onValueChange={setSelectedMemberToAdd}>
+                              <SelectTrigger className="h-8">
+                                <SelectValue placeholder="Select organization member" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availableOrganizationMembers.length > 0 ? (
+                                  availableOrganizationMembers.map((member) => (
+                                    <SelectItem key={member.id} value={member.id}>
+                                      {member.name}
+                                    </SelectItem>
+                                  ))
+                                ) : (
+                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                    No members available to add.
+                                  </div>
+                                )}
+                              </SelectContent>
+                            </Select>
+                            {selectedOrganizationMember && (
+                              <p className="text-[11px] text-muted-foreground">
+                                Role will be inherited automatically from organization:{" "}
+                                <span className="font-medium text-foreground capitalize">
+                                  {selectedOrganizationMember.role || 'member'}
+                                </span>
+                              </p>
+                            )}
+                            <Button
+                              size="sm"
+                              className="w-full"
+                              onClick={handleAddProjectMember}
+                              disabled={isAddingProjectMember || !selectedMemberToAdd || availableOrganizationMembers.length === 0}
+                            >
+                              {isAddingProjectMember && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                              Add Member
+                            </Button>
+                            {availableOrganizationMembers.length === 0 && (
+                              <p className="text-[11px] text-muted-foreground">
+                                All organization members are already in this project.
+                              </p>
                             )}
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">No team members assigned yet.</p>
-                    )}
-                    {canManageProjectMembers ? (
-                      <div className="pt-3 mt-2 border-t space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">Add Member</p>
-                        <div className="space-y-2">
-                          <Select value={selectedMemberToAdd} onValueChange={setSelectedMemberToAdd}>
-                            <SelectTrigger className="h-8">
-                              <SelectValue placeholder="Select organization member" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availableOrganizationMembers.length > 0 ? (
-                                availableOrganizationMembers.map((member) => (
-                                  <SelectItem key={member.id} value={member.id}>
-                                    {member.name}
-                                  </SelectItem>
-                                ))
-                              ) : (
-                                <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                  No members available to add.
-                                </div>
-                              )}
-                            </SelectContent>
-                          </Select>
-                          {selectedOrganizationMember && (
-                            <p className="text-[11px] text-muted-foreground">
-                              Role will be inherited automatically from organization:{" "}
-                              <span className="font-medium text-foreground capitalize">
-                                {selectedOrganizationMember.role || 'member'}
-                              </span>
-                            </p>
-                          )}
-                          <Button
-                            size="sm"
-                            className="w-full"
-                            onClick={handleAddProjectMember}
-                            disabled={isAddingProjectMember || !selectedMemberToAdd || availableOrganizationMembers.length === 0}
-                          >
-                            {isAddingProjectMember && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                            Add Member
-                          </Button>
-                          {availableOrganizationMembers.length === 0 && (
-                            <p className="text-[11px] text-muted-foreground">
-                              All organization members are already in this project.
-                            </p>
-                          )}
                         </div>
-                      </div>
-                    ) : (
-                      <div className="pt-3 mt-2 border-t">
-                        <p className="text-[11px] text-muted-foreground">
-                          Only the project creator or an Admin can add or remove project members.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </PopoverContent>
-              </Popover>
-              {/* Critical Issues Badge */}
-              {criticalIssuesCount > 0 && (
+                      ) : (
+                        <div className="pt-3 mt-2 border-t">
+                          <p className="text-[11px] text-muted-foreground">
+                            Only the project creator or an Admin can add or remove project members.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                {/* Critical Issues Badge */}
+                {/* {criticalIssuesCount > 0 && (
                 <Badge variant="destructive" className="gap-1 shrink-0 hidden sm:inline-flex">
                   <AlertTriangle className="h-3 w-3 shrink-0" />
                   {criticalIssuesCount} Critical
                 </Badge>
-              )}
-              {/* Section Add/Action Buttons */}
-              {section === 'tasks' && (
-                <Button
-                  size="sm"
-                  onClick={() => setIsAddTaskDialogOpen(true)}
-                  className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden sm:inline">Create Task</span>
-                </Button>
-              )}
-              {section === 'modules' && canAddModulesAndMilestones && (
-                <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={handleAddModule}>
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden md:inline">Add Module</span>
-                </Button>
-              )}
-              {section === 'milestones' && canAddModulesAndMilestones && (
-                <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddMilestoneDialogOpen(true)}>
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden md:inline">Add Milestone</span>
-                </Button>
-              )}
-              {section === 'issues' && (
-                <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddIssueDialogOpen(true)}>
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden md:inline">Report Issue</span>
-                </Button>
-              )}
-              {section === 'bom' && (
-                <Button size="sm" onClick={() => setBomAddOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden sm:inline">Add Part</span>
-                </Button>
-              )}
-              {section === 'eng-changes' && (
-                <Button size="sm" onClick={() => setEcoNewOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
-                  <Plus className="h-4 w-4" />
-                  <span className="hidden sm:inline">New ECO</span>
-                </Button>
-              )}
-              {section === 'gate-reviews' && (
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
-                    <Download className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Export</span>
-                  </Button>
-                  <Button size="sm" className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+              )} */}
+                {/* Section Add/Action Buttons */}
+                {section === 'tasks' && (
+                  <Button
+                    size="sm"
+                    onClick={() => setIsAddTaskDialogOpen(true)}
+                    className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg"
+                  >
                     <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Add Gate</span>
+                    <span className="hidden sm:inline">Create Task</span>
                   </Button>
-                </div>
-              )}
-              {section === 'risk' && (
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
-                    <Download className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Export</span>
-                  </Button>
-                  <Button size="sm" className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                )}
+                {section === 'modules' && canAddModulesAndMilestones && (
+                  <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={handleAddModule}>
                     <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Add Risk</span>
+                    <span className="hidden md:inline">Add Module</span>
                   </Button>
-                </div>
-              )}
+                )}
+                {section === 'milestones' && canAddModulesAndMilestones && (
+                  <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddMilestoneDialogOpen(true)}>
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden md:inline">Add Milestone</span>
+                  </Button>
+                )}
+                {section === 'issues' && (
+                  <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddIssueDialogOpen(true)}>
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden md:inline">Report Issue</span>
+                  </Button>
+                )}
+                {section === 'bom' && (
+                  <Button size="sm" onClick={() => setBomAddOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">Add Part</span>
+                  </Button>
+                )}
+                {section === 'eng-changes' && (
+                  <Button size="sm" onClick={() => setEcoNewOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">New ECO</span>
+                  </Button>
+                )}
+                {section === 'gate-reviews' && (
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
+                      <Download className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Export</span>
+                    </Button>
+                    <Button size="sm" className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                      <Plus className="h-4 w-4" />
+                      <span className="hidden sm:inline">Add Gate</span>
+                    </Button>
+                  </div>
+                )}
+                {section === 'risk' && (
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
+                      <Download className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Export</span>
+                    </Button>
+                    <Button size="sm" className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                      <Plus className="h-4 w-4" />
+                      <span className="hidden sm:inline">Add Risk</span>
+                    </Button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
           )}
 
           {/* Second Row: Search + View Toggle + Filter toolbar (below tabs, like BOM UI) */}
