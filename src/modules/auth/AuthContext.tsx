@@ -1,7 +1,9 @@
-import React, { createContext, useEffect, useState, useCallback, useContext, useMemo } from 'react';
+import React, { createContext, useEffect, useRef, useState, useCallback, useContext, useMemo } from 'react';
+import { io, Socket } from 'socket.io-client';
 import { authService, BackendUser, SignUpMetadata } from './services/auth.service';
 import { apiClient } from '@/shared/api/client';
 import { ENDPOINTS } from '@/shared/api/endpoints';
+import { config } from '@/config';
 import { setSentryUser, clearSentryUser } from '@/infrastructure/monitoring/sentry';
 
 interface AuthContextValue {
@@ -44,6 +46,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
     init();
   }, []);
+
+  // Open a socket once authenticated; listen for server-initiated force-logout
+  // (e.g. account deleted by an admin). The server emits 'auth:force_logout' to
+  // the user:{userId} room, which the socket server auto-joins on connect.
+  const authSocketRef = useRef<Socket | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      authSocketRef.current?.disconnect();
+      authSocketRef.current = null;
+      return;
+    }
+
+    const socket = io(config.api.wsUrl, {
+      withCredentials: true,
+      transports: ['websocket', 'polling'],
+    });
+
+    socket.on('auth:force_logout', () => {
+      socket.disconnect();
+      authSocketRef.current = null;
+      clearSentryUser();
+      setUser(null);
+      setPendingVerificationEmail(null);
+      window.location.href = '/login';
+    });
+
+    authSocketRef.current = socket;
+
+    return () => {
+      socket.disconnect();
+      authSocketRef.current = null;
+    };
+  }, [user?.id]); // reconnect only if the logged-in user changes
 
   const refreshProfile = useCallback(async () => {
     try {

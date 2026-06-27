@@ -42,6 +42,7 @@ export type DocValue = { kind: 'file'; file: File } | { kind: 'url'; url: string
 export interface BOMPartPayload {
   mode: 'add' | 'edit';
   pn: string;
+  name: string;
   desc: string;
   category: BOMCategory;
   status: BOMStatus;
@@ -414,6 +415,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
 
   // ── Form state ──
   const [pn, setPn] = useState(node?.pn ?? '');
+  const [name, setName] = useState(node?.name ?? '');
   const [desc, setDesc] = useState(node?.desc ?? '');
   const [category, setCategory] = useState<BOMCategory>(node?.cat ?? 'assembly');
   const [status, setStatus] = useState<BOMStatus>(node?.status ?? 'pending');
@@ -450,6 +452,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   useEffect(() => {
     if (!open) return;
     setPn(node?.pn ?? '');
+    setName(node?.name ?? '');
     setDesc(node?.desc ?? '');
     setCategory(node?.cat ?? 'assembly');
     setStatus(node?.status ?? 'pending');
@@ -504,6 +507,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     const e: Record<string, string> = {};
     if (tab === 'details') {
       if (!isEdit && !pn.trim()) e.pn = 'Part number is required';
+      if (!name.trim()) e.name = 'Part name is required';
       if (!desc.trim()) e.desc = 'Description is required';
       if (!category.trim()) e.category = !isKnownCategory(category) ? 'Please enter a custom category name' : 'Category is required';
       if (!selectedOwner && !(isEdit && node?.owner)) e.owner = 'Owner is required';
@@ -529,6 +533,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
   const validate = () => {
     const e: Record<string, string> = {};
     if (!isEdit && !pn.trim()) e.pn = 'Part number is required';
+    if (!name.trim()) e.name = 'Part name is required';
     if (!desc.trim()) e.desc = 'Description is required';
     if (!category.trim()) e.category = !isKnownCategory(category) ? 'Please enter a custom category name' : 'Category is required';
     if (!manufacturer.trim()) e.mfr = 'Manufacturer is required';
@@ -545,6 +550,7 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
       await onSave({
         mode,
         pn: isEdit ? (node?.pn ?? pn) : pn.trim().toUpperCase(),
+        name: name.trim(),
         desc, category: category.trim().toLowerCase(), status,
         rev: isEdit ? (versionMode === 'new' ? (newRevLabel || nextRev(node!.rev)) : node!.rev) : rev,
         qty: parseFloat(qty) || 1,
@@ -655,6 +661,12 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                         {errors.pn && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.pn}</p>}
                       </>
                     )}
+                  </FL>
+
+                  <FL label="Part Name" required>
+                    <FInput value={name} onChange={e => setName(e.target.value)}
+                      placeholder="e.g. Power Module" className="h-9" />
+                    {errors.name && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.name}</p>}
                   </FL>
 
                   <FL label="Description" required>

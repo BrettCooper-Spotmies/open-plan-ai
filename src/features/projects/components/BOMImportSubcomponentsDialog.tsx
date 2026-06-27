@@ -240,6 +240,7 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
         if (!partId) {
           const part = await createPart.mutateAsync({
             partNumber:          row.partNumber,
+            name:                row.name || row.partNumber,
             description:         row.description,
             category:            row.category as ApiPartResponse['category'],
             manufacturer:        row.manufacturer || undefined,
@@ -365,7 +366,7 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono font-medium text-foreground">{row.partNumber || `Row ${row.rowNumber}`}</span>
-                          <span className="text-muted-foreground truncate">{row.description}</span>
+                          <span className="text-muted-foreground truncate">{row.name || row.description}</span>
                           {row.existingPart && (
                             <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">
                               Existing part — will attach, not duplicate
@@ -419,7 +420,7 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
                       ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       : <X className="w-3.5 h-3.5 text-destructive shrink-0" />}
                     <span className="font-mono font-medium text-foreground">{r.row.partNumber}</span>
-                    <span className="text-muted-foreground truncate flex-1">{r.row.description}</span>
+                    <span className="text-muted-foreground truncate flex-1">{r.row.name || r.row.description}</span>
                     {r.error && <span className="text-destructive shrink-0">{r.error}</span>}
                   </div>
                 ))}

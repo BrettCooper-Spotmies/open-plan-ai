@@ -4,8 +4,9 @@
     {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "open-plan-ai", "run", "dev"],
-      "port": 8080
+      "runtimeArgs": ["run", "dev"],
+      "port": 8080,
+      "autoPort": false
     }
   ]
 }

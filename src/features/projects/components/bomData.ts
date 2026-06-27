@@ -23,6 +23,7 @@ export interface BOMNode {
   level: number;
   levelLabel?: string;  // hierarchical position, e.g. "1.0", "1.1", "1.1.1" — set via assignLevelLabels()
   pn: string;
+  name: string;
   desc: string;
   qty: number;
   uom: string;
@@ -109,6 +110,7 @@ export interface ApiPartResponse {
   id: string;
   orgId: string;
   partNumber: string;
+  name: string;
   description: string;
   category: BOMCategory;
   manufacturer: string | null;
@@ -194,6 +196,7 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     id:           node.id,
     level:        depth,
     pn:           node.part.partNumber,
+    name:         node.part.name,
     desc:         node.part.description,
     qty:          parseFloat(node.quantity),
     uom:          node.unit,
@@ -340,6 +343,7 @@ interface ImportColumnDef {
 
 export const SUBCOMPONENT_IMPORT_COLUMNS: ImportColumnDef[] = [
   { label: 'Part Number',        required: true,  aliases: ['part number', 'partnumber', 'pn'] },
+  { label: 'Part Name',          required: false, aliases: ['part name', 'name'] },
   { label: 'Description',        required: true,  aliases: ['description', 'desc'] },
   { label: 'Category',           required: true,  aliases: ['category'] },
   { label: 'Status',             required: false, aliases: ['status'] },
@@ -355,6 +359,7 @@ export const SUBCOMPONENT_IMPORT_COLUMNS: ImportColumnDef[] = [
 export interface ParsedImportRow {
   rowNumber: number; // 1-based spreadsheet row, header row counts as row 1
   partNumber: string;
+  name: string;
   description: string;
   category: BOMCategory | '';
   status: BOMStatus;
@@ -429,6 +434,7 @@ export function parseSubcomponentImportRows(
     const errors: string[] = [];
 
     const partNumber   = pickField(row, colAliases('Part Number'));
+    const name         = pickField(row, colAliases('Part Name'));
     const description  = pickField(row, colAliases('Description'));
     const categoryRaw  = pickField(row, colAliases('Category')).toLowerCase();
     const statusRaw    = pickField(row, colAliases('Status')).toLowerCase();
@@ -492,7 +498,7 @@ export function parseSubcomponentImportRows(
 
     return {
       rowNumber: i + 2,
-      partNumber, description, category, status,
+      partNumber, name, description, category, status,
       manufacturer, mpn, supplier, unitPrice, leadTimeWeeks, quantity, uom,
       existingPart,
       errors,
