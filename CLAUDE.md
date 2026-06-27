@@ -44,6 +44,10 @@ Only **`src/modules/auth`** has actually been migrated — it has real `componen
 
 **Logging convention**: `no-console` is an ESLint error (allows only `table`/`group`/`groupEnd`/`groupCollapsed`/`time`/`timeEnd`). Use `logger` from `src/services/monitoring/logger.ts` instead of `console.*`. Sentry init lives in `src/infrastructure/monitoring/sentry.ts`.
 
+Requirements feature files: `RequirementsView.tsx` (orchestrator), `RequirementDetailScreen.tsx`, `RequirementEditor.tsx`, `RequirementImpact.tsx`, `RequirementsShared.tsx` — all in `src/features/projects/components/`. Data model + mock data in `requirementsData.ts`. **Status: mock data only — no backend integration yet.** Key types: 5-tier `ReqType` hierarchy (`stakeholder-need → stakeholder-req → system-req → subsystem-req → component-req`), `ReqStatus` (`draft → reviewed → approved → verified → validated`), `ReqGroup` (9 hardware domains: SYS, PWR, CTL, CHD, ENC, HMI, SAF, SEC, STK). Requirements are cross-linked into the ECO wizard and BOM part editor for traceability.
+
+Integrations feature: `src/features/integrations/` — showcase UI for planned connectors (CAD, PLM, spreadsheets, AI tools, git). All items show "Coming Soon"; no backend connectors exist yet.
+
 BOM feature files: `BOMView.tsx` (orchestrator), `BOMDetailScreen.tsx`, `BOMMapView.tsx`, `BOMShared.tsx`, `bomData.ts` (type definitions, adapter functions `fromApiNode()`/`fromApiRevision()`, and all tree utilities — no mock data). Hooks in `src/hooks/useBom.ts`, `useParts.ts`, `useBomDocuments.ts`.
 
 ECO (Engineering Changes) feature files: `ECOView.tsx` (orchestrator — receives `projectId: string` from `ProjectDetail`), `ECOListView.tsx` (KPI cards + list + preview panel), `ECODetailView.tsx` (full detail + approval pipeline + ECN release), `ECOWizard.tsx` (5-step create wizard), `ECOShared.tsx` (shared pills/avatars), `ecoData.ts` (TypeScript types, enums, adapter functions, helper utilities). Hooks in `src/hooks/useECOs.ts`.
@@ -90,6 +94,12 @@ Vitest + React Testing Library. Test setup at `src/test/setup.ts`. Path alias `@
 - **New shadcn components**: `npx shadcn-ui@latest add <component>` — outputs to `src/components/ui/`.
 - Module type vocabulary and status enumerations are fixed (`TASK_STATUSES`, `PRIORITIES`, `MODULE_TYPES`). Custom values are not supported at v1.
 - **Enum case convention**: Backend API returns enum values in lowercase (`in_review`, `design_change`). Frontend TypeScript types use UPPERCASE (`IN_REVIEW`, `DESIGN_CHANGE`). Convert inbound with `.toUpperCase()` in adapter functions; outbound with `.toLowerCase()` in mutation payloads. See `ecoData.ts` adapters for the established pattern.
+
+## Custom Columns & Tags
+
+- **Task columns**: `useProjectTaskColumns` hook + `projectTaskColumns.service.ts` — per-project Kanban column definitions (key, label, color, position, isSpecial). Backed by `/projects/:projectId/task-columns` endpoints.
+- **Issue columns**: `useIssueColumns` hook + `issueColumns.service.ts` — same pattern for issue boards.
+- **Tags**: `useProjectTags` hook + `projectTags.service.ts` — project-scoped tag master (name + color). Tasks/issues store tag names as text arrays; the tags API is the canonical color source.
 
 ## ECO — Key Integration Notes
 

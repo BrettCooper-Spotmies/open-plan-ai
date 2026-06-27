@@ -426,7 +426,7 @@ export function ECOWizard({
           className={cn(inputCls, 'h-16 resize-none')}
         />
       </div>
-      <div>
+      {/* <div>
         <FieldLabel required>Scope</FieldLabel>
         <div className="flex bg-muted/40 border border-border rounded-md p-0.5 w-fit">
           {(['BOM_PART', 'REQUIREMENT'] as ECOScope[]).map(s => (
@@ -450,7 +450,7 @@ export function ECOWizard({
             </button>
           ))}
         </div>
-      </div>
+      </div> */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <FieldLabel required>Change Type</FieldLabel>
