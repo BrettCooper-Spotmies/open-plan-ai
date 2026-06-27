@@ -1,13 +1,14 @@
-import { Link } from 'react-router-dom';
 import { ArrowRight, Layers } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { useOrgBomAggregate } from '../hooks/useOrgAggregates';
 import { PanelIcon } from './PanelIcon';
+import { ProjectPickerPopover } from './ProjectPickerPopover';
+import type { Project } from '@/types';
 
 interface BomReadinessProps {
   projectIds: string[];
+  projects: Project[];
 }
 
 function BomDonut({ pct }: { pct: number }) {
@@ -30,7 +31,7 @@ function BomDonut({ pct }: { pct: number }) {
   );
 }
 
-export function BomReadiness({ projectIds }: BomReadinessProps) {
+export function BomReadiness({ projectIds, projects }: BomReadinessProps) {
   const { isLoading, total, approved, pending, pct } = useOrgBomAggregate(projectIds);
 
   return (
@@ -40,12 +41,7 @@ export function BomReadiness({ projectIds }: BomReadinessProps) {
           <PanelIcon icon={Layers} color="#EA580C" />
           Bill of Materials
         </CardTitle>
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/projects" className="text-muted-foreground hover:text-foreground">
-            View BOM
-            <ArrowRight className="h-4 w-4 ml-1" />
-          </Link>
-        </Button>
+        <ProjectPickerPopover projects={projects} tab="bom" label="View BOM" />
       </CardHeader>
       <CardContent>
         <div className="flex items-center gap-4">

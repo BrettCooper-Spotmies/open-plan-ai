@@ -1,14 +1,16 @@
 import { Link } from 'react-router-dom';
 import { ArrowRight, GitMerge, GitPullRequest } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { useOrgEcoAggregate, useOrgEcoStatusCounts, useOrgAwaitingEcos } from '../hooks/useOrgAggregates';
 import { MAIN_STATUSES, STATUS_LABEL, statusMeta, type ECOStatus } from '@/features/projects/components/ecoData';
 import type { ApiEcoListItem } from '@/hooks/useECOs';
 import { PanelIcon } from './PanelIcon';
+import { ProjectPickerPopover } from './ProjectPickerPopover';
+import type { Project } from '@/types';
 
 interface EngineeringChangesSummaryProps {
   projectIds: string[];
+  projects: Project[];
 }
 
 function StageBar({ status, count, max }: { status: ECOStatus; count: number; max: number }) {
@@ -27,7 +29,7 @@ function StageBar({ status, count, max }: { status: ECOStatus; count: number; ma
   );
 }
 
-export function EngineeringChangesSummary({ projectIds }: EngineeringChangesSummaryProps) {
+export function EngineeringChangesSummary({ projectIds, projects }: EngineeringChangesSummaryProps) {
   const { isLoading: aggLoading, open, firstPassPct, avgCycleDays } = useOrgEcoAggregate(projectIds);
   const { isLoading: statusLoading, ecos } = useOrgEcoStatusCounts(projectIds);
   const { isLoading: awaitingLoading, awaiting } = useOrgAwaitingEcos(projectIds);
@@ -47,12 +49,7 @@ export function EngineeringChangesSummary({ projectIds }: EngineeringChangesSumm
           <PanelIcon icon={GitMerge} color="#9333EA" />
           Engineering Changes
         </CardTitle>
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/projects" className="text-muted-foreground hover:text-foreground">
-            Open ECOs
-            <ArrowRight className="h-4 w-4 ml-1" />
-          </Link>
-        </Button>
+        <ProjectPickerPopover projects={projects} tab="eng-changes" label="Open ECOs" />
       </CardHeader>
       <CardContent className="flex-1 space-y-4">
         <div className="grid grid-cols-3 gap-0 rounded-lg border border-border overflow-hidden">

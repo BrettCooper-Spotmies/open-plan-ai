@@ -247,10 +247,10 @@ export default function Dashboard() {
                 <ProjectsOverview projects={dashboardProjects} atRiskProjectIds={atRiskProjectIds} />
               </div>
               <div className="lg:col-span-1 h-full">
-                <EngineeringChangesSummary projectIds={projectIds} />
+                <EngineeringChangesSummary projectIds={projectIds} projects={dashboardProjects} />
               </div>
               <div className="space-y-4 md:space-y-3">
-                <BomReadiness projectIds={projectIds} />
+                <BomReadiness projectIds={projectIds} projects={dashboardProjects} />
                 <ActivityFeed activities={dashboardActivities} isLoading={activitiesLoading || isLoading} />
               </div>
             </div>
