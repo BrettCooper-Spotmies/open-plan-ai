@@ -1273,7 +1273,7 @@ const EditProject = () => {
                                         placeholder="e.g. John Doe"
                                         value={clientName}
                                         maxLength={100}
-                                        onChange={(e) => setClientName(e.target.value)}
+                                        onChange={(e) => setClientName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                                     />
                                 </div>
                                 <div className="space-y-2">
