@@ -162,6 +162,14 @@ const columnColorOptions = [
   { value: 'bg-status-done', label: 'Green' },
   { value: 'bg-status-blocked', label: 'Red' },
   { value: 'bg-chart-4', label: 'Yellow' },
+  { value: 'bg-orange-500', label: 'Orange' },
+  { value: 'bg-pink-500', label: 'Pink' },
+  { value: 'bg-cyan-500', label: 'Cyan' },
+  { value: 'bg-teal-500', label: 'Teal' },
+  { value: 'bg-indigo-500', label: 'Indigo' },
+  { value: 'bg-rose-500', label: 'Rose' },
+  { value: 'bg-amber-500', label: 'Amber' },
+  { value: 'bg-lime-500', label: 'Lime' },
 ];
 
 export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assignableMembers, onTaskCreate,
