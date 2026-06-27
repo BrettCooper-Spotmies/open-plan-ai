@@ -70,6 +70,73 @@ function EcoSelect<T extends string>({
   );
 }
 
+const ECO_SELECT_CLS = 'w-full bg-muted/40 border border-border rounded-md text-foreground text-[13px] px-3 py-2 outline-none focus:border-primary/40 cursor-pointer appearance-none font-[inherit]';
+
+const CUSTOM_SENTINEL = '__custom__';
+
+function EcoSelectWithCustom({
+  value, onChange, options, labels,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  labels: Record<string, string>;
+}) {
+  const isCustom = !!value && !options.includes(value);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    if (e.target.value === CUSTOM_SENTINEL) {
+      setEditing(true);
+      setDraft('');
+    } else {
+      onChange(e.target.value);
+    }
+  }
+
+  function commit() {
+    const v = draft.trim();
+    if (v) onChange(v);
+    setEditing(false);
+    setDraft('');
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <select
+        value={isCustom ? CUSTOM_SENTINEL : value}
+        onChange={handleSelectChange}
+        className={ECO_SELECT_CLS}
+      >
+        {options.map(o => (
+          <option key={o} value={o} className="bg-card">{labels[o] ?? o}</option>
+        ))}
+        {isCustom && (
+          <option value={CUSTOM_SENTINEL} className="bg-card">{value}</option>
+        )}
+        <option value={CUSTOM_SENTINEL} disabled={false} className="bg-card text-muted-foreground">
+          {isCustom ? '✎ Edit custom…' : '+ Custom…'}
+        </option>
+      </select>
+      {editing && (
+        <input
+          autoFocus
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') { setEditing(false); setDraft(''); }
+          }}
+          placeholder="Type custom option and press Enter…"
+          className={inputCls}
+        />
+      )}
+    </div>
+  );
+}
+
 // ── Input ─────────────────────────────────────────────────────────────────────
 
 const inputCls = 'w-full bg-muted/40 border border-border rounded-md text-foreground text-[13px] px-3 py-2 outline-none focus:border-primary/40 placeholder:text-muted-foreground/50 font-[inherit]';
@@ -122,7 +189,7 @@ function Stepper({ step, maxStepReached, onStepClick }: { step: number; maxStepR
 
 interface BasicsState {
   title: string; description: string;
-  type: ECOType; priority: ECOPriority; reason: ECOReason;
+  type: ECOType | string; priority: ECOPriority; reason: ECOReason | string;
   changeClass: ChangeClass;
   ecr: string;
   effType: EffectivityType; effValue: string;
@@ -263,6 +330,7 @@ export function ECOWizard({
   const validateStep = (s: number): boolean => {
     const e: Record<string, string> = {};
     if (s === 0 && !basics.title.trim()) e.title = 'Title is required';
+    if (s === 1 && items.length < 1) e.items = 'At least 1 affected part is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -321,11 +389,11 @@ export function ECOWizard({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <FieldLabel required>Change Type</FieldLabel>
-          <EcoSelect value={basics.type} onChange={v => setBasics({ ...basics, type: v })} options={Object.keys(ECO_TYPE_LABEL) as ECOType[]} labels={ECO_TYPE_LABEL} />
+          <EcoSelectWithCustom value={basics.type} onChange={v => setBasics({ ...basics, type: v })} options={Object.keys(ECO_TYPE_LABEL)} labels={ECO_TYPE_LABEL} />
         </div>
         <div>
           <FieldLabel required>Reason Code</FieldLabel>
-          <EcoSelect value={basics.reason} onChange={v => setBasics({ ...basics, reason: v })} options={Object.keys(REASON_LABEL) as ECOReason[]} labels={REASON_LABEL} />
+          <EcoSelectWithCustom value={basics.reason} onChange={v => setBasics({ ...basics, reason: v })} options={Object.keys(REASON_LABEL)} labels={REASON_LABEL} />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -459,6 +527,7 @@ export function ECOWizard({
                 value={it.revTo}
                 onChange={e => upItem(idx, 'revTo', e.target.value)}
                 placeholder="e.g. B"
+                maxLength={3}
                 className={cn(inputCls, 'font-mono text-center')}
               />
             </div>
@@ -528,19 +597,10 @@ export function ECOWizard({
 
       {/* Attachments */}
       <div className="mt-2 pt-4 border-t border-border">
-        <div className="flex items-center justify-between mb-2.5">
-          <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
-            <FileText className="w-3.5 h-3.5 text-muted-foreground" />
-            Attachments
-            <span className="text-muted-foreground font-normal">· {attachments.length}</span>
-          </div>
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold bg-muted/50 text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit]"
-          >
-            <Upload className="w-3 h-3 text-muted-foreground" />
-            Browse
-          </button>
+        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground mb-2.5">
+          <FileText className="w-3.5 h-3.5 text-muted-foreground" />
+          Attachments
+          <span className="text-muted-foreground font-normal">· {attachments.length}</span>
         </div>
         <input
           ref={fileRef} type="file" multiple
