@@ -1,6 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
-import type { ApiPartResponse, ApiRevisionResponse, BOMStatus, BOMCategory } from '@/features/projects/components/bomData';
+import type { ApiPartResponse, ApiRevisionResponse, BOMStatus, BOMCategory, SupplierEntry } from '@/features/projects/components/bomData';
 
 export interface PaginationMeta {
   page: number;
@@ -24,6 +24,7 @@ export interface CreatePartDto {
   initialRev?: string;
   initialPrice?: number;
   initialLeadTimeDays?: number;
+  initialSuppliers?: SupplierEntry[];
 }
 
 export type UpdatePartDto = Partial<Omit<CreatePartDto, 'partNumber'>>;
@@ -36,6 +37,7 @@ export interface CreateRevisionDto {
   price?: number;
   leadTimeDays?: number;
   ecoId?: string;
+  suppliers?: SupplierEntry[];
 }
 
 export interface ListPartsResult {

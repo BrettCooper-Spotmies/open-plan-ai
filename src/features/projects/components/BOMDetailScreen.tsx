@@ -510,6 +510,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       initialRev: payload.rev,
       initialPrice: payload.price > 0 ? payload.price : undefined,
       initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
+      initialSuppliers: payload.suppliers?.length ? payload.suppliers.map(s => ({ ...s, price: parseFloat(s.price) || 0 })) : undefined,
     });
     const node = await createNode.mutateAsync({
       partId: part.id, quantity: payload.qty, unit: payload.uom,
@@ -532,6 +533,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
           status: payload.status,
           price: payload.price,
           leadTimeDays: payload.leadTime,
+          suppliers: payload.suppliers?.length ? payload.suppliers.map(s => ({ ...s, price: parseFloat(s.price) || 0 })) : undefined,
         },
       });
     } else {
@@ -552,6 +554,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             status: payload.status,
             price: payload.price,
             leadTimeDays: payload.leadTime,
+            suppliers: payload.suppliers?.length ? payload.suppliers.map(s => ({ ...s, price: parseFloat(s.price) || 0 })) : undefined,
           },
         })] : []),
       ]);

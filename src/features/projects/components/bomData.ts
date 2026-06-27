@@ -1,5 +1,11 @@
 // BOM types, API response types, adapters, and tree helpers
 
+export interface SupplierEntry {
+  distributor: string;
+  price: string;
+  calcFromSubparts: boolean;
+}
+
 export type BOMStatus = 'approved' | 'pending' | 'rejected';
 // Free text — not a closed union. Known presets (below) plus any custom
 // category a user adds via the "Other" option when adding/importing parts.
@@ -16,6 +22,7 @@ export interface BOMRevision {
   status: BOMStatus;
   price: number;
   leadTime: number;   // days — mirrors backend leadTimeDays 1:1, no unit conversion
+  suppliers: SupplierEntry[];
 }
 
 export interface BOMNode {
@@ -37,6 +44,7 @@ export interface BOMNode {
   price: number;
   leadTime: number;   // days — mirrors backend leadTimeDays 1:1, no unit conversion
   mpn: string;
+  suppliers: SupplierEntry[];
   owner: string;
   ownerId?: string;
   revHistory: BOMRevision[];
@@ -103,6 +111,7 @@ export interface ApiRevisionResponse {
   price: string | null;
   leadTimeDays: number | null;
   ecoId: string | null;
+  suppliers: Array<{ distributor: string; price: number; calcFromSubparts: boolean }> | null;
   createdAt: string;
 }
 
@@ -211,6 +220,7 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     price:        parseFloat(rev?.price ?? '0'),
     leadTime:     rev?.leadTimeDays ?? 0,
     mpn:          node.part.mpn ?? '',
+    suppliers:    rev?.suppliers?.map(s => ({ ...s, price: String(s.price) })) ?? [],
     owner:        node.owner?.name ?? '',
     ownerId:      node.owner?.id,
     revHistory:   [],  // loaded on demand via usePartRevisions
@@ -233,13 +243,14 @@ export function applyPriceRollup(node: BOMNode): BOMNode {
 
 export function fromApiRevision(r: ApiRevisionResponse): BOMRevision {
   return {
-    rev:      r.rev,
-    date:     r.createdAt.split('T')[0],
-    author:   r.author ?? 'Unknown',
-    changes:  r.changes,
-    status:   r.status,
-    price:    parseFloat(r.price ?? '0'),
-    leadTime: r.leadTimeDays ?? 0,
+    rev:       r.rev,
+    date:      r.createdAt.split('T')[0],
+    author:    r.author ?? 'Unknown',
+    changes:   r.changes,
+    status:    r.status,
+    price:     parseFloat(r.price ?? '0'),
+    leadTime:  r.leadTimeDays ?? 0,
+    suppliers: r.suppliers?.map(s => ({ ...s, price: String(s.price) })) ?? [],
   };
 }
 

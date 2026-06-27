@@ -26,7 +26,7 @@ import {
   Check, XCircle, History, Loader2,
 } from 'lucide-react';
 import {
-  BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, KNOWN_BOM_CATEGORIES,
+  BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, KNOWN_BOM_CATEGORIES, SupplierEntry,
 } from './bomData';
 import { BOMStatusPill } from './BOMShared';
 import { BOMRejectDialog } from './BOMRejectDialog';
@@ -56,6 +56,7 @@ export interface BOMPartPayload {
   price: number;
   leadTime: number;
   mpn: string;
+  suppliers: SupplierEntry[];
   owner: string;
   ownerId?: string;
   req: string[];
@@ -426,10 +427,13 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   const [qty, setQty] = useState(String(node?.qty ?? 1));
   const [uom, setUom] = useState(node?.uom ?? 'EA');
   const [manufacturer, setManufacturer] = useState(node?.manufacturer ?? '');
-  const [distributor, setDistributor] = useState(node?.distributor ?? '');
-  const [price, setPrice] = useState(String(node?.price ?? ''));
-  const [calcFromSubparts, setCalcFromSubparts] = useState(isEdit ? (node?.price === 0) : false);
   const initialLeadTime = deriveLeadTime(node?.leadTime ?? 0);
+
+  const defaultSuppliers = (): SupplierEntry[] => {
+    if (node?.suppliers?.length) return node.suppliers.map(s => ({ ...s }));
+    return [{ distributor: node?.distributor ?? '', price: node?.price ? String(node.price) : '', calcFromSubparts: isEdit ? node?.price === 0 : false }];
+  };
+  const [suppliers, setSuppliers] = useState<SupplierEntry[]>(defaultSuppliers);
   const [leadTime, setLeadTime] = useState(initialLeadTime.value);
   const [leadTimeUnit, setLeadTimeUnit] = useState<LeadTimeUnit>(initialLeadTime.unit);
   const [mpn, setMpn] = useState(node?.mpn ?? '');
@@ -443,7 +447,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   const [techSections, setTechSections] = useState<TechFileSection[]>(DEFAULT_TECH_SECTIONS);
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
-  
+
   const [versionMode, setVersionMode] = useState<'same' | 'new'>('same');
   const [newRevLabel, setNewRevLabel] = useState(node ? nextRev(node.rev) : 'B');
   const [changeNotes, setChangeNotes] = useState('');
@@ -463,9 +467,11 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     setQty(String(node?.qty ?? 1));
     setUom(node?.uom ?? 'EA');
     setManufacturer(node?.manufacturer ?? '');
-    setDistributor(node?.distributor ?? '');
-    setPrice(String(node?.price ?? ''));
-    setCalcFromSubparts(node?.price === 0);
+    setSuppliers(
+      node?.suppliers?.length
+        ? node.suppliers.map(s => ({ ...s }))
+        : [{ distributor: node?.distributor ?? '', price: node?.price ? String(node.price) : '', calcFromSubparts: node?.price === 0 }]
+    );
     const lt = deriveLeadTime(node?.leadTime ?? 0);
     setLeadTime(lt.value);
     setLeadTimeUnit(lt.unit);
@@ -517,7 +523,13 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     }
     if (tab === 'sourcing') {
       if (!manufacturer.trim()) e.mfr = 'Manufacturer is required';
+      if (!mpn.trim()) e.mpn = 'MPN is required';
       if (!qty.trim()) e.qty = 'Valid quantity is required';
+      if (!leadTime.trim() || isNaN(parseFloat(leadTime))) e.leadTime = 'Lead time is required';
+      suppliers.forEach((s, i) => {
+        if (!s.distributor.trim()) e[`sup_dist_${i}`] = 'Supplier name is required';
+        if (!s.calcFromSubparts && (!s.price.trim() || isNaN(parseFloat(s.price)))) e[`sup_price_${i}`] = 'Unit price is required';
+      });
     }
     if (tab === 'documents') {
       if (isEdit && versionMode === 'new' && !changeNotes.trim())
@@ -560,8 +572,14 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     if (!desc.trim()) e.desc = 'Description is required';
     if (!category.trim()) e.category = !isKnownCategory(category) ? 'Please enter a custom category name' : 'Category is required';
     if (!manufacturer.trim()) e.mfr = 'Manufacturer is required';
+    if (!mpn.trim()) e.mpn = 'MPN is required';
+    if (!leadTime.trim() || isNaN(parseFloat(leadTime))) e.leadTime = 'Lead time is required';
     if (!selectedOwner && !(isEdit && node?.owner)) e.owner = 'Owner is required';
     if (isEdit && versionMode === 'new' && !changeNotes.trim()) e.notes = 'Change notes are required when creating a new revision';
+    suppliers.forEach((s, i) => {
+      if (!s.distributor.trim()) e[`sup_dist_${i}`] = 'Supplier name is required';
+      if (!s.calcFromSubparts && (!s.price.trim() || isNaN(parseFloat(s.price)))) e[`sup_price_${i}`] = 'Unit price is required';
+    });
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -578,14 +596,20 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
         rev: isEdit ? (versionMode === 'new' ? (newRevLabel || nextRev(node!.rev)) : node!.rev) : rev,
         qty: parseFloat(qty) || 1,
         uom,
-        manufacturer, distributor,
-        price: calcFromSubparts ? 0 : (parseFloat(price) || 0),
+        manufacturer,
+        distributor: suppliers[0]?.distributor ?? '',
+        price: suppliers[0]?.calcFromSubparts ? 0 : (parseFloat(suppliers[0]?.price ?? '') || 0),
         leadTime: (parseFloat(leadTime) || 0) * LEAD_TIME_UNITS.find(u => u.id === leadTimeUnit)!.toDays,
         mpn,
+        suppliers: suppliers.map(s => ({
+          distributor: s.distributor,
+          price: s.calcFromSubparts ? '0' : s.price,
+          calcFromSubparts: s.calcFromSubparts,
+        })),
         owner: selectedOwner?.name ?? (isEdit ? node?.owner ?? '' : ''),
         ownerId: selectedOwner?.id,
         req,
-        docPhoto, 
+        docPhoto,
         docDatasheet: techSections.find(s => s.id === 'datasheet')?.value || [],
         doc3DModel: techSections.find(s => s.id === '3dmodel')?.value || [],
         docFootprint: techSections.find(s => s.id === 'footprint')?.value || [],
@@ -890,49 +914,120 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
               </div>
             </TabsContent>
 
-            {/* ── SOURCING — 3-column ── */}
+            {/* ── SOURCING ── */}
             <TabsContent value="sourcing" className="flex-1 overflow-y-auto px-7 py-5 mt-0 data-[state=inactive]:hidden">
-              <div className="grid grid-cols-3 gap-x-6 gap-y-5">
-                <FL label="Manufacturer" required className="col-span-3">
+              <div className="space-y-5">
+                {/* Manufacturer */}
+                <FL label="Manufacturer" required>
                   <FInput value={manufacturer} onChange={e => setManufacturer(e.target.value)}
                     placeholder="e.g. Texas Instruments" className="h-9" />
                   {errors.mfr && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.mfr}</p>}
                 </FL>
-                <FL label="Manufacturer PN (MPN)">
-                  <FInput value={mpn} onChange={e => setMpn(e.target.value)}
-                    placeholder="e.g. TI-A4B2C" className="h-9 font-mono" />
-                </FL>
-                <FL label="Supplier / Distributor">
-                  <FInput value={distributor} onChange={e => setDistributor(e.target.value)}
-                    placeholder="e.g. Digi-Key" className="h-9" />
-                </FL>
-                <FL label="Unit Price">
-                  <div className="flex flex-col gap-2 pt-1">
-                    <FInput value={calcFromSubparts ? '0.00' : price} onChange={e => {
-                      let val = e.target.value.replace(/[^0-9.]/g, '');
-                      const parts = val.split('.');
-                      if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
-                      if (parts[0].length > 10) val = parts.length > 1 ? parts[0].slice(0, 10) + '.' + parts[1] : parts[0].slice(0, 10);
-                      setPrice(val);
+
+                {/* MPN · Quantity · UOM */}
+                <div className="grid grid-cols-3 gap-x-6">
+                  <FL label="Manufacturer PN (MPN)" required>
+                    <FInput value={mpn} onChange={e => setMpn(e.target.value)}
+                      placeholder="e.g. TI-A4B2C" className="h-9 font-mono" />
+                    {errors.mpn && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.mpn}</p>}
+                  </FL>
+                  <FL label="Quantity" required>
+                    <FInput value={qty} onChange={e => {
+                      let val = e.target.value;
+                      if (['EA', 'SET', 'PCS', 'LOT', 'LIC'].includes(uom)) {
+                        val = val.replace(/[^0-9]/g, '').slice(0, 10);
+                      } else {
+                        val = val.replace(/[^0-9.]/g, '');
+                        const parts = val.split('.');
+                        if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                        if (parts[0].length > 10) val = parts.length > 1 ? parts[0].slice(0, 10) + '.' + parts[1] : parts[0].slice(0, 10);
+                      }
+                      setQty(val);
                     }}
-                      disabled={calcFromSubparts}
-                      type="text" placeholder="0.00" className="h-9" maxLength={15} />
-                    <div className="flex items-center gap-2">
-                      <Checkbox 
-                        id="calcFromSubparts" 
-                        checked={calcFromSubparts} 
-                        onCheckedChange={(c) => setCalcFromSubparts(!!c)} 
-                      />
-                      <label htmlFor="calcFromSubparts" className="text-[11px] font-medium leading-none text-muted-foreground cursor-pointer select-none">
-                        Calculate from sub-parts
-                      </label>
+                      type="text" placeholder="1" className="h-9" maxLength={15} />
+                    {errors.qty && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.qty}</p>}
+                  </FL>
+                  <FL label="Unit of Measure (UOM)" required>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {UOM_OPTIONS.map(u => (
+                        <button key={u} onClick={() => setUom(u)}
+                          className={cn(
+                            'px-3 py-1.5 rounded-md text-xs font-medium border cursor-pointer transition-colors',
+                            uom === u ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border hover:bg-muted'
+                          )}>
+                          {u}
+                        </button>
+                      ))}
                     </div>
-                  </div>
-                </FL>
-                <FL label="Lead Time">
+                  </FL>
+                </div>
+
+                {/* Dynamic supplier list */}
+                <div className="space-y-3">
+                  {suppliers.map((sup, i) => (
+                    <div key={i} className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Supplier {i + 1}
+                        </span>
+                        {suppliers.length > 1 && (
+                          <button
+                            onClick={() => setSuppliers(s => s.filter((_, idx) => idx !== i))}
+                            className="text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                            title="Remove supplier"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                        <FL label="Supplier / Distributor" required>
+                          <FInput
+                            value={sup.distributor}
+                            onChange={e => setSuppliers(s => s.map((x, idx) => idx === i ? { ...x, distributor: e.target.value } : x))}
+                            placeholder="e.g. Digi-Key" className="h-9" />
+                          {errors[`sup_dist_${i}`] && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors[`sup_dist_${i}`]}</p>}
+                        </FL>
+                        <FL label="Unit Price" required>
+                          <FInput
+                            value={sup.calcFromSubparts ? '0.00' : sup.price}
+                            onChange={e => {
+                              let val = e.target.value.replace(/[^0-9.]/g, '');
+                              const parts = val.split('.');
+                              if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                              if (parts[0].length > 10) val = parts.length > 1 ? parts[0].slice(0, 10) + '.' + parts[1] : parts[0].slice(0, 10);
+                              setSuppliers(s => s.map((x, idx) => idx === i ? { ...x, price: val } : x));
+                            }}
+                            disabled={sup.calcFromSubparts}
+                            type="text" placeholder="0.00" className="h-9" maxLength={15} />
+                          {errors[`sup_price_${i}`] && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors[`sup_price_${i}`]}</p>}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <Checkbox
+                              id={`calcFromSubparts_${i}`}
+                              checked={sup.calcFromSubparts}
+                              onCheckedChange={c => setSuppliers(s => s.map((x, idx) => idx === i ? { ...x, calcFromSubparts: !!c } : x))}
+                            />
+                            <label htmlFor={`calcFromSubparts_${i}`} className="text-[11px] font-medium leading-none text-muted-foreground cursor-pointer select-none">
+                              Calculate from sub-parts
+                            </label>
+                          </div>
+                        </FL>
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setSuppliers(s => [...s, { distributor: '', price: '', calcFromSubparts: false }])}
+                    className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors cursor-pointer mt-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add Supplier
+                  </button>
+                </div>
+
+                {/* Lead Time */}
+                <FL label="Lead Time" required>
                   <div className="flex gap-1.5">
                     <FInput value={leadTime} onChange={e => {
-                      let val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
+                      const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
                       setLeadTime(val);
                     }}
                       type="text" placeholder="8" className="h-9 flex-1" maxLength={6} />
@@ -948,34 +1043,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                       ))}
                     </div>
                   </div>
-                </FL>
-                <FL label="Quantity">
-                  <FInput value={qty} onChange={e => {
-                    let val = e.target.value;
-                    if (['EA', 'SET', 'PCS', 'LOT', 'LIC'].includes(uom)) {
-                      val = val.replace(/[^0-9]/g, '').slice(0, 10);
-                    } else {
-                      val = val.replace(/[^0-9.]/g, '');
-                      const parts = val.split('.');
-                      if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
-                      if (parts[0].length > 10) val = parts.length > 1 ? parts[0].slice(0, 10) + '.' + parts[1] : parts[0].slice(0, 10);
-                    }
-                    setQty(val);
-                  }}
-                    type="text" placeholder="1" className="h-9" maxLength={15} />
-                </FL>
-                <FL label="Unit of Measure (UOM)">
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {UOM_OPTIONS.map(u => (
-                      <button key={u} onClick={() => setUom(u)}
-                        className={cn(
-                          'px-3 py-1.5 rounded-md text-xs font-medium border cursor-pointer transition-colors',
-                          uom === u ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border hover:bg-muted'
-                        )}>
-                        {u}
-                      </button>
-                    ))}
-                  </div>
+                  {errors.leadTime && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.leadTime}</p>}
                 </FL>
               </div>
             </TabsContent>
@@ -1041,7 +1109,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                     {techSections.map((section) => (
                       <div key={section.id} className="relative group">
                         <FileRow icon={section.icon} label={section.label} hint={section.hint}
-                          accept={section.accept} value={section.value} 
+                          accept={section.accept} value={section.value}
                           onChange={(v) => setTechSections(ts => ts.map(s => s.id === section.id ? { ...s, value: v } : s))} />
                         <button type="button" onClick={() => setTechSections(ts => ts.filter(s => s.id !== section.id))}
                           className="absolute -right-2 -top-2 bg-destructive/10 text-destructive rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity" title="Remove Section">
@@ -1049,13 +1117,13 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                         </button>
                       </div>
                     ))}
-                    
+
                     {isAddingSection && (
                       <div className="flex items-center gap-2 p-3 rounded-xl border-2 border-dashed border-border bg-card">
-                        <FInput 
-                          value={newSectionName} 
-                          onChange={e => setNewSectionName(e.target.value)} 
-                          placeholder="Section Name (e.g. Test Report)" 
+                        <FInput
+                          value={newSectionName}
+                          onChange={e => setNewSectionName(e.target.value)}
+                          placeholder="Section Name (e.g. Test Report)"
                           className="h-8 flex-1"
                           autoFocus
                           onKeyDown={e => {

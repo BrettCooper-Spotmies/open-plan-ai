@@ -887,6 +887,7 @@ export function BOMView({
         initialRev:          payload.rev,
         initialPrice:        payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
+        initialSuppliers:    payload.suppliers?.length ? payload.suppliers.map(s => ({ ...s, price: parseFloat(s.price) || 0 })) : undefined,
       });
       const node = await createNode.mutateAsync({
         partId:   part.id,
@@ -926,6 +927,7 @@ export function BOMView({
         initialRev:          payload.rev,
         initialPrice:        payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
+        initialSuppliers:    payload.suppliers?.length ? payload.suppliers.map(s => ({ ...s, price: parseFloat(s.price) || 0 })) : undefined,
       });
       const node = await createNode.mutateAsync({
         partId:   part.id,

@@ -16,6 +16,24 @@ import { useCreateECO } from '@/hooks/useECOs';
 import { useBomTree } from '@/hooks/useBom';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { fromApiNode, bomFlatAll, bomPath } from './bomData';
+import { REQS } from './requirementsData';
+
+// ── BOM parameter options for Details diff rows ───────────────────────────────
+
+const BOM_PARAM_OPTIONS: { key: string; label: string }[] = [
+  { key: 'name',         label: 'Part Name' },
+  { key: 'desc',         label: 'Description' },
+  { key: 'qty',          label: 'Quantity' },
+  { key: 'uom',          label: 'Unit of Measure' },
+  { key: 'supplier',     label: 'Supplier' },
+  { key: 'rev',          label: 'Revision' },
+  { key: 'cat',          label: 'Category' },
+  { key: 'manufacturer', label: 'Manufacturer' },
+  { key: 'distributor',  label: 'Distributor' },
+  { key: 'price',        label: 'Unit Price' },
+  { key: 'leadTime',     label: 'Lead Time (days)' },
+  { key: 'mpn',          label: 'MPN' },
+];
 
 // ── Attachment file type helper ───────────────────────────────────────────────
 
@@ -187,12 +205,22 @@ function Stepper({ step, maxStepReached, onStepClick }: { step: number; maxStepR
 
 // ── Wizard state types ────────────────────────────────────────────────────────
 
+type ECOScope = 'BOM_PART' | 'REQUIREMENT';
+
 interface BasicsState {
   title: string; description: string;
   type: ECOType | string; priority: ECOPriority; reason: ECOReason | string;
   changeClass: ChangeClass;
   ecr: string;
   effType: EffectivityType; effValue: string;
+  scope: ECOScope;
+}
+
+interface ReqItemState {
+  key: string;
+  title: string;
+  status: string;
+  category: string;
 }
 
 interface ItemState {
@@ -240,6 +268,7 @@ export function ECOWizard({
     reason: seed?.reason ?? 'PERFORMANCE', changeClass: seed?.changeClass ?? 'II',
     ecr: seed?.ecr ?? '',
     effType: 'DATE', effValue: '',
+    scope: 'BOM_PART',
   });
 
   // Step 2 — Affected items (real BOM parts for this project)
@@ -259,6 +288,8 @@ export function ECOWizard({
 
   const [items, setItems] = useState<ItemState[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [reqItems, setReqItems] = useState<ReqItemState[]>([]);
+  const [reqPickerOpen, setReqPickerOpen] = useState(false);
 
   // Selecting a part auto-populates Rev From from its current BOM revision;
   // Rev To is left for the user to fill in once the target rev is known.
@@ -276,7 +307,7 @@ export function ECOWizard({
   };
 
   // Step 3 — Diff rows + attachments
-  const [diffRows, setDiffRows] = useState<DiffRowState[]>([]);
+  const [diffRows, setDiffRows] = useState<DiffRowState[]>([{ param: '', from: '', to: '', cls: 'MODIFIED' }]);
   const [attachments, setAttachments] = useState<AttachmentState[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -327,10 +358,19 @@ export function ECOWizard({
 
   const canSubmit = !createMutation.isPending;
 
+  // Auto-fill "From" in Details when scope is BOM_PART
+  const firstSelectedNode = useMemo(() => {
+    if (items.length === 0) return null;
+    return bomFlatAll(bomRootNodes).find(n => n.id === items[0].nodeId) ?? null;
+  }, [items, bomRootNodes]);
+
   const validateStep = (s: number): boolean => {
     const e: Record<string, string> = {};
     if (s === 0 && !basics.title.trim()) e.title = 'Title is required';
-    if (s === 1 && items.length < 1) e.items = 'At least 1 affected part is required';
+    if (s === 1) {
+      if (basics.scope === 'BOM_PART' && items.length < 1) e.items = 'At least 1 affected part is required';
+      if (basics.scope === 'REQUIREMENT' && reqItems.length < 1) e.items = 'At least 1 affected requirement is required';
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -385,6 +425,31 @@ export function ECOWizard({
           placeholder="Short summary of the change intent"
           className={cn(inputCls, 'h-16 resize-none')}
         />
+      </div>
+      <div>
+        <FieldLabel required>Scope</FieldLabel>
+        <div className="flex bg-muted/40 border border-border rounded-md p-0.5 w-fit">
+          {(['BOM_PART', 'REQUIREMENT'] as ECOScope[]).map(s => (
+            <button
+              key={s}
+              onClick={() => {
+                setBasics({ ...basics, scope: s });
+                setItems([]);
+                setReqItems([]);
+                setDiffRows([{ param: '', from: '', to: '', cls: 'MODIFIED' }]);
+              }}
+              className="px-3 py-1.5 rounded text-[12px] font-semibold transition-colors font-[inherit]"
+              style={{
+                background: basics.scope === s ? '#2563EB' : 'transparent',
+                color: basics.scope === s ? '#fff' : undefined,
+                border: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              {s === 'BOM_PART' ? 'BOM Part' : 'Requirement'}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -457,7 +522,7 @@ export function ECOWizard({
     </div>
   );
 
-  const StepItems = (
+  const StepItemsBomPart = (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div className="text-[13px] text-muted-foreground">
@@ -552,6 +617,77 @@ export function ECOWizard({
     </div>
   );
 
+  const StepItemsRequirement = (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <div className="text-[13px] text-muted-foreground">
+          {reqItems.length} affected requirement{reqItems.length !== 1 ? 's' : ''}
+        </div>
+        <button
+          onClick={() => setReqPickerOpen(p => !p)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors font-[inherit]"
+        >
+          <Plus className="w-3 h-3" />
+          Add requirement
+        </button>
+      </div>
+      {reqPickerOpen && (
+        <div className="border border-border rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+          {REQS.length === 0 ? (
+            <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
+              No requirements in this project yet.
+            </div>
+          ) : (
+            REQS.filter(r => !reqItems.find(ri => ri.key === r.key)).map(r => (
+              <div
+                key={r.key}
+                onClick={() => {
+                  setReqItems(prev => [...prev, { key: r.key, title: r.title, status: r.status, category: r.category }]);
+                  setReqPickerOpen(false);
+                }}
+                className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[11px] font-mono font-semibold text-blue-500 shrink-0">{r.key}</span>
+                  <span className="text-[12px] text-muted-foreground truncate">{r.title}</span>
+                </div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 border border-border shrink-0 ml-2">{r.status}</span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+      {reqItems.length === 0 && !reqPickerOpen && (
+        <div
+          className="py-7 text-center border border-dashed rounded-lg text-[12px]"
+          style={{
+            borderColor: errors.items ? '#DC2626' : 'hsl(var(--border))',
+            color: errors.items ? '#DC2626' : 'hsl(var(--muted-foreground))',
+          }}
+        >
+          {errors.items ?? 'No requirements yet — at least one is required to submit.'}
+        </div>
+      )}
+      {reqItems.map((ri, idx) => (
+        <div key={ri.key} className="border border-border rounded-lg p-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[11px] font-mono font-semibold text-blue-500 shrink-0">{ri.key}</span>
+            <span className="text-[12px] text-foreground truncate">{ri.title}</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 border border-border">{ri.status}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted/60 border border-border">{ri.category}</span>
+            <button onClick={() => setReqItems(reqItems.filter((_, i) => i !== idx))} className="text-muted-foreground hover:text-foreground transition-colors ml-1">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const StepItems = basics.scope === 'REQUIREMENT' ? StepItemsRequirement : StepItemsBomPart;
+
   const StepDetails = (
     <div className="flex flex-col gap-3">
       {/* Diff rows */}
@@ -578,7 +714,26 @@ export function ECOWizard({
       )}
       {diffRows.map((r, idx) => (
         <div key={idx} className="flex gap-2 items-center">
-          <input value={r.param} onChange={e => upRow(idx, 'param', e.target.value)} placeholder="Parameter" className={cn(inputCls, 'flex-[1.2]')} />
+          {basics.scope === 'BOM_PART' && items.length > 0 ? (
+            <select
+              value={r.param}
+              onChange={e => {
+                const key = e.target.value;
+                const autoFrom = firstSelectedNode
+                  ? String((firstSelectedNode as Record<string, unknown>)[key] ?? '')
+                  : '';
+                setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: key, from: autoFrom } : x));
+              }}
+              className={cn(ECO_SELECT_CLS, 'flex-[1.2]')}
+            >
+              <option value="" className="bg-card">— select parameter —</option>
+              {BOM_PARAM_OPTIONS.map(o => (
+                <option key={o.key} value={o.key} className="bg-card">{o.label}</option>
+              ))}
+            </select>
+          ) : (
+            <input value={r.param} onChange={e => upRow(idx, 'param', e.target.value)} placeholder="Parameter" className={cn(inputCls, 'flex-[1.2]')} />
+          )}
           <input value={r.from}  onChange={e => upRow(idx, 'from',  e.target.value)} placeholder="from"      className={cn(inputCls, 'flex-1')} />
           <input value={r.to}    onChange={e => upRow(idx, 'to',    e.target.value)} placeholder="to"        className={cn(inputCls, 'flex-1')} />
           <div className="w-32">
