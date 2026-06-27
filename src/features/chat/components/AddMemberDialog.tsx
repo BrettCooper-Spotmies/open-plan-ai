@@ -28,17 +28,17 @@ export function AddMemberDialog({ conversation, open, onOpenChange, onMemberAdde
   const [showConfirm, setShowConfirm] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !currentOrganization?.id) return;
     setSelectedUserIds([]);
     setLoadingUsers(true);
-    chatService.getReachableUsers(currentOrganization?.id)
+    chatService.getReachableUsers(currentOrganization.id)
       .then((users) => {
         const existingIds = new Set(conversation.members.map((m) => m.id));
         setReachableUsers(users.filter((u) => !existingIds.has(u.id)));
       })
       .catch(() => toast.error('Failed to load users'))
       .finally(() => setLoadingUsers(false));
-  }, [open, conversation.members]);
+  }, [open, conversation.members, currentOrganization?.id]);
 
   const toggleUser = (userId: string) => {
     setSelectedUserIds((prev) =>
