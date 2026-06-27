@@ -24,6 +24,7 @@ export interface UpdateTaskColumnInput {
 // the backend seeds for every new project — see DEFAULT_TASK_COLUMNS in
 // open-plan-ai-backend/src/modules/task-columns/task-columns.service.ts.
 export const DEFAULT_COLUMNS: ProjectTaskColumn[] = [
+  { id: 'blocked', status: 'blocked', label: 'Dependencies', color: '#ef4444', isSpecial: true },
   { id: 'backlog', status: 'backlog', label: 'Backlog', color: '#6b7280' },
   { id: 'todo', status: 'todo', label: 'To Do', color: '#3b82f6' },
   { id: 'in-progress', status: 'in-progress', label: 'In Progress', color: '#f59e0b' },
