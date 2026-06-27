@@ -535,6 +535,11 @@ export const TaskDetailModal = ({
       return;
     }
 
+    if (!editedTask.startDate) {
+      toast.error('Start date is required');
+      return;
+    }
+
     if (isBlockedWithoutDependencies) {
       toast.error('Please add dependencies before creating a blocked task');
       return;
@@ -733,6 +738,7 @@ export const TaskDetailModal = ({
   const isFormDirty = isTaskDirty || hasBlockingToChanges || hasBlockedByChanges;
   const canSubmitTask = Boolean(
     editedTask.title &&
+      editedTask.startDate &&
       editedTask.dueDate &&
       !isBlockedWithoutDependencies &&
       (mode === 'create' || isFormDirty)
@@ -1371,6 +1377,7 @@ export const TaskDetailModal = ({
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <CalendarIcon className="h-3 w-3" />
                     Start Date
+                    <span className="text-destructive">*</span>
                   </Label>
                   <Popover>
                     <PopoverTrigger asChild>
