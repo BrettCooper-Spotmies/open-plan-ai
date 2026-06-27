@@ -38,8 +38,13 @@ function fmtSize(b: number) {
 
 // ── Shared field label ────────────────────────────────────────────────────────
 
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">{children}</div>;
+function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
+  return (
+    <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-0.5">
+      {children}
+      {required && <span style={{ color: '#DC2626' }}>*</span>}
+    </div>
+  );
 }
 
 // ── Shared select ─────────────────────────────────────────────────────────────
@@ -251,18 +256,13 @@ export function ECOWizard({
   const stageMoved = (p: PipelineStep, idx: number) =>
     defaultOrder[p.stage] !== undefined && defaultOrder[p.stage] !== idx;
 
-  const pipelineValid = pipeline.every((p, idx) => {
-    const needsReason = p.optional || stageMoved(p, idx);
-    const reasonOk = !needsReason || (p.justification ?? '').trim().length > 0;
-    return reasonOk && !!p.approverId;
-  });
+  const pipelineValid = true;
 
-  const canSubmit = basics.title.trim() && items.length >= 1 && pipeline.length >= 2 && pipelineValid;
+  const canSubmit = !createMutation.isPending;
 
   const validateStep = (s: number): boolean => {
     const e: Record<string, string> = {};
     if (s === 0 && !basics.title.trim()) e.title = 'Title is required';
-    if (s === 1 && items.length < 1) e.items = 'At least 1 affected part is required';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -293,7 +293,7 @@ export function ECOWizard({
   const StepBasics = (
     <div className="flex flex-col gap-3.5">
       <div>
-        <FieldLabel>Title</FieldLabel>
+        <FieldLabel required>Title</FieldLabel>
         <input
           value={basics.title}
           onChange={e => {
@@ -320,21 +320,21 @@ export function ECOWizard({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <FieldLabel>Change Type</FieldLabel>
+          <FieldLabel required>Change Type</FieldLabel>
           <EcoSelect value={basics.type} onChange={v => setBasics({ ...basics, type: v })} options={Object.keys(ECO_TYPE_LABEL) as ECOType[]} labels={ECO_TYPE_LABEL} />
         </div>
         <div>
-          <FieldLabel>Reason Code</FieldLabel>
+          <FieldLabel required>Reason Code</FieldLabel>
           <EcoSelect value={basics.reason} onChange={v => setBasics({ ...basics, reason: v })} options={Object.keys(REASON_LABEL) as ECOReason[]} labels={REASON_LABEL} />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <FieldLabel>Priority</FieldLabel>
+          <FieldLabel required>Priority</FieldLabel>
           <EcoSelect value={basics.priority} onChange={v => setBasics({ ...basics, priority: v })} options={Object.keys(PRIORITY_LABEL) as ECOPriority[]} labels={PRIORITY_LABEL} />
         </div>
         <div>
-          <FieldLabel>Change Classification</FieldLabel>
+          <FieldLabel required>Change Classification</FieldLabel>
           <EcoSelect value={basics.changeClass} onChange={v => setBasics({ ...basics, changeClass: v })} options={Object.keys(CHANGE_CLASS_LABEL) as ChangeClass[]} labels={CHANGE_CLASS_LABEL} />
         </div>
       </div>
@@ -370,12 +370,13 @@ export function ECOWizard({
             ))}
           </div>
           <input
+            type={basics.effType === 'DATE' ? 'date' : 'text'}
             value={basics.effValue}
             onChange={e => setBasics({ ...basics, effValue: e.target.value })}
             placeholder={
-              basics.effType === 'DATE' ? 'Jun 02, 2026'
-              : basics.effType === 'SERIAL' ? 'Effective from S/N EVC-1450'
-              : 'Effective from Lot 2026-W18'
+              basics.effType === 'SERIAL' ? 'Effective from S/N EVC-1450'
+              : basics.effType === 'LOT' ? 'Effective from Lot 2026-W18'
+              : undefined
             }
             className={cn(inputCls, 'flex-1')}
           />
@@ -848,16 +849,8 @@ export function ECOWizard({
 
         {/* Footer */}
         <div className="px-5 py-3.5 border-t border-border flex items-center justify-between">
-          <div
-            className="text-[11px] flex items-center gap-1.5"
-            style={{ color: canSubmit ? undefined : '#F59E0B' }}
-          >
-            {!canSubmit && <AlertCircle className="w-3 h-3" style={{ color: '#F59E0B' }} />}
-            {canSubmit
-              ? <span className="text-muted-foreground">Ready to save draft</span>
-              : !pipelineValid
-              ? 'Assign an approver to every stage, and a justification for each optional / reordered stage'
-              : 'Need a title, ≥1 affected item and a pipeline to submit'}
+          <div className="text-[11px] flex items-center gap-1.5">
+            <span className="text-muted-foreground">Ready to save draft</span>
           </div>
           <div className="flex gap-2">
             {step > 0 && (
