@@ -603,11 +603,11 @@ export function ECOWizard({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <FieldLabel>Unit Cost Δ ($/unit)</FieldLabel>
-          <input value={impact.unitCostDelta} onChange={e => setImpact({ ...impact, unitCostDelta: e.target.value })} placeholder="+4.55" className={inputCls} />
+          <input value={impact.unitCostDelta} onChange={e => { const v = e.target.value; if (/^[+-]?\d*\.?\d*$/.test(v)) setImpact({ ...impact, unitCostDelta: v }); }} placeholder="+4.55" className={inputCls} />
         </div>
         <div>
           <FieldLabel>One-Time Cost ($)</FieldLabel>
-          <input value={impact.oneTimeCost} onChange={e => setImpact({ ...impact, oneTimeCost: e.target.value })} placeholder="12400" className={inputCls} />
+          <input value={impact.oneTimeCost} onChange={e => { const v = e.target.value; if (/^\d*\.?\d*$/.test(v)) setImpact({ ...impact, oneTimeCost: v }); }} placeholder="12400" className={inputCls} />
         </div>
       </div>
       {([
