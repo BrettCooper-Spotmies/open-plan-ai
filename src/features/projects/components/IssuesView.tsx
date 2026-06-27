@@ -441,7 +441,24 @@ export function IssuesView({
                                               >
                                                 <div className="space-y-2">
                                                   <div className="flex items-start justify-between gap-2">
-                                                    <p className="text-sm font-medium line-clamp-2">{issue.title}</p>
+                                                    <div className="flex items-start gap-2 min-w-0 flex-1">
+                                                      <button
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          handleStatusChange(issue, issue.status === 'resolved' ? 'open' : 'resolved');
+                                                        }}
+                                                        className={cn(
+                                                          'shrink-0 mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center transition-all',
+                                                          issue.status === 'resolved'
+                                                            ? 'bg-status-done/20 border-status-done'
+                                                            : 'border-foreground/30 hover:border-foreground hover:bg-muted bg-background'
+                                                        )}
+                                                        aria-label="Mark as resolved"
+                                                      >
+                                                        {issue.status === 'resolved' && <Check className="h-2.5 w-2.5 text-status-done" />}
+                                                      </button>
+                                                      <p className="text-sm font-medium line-clamp-2">{issue.title}</p>
+                                                    </div>
                                                     <div className="text-muted-foreground hover:text-foreground mt-0.5">
                                                       <GripVertical className="h-4 w-4" />
                                                     </div>

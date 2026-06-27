@@ -319,6 +319,29 @@ export function IssueDetailContent({
         if (e.target) e.target.value = '';
     };
 
+    const handlePaste = (e: ClipboardEvent) => {
+        if (isUploading) return;
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        const imageFiles: File[] = [];
+        for (const item of Array.from(items)) {
+            if (item.kind === 'file' && item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                if (file) imageFiles.push(file);
+            }
+        }
+        if (imageFiles.length === 0) return;
+        e.preventDefault();
+        const dt = new DataTransfer();
+        imageFiles.forEach(f => dt.items.add(f));
+        processFiles(dt.files);
+    };
+
+    useEffect(() => {
+        document.addEventListener('paste', handlePaste);
+        return () => document.removeEventListener('paste', handlePaste);
+    });
+
     const handleRemovePendingFile = (index: number) => {
         setPendingFiles(prev => prev.filter((_, i) => i !== index));
     };
@@ -1006,7 +1029,7 @@ export function IssueDetailContent({
                                                 {isUploading ? 'Uploading...' : 'Add Attachment'}
                                             </span>
                                         </div>
-                                        {!isUploading && <p className="text-xs text-muted-foreground mt-1">or drag and drop</p>}
+                                        {!isUploading && <p className="text-xs text-muted-foreground mt-1">or drag and drop, or paste image</p>}
                                     </div>
                                     <input type="file" className="hidden" multiple onChange={handleFileUpload} disabled={isUploading} />
                                 </label>
