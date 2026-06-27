@@ -54,7 +54,8 @@ import {
   Smile
 } from "lucide-react";
 import { format, isBefore, startOfMonth, startOfToday } from "date-fns";
-import { cn, isValidPhoneNumber, sanitizePhoneInput } from "@/lib/utils";
+import { cn, isValidPhoneNumber } from "@/lib/utils";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -595,6 +596,11 @@ const NewProject = () => {
       return;
     }
 
+    if (isBefore(expectedEndDate, startDate)) {
+      toast.error('Expected completion date must be after the start date');
+      return;
+    }
+
     if (newMilestoneName.trim() || newMilestoneStart || newMilestoneEnd) {
       toast.error("You have an unsaved milestone. Please click '+ Add Milestone' or clear the inputs.");
       return;
@@ -888,6 +894,9 @@ const NewProject = () => {
                       selected={startDate}
                       onSelect={(date) => {
                         setStartDate(date);
+                        if (date && expectedEndDate && isBefore(expectedEndDate, date)) {
+                          setExpectedEndDate(undefined);
+                        }
                         setIsStartDateOpen(false);
                       }}
                       initialFocus
@@ -947,7 +956,7 @@ const NewProject = () => {
                       placeholder="Client name"
                       value={clientName}
                       maxLength={100}
-                      onChange={(e) => setClientName(e.target.value)}
+                      onChange={(e) => setClientName(e.target.value.replace(/[^a-zA-Z\s]/g, ''))}
                     />
                   </div>
                   <div className="space-y-2">
@@ -966,16 +975,12 @@ const NewProject = () => {
                     {clientOrgError && <p className="text-xs text-destructive">{clientOrgError}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="clientContact">Contact Number</Label>
-                    <Input
-                      id="clientContact"
-                      placeholder="e.g. +1 4155552671"
+                    <Label>Contact Number</Label>
+                    <PhoneInput
                       value={clientContact}
-                      maxLength={16}
-                      onChange={(e) => {
-                        const val = sanitizePhoneInput(e.target.value);
-                        setClientContact(val);
-                        setClientContactError(val.length > 0 && !isValidPhoneNumber(val) ? "Please enter a valid phone number (with country code)" : "");
+                      onChange={(fullValue, error) => {
+                        setClientContact(fullValue);
+                        setClientContactError(error);
                       }}
                     />
                     {clientContactError && <p className="text-xs text-destructive">{clientContactError}</p>}

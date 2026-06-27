@@ -27,6 +27,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // If this is a Vite chunk loading error due to a new deployment, auto-reload
+    if (error.message?.includes('Failed to fetch dynamically imported module')) {
+      window.location.reload();
+      return;
+    }
+
     logger.error('React Error Boundary caught error', {
       error: error.message,
       stack: error.stack,
@@ -45,6 +51,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      // Don't flash the error UI if we're just going to auto-reload
+      if (this.state.error?.message?.includes('Failed to fetch dynamically imported module')) {
+        return null;
+      }
+
       if (this.props.fallback) {
         return this.props.fallback;
       }

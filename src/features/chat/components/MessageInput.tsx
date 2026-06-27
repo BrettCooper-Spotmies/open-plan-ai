@@ -72,7 +72,9 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const lastTypingRef = useRef(0);
+  const dragCounterRef = useRef(0);
   const { user } = useAuth();
 
   const { isOnline, pendingCount, enqueueText, enqueueFile } = useOfflineQueue(user?.id);
@@ -206,6 +208,54 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     setPendingFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handlePaste = (e: React.ClipboardEvent) => {
+    if (readOnly) return;
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const fileList: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].kind === 'file') {
+        const file = items[i].getAsFile();
+        if (file) fileList.push(file);
+      }
+    }
+    if (fileList.length > 0) {
+      e.preventDefault();
+      const dt = new DataTransfer();
+      fileList.forEach(f => dt.items.add(f));
+      addFiles(dt.files);
+    }
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.types.includes('Files')) setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current === 0) setIsDraggingOver(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingOver(false);
+    if (readOnly) return;
+    addFiles(e.dataTransfer.files);
+  };
+
   const sendFileMessage = async (file: File, caption?: string) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -329,7 +379,25 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   const showCharCount = value.length > MAX_CHARS * 0.9;
 
   return (
-    <div className="border-t border-border/70 bg-gradient-to-t from-background via-background/95 to-background/80 px-2 md:px-4 py-2">
+    <div
+      className={cn(
+        'border-t border-border/70 bg-gradient-to-t from-background via-background/95 to-background/80 px-2 md:px-4 py-2 relative',
+        isDraggingOver && 'ring-2 ring-primary ring-inset'
+      )}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drop overlay */}
+      {isDraggingOver && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center rounded-t-none bg-primary/10 border-2 border-dashed border-primary pointer-events-none">
+          <div className="flex flex-col items-center gap-1 text-primary">
+            <Paperclip className="h-6 w-6" />
+            <span className="text-sm font-medium">Drop files to attach</span>
+          </div>
+        </div>
+      )}
 
       {/* ── Offline banner ── */}
       {!isOnline && (
@@ -518,6 +586,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
               value={value}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               placeholder={isMobile || otherMembers.length <= 1 ? 'Type a message...' : 'Type a message... Use @ to mention'}
               rows={1}
               className="w-full resize-none bg-transparent text-sm leading-5 max-h-[140px] placeholder:text-muted-foreground/90 focus-visible:outline-none"
