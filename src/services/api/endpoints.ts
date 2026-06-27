@@ -139,6 +139,7 @@ export const ENDPOINTS = {
   PARTS: {
     LIST:      (orgId: string)  => `/organizations/${orgId}/parts`,
     CREATE:    (orgId: string)  => `/organizations/${orgId}/parts`,
+    CHECK:     (orgId: string)  => `/organizations/${orgId}/parts/check`,
     BY_ID:     (partId: string) => `/parts/${partId}`,
     REVISIONS: (partId: string) => `/parts/${partId}/revisions`,
     WHERE_USED:(partId: string) => `/parts/${partId}/where-used`,

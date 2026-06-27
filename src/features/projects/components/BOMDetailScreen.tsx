@@ -1051,6 +1051,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       <BOMPartSheet
         mode="add"
         projectId={projectId}
+        orgId={orgId}
         open={showCreateNewSub}
         onClose={() => setShowCreateNewSub(false)}
         onSave={handleNewSubSaved}
@@ -1069,6 +1070,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       <BOMPartSheet
         mode="edit"
         projectId={projectId}
+        orgId={orgId}
         node={node}
         open={showEdit}
         onClose={() => setShowEdit(false)}

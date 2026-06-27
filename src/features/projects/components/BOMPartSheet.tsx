@@ -30,6 +30,8 @@ import {
 } from './bomData';
 import { BOMStatusPill } from './BOMShared';
 import { BOMRejectDialog } from './BOMRejectDialog';
+import { apiClient } from '@/services/api/client';
+import { ENDPOINTS } from '@/services/api/endpoints';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useApproveBomNode, useRejectBomNode, useBomNodeApprovals } from '@/hooks/useBom';
@@ -74,6 +76,7 @@ interface Props {
   mode: 'add' | 'edit';
   node?: BOMNode;           // required when mode === 'edit'
   projectId: string;
+  orgId: string;
   open: boolean;
   onClose: () => void;
   onSave: (payload: BOMPartPayload) => void | Promise<void>;
@@ -400,7 +403,7 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
 }
 
 // ── Main component ─────────────────────────────────────────────────
-export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: Props) {
+export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSave }: Props) {
   const isEdit = mode === 'edit';
 
   const { data: projectMembers = [] } = useProjectMembers(projectId);
@@ -524,9 +527,29 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
     return Object.keys(e).length === 0;
   };
 
-  const handleNext = () => {
+  const [checkingPn, setCheckingPn] = useState(false);
+
+  const handleNext = async () => {
     if (activeTab === 'history') return;
     if (!validateTab(activeTab)) return;
+    if (!isEdit && activeTab === 'details') {
+      setCheckingPn(true);
+      try {
+        const res = await apiClient.get<{ data: { exists: boolean } }>(
+          ENDPOINTS.PARTS.CHECK(orgId),
+          { params: { partNumber: pn.trim().toUpperCase() } },
+        );
+        if (res.data.exists) {
+          setErrors(e => ({ ...e, pn: `Part number '${pn.trim().toUpperCase()}' already exists` }));
+          return;
+        }
+      } catch {
+        setErrors(e => ({ ...e, pn: 'Part number already exists' }));
+        return;
+      } finally {
+        setCheckingPn(false);
+      }
+    }
     setActiveTab(TABS[wizardIndex(activeTab) + 1]);
   };
 
@@ -1186,8 +1209,8 @@ export function BOMPartSheet({ mode, node, projectId, open, onClose, onSave }: P
                 </Button>
               )}
               {activeTab === 'history' ? null : activeTab !== 'documents' ? (
-                <Button size="default" className="gap-1.5 px-5" onClick={handleNext}>
-                  Next <ChevronRight className="w-4 h-4" />
+                <Button size="default" className="gap-1.5 px-5" onClick={handleNext} disabled={checkingPn}>
+                  {checkingPn ? <><Loader2 className="w-4 h-4 animate-spin" /> Checking…</> : <>Next <ChevronRight className="w-4 h-4" /></>}
                 </Button>
               ) : (
                 <Button size="default" className="gap-2 px-6"

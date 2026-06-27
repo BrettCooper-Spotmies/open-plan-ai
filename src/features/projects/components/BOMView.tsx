@@ -1210,6 +1210,7 @@ export function BOMView({
       <BOMPartSheet
         mode="add"
         projectId={projectId}
+        orgId={orgId}
         open={addOpen}
         onClose={() => onAddClose?.()}
         onSave={handleAddPart}
@@ -1231,6 +1232,7 @@ export function BOMView({
         <BOMPartSheet
           mode="add"
           projectId={projectId}
+          orgId={orgId}
           open={!!createSubNode}
           onClose={() => setCreateSubNode(null)}
           onSave={handleAddSubcomponent}
