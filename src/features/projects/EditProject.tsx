@@ -55,7 +55,8 @@ import {
     Palette
 } from "lucide-react";
 import { format, isBefore, startOfMonth } from "date-fns";
-import { cn, isValidPhoneNumber, sanitizePhoneInput } from "@/lib/utils";
+import { cn, isValidPhoneNumber } from "@/lib/utils";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1292,16 +1293,12 @@ const EditProject = () => {
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="clientContact">Contact Number</Label>
-                                <Input
-                                    id="clientContact"
-                                    placeholder="e.g. +1 4155552671"
+                                <Label>Contact Number</Label>
+                                <PhoneInput
                                     value={clientContact}
-                                    maxLength={16}
-                                    onChange={(e) => {
-                                        const val = sanitizePhoneInput(e.target.value);
-                                        setClientContact(val);
-                                        setClientContactError(val.length > 0 && !isValidPhoneNumber(val) ? "Please enter a valid phone number (with country code)" : "");
+                                    onChange={(fullValue, error) => {
+                                        setClientContact(fullValue);
+                                        setClientContactError(error);
                                     }}
                                 />
                                 {clientContactError && <p className="text-xs text-destructive">{clientContactError}</p>}
