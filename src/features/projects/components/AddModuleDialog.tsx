@@ -23,6 +23,7 @@ import { Module, ModuleType, TeamMember } from '@/types';
 import { formatModuleType, getModuleColor } from '../utils/projectUtils';
 import { cn } from '@/lib/utils';
 
+
 interface AddModuleDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -36,20 +37,6 @@ const moduleTypes: ModuleType[] = [
   'procurement', 'manufacturing', 'qa', 'logistics', 'enclosure', 'pcb', 'power'
 ];
 
-const moduleColorPresets: { type: ModuleType; color: string }[] = [
-  { type: 'pcb', color: '#3B82F6' },
-  { type: 'enclosure', color: '#10B981' },
-  { type: 'firmware', color: '#8B5CF6' },
-  { type: 'procurement', color: '#F59E0B' },
-  { type: 'software', color: '#EC4899' },
-  { type: 'qa', color: '#EF4444' },
-  { type: 'hardware', color: '#0EA5E9' },
-  { type: 'design', color: '#06B6D4' },
-  { type: 'manufacturing', color: '#22C55E' },
-  { type: 'testing', color: '#F97316' },
-  { type: 'logistics', color: '#64748B' },
-  { type: 'power', color: '#A855F7' },
-];
 
 export function AddModuleDialog({
   isOpen,
@@ -62,17 +49,10 @@ export function AddModuleDialog({
   const [type, setType] = useState<ModuleType>('hardware');
   const [description, setDescription] = useState('');
   const [ownerId, setOwnerId] = useState<string>('');
-  const [customColor, setCustomColor] = useState<string>('');
   const [errors, setErrors] = useState<{ name?: string }>({});
 
   const handleTypeChange = (newType: ModuleType) => {
     setType(newType);
-    setCustomColor(''); // Reset to default color for new type
-  };
-
-  const getSelectedColor = () => {
-    if (customColor) return customColor;
-    return getModuleColor(type);
   };
 
   const validateForm = (): boolean => {
@@ -100,7 +80,7 @@ export function AddModuleDialog({
       type,
       description: description.trim() || undefined,
       owner,
-      color: getSelectedColor(),
+      color: getModuleColor(type),
       progress: 0,
       status: 'active',
     });
@@ -110,7 +90,6 @@ export function AddModuleDialog({
     setType('hardware');
     setDescription('');
     setOwnerId('');
-    setCustomColor('');
     setErrors({});
     onClose();
   };
@@ -120,7 +99,6 @@ export function AddModuleDialog({
     setType('hardware');
     setDescription('');
     setOwnerId('');
-    setCustomColor('');
     setErrors({});
     onClose();
   };
@@ -179,35 +157,6 @@ export function AddModuleDialog({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          {/* Color Picker */}
-          <div className="space-y-2">
-            <Label>Color</Label>
-            <div className="flex items-center gap-2">
-              <div className="flex gap-1.5 flex-wrap">
-                {moduleColorPresets.slice(0, 8).map((preset) => (
-                  <button
-                    key={preset.color}
-                    type="button"
-                    className={cn(
-                      'w-6 h-6 rounded-full border-2 transition-all',
-                      getSelectedColor() === preset.color
-                        ? 'border-foreground scale-110'
-                        : 'border-transparent hover:scale-105'
-                    )}
-                    style={{ backgroundColor: preset.color }}
-                    onClick={() => setCustomColor(preset.color)}
-                  />
-                ))}
-              </div>
-              <Input
-                type="color"
-                value={getSelectedColor()}
-                onChange={(e) => setCustomColor(e.target.value)}
-                className="w-10 h-8 p-1 cursor-pointer"
-              />
-            </div>
           </div>
 
           {/* Description */}
