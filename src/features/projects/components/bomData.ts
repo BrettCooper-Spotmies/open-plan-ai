@@ -235,7 +235,7 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     suppliers:    rev?.suppliers?.map(s => ({ ...s, price: String(s.price) })) ?? [],
     owner:        node.owner?.name ?? '',
     ownerId:      node.owner?.id,
-    customFields: node.part.customFields ?? [],
+    customFields: Array.isArray(node.part.customFields) ? node.part.customFields : [],
     revHistory:   [],  // loaded on demand via usePartRevisions
     children:     node.children?.map(c => fromApiNode(c, depth + 1)),
     _partId:      node.part.id,

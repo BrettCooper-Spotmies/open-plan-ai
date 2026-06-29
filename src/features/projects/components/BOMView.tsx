@@ -548,13 +548,13 @@ function ListView({
               {/* Part */}
               <div className="flex-1 min-w-0 px-2 flex items-center gap-2.5">
                 <PartImageThumb nodeId={row.id} cat={row.cat} size={32} hoverZoom />
-                <div className="min-w-0">
+                <div className="flex-1 min-w-0">
                   <span className={cn('text-sm block truncate',
                     row.level === 0 ? 'font-semibold text-foreground' : row.level === 1 ? 'font-medium text-foreground' : 'text-muted-foreground'
                   )}>
                     {row.name || row.desc}
                   </span>
-                  <span className="text-xs font-medium font-mono block text-muted-foreground">{row.pn}</span>
+                  <span className="text-xs font-medium font-mono block truncate text-muted-foreground">{row.pn}</span>
                 </div>
               </div>
 
