@@ -431,23 +431,6 @@ export function IssueDetailContent({
                             aria-required="true"
                         />
                     </div>
-                    {/* Severity Badge and Actions on the right */}
-                    <div className="flex-shrink-0 pt-1">
-                        <div className="flex items-center gap-2">
-                            <Badge className={cn(ISSUE_SEVERITY_DISPLAY[editedIssue.severity].color)}>
-                                {(() => {
-                                    const SeverityIcon = ISSUE_SEVERITY_DISPLAY[editedIssue.severity].icon;
-                                    return <SeverityIcon className="h-3 w-3 mr-1" />;
-                                })()}
-                                {ISSUE_SEVERITY_DISPLAY[editedIssue.severity].label}
-                            </Badge>
-                            {!isExpanded && onExpand && (
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" onClick={onExpand}>
-                                    <Maximize2 className="h-4 w-4" />
-                                </Button>
-                            )}
-                        </div>
-                    </div>
                 </div>
 
                 <ConfirmationDialog

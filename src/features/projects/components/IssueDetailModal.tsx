@@ -15,7 +15,8 @@ import {
 } from '@/types';
 import { IssueDetailContent } from './IssueDetailContent';
 import { Button } from '@/components/ui/button';
-import { Trash2 } from 'lucide-react';
+import { DialogClose } from '@/components/ui/dialog';
+import { Trash2, Maximize2, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { logger } from '@/services/monitoring/logger';
@@ -80,16 +81,47 @@ export function IssueDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden">
-        {/* Header - shown for create mode */}
+      <DialogContent hideClose className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden">
+        {/* Header - create mode */}
         {mode === 'create' && (
-          <DialogHeader className="px-6 py-4 border-b">
+          <DialogHeader className="px-6 py-4 border-b flex-row items-center justify-between">
             <DialogTitle>Create New Issue</DialogTitle>
+            <DialogClose asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </Button>
+            </DialogClose>
           </DialogHeader>
         )}
-        {/* Accessible title for view mode (screen readers only) */}
+        {/* Header - view mode with expand + close */}
         {mode !== 'create' && (
-          <DialogTitle className="sr-only">Issue Details</DialogTitle>
+          <div className="flex items-center justify-between px-6 py-3 border-b shrink-0">
+            <DialogTitle className="text-sm font-medium text-muted-foreground">Issue</DialogTitle>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                onClick={() => {
+                  const pathParts = window.location.pathname.split('/');
+                  const projectIndex = pathParts.indexOf('projects');
+                  if (projectIndex !== -1 && pathParts[projectIndex + 1]) {
+                    navigate(`/projects/${pathParts[projectIndex + 1]}/issues/${editedIssue.id}`);
+                  } else {
+                    logger.warn('Could not determine project ID from URL');
+                  }
+                  onClose();
+                }}
+              >
+                <Maximize2 className="h-4 w-4" />
+              </Button>
+              <DialogClose asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                  <X className="h-4 w-4" />
+                </Button>
+              </DialogClose>
+            </div>
+          </div>
         )}
         <DialogDescription className="sr-only">
           View and edit details for issue {editedIssue?.title || 'New Issue'}
@@ -105,17 +137,7 @@ export function IssueDetailModal({
               isDraft={true} // Always pretend it's draft to enable auto-callbacks to onUpdate instead of parent
               mode={mode}
               onPendingFilesChange={setPendingFiles}
-              onExpand={mode === 'create' ? undefined : () => {
-                const pathParts = window.location.pathname.split('/');
-                const projectIndex = pathParts.indexOf('projects');
-                if (projectIndex !== -1 && pathParts[projectIndex + 1]) {
-                  const projectId = pathParts[projectIndex + 1];
-                  navigate(`/projects/${projectId}/issues/${editedIssue.id}`);
-                } else {
-                  logger.warn("Could not determine project ID from URL");
-                }
-                onClose();
-              }}
+              onExpand={undefined}
             />
           </div>
         </ScrollArea>
