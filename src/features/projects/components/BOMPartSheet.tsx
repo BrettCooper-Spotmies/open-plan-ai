@@ -449,7 +449,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
 
-  const [customFields, setCustomFields] = useState<CustomFieldEntry[]>(node?.customFields ?? []);
+  const [customFields, setCustomFields] = useState<CustomFieldEntry[]>(Array.isArray(node?.customFields) ? node.customFields : []);
   const [versionMode, setVersionMode] = useState<'same' | 'new'>('same');
   const [newRevLabel, setNewRevLabel] = useState(node ? nextRev(node.rev) : 'B');
   const [changeNotes, setChangeNotes] = useState('');
@@ -486,7 +486,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     setTechSections(DEFAULT_TECH_SECTIONS.map(s => ({ ...s, value: [] })));
     setIsAddingSection(false);
     setNewSectionName('');
-    setCustomFields(node?.customFields ?? []);
+    setCustomFields(Array.isArray(node?.customFields) ? node.customFields : []);
     setVersionMode('same');
     setNewRevLabel(node ? nextRev(node.rev) : 'B');
     setChangeNotes('');

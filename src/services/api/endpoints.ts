@@ -137,6 +137,7 @@ export const ENDPOINTS = {
     APPROVE_NODE:      (nodeId: string) => `/bom/nodes/${nodeId}/approve`,
     REJECT_NODE:       (nodeId: string) => `/bom/nodes/${nodeId}/reject`,
     NODE_APPROVALS:    (nodeId: string) => `/bom/nodes/${nodeId}/approvals`,
+    NODE_NOTES:        (nodeId: string) => `/bom/nodes/${nodeId}/notes`,
   },
   // BOM import — AI-assisted column mapping fallback for Excel import
   BOM_IMPORT: {
