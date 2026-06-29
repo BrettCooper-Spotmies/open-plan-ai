@@ -730,13 +730,19 @@ export default function ProjectDetail() {
     if (!project) return;
 
     const created = await createIssueMutation.mutateAsync({
+      ...newIssuePartial,
       title: newIssuePartial.title || 'New Issue',
       description: newIssuePartial.description || '',
+      descriptionBlocks: newIssuePartial.descriptionBlocks || [],
       status: newIssuePartial.status || 'open',
       severity: newIssuePartial.severity || 'minor',
       category: newIssuePartial.category || 'other',
       assignees: newIssuePartial.assignees || [],
-      reportedBy: { id: '', name: '', email: '', role: 'Member', initials: '' },
+      tags: newIssuePartial.tags || [],
+      checklist: newIssuePartial.checklist || [],
+      dueDate: newIssuePartial.dueDate,
+      blocksTaskIds: newIssuePartial.blocksTaskIds || [],
+      reportedBy: newIssuePartial.reportedBy || { id: '', name: '', email: '', role: 'Member', initials: '' },
     } as Omit<Issue, 'id' | 'reportedAt'>);
 
     if (pendingFiles && pendingFiles.length > 0 && created?.id) {

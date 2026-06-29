@@ -31,7 +31,8 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { IssueDetailModal } from './IssueDetailModal';
 import { ISSUE_SEVERITY_DISPLAY } from './issueSeverity';
-import { useIssueColumns, useCreateIssueColumn, useDeleteIssueColumn } from '@/hooks/useIssueColumns';
+import { useIssueColumns, useCreateIssueColumn, useDeleteIssueColumn, useReorderIssueColumns } from '@/hooks/useIssueColumns';
+import { useUpdateIssueStatus } from '@/hooks/useProjectMutations';
 import { DEFAULT_ISSUE_COLUMNS } from '@/services/issueColumns.service';
 import { useAuth } from '@/modules/auth';
 
@@ -143,6 +144,8 @@ export function IssuesView({
   const { data: apiIssueColumns } = useIssueColumns(routeProjectId);
   const createIssueColumn = useCreateIssueColumn(routeProjectId);
   const deleteIssueColumn = useDeleteIssueColumn(routeProjectId);
+  const reorderIssueColumns = useReorderIssueColumns(routeProjectId);
+  const updateIssueStatus = useUpdateIssueStatus(routeProjectId || '');
 
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
   const [internalSeverityFilter, setInternalSeverityFilter] = useState<IssueSeverity[]>([]);
@@ -349,6 +352,9 @@ export function IssuesView({
       const [removed] = newColumns.splice(source.index, 1);
       newColumns.splice(destination.index, 0, removed);
       setColumns(newColumns);
+      const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const persistableIds = newColumns.filter(col => UUID_RE.test(col.id)).map(col => col.id);
+      if (persistableIds.length > 0) reorderIssueColumns.mutate(persistableIds);
       return;
     }
 
@@ -362,8 +368,11 @@ export function IssuesView({
     const movedIssue = localIssues.find(issue => issue.id === draggableId);
     if (!movedIssue) return;
 
-    const newStatus = destinationColumn.status as IssueStatus;
-    handleStatusChange(movedIssue, newStatus);
+    const newStatus = destinationColumn.status;
+    if (movedIssue.status === newStatus) return;
+
+    setLocalIssues(prev => prev.map(i => i.id === movedIssue.id ? { ...i, status: newStatus as IssueStatus } : i));
+    updateIssueStatus.mutate({ issueId: movedIssue.id, status: newStatus });
   };
 
   const getColumnIssues = (column: IssuesKanbanColumn) => {

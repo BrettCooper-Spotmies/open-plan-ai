@@ -5,6 +5,8 @@
  */
 import { useState, useRef, useEffect } from 'react';
 import { toast } from 'sonner';
+import { useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -37,8 +39,11 @@ import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useApproveBomNode, useRejectBomNode, useBomNodeApprovals } from '@/hooks/useBom';
 import { TeamMember } from '@/types';
 
-// ── Document value: either an uploaded file or a linked URL ───────
-export type DocValue = { kind: 'file'; file: File } | { kind: 'url'; url: string; fileName?: string };
+// ── Document value: either an uploaded file, a linked URL, or an existing server attachment ───────
+export type DocValue =
+  | { kind: 'file'; file: File }
+  | { kind: 'url'; url: string; fileName?: string }
+  | { kind: 'existing'; id: string; url: string; fileName?: string | null };
 
 // ── Public payload type ───────────────────────────────────────────
 export interface BOMPartPayload {
@@ -243,6 +248,14 @@ function FileRow({ icon: Icon, label, hint, accept, value, onChange }: FileRowPr
                     ({(v.file.size / 1024).toFixed(0)} KB)
                   </span>
                 </>
+              ) : v.kind === 'existing' ? (
+                <>
+                  <Paperclip className="w-3 h-3 text-muted-foreground shrink-0" />
+                  <span className="text-[11px] text-foreground/70 font-medium truncate flex-1">
+                    {v.fileName || v.url.split('/').pop()?.split(/[?#]/)[0] || 'Existing file'}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground/60 shrink-0">Saved</span>
+                </>
               ) : (
                 <>
                   <LinkIcon className="w-3 h-3 text-primary shrink-0" />
@@ -284,7 +297,7 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
   const ref = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<'file' | 'url'>('file');
   const [urlInput, setUrlInput] = useState('');
-  const preview = value?.kind === 'file' ? URL.createObjectURL(value.file) : value?.kind === 'url' ? value.url : null;
+  const preview = value?.kind === 'file' ? URL.createObjectURL(value.file) : (value?.kind === 'url' || value?.kind === 'existing') ? value.url : null;
 
   const addUrl = () => {
     let u = urlInput.trim();
@@ -346,7 +359,7 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
         {preview ? (
           <>
             <img src={preview} alt="preview" className="w-full h-full object-contain rounded-xl opacity-80" />
-            {value?.kind === 'file' && (
+            {(value?.kind === 'file' || value?.kind === 'existing') && (
               <div onClick={() => ref.current?.click()}
                 className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity bg-black/30 rounded-xl cursor-pointer">
                 <span className="text-xs text-white font-medium">Click to replace</span>
@@ -391,6 +404,9 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
             {value.kind === 'url' && (
               <span className="text-[11px] text-muted-foreground truncate max-w-[260px]">{value.url}</span>
             )}
+            {value.kind === 'existing' && value.fileName && (
+              <span className="text-[11px] text-muted-foreground truncate max-w-[260px]">{value.fileName}</span>
+            )}
           </>
         ) : (
           <button onClick={() => setMode(m => m === 'file' ? 'url' : 'file')} className="text-[11px] text-muted-foreground hover:text-foreground underline">
@@ -416,11 +432,12 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   const approveBomNode = useApproveBomNode(projectId);
   const rejectBomNode = useRejectBomNode(projectId);
   const { data: approvals = [], isLoading: approvalsLoading } = useBomNodeApprovals(isEdit ? node?.id : undefined);
+  const { data: existingDocs = [], isLoading: docsLoading } = useBomDocuments(isEdit ? node?.id : undefined);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
 
   // ── Form state ──
   const [pn, setPn] = useState(node?.pn ?? '');
-  const [name, setName] = useState(node?.name ?? '');
+  const [name, setName] = useState(isEdit ? (node?.name || node?.pn || '') : (node?.name ?? ''));
   const [desc, setDesc] = useState(node?.desc ?? '');
   const [category, setCategory] = useState<BOMCategory>(node?.cat ?? 'assembly');
   const [status, setStatus] = useState<BOMStatus>(node?.status ?? 'pending');
@@ -448,6 +465,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   const [techSections, setTechSections] = useState<TechFileSection[]>(DEFAULT_TECH_SECTIONS);
   const [isAddingSection, setIsAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
+  const [docsPopulated, setDocsPopulated] = useState(false);
 
   const [customFields, setCustomFields] = useState<CustomFieldEntry[]>(Array.isArray(node?.customFields) ? node.customFields : []);
   const [versionMode, setVersionMode] = useState<'same' | 'new'>('same');
@@ -461,7 +479,9 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   useEffect(() => {
     if (!open) return;
     setPn(node?.pn ?? '');
-    setName(node?.name ?? '');
+    // In edit mode, fall back to the part number when name is empty so the form
+    // shows the same identifier the detail view heading displays.
+    setName(isEdit ? (node?.name || node?.pn || '') : (node?.name ?? ''));
     setDesc(node?.desc ?? '');
     setCategory(node?.cat ?? 'assembly');
     setStatus(node?.status ?? 'pending');
@@ -484,6 +504,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     setReqInput('');
     setDocPhoto(null);
     setTechSections(DEFAULT_TECH_SECTIONS.map(s => ({ ...s, value: [] })));
+    setDocsPopulated(false);
     setIsAddingSection(false);
     setNewSectionName('');
     setCustomFields(Array.isArray(node?.customFields) ? node.customFields : []);
@@ -492,7 +513,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     setChangeNotes('');
     setErrors({});
     setActiveTab('details');
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, node?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Map the node's owner to a project member once members are loaded
   useEffect(() => {
@@ -507,6 +528,48 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
       }
     }
   }, [open, isEdit, node, projectMembers, selectedOwner]);
+
+  // Pre-populate Documents tab from existing server attachments (edit mode only)
+  useEffect(() => {
+    if (!open || !isEdit || !node?.id || docsLoading || docsPopulated) return;
+
+    const photoDoc = existingDocs.find(isImageAttachment);
+    if (photoDoc) {
+      const url = resolveFileUrl(photoDoc.fileUrl);
+      if (url) {
+        setDocPhoto({ kind: 'existing', id: photoDoc.id, url, fileName: photoDoc.fileName });
+      }
+    }
+
+    const nonImageDocs = existingDocs.filter(d => !isImageAttachment(d));
+    if (nonImageDocs.length > 0) {
+      setTechSections(ts => {
+        const updated = ts.map(s => ({ ...s, value: [] as DocValue[] }));
+        const orphans: DocValue[] = [];
+        for (const doc of nonImageDocs) {
+          const url = resolveFileUrl(doc.fileUrl);
+          if (!url) continue;
+          const entry: DocValue = { kind: 'existing', id: doc.id, url, fileName: doc.fileName };
+          const ext = (doc.fileName || doc.fileUrl || '').split('.').pop()?.toLowerCase().split(/[?#]/)[0] ?? '';
+          if (doc.mimeType === 'application/pdf' || ext === 'pdf') {
+            updated.find(s => s.id === 'datasheet')?.value.push(entry) ?? orphans.push(entry);
+          } else if (['step', 'stp', 'iges', 'igs', 'stl'].includes(ext)) {
+            updated.find(s => s.id === '3dmodel')?.value.push(entry) ?? orphans.push(entry);
+          } else if (['kicad_mod', 'kicad_pcb', 'lib', 'lbr'].includes(ext)) {
+            updated.find(s => s.id === 'footprint')?.value.push(entry) ?? orphans.push(entry);
+          } else {
+            orphans.push(entry);
+          }
+        }
+        if (orphans.length > 0) {
+          return [...updated, { id: 'existing-other', label: 'Other Files', hint: 'Existing attachments', accept: '*/*', icon: Paperclip, value: orphans }];
+        }
+        return updated;
+      });
+    }
+
+    setDocsPopulated(true);
+  }, [open, isEdit, node?.id, docsLoading, existingDocs, docsPopulated]);
 
   const addReq = () => {
     const v = reqInput.trim().toUpperCase();

@@ -248,6 +248,41 @@ export function useUpdateIssue(projectId: string) {
   });
 }
 
+export function useUpdateIssueStatus(projectId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ issueId, status }: { issueId: string; status: string }) =>
+      issuesService.updateStatus(issueId, status as Issue['status']),
+    onMutate: async ({ issueId, status }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      const previousProject = queryClient.getQueryData(queryKeys.projects.detail(projectId));
+
+      queryClient.setQueryData(queryKeys.projects.detail(projectId), (old: any) => {
+        if (!old) return old;
+        return {
+          ...old,
+          issues: old.issues?.map((i: Issue) =>
+            i.id === issueId ? { ...i, status } : i
+          ) || [],
+        };
+      });
+
+      return { previousProject };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousProject) {
+        queryClient.setQueryData(queryKeys.projects.detail(projectId), context.previousProject);
+      }
+      toast.error('Failed to update issue status');
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.issues.list(projectId) });
+    },
+  });
+}
+
 export function useDeleteIssue(projectId: string) {
   const queryClient = useQueryClient();
 
