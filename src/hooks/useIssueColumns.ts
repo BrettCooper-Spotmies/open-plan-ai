@@ -57,6 +57,7 @@ export function useDeleteIssueColumn(projectId?: string) {
     onSuccess: () => {
       if (!projectId) return;
       queryClient.invalidateQueries({ queryKey: queryKeys.issueColumns.list(projectId) });
+      toast.success('Bucket deleted');
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to delete column');
