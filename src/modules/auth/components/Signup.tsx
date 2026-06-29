@@ -14,15 +14,20 @@ import { getPasswordRequirements, getUnmetRequirementLabels } from "@/lib/passwo
 import { apiClient } from "@/services/api/client";
 
 const industries = [
-  "Medical Devices",
-  "Consumer Electronics",
-  "Automotive",
   "Aerospace & Defense",
-  "Industrial Equipment",
-  "IoT & Smart Devices",
-  "Telecommunications",
+  "Agriculture & Food Tech",
+  "Automotive",
+  "Construction & Infrastructure",
+  "Consumer Electronics",
   "Energy & Utilities",
+  "Healthcare",
+  "Industrial Equipment",
+  "Information Technology & Software",
+  "IoT & Smart Devices",
+  "Manufacturing",
+  "Medical Devices",
   "Robotics",
+  "Telecommunications",
   "Other",
 ];
 
@@ -41,6 +46,7 @@ const Signup = () => {
     companyName: "",
     industry: "",
   });
+  const [otherIndustry, setOtherIndustry] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [inviteEmail, setInviteEmail] = useState<string>('');
@@ -110,14 +116,20 @@ const Signup = () => {
       return;
     }
 
+    if (!isInviteSignup && formData.industry === "Other" && !otherIndustry.trim()) {
+      setError("Please specify your industry");
+      return;
+    }
+
     setIsLoading(true);
 
     try {
       // Use the unified signUp for both invite and regular signups
+      const industryValue = formData.industry === "Other" ? otherIndustry.trim() : formData.industry;
       const result = await signUp(formData.email, formData.password, {
         name: formData.fullName,
         company: formData.companyName,
-        industry: formData.industry,
+        industry: industryValue,
       });
 
       if (result.error) {
@@ -131,7 +143,7 @@ const Signup = () => {
         try {
           sessionStorage.setItem(
             'openplan_pending_org',
-            JSON.stringify({ name: formData.companyName, description: formData.industry })
+            JSON.stringify({ name: formData.companyName, description: industryValue })
           );
         } catch {
           // sessionStorage may be unavailable; org creation will fall back to Dashboard prompt.
@@ -425,7 +437,10 @@ const Signup = () => {
                       <Factory className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
                       <Select
                         value={formData.industry}
-                        onValueChange={(value) => handleChange("industry", value)}
+                        onValueChange={(value) => {
+                          handleChange("industry", value);
+                          if (value !== "Other") setOtherIndustry("");
+                        }}
                         required
                         disabled={isLoading}
                       >
@@ -441,6 +456,16 @@ const Signup = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                    {formData.industry === "Other" && (
+                      <Input
+                        type="text"
+                        placeholder="Please specify your industry"
+                        value={otherIndustry}
+                        onChange={(e) => setOtherIndustry(e.target.value)}
+                        disabled={isLoading}
+                        autoFocus
+                      />
+                    )}
                   </div>
                 </>
               )}
