@@ -26,7 +26,6 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { NotificationsPopover } from './NotificationsPopover';
 import { useAppTheme } from '@/hooks/useAppTheme';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { cn } from '@/lib/utils';
@@ -39,7 +38,7 @@ const stageColors: Record<string, string> = {
   production: 'bg-chart-3/10 text-chart-3',
 };
 
-function getMobileHeaderTitle(pathname: string): string {
+function getPageTitle(pathname: string): string {
   if (pathname === '/') return 'Dashboard';
   if (pathname.startsWith('/my-day')) return 'My Day';
   if (pathname.startsWith('/projects')) return 'Projects';
@@ -55,7 +54,6 @@ function getMobileHeaderTitle(pathname: string): string {
 export function AppHeader() {
   const location = useLocation();
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
   const { user: profile, signOut } = useAuth();
   const { theme, changeTheme } = useAppTheme();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
@@ -65,8 +63,8 @@ export function AppHeader() {
   const projectId = projectMatch?.params?.id;
   const { data: project } = useProjectDetail(projectId, { enabled: !!projectId });
 
-  const mobileTitle = useMemo(
-    () => getMobileHeaderTitle(location.pathname),
+  const pageTitle = useMemo(
+    () => getPageTitle(location.pathname),
     [location.pathname],
   );
 
@@ -104,11 +102,11 @@ export function AppHeader() {
               {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
             </Badge>
           </div>
-        ) : isMobile ? (
-          <h1 className="text-base font-semibold text-foreground leading-none">
-            {mobileTitle}
+        ) : (
+          <h1 className="text-2xl font-semibold text-foreground leading-none">
+            {pageTitle}
           </h1>
-        ) : null}
+        )}
       </div>
 
       <div className="flex items-center gap-2">

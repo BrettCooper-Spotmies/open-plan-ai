@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { ManageOrgAccessDialog } from './components/ManageOrgAccessDialog';
 import { useTeamMembers, useInviteTeamMember, useRemoveTeamMember, usePendingInvitations, useCancelInvitation, useUpdateTeamMemberDetails, type TeamMember, type TeamInvitation } from '@/hooks/useTeam';
@@ -74,6 +74,11 @@ const formatUiDate = (value?: string | null) => {
 const normalizeEmail = (value?: string | null) => (value || '').trim().toLowerCase();
 
 const Team = () => {
+  useEffect(() => {
+    document.title = 'Team | Open Plan AI';
+    return () => { document.title = 'Open Plan AI'; };
+  }, []);
+
   const { currentOrganization, isLoading: isOrgLoading } = useOrganization();
   const { data: teamMembers, isLoading: isTeamLoading, error } = useTeamMembers(currentOrganization?.id);
   const { user } = useAuth();

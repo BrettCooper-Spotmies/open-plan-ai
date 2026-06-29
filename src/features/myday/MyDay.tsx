@@ -1,5 +1,4 @@
-import { useState, useMemo } from 'react';
-import { format } from 'date-fns';
+import { useState, useMemo, useEffect } from 'react';
 import { LayoutGrid, List } from 'lucide-react';
 import { MyDayStats } from './components/MyDayStats';
 import { MyDayKanbanView } from './components/MyDayKanbanView';
@@ -19,6 +18,11 @@ import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
 
 export default function MyDay() {
+  useEffect(() => {
+    document.title = 'My Day | Open Plan AI';
+    return () => { document.title = 'Open Plan AI'; };
+  }, []);
+
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
@@ -156,8 +160,6 @@ export default function MyDay() {
   const issueTeamMembers = selectedIssueProject?.team || [];
   const issueTasks = selectedIssueProject?.tasks || [];
 
-  const today = format(new Date(), 'EEEE, MMMM d');
-
   // Early return: show identical skeleton to Suspense fallback while data loads
   if (tasksLoading) {
     return <AppLayoutSkeleton variant="list" />;
@@ -166,19 +168,6 @@ export default function MyDay() {
   return (
     <>
       <div className="grid grid-cols-1 gap-6 w-full min-w-0">
-        {/* Header - always visible, never shimmers */}
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div>
-              <h1 className="text-2xl font-bold text-foreground">My Day</h1>
-              <p className="text-sm text-muted-foreground">{today}</p>
-            </div>
-          </div>
-          <p className="text-muted-foreground mt-2">
-            Your personal execution dashboard — focus on what matters today.
-          </p>
-        </div>
-
         {/* Stats - always visible once data is ready */}
         <MyDayStats
           attentionCount={needsAttention.length}

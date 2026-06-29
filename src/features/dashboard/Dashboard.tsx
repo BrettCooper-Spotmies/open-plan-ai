@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { DashboardStats } from './components/DashboardStats';
 import { ActivityFeed } from './components/ActivityFeed';
 import { ProjectsOverview } from './components/ProjectsOverview';
@@ -166,17 +166,14 @@ export default function Dashboard() {
   // Show "Create Organization" card when no org exists
   const showNoOrgState = !orgLoading && !currentOrganization;
 
+  useEffect(() => {
+    document.title = 'Dashboard | Open Plan AI';
+    return () => { document.title = 'Open Plan AI'; };
+  }, []);
+
   return (
     <>
       <div className="space-y-4 md:space-y-6 animate-fade-in overflow-x-hidden">
-        {!isMobile && (
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Welcome back! Here's an overview of your projects.
-            </p>
-          </div>
-        )}
 
         {/* Compact Create Organization Banner */}
         {showNoOrgState && (
