@@ -99,9 +99,11 @@ function ParamCombobox({
                   key={o.key}
                   value={o.label}
                   onSelect={() => {
-                    const autoFrom = firstSelectedNode
-                      ? String(firstSelectedNode[o.key] ?? '')
-                      : '';
+                    const autoFrom = o.key === 'rev'
+                      ? ''
+                      : firstSelectedNode
+                        ? String(firstSelectedNode[o.key] ?? '')
+                        : '';
                     onChange(o.label, autoFrom);
                     setOpen(false);
                   }}
@@ -961,9 +963,11 @@ export function ECOWizard({
                     }
                     const bomOpt = BOM_PARAM_OPTIONS.find(o => o.key === val);
                     if (bomOpt) {
-                      const autoFrom = firstSelectedNode
-                        ? String((firstSelectedNode as Record<string, unknown>)[bomOpt.key] ?? '')
-                        : '';
+                      const autoFrom = bomOpt.key === 'rev'
+                        ? (items[0]?.revFrom ?? '')
+                        : firstSelectedNode
+                          ? String((firstSelectedNode as Record<string, unknown>)[bomOpt.key] ?? '')
+                          : '';
                       setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: bomOpt.label, from: autoFrom, paramIsCustom: false } : x));
                     } else {
                       setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: val, from: '', paramIsCustom: false } : x));
@@ -991,8 +995,8 @@ export function ECOWizard({
           ) : (
             <input value={r.param} onChange={e => upRow(idx, 'param', e.target.value)} placeholder="Parameter" className={cn(inputCls, 'flex-[1.2]')} />
           )}
-          <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" className={cn(inputCls, 'flex-1')} />
-          <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" className={cn(inputCls, 'flex-1')} />
+          <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+          <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
           <div className="w-32">
             <EcoSelect value={r.cls} onChange={v => upRow(idx, 'cls', v)} options={Object.keys(CHANGE_LABEL_MAP) as ChangeLabel[]} labels={CHANGE_LABEL_MAP} />
           </div>
