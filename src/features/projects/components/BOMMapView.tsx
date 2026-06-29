@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { Plus, Minus, Maximize, RefreshCw } from 'lucide-react';
 import { BOMNode } from './bomData';
 import { BOMStatusPill, PartImageThumb } from './BOMShared';
+import { useCurrency } from '@/hooks/useCurrency';
 
 interface Props {
   nodes: BOMNode[];
@@ -29,6 +30,7 @@ interface DragState {
 }
 
 export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
+  const { formatCurrency } = useCurrency();
   const containerRef = useRef<HTMLDivElement>(null);
   const mmRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -260,7 +262,7 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
                 <BOMStatusPill status={n.status} />
                 <span style={{ fontSize: 11.5, color: 'var(--muted-foreground)', fontVariantNumeric: 'tabular-nums' }}>
                   ×{n.qty} <span style={{ color: 'var(--muted-foreground)' }}>·</span>{' '}
-                  <span style={{ color: 'var(--foreground)', fontWeight: 500 }}>${n.price.toFixed(2)}</span>
+                  <span style={{ color: 'var(--foreground)', fontWeight: 500 }}>{formatCurrency(n.price)}</span>
                 </span>
               </div>
 

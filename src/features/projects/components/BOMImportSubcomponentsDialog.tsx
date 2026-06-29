@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import {
   FileSpreadsheet, Download, Upload, ChevronLeft, AlertCircle, CheckCircle2,
   Loader2, X,
+
 } from 'lucide-react';
 import {
   BOMNode, ApiPartResponse, ParsedImportRow,
@@ -24,7 +25,7 @@ import { useCreateBomNode, useMapImportColumns } from '@/hooks/useBom';
 import { useAuth } from '@/modules/auth';
 
 const MAX_IMPORT_ROWS = 200;
-const CATEGORY_NOTE = 'assembly, power, control, connector, enclosure, hmi, safety — or any custom category';
+const CATEGORY_NOTE = 'top, power, control, charging, enclosure, hmi, safety, other — or any custom category';
 const STATUS_NOTE = 'approved, pending (default: pending)';
 
 interface ImportResult {
@@ -36,7 +37,8 @@ interface ImportResult {
 interface Props {
   open: boolean;
   onClose: () => void;
-  parentNode: BOMNode;
+  /** If null/undefined, parts are imported as top-level BOM nodes (no parent). */
+  parentNode?: BOMNode | null;
   projectId: string;
   orgId: string;
 }
@@ -67,31 +69,42 @@ async function buildTemplateWorkbook(): Promise<Workbook> {
   const workbook = new Workbook();
 
   const sheet = workbook.addWorksheet('Sub-components');
-  sheet.addRow(SUBCOMPONENT_IMPORT_COLUMNS.map(c => c.label));
+  const headerRow = sheet.addRow(SUBCOMPONENT_IMPORT_COLUMNS.map(c => c.required ? `${c.label} *` : c.label));
+  headerRow.font = { bold: true };
+  // Highlight required columns in light yellow
+  headerRow.eachCell((cell, colNumber) => {
+    const col = SUBCOMPONENT_IMPORT_COLUMNS[colNumber - 1];
+    if (col?.required) {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF99' } };
+    }
+  });
   sheet.addRow([
-    'EV-CONN-010', 'Charging port connector, IP67', 'connector', 'pending',
-    'Acme Corp', 'ACM-1234', 'Acme Distribution', '12.50', '4', '2', 'EA',
+    'EV-CONN-010', 'Charging Port Connector', 'IP67 waterproof charging port connector', 'power', 'pending',
+    'Acme Corp', 'ACM-1234', 'Digi-Key', '12.50', '4', '2', 'EA',
   ]);
-  sheet.columns.forEach(col => { col.width = 20; });
-  sheet.getRow(1).font = { bold: true };
+  sheet.columns.forEach(col => { col.width = 22; });
 
   const instructions = workbook.addWorksheet('Instructions');
   instructions.addRow(['Column', 'Required', 'Notes']);
   instructions.getRow(1).font = { bold: true };
   const notes: Record<string, string> = {
-    'Part Number': 'Unique per organization. A part number matching an existing part attaches that part instead of creating a duplicate.',
+    'Part Number': 'Unique per organization. A matching part number attaches the existing part instead of creating a duplicate.',
+    'Part Name': 'Short descriptive name for the part',
+    'Description': 'Brief technical description of the part',
     'Category': `One of: ${CATEGORY_NOTE}`,
     'Status': STATUS_NOTE,
-    'MPN': 'Manufacturer part number',
-    'Unit Price': 'Numeric, e.g. 12.50',
-    'Lead Time (weeks)': 'Numeric, e.g. 4',
+    'Manufacturer': 'e.g. Texas Instruments, Acme Corp',
+    'MPN': 'Manufacturer part number, e.g. TI-A4B2C',
+    'Supplier': 'Supplier / distributor name, e.g. Digi-Key, Mouser',
+    'Unit Price': 'Numeric price per unit, e.g. 12.50',
+    'Lead Time (weeks)': 'Numeric lead time in weeks, e.g. 4',
     'Quantity': 'Numeric, must be greater than 0',
-    'UOM': 'e.g. EA, SET, KG (default: EA)',
+    'UOM': 'Unit of measure: EA, SET, KG, M, FT, PCS, LOT',
   };
   SUBCOMPONENT_IMPORT_COLUMNS.forEach(c => {
-    instructions.addRow([c.label, c.required ? 'Yes' : 'No', notes[c.label] ?? '']);
+    instructions.addRow([c.label, c.required ? 'Yes *' : 'No', notes[c.label] ?? '']);
   });
-  instructions.columns.forEach(col => { col.width = 24; });
+  instructions.columns.forEach(col => { col.width = 28; });
 
   return workbook;
 }
@@ -163,20 +176,15 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
     try {
       let headers: string[] = [];
       let rawRows: Record<string, unknown>[] = [];
-      
+
       const isCsv = file.name.toLowerCase().endsWith('.csv');
-      
+
       if (isCsv) {
         const text = await file.text();
-        const result = Papa.parse(text, {
-          header: true,
-          skipEmptyLines: true,
-        });
-        
+        const result = Papa.parse(text, { header: true, skipEmptyLines: true });
         if (result.errors.length > 0 && result.data.length === 0) {
           throw new Error('Failed to parse CSV file: ' + result.errors[0].message);
         }
-        
         headers = result.meta.fields || [];
         rawRows = result.data as Record<string, unknown>[];
       } else {
@@ -186,7 +194,6 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
         await workbook.xlsx.load(buffer as unknown as Buffer);
         const sheet = workbook.worksheets[0];
         if (!sheet) throw new Error('No sheet found in this file.');
-
         const parsed = sheetToRows(sheet);
         headers = parsed.headers;
         rawRows = parsed.rows;
@@ -211,14 +218,11 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
         setParsedRows(parseSubcomponentImportRows(remappedRows, existingParts));
         setStage('preview');
       } catch (mapErr) {
-        // 422 means the backend rejected the file as not BOM/parts-related —
-        // surface that specific reason. Any other failure (timeout, 5xx,
-        // misconfigured Azure OpenAI) gets a generic fallback message.
         const status = (mapErr as { response?: { status?: number } })?.response?.status;
         if (status === 422 && mapErr instanceof Error && mapErr.message) {
           throw mapErr;
         }
-        throw new Error("Couldn't automatically map these columns. Please use the template format and try again.");
+        throw new Error("Couldn't extract columns from this file. Please use the template format and try again.");
       } finally {
         setMappingInProgress(false);
       }
@@ -248,14 +252,15 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
             mpn:                 row.mpn || undefined,
             unit:                row.uom,
             initialStatus:       row.status,
-            initialPrice:        row.unitPrice && row.unitPrice > 0 ? row.unitPrice : undefined,
-            initialLeadTimeDays: row.leadTimeWeeks && row.leadTimeWeeks > 0 ? row.leadTimeWeeks * 7 : undefined,
+            initialPrice:        row.unitPrice !== undefined ? row.unitPrice : undefined,
+            initialLeadTimeDays: row.leadTimeWeeks !== undefined && row.leadTimeWeeks > 0 ? row.leadTimeWeeks * 7 : undefined,
           });
           partId = part.id;
         }
         await createNode.mutateAsync({
           partId, quantity: row.quantity, unit: row.uom,
-          status: row.status, parentId: parentNode.id,
+          status: row.status,
+          ...(parentNode ? { parentId: parentNode.id } : {}),
           // Imported rows have no per-row owner picker — default to whoever ran the import.
           ownerId: user?.id,
         });
@@ -281,7 +286,9 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
             Import Sub-components
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Bulk-add sub-components to <span className="font-mono text-foreground">{parentNode.pn}</span> from a spreadsheet.
+            {parentNode
+              ? <>Bulk-add sub-components to <span className="font-mono text-foreground">{parentNode.pn}</span> from a spreadsheet.</>
+              : 'Bulk-add top-level parts to the BOM from a spreadsheet.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -290,7 +297,7 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
             <div className="flex items-center gap-3 p-3 rounded-lg border border-border bg-muted/30">
               <Download className="w-4 h-4 text-muted-foreground shrink-0" />
               <div className="flex-1 min-w-0 text-xs text-muted-foreground">
-                Not sure about the format? Download a template with the required columns and an example row.
+                Download a template with all required columns (marked <span className="font-semibold text-foreground">*</span>) and an example row.
               </div>
               <Button variant="outline" size="sm" onClick={downloadTemplate}>Download template</Button>
             </div>
@@ -302,7 +309,7 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
               onClick={() => { if (!mappingInProgress) fileInputRef.current?.click(); }}
               className={cn(
                 'flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed transition-colors',
-                mappingInProgress ? 'cursor-not-allowed opacity-70 border-border bg-muted/20' : 
+                mappingInProgress ? 'cursor-not-allowed opacity-70 border-border bg-muted/20' :
                 isDragging ? 'border-primary bg-primary/10' : 'border-border bg-muted/20 hover:bg-muted/40 hover:border-primary/30 cursor-pointer',
               )}
               style={{ height: 160 }}
@@ -310,8 +317,8 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
               {mappingInProgress ? (
                 <>
                   <Loader2 className="w-7 h-7 text-primary animate-spin" />
-                  <span className="text-sm text-foreground font-medium">Analyzing column headers with AI…</span>
-                  <span className="text-[11px] text-muted-foreground">These headers don't match our template — mapping them automatically</span>
+                  <span className="text-sm text-foreground font-medium">Extracting column headers…</span>
+                  <span className="text-[11px] text-muted-foreground">Mapping your columns to the required fields</span>
                 </>
               ) : (
                 <>
