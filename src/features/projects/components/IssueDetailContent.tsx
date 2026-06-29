@@ -5,7 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
@@ -229,6 +235,7 @@ export function IssueDetailContent({
     const checklist = editedIssue.checklist || [];
     const completedItems = checklist.filter(item => item.completed).length;
     const checklistProgress = checklist.length > 0 ? (completedItems / checklist.length) * 100 : 0;
+    const showChecklistInBoardView = checklist.length > 0 && checklist.every((item) => item.showInBoardView === true);
 
     const handleAddChecklistItem = () => {
         if (!newChecklistItem.trim()) return;
@@ -236,6 +243,7 @@ export function IssueDetailContent({
             id: `checklist-${Date.now()}`,
             text: newChecklistItem,
             completed: false,
+            showInBoardView: showChecklistInBoardView,
         };
         handleFieldChange('checklist', [...checklist, newItem]);
         setNewChecklistItem('');
@@ -245,6 +253,11 @@ export function IssueDetailContent({
         const updated = checklist.map(item =>
             item.id === itemId ? { ...item, completed: !item.completed } : item
         );
+        handleFieldChange('checklist', updated);
+    };
+
+    const handleToggleChecklistBoardViewForAll = (showInBoardView: boolean) => {
+        const updated = checklist.map(item => ({ ...item, showInBoardView }));
         handleFieldChange('checklist', updated);
     };
 
@@ -418,23 +431,6 @@ export function IssueDetailContent({
                             aria-required="true"
                         />
                     </div>
-                    {/* Severity Badge and Actions on the right */}
-                    <div className="flex-shrink-0 pt-1">
-                        <div className="flex items-center gap-2">
-                            <Badge className={cn(ISSUE_SEVERITY_DISPLAY[editedIssue.severity].color)}>
-                                {(() => {
-                                    const SeverityIcon = ISSUE_SEVERITY_DISPLAY[editedIssue.severity].icon;
-                                    return <SeverityIcon className="h-3 w-3 mr-1" />;
-                                })()}
-                                {ISSUE_SEVERITY_DISPLAY[editedIssue.severity].label}
-                            </Badge>
-                            {!isExpanded && onExpand && (
-                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground" onClick={onExpand}>
-                                    <Maximize2 className="h-4 w-4" />
-                                </Button>
-                            )}
-                        </div>
-                    </div>
                 </div>
 
                 <ConfirmationDialog
@@ -451,73 +447,118 @@ export function IssueDetailContent({
                 />
 
                 <div className="flex flex-col gap-6">
-                    {/* Metadata Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {/* Assigned To */}
-                        <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                <User className="h-3 w-3" />
-                                Assigned To
-                            </Label>
-                            <div
-                                className="min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm cursor-pointer hover:border-primary/50 transition-colors"
-                                onClick={() => setIsAssigneePopoverOpen(true)}
-                            >
-                                {(editedIssue.assignees || []).map((assignee) => (
-                                    <Badge key={assignee.id} variant="secondary" className="pl-1 pr-1.5 gap-1.5 h-6 cursor-default">
-                                        <Avatar className="h-4 w-4">
-                                            <AvatarFallback className="text-[9px]">{assignee.initials}</AvatarFallback>
-                                        </Avatar>
-                                        <span className="text-xs font-normal">{assignee.name}</span>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleFieldChange('assignees', (editedIssue.assignees || []).filter(a => a.id !== assignee.id));
-                                            }}
-                                            className="ml-auto text-muted-foreground hover:text-foreground outline-none"
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </button>
-                                    </Badge>
-                                ))}
-                                <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
-                                    <PopoverTrigger asChild>
-                                        <button className="h-6 w-6 rounded-full border border-dashed text-muted-foreground hover:border-primary hover:text-primary flex items-center justify-center transition-colors">
-                                            <Plus className="h-3 w-3" />
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="p-0 w-[200px]" align="start">
-                                        <Command>
-                                            <CommandInput placeholder="Search members..." />
-                                            <CommandList>
-                                                <CommandEmpty>No results found.</CommandEmpty>
-                                                <CommandGroup heading="Team Members">
-                                                    {teamMembers
-                                                        .filter(m => !editedIssue.assignees?.some(a => a.id === m.id))
-                                                        .map((member) => (
-                                                            <CommandItem
-                                                                key={member.id}
-                                                                value={member.name}
-                                                                onSelect={() => {
-                                                                    handleFieldChange('assignees', [...(editedIssue.assignees || []), member]);
-                                                                    setIsAssigneePopoverOpen(false);
-                                                                }}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Avatar className="h-5 w-5 mr-2">
-                                                                    <AvatarFallback className="text-[9px]">{member.initials}</AvatarFallback>
-                                                                </Avatar>
-                                                                {member.name}
-                                                            </CommandItem>
-                                                        ))}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                        </div>
+                    {/* Assigned To — dedicated full-width row, avatar-only display */}
+                    <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            <User className="h-3 w-3" />
+                            Assigned To
+                        </Label>
+                        <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
+                            <PopoverTrigger asChild>
+                                <button className="flex items-center gap-2 h-10 px-2 w-full text-left rounded-md hover:bg-muted/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                    <TooltipProvider delayDuration={150}>
+                                        <div className="flex items-center">
+                                            {(editedIssue.assignees || []).slice(0, 6).map((assignee, index) => (
+                                                <Tooltip key={assignee.id}>
+                                                    <TooltipTrigger asChild>
+                                                        <div
+                                                            className="rounded-full ring-2 ring-background cursor-pointer"
+                                                            style={{ zIndex: index, marginLeft: index === 0 ? 0 : '-8px' }}
+                                                        >
+                                                            <Avatar className="h-8 w-8">
+                                                                <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
+                                                                <AvatarFallback className="text-xs font-semibold bg-primary/15 text-primary">
+                                                                    {assignee.initials}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                        </div>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top" className="text-xs">
+                                                        {assignee.name}
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            ))}
+                                            {(editedIssue.assignees || []).length > 6 && (
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <div
+                                                            className="h-8 w-8 rounded-full ring-2 ring-background bg-muted flex items-center justify-center cursor-pointer"
+                                                            style={{ zIndex: 6, marginLeft: '-8px' }}
+                                                        >
+                                                            <span className="text-xs text-muted-foreground font-medium">+{(editedIssue.assignees || []).length - 6}</span>
+                                                        </div>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top" className="text-xs">
+                                                        {(editedIssue.assignees || []).slice(6).map(a => a.name).join(', ')}
+                                                    </TooltipContent>
+                                                </Tooltip>
+                                            )}
+                                        </div>
+                                    </TooltipProvider>
+                                    <div className="h-8 w-8 rounded-full border-2 border-dashed border-muted-foreground/40 hover:border-primary hover:text-primary transition-all flex items-center justify-center shrink-0">
+                                        <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                                    </div>
+                                    {(editedIssue.assignees || []).length === 0 && (
+                                        <span className="text-sm text-muted-foreground">Click to assign members...</span>
+                                    )}
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="p-0 w-[260px]" align="start">
+                                {(editedIssue.assignees || []).length > 0 && (
+                                    <div className="p-2 border-b">
+                                        <p className="text-xs font-medium text-muted-foreground px-2 mb-1">Assigned</p>
+                                        {(editedIssue.assignees || []).map((assignee) => (
+                                            <div key={assignee.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted group">
+                                                <Avatar className="h-6 w-6 shrink-0">
+                                                    <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
+                                                    <AvatarFallback className="text-[10px]">{assignee.initials}</AvatarFallback>
+                                                </Avatar>
+                                                <span className="flex-1 text-sm">{assignee.name}</span>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleFieldChange('assignees', (editedIssue.assignees || []).filter(a => a.id !== assignee.id));
+                                                    }}
+                                                    className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <Command>
+                                    <CommandInput placeholder="Search members..." />
+                                    <CommandList>
+                                        <CommandEmpty>No results found.</CommandEmpty>
+                                        <CommandGroup heading="Add members">
+                                            {teamMembers
+                                                .filter(m => !editedIssue.assignees?.some(a => a.id === m.id))
+                                                .map((member) => (
+                                                    <CommandItem
+                                                        key={member.id}
+                                                        value={member.name}
+                                                        onSelect={() => {
+                                                            handleFieldChange('assignees', [...(editedIssue.assignees || []), member]);
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Avatar className="h-5 w-5 mr-2">
+                                                            <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
+                                                            <AvatarFallback className="text-[9px]">{member.initials}</AvatarFallback>
+                                                        </Avatar>
+                                                        {member.name}
+                                                    </CommandItem>
+                                                ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
+                    </div>
 
+                    {/* Metadata Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-start">
                         {/* Status */}
                         <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
@@ -847,6 +888,23 @@ export function IssueDetailContent({
                                     <span className="text-xs">({completedItems}/{checklist.length})</span>
                                 )}
                             </h3>
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="issue-show-checklist-in-board-view"
+                                    checked={showChecklistInBoardView}
+                                    onCheckedChange={(checked) => handleToggleChecklistBoardViewForAll(checked === true)}
+                                    disabled={checklist.length === 0}
+                                />
+                                <Label
+                                    htmlFor="issue-show-checklist-in-board-view"
+                                    className={cn(
+                                        "text-sm font-normal",
+                                        checklist.length === 0 ? "text-muted-foreground/60 cursor-not-allowed" : "cursor-pointer"
+                                    )}
+                                >
+                                    Show in board view
+                                </Label>
+                            </div>
                         </div>
 
                         {checklist.length > 0 && (

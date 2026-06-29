@@ -132,6 +132,19 @@ export default function Projects() {
 
   const isProjectOwner = selectedProjectDetails?.createdBy === user?.id;
 
+  const canEditSelectedProject = (() => {
+    if (!selectedProjectDetails || !user?.id) return false;
+    if (selectedProjectDetails.createdBy === user.id) return true;
+    const role = (selectedProjectDetails.myRole || '').toLowerCase();
+    return role === 'admin';
+  })();
+
+  const canEditProject = (project: { createdBy?: string; myRole?: string }) => {
+    if (!user?.id) return false;
+    if (project.createdBy === user.id) return true;
+    return (project.myRole || '').toLowerCase() === 'admin';
+  };
+
   const handleDeleteProject = async () => {
     if (!selectedProjectDetails?.id) return;
     if (deleteProjectConfirmText.trim() !== selectedProjectDetails.name) {
@@ -306,10 +319,12 @@ export default function Projects() {
                             <FolderOpen className="h-4 w-4 mr-2" />
                             View Files
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => handleEdit(project.id, e)}>
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
+                          {canEditProject(project) && (
+                            <DropdownMenuItem onClick={(e) => handleEdit(project.id, e)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
@@ -614,16 +629,18 @@ export default function Projects() {
                   <Eye className="h-4 w-4 mr-2" />
                   Open Project
                 </Button>
-                <Button
-                  className="flex-1"
-                  onClick={() => {
-                    setDetailsDialogOpen(false);
-                    navigate(`/projects/${selectedProjectId}/edit`);
-                  }}
-                >
-                  <Pencil className="h-4 w-4 mr-2" />
-                  Edit Project
-                </Button>
+                {canEditSelectedProject && (
+                  <Button
+                    className="flex-1"
+                    onClick={() => {
+                      setDetailsDialogOpen(false);
+                      navigate(`/projects/${selectedProjectId}/edit`);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit Project
+                  </Button>
+                )}
               </div>
               {isProjectOwner && (
                 <Button
