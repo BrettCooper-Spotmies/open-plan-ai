@@ -18,8 +18,6 @@ interface ReportsHeaderProps {
 }
 
 export function ReportsHeader({
-  projectName,
-  timeRangeLabel,
   onExport,
 }: ReportsHeaderProps) {
   const isMobile = useIsMobile();
@@ -37,15 +35,6 @@ export function ReportsHeader({
               <BarChart3 className="h-4.5 w-4.5 text-primary" />
             </div>
           )}
-          <div className="min-w-0">
-            {!isMobile && <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>}
-            {!isMobile && (projectName || timeRangeLabel) && (
-              <p className="text-sm text-muted-foreground truncate">
-                {projectName || 'All Projects'}
-                {timeRangeLabel && ` · ${timeRangeLabel}`}
-              </p>
-            )}
-          </div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

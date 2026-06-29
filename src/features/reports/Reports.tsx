@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { downloadCSVReport, triggerPDFExport } from './utils/exportUtils';
 import { ReportsHeader } from './components/ReportsHeader';
@@ -82,6 +82,11 @@ function serviceTeamMemberToFrontend(m: ServiceTeamMember): TeamMember {
 export default function Reports() {
   const navigate = useNavigate();
   const { currentOrganization, isLoading: orgLoading } = useOrganization();
+
+  useEffect(() => {
+    document.title = 'Reports | Open Plan AI';
+    return () => { document.title = 'Open Plan AI'; };
+  }, []);
   const orgId = currentOrganization?.id;
 
   const [filter, setFilter] = useState<ReportFilter>({ timeRange: '30d' });

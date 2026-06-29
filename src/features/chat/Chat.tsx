@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,12 +17,16 @@ import { useTypingIndicator } from './hooks/useTypingIndicator';
 import { useReachableUsers } from './hooks/useReachableUsers';
 import { useReadReceipts } from './hooks/useReadReceipts';
 import { chatService } from '@/services/chat.service';
-import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { ChatMessage } from './types';
 import { logger } from '@/services/monitoring/logger';
 
 export default function Chat() {
+  useEffect(() => {
+    document.title = 'Chat | Open Plan AI';
+    return () => { document.title = 'Open Plan AI'; };
+  }, []);
+
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
