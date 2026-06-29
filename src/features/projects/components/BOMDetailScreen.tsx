@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
 import {
   ArrowLeft, GitMerge, SquarePen, ChevronRight, Factory, Hash,
@@ -21,10 +21,17 @@ import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision } from '@/hooks/useParts';
 import { useCreateBomNode, useUpdateBomNode, useAddRequirement, useRemoveRequirement, useApproveBomNode, useRejectBomNode, useBomNodeApprovals } from '@/hooks/useBom';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { useAuth } from '@/contexts/AuthContext';
 import { BOMRejectDialog } from './BOMRejectDialog';
 import { uploadBomDocumentFile, addBomDocumentLink, useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
 import { useCurrency } from '@/hooks/useCurrency';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { useBomNotes, useAddBomNote, useUpdateBomNote, useDeleteBomNote } from '@/hooks/useBomNotes';
+
+function getInitials(name: string | undefined | null): string {
+  if (!name) return '?';
+  return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
 
 async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
   const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? []), ...(payload.docCustom ?? [])].filter(Boolean) as DocValue[];
@@ -99,95 +106,63 @@ export function AddSubcomponentDialog({
 }
 
 // ── Notes ──────────────────────────────────────────────────────────
-interface BOMNote {
-  id: string;
-  author: string;
-  initials: string;
-  avatarColor: string;
-  content: string;
-  timestamp: Date;
-  edited?: boolean;
-}
 
-const AVATAR_COLORS = [
+const NOTE_AVATAR_COLORS = [
   'bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500',
   'bg-rose-500', 'bg-cyan-500', 'bg-orange-500', 'bg-indigo-500',
 ];
 
-function getInitials(name: string) {
-  return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+function noteAvatarColor(authorId: string) {
+  let h = 0;
+  for (let i = 0; i < authorId.length; i++) h = (h * 31 + authorId.charCodeAt(i)) >>> 0;
+  return NOTE_AVATAR_COLORS[h % NOTE_AVATAR_COLORS.length];
 }
 
-function formatRelative(date: Date): string {
-  const diff = (Date.now() - date.getTime()) / 1000;
+function formatRelative(dateStr: string): string {
+  const diff = (Date.now() - new Date(dateStr).getTime()) / 1000;
   if (diff < 5) return 'Just now';
   if (diff < 60) return `${Math.floor(diff)}s ago`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return new Date(dateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
-// Seed notes for demo
-function seedNotes(pn: string, owner: string): BOMNote[] {
-  const initials = getInitials(owner);
-  const color = AVATAR_COLORS[pn.length % AVATAR_COLORS.length];
-  return [
-    {
-      id: '1', author: owner, initials, avatarColor: color,
-      content: `Lead time flagged — verify with distributor before next gate review.`,
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 3), // 3h ago
-    },
-    {
-      id: '2', author: 'Marcus Rodriguez', initials: 'MR', avatarColor: 'bg-blue-500',
-      content: `Rev ${pn.slice(-3) === 'A' ? 'A' : 'B'} tested and signed off by QA. No issues.`,
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 27), // 1d ago
-    },
-  ];
-}
+function NotesCard({ nodeId, currentUserId }: { nodeId: string; currentUserId: string | undefined }) {
+  const { data: notes = [], isLoading } = useBomNotes(nodeId);
+  const addNote = useAddBomNote(nodeId);
+  const updateNote = useUpdateBomNote(nodeId);
+  const deleteNote = useDeleteBomNote(nodeId);
 
-function NotesCard({ pn, owner }: { pn: string; owner: string }) {
-  const [notes, setNotes] = useState<BOMNote[]>([]);
   const [draft, setDraft] = useState('');
   const [editId, setEditId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
-  // Auto-resize textarea
   useEffect(() => {
     const el = textareaRef.current;
     if (el) { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }
   }, [draft]);
 
-  const addNote = () => {
+  const handleAddNote = useCallback(() => {
     const content = draft.trim();
-    if (!content) return;
-    const newNote: BOMNote = {
-      id: Date.now().toString(),
-      author: 'You',
-      initials: 'YO',
-      avatarColor: 'bg-primary',
-      content,
-      timestamp: new Date(),
-    };
-    setNotes(n => [newNote, ...n]);
-    setDraft('');
-  };
+    if (!content || addNote.isPending) return;
+    addNote.mutate(content, { onSuccess: () => setDraft('') });
+  }, [draft, addNote]);
 
-  const deleteNote = (id: string) => setNotes(n => n.filter(note => note.id !== id));
-
-  const startEdit = (note: BOMNote) => {
-    setEditId(note.id);
-    setEditText(note.content);
+  const startEdit = (noteId: string, content: string) => {
+    setEditId(noteId);
+    setEditText(content);
     setTimeout(() => editRef.current?.focus(), 50);
   };
 
-  const saveEdit = (id: string) => {
+  const handleSaveEdit = (noteId: string) => {
     const content = editText.trim();
-    if (!content) return;
-    setNotes(n => n.map(note => note.id === id ? { ...note, content, edited: true } : note));
-    setEditId(null);
+    if (!content || updateNote.isPending) return;
+    updateNote.mutate({ noteId, content }, { onSuccess: () => setEditId(null) });
   };
+
+  const sortedNotes = [...notes].reverse();
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -205,68 +180,78 @@ function NotesCard({ pn, owner }: { pn: string; owner: string }) {
       </div>
 
       {/* Notes list */}
-      {notes.length > 0 && (
+      {isLoading ? (
+        <div className="px-4 py-3 space-y-2">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-3/4" />
+        </div>
+      ) : sortedNotes.length > 0 && (
         <div className="divide-y divide-border">
-          {notes.map(note => (
-            <div key={note.id} className="group px-4 py-3 hover:bg-muted/20 transition-colors">
-              <div className="flex items-start gap-2.5">
-                {/* Avatar */}
-                <div className={cn(
-                  'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-0.5',
-                  note.author === 'You' ? 'bg-primary' : note.avatarColor
-                )}>
-                  {note.initials}
-                </div>
-                <div className="flex-1 min-w-0">
-                  {/* Header row */}
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-xs font-semibold text-foreground">{note.author}</span>
-                    <span className="text-[10.5px] text-muted-foreground/70">{formatRelative(note.timestamp)}</span>
-                    {note.edited && (
-                      <span className="text-[10px] text-muted-foreground/50 italic">edited</span>
-                    )}
-                    {/* Actions */}
-                    <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {note.author === 'You' && (
-                        <button onClick={() => startEdit(note)}
-                          className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-                          <Pencil className="w-3 h-3" />
-                        </button>
-                      )}
-                      <button onClick={() => deleteNote(note.id)}
-                        className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
+          {sortedNotes.map(note => {
+            const isOwn = note.author?.id === currentUserId;
+            const initials = note.author?.initials ?? note.author?.name?.slice(0, 2).toUpperCase() ?? '?';
+            const wasEdited = note.createdAt !== note.updatedAt;
+            return (
+              <div key={note.id} className="group px-4 py-3 hover:bg-muted/20 transition-colors">
+                <div className="flex items-start gap-2.5">
+                  <div className={cn(
+                    'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-0.5',
+                    isOwn ? 'bg-primary' : noteAvatarColor(note.author?.id ?? note.id),
+                  )}>
+                    {initials}
                   </div>
-                  {/* Content / Edit */}
-                  {editId === note.id ? (
-                    <div className="space-y-1.5">
-                      <textarea
-                        ref={editRef}
-                        value={editText}
-                        onChange={e => setEditText(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) saveEdit(note.id); if (e.key === 'Escape') setEditId(null); }}
-                        className="w-full text-xs text-foreground bg-muted border border-border rounded-md px-2.5 py-1.5 resize-none outline-none focus:ring-1 focus:ring-primary/40 min-h-[56px]"
-                      />
-                      <div className="flex items-center gap-1.5 justify-end">
-                        <button onClick={() => setEditId(null)}
-                          className="text-[11px] text-muted-foreground hover:text-foreground px-2 py-0.5 rounded transition-colors">
-                          Cancel
-                        </button>
-                        <button onClick={() => saveEdit(note.id)}
-                          className="text-[11px] font-medium text-primary hover:text-primary/80 px-2 py-0.5 rounded transition-colors">
-                          Save
-                        </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-semibold text-foreground">
+                        {isOwn ? 'You' : (note.author?.name ?? 'Unknown')}
+                      </span>
+                      <span className="text-[10.5px] text-muted-foreground/70">{formatRelative(note.createdAt)}</span>
+                      {wasEdited && (
+                        <span className="text-[10px] text-muted-foreground/50 italic">edited</span>
+                      )}
+                      <div className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {isOwn && (
+                          <button onClick={() => startEdit(note.id, note.content)}
+                            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        )}
+                        {isOwn && (
+                          <button onClick={() => deleteNote.mutate(note.id)}
+                            className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{note.content}</p>
-                  )}
+                    {editId === note.id ? (
+                      <div className="space-y-1.5">
+                        <textarea
+                          ref={editRef}
+                          value={editText}
+                          onChange={e => setEditText(e.target.value)}
+                          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSaveEdit(note.id); if (e.key === 'Escape') setEditId(null); }}
+                          className="w-full text-xs text-foreground bg-muted border border-border rounded-md px-2.5 py-1.5 resize-none outline-none focus:ring-1 focus:ring-primary/40 min-h-[56px]"
+                        />
+                        <div className="flex items-center gap-1.5 justify-end">
+                          <button onClick={() => setEditId(null)}
+                            className="text-[11px] text-muted-foreground hover:text-foreground px-2 py-0.5 rounded transition-colors">
+                            Cancel
+                          </button>
+                          <button onClick={() => handleSaveEdit(note.id)}
+                            className="text-[11px] font-medium text-primary hover:text-primary/80 px-2 py-0.5 rounded transition-colors">
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -281,16 +266,16 @@ function NotesCard({ pn, owner }: { pn: string; owner: string }) {
               ref={textareaRef}
               value={draft}
               onChange={e => setDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) addNote(); }}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAddNote(); }}
               placeholder="Add a note… (⌘↵ to submit)"
               rows={1}
               className="w-full text-xs text-foreground bg-background border border-border rounded-lg px-3 py-2 resize-none outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50 overflow-hidden"
             />
             {draft.trim() && (
               <div className="flex items-center justify-end">
-                <button onClick={addNote}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors">
-                  <Send className="w-3 h-3" /> Add Note
+                <button onClick={handleAddNote} disabled={addNote.isPending}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60">
+                  {addNote.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />} Add Note
                 </button>
               </div>
             )}
@@ -431,6 +416,7 @@ function RevisionToggle({
 
 // ── Main component ─────────────────────────────────────────────────
 export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectId, onBack, onNavigate }: Props) {
+  const { user } = useAuth();
   const { formatCurrency } = useCurrency();
 
   // ── Uploaded documents — pull the product photo (first image attachment) ──
@@ -832,7 +818,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             </Card>
 
             {/* Notes */}
-            <NotesCard pn={node.pn} owner={node.owner} />
+            <NotesCard nodeId={node.id} currentUserId={user?.id} />
           </div>
 
           {/* RIGHT */}
