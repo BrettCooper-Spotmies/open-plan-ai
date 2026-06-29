@@ -1,7 +1,8 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
   CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check, Download, ExternalLink,
+  FileSpreadsheet, PenLine,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -49,6 +50,7 @@ function OwnerBadge({ name, size = 'sm' }: { name: string; size?: 'sm' | 'xs' })
   );
 }
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
@@ -799,9 +801,21 @@ export function BOMView({
 }: BOMViewProps) {
   const selected = selectedId;
   const setSelected = (id: string | null) => onSelectedIdChange?.(id);
+  const [addChoiceOpen, setAddChoiceOpen] = useState(false);
+  const [addManualOpen, setAddManualOpen] = useState(false);
+  const [addImportOpen, setAddImportOpen] = useState(false);
   const [addSubNode, setAddSubNode] = useState<BOMNode | null>(null);
   const [createSubNode, setCreateSubNode] = useState<BOMNode | null>(null);
   const [importSubNode, setImportSubNode] = useState<BOMNode | null>(null);
+
+  // Intercept external addOpen prop — show choice dialog instead of going straight to the sheet
+  const prevAddOpen = useRef(false);
+  useEffect(() => {
+    if (addOpen && !prevAddOpen.current) {
+      setAddChoiceOpen(true);
+    }
+    prevAddOpen.current = addOpen;
+  }, [addOpen]);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
   const [rejectTarget, setRejectTarget] = useState<BOMNode | null>(null);
@@ -1208,15 +1222,68 @@ export function BOMView({
         currencySymbol={currencySymbol}
       />
 
-      {/* Add Part sheet */}
+      {/* Add Part — choice dialog */}
+      <Dialog open={addChoiceOpen} onOpenChange={v => { if (!v) { setAddChoiceOpen(false); onAddClose?.(); } }}>
+        <DialogContent className="sm:max-w-[440px] p-0 gap-0 overflow-hidden">
+          <DialogHeader className="px-5 pt-5 pb-3 border-b border-border">
+            <DialogTitle className="text-base font-semibold">Add Part</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Choose how you'd like to add a top-level part to the BOM.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 px-4 py-4">
+            <button
+              onClick={() => { setAddChoiceOpen(false); setAddManualOpen(true); }}
+              className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-foreground/20 transition-colors text-left group"
+            >
+              <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-primary/10 text-primary">
+                <PenLine className="w-4 h-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-foreground">Add Manually</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Create one new part using the part details form.</div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+            </button>
+            <button
+              onClick={() => { setAddChoiceOpen(false); setAddImportOpen(true); }}
+              className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-foreground/20 transition-colors text-left group"
+            >
+              <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-emerald-500/10 text-emerald-600">
+                <FileSpreadsheet className="w-4 h-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-foreground">Import from Excel</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Bulk-add multiple parts at once from a spreadsheet.</div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+            </button>
+          </div>
+          <div className="px-4 pb-4 flex justify-end">
+            <Button variant="outline" size="sm" onClick={() => { setAddChoiceOpen(false); onAddClose?.(); }}>Cancel</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Part sheet — manual */}
       <BOMPartSheet
         mode="add"
         projectId={projectId}
         orgId={orgId}
-        open={addOpen}
-        onClose={() => onAddClose?.()}
+        open={addManualOpen}
+        onClose={() => { setAddManualOpen(false); onAddClose?.(); }}
         onSave={handleAddPart}
       />
+
+      {/* Add Part — import from Excel (top-level, no parent) */}
+      {addImportOpen && (
+        <BOMImportSubcomponentsDialog
+          open={addImportOpen}
+          onClose={() => { setAddImportOpen(false); onAddClose?.(); }}
+          projectId={projectId}
+          orgId={orgId}
+        />
+      )}
 
       {/* Add Sub-component dialog (from list row "+" action) */}
       {addSubNode && (

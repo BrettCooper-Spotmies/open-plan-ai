@@ -36,7 +36,8 @@ interface ImportResult {
 interface Props {
   open: boolean;
   onClose: () => void;
-  parentNode: BOMNode;
+  /** If null/undefined, parts are imported as top-level BOM nodes (no parent). */
+  parentNode?: BOMNode | null;
   projectId: string;
   orgId: string;
 }
@@ -255,7 +256,8 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
         }
         await createNode.mutateAsync({
           partId, quantity: row.quantity, unit: row.uom,
-          status: row.status, parentId: parentNode.id,
+          status: row.status,
+          ...(parentNode ? { parentId: parentNode.id } : {}),
           // Imported rows have no per-row owner picker — default to whoever ran the import.
           ownerId: user?.id,
         });
@@ -281,7 +283,9 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
             Import Sub-components
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
-            Bulk-add sub-components to <span className="font-mono text-foreground">{parentNode.pn}</span> from a spreadsheet.
+            {parentNode
+              ? <>Bulk-add sub-components to <span className="font-mono text-foreground">{parentNode.pn}</span> from a spreadsheet.</>
+              : 'Bulk-add top-level parts to the BOM from a spreadsheet.'}
           </DialogDescription>
         </DialogHeader>
 
