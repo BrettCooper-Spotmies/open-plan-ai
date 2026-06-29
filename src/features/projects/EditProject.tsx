@@ -378,6 +378,13 @@ const EditProject = () => {
         return project.createdBy === user.id;
     }, [project?.createdBy, user?.id]);
 
+    const canEditProject = useMemo(() => {
+        if (!project || !user?.id) return false;
+        if (project.createdBy === user.id) return true;
+        const myMembership = (project.team || []).find((member) => member.id === user.id);
+        return (myMembership?.role || '').toLowerCase() === 'admin';
+    }, [project?.createdBy, project?.team, user?.id]);
+
     const selectedOrgMember = useMemo(
         () => orgMembers.find((member: any) => member.id === selectedMember),
         [orgMembers, selectedMember]
@@ -1014,6 +1021,23 @@ const EditProject = () => {
                     </p>
                     <Button className="mt-4" onClick={() => navigate('/projects')}>
                         Back to Projects
+                    </Button>
+                </div>
+            </>
+        );
+    }
+
+    if (!canEditProject) {
+        return (
+            <>
+                <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+                    <AlertTriangle className="h-12 w-12 text-muted-foreground" />
+                    <h2 className="text-xl font-medium">Access Denied</h2>
+                    <p className="text-muted-foreground text-center max-w-sm">
+                        You don't have permission to edit this project. Only the project owner or an Admin can make changes.
+                    </p>
+                    <Button onClick={() => navigate(`/projects/${id}`)}>
+                        Back to Project
                     </Button>
                 </div>
             </>
