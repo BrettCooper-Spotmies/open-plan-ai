@@ -250,8 +250,7 @@ export function applyPriceRollup(node: BOMNode): BOMNode {
   if (!node.children?.length) return node;
   const rolledChildren = node.children.map(applyPriceRollup);
   const childrenPrice = rolledChildren.reduce((sum, c) => sum + c.qty * c.price, 0);
-  const rollupPrice = node.price + childrenPrice;
-  return { ...node, price: rollupPrice, children: rolledChildren };
+  return { ...node, price: node.price + childrenPrice, children: rolledChildren };
 }
 
 export function fromApiRevision(r: ApiRevisionResponse): BOMRevision {

@@ -1041,7 +1041,7 @@ export function BOMView({
   const totalCount    = bomTree?.totalNodes    ?? allNodes.length;
   const approvedCount = bomTree?.approvedCount ?? allNodes.filter(n => n.status === 'approved').length;
   const pendingCount  = bomTree?.pendingCount  ?? allNodes.filter(n => n.status === 'pending').length;
-  const totalCost     = useMemo(() => allNodes.reduce((s, n) => s + n.price * n.qty, 0), [allNodes]);
+  const totalCost     = useMemo(() => rootNodes.reduce((s, n) => s + n.price * n.qty, 0), [rootNodes]);
 
   if (treeLoading) return <BOMViewSkeleton />;
 
