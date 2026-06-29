@@ -33,6 +33,7 @@ import { IssueDetailModal } from './IssueDetailModal';
 import { ISSUE_SEVERITY_DISPLAY } from './issueSeverity';
 import { useIssueColumns, useCreateIssueColumn, useDeleteIssueColumn } from '@/hooks/useIssueColumns';
 import { DEFAULT_ISSUE_COLUMNS } from '@/services/issueColumns.service';
+import { useAuth } from '@/modules/auth';
 
 interface IssuesViewProps {
   issues: Issue[];
@@ -138,6 +139,7 @@ export function IssuesView({
   onIssueDelete,
 }: IssuesViewProps) {
   const { id: routeProjectId } = useParams();
+  const { user } = useAuth();
   const { data: apiIssueColumns } = useIssueColumns(routeProjectId);
   const createIssueColumn = useCreateIssueColumn(routeProjectId);
   const deleteIssueColumn = useDeleteIssueColumn(routeProjectId);
@@ -265,7 +267,7 @@ export function IssuesView({
       severity: 'minor',
       category: 'other',
       projectId: pid, // Ensure projectId is set
-      reportedBy: { id: 'currentUser', name: 'Current User', initials: 'CU', avatar: '', email: 'current.user@example.com', role: 'Member' },
+      reportedBy: { id: user?.id ?? 'currentUser', name: user?.name ?? 'Current User', initials: user?.initials ?? user?.name?.split(' ').map(n => n[0]).join('').toUpperCase() ?? 'CU', avatar: user?.avatarUrl ?? '', email: user?.email ?? '', role: 'Member' },
       reportedAt: new Date().toISOString(), // Add reportedAt
       assignees: [],
       tags: [],
