@@ -366,17 +366,17 @@ interface ImportColumnDef {
 
 export const SUBCOMPONENT_IMPORT_COLUMNS: ImportColumnDef[] = [
   { label: 'Part Number',        required: true,  aliases: ['part number', 'partnumber', 'pn'] },
-  { label: 'Part Name',          required: false, aliases: ['part name', 'name'] },
+  { label: 'Part Name',          required: true,  aliases: ['part name', 'name'] },
   { label: 'Description',        required: true,  aliases: ['description', 'desc'] },
   { label: 'Category',           required: true,  aliases: ['category'] },
   { label: 'Status',             required: false, aliases: ['status'] },
-  { label: 'Manufacturer',       required: false, aliases: ['manufacturer'] },
-  { label: 'MPN',                required: false, aliases: ['mpn'] },
-  { label: 'Supplier',           required: false, aliases: ['supplier', 'distributor'] },
-  { label: 'Unit Price',         required: false, aliases: ['unit price', 'price'] },
-  { label: 'Lead Time (weeks)',  required: false, aliases: ['lead time (weeks)', 'lead time', 'leadtime'] },
+  { label: 'Manufacturer',       required: true,  aliases: ['manufacturer'] },
+  { label: 'MPN',                required: true,  aliases: ['mpn', 'manufacturer pn', 'manufacturer part number'] },
+  { label: 'Supplier',           required: true,  aliases: ['supplier', 'distributor'] },
+  { label: 'Unit Price',         required: true,  aliases: ['unit price', 'price'] },
+  { label: 'Lead Time (weeks)',  required: true,  aliases: ['lead time (weeks)', 'lead time', 'leadtime'] },
   { label: 'Quantity',           required: true,  aliases: ['quantity', 'qty'] },
-  { label: 'UOM',                required: false, aliases: ['uom', 'unit'] },
+  { label: 'UOM',                required: true,  aliases: ['uom', 'unit'] },
 ];
 
 export interface ParsedImportRow {
@@ -470,6 +470,7 @@ export function parseSubcomponentImportRows(
     const uomRaw         = pickField(row, colAliases('UOM'));
 
     if (!partNumber) errors.push('Missing Part Number');
+    if (!name) errors.push('Missing Part Name');
     if (!description) errors.push('Missing Description');
 
     // Category accepts any non-empty value — a known preset (KNOWN_BOM_CATEGORIES)
@@ -482,23 +483,27 @@ export function parseSubcomponentImportRows(
     }
 
     let status: BOMStatus = 'pending';
-    if (statusRaw) {
-      if (!IMPORT_STATUS_VALUES.includes(statusRaw as BOMStatus)) {
-        errors.push(`Status "${statusRaw}" is not valid`);
-      } else {
-        status = statusRaw as BOMStatus;
-      }
+    if (statusRaw && IMPORT_STATUS_VALUES.includes(statusRaw as BOMStatus)) {
+      status = statusRaw as BOMStatus;
     }
 
+    if (!manufacturer) errors.push('Missing Manufacturer');
+    if (!mpn) errors.push('Missing MPN');
+    if (!supplier) errors.push('Missing Supplier');
+
     let unitPrice: number | undefined;
-    if (unitPriceRaw) {
+    if (!unitPriceRaw) {
+      errors.push('Missing Unit Price');
+    } else {
       const n = Number(unitPriceRaw);
       if (Number.isNaN(n)) errors.push('Unit Price must be a number');
       else unitPrice = n;
     }
 
     let leadTimeWeeks: number | undefined;
-    if (leadTimeRaw) {
+    if (!leadTimeRaw) {
+      errors.push('Missing Lead Time');
+    } else {
       const n = Number(leadTimeRaw);
       if (Number.isNaN(n)) errors.push('Lead Time must be a number');
       else leadTimeWeeks = n;
@@ -513,6 +518,7 @@ export function parseSubcomponentImportRows(
       else quantity = n;
     }
 
+    if (!uomRaw) errors.push('Missing UOM');
     const uom = uomRaw || 'EA';
 
     const existingPart = partNumber
