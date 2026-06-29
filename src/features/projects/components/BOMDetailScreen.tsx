@@ -862,7 +862,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                     </div>
                   );
                 })}
-                {node.customFields && node.customFields.length > 0 && (
+                {Array.isArray(node.customFields) && node.customFields.length > 0 && (
                   <>
                     <div className="border-t border-border/50 pt-2 mt-1">
                       <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-2">Additional Fields</p>
