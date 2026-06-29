@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Issue, IssueStatus, IssueSeverity, IssueCategory, Task, TeamMember } from '@/types';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -118,6 +119,8 @@ const issueSeverityBorder: Record<IssueSeverity, string> = {
   trivial: 'border-l-muted-foreground',
 };
 
+const BOARD_CHECKLIST_PREVIEW_COUNT = 2;
+
 export function IssuesView({
   issues,
   viewMode = 'table',
@@ -153,6 +156,7 @@ export function IssuesView({
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
   const [newColumnColor, setNewColumnColor] = useState('#3b82f6');
+  const [expandedChecklistPreview, setExpandedChecklistPreview] = useState<Record<string, boolean>>({});
 
   // Sync columns from API
   useEffect(() => {
@@ -367,6 +371,17 @@ export function IssuesView({
     return sortedIssues.filter(issue => issue.status === column.status && !isDependencyIssue(issue));
   };
 
+  const handleToggleChecklistItemOnCard = (issueId: string, checklistItemId: string) => {
+    const issue = localIssues.find((i) => i.id === issueId);
+    if (!issue) return;
+    const updatedChecklist = (issue.checklist || []).map((item) =>
+      item.id === checklistItemId ? { ...item, completed: !item.completed } : item
+    );
+    const updatedIssue = { ...issue, checklist: updatedChecklist };
+    setLocalIssues(localIssues.map((i) => (i.id === issueId ? updatedIssue : i)));
+    onIssueUpdate?.(updatedIssue);
+  };
+
   return (
     <div className="space-y-4">
       {viewMode === 'kanban' ? (
@@ -520,6 +535,63 @@ export function IssuesView({
                                                   {issue.description && (
                                                     <p className="text-xs text-muted-foreground line-clamp-2">{issue.description}</p>
                                                   )}
+
+                                                  {(() => {
+                                                    const boardChecklistItems = (issue.checklist || []).filter(
+                                                      (item) => item.showInBoardView === true
+                                                    );
+                                                    if (boardChecklistItems.length === 0) return null;
+                                                    const isExpanded = expandedChecklistPreview[issue.id] === true;
+                                                    const visibleItems = isExpanded
+                                                      ? boardChecklistItems
+                                                      : boardChecklistItems.slice(0, BOARD_CHECKLIST_PREVIEW_COUNT);
+                                                    const hasMore = boardChecklistItems.length > BOARD_CHECKLIST_PREVIEW_COUNT;
+                                                    return (
+                                                      <div className="space-y-1.5 pt-1">
+                                                        {visibleItems.map((item) => (
+                                                          <div key={item.id} className="flex items-center gap-2">
+                                                            <Checkbox
+                                                              checked={item.completed}
+                                                              onCheckedChange={(checked) => {
+                                                                if (checked === 'indeterminate') return;
+                                                                handleToggleChecklistItemOnCard(issue.id, item.id);
+                                                              }}
+                                                              className="h-3.5 w-3.5 rounded-[3px]"
+                                                              onClick={(event) => event.stopPropagation()}
+                                                            />
+                                                            <button
+                                                              type="button"
+                                                              onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                handleToggleChecklistItemOnCard(issue.id, item.id);
+                                                              }}
+                                                              className={cn(
+                                                                'min-w-0 flex-1 text-left text-[11px] text-muted-foreground truncate',
+                                                                item.completed && 'line-through'
+                                                              )}
+                                                            >
+                                                              {item.text}
+                                                            </button>
+                                                          </div>
+                                                        ))}
+                                                        {hasMore && (
+                                                          <button
+                                                            type="button"
+                                                            className="text-[11px] text-primary hover:underline"
+                                                            onClick={(event) => {
+                                                              event.stopPropagation();
+                                                              setExpandedChecklistPreview((prev) => ({
+                                                                ...prev,
+                                                                [issue.id]: !isExpanded,
+                                                              }));
+                                                            }}
+                                                          >
+                                                            {isExpanded ? 'View less' : `View more (${boardChecklistItems.length - BOARD_CHECKLIST_PREVIEW_COUNT})`}
+                                                          </button>
+                                                        )}
+                                                      </div>
+                                                    );
+                                                  })()}
 
                                                   <div className="flex items-center justify-between gap-2">
                                                     <Badge className={cn('gap-1', ISSUE_SEVERITY_DISPLAY[issue.severity].color)}>
