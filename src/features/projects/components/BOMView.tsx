@@ -855,13 +855,15 @@ export function BOMView({
     return map;
   }, [pendingApprovalRequests]);
 
-  // Only an admin or an assigned approver may approve/reject — plain managers
-  // no longer get a blanket override.
+  // Approve/reject buttons only appear when a review request has actually been
+  // sent for the node. Admins can decide any active request; other users only
+  // if they are listed as an approver on that request.
   const canDecideRow = useCallback((nodeId: string): boolean => {
+    const req = pendingRequestByNodeId.get(nodeId);
+    if (!req) return false;
     if (isAdmin) return true;
     if (!user) return false;
-    const req = pendingRequestByNodeId.get(nodeId);
-    return !!req && req.approvers.some(a => a.id === user.id);
+    return req.approvers.some(a => a.id === user.id);
   }, [isAdmin, user, pendingRequestByNodeId]);
 
   const handleApprove = async (node: BOMNode) => {
