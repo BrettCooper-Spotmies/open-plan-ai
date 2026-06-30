@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageSquare, CheckCircle2, AlertCircle, Users, FolderKanban, Clock, Activity } from 'lucide-react';
+import { Bell, CheckCircle2, AlertCircle, FolderKanban, Clock, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -14,20 +14,17 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 const getNotificationIcon = (type: AppNotification['type']) => {
     switch (type) {
-        case 'activity':
-            return <Activity className="h-4 w-4 text-blue-500" />;
-        case 'mention':
-            return <Users className="h-4 w-4 text-blue-500" />;
-        case 'assignment':
+        case 'task_assigned':
             return <FolderKanban className="h-4 w-4 text-purple-500" />;
-        case 'completed':
-            return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-        case 'comment':
-            return <MessageSquare className="h-4 w-4 text-orange-500" />;
-        case 'message':
-            return <MessageSquare className="h-4 w-4 text-emerald-500" />;
-        case 'deadline':
+        case 'issue_assigned':
+        case 'issue_resolved':
+        case 'issue_linked_to_task':
             return <AlertCircle className="h-4 w-4 text-red-500" />;
+        case 'bom_approval_requested':
+        case 'bom_approval_decided':
+            return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+        case 'eco_decision_requested':
+            return <Activity className="h-4 w-4 text-blue-500" />;
         default:
             return <Bell className="h-4 w-4 text-muted-foreground" />;
     }
@@ -37,9 +34,7 @@ export function NotificationsPopover() {
     const [open, setOpen] = useState(false);
     const navigate = useNavigate();
     const isMobile = useIsMobile();
-    const { notifications, markAsRead, markAllAsRead } = useNotifications();
-
-    const unreadCount = notifications.filter((n) => !n.read).length;
+    const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
     const handleMarkAsRead = (id: string) => {
         markAsRead.mutate(id);
@@ -124,10 +119,8 @@ export function NotificationsPopover() {
                                     onClick={() => {
                                         handleMarkAsRead(notification.id);
                                         setOpen(false);
-                                        if (notification.type === 'message' && notification.conversation_id) {
-                                            navigate(`/chat/${notification.conversation_id}`);
-                                        } else if (notification.project_id) {
-                                            navigate(`/projects/${notification.project_id}`);
+                                        if (notification.actionUrl) {
+                                            navigate(notification.actionUrl);
                                         }
                                     }}
                                 >
@@ -161,12 +154,6 @@ export function NotificationsPopover() {
                                             {notification.description}
                                         </p>
                                         <div className="flex items-center gap-2 mt-1.5">
-                                            {notification.project && (
-                                                <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                                                    <FolderKanban className="h-2.5 w-2.5" />
-                                                    {notification.project}
-                                                </span>
-                                            )}
                                             <span className="flex items-center gap-1 text-[10px] text-muted-foreground">
                                                 <Clock className="h-2.5 w-2.5" />
                                                 {notification.time}

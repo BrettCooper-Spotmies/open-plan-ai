@@ -83,7 +83,6 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionStartRef = useRef<number>(-1);
-  const { createNotification } = useNotifications();
 
   const otherMembers = useMemo(
     () => (members || []).filter((m) => m.id !== user?.id),
@@ -314,21 +313,6 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
         else await chatService.sendMessage(conversationId, trimmed, undefined, replyingTo?.id);
       }
 
-      otherMembers.forEach((member) => {
-        if (trimmed.includes(`@${member.name}`)) {
-          try {
-            createNotification.mutate({
-              user_id: member.id,
-              actor_id: user?.id,
-              type: 'mention',
-              title: 'Mentioned you in a message',
-              description: trimmed.length > 100 ? trimmed.substring(0, 97) + '...' : trimmed,
-            });
-          } catch (notifErr) {
-            logger.warn('[MessageInput] Failed to create mention notification:', notifErr);
-          }
-        }
-      });
 
       onMessageSent?.();
       onCancelReply?.();

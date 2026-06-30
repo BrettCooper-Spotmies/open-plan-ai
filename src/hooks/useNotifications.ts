@@ -1,92 +1,88 @@
+import { useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
-import { notificationsService, Notification, NotificationType } from '@/services/notifications.service';
+import { notificationsService, Notification } from '@/services/notifications.service';
 import { formatDistanceToNow } from 'date-fns';
+import { chatTransport } from '@/features/chat/transport';
 
-export interface AppNotification extends Omit<Notification, 'type'> {
-    type: Notification['type'] | 'message';
-    time: string;
-    initials?: string;
-    project: string;
+export interface AppNotification extends Notification {
+  read: boolean;
+  description: string | null;
+  time: string;
+  initials: string;
 }
 
 export function useNotifications() {
-    const { user } = useAuth();
-    const queryClient = useQueryClient();
-    const userId = user?.id;
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const userId = user?.id;
 
-    const { data: rawNotifications = [], isLoading, error } = useQuery({
-        queryKey: ['notifications', userId],
-        queryFn: () => notificationsService.getAll(),
-        enabled: !!userId,
-    });
+  const { data: rawNotifications = [], isLoading, error } = useQuery({
+    queryKey: ['notifications', userId],
+    queryFn: () => notificationsService.getAll(),
+    enabled: !!userId,
+  });
 
-    const notifications: AppNotification[] = rawNotifications.map((n: Notification) => ({
-        ...n,
-        time: formatDistanceToNow(new Date(n.createdAt), { addSuffix: true }),
-        initials: (() => {
-            const title: string = n.title || '';
-            const words = title.trim().split(/\s+/);
-            if (words.length >= 2) {
-                return (words[0][0] + words[1][0]).toUpperCase();
-            }
-            return words[0]?.substring(0, 2).toUpperCase() || '??';
-        })(),
-        project: n.type === 'message' ? 'Chat' : (n.project?.name || 'Project'),
-    }));
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ['notifications-count', userId],
+    queryFn: () => notificationsService.getUnreadCount(),
+    enabled: !!userId,
+  });
 
-    const markAsRead = useMutation({
-        mutationFn: (id: string) => notificationsService.markAsRead(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
-        },
-    });
+  // Real-time: invalidate when a new notification arrives via socket
+  useEffect(() => {
+    if (!userId) return;
+    const socket = (chatTransport as any).socket;
+    if (!socket) return;
 
-    const markAllAsRead = useMutation({
-        mutationFn: () => notificationsService.markAllAsRead(),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
-        },
-    });
-
-    const deleteNotification = useMutation({
-        mutationFn: (id: string) => notificationsService.delete(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
-        },
-    });
-
-    const clearRead = useMutation({
-        mutationFn: () => notificationsService.deleteAllRead(userId || ''),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
-        },
-    });
-
-    const createNotification = useMutation({
-        mutationFn: (notification: {
-            user_id: string;
-            actor_id?: string;
-            type: NotificationType;
-            title: string;
-            description: string;
-            project_id?: string;
-            entity_id?: string;
-            entity_type?: string;
-        }) => notificationsService.create(notification),
-    });
-
-    const unreadCount = notifications.filter(n => !n.read).length;
-
-    return {
-        notifications,
-        unreadCount,
-        isLoading,
-        error,
-        markAsRead,
-        markAllAsRead,
-        clearRead,
-        deleteNotification,
-        createNotification,
+    const handler = () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+      queryClient.invalidateQueries({ queryKey: ['notifications-count', userId] });
     };
+
+    socket.on('notification:created', handler);
+    return () => { socket.off('notification:created', handler); };
+  }, [userId, queryClient]);
+
+  const notifications: AppNotification[] = rawNotifications.map((n: Notification) => ({
+    ...n,
+    read: n.readAt !== null,
+    description: n.content,
+    time: formatDistanceToNow(new Date(n.createdAt), { addSuffix: true }),
+    initials: (() => {
+      const words = (n.title || '').trim().split(/\s+/);
+      if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+      return words[0]?.substring(0, 2).toUpperCase() || '??';
+    })(),
+  }));
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['notifications', userId] });
+    queryClient.invalidateQueries({ queryKey: ['notifications-count', userId] });
+  };
+
+  const markAsRead = useMutation({
+    mutationFn: (id: string) => notificationsService.markAsRead(id),
+    onSuccess: invalidate,
+  });
+
+  const markAllAsRead = useMutation({
+    mutationFn: () => notificationsService.markAllAsRead(),
+    onSuccess: invalidate,
+  });
+
+  const deleteNotification = useMutation({
+    mutationFn: (id: string) => notificationsService.delete(id),
+    onSuccess: invalidate,
+  });
+
+  return {
+    notifications,
+    unreadCount,
+    isLoading,
+    error,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification,
+  };
 }
