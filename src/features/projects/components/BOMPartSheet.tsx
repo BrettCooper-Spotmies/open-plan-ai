@@ -595,6 +595,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
       if (!manufacturer.trim()) e.mfr = 'Manufacturer is required';
       if (!mpn.trim()) e.mpn = 'MPN is required';
       if (!qty.trim()) e.qty = 'Valid quantity is required';
+      else if (parseFloat(qty) > 1000000) e.qty = 'Quantity must be 1,000,000 or less';
       if (!leadTime.trim() || isNaN(parseFloat(leadTime))) e.leadTime = 'Lead time is required';
       suppliers.forEach((s, i) => {
         if (!s.distributor.trim()) e[`sup_dist_${i}`] = 'Supplier name is required';
