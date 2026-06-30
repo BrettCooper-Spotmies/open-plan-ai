@@ -2,12 +2,13 @@ import { useState, useCallback, memo } from 'react';
 import { Task, Milestone } from '@/types';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { ArrowUpDown, AlertTriangle, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TaskDetailModal } from './TaskDetailModal';
 import { formatModuleType } from '../utils/projectUtils';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import { useVirtualList, getVirtualContainerStyle, getVirtualItemStyle } from '@/hooks/useVirtualList';
 
 interface VirtualListViewProps {
@@ -94,6 +95,7 @@ const TaskTableRow = memo(function TaskTableRow({
         {task.assignees && task.assignees.length > 0 ? (
           <div className="flex items-center gap-2">
             <Avatar className="h-6 w-6">
+              <AvatarImage src={resolveFileUrl(task.assignees[0].avatar) ?? task.assignees[0].avatar} alt={task.assignees[0].name} />
               <AvatarFallback className="text-[10px]">
                 {task.assignees[0].initials}
               </AvatarFallback>
@@ -340,6 +342,7 @@ export function VirtualListView({ tasks, milestones = [], onTaskClick, onUpdate,
                       {task.assignees && task.assignees.length > 0 ? (
                         <div className="flex items-center gap-2">
                           <Avatar className="h-6 w-6">
+                            <AvatarImage src={resolveFileUrl(task.assignees[0].avatar) ?? task.assignees[0].avatar} alt={task.assignees[0].name} />
                             <AvatarFallback className="text-[10px]">
                               {task.assignees[0].initials}
                             </AvatarFallback>

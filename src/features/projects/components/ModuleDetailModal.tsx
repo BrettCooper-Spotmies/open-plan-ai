@@ -13,7 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import { Separator } from '@/components/ui/separator';
 import {
   Select,
@@ -359,6 +360,7 @@ export function ModuleDetailModal({
                             <SelectItem key={member.id} value={member.id}>
                               <div className="flex items-center gap-2">
                                 <Avatar className="h-5 w-5">
+                                  <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
                                   <AvatarFallback className="text-[9px]">{member.initials}</AvatarFallback>
                                 </Avatar>
                                 {member.name}
@@ -370,6 +372,7 @@ export function ModuleDetailModal({
                     ) : module.owner ? (
                       <div className="flex items-center gap-2 mt-1">
                         <Avatar className="h-6 w-6">
+                          <AvatarImage src={resolveFileUrl(module.owner.avatar) ?? module.owner.avatar} alt={module.owner.name} />
                           <AvatarFallback className="text-[10px]">{module.owner.initials}</AvatarFallback>
                         </Avatar>
                         <span className="text-sm">{module.owner.name}</span>
@@ -394,6 +397,7 @@ export function ModuleDetailModal({
                       <Label className="text-xs text-muted-foreground">Created By</Label>
                       <div className="flex items-center gap-2 mt-1">
                         <Avatar className="h-5 w-5">
+                          <AvatarImage src={resolveFileUrl(module.createdBy.avatar) ?? module.createdBy.avatar} alt={module.createdBy.name} />
                           <AvatarFallback className="text-[9px]">{module.createdBy.initials}</AvatarFallback>
                         </Avatar>
                         <span className="text-sm">{module.createdBy.name}</span>
@@ -509,6 +513,7 @@ export function ModuleDetailModal({
                         <div className="flex items-center gap-2 shrink-0">
                           {task.assignees?.[0] && (
                             <Avatar className="h-5 w-5">
+                              <AvatarImage src={resolveFileUrl(task.assignees[0].avatar) ?? task.assignees[0].avatar} alt={task.assignees[0].name} />
                               <AvatarFallback className="text-[9px]">
                                 {task.assignees[0].initials}
                               </AvatarFallback>

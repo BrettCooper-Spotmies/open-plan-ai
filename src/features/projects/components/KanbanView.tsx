@@ -6,17 +6,18 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ColorSwatchPicker } from '@/components/shared/ColorSwatchPicker';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { playCompleteSound } from '@/lib/playSound';
+import { BUCKET_COLOR_OPTIONS } from '@/lib/bucketColors';
 import { Plus, Check, GripVertical, X, Link2, Calendar as CalendarIcon, Maximize2 } from 'lucide-react';
 import {
   Command,
@@ -33,6 +34,7 @@ import {
 } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import { TaskDetailModal } from './TaskDetailModal';
 import {
   useProjectTaskColumns,
@@ -156,23 +158,6 @@ const moduleColors: Record<string, string> = {
   power: 'border-l-destructive',
 };
 
-const columnColorOptions = [
-  { value: 'bg-status-todo', label: 'Gray' },
-  { value: 'bg-status-in-progress', label: 'Blue' },
-  { value: 'bg-status-review', label: 'Purple' },
-  { value: 'bg-status-done', label: 'Green' },
-  { value: 'bg-status-blocked', label: 'Red' },
-  { value: 'bg-chart-4', label: 'Yellow' },
-  { value: 'bg-orange-500', label: 'Orange' },
-  { value: 'bg-pink-500', label: 'Pink' },
-  { value: 'bg-cyan-500', label: 'Cyan' },
-  { value: 'bg-teal-500', label: 'Teal' },
-  { value: 'bg-indigo-500', label: 'Indigo' },
-  { value: 'bg-rose-500', label: 'Rose' },
-  { value: 'bg-amber-500', label: 'Amber' },
-  { value: 'bg-lime-500', label: 'Lime' },
-];
-
 export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assignableMembers, onTaskCreate,
   onTaskUpdate,
   onBatchTaskUpdate,
@@ -225,7 +210,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
   const [addTaskToColumn, setAddTaskToColumn] = useState<string | null>(null);
   const [newColumnName, setNewColumnName] = useState('');
-  const [newColumnColor, setNewColumnColor] = useState('bg-status-todo');
+  const [newColumnColor, setNewColumnColor] = useState(BUCKET_COLOR_OPTIONS[0].value);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [expandedChecklistPreview, setExpandedChecklistPreview] = useState<Record<string, boolean>>({});
@@ -479,7 +464,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       {
         onSuccess: () => {
           setNewColumnName('');
-          setNewColumnColor('bg-status-todo');
+          setNewColumnColor(BUCKET_COLOR_OPTIONS[0].value);
           setIsAddColumnOpen(false);
         },
       }
@@ -848,6 +833,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                       <div className="flex -space-x-2">
                                                         {(task.assignees || []).slice(0, 3).map((assignee) => (
                                                           <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
+                                                            <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
                                                             <AvatarFallback className="text-[9px] bg-muted">
                                                               {assignee.initials}
                                                             </AvatarFallback>
@@ -949,21 +935,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                           </div>
                           <div className="space-y-2">
                             <Label>Color</Label>
-                            <Select value={newColumnColor} onValueChange={setNewColumnColor}>
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {columnColorOptions.map((option) => (
-                                  <SelectItem key={option.value} value={option.value}>
-                                    <div className="flex items-center gap-2">
-                                      <div className={cn('w-3 h-3 rounded-full', option.value)} />
-                                      {option.label}
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <ColorSwatchPicker
+                              value={newColumnColor}
+                              onChange={setNewColumnColor}
+                            />
                           </div>
                           <Button onClick={handleAddColumn} className="w-full">
                             Add Bucket

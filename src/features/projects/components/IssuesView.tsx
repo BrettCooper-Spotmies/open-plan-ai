@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ColorSwatchPicker } from '@/components/shared/ColorSwatchPicker';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useParams } from 'react-router-dom';
@@ -85,16 +85,6 @@ const categoryConfig: Record<IssueCategory, { icon: typeof Bug; label: string }>
   'design-change': { icon: Pencil, label: 'Design Change' },
   other: { icon: Info, label: 'Other' },
 };
-
-const COLUMN_COLOR_OPTIONS = [
-  { value: '#ef4444', label: 'Red' },
-  { value: '#f97316', label: 'Orange' },
-  { value: '#eab308', label: 'Yellow' },
-  { value: '#10b981', label: 'Green' },
-  { value: '#3b82f6', label: 'Blue' },
-  { value: '#8b5cf6', label: 'Purple' },
-  { value: '#6b7280', label: 'Gray' },
-];
 
 const DEPENDENCIES_COLUMN: IssuesKanbanColumn = {
   id: 'col-dependencies',
@@ -729,21 +719,10 @@ export function IssuesView({
                             </div>
                             <div className="space-y-2">
                               <Label>Color</Label>
-                              <Select value={newColumnColor} onValueChange={setNewColumnColor}>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {COLUMN_COLOR_OPTIONS.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: option.value }} />
-                                        {option.label}
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <ColorSwatchPicker
+                                value={newColumnColor}
+                                onChange={setNewColumnColor}
+                              />
                             </div>
                             <Button
                               onClick={handleAddColumn}

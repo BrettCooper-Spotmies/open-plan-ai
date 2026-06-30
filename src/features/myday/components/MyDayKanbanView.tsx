@@ -2,8 +2,9 @@ import { useState, useMemo, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult, DragStart } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import { Check, CheckSquare, Bug } from 'lucide-react';
 import {
   MyDayItem,
@@ -378,6 +379,7 @@ export function MyDayKanbanView({
                                 <div className="flex items-center justify-between pt-2">
                                   {task.assignees && task.assignees.length > 0 && (
                                     <Avatar className="h-5 w-5">
+                                      <AvatarImage src={resolveFileUrl(task.assignees[0].avatar) ?? task.assignees[0].avatar} alt={task.assignees[0].name} />
                                       <AvatarFallback className="text-[9px] bg-muted">
                                         {task.assignees[0].initials}
                                       </AvatarFallback>

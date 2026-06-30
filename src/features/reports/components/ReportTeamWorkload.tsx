@@ -1,8 +1,9 @@
 import { memo, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Users } from 'lucide-react';
 import { TeamWorkloadItem } from '../utils/reportsUtils';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 interface ReportTeamWorkloadProps {
   data: TeamWorkloadItem[];
@@ -24,6 +25,7 @@ export const ReportTeamWorkload = memo(function ReportTeamWorkload({ data, onMem
     return {
       fullName: item.member.name,
       initials: item.member.initials,
+      avatar: item.member.avatar,
       memberId: item.member.id,
       totalTasks: item.totalTasks,
       totalIssues: item.totalIssues,
@@ -67,6 +69,7 @@ export const ReportTeamWorkload = memo(function ReportTeamWorkload({ data, onMem
                 onClick={() => handleMemberClick(member.memberId)}
               >
                 <Avatar className="h-8 w-8 shrink-0">
+                  <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.fullName} />
                   <AvatarFallback className="text-xs bg-primary/10 text-primary">
                     {member.initials}
                   </AvatarFallback>

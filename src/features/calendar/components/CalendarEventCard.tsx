@@ -2,8 +2,9 @@ import React from 'react';
 import { Flag, AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { CalendarEvent } from '../utils/calendarUtils';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 interface CalendarEventCardProps {
   event: CalendarEvent;
@@ -116,6 +117,7 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
         <div className="flex -space-x-1">
           {event.assignees.slice(0, 2).map((assignee) => (
             <Avatar key={assignee.id} className="h-4 w-4 border border-background">
+              <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
               <AvatarFallback className="text-[8px] bg-muted">
                 {assignee.initials}
               </AvatarFallback>

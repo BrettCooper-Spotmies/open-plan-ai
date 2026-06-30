@@ -3,7 +3,8 @@ import { AlertCircle, AlertTriangle, Info, ChevronUp, ChevronDown, ExternalLink 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import { Issue, IssueSeverity } from '@/types';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -168,6 +169,7 @@ export const ReportOpenIssuesTable = memo(function ReportOpenIssuesTable({ issue
                           <div className="flex -space-x-2">
                             {issue.assignees.slice(0, 3).map((assignee) => (
                               <Avatar key={assignee.id} className="h-6 w-6 border-2 border-background">
+                                <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
                                 <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
                                   {assignee.initials}
                                 </AvatarFallback>

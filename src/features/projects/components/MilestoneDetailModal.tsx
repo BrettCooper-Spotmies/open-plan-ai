@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
@@ -44,6 +44,7 @@ import {
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { Milestone, MilestoneStatus, Task, Issue, Module } from '@/types';
 import { getMilestoneProgress, getMilestoneTasks, getMilestoneIssues, getMilestoneStatus, getModuleProgress } from '../utils/projectUtils';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 interface MilestoneDetailModalProps {
   milestone: Milestone | null;
@@ -376,6 +377,7 @@ export function MilestoneDetailModal({
                   </Label>
                   <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-input bg-muted/30">
                     <Avatar className="h-5 w-5">
+                      <AvatarImage src={resolveFileUrl(editedMilestone.createdBy.avatar) ?? editedMilestone.createdBy.avatar} alt={editedMilestone.createdBy.name} />
                       <AvatarFallback className="text-[9px]">
                         {editedMilestone.createdBy.initials}
                       </AvatarFallback>

@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Dialog,
   DialogContent,
@@ -78,6 +78,7 @@ import { calculateProjectProgress } from './utils/projectUtils';
 import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember } from '@/types';
 import { logger } from '@/services/monitoring/logger';
 import { format } from 'date-fns';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 // Issue Filter interface
 interface IssueFilter {
@@ -1120,6 +1121,7 @@ export default function ProjectDetail() {
                             <div key={member.id} className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2 min-w-0">
                                 <Avatar className="h-7 w-7">
+                                  <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
                                   <AvatarFallback className="text-[11px]">
                                     {member.initials}
                                   </AvatarFallback>

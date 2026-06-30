@@ -18,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -862,6 +862,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                           {selectedOwner ? (
                             <>
                               <Avatar className="h-5 w-5 shrink-0">
+                                <AvatarImage src={resolveFileUrl(selectedOwner.avatar) ?? selectedOwner.avatar} alt={selectedOwner.name} />
                                 <AvatarFallback className="text-[9px] bg-primary/20 text-primary">
                                   {selectedOwner.initials}
                                 </AvatarFallback>
@@ -903,6 +904,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                                 >
                                   <div className="flex items-center gap-2">
                                     <Avatar className="h-5 w-5">
+                                      <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
                                       <AvatarFallback className="text-[9px]">
                                         {member.initials}
                                       </AvatarFallback>

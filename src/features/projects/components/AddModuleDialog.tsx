@@ -11,7 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import {
   Select,
   SelectContent,
@@ -183,6 +184,7 @@ export function AddModuleDialog({
                   <SelectItem key={member.id} value={member.id}>
                     <div className="flex items-center gap-2">
                       <Avatar className="h-5 w-5">
+                        <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
                         <AvatarFallback className="text-[9px]">
                           {member.initials}
                         </AvatarFallback>
