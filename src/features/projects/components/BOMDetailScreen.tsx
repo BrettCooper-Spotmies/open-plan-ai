@@ -473,7 +473,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const addRequirement = useAddRequirement(projectId);
   const removeRequirement = useRemoveRequirement(projectId);
 
-  const activeRev = revHistory[activeRevIdx] ?? { rev: originalNode.rev, status: originalNode.status, price: originalNode.price, leadTime: originalNode.leadTime, date: '', author: '', changes: '' } as BOMRevision;
+  const activeRev = revHistory[activeRevIdx] ?? { rev: originalNode.rev, status: originalNode.status, price: originalNode.price, leadTime: originalNode.leadTime, date: '', author: '', changes: '', customFields: originalNode.customFields } as BOMRevision;
   const isLatest = revHistory.length === 0 || activeRevIdx === revHistory.length - 1;
 
   // Build a synthetic "view node" that reflects the active revision's data.
@@ -485,6 +485,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     status: originalNode.status,
     price: activeRev.price,
     leadTime: activeRev.leadTime,
+    customFields: activeRev.customFields?.length ? activeRev.customFields : originalNode.customFields,
   };
 
   const meta = getCategoryMeta(node.cat);
