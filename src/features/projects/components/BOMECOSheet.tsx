@@ -308,6 +308,7 @@ export function BOMECOSheet({
                       value={revFrom}
                       onChange={e => setRevFrom(e.target.value)}
                       placeholder="e.g. A"
+                      maxLength={3}
                     />
                   </FL>
                   <FL label="Rev To">
@@ -315,6 +316,7 @@ export function BOMECOSheet({
                       value={revTo}
                       onChange={e => setRevTo(e.target.value)}
                       placeholder="e.g. B"
+                      maxLength={3}
                     />
                   </FL>
                 </div>
