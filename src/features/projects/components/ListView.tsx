@@ -8,6 +8,7 @@ import { ArrowUpDown, AlertTriangle, Link2, Plus, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TaskDetailModal } from './TaskDetailModal';
 import { formatModuleType } from '../utils/projectUtils';
+import { playCompleteSound } from '@/lib/playSound';
 
 interface ListViewProps {
   projectId?: string;
@@ -155,6 +156,7 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
   const handleCompleteTask = (e: React.MouseEvent, task: Task) => {
     e.stopPropagation();
     const updatedTask = { ...task, status: 'done' as const };
+    playCompleteSound();
     if (onTaskUpdate) {
       onTaskUpdate(updatedTask);
     }
