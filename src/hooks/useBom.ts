@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryClient';
 import { bomService, type CreateNodeDto, type UpdateNodeDto } from '@/services/bom.service';
-import { fromApiApproval } from '@/features/projects/components/bomData';
+import { fromApiApproval, fromApiApprovalRequest, type BOMApprovalRequestScope } from '@/features/projects/components/bomData';
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 
@@ -108,34 +108,56 @@ export function useRemoveRequirement(projectId: string) {
   });
 }
 
-export function useApproveBomNode(projectId: string) {
+export function useCreateApprovalRequest(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ nodeId, comment }: { nodeId: string; comment?: string }) =>
-      bomService.approveNode(nodeId, comment),
+    mutationFn: ({
+      nodeId,
+      scope,
+      approverIds,
+      comment,
+    }: { nodeId: string; scope: BOMApprovalRequestScope; approverIds: string[]; comment?: string }) =>
+      bomService.createApprovalRequest(nodeId, { scope, approverIds, comment }),
     onSuccess: (_data, { nodeId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.tree(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.summary(projectId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.bom.approvals(nodeId) });
-      // Approval updates the revision's status — bust the parts revisions cache so
-      // BOMDetailScreen re-derives node.status from fresh revision data.
+      queryClient.invalidateQueries({ queryKey: queryKeys.bom.approvalRequests(nodeId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
     },
   });
 }
 
-export function useRejectBomNode(projectId: string) {
+export function useDecideApprovalRequest(projectId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ nodeId, reason, comment }: { nodeId: string; reason: string; comment?: string }) =>
-      bomService.rejectNode(nodeId, reason, comment),
+    mutationFn: ({
+      requestId,
+      decision,
+      reason,
+      comment,
+    }: { requestId: string; nodeId: string; decision: 'approved' | 'rejected'; reason?: string; comment?: string }) =>
+      bomService.decideApprovalRequest(requestId, { decision, reason, comment }),
     onSuccess: (_data, { nodeId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.tree(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.summary(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.approvals(nodeId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.bom.approvalRequests(nodeId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
     },
   });
+}
+
+export function useBomApprovalRequests(nodeId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.bom.approvalRequests(nodeId ?? ''),
+    queryFn:  async () => (await bomService.listApprovalRequests(nodeId!)).map(fromApiApprovalRequest),
+    enabled:  !!nodeId,
+  });
+}
+
+export function useActiveBomApprovalRequest(nodeId: string | undefined) {
+  const { data: requests } = useBomApprovalRequests(nodeId);
+  return requests?.find((r) => r.status === 'pending') ?? null;
 }
 
 export function useMapImportColumns() {

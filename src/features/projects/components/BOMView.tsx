@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useBomTree, useCreateBomNode, useApproveBomNode, useRejectBomNode, useAddRequirement } from '@/hooks/useBom';
+import { useBomTree, useCreateBomNode, useDecideApprovalRequest, useAddRequirement } from '@/hooks/useBom';
 import { useCreatePart } from '@/hooks/useParts';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
@@ -835,16 +835,20 @@ export function BOMView({
   const { data: project } = useProjectDetail(projectId);
   const createPart = useCreatePart(orgId);
   const createNode = useCreateBomNode(projectId);
-  const approveBomNode = useApproveBomNode(projectId);
-  const rejectBomNode = useRejectBomNode(projectId);
+  const decideApprovalRequest = useDecideApprovalRequest(projectId);
   const addRequirement = useAddRequirement(projectId);
 
   const projectRole = (project?.myRole || '').toLowerCase();
   const canApprove = projectRole === 'admin' || projectRole === 'manager';
 
+  // Quick row actions only act when the node has an active review request —
+  // managers/admins are allowed to decide any request per the backend's override rule.
   const handleApprove = async (node: BOMNode) => {
     try {
-      await approveBomNode.mutateAsync({ nodeId: node.id });
+      const requests = await bomService.listApprovalRequests(node.id);
+      const active = requests.find(r => r.status === 'pending');
+      if (!active) { toast.error('This part has not been sent for review yet.'); return; }
+      await decideApprovalRequest.mutateAsync({ requestId: active.id, nodeId: node.id, decision: 'approved' });
       toast.success(`${node.pn} approved`);
     } catch (err) {
       toast.error('Failed to approve part', {
@@ -856,7 +860,10 @@ export function BOMView({
   const handleRejectConfirm = async (reason: string, comment?: string) => {
     if (!rejectTarget) return;
     try {
-      await rejectBomNode.mutateAsync({ nodeId: rejectTarget.id, reason, comment });
+      const requests = await bomService.listApprovalRequests(rejectTarget.id);
+      const active = requests.find(r => r.status === 'pending');
+      if (!active) { toast.error('This part has not been sent for review yet.'); return; }
+      await decideApprovalRequest.mutateAsync({ requestId: active.id, nodeId: rejectTarget.id, decision: 'rejected', reason, comment });
       toast.success(`${rejectTarget.pn} rejected`);
     } catch (err) {
       toast.error('Failed to reject part', {
@@ -1207,7 +1214,7 @@ export function BOMView({
           canApprove={canApprove}
           onApprove={handleApprove}
           onReject={setRejectTarget}
-          approvingId={approveBomNode.isPending ? approveBomNode.variables?.nodeId ?? null : null}
+          approvingId={decideApprovalRequest.isPending ? decideApprovalRequest.variables?.nodeId ?? null : null}
         />
       )}
       {view === 'grid' && (

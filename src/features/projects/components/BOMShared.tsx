@@ -141,10 +141,18 @@ export function BOMStatusPill({ status }: { status: BOMStatus }) {
       </span>
     );
   }
+  if (status === 'draft') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium"
+        style={{ background: 'rgba(100,116,139,0.1)', color: '#64748B', border: '1px solid rgba(100,116,139,0.2)' }}>
+        Draft
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium"
       style={{ background: 'rgba(245,158,11,0.1)', color: '#D97706', border: '1px solid rgba(245,158,11,0.2)' }}>
-      Pending
+      Pending Review
     </span>
   );
 }

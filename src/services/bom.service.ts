@@ -6,13 +6,15 @@ import type {
   ApiSummaryResponse,
   ApiReqLinkResponse,
   ApiApprovalResponse,
+  ApiApprovalRequestResponse,
+  BOMApprovalRequestScope,
 } from '@/features/projects/components/bomData';
 
 export interface CreateNodeDto {
   partId: string;
   quantity: number;
   unit?: string;
-  status?: 'approved' | 'pending';
+  status?: 'approved' | 'pending' | 'draft';
   parentId?: string | null;
   position?: number;
   notes?: string;
@@ -22,7 +24,7 @@ export interface CreateNodeDto {
 export interface UpdateNodeDto {
   quantity?: number;
   unit?: string;
-  status?: 'approved' | 'pending';
+  status?: 'approved' | 'pending' | 'draft';
   notes?: string;
 }
 
@@ -80,16 +82,26 @@ export const bomService = {
     await apiClient.delete(ENDPOINTS.BOM.REQ_LINK(linkId));
   },
 
-  async approveNode(nodeId: string, comment?: string): Promise<ApiNodeResponse> {
-    return apiClient.post<ApiNodeResponse>(ENDPOINTS.BOM.APPROVE_NODE(nodeId), { comment });
-  },
-
-  async rejectNode(nodeId: string, reason: string, comment?: string): Promise<ApiNodeResponse> {
-    return apiClient.post<ApiNodeResponse>(ENDPOINTS.BOM.REJECT_NODE(nodeId), { reason, comment });
-  },
-
   async getNodeApprovals(nodeId: string): Promise<ApiApprovalResponse[]> {
     return apiClient.get<ApiApprovalResponse[]>(ENDPOINTS.BOM.NODE_APPROVALS(nodeId));
+  },
+
+  async createApprovalRequest(
+    nodeId: string,
+    dto: { scope: BOMApprovalRequestScope; approverIds: string[]; comment?: string },
+  ): Promise<ApiApprovalRequestResponse> {
+    return apiClient.post<ApiApprovalRequestResponse>(ENDPOINTS.BOM.APPROVAL_REQUESTS(nodeId), dto);
+  },
+
+  async listApprovalRequests(nodeId: string): Promise<ApiApprovalRequestResponse[]> {
+    return apiClient.get<ApiApprovalRequestResponse[]>(ENDPOINTS.BOM.APPROVAL_REQUESTS(nodeId));
+  },
+
+  async decideApprovalRequest(
+    requestId: string,
+    dto: { decision: 'approved' | 'rejected'; reason?: string; comment?: string },
+  ): Promise<ApiApprovalRequestResponse> {
+    return apiClient.post<ApiApprovalRequestResponse>(ENDPOINTS.BOM.APPROVAL_REQUEST_DECISION(requestId), dto);
   },
 
   async exportCsv(projectId: string): Promise<Blob> {

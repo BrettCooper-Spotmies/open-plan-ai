@@ -156,6 +156,7 @@ export const queryKeys = {
     summary:   (projectId: string) => ['bom', 'summary', projectId] as const,
     node:      (nodeId: string)    => ['bom', 'node', nodeId] as const,
     approvals:  (nodeId: string)    => ['bom', 'approvals', nodeId] as const,
+    approvalRequests: (nodeId: string) => ['bom', 'approval-requests', nodeId] as const,
     notes:      (nodeId: string)    => ['bom', 'notes', nodeId] as const,
     costTrend:  (projectId: string, granularity: string) => ['bom', 'cost-trend', projectId, granularity] as const,
   },

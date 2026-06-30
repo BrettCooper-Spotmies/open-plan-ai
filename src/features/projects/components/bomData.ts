@@ -6,7 +6,7 @@ export interface SupplierEntry {
   calcFromSubparts: boolean;
 }
 
-export type BOMStatus = 'approved' | 'pending' | 'rejected';
+export type BOMStatus = 'approved' | 'pending' | 'rejected' | 'draft';
 // Free text — not a closed union. Known presets (below) plus any custom
 // category a user adds via the "Other" option when adding/importing parts.
 export type BOMCategory = string;
@@ -52,6 +52,8 @@ export interface BOMNode {
   suppliers: SupplierEntry[];
   owner: string;
   ownerId?: string;
+  createdByName: string;
+  createdById?: string;
   customFields: CustomFieldEntry[];
   revHistory: BOMRevision[];
   children?: BOMNode[];
@@ -162,6 +164,7 @@ export interface ApiNodeResponse {
   status: BOMStatus;
   notes: string | null;
   owner: { id: string; name: string } | null;
+  creator: { id: string; name: string } | null;
   part: ApiPartResponse;
   requirements: ApiReqLinkResponse[];
   children?: ApiNodeResponse[];
@@ -197,6 +200,60 @@ export interface BOMApproval {
   reason: string | null;
   comment: string | null;
   date: string; // ISO date string
+}
+
+export type BOMApprovalRequestScope = 'node' | 'subtree';
+export type BOMApprovalRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ApiApprovalRequestResponse {
+  id: string;
+  treeId: string;
+  rootNodeId: string;
+  scope: BOMApprovalRequestScope;
+  nodeIds: string[];
+  requestedBy: { id: string; name: string };
+  approvers: Array<{ id: string; name: string }>;
+  status: BOMApprovalRequestStatus;
+  decidedBy: { id: string; name: string } | null;
+  decidedAt: string | null;
+  reason: string | null;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BOMApprovalRequest {
+  id: string;
+  rootNodeId: string;
+  scope: BOMApprovalRequestScope;
+  nodeIds: string[];
+  requestedByName: string;
+  requestedById: string;
+  approvers: Array<{ id: string; name: string }>;
+  status: BOMApprovalRequestStatus;
+  decidedByName: string | null;
+  decidedAt: string | null;
+  reason: string | null;
+  comment: string | null;
+  createdAt: string;
+}
+
+export function fromApiApprovalRequest(r: ApiApprovalRequestResponse): BOMApprovalRequest {
+  return {
+    id:              r.id,
+    rootNodeId:      r.rootNodeId,
+    scope:           r.scope,
+    nodeIds:         r.nodeIds,
+    requestedByName: r.requestedBy.name,
+    requestedById:   r.requestedBy.id,
+    approvers:       r.approvers,
+    status:          r.status,
+    decidedByName:   r.decidedBy?.name ?? null,
+    decidedAt:       r.decidedAt,
+    reason:          r.reason,
+    comment:         r.comment,
+    createdAt:       r.createdAt,
+  };
 }
 
 export interface ApiSummaryResponse {
@@ -235,6 +292,8 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     suppliers:    rev?.suppliers?.map(s => ({ ...s, price: String(s.price) })) ?? [],
     owner:        node.owner?.name ?? '',
     ownerId:      node.owner?.id,
+    createdByName: node.creator?.name ?? '',
+    createdById:   node.creator?.id,
     customFields: Array.isArray(node.part.customFields) ? node.part.customFields : [],
     revHistory:   [],  // loaded on demand via usePartRevisions
     children:     node.children?.map(c => fromApiNode(c, depth + 1)),
