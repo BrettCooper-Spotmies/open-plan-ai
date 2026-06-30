@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
+import { DragDropContext, Droppable, Draggable, DropResult, DragStart } from '@hello-pangea/dnd';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -30,13 +30,35 @@ interface MyDayKanbanViewProps {
   onTaskClick: (item: MyDayItem) => void;
   onStatusUpdate: (taskId: string, status: TaskStatus) => void;
   onChecklistToggle: (taskId: string, itemId: string) => void;
+  // Each project's Kanban columns are fully customizable, so a project may
+  // not have a column for every My Day progress bucket (e.g. its "In
+  // Progress" column was deleted/replaced). Keyed by projectId; absence of
+  // an entry means "not loaded yet" — that project's drops are allowed.
+  projectTaskColumnKeys?: Record<string, Set<string>>;
+  projectIssueColumnKeys?: Record<string, Set<string>>;
 }
+
+// Maps a My Day progress bucket to the backend status/column key it writes,
+// for tasks and issues respectively. Kept alongside handleDragEnd's own
+// statusMap/issueStatusMap so the drop-target validity check below mirrors
+// exactly what a drop would actually write.
+const taskStatusByBucket: Record<string, TaskStatus> = {
+  notStarted: 'todo',
+  inProgress: 'in-progress',
+  completed: 'done',
+};
+
+const issueStatusByBucket: Record<string, string> = {
+  notStarted: 'open',
+  inProgress: 'investigating',
+  completed: 'resolved',
+};
 
 const progressColumnConfig = [
   { id: 'dependency', label: 'Dependency', color: 'bg-status-blocked' },
-  { id: 'notStarted', label: 'Not Started', color: 'bg-status-todo' },
+  { id: 'notStarted', label: 'To Do', color: 'bg-status-todo' },
   { id: 'inProgress', label: 'In Progress', color: 'bg-status-in-progress' },
-  { id: 'completed', label: 'Completed', color: 'bg-status-done' },
+  { id: 'completed', label: 'Done', color: 'bg-status-done' },
 ];
 
 const dueDateColumnConfig = [
@@ -77,12 +99,42 @@ export function MyDayKanbanView({
   groupBy,
   onTaskClick,
   onStatusUpdate,
+  projectTaskColumnKeys = {},
+  projectIssueColumnKeys = {},
 }: MyDayKanbanViewProps) {
   const [localTasks, setLocalTasks] = useState<MyDayItem[]>(initialTasks);
+  const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
 
   useEffect(() => {
     setLocalTasks(initialTasks);
   }, [initialTasks]);
+
+  const handleDragStart = (start: DragStart) => {
+    setDraggingItemId(start.draggableId);
+  };
+
+  // Buckets the currently-dragged item cannot be dropped into because its
+  // project has no column matching that bucket's status. Empty (nothing
+  // disabled) when not dragging, or when the item's project columns haven't
+  // loaded yet — we only block drops we can positively confirm are invalid.
+  const disabledBucketsForDrag = useMemo(() => {
+    if (!draggingItemId || groupBy !== 'progress') return new Set<string>();
+    const item = localTasks.find(t => t.id === draggingItemId);
+    if (!item) return new Set<string>();
+
+    const availableKeys =
+      item.itemType === 'task'
+        ? projectTaskColumnKeys[item.projectId]
+        : projectIssueColumnKeys[item.projectId];
+    if (!availableKeys) return new Set<string>();
+
+    const statusByBucket = item.itemType === 'task' ? taskStatusByBucket : issueStatusByBucket;
+    const disabled = new Set<string>();
+    for (const [bucketId, status] of Object.entries(statusByBucket)) {
+      if (!availableKeys.has(status)) disabled.add(bucketId);
+    }
+    return disabled;
+  }, [draggingItemId, groupBy, localTasks, projectTaskColumnKeys, projectIssueColumnKeys]);
 
   const columns = useMemo((): KanbanColumn[] => {
     switch (groupBy) {
@@ -122,6 +174,7 @@ export function MyDayKanbanView({
   }, [localTasks, groupBy]);
 
   const handleDragEnd = (result: DropResult) => {
+    setDraggingItemId(null);
     if (!result.destination) return;
 
     const { source, destination, draggableId } = result;
@@ -130,13 +183,7 @@ export function MyDayKanbanView({
     if (groupBy === 'progress') {
       // 'dependency' is excluded: it's a derived blocked-state, not a real
       // task_columns key on the backend, and isDropDisabled prevents drops there.
-      const statusMap: Record<string, TaskStatus> = {
-        notStarted: 'todo',
-        inProgress: 'in-progress',
-        completed: 'done',
-      };
-
-      const newStatus = statusMap[destination.droppableId];
+      const newStatus = taskStatusByBucket[destination.droppableId];
       if (newStatus) {
         // Optimistic local update to prevent blinking AND maintain new dragging order
         const tasksCopy = [...localTasks];
@@ -198,7 +245,7 @@ export function MyDayKanbanView({
 
   return (
     <div className="space-y-4">
-      <DragDropContext onDragEnd={handleDragEnd}>
+      <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <Droppable droppableId="board" type="COLUMN" direction="horizontal">
           {(provided) => (
             <div
@@ -245,7 +292,11 @@ export function MyDayKanbanView({
                         <Droppable
                           droppableId={column.id}
                           type="TASK"
-                          isDropDisabled={groupBy !== 'progress' || column.id === 'dependency'}
+                          isDropDisabled={
+                            groupBy !== 'progress' ||
+                            column.id === 'dependency' ||
+                            disabledBucketsForDrag.has(column.id)
+                          }
                         >
                           {(provided, snapshot) => (
                             <div
@@ -253,8 +304,14 @@ export function MyDayKanbanView({
                               {...provided.droppableProps}
                               className={cn(
                                 'flex flex-col gap-2 min-h-[200px] p-2 rounded-lg',
-                                snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30'
+                                snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30',
+                                disabledBucketsForDrag.has(column.id) && 'opacity-40 cursor-not-allowed'
                               )}
+                              title={
+                                disabledBucketsForDrag.has(column.id)
+                                  ? `This item's project has no "${column.label}" column`
+                                  : undefined
+                              }
                             >
                               {column.tasks.map((task, taskIndex) => (
                                 <Draggable
