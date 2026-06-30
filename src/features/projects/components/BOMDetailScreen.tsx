@@ -14,16 +14,17 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, fromApiRevision, formatLeadTime, getCategoryMeta } from './bomData';
+import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, fromApiRevision, formatLeadTime, getCategoryMeta, type BOMApprovalRequestScope } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb, PartImageThumb } from './BOMShared';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision } from '@/hooks/useParts';
-import { useCreateBomNode, useUpdateBomNode, useAddRequirement, useRemoveRequirement, useApproveBomNode, useRejectBomNode, useBomNodeApprovals } from '@/hooks/useBom';
+import { useCreateBomNode, useUpdateBomNode, useAddRequirement, useRemoveRequirement, useCreateApprovalRequest, useDecideApprovalRequest, useBomNodeApprovals, useBomApprovalRequests, useActiveBomApprovalRequest } from '@/hooks/useBom';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useAuth } from '@/contexts/AuthContext';
-import { BOMRejectDialog } from './BOMRejectDialog';
+import { BOMSendForReviewModal } from './BOMSendForReviewModal';
+import { BOMApprovalReviewCard } from './BOMApprovalReviewCard';
 import { uploadBomDocumentFile, addBomDocumentLink, useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
 import { useCurrency } from '@/hooks/useCurrency';
 import { resolveFileUrl } from '@/utils/fileUrl';
@@ -442,15 +443,25 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const [showAddSub, setShowAddSub] = useState(false);
   const [showCreateNewSub, setShowCreateNewSub] = useState(false);
   const [showImportExcel, setShowImportExcel] = useState(false);
-  const [showReject, setShowReject] = useState(false);
+  const [showSendForReview, setShowSendForReview] = useState(false);
 
   // ── Approval workflow ──
   const { data: project } = useProjectDetail(projectId);
   const projectRole = (project?.myRole || '').toLowerCase();
   const canApprove = projectRole === 'admin' || projectRole === 'manager';
-  const approveBomNode = useApproveBomNode(projectId);
-  const rejectBomNode = useRejectBomNode(projectId);
+  const isAdmin = projectRole === 'admin';
+  const createApprovalRequest = useCreateApprovalRequest(projectId);
+  const decideApprovalRequest = useDecideApprovalRequest(projectId);
   const { data: approvals = [], isLoading: approvalsLoading } = useBomNodeApprovals(originalNode.id);
+  const { data: approvalRequests = [] } = useBomApprovalRequests(originalNode.id);
+  const activeRequest = useActiveBomApprovalRequest(originalNode.id);
+  const isCreatorOrOwner = !!user && (originalNode.ownerId === user.id || originalNode.createdById === user.id);
+  const canSendForReview = (canApprove || isCreatorOrOwner) && !activeRequest
+    && (originalNode.status === 'draft' || originalNode.status === 'pending');
+  const isAssignedApprover = !!user && !!activeRequest && activeRequest.approvers.some(a => a.id === user.id);
+  const canDecide = isAssignedApprover || isAdmin;
+  const lastRequest = approvalRequests[0];
+  const showRejectionBanner = !activeRequest && lastRequest?.status === 'rejected';
 
   // Point to latest revision whenever the node changes or revisions first load
   useEffect(() => {
@@ -466,7 +477,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const addRequirement = useAddRequirement(projectId);
   const removeRequirement = useRemoveRequirement(projectId);
 
-  const activeRev = revHistory[activeRevIdx] ?? { rev: originalNode.rev, status: originalNode.status, price: originalNode.price, leadTime: originalNode.leadTime, date: '', author: '', changes: '' } as BOMRevision;
+  const activeRev = revHistory[activeRevIdx] ?? { rev: originalNode.rev, status: originalNode.status, price: originalNode.price, leadTime: originalNode.leadTime, date: '', author: '', changes: '', customFields: originalNode.customFields } as BOMRevision;
   const isLatest = revHistory.length === 0 || activeRevIdx === revHistory.length - 1;
 
   // Build a synthetic "view node" that reflects the active revision's data.
@@ -483,6 +494,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     suppliers: (activeRev as BOMRevision).suppliers?.length
       ? (activeRev as BOMRevision).suppliers
       : originalNode.suppliers,
+    customFields: activeRev.customFields?.length ? activeRev.customFields : originalNode.customFields,
   };
 
   const meta = getCategoryMeta(node.cat);
@@ -568,10 +580,27 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     setShowEdit(false);
   };
 
-  // ── Approve / Reject handlers ──
-  const handleApprove = async () => {
+  // ── Send for review / Approve / Reject handlers ──
+  const handleSendForReview = async (
+    scope: BOMApprovalRequestScope,
+    approverIds: string[],
+    comment?: string,
+  ) => {
     try {
-      await approveBomNode.mutateAsync({ nodeId: originalNode.id });
+      await createApprovalRequest.mutateAsync({ nodeId: originalNode.id, scope, approverIds, comment });
+      toast.success(`${originalNode.pn} sent for review`);
+    } catch (err) {
+      toast.error('Failed to send part for review', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+      throw err;
+    }
+  };
+
+  const handleApprove = async (comment?: string) => {
+    if (!activeRequest) return;
+    try {
+      await decideApprovalRequest.mutateAsync({ requestId: activeRequest.id, nodeId: originalNode.id, decision: 'approved', comment });
       toast.success(`${originalNode.pn} approved`);
     } catch (err) {
       toast.error('Failed to approve part', {
@@ -581,8 +610,9 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   };
 
   const handleRejectConfirm = async (reason: string, comment?: string) => {
+    if (!activeRequest) return;
     try {
-      await rejectBomNode.mutateAsync({ nodeId: originalNode.id, reason, comment });
+      await decideApprovalRequest.mutateAsync({ requestId: activeRequest.id, nodeId: originalNode.id, decision: 'rejected', reason, comment });
       toast.success(`${originalNode.pn} rejected`);
     } catch (err) {
       toast.error('Failed to reject part', {
@@ -592,7 +622,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     }
   };
 
-  const showApprovalActions = canApprove && isLatest && node.status === 'pending';
+  const showApprovalActions = canDecide && isLatest && !!activeRequest;
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
@@ -647,28 +677,22 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             </div>
           </div>
           <div className="flex gap-2 shrink-0">
-            {showApprovalActions && (
-              <>
-                <button
-                  onClick={handleApprove}
-                  disabled={approveBomNode.isPending || rejectBomNode.isPending}
-                  title="Approve this part"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {approveBomNode.isPending
-                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    : <Check className="w-3.5 h-3.5" style={{ color: '#16A34A' }} />}
-                  Approve
-                </button>
-                <button
-                  onClick={() => setShowReject(true)}
-                  disabled={approveBomNode.isPending || rejectBomNode.isPending}
-                  title="Reject this part"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <XCircle className="w-3.5 h-3.5" style={{ color: '#DC2626' }} /> Reject
-                </button>
-              </>
+            {canSendForReview && (
+              <button
+                onClick={() => setShowSendForReview(true)}
+                title="Send this part for review"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap"
+              >
+                <Send className="w-3.5 h-3.5 text-muted-foreground" /> Send for Review
+              </button>
+            )}
+            {activeRequest && !canDecide && (
+              <span
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap"
+                style={{ background: 'rgba(245,158,11,0.1)', color: '#D97706', border: '1px solid rgba(245,158,11,0.2)' }}
+              >
+                Awaiting review by {activeRequest.approvers.map(a => a.name).join(', ')}
+              </span>
             )}
             <button
               onClick={() => setEcoOpen(true)}
@@ -692,6 +716,30 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
           </div>
         </div>
 
+        {showRejectionBanner && (
+          <div
+            className="mx-6 mb-4 px-4 py-2.5 rounded-lg text-[12px] flex items-start gap-2"
+            style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
+          >
+            <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-semibold">Review rejected by {lastRequest?.decidedByName ?? 'an approver'}.</span>
+              {lastRequest?.reason && <span> {lastRequest.reason}</span>}
+              {' '}Update the part and click &quot;Send for Review&quot; to resubmit.
+            </div>
+          </div>
+        )}
+
+        {showApprovalActions && activeRequest && (
+          <BOMApprovalReviewCard
+            request={activeRequest}
+            partLabel={node.pn}
+            onApprove={handleApprove}
+            onReject={handleRejectConfirm}
+            isPending={decideApprovalRequest.isPending}
+          />
+        )}
+
         {/* Info row */}
         <div className="mx-6 mb-5 px-4 py-3.5 bg-card border border-border rounded-xl grid gap-4"
           style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
@@ -712,6 +760,16 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               {node.owner}
             </span>
           </Field>
+          {node.createdByName && (
+            <Field label="Created By">
+              <span className="flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-muted border border-border flex items-center justify-center text-[8px] font-bold text-muted-foreground shrink-0">
+                  {getInitials(node.createdByName)}
+                </span>
+                {node.createdByName}
+              </span>
+            </Field>
+          )}
         </div>
 
         {/* Two-column body */}
@@ -731,7 +789,9 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   )}
                   <div className="grid grid-cols-3 gap-x-4 gap-y-3.5">
                     <Field label="Extended Price">{formatCurrency(extended)}</Field>
-                    <Field label="Status">{node.status === 'approved' ? 'Approved' : 'Pending review'}</Field>
+                    <Field label="Status">
+                      {node.status === 'approved' ? 'Approved' : node.status === 'draft' ? 'Draft' : 'Pending review'}
+                    </Field>
                     <Field label="Revision">Rev {node.rev}</Field>
                     <Field label="Category">{meta.label}</Field>
                     <Field label="Sub-components">{children.length}</Field>
@@ -969,6 +1029,13 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                 )
               }
             >
+              {activeRequest && (
+                <div className="mb-3 px-2.5 py-2 rounded-md bg-muted/50 border border-border text-[11.5px] text-muted-foreground">
+                  <span className="font-medium text-foreground">{activeRequest.requestedByName}</span> sent{' '}
+                  {activeRequest.scope === 'subtree' ? 'this part + sub-components' : 'this part'} for review by{' '}
+                  {activeRequest.approvers.map(a => a.name).join(', ')}.
+                </div>
+              )}
               {approvalsLoading ? (
                 <div className="flex flex-col gap-0">
                   {[0, 1].map(i => (
@@ -1099,12 +1166,14 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         projectId={projectId}
       />
 
-      {/* Reject confirmation (mandatory reason) */}
-      <BOMRejectDialog
-        open={showReject}
+      {/* Send for review */}
+      <BOMSendForReviewModal
+        open={showSendForReview}
+        projectId={projectId}
         partLabel={originalNode.pn}
-        onClose={() => setShowReject(false)}
-        onConfirm={handleRejectConfirm}
+        hasChildren={children.length > 0}
+        onClose={() => setShowSendForReview(false)}
+        onSubmit={handleSendForReview}
       />
     </div>
   );

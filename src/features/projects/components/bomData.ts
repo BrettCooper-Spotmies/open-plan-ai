@@ -6,7 +6,7 @@ export interface SupplierEntry {
   calcFromSubparts: boolean;
 }
 
-export type BOMStatus = 'approved' | 'pending' | 'rejected';
+export type BOMStatus = 'approved' | 'pending' | 'rejected' | 'draft';
 // Free text — not a closed union. Known presets (below) plus any custom
 // category a user adds via the "Other" option when adding/importing parts.
 export type BOMCategory = string;
@@ -23,6 +23,7 @@ export interface BOMRevision {
   price: number;
   leadTime: number;   // days — mirrors backend leadTimeDays 1:1, no unit conversion
   suppliers: SupplierEntry[];
+  customFields: CustomFieldEntry[];
 }
 
 export interface CustomFieldEntry {
@@ -52,6 +53,8 @@ export interface BOMNode {
   suppliers: SupplierEntry[];
   owner: string;
   ownerId?: string;
+  createdByName: string;
+  createdById?: string;
   customFields: CustomFieldEntry[];
   revHistory: BOMRevision[];
   children?: BOMNode[];
@@ -118,6 +121,7 @@ export interface ApiRevisionResponse {
   leadTimeDays: number | null;
   ecoId: string | null;
   suppliers: Array<{ distributor: string; price: number; calcFromSubparts: boolean }> | null;
+  customFields: ApiCustomFieldEntry[] | null;
   createdAt: string;
 }
 
@@ -162,6 +166,7 @@ export interface ApiNodeResponse {
   status: BOMStatus;
   notes: string | null;
   owner: { id: string; name: string } | null;
+  creator: { id: string; name: string } | null;
   part: ApiPartResponse;
   requirements: ApiReqLinkResponse[];
   children?: ApiNodeResponse[];
@@ -197,6 +202,60 @@ export interface BOMApproval {
   reason: string | null;
   comment: string | null;
   date: string; // ISO date string
+}
+
+export type BOMApprovalRequestScope = 'node' | 'subtree';
+export type BOMApprovalRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ApiApprovalRequestResponse {
+  id: string;
+  treeId: string;
+  rootNodeId: string;
+  scope: BOMApprovalRequestScope;
+  nodeIds: string[];
+  requestedBy: { id: string; name: string };
+  approvers: Array<{ id: string; name: string }>;
+  status: BOMApprovalRequestStatus;
+  decidedBy: { id: string; name: string } | null;
+  decidedAt: string | null;
+  reason: string | null;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BOMApprovalRequest {
+  id: string;
+  rootNodeId: string;
+  scope: BOMApprovalRequestScope;
+  nodeIds: string[];
+  requestedByName: string;
+  requestedById: string;
+  approvers: Array<{ id: string; name: string }>;
+  status: BOMApprovalRequestStatus;
+  decidedByName: string | null;
+  decidedAt: string | null;
+  reason: string | null;
+  comment: string | null;
+  createdAt: string;
+}
+
+export function fromApiApprovalRequest(r: ApiApprovalRequestResponse): BOMApprovalRequest {
+  return {
+    id:              r.id,
+    rootNodeId:      r.rootNodeId,
+    scope:           r.scope,
+    nodeIds:         r.nodeIds,
+    requestedByName: r.requestedBy.name,
+    requestedById:   r.requestedBy.id,
+    approvers:       r.approvers,
+    status:          r.status,
+    decidedByName:   r.decidedBy?.name ?? null,
+    decidedAt:       r.decidedAt,
+    reason:          r.reason,
+    comment:         r.comment,
+    createdAt:       r.createdAt,
+  };
 }
 
 export interface ApiSummaryResponse {
@@ -235,6 +294,8 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     suppliers:    rev?.suppliers?.map(s => ({ ...s, price: String(s.price) })) ?? [],
     owner:        node.owner?.name ?? '',
     ownerId:      node.owner?.id,
+    createdByName: node.creator?.name ?? '',
+    createdById:   node.creator?.id,
     customFields: Array.isArray(node.part.customFields) ? node.part.customFields : [],
     revHistory:   [],  // loaded on demand via usePartRevisions
     children:     node.children?.map(c => fromApiNode(c, depth + 1)),
@@ -263,6 +324,7 @@ export function fromApiRevision(r: ApiRevisionResponse): BOMRevision {
     price:     parseFloat(r.price ?? '0'),
     leadTime:  r.leadTimeDays ?? 0,
     suppliers: r.suppliers?.map(s => ({ ...s, price: String(s.price) })) ?? [],
+    customFields: r.customFields ?? [],
   };
 }
 
@@ -356,7 +418,6 @@ export function assignLevelLabels(nodes: BOMNode[], prefix: number[] = []): void
 
 // ── Sub-component bulk import (Excel/CSV) ─────────────────────────
 
-const IMPORT_STATUS_VALUES: BOMStatus[] = ['approved', 'pending'];
 
 interface ImportColumnDef {
   label: string;
@@ -369,7 +430,6 @@ export const SUBCOMPONENT_IMPORT_COLUMNS: ImportColumnDef[] = [
   { label: 'Part Name',          required: true,  aliases: ['part name', 'name'] },
   { label: 'Description',        required: true,  aliases: ['description', 'desc'] },
   { label: 'Category',           required: true,  aliases: ['category'] },
-  { label: 'Status',             required: false, aliases: ['status'] },
   { label: 'Manufacturer',       required: true,  aliases: ['manufacturer'] },
   { label: 'MPN',                required: true,  aliases: ['mpn', 'manufacturer pn', 'manufacturer part number'] },
   { label: 'Supplier',           required: true,  aliases: ['supplier', 'distributor'] },
@@ -449,6 +509,27 @@ export function applyColumnMapping(
   });
 }
 
+/**
+ * Parses lead time strings to weeks.
+ * Accepts plain numbers ("4"), or "N unit" strings ("7 days", "2 weeks", "3 months").
+ * Returns null if the input cannot be parsed.
+ */
+function parseLeadTimeToWeeks(raw: string): number | null {
+  const trimmed = raw.trim();
+  const plain = Number(trimmed);
+  if (!Number.isNaN(plain)) return plain;
+
+  const match = trimmed.toLowerCase().match(/^(\d+(?:\.\d+)?)\s*(day|days?|d|week|weeks?|wk|wks?|w|month|months?|mo|mos?|m)$/);
+  if (!match) return null;
+
+  const amount = parseFloat(match[1]);
+  const unit = match[2];
+  if (unit.startsWith('d')) return amount / 7;
+  if (unit.startsWith('w')) return amount;
+  if (unit.startsWith('mo') || unit === 'm') return amount * 4.33;
+  return null;
+}
+
 export function parseSubcomponentImportRows(
   rows: Record<string, unknown>[],
   existingParts: ApiPartResponse[],
@@ -460,7 +541,8 @@ export function parseSubcomponentImportRows(
     const name         = pickField(row, colAliases('Part Name'));
     const description  = pickField(row, colAliases('Description'));
     const categoryRaw  = pickField(row, colAliases('Category')).toLowerCase();
-    const statusRaw    = pickField(row, colAliases('Status')).toLowerCase();
+    // Status is intentionally ignored during import — all imported parts start as 'pending'
+    // and must be approved through the normal approval workflow.
     const manufacturer = pickField(row, colAliases('Manufacturer'));
     const mpn          = pickField(row, colAliases('MPN'));
     const supplier      = pickField(row, colAliases('Supplier'));
@@ -482,10 +564,7 @@ export function parseSubcomponentImportRows(
       category = categoryRaw;
     }
 
-    let status: BOMStatus = 'pending';
-    if (statusRaw && IMPORT_STATUS_VALUES.includes(statusRaw as BOMStatus)) {
-      status = statusRaw as BOMStatus;
-    }
+    const status: BOMStatus = 'pending';
 
     if (!manufacturer) errors.push('Missing Manufacturer');
     if (!mpn) errors.push('Missing MPN');
@@ -504,9 +583,9 @@ export function parseSubcomponentImportRows(
     if (!leadTimeRaw) {
       errors.push('Missing Lead Time');
     } else {
-      const n = Number(leadTimeRaw);
-      if (Number.isNaN(n)) errors.push('Lead Time must be a number');
-      else leadTimeWeeks = n;
+      const parsed = parseLeadTimeToWeeks(leadTimeRaw);
+      if (parsed === null) errors.push('Lead Time must be a number');
+      else leadTimeWeeks = parsed;
     }
 
     let quantity = 1;

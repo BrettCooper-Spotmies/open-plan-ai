@@ -36,7 +36,8 @@ import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
-import { useApproveBomNode, useRejectBomNode, useBomNodeApprovals } from '@/hooks/useBom';
+import { useDecideApprovalRequest, useActiveBomApprovalRequest, useBomNodeApprovals } from '@/hooks/useBom';
+import { useAuth } from '@/contexts/AuthContext';
 import { TeamMember } from '@/types';
 
 // ── Document value: either an uploaded file, a linked URL, or an existing server attachment ───────
@@ -424,13 +425,16 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
 export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSave }: Props) {
   const isEdit = mode === 'edit';
 
+  const { user } = useAuth();
   const { data: projectMembers = [] } = useProjectMembers(projectId);
   const { data: project } = useProjectDetail(projectId);
   const projectRole = (project?.myRole || '').toLowerCase();
   const canEditStatus = projectRole === 'admin' || projectRole === 'manager';
+  const isAdmin = projectRole === 'admin';
 
-  const approveBomNode = useApproveBomNode(projectId);
-  const rejectBomNode = useRejectBomNode(projectId);
+  const decideApprovalRequest = useDecideApprovalRequest(projectId);
+  const activeRequest = useActiveBomApprovalRequest(isEdit ? node?.id : undefined);
+  const isAssignedApprover = !!user && !!activeRequest && activeRequest.approvers.some(a => a.id === user.id);
   const { data: approvals = [], isLoading: approvalsLoading } = useBomNodeApprovals(isEdit ? node?.id : undefined);
   const { data: existingDocs = [], isLoading: docsLoading } = useBomDocuments(isEdit ? node?.id : undefined);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
@@ -694,9 +698,9 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   };
 
   const handleApproveClick = async () => {
-    if (!node) return;
+    if (!node || !activeRequest) return;
     try {
-      await approveBomNode.mutateAsync({ nodeId: node.id });
+      await decideApprovalRequest.mutateAsync({ requestId: activeRequest.id, nodeId: node.id, decision: 'approved' });
       toast.success(`${node.pn} approved`);
       onClose();
     } catch (err) {
@@ -707,9 +711,9 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   };
 
   const handleRejectConfirm = async (reason: string, comment?: string) => {
-    if (!node) return;
+    if (!node || !activeRequest) return;
     try {
-      await rejectBomNode.mutateAsync({ nodeId: node.id, reason, comment });
+      await decideApprovalRequest.mutateAsync({ requestId: activeRequest.id, nodeId: node.id, decision: 'rejected', reason, comment });
       toast.success(`${node.pn} rejected`);
       onClose();
     } catch (err) {
@@ -817,17 +821,17 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                           <p className="text-[11px] text-muted-foreground mt-1.5">Only project managers or admins can change part status.</p>
                         )}
                       </>
-                    ) : node?.status === 'pending' && canEditStatus ? (
+                    ) : node?.status === 'pending' && activeRequest && (isAssignedApprover || isAdmin) ? (
                       <div className="flex gap-2">
-                        <button type="button" disabled={approveBomNode.isPending || rejectBomNode.isPending}
+                        <button type="button" disabled={decideApprovalRequest.isPending}
                           onClick={handleApproveClick}
                           className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                          {approveBomNode.isPending
+                          {decideApprovalRequest.isPending
                             ? <Loader2 className="w-4 h-4 animate-spin" />
                             : <Check className="w-4 h-4" style={{ color: '#16A34A' }} />}
                           Approve
                         </button>
-                        <button type="button" disabled={approveBomNode.isPending || rejectBomNode.isPending}
+                        <button type="button" disabled={decideApprovalRequest.isPending}
                           onClick={() => setShowRejectDialog(true)}
                           className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                           <XCircle className="w-4 h-4" style={{ color: '#DC2626' }} />
@@ -837,8 +841,8 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                     ) : (
                       <div className="flex items-center gap-2 h-9">
                         <BOMStatusPill status={node?.status ?? 'pending'} />
-                        {!canEditStatus && (
-                          <span className="text-[11px] text-muted-foreground">Only project managers or admins can approve or reject parts.</span>
+                        {node?.status === 'pending' && !activeRequest && (
+                          <span className="text-[11px] text-muted-foreground">Not yet sent for review.</span>
                         )}
                       </div>
                     )}

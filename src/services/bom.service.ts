@@ -6,13 +6,15 @@ import type {
   ApiSummaryResponse,
   ApiReqLinkResponse,
   ApiApprovalResponse,
+  ApiApprovalRequestResponse,
+  BOMApprovalRequestScope,
 } from '@/features/projects/components/bomData';
 
 export interface CreateNodeDto {
   partId: string;
   quantity: number;
   unit?: string;
-  status?: 'approved' | 'pending';
+  status?: 'approved' | 'pending' | 'draft';
   parentId?: string | null;
   position?: number;
   notes?: string;
@@ -22,13 +24,24 @@ export interface CreateNodeDto {
 export interface UpdateNodeDto {
   quantity?: number;
   unit?: string;
-  status?: 'approved' | 'pending';
+  status?: 'approved' | 'pending' | 'draft';
   notes?: string;
 }
 
 export interface MapColumnsResponse {
   mapping: Record<string, string>;
   unmatched: string[];
+}
+
+export interface FixRowRequest {
+  partNumber: string; name: string; description: string; category: string;
+  manufacturer: string; mpn: string; supplier: string;
+  unitPriceRaw: string; leadTimeRaw: string; quantityRaw: string; uom: string;
+  errors: string[];
+}
+
+export interface FixRowResponse {
+  suggestions: { name: string | null; description: string | null; category: string | null };
 }
 
 export const bomService = {
@@ -39,6 +52,14 @@ export const bomService = {
     return apiClient.post<MapColumnsResponse>(
       ENDPOINTS.BOM_IMPORT.MAP_COLUMNS(),
       { headers, sampleRows },
+      { timeout: 20000 },
+    );
+  },
+
+  async fixImportRow(payload: FixRowRequest): Promise<FixRowResponse> {
+    return apiClient.post<FixRowResponse>(
+      ENDPOINTS.BOM_IMPORT.FIX_ROW(),
+      payload,
       { timeout: 20000 },
     );
   },
@@ -80,16 +101,35 @@ export const bomService = {
     await apiClient.delete(ENDPOINTS.BOM.REQ_LINK(linkId));
   },
 
-  async approveNode(nodeId: string, comment?: string): Promise<ApiNodeResponse> {
-    return apiClient.post<ApiNodeResponse>(ENDPOINTS.BOM.APPROVE_NODE(nodeId), { comment });
-  },
-
-  async rejectNode(nodeId: string, reason: string, comment?: string): Promise<ApiNodeResponse> {
-    return apiClient.post<ApiNodeResponse>(ENDPOINTS.BOM.REJECT_NODE(nodeId), { reason, comment });
-  },
-
   async getNodeApprovals(nodeId: string): Promise<ApiApprovalResponse[]> {
     return apiClient.get<ApiApprovalResponse[]>(ENDPOINTS.BOM.NODE_APPROVALS(nodeId));
+  },
+
+  async createApprovalRequest(
+    nodeId: string,
+    dto: { scope: BOMApprovalRequestScope; approverIds: string[]; comment?: string },
+  ): Promise<ApiApprovalRequestResponse> {
+    return apiClient.post<ApiApprovalRequestResponse>(ENDPOINTS.BOM.APPROVAL_REQUESTS(nodeId), dto);
+  },
+
+  async listApprovalRequests(nodeId: string): Promise<ApiApprovalRequestResponse[]> {
+    return apiClient.get<ApiApprovalRequestResponse[]>(ENDPOINTS.BOM.APPROVAL_REQUESTS(nodeId));
+  },
+
+  async listProjectApprovalRequests(
+    projectId: string,
+    status?: 'pending' | 'approved' | 'rejected',
+  ): Promise<ApiApprovalRequestResponse[]> {
+    return apiClient.get<ApiApprovalRequestResponse[]>(
+      ENDPOINTS.BOM.PROJECT_APPROVAL_REQUESTS(projectId) + (status ? `?status=${status}` : ''),
+    );
+  },
+
+  async decideApprovalRequest(
+    requestId: string,
+    dto: { decision: 'approved' | 'rejected'; reason?: string; comment?: string },
+  ): Promise<ApiApprovalRequestResponse> {
+    return apiClient.post<ApiApprovalRequestResponse>(ENDPOINTS.BOM.APPROVAL_REQUEST_DECISION(requestId), dto);
   },
 
   async exportCsv(projectId: string): Promise<Blob> {

@@ -12,8 +12,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import {
   FileSpreadsheet, Download, Upload, ChevronLeft, AlertCircle, CheckCircle2,
-  Loader2, X,
-
+  Loader2, X, Sparkles,
 } from 'lucide-react';
 import {
   BOMNode, ApiPartResponse, ParsedImportRow,
@@ -21,12 +20,11 @@ import {
   checkColumnMappingConfidence, applyColumnMapping,
 } from './bomData';
 import { useOrgParts, useCreatePart } from '@/hooks/useParts';
-import { useCreateBomNode, useMapImportColumns } from '@/hooks/useBom';
+import { useCreateBomNode, useMapImportColumns, useFixImportRow } from '@/hooks/useBom';
 import { useAuth } from '@/modules/auth';
 
 const MAX_IMPORT_ROWS = 200;
 const CATEGORY_NOTE = 'top, power, control, charging, enclosure, hmi, safety, other — or any custom category';
-const STATUS_NOTE = 'approved, pending (default: pending)';
 
 interface ImportResult {
   row: ParsedImportRow;
@@ -79,7 +77,7 @@ async function buildTemplateWorkbook(): Promise<Workbook> {
     }
   });
   sheet.addRow([
-    'EV-CONN-010', 'Charging Port Connector', 'IP67 waterproof charging port connector', 'power', 'pending',
+    'EV-CONN-010', 'Charging Port Connector', 'IP67 waterproof charging port connector', 'power',
     'Acme Corp', 'ACM-1234', 'Digi-Key', '12.50', '4', '2', 'EA',
   ]);
   sheet.columns.forEach(col => { col.width = 22; });
@@ -92,7 +90,6 @@ async function buildTemplateWorkbook(): Promise<Workbook> {
     'Part Name': 'Short descriptive name for the part',
     'Description': 'Brief technical description of the part',
     'Category': `One of: ${CATEGORY_NOTE}`,
-    'Status': STATUS_NOTE,
     'Manufacturer': 'e.g. Texas Instruments, Acme Corp',
     'MPN': 'Manufacturer part number, e.g. TI-A4B2C',
     'Supplier': 'Supplier / distributor name, e.g. Digi-Key, Mouser',
@@ -129,7 +126,9 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [results, setResults] = useState<ImportResult[]>([]);
   const [mappingInProgress, setMappingInProgress] = useState(false);
+  const [mappingWarning, setMappingWarning] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [fixingRows, setFixingRows] = useState<Set<number>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: partsData } = useOrgParts(orgId, { limit: 100 });
@@ -138,13 +137,53 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
   const createPart = useCreatePart(orgId);
   const createNode = useCreateBomNode(projectId);
   const mapImportColumns = useMapImportColumns();
+  const fixImportRow = useFixImportRow();
   const { user } = useAuth();
 
   const reset = () => {
     setStage('upload'); setFileName(null); setFileError(null);
     setParsedRows([]); setProgress({ done: 0, total: 0 }); setResults([]);
-    setMappingInProgress(false);
-    setIsDragging(false);
+    setMappingInProgress(false); setMappingWarning(null); setIsDragging(false);
+    setFixingRows(new Set());
+  };
+
+  const handleAiFix = async (row: ParsedImportRow) => {
+    setFixingRows(prev => new Set(prev).add(row.rowNumber));
+    try {
+      const { suggestions } = await fixImportRow.mutateAsync({
+        partNumber:   row.partNumber,
+        name:         row.name,
+        description:  row.description,
+        category:     row.category,
+        manufacturer: row.manufacturer,
+        mpn:          row.mpn,
+        supplier:     row.supplier,
+        unitPriceRaw: row.unitPrice !== undefined ? String(row.unitPrice) : '',
+        leadTimeRaw:  row.leadTimeWeeks !== undefined ? String(row.leadTimeWeeks) : '',
+        quantityRaw:  String(row.quantity),
+        uom:          row.uom,
+        errors:       row.errors,
+      });
+      setParsedRows(prev => prev.map(r => {
+        if (r.rowNumber !== row.rowNumber) return r;
+        const updated = { ...r };
+        if (suggestions.name && !r.name)        { updated.name = suggestions.name; }
+        if (suggestions.description && !r.description) { updated.description = suggestions.description; }
+        if (suggestions.category && !r.category) { updated.category = suggestions.category as typeof r.category; }
+        // Re-derive errors from the updated fields
+        const newErrors = updated.errors.filter(e =>
+          !(e === 'Missing Part Name'   && updated.name) &&
+          !(e === 'Missing Description' && updated.description) &&
+          !(e === 'Missing Category'    && updated.category),
+        );
+        updated.errors = newErrors;
+        return updated;
+      }));
+    } catch {
+      // error is silent; the row stays red so the user knows the fix didn't work
+    } finally {
+      setFixingRows(prev => { const next = new Set(prev); next.delete(row.rowNumber); return next; });
+    }
   };
 
   const handleClose = () => { reset(); onClose(); };
@@ -216,13 +255,20 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
         const { mapping } = await mapImportColumns.mutateAsync({ headers, sampleRows: rawRows.slice(0, 3) });
         const remappedRows = applyColumnMapping(rawRows, mapping);
         setParsedRows(parseSubcomponentImportRows(remappedRows, existingParts));
+        setMappingWarning(null);
         setStage('preview');
       } catch (mapErr) {
         const status = (mapErr as { response?: { status?: number } })?.response?.status;
+        // 422 = AI confirmed this file is not BOM/parts data — block the import.
         if (status === 422 && mapErr instanceof Error && mapErr.message) {
           throw mapErr;
         }
-        throw new Error("Couldn't extract columns from this file. Please use the template format and try again.");
+        // All other errors (AI unavailable, network, etc.) — fall back to parsing
+        // the rows directly with raw headers. Some fields may be unmapped and show
+        // as errors in the preview; the user can fix them with the AI Fix button.
+        setParsedRows(parseSubcomponentImportRows(rawRows, existingParts));
+        setMappingWarning('Column auto-mapping was unavailable. Review the rows below and use "Fix with AI" on any that need corrections.');
+        setStage('preview');
       } finally {
         setMappingInProgress(false);
       }
@@ -352,10 +398,16 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
                   <> · {parsedRows.length - validRows.length} will be skipped</>
                 )}
               </span>
-              <Button variant="ghost" size="sm" className="gap-1" onClick={() => { setStage('upload'); setFileName(null); }}>
+              <Button variant="ghost" size="sm" className="gap-1" onClick={() => { setStage('upload'); setFileName(null); setMappingWarning(null); }}>
                 <ChevronLeft className="w-3.5 h-3.5" /> Back
               </Button>
             </div>
+            {mappingWarning && (
+              <div className="mx-5 mb-2 flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 shrink-0">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
+                <span>{mappingWarning}</span>
+              </div>
+            )}
             <div className="flex-1 overflow-y-auto px-5 pb-3 min-h-0">
               <div className="space-y-1">
                 {parsedRows.map(row => {
@@ -381,7 +433,20 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
                           )}
                         </div>
                         {!isValid && (
-                          <div className="text-destructive mt-0.5">{row.errors.join(' · ')}</div>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className="text-destructive">{row.errors.join(' · ')}</span>
+                            {row.errors.some(e => ['Missing Part Name', 'Missing Description', 'Missing Category'].includes(e)) && (
+                              <button
+                                onClick={() => handleAiFix(row)}
+                                disabled={fixingRows.has(row.rowNumber)}
+                                className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                              >
+                                {fixingRows.has(row.rowNumber)
+                                  ? <><Loader2 className="w-2.5 h-2.5 animate-spin" /> Fixing…</>
+                                  : <><Sparkles className="w-2.5 h-2.5" /> Fix with AI</>}
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
                       <span className="text-muted-foreground shrink-0">Row {row.rowNumber}</span>
