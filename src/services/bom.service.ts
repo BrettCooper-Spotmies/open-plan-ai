@@ -33,6 +33,17 @@ export interface MapColumnsResponse {
   unmatched: string[];
 }
 
+export interface FixRowRequest {
+  partNumber: string; name: string; description: string; category: string;
+  manufacturer: string; mpn: string; supplier: string;
+  unitPriceRaw: string; leadTimeRaw: string; quantityRaw: string; uom: string;
+  errors: string[];
+}
+
+export interface FixRowResponse {
+  suggestions: { name: string | null; description: string | null; category: string | null };
+}
+
 export const bomService = {
   async mapImportColumns(
     headers: string[],
@@ -41,6 +52,14 @@ export const bomService = {
     return apiClient.post<MapColumnsResponse>(
       ENDPOINTS.BOM_IMPORT.MAP_COLUMNS(),
       { headers, sampleRows },
+      { timeout: 20000 },
+    );
+  },
+
+  async fixImportRow(payload: FixRowRequest): Promise<FixRowResponse> {
+    return apiClient.post<FixRowResponse>(
+      ENDPOINTS.BOM_IMPORT.FIX_ROW(),
+      payload,
       { timeout: 20000 },
     );
   },

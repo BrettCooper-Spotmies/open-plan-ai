@@ -143,6 +143,7 @@ export const ENDPOINTS = {
   // BOM import — AI-assisted column mapping fallback for Excel import
   BOM_IMPORT: {
     MAP_COLUMNS: () => `/bom/import/map-columns`,
+    FIX_ROW:     () => `/bom/import/fix-row`,
   },
   // Parts catalog (org-scoped)
   PARTS: {

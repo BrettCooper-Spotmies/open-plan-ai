@@ -181,6 +181,13 @@ export function useMapImportColumns() {
   });
 }
 
+export function useFixImportRow() {
+  return useMutation({
+    mutationFn: (payload: Parameters<typeof bomService.fixImportRow>[0]) =>
+      bomService.fixImportRow(payload),
+  });
+}
+
 export function useBomNodeApprovals(nodeId: string | undefined) {
   return useQuery({
     queryKey: queryKeys.bom.approvals(nodeId ?? ''),

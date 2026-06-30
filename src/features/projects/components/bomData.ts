@@ -418,7 +418,6 @@ export function assignLevelLabels(nodes: BOMNode[], prefix: number[] = []): void
 
 // ── Sub-component bulk import (Excel/CSV) ─────────────────────────
 
-const IMPORT_STATUS_VALUES: BOMStatus[] = ['approved', 'pending'];
 
 interface ImportColumnDef {
   label: string;
@@ -431,7 +430,6 @@ export const SUBCOMPONENT_IMPORT_COLUMNS: ImportColumnDef[] = [
   { label: 'Part Name',          required: true,  aliases: ['part name', 'name'] },
   { label: 'Description',        required: true,  aliases: ['description', 'desc'] },
   { label: 'Category',           required: true,  aliases: ['category'] },
-  { label: 'Status',             required: false, aliases: ['status'] },
   { label: 'Manufacturer',       required: true,  aliases: ['manufacturer'] },
   { label: 'MPN',                required: true,  aliases: ['mpn', 'manufacturer pn', 'manufacturer part number'] },
   { label: 'Supplier',           required: true,  aliases: ['supplier', 'distributor'] },
@@ -511,6 +509,27 @@ export function applyColumnMapping(
   });
 }
 
+/**
+ * Parses lead time strings to weeks.
+ * Accepts plain numbers ("4"), or "N unit" strings ("7 days", "2 weeks", "3 months").
+ * Returns null if the input cannot be parsed.
+ */
+function parseLeadTimeToWeeks(raw: string): number | null {
+  const trimmed = raw.trim();
+  const plain = Number(trimmed);
+  if (!Number.isNaN(plain)) return plain;
+
+  const match = trimmed.toLowerCase().match(/^(\d+(?:\.\d+)?)\s*(day|days?|d|week|weeks?|wk|wks?|w|month|months?|mo|mos?|m)$/);
+  if (!match) return null;
+
+  const amount = parseFloat(match[1]);
+  const unit = match[2];
+  if (unit.startsWith('d')) return amount / 7;
+  if (unit.startsWith('w')) return amount;
+  if (unit.startsWith('mo') || unit === 'm') return amount * 4.33;
+  return null;
+}
+
 export function parseSubcomponentImportRows(
   rows: Record<string, unknown>[],
   existingParts: ApiPartResponse[],
@@ -522,7 +541,8 @@ export function parseSubcomponentImportRows(
     const name         = pickField(row, colAliases('Part Name'));
     const description  = pickField(row, colAliases('Description'));
     const categoryRaw  = pickField(row, colAliases('Category')).toLowerCase();
-    const statusRaw    = pickField(row, colAliases('Status')).toLowerCase();
+    // Status is intentionally ignored during import — all imported parts start as 'pending'
+    // and must be approved through the normal approval workflow.
     const manufacturer = pickField(row, colAliases('Manufacturer'));
     const mpn          = pickField(row, colAliases('MPN'));
     const supplier      = pickField(row, colAliases('Supplier'));
@@ -544,10 +564,7 @@ export function parseSubcomponentImportRows(
       category = categoryRaw;
     }
 
-    let status: BOMStatus = 'pending';
-    if (statusRaw && IMPORT_STATUS_VALUES.includes(statusRaw as BOMStatus)) {
-      status = statusRaw as BOMStatus;
-    }
+    const status: BOMStatus = 'pending';
 
     if (!manufacturer) errors.push('Missing Manufacturer');
     if (!mpn) errors.push('Missing MPN');
@@ -566,9 +583,9 @@ export function parseSubcomponentImportRows(
     if (!leadTimeRaw) {
       errors.push('Missing Lead Time');
     } else {
-      const n = Number(leadTimeRaw);
-      if (Number.isNaN(n)) errors.push('Lead Time must be a number');
-      else leadTimeWeeks = n;
+      const parsed = parseLeadTimeToWeeks(leadTimeRaw);
+      if (parsed === null) errors.push('Lead Time must be a number');
+      else leadTimeWeeks = parsed;
     }
 
     let quantity = 1;
