@@ -4,9 +4,8 @@ import { Project, Task, Milestone, Issue, IssueCategory, IssueSeverity, IssueSta
 import { tasksService } from '@/services/tasks.service';
 
 const LEGACY_ISSUE_STATUS_MAP: Record<string, IssueStatus> = {
-  'in-progress': 'investigating',
-  'in_progress': 'investigating',
-  'pending':     'investigating',
+  'in_progress': 'in-progress',
+  'pending':     'in-progress',
 };
 
 /** Normalise an issue status value from the API. Passes custom statuses through as-is. */

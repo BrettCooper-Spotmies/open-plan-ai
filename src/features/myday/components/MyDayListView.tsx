@@ -29,7 +29,6 @@ const statusColors: Record<string, string> = {
   blocked: 'bg-status-blocked/20 text-status-blocked',
   // Issue statuses
   open: 'bg-destructive/20 text-destructive',
-  investigating: 'bg-orange-500/20 text-orange-600',
   resolved: 'bg-status-done/20 text-status-done',
   closed: 'bg-muted-foreground/20 text-muted-foreground',
   'wont-fix': 'bg-muted-foreground/20 text-muted-foreground',
@@ -43,7 +42,6 @@ const statusLabels: Record<string, string> = {
   blocked: 'Blocked',
   // Issue statuses
   open: 'Open',
-  investigating: 'Investigating',
   resolved: 'Resolved',
   closed: 'Closed',
   'wont-fix': "Won't Fix",

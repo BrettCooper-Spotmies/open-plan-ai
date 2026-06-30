@@ -205,7 +205,7 @@ export function mapIssueToMyDayItem(issue: Issue, project: Project): MyDayItem {
     projectName: project.name,
     isOverdue: dueDateStatus === 'overdue',
     isDueToday: dueDateStatus === 'today',
-    isBlocked: issue.status === 'investigating',
+    isBlocked: issue.status === 'in-progress',
     originalIssue: issue,
   };
 }
@@ -536,7 +536,7 @@ export function groupTasksByProgress(items: MyDayTask[] | MyDayItem[]): {
       groups.completed.push(item);
     } else if (item.status === 'blocked' || item.isBlocked || item.hasUnresolvedDependencies) {
       groups.dependency.push(item);
-    } else if (item.status === 'in-progress' || item.status === 'review' || item.status === 'investigating') {
+    } else if (item.status === 'in-progress' || item.status === 'review') {
       groups.inProgress.push(item);
     } else {
       groups.notStarted.push(item);

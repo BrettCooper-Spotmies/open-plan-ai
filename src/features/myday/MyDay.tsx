@@ -48,10 +48,10 @@ export default function MyDay() {
 
   // Per-project Kanban columns are fully customizable (see task-columns /
   // issue-columns modules), so My Day's "group by progress" board — which
-  // shows a single universal Dependency/Not Started/In Progress/Completed
-  // layout across every project — can't assume a project has a column for
-  // each bucket. Fetch each represented project's columns so the Kanban view
-  // can disable drop targets that don't map to a real column for that task.
+  // shows a single universal Dependency/To Do/In Progress/Done layout across
+  // every project — can't assume a project has a column for each bucket.
+  // Fetch each represented project's columns so drag-and-drop can disable
+  // drop targets that don't map to a real column for that task.
   const projectIdsWithItems = useMemo(
     () => Array.from(new Set(userTasks.map(item => item.projectId))),
     [userTasks],
@@ -121,9 +121,9 @@ export default function MyDay() {
         // a clear 1-to-1 IssueStatus counterpart.
         const issueStatusMap: Partial<Record<TaskStatus, IssueStatus>> = {
           'todo':        'open',
-          'in-progress': 'investigating',
+          'in-progress': 'in-progress',
           'done':        'resolved',
-          'blocked':     'investigating',
+          'blocked':     'in-progress',
           // 'review' intentionally omitted — no equivalent IssueStatus exists.
         };
         const mappedStatus = issueStatusMap[status];

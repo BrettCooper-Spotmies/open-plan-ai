@@ -199,7 +199,7 @@ describe('projectsService', () => {
         projectId: 'proj-1',
         category: 'risk',
         severity: 'minor',
-        status: 'in-progress', // legacy value not in current IssueStatus union
+        status: 'in_progress', // legacy value not in current IssueStatus union
         createdAt: '2026-01-01T00:00:00Z',
         assignees: [],
       };
@@ -207,7 +207,7 @@ describe('projectsService', () => {
 
       const [issue] = await projectsService.getIssues('proj-1');
 
-      expect(issue.status).toBe('investigating'); // normalised via normaliseIssueStatus
+      expect(issue.status).toBe('in-progress'); // normalised via normaliseIssueStatus
     });
   });
 });

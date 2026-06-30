@@ -4,7 +4,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { GripVertical, Check, CheckSquare, Bug } from 'lucide-react';
+import { Check, CheckSquare, Bug } from 'lucide-react';
 import {
   MyDayItem,
   groupTasksByProject,
@@ -39,9 +39,7 @@ interface MyDayKanbanViewProps {
 }
 
 // Maps a My Day progress bucket to the backend status/column key it writes,
-// for tasks and issues respectively. Kept alongside handleDragEnd's own
-// statusMap/issueStatusMap so the drop-target validity check below mirrors
-// exactly what a drop would actually write.
+// for tasks and issues respectively.
 const taskStatusByBucket: Record<string, TaskStatus> = {
   notStarted: 'todo',
   inProgress: 'in-progress',
@@ -50,7 +48,7 @@ const taskStatusByBucket: Record<string, TaskStatus> = {
 
 const issueStatusByBucket: Record<string, string> = {
   notStarted: 'open',
-  inProgress: 'investigating',
+  inProgress: 'in-progress',
   completed: 'resolved',
 };
 
@@ -193,28 +191,21 @@ export function MyDayKanbanView({
           const item = tasksCopy[itemIndex];
           // remove item
           tasksCopy.splice(itemIndex, 1);
-          
+
           let updatedItem = { ...item };
           if (item.itemType === 'task' && item.originalTask) {
             updatedItem = { ...updatedItem, status: newStatus, originalTask: { ...item.originalTask, status: newStatus } };
           } else if (item.itemType === 'issue' && item.originalIssue) {
-            const issueStatusMap: Record<string, any> = {
-              'todo': 'open',
-              'in-progress': 'investigating',
-              'review': 'investigating',
-              'done': 'resolved',
-              'blocked': 'investigating'
-             };
-             const mappedStatus = issueStatusMap[newStatus];
-             updatedItem = { ...updatedItem, status: mappedStatus, originalIssue: { ...item.originalIssue, status: mappedStatus } };
+            const mappedStatus = issueStatusByBucket[destination.droppableId];
+            updatedItem = { ...updatedItem, status: mappedStatus, originalIssue: { ...item.originalIssue, status: mappedStatus } };
           }
-          
+
           // Re-insert at the estimated destination index relative to the whole array.
           // Since localTasks is all items, but destination.index is relative to the group,
-          // we need to insert it at a positional index. But inserting it at the end of the array is usually fine 
+          // we need to insert it at a positional index. But inserting it at the end of the array is usually fine
           // if we don't care about intra-column sorting in MyDayKanbanView.
           tasksCopy.push(updatedItem);
-          
+
           setLocalTasks(tasksCopy);
         }
 
@@ -246,195 +237,171 @@ export function MyDayKanbanView({
   return (
     <div className="space-y-4">
       <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <Droppable droppableId="board" type="COLUMN" direction="horizontal">
-          {(provided) => (
-            <div
-              ref={provided.innerRef}
-              {...provided.droppableProps}
-              className="w-full pb-4 overflow-x-auto md:overflow-visible touch-pan-x"
-            >
+        <div className="w-full pb-4 overflow-x-auto md:overflow-visible touch-pan-x">
+          <div
+            className="flex gap-3 min-w-max snap-x snap-mandatory md:grid md:gap-4 md:min-w-0"
+            style={{
+              gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {columns.map((column) => (
               <div
-                className="flex gap-3 min-w-max snap-x snap-mandatory md:grid md:gap-4 md:min-w-0"
-                style={{
-                  gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
-                }}
+                key={column.id}
+                className="w-[250px] min-w-[250px] space-y-3 snap-start md:w-auto md:min-w-0 md:flex-1"
               >
-                {columns.map((column, index) => (
-                  <Draggable key={column.id} draggableId={column.id} index={index}>
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.draggableProps}
-                        style={provided.draggableProps.style}
-                        className={cn(
-                          'w-[250px] min-w-[250px] space-y-3 snap-start md:w-auto md:min-w-0 md:flex-1',
-                          snapshot.isDragging && 'shadow-lg'
-                        )}
-                      >
-                        {/* Column Header - Sticky */}
-                        <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
-                          <div className="flex items-center gap-2 px-1">
-                            <div
-                              {...provided.dragHandleProps}
-                              className="cursor-grab active:cursor-grabbing"
-                            >
-                              <GripVertical className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                            <div className={cn('w-2 h-2 rounded-full', column.color)} />
-                            <h3 className="font-medium text-sm">{column.label}</h3>
-                            <span className="text-xs text-muted-foreground">
-                              {column.tasks.length}
-                            </span>
-                          </div>
-                        </div>
+                {/* Column Header - Sticky */}
+                <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
+                  <div className="flex items-center gap-2 px-1">
+                    <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                    <h3 className="font-medium text-sm">{column.label}</h3>
+                    <span className="text-xs text-muted-foreground">
+                      {column.tasks.length}
+                    </span>
+                  </div>
+                </div>
 
-                        {/* Tasks Droppable */}
-                        <Droppable
-                          droppableId={column.id}
-                          type="TASK"
-                          isDropDisabled={
-                            groupBy !== 'progress' ||
-                            column.id === 'dependency' ||
-                            disabledBucketsForDrag.has(column.id)
-                          }
+                {/* Tasks Droppable */}
+                <Droppable
+                  droppableId={column.id}
+                  type="TASK"
+                  isDropDisabled={
+                    groupBy !== 'progress' ||
+                    column.id === 'dependency' ||
+                    disabledBucketsForDrag.has(column.id)
+                  }
+                >
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={cn(
+                        'flex flex-col gap-2 min-h-[200px] p-2 rounded-lg',
+                        snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30',
+                        disabledBucketsForDrag.has(column.id) && 'opacity-40 cursor-not-allowed'
+                      )}
+                      title={
+                        disabledBucketsForDrag.has(column.id)
+                          ? `This item's project has no "${column.label}" column`
+                          : undefined
+                      }
+                    >
+                      {column.tasks.map((task, taskIndex) => (
+                        <Draggable
+                          key={task.id}
+                          draggableId={task.id}
+                          index={taskIndex}
+                          isDragDisabled={groupBy !== 'progress'}
                         >
                           {(provided, snapshot) => (
-                            <div
+                            <Card
                               ref={provided.innerRef}
-                              {...provided.droppableProps}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              style={provided.draggableProps.style}
                               className={cn(
-                                'flex flex-col gap-2 min-h-[200px] p-2 rounded-lg',
-                                snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30',
-                                disabledBucketsForDrag.has(column.id) && 'opacity-40 cursor-not-allowed'
+                                'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md',
+                                task.itemType === 'task' && task.originalTask?.module
+                                  ? moduleColors[task.originalTask.module as keyof typeof moduleColors] || 'border-l-muted'
+                                  : 'border-l-muted',
+                                snapshot.isDragging && 'shadow-lg'
                               )}
-                              title={
-                                disabledBucketsForDrag.has(column.id)
-                                  ? `This item's project has no "${column.label}" column`
-                                  : undefined
-                              }
+                              onClick={() => onTaskClick(task)}
                             >
-                              {column.tasks.map((task, taskIndex) => (
-                                <Draggable
-                                  key={task.id}
-                                  draggableId={task.id}
-                                  index={taskIndex}
-                                  isDragDisabled={groupBy !== 'progress'}
-                                >
-                                  {(provided, snapshot) => (
-                                    <Card
-                                      ref={provided.innerRef}
-                                      {...provided.draggableProps}
-                                      {...provided.dragHandleProps}
-                                      style={provided.draggableProps.style}
-                                      className={cn(
-                                        'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md',
-                                        task.itemType === 'task' && task.originalTask?.module
-                                          ? moduleColors[task.originalTask.module as keyof typeof moduleColors] || 'border-l-muted'
-                                          : 'border-l-muted',
-                                        snapshot.isDragging && 'shadow-lg'
-                                      )}
-                                      onClick={() => onTaskClick(task)}
-                                    >
-                                      <div className="space-y-2">
-                                        <div className="flex items-start justify-between gap-2">
-                                          <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
-                                            {(task.status === 'done' || task.status === 'resolved' || task.status === 'closed') ? (
-                                              <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
-                                                <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
-                                                  <Check className="h-3 w-3 text-status-done" />
-                                                </div>
-                                              </div>
-                                            ) : (
-                                              <div
-                                                className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4"
-                                              >
-                                                <button
-                                                  onClick={(e) => handleCompleteTask(task.id, e)}
-                                                  className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
-                                                  aria-label="Mark task complete"
-                                                >
-                                                  <span className="sr-only">Mark complete</span>
-                                                </button>
-                                              </div>
-                                            )}
-                                            <h4
-                                              className="text-sm font-medium leading-tight truncate transition-all duration-300 ease-out translate-x-6"
-                                            >
-                                              {task.title}
-                                            </h4>
-                                          </div>
-                                          <div className="flex items-center gap-1 shrink-0">
-                                            {/* Item Type Badge */}
-                                            <Badge
-                                              variant="outline"
-                                              className={cn(
-                                                'text-[9px] px-1 py-0 h-4 flex items-center gap-0.5',
-                                                task.itemType === 'task' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'
-                                              )}
-                                            >
-                                              {task.itemType === 'task' ? (
-                                                <>
-                                                  <CheckSquare className="h-2.5 w-2.5" />
-                                                  <span>Task</span>
-                                                </>
-                                              ) : (
-                                                <>
-                                                  <Bug className="h-2.5 w-2.5" />
-                                                  <span>Issue</span>
-                                                </>
-                                              )}
-                                            </Badge>
-                                            {/* Priority Badge */}
-                                            <Badge
-                                              variant="secondary"
-                                              className={cn(
-                                                'text-[10px] px-1.5 py-0',
-                                                priorityColors[task.priority as keyof typeof priorityColors]
-                                              )}
-                                            >
-                                              {task.priority}
-                                            </Badge>
-                                          </div>
-                                        </div>
-
-                                        {task.description && (
-                                          <p className="text-xs text-muted-foreground line-clamp-2 text-left">
-                                            {task.description}
-                                          </p>
-                                        )}
-
-                                        <div className="flex items-center justify-between pt-2">
-                                          {task.assignees && task.assignees.length > 0 && (
-                                            <Avatar className="h-5 w-5">
-                                              <AvatarFallback className="text-[9px] bg-muted">
-                                                {task.assignees[0].initials}
-                                              </AvatarFallback>
-                                            </Avatar>
-                                          )}
-                                          {task.dueDate && (
-                                            <span className="text-[10px] text-muted-foreground">
-                                              {formatTaskDateRange(task.originalTask?.startDate, task.dueDate)}
-                                            </span>
-                                          )}
+                              <div className="space-y-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
+                                    {(task.status === 'done' || task.status === 'resolved' || task.status === 'closed') ? (
+                                      <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                        <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
+                                          <Check className="h-3 w-3 text-status-done" />
                                         </div>
                                       </div>
-                                    </Card>
+                                    ) : (
+                                      <div
+                                        className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4"
+                                      >
+                                        <button
+                                          onClick={(e) => handleCompleteTask(task.id, e)}
+                                          className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
+                                          aria-label="Mark task complete"
+                                        >
+                                          <span className="sr-only">Mark complete</span>
+                                        </button>
+                                      </div>
+                                    )}
+                                    <h4
+                                      className="text-sm font-medium leading-tight truncate transition-all duration-300 ease-out translate-x-6"
+                                    >
+                                      {task.title}
+                                    </h4>
+                                  </div>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {/* Item Type Badge */}
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        'text-[9px] px-1 py-0 h-4 flex items-center gap-0.5',
+                                        task.itemType === 'task' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'
+                                      )}
+                                    >
+                                      {task.itemType === 'task' ? (
+                                        <>
+                                          <CheckSquare className="h-2.5 w-2.5" />
+                                          <span>Task</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Bug className="h-2.5 w-2.5" />
+                                          <span>Issue</span>
+                                        </>
+                                      )}
+                                    </Badge>
+                                    {/* Priority Badge */}
+                                    <Badge
+                                      variant="secondary"
+                                      className={cn(
+                                        'text-[10px] px-1.5 py-0',
+                                        priorityColors[task.priority as keyof typeof priorityColors]
+                                      )}
+                                    >
+                                      {task.priority}
+                                    </Badge>
+                                  </div>
+                                </div>
+
+                                {task.description && (
+                                  <p className="text-xs text-muted-foreground line-clamp-2 text-left">
+                                    {task.description}
+                                  </p>
+                                )}
+
+                                <div className="flex items-center justify-between pt-2">
+                                  {task.assignees && task.assignees.length > 0 && (
+                                    <Avatar className="h-5 w-5">
+                                      <AvatarFallback className="text-[9px] bg-muted">
+                                        {task.assignees[0].initials}
+                                      </AvatarFallback>
+                                    </Avatar>
                                   )}
-                                </Draggable>
-                              ))}
-                              {provided.placeholder}
-                            </div>
+                                  {task.dueDate && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {formatTaskDateRange(task.originalTask?.startDate, task.dueDate)}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </Card>
                           )}
-                        </Droppable>
-                      </div>
-                    )}
-                  </Draggable>
-                ))}
-                {provided.placeholder}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
               </div>
-            </div>
-          )}
-        </Droppable>
+            ))}
+          </div>
+        </div>
       </DragDropContext>
     </div>
   );

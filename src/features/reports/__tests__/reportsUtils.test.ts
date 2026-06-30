@@ -81,10 +81,10 @@ describe('reportsUtils', () => {
       expect(result).toEqual({ total: 0, critical: 0 });
     });
 
-    it('should count open and investigating issues', () => {
+    it('should count open and in-progress issues', () => {
       const issues = [
         createIssue({ status: 'open' }),
-        createIssue({ status: 'investigating' }),
+        createIssue({ status: 'in-progress' }),
         createIssue({ status: 'resolved' }),
         createIssue({ status: 'closed' }),
       ];
@@ -97,7 +97,7 @@ describe('reportsUtils', () => {
       const issues = [
         createIssue({ status: 'open', severity: 'critical' }),
         createIssue({ status: 'open', severity: 'minor' }),
-        createIssue({ status: 'investigating', severity: 'critical' }),
+        createIssue({ status: 'in-progress', severity: 'critical' }),
       ];
 
       const result = countOpenIssues(issues);

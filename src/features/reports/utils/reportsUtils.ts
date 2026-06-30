@@ -197,7 +197,7 @@ export function calculateProjectProgress(
 // Count open issues
 export function countOpenIssues(issues: Issue[]): { total: number; critical: number } {
   const openIssues = issues.filter(i =>
-    i.status === 'open' || i.status === 'investigating'
+    i.status === 'open' || i.status === 'in-progress'
   );
   const criticalIssues = openIssues.filter(i => i.severity === 'critical');
 
@@ -324,7 +324,7 @@ export function getTeamWorkload(
     const memberIssues = issues.filter(i =>
       i.assignees?.some((a: { id: string }) => a.id === member.id)
     );
-    const openIssues = memberIssues.filter(i => i.status === 'open' || i.status === 'investigating').length;
+    const openIssues = memberIssues.filter(i => i.status === 'open' || i.status === 'in-progress').length;
     const resolvedIssues = memberIssues.filter(i => i.status === 'resolved' || i.status === 'closed' || i.status === 'wont-fix').length;
 
     return {

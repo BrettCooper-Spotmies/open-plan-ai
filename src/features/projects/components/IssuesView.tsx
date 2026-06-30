@@ -66,7 +66,7 @@ interface IssuesKanbanColumn {
 
 const STATUS_BADGE_CONFIG: Record<string, { color: string; label: string }> = {
   open: { color: 'bg-destructive/20 text-destructive border-destructive/30', label: 'Open' },
-  investigating: { color: 'bg-orange-500/20 text-orange-600 border-orange-500/30', label: 'Investigating' },
+  'in-progress': { color: 'bg-orange-500/20 text-orange-600 border-orange-500/30', label: 'In Progress' },
   resolved: { color: 'bg-status-done/20 text-status-done border-status-done/30', label: 'Resolved' },
   closed: { color: 'bg-muted text-muted-foreground border-muted', label: 'Closed' },
   'wont-fix': { color: 'bg-muted text-muted-foreground border-muted line-through', label: "Won't Fix" },

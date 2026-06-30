@@ -203,7 +203,7 @@ function IssueViewControls({
               <MultiSelect
                 options={[
                   { value: 'open', label: 'Open' },
-                  { value: 'investigating', label: 'Investigating' },
+                  { value: 'in-progress', label: 'In Progress' },
                   { value: 'resolved', label: 'Resolved' },
                   { value: 'closed', label: 'Closed' },
                   { value: 'wont-fix', label: "Won't Fix" },
