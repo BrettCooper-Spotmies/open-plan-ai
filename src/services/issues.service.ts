@@ -48,6 +48,7 @@ export const issuesService = {
     const blocksTaskIds = (issue.blocksTaskIds || []).filter(Boolean);
     if (blocksTaskIds.length > 0) payload.blocksTaskIds = blocksTaskIds;
     if (issue.tags && issue.tags.length > 0) payload.tags = issue.tags;
+    if (issue.checklist && issue.checklist.length > 0) payload.checklist = issue.checklist;
     if (issue.descriptionBlocks && issue.descriptionBlocks.length > 0) payload.descriptionBlocks = issue.descriptionBlocks;
     return apiClient.post<Issue>(ENDPOINTS.ISSUES.LIST(projectId), payload);
   },

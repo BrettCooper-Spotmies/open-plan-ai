@@ -99,9 +99,11 @@ function ParamCombobox({
                   key={o.key}
                   value={o.label}
                   onSelect={() => {
-                    const autoFrom = firstSelectedNode
-                      ? String(firstSelectedNode[o.key] ?? '')
-                      : '';
+                    const autoFrom = o.key === 'rev'
+                      ? ''
+                      : firstSelectedNode
+                        ? String(firstSelectedNode[o.key] ?? '')
+                        : '';
                     onChange(o.label, autoFrom);
                     setOpen(false);
                   }}
@@ -477,8 +479,8 @@ export function ECOWizard({
       schedule:      (d.scheduleImpact?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
       recert:        d.requiresRecertification ?? false,
       firmware:      d.firmwareCoupling ?? false,
-      unitCostDelta: d.unitCostDelta != null ? String(d.unitCostDelta) : '',
-      oneTimeCost:   d.oneTimeCost   != null ? String(d.oneTimeCost)  : '',
+      unitCostDelta: d.unitCostDelta != null ? String(parseFloat(d.unitCostDelta.toFixed(6))) : '',
+      oneTimeCost:   d.oneTimeCost   != null ? String(parseFloat(d.oneTimeCost.toFixed(6)))   : '',
     });
     if (d.steps?.length) {
       setPipeline(
@@ -572,9 +574,22 @@ export function ECOWizard({
     if (s === 0 && !basics.title.trim()) e.title = 'Title is required';
     if (s === 1) {
       if (basics.scope === 'BOM_PART' && items.length < 1) e.items = 'At least 1 affected part is required';
+      if (basics.scope === 'BOM_PART' && items.length > 0 && items.some(it => !it.revTo.trim())) e.revTo = 'Rev To is required for all parts';
       if (basics.scope === 'REQUIREMENT' && reqItems.length < 1) e.items = 'At least 1 affected requirement is required';
     }
     if (s === 2 && !diffRows.some(r => r.param.trim())) e.details = 'At least 1 parameter is required';
+    if (s === 2) {
+      const paramNames = diffRows.map(r => r.param.trim()).filter(Boolean);
+      if (paramNames.length !== new Set(paramNames).size) e.details = 'Each parameter must be unique — remove the duplicate rows';
+    }
+    if (s === 3) {
+      if (impact.unitCostDelta.trim() && isNaN(parseFloat(impact.unitCostDelta))) e.unitCostDelta = 'Enter a valid number (e.g. -4.55)';
+      if (impact.oneTimeCost.trim()) {
+        const v = parseFloat(impact.oneTimeCost);
+        if (isNaN(v)) e.oneTimeCost = 'Enter a valid number';
+        else if (v < 0) e.oneTimeCost = 'Cost must be 0 or greater';
+      }
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -658,11 +673,11 @@ export function ECOWizard({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <FieldLabel required>Change Type</FieldLabel>
-          <EcoSelectWithCustom value={basics.type} onChange={v => setBasics({ ...basics, type: v })} options={Object.keys(ECO_TYPE_LABEL)} labels={ECO_TYPE_LABEL} />
+          <EcoSelect value={basics.type as ECOType} onChange={v => setBasics({ ...basics, type: v })} options={Object.keys(ECO_TYPE_LABEL) as ECOType[]} labels={ECO_TYPE_LABEL} />
         </div>
         <div>
           <FieldLabel required>Reason Code</FieldLabel>
-          <EcoSelectWithCustom value={basics.reason} onChange={v => setBasics({ ...basics, reason: v })} options={Object.keys(REASON_LABEL)} labels={REASON_LABEL} />
+          <EcoSelect value={basics.reason as ECOReason} onChange={v => setBasics({ ...basics, reason: v })} options={Object.keys(REASON_LABEL) as ECOReason[]} labels={REASON_LABEL} />
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -793,13 +808,13 @@ export function ECOWizard({
               <input value={it.revFrom} disabled className={cn(inputCls, 'font-mono text-center cursor-not-allowed opacity-70')} />
             </div>
             <div className="flex-1">
-              <FieldLabel>Rev To</FieldLabel>
+              <FieldLabel required>Rev To</FieldLabel>
               <input
                 value={it.revTo}
                 onChange={e => upItem(idx, 'revTo', e.target.value)}
                 placeholder="e.g. B"
                 maxLength={3}
-                className={cn(inputCls, 'font-mono text-center')}
+                className={cn(inputCls, 'font-mono text-center', errors.revTo && !it.revTo.trim() && 'border-destructive')}
               />
             </div>
           </div>
@@ -932,52 +947,56 @@ export function ECOWizard({
                 placeholder="Type parameter name…"
                 className={cn(inputCls, 'flex-[1.2]')}
               />
-            ) : (
-              <select
-                value={
-                  BOM_PARAM_OPTIONS.find(o => o.label === r.param)?.key
-                  ?? (ECO_RECOMMENDED_PARAMS.includes(r.param) ? r.param : '')
-                }
-                onChange={e => {
-                  const val = e.target.value;
-                  if (val === '__other__') {
-                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: true } : x));
-                    return;
+            ) : (() => {
+              const usedParams = new Set(diffRows.filter((_, i) => i !== idx).map(x => x.param).filter(Boolean));
+              return (
+                <select
+                  value={
+                    BOM_PARAM_OPTIONS.find(o => o.label === r.param)?.key
+                    ?? (ECO_RECOMMENDED_PARAMS.includes(r.param) ? r.param : '')
                   }
-                  const bomOpt = BOM_PARAM_OPTIONS.find(o => o.key === val);
-                  if (bomOpt) {
-                    const autoFrom = firstSelectedNode
-                      ? String((firstSelectedNode as Record<string, unknown>)[bomOpt.key] ?? '')
-                      : '';
-                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: bomOpt.label, from: autoFrom, paramIsCustom: false } : x));
-                  } else {
-                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: val, from: '', paramIsCustom: false } : x));
-                  }
-                }}
-                className={cn(ECO_SELECT_CLS, 'flex-[1.2]')}
-              >
-                <option value="" className="bg-card">— select parameter —</option>
-                <optgroup label="BOM Fields">
-                  {BOM_PARAM_OPTIONS.map(o => (
-                    <option key={o.key} value={o.key} className="bg-card">{o.label}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Recommended">
-                  {ECO_RECOMMENDED_PARAMS.map(p => (
-                    <option key={p} value={p} className="bg-card">{p}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Custom">
-                  <option value="__other__" className="bg-card">Other…</option>
-                </optgroup>
-              </select>
-
-            )
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === '__other__') {
+                      setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: true } : x));
+                      return;
+                    }
+                    const bomOpt = BOM_PARAM_OPTIONS.find(o => o.key === val);
+                    if (bomOpt) {
+                      const autoFrom = bomOpt.key === 'rev'
+                        ? (items[0]?.revFrom ?? '')
+                        : firstSelectedNode
+                          ? String((firstSelectedNode as Record<string, unknown>)[bomOpt.key] ?? '')
+                          : '';
+                      setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: bomOpt.label, from: autoFrom, paramIsCustom: false } : x));
+                    } else {
+                      setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: val, from: '', paramIsCustom: false } : x));
+                    }
+                  }}
+                  className={cn(ECO_SELECT_CLS, 'flex-[1.2]')}
+                >
+                  <option value="" className="bg-card">— select parameter —</option>
+                  <optgroup label="BOM Fields">
+                    {BOM_PARAM_OPTIONS.map(o => (
+                      <option key={o.key} value={o.key} className="bg-card" disabled={usedParams.has(o.label)}>{o.label}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Recommended">
+                    {ECO_RECOMMENDED_PARAMS.map(p => (
+                      <option key={p} value={p} className="bg-card" disabled={usedParams.has(p)}>{p}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Custom">
+                    <option value="__other__" className="bg-card">Other…</option>
+                  </optgroup>
+                </select>
+              );
+            })()
           ) : (
             <input value={r.param} onChange={e => upRow(idx, 'param', e.target.value)} placeholder="Parameter" className={cn(inputCls, 'flex-[1.2]')} />
           )}
-          <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" className={cn(inputCls, 'flex-1')} />
-          <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" className={cn(inputCls, 'flex-1')} />
+          <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+          <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
           <div className="w-32">
             <EcoSelect value={r.cls} onChange={v => upRow(idx, 'cls', v)} options={Object.keys(CHANGE_LABEL_MAP) as ChangeLabel[]} labels={CHANGE_LABEL_MAP} />
           </div>
@@ -1011,8 +1030,9 @@ export function ECOWizard({
         />
         <div
           onClick={() => fileRef.current?.click()}
+          onDragEnter={e => { e.preventDefault(); setDragOver(true); }}
           onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
+          onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
           onDrop={e => { e.preventDefault(); setDragOver(false); addFiles(e.dataTransfer.files); }}
           className="flex flex-col items-center gap-1.5 p-5 rounded-lg border-2 border-dashed cursor-pointer transition-all"
           style={{
@@ -1066,11 +1086,33 @@ export function ECOWizard({
       <div className="grid grid-cols-2 gap-3">
         <div>
           <FieldLabel>Unit Cost Δ ($/unit)</FieldLabel>
-          <input value={impact.unitCostDelta} onChange={e => { const v = e.target.value; if (/^[+-]?\d*\.?\d*$/.test(v)) setImpact({ ...impact, unitCostDelta: v }); }} placeholder="+4.55" className={inputCls} />
+          <input
+            value={impact.unitCostDelta}
+            onChange={e => { const v = e.target.value; if (/^[+-]?\d*\.?\d{0,6}$/.test(v)) { setImpact({ ...impact, unitCostDelta: v }); if (errors.unitCostDelta) setErrors(({ unitCostDelta: _, ...rest }) => rest); } }}
+            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, unitCostDelta: String(parseFloat(n.toFixed(6))) })); }}
+            placeholder="+4.55"
+            className={cn(inputCls, errors.unitCostDelta && 'border-destructive')}
+          />
+          {errors.unitCostDelta && (
+            <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+              <AlertCircle className="w-3 h-3" />{errors.unitCostDelta}
+            </p>
+          )}
         </div>
         <div>
           <FieldLabel>One-Time Cost ($)</FieldLabel>
-          <input value={impact.oneTimeCost} onChange={e => { const v = e.target.value; if (/^\d*\.?\d*$/.test(v)) setImpact({ ...impact, oneTimeCost: v }); }} placeholder="12400" className={inputCls} />
+          <input
+            value={impact.oneTimeCost}
+            onChange={e => { const v = e.target.value; if (/^\d*\.?\d{0,6}$/.test(v)) { setImpact({ ...impact, oneTimeCost: v }); if (errors.oneTimeCost) setErrors(({ oneTimeCost: _, ...rest }) => rest); } }}
+            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, oneTimeCost: String(parseFloat(n.toFixed(6))) })); }}
+            placeholder="12400"
+            className={cn(inputCls, errors.oneTimeCost && 'border-destructive')}
+          />
+          {errors.oneTimeCost && (
+            <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+              <AlertCircle className="w-3 h-3" />{errors.oneTimeCost}
+            </p>
+          )}
         </div>
       </div>
       {([
