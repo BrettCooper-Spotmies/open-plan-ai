@@ -165,7 +165,7 @@ function SkeletonActivityTimeline() {
 
 const LC_NODES = [
   { key: 'DRAFT', label: 'Draft', icon: Edit },
-  { key: 'IN_REVIEW', label: 'In Review', icon: ClipboardCheck },
+  { key: 'IN_REVIEW', label: 'Send for review', icon: ClipboardCheck },
   { key: 'APPROVED', label: 'Approved', icon: CheckCircle },
   { key: 'RELEASED', label: 'Released', icon: GitBranch, sub: 'ECN' },
   { key: 'VERIFIED', label: 'Verified', icon: Shield },
