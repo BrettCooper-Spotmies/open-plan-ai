@@ -56,9 +56,9 @@ const issueStatusByBucket: Record<string, string> = {
 
 const progressColumnConfig = [
   { id: 'dependency', label: 'Dependency', color: 'bg-status-blocked' },
-  { id: 'notStarted', label: 'Not Started', color: 'bg-status-todo' },
+  { id: 'notStarted', label: 'To Do', color: 'bg-status-todo' },
   { id: 'inProgress', label: 'In Progress', color: 'bg-status-in-progress' },
-  { id: 'completed', label: 'Completed', color: 'bg-status-done' },
+  { id: 'completed', label: 'Done', color: 'bg-status-done' },
 ];
 
 const dueDateColumnConfig = [
