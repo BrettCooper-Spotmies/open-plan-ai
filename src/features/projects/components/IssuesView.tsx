@@ -46,6 +46,7 @@ interface IssuesViewProps {
   statusFilter?: IssueStatus[];
   assigneeFilter?: string[];
   dueDateFilter?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
+  reportedDateFilter?: 'today' | 'this-week' | 'this-month';
   isAddDialogOpen?: boolean;
   onAddDialogClose?: () => void;
   onIssueUpdate?: (issue: Issue) => void;
@@ -133,6 +134,7 @@ export function IssuesView({
   statusFilter: externalStatusFilter = [],
   assigneeFilter: externalAssigneeFilter = [],
   dueDateFilter: externalDueDateFilter,
+  reportedDateFilter: externalReportedDateFilter,
   isAddDialogOpen: externalIsAddDialogOpen,
   onAddDialogClose,
   onIssueUpdate,
@@ -176,6 +178,7 @@ export function IssuesView({
   const statusFilter = externalStatusFilter ?? internalStatusFilter;
   const assigneeFilter = externalAssigneeFilter;
   const dueDateFilter = externalDueDateFilter;
+  const reportedDateFilter = externalReportedDateFilter;
 
   useEffect(() => {
     setLocalIssues(issues);
@@ -238,8 +241,32 @@ export function IssuesView({
           break;
       }
     }
+    let matchesReportedDate = true;
+    if (reportedDateFilter) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+      const issueReportedDate = issue.reportedAt ? new Date(issue.reportedAt) : null;
+      switch (reportedDateFilter) {
+        case 'today':
+          matchesReportedDate = !!issueReportedDate && issueReportedDate.toDateString() === todayStart.toDateString();
+          break;
+        case 'this-week': {
+          const weekStart = new Date(todayStart);
+          weekStart.setDate(todayStart.getDate() - 7);
+          matchesReportedDate = !!issueReportedDate && issueReportedDate >= weekStart && issueReportedDate <= todayEnd;
+          break;
+        }
+        case 'this-month': {
+          const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+          matchesReportedDate = !!issueReportedDate && issueReportedDate >= monthStart && issueReportedDate <= todayEnd;
+          break;
+        }
+      }
+    }
 
-    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesDueDate;
+    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesDueDate && matchesReportedDate;
   });
 
   // Sort by severity (critical first), then by date

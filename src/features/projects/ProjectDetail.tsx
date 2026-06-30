@@ -85,6 +85,7 @@ interface IssueFilter {
   severity?: IssueSeverity[];
   assigneeId?: string[];
   dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
+  reportedDate?: 'today' | 'this-week' | 'this-month';
 }
 
 
@@ -272,6 +273,31 @@ function IssueViewControls({
                   <SelectItem value="this-week">This Week</SelectItem>
                   <SelectItem value="this-month">This Month</SelectItem>
                   <SelectItem value="no-date">No Date</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Reported Date Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Reported Date
+              </Label>
+              <Select
+                value={filters.reportedDate ?? 'all'}
+                onValueChange={(v) => onFiltersChange({
+                  ...filters,
+                  reportedDate: v === 'all' ? undefined : v as IssueFilter['reportedDate'],
+                })}
+              >
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Any Date" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any Date</SelectItem>
+                  <SelectItem value="today">Today</SelectItem>
+                  <SelectItem value="this-week">This Week</SelectItem>
+                  <SelectItem value="this-month">This Month</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -481,6 +507,7 @@ export default function ProjectDetail() {
     if (issueFilters.severity?.length) count++;
     if (issueFilters.assigneeId?.length) count++;
     if (issueFilters.dueDate !== undefined) count++;
+    if (issueFilters.reportedDate !== undefined) count++;
     return count;
   }, [issueFilters]);
 
@@ -1477,6 +1504,7 @@ export default function ProjectDetail() {
               statusFilter={issueFilters.status}
               assigneeFilter={issueFilters.assigneeId}
               dueDateFilter={issueFilters.dueDate}
+              reportedDateFilter={issueFilters.reportedDate}
               isAddDialogOpen={isAddIssueDialogOpen}
               onAddDialogClose={() => setIsAddIssueDialogOpen(false)}
               onIssueCreate={handleIssueCreate}
