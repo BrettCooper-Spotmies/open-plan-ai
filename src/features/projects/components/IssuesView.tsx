@@ -443,7 +443,7 @@ export function IssuesView({
                         key={column.id}
                         draggableId={column.id}
                         index={index}
-                        isDragDisabled={column.isSpecial}
+                        isDragDisabled={column.isSpecial || !apiIssueColumns?.length}
                       >
                         {(columnProvided, columnSnapshot) => (
                           <div
