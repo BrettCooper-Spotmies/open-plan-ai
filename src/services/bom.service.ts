@@ -97,6 +97,15 @@ export const bomService = {
     return apiClient.get<ApiApprovalRequestResponse[]>(ENDPOINTS.BOM.APPROVAL_REQUESTS(nodeId));
   },
 
+  async listProjectApprovalRequests(
+    projectId: string,
+    status?: 'pending' | 'approved' | 'rejected',
+  ): Promise<ApiApprovalRequestResponse[]> {
+    return apiClient.get<ApiApprovalRequestResponse[]>(
+      ENDPOINTS.BOM.PROJECT_APPROVAL_REQUESTS(projectId) + (status ? `?status=${status}` : ''),
+    );
+  },
+
   async decideApprovalRequest(
     requestId: string,
     dto: { decision: 'approved' | 'rejected'; reason?: string; comment?: string },

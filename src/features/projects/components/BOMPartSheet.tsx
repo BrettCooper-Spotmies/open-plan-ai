@@ -414,6 +414,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   const { data: project } = useProjectDetail(projectId);
   const projectRole = (project?.myRole || '').toLowerCase();
   const canEditStatus = projectRole === 'admin' || projectRole === 'manager';
+  const isAdmin = projectRole === 'admin';
 
   const decideApprovalRequest = useDecideApprovalRequest(projectId);
   const activeRequest = useActiveBomApprovalRequest(isEdit ? node?.id : undefined);
@@ -757,7 +758,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                           <p className="text-[11px] text-muted-foreground mt-1.5">Only project managers or admins can change part status.</p>
                         )}
                       </>
-                    ) : node?.status === 'pending' && activeRequest && (isAssignedApprover || canEditStatus) ? (
+                    ) : node?.status === 'pending' && activeRequest && (isAssignedApprover || isAdmin) ? (
                       <div className="flex gap-2">
                         <button type="button" disabled={decideApprovalRequest.isPending}
                           onClick={handleApproveClick}

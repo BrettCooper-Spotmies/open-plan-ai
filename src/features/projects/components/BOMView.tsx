@@ -6,13 +6,15 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useBomTree, useCreateBomNode, useDecideApprovalRequest, useAddRequirement } from '@/hooks/useBom';
+import { useBomTree, useCreateBomNode, useDecideApprovalRequest, useAddRequirement, useProjectApprovalRequests } from '@/hooks/useBom';
 import { useCreatePart } from '@/hooks/useParts';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { useAuth } from '@/contexts/AuthContext';
 import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
 import { bomService } from '@/services/bom.service';
 import { downloadBomCsv } from '@/features/reports/utils/exportUtils';
 import { createBomWorkbook, downloadExcelFile } from '@/utils/excelExport';
+import type { BOMApprovalRequest } from './bomData';
 
 async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
   const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? []), ...(payload.docCustom ?? [])].filter(Boolean) as DocValue[];
@@ -468,7 +470,7 @@ const HEADERS = [
 
 function ListView({
   rows, expanded, toggle, filtersActive, onOpen, onAddSub, totalCount, formatCurrency,
-  canApprove, onApprove, onReject, approvingId,
+  canDecideRow, onApprove, onReject, approvingId,
 }: {
   rows: BOMNode[];
   expanded: Record<string, boolean>;
@@ -478,7 +480,7 @@ function ListView({
   onAddSub: (node: BOMNode) => void;
   totalCount: number;
   formatCurrency: (n: number) => string;
-  canApprove: boolean;
+  canDecideRow: (nodeId: string) => boolean;
   onApprove: (node: BOMNode) => void;
   onReject: (node: BOMNode) => void;
   approvingId: string | null;
@@ -587,7 +589,7 @@ function ListView({
               </div>
               {/* Actions */}
               <div style={{ flexBasis: 110, flexShrink: 0 }} className={cn('flex items-center justify-end gap-1 transition-opacity', isHovered ? 'opacity-100' : 'opacity-0')}>
-                {canApprove && row.status === 'pending' && (
+                {row.status === 'pending' && canDecideRow(row.id) && (
                   <>
                     <button
                       onClick={e => { e.stopPropagation(); onApprove(row); }}
@@ -833,21 +835,39 @@ export function BOMView({
   // ── Live API data ─────────────────────────────────────────────────
   const { data: bomTree, isLoading: treeLoading } = useBomTree(projectId);
   const { data: project } = useProjectDetail(projectId);
+  const { user } = useAuth();
   const createPart = useCreatePart(orgId);
   const createNode = useCreateBomNode(projectId);
   const decideApprovalRequest = useDecideApprovalRequest(projectId);
   const addRequirement = useAddRequirement(projectId);
+  const { data: pendingApprovalRequests = [] } = useProjectApprovalRequests(projectId, 'pending');
 
   const projectRole = (project?.myRole || '').toLowerCase();
-  const canApprove = projectRole === 'admin' || projectRole === 'manager';
+  const isAdmin = projectRole === 'admin';
 
-  // Quick row actions only act when the node has an active review request —
-  // managers/admins are allowed to decide any request per the backend's override rule.
+  // Map every node covered by an active request to that request, so row-level
+  // actions and the "Needs Your Review" card can be gated without N+1 calls.
+  const pendingRequestByNodeId = useMemo(() => {
+    const map = new Map<string, BOMApprovalRequest>();
+    for (const req of pendingApprovalRequests) {
+      for (const nodeId of req.nodeIds) map.set(nodeId, req);
+    }
+    return map;
+  }, [pendingApprovalRequests]);
+
+  // Only an admin or an assigned approver may approve/reject — plain managers
+  // no longer get a blanket override.
+  const canDecideRow = useCallback((nodeId: string): boolean => {
+    if (isAdmin) return true;
+    if (!user) return false;
+    const req = pendingRequestByNodeId.get(nodeId);
+    return !!req && req.approvers.some(a => a.id === user.id);
+  }, [isAdmin, user, pendingRequestByNodeId]);
+
   const handleApprove = async (node: BOMNode) => {
+    const active = pendingRequestByNodeId.get(node.id);
+    if (!active) { toast.error('This part has not been sent for review yet.'); return; }
     try {
-      const requests = await bomService.listApprovalRequests(node.id);
-      const active = requests.find(r => r.status === 'pending');
-      if (!active) { toast.error('This part has not been sent for review yet.'); return; }
       await decideApprovalRequest.mutateAsync({ requestId: active.id, nodeId: node.id, decision: 'approved' });
       toast.success(`${node.pn} approved`);
     } catch (err) {
@@ -859,10 +879,9 @@ export function BOMView({
 
   const handleRejectConfirm = async (reason: string, comment?: string) => {
     if (!rejectTarget) return;
+    const active = pendingRequestByNodeId.get(rejectTarget.id);
+    if (!active) { toast.error('This part has not been sent for review yet.'); return; }
     try {
-      const requests = await bomService.listApprovalRequests(rejectTarget.id);
-      const active = requests.find(r => r.status === 'pending');
-      if (!active) { toast.error('This part has not been sent for review yet.'); return; }
       await decideApprovalRequest.mutateAsync({ requestId: active.id, nodeId: rejectTarget.id, decision: 'rejected', reason, comment });
       toast.success(`${rejectTarget.pn} rejected`);
     } catch (err) {
@@ -1211,7 +1230,7 @@ export function BOMView({
           onAddSub={setAddSubNode}
           totalCount={totalCount}
           formatCurrency={formatCurrency}
-          canApprove={canApprove}
+          canDecideRow={canDecideRow}
           onApprove={handleApprove}
           onReject={setRejectTarget}
           approvingId={decideApprovalRequest.isPending ? decideApprovalRequest.variables?.nodeId ?? null : null}

@@ -122,6 +122,7 @@ export function useCreateApprovalRequest(projectId: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.tree(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.summary(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.approvalRequests(nodeId) });
+      queryClient.invalidateQueries({ queryKey: ['bom', 'project-approval-requests', projectId] });
       queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
     },
   });
@@ -142,6 +143,7 @@ export function useDecideApprovalRequest(projectId: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.summary(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.approvals(nodeId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.approvalRequests(nodeId) });
+      queryClient.invalidateQueries({ queryKey: ['bom', 'project-approval-requests', projectId] });
       queryClient.invalidateQueries({ queryKey: queryKeys.parts.all });
     },
   });
@@ -158,6 +160,18 @@ export function useBomApprovalRequests(nodeId: string | undefined) {
 export function useActiveBomApprovalRequest(nodeId: string | undefined) {
   const { data: requests } = useBomApprovalRequests(nodeId);
   return requests?.find((r) => r.status === 'pending') ?? null;
+}
+
+export function useProjectApprovalRequests(
+  projectId: string | undefined,
+  status?: 'pending' | 'approved' | 'rejected',
+) {
+  return useQuery({
+    queryKey: queryKeys.bom.projectApprovalRequests(projectId ?? '', status),
+    queryFn:  async () => (await bomService.listProjectApprovalRequests(projectId!, status)).map(fromApiApprovalRequest),
+    enabled:  !!projectId,
+    staleTime: 15 * 1000,
+  });
 }
 
 export function useMapImportColumns() {

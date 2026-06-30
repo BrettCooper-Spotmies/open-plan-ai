@@ -22,8 +22,8 @@ import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision } fro
 import { useCreateBomNode, useUpdateBomNode, useAddRequirement, useRemoveRequirement, useCreateApprovalRequest, useDecideApprovalRequest, useBomNodeApprovals, useBomApprovalRequests, useActiveBomApprovalRequest } from '@/hooks/useBom';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useAuth } from '@/contexts/AuthContext';
-import { BOMRejectDialog } from './BOMRejectDialog';
 import { BOMSendForReviewModal } from './BOMSendForReviewModal';
+import { BOMApprovalReviewCard } from './BOMApprovalReviewCard';
 import { uploadBomDocumentFile, addBomDocumentLink, useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
 import { useCurrency } from '@/hooks/useCurrency';
 import { resolveFileUrl } from '@/utils/fileUrl';
@@ -440,13 +440,13 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const [showAddSub, setShowAddSub] = useState(false);
   const [showCreateNewSub, setShowCreateNewSub] = useState(false);
   const [showImportExcel, setShowImportExcel] = useState(false);
-  const [showReject, setShowReject] = useState(false);
   const [showSendForReview, setShowSendForReview] = useState(false);
 
   // ── Approval workflow ──
   const { data: project } = useProjectDetail(projectId);
   const projectRole = (project?.myRole || '').toLowerCase();
   const canApprove = projectRole === 'admin' || projectRole === 'manager';
+  const isAdmin = projectRole === 'admin';
   const createApprovalRequest = useCreateApprovalRequest(projectId);
   const decideApprovalRequest = useDecideApprovalRequest(projectId);
   const { data: approvals = [], isLoading: approvalsLoading } = useBomNodeApprovals(originalNode.id);
@@ -456,6 +456,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const canSendForReview = (canApprove || isCreatorOrOwner) && !activeRequest
     && (originalNode.status === 'draft' || originalNode.status === 'pending');
   const isAssignedApprover = !!user && !!activeRequest && activeRequest.approvers.some(a => a.id === user.id);
+  const canDecide = isAssignedApprover || isAdmin;
   const lastRequest = approvalRequests[0];
   const showRejectionBanner = !activeRequest && lastRequest?.status === 'rejected';
 
@@ -587,10 +588,10 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     }
   };
 
-  const handleApprove = async () => {
+  const handleApprove = async (comment?: string) => {
     if (!activeRequest) return;
     try {
-      await decideApprovalRequest.mutateAsync({ requestId: activeRequest.id, nodeId: originalNode.id, decision: 'approved' });
+      await decideApprovalRequest.mutateAsync({ requestId: activeRequest.id, nodeId: originalNode.id, decision: 'approved', comment });
       toast.success(`${originalNode.pn} approved`);
     } catch (err) {
       toast.error('Failed to approve part', {
@@ -612,7 +613,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     }
   };
 
-  const showApprovalActions = isAssignedApprover && isLatest && !!activeRequest;
+  const showApprovalActions = canDecide && isLatest && !!activeRequest;
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
@@ -676,30 +677,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                 <Send className="w-3.5 h-3.5 text-muted-foreground" /> Send for Review
               </button>
             )}
-            {showApprovalActions && (
-              <>
-                <button
-                  onClick={handleApprove}
-                  disabled={decideApprovalRequest.isPending}
-                  title="Approve this part"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {decideApprovalRequest.isPending
-                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    : <Check className="w-3.5 h-3.5" style={{ color: '#16A34A' }} />}
-                  Approve
-                </button>
-                <button
-                  onClick={() => setShowReject(true)}
-                  disabled={decideApprovalRequest.isPending}
-                  title="Reject this part"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <XCircle className="w-3.5 h-3.5" style={{ color: '#DC2626' }} /> Reject
-                </button>
-              </>
-            )}
-            {activeRequest && !isAssignedApprover && (
+            {activeRequest && !canDecide && (
               <span
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap"
                 style={{ background: 'rgba(245,158,11,0.1)', color: '#D97706', border: '1px solid rgba(245,158,11,0.2)' }}
@@ -741,6 +719,16 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               {' '}Update the part and click &quot;Send for Review&quot; to resubmit.
             </div>
           </div>
+        )}
+
+        {showApprovalActions && activeRequest && (
+          <BOMApprovalReviewCard
+            request={activeRequest}
+            partLabel={node.pn}
+            onApprove={handleApprove}
+            onReject={handleRejectConfirm}
+            isPending={decideApprovalRequest.isPending}
+          />
         )}
 
         {/* Info row */}
@@ -1167,14 +1155,6 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         onClose={() => setEcoOpen(false)}
         node={node}
         projectId={projectId}
-      />
-
-      {/* Reject confirmation (mandatory reason) */}
-      <BOMRejectDialog
-        open={showReject}
-        partLabel={originalNode.pn}
-        onClose={() => setShowReject(false)}
-        onConfirm={handleRejectConfirm}
       />
 
       {/* Send for review */}
