@@ -16,6 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { playCompleteSound } from '@/lib/playSound';
 import { Plus, Check, GripVertical, X, Link2, Calendar as CalendarIcon, Maximize2 } from 'lucide-react';
 import {
   Command,
@@ -441,6 +442,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
 
     const prevTasks = [...tasks];
     const updatedTask = { ...task, status: 'done' as TaskStatus };
+    playCompleteSound();
     if (onTaskUpdate) {
       onTaskUpdate(updatedTask, () => setTasks(prevTasks));
     } else {

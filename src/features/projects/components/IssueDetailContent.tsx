@@ -563,7 +563,7 @@ export function IssueDetailContent({
                         <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                                 <AlertCircle className="h-3 w-3" />
-                                Status <span className="text-destructive" aria-hidden="true">*</span>
+                                Bucket <span className="text-destructive" aria-hidden="true">*</span>
                             </Label>
                             <Select
                                 value={editedIssue.status}

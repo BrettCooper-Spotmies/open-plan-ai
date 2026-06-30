@@ -10,9 +10,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { playCompleteSound } from '@/lib/playSound';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import {
   AlertTriangle,
   Info,
@@ -354,6 +356,10 @@ export function IssuesView({
       updatedAt: new Date().toISOString(),
     };
 
+    if (status === 'resolved') {
+      playCompleteSound();
+    }
+
     setLocalIssues(prev => prev.map(i => (i.id === issue.id ? updatedIssue : i)));
     onIssueUpdate?.(updatedIssue);
   };
@@ -631,7 +637,7 @@ export function IssuesView({
                                                     );
                                                   })()}
 
-                                                  <div className="flex items-center justify-between gap-2">
+                                                  {/* <div className="flex items-center justify-between gap-2">
                                                     <Badge className={cn('gap-1', ISSUE_SEVERITY_DISPLAY[issue.severity].color)}>
                                                       <SeverityIcon className="h-3 w-3" />
                                                       {ISSUE_SEVERITY_DISPLAY[issue.severity].label}
@@ -646,12 +652,13 @@ export function IssuesView({
                                                         {getStatusBadge(issue.status).label}
                                                       </Badge>
                                                     )}
-                                                  </div>
+                                                  </div> */}
 
                                                   <div className="flex items-center justify-between pt-1">
                                                     <div className="flex -space-x-2">
                                                       {(issue.assignees || []).slice(0, 3).map((assignee) => (
                                                         <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
+                                                          <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
                                                           <AvatarFallback className="text-[9px] bg-muted">{assignee.initials}</AvatarFallback>
                                                         </Avatar>
                                                       ))}
@@ -835,6 +842,7 @@ export function IssuesView({
                           <div className="flex -space-x-2 overflow-hidden">
                             {issue.assignees.map((assignee) => (
                               <Avatar key={assignee.id} className="inline-block h-6 w-6 ring-2 ring-background">
+                                <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
                                 <AvatarFallback className="text-[10px]">
                                   {assignee.initials}
                                 </AvatarFallback>
