@@ -165,7 +165,7 @@ function SkeletonActivityTimeline() {
 
 const LC_NODES = [
   { key: 'DRAFT', label: 'Draft', icon: Edit },
-  { key: 'IN_REVIEW', label: 'In Review', icon: ClipboardCheck },
+  { key: 'IN_REVIEW', label: 'Send for review', icon: ClipboardCheck },
   { key: 'APPROVED', label: 'Approved', icon: CheckCircle },
   { key: 'RELEASED', label: 'Released', icon: GitBranch, sub: 'ECN' },
   { key: 'VERIFIED', label: 'Verified', icon: Shield },
@@ -193,6 +193,7 @@ function LifecycleTracker({ status }: { status: ECOStatus }) {
           const done = i < cur;
           const here = i === cur;
           const isOff = !!offTrack && offTrack.at === i && here;
+          const reached = done || (here && !isOff);
           const NodeIcon = isOff ? RefreshCw : n.icon;
           return (
             <Fragment key={n.key}>
@@ -204,12 +205,12 @@ function LifecycleTracker({ status }: { status: ECOStatus }) {
                     here ? 'w-11 h-11' : 'w-9 h-9',
                   )}
                   style={{
-                    background: done ? '#16A34A' : here ? 'hsl(var(--primary))' : 'transparent',
-                    border: done || here ? 'none' : '1.5px solid hsl(var(--border))',
-                    boxShadow: here ? '0 0 0 4px hsl(var(--primary)/0.15)' : undefined,
+                    background: reached ? '#16A34A' : here ? 'hsl(var(--primary))' : 'transparent',
+                    border: reached || here ? 'none' : '1.5px solid hsl(var(--border))',
+                    boxShadow: here ? (isOff ? '0 0 0 4px hsl(var(--primary)/0.15)' : '0 0 0 4px rgba(22,163,74,0.15)') : undefined,
                   }}
                 >
-                  {done
+                  {reached
                     ? <Check className="w-4 h-4 text-white" strokeWidth={3} />
                     : <NodeIcon
                       className={here ? 'w-5 h-5' : 'w-4 h-4'}
@@ -221,7 +222,7 @@ function LifecycleTracker({ status }: { status: ECOStatus }) {
                   className="text-[11px] text-center leading-tight w-full"
                   style={{
                     fontWeight: here ? 600 : 400,
-                    color: here ? 'hsl(var(--primary))' : done ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))',
+                    color: reached ? (here ? '#16A34A' : 'hsl(var(--foreground))') : here ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
                   }}
                 >
                   {isOff ? offTrack!.label : n.label}

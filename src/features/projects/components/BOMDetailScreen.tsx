@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft, GitMerge, SquarePen, ChevronRight, Factory, Hash,
@@ -36,8 +37,9 @@ function getInitials(name: string | undefined | null): string {
 
 async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
   const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? []), ...(payload.docCustom ?? [])].filter(Boolean) as DocValue[];
+  const newDocs = docs.filter(d => d.kind !== 'existing');
   await Promise.allSettled(
-    docs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName)),
+    newDocs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName)),
   );
 }
 
@@ -419,6 +421,7 @@ function RevisionToggle({
 export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectId, onBack, onNavigate }: Props) {
   const { user } = useAuth();
   const { formatCurrency } = useCurrency();
+  const queryClient = useQueryClient();
 
   // ── Uploaded documents — pull the product photo (first image attachment) ──
   const { data: nodeDocs } = useBomDocuments(originalNode.id);
@@ -486,6 +489,11 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     status: originalNode.status,
     price: activeRev.price,
     leadTime: activeRev.leadTime,
+    // Use the active revision's supplier list when available so the edit form
+    // reflects the correct per-revision sourcing data; fall back to the part-level data.
+    suppliers: (activeRev as BOMRevision).suppliers?.length
+      ? (activeRev as BOMRevision).suppliers
+      : originalNode.suppliers,
     customFields: activeRev.customFields?.length ? activeRev.customFields : originalNode.customFields,
   };
 
@@ -542,7 +550,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       const priceChanged = payload.price !== activeRev.price;
       const leadTimeChanged = payload.leadTime !== activeRev.leadTime;
       await Promise.all([
-        updateNode.mutateAsync({ nodeId: originalNode.id, dto: { quantity: payload.qty, unit: payload.uom, status: payload.status } }),
+        updateNode.mutateAsync({ nodeId: originalNode.id, dto: { quantity: payload.qty, unit: payload.uom } }),
         updatePart.mutateAsync({ partId: originalNode._partId, dto: { name: payload.name, description: payload.desc, manufacturer: payload.manufacturer || undefined, distributor: payload.distributor || undefined, mpn: payload.mpn || undefined, customFields: payload.customFields } }),
         ...(priceChanged || leadTimeChanged ? [createRev.mutateAsync({
           partId: originalNode._partId,
@@ -559,6 +567,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     }
     // Upload any documents attached in the edit form
     await saveBomDocs(originalNode.id, payload);
+    queryClient.invalidateQueries({ queryKey: ['bom-documents', originalNode.id] });
 
     // Sync requirement traceability links
     const toAdd = payload.req.filter(r => !originalNode.req.includes(r));

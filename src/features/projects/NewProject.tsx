@@ -53,7 +53,7 @@ import {
   Loader2,
   Smile
 } from "lucide-react";
-import { format, isBefore, startOfMonth, startOfToday } from "date-fns";
+import { format, isBefore, startOfMonth } from "date-fns";
 import { cn, isValidPhoneNumber } from "@/lib/utils";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -927,7 +927,7 @@ const NewProject = () => {
                         setExpectedEndDate(date);
                         setIsExpectedEndDateOpen(false);
                       }}
-                      disabled={(date) => isBefore(date, startOfToday()) || (startDate ? isBefore(date, startDate) : false)}
+                      disabled={(date) => (startDate ? isBefore(date, startDate) : false)}
                       initialFocus
                     />
                   </PopoverContent>

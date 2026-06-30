@@ -343,6 +343,7 @@ export function BOMECOSheet({
                       value={revFrom}
                       onChange={e => setRevFrom(e.target.value)}
                       placeholder="e.g. A"
+                      maxLength={3}
                     />
                   </FL>
                   <FL label="Rev To" required>
@@ -351,6 +352,7 @@ export function BOMECOSheet({
                       onChange={e => { setRevTo(e.target.value); if (errors.revTo) setErrors(({ revTo: _r, ...rest }) => rest); }}
                       placeholder="e.g. B"
                       className={cn(errors.revTo && 'border-destructive')}
+                      maxLength={3}
                     />
                     {errors.revTo && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.revTo}</p>}
                   </FL>
