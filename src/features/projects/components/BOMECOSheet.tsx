@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import {
-  ECOType, ECOReason, ECOPriority, ImpactLevel,
+  ECOType, ECOReason, ECOPriority, ImpactLevel, ChangeLabel,
   ECO_TYPE_LABEL, REASON_LABEL, PRIORITY_LABEL, IMPACT_LABEL,
   PipelineStep, PIPELINE_STAGE_DEFS,
 } from './ecoData';
@@ -160,6 +160,30 @@ export function BOMECOSheet({
     PIPELINE_STAGE_DEFS.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
   );
 
+  // Compute which BOM fields changed from the original node values
+  const changedFields = useMemo(() => {
+    const rows: { param: string; from: string; to: string; label: ChangeLabel }[] = [];
+    const check = (param: string, orig: string, cur: string) => {
+      if (orig !== cur && cur.trim() !== '') {
+        const fromN = parseFloat(orig), toN = parseFloat(cur);
+        const label: ChangeLabel =
+          !isNaN(fromN) && !isNaN(toN)
+            ? toN > fromN ? 'INCREASED' : 'DECREASED'
+            : 'MODIFIED';
+        rows.push({ param, from: orig || '—', to: cur, label });
+      }
+    };
+    check('Description',            node.desc ?? '',                                    desc);
+    check('Manufacturer',           node.manufacturer ?? '',                            manufacturer);
+    check('Manufacturer PN (MPN)', node.mpn ?? '',                                     mpn);
+    check('Supplier / Distributor', node.distributor ?? '',                             distributor);
+    check('Unit Price',             node.price != null ? String(node.price) : '',       price);
+    check('Lead Time (days)',       node.leadTime != null ? String(node.leadTime) : '', leadTime);
+    check('Quantity',               node.qty != null ? String(node.qty) : '',           qty);
+    check('Unit of Measure',        node.uom ?? 'EA',                                  uom);
+    return rows;
+  }, [node, desc, manufacturer, mpn, distributor, price, leadTime, qty, uom]);
+
   const assignApprover = (idx: number, memberId: string) => {
     const member = projectMembers.find(m => m.id === memberId);
     setPipeline(pl => pl.map((x, i) => (
@@ -180,8 +204,10 @@ export function BOMECOSheet({
 
   const validateTab = (tab: TabId): boolean => {
     const e: Record<string, string> = {};
-    if (tab === 'part' && !ecoTitle.trim()) {
-      e.title = 'ECO title is required';
+    if (tab === 'part') {
+      if (!ecoTitle.trim()) e.title = 'ECO title is required';
+      if (!revTo.trim()) e.revTo = 'Rev To is required';
+      if (changedFields.length === 0) e.changes = 'Change at least one BOM field to proceed';
     }
     if (tab === 'impact' && impactArea === 'other' && !impactAreaOther.trim()) {
       e.impactAreaOther = 'Specify the impact area';
@@ -219,10 +245,19 @@ export function BOMECOSheet({
         parts: node._partId ? [{
           partId: node._partId,
           bomNodeId: node.id,
+          revFrom: revFrom || null,
+          revTo: revTo || null,
           impactLevel: impactLevel.toLowerCase(),
           disposition: 'use_as_is',
           notes: null,
         }] : [],
+        diffRows: changedFields.map((r, i) => ({
+          order: i,
+          parameter: r.param,
+          fromValue: r.from,
+          toValue: r.to,
+          changeLabel: r.label.toLowerCase(),
+        })),
         pipelineSteps: pipeline.map((p, i) => ({
           order: i + 1,
           stage: p.stage,
@@ -310,12 +345,14 @@ export function BOMECOSheet({
                       placeholder="e.g. A"
                     />
                   </FL>
-                  <FL label="Rev To">
+                  <FL label="Rev To" required>
                     <FInput
                       value={revTo}
-                      onChange={e => setRevTo(e.target.value)}
+                      onChange={e => { setRevTo(e.target.value); if (errors.revTo) setErrors(({ revTo: _r, ...rest }) => rest); }}
                       placeholder="e.g. B"
+                      className={cn(errors.revTo && 'border-destructive')}
                     />
+                    {errors.revTo && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.revTo}</p>}
                   </FL>
                 </div>
                 <p className="text-[11px] text-muted-foreground -mt-3">
@@ -417,6 +454,32 @@ export function BOMECOSheet({
                       </div>
                     </FL>
                   </div>
+
+                  {/* Changed fields summary */}
+                  {changedFields.length > 0 && (
+                    <div className="pt-1 flex flex-wrap gap-1.5">
+                      {changedFields.slice(0, 4).map(r => (
+                        <span
+                          key={r.param}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium"
+                          style={{ background: 'hsl(var(--primary)/0.08)', color: 'hsl(var(--primary))', border: '1px solid hsl(var(--primary)/0.2)' }}
+                        >
+                          <span className="w-1.5 h-1.5 rounded-full inline-block" style={{ background: 'hsl(var(--primary))' }} />
+                          {r.param}
+                        </span>
+                      ))}
+                      {changedFields.length > 4 && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium text-muted-foreground border border-border">
+                          +{changedFields.length - 4} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {errors.changes && (
+                    <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />{errors.changes}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
