@@ -100,6 +100,11 @@ export default function Projects() {
   const canCreateProject = myRole === 'admin' || myRole === 'manager';
 
   useEffect(() => {
+    document.title = 'Projects | Open Plan AI';
+    return () => { document.title = 'Open Plan AI'; };
+  }, []);
+
+  useEffect(() => {
     if (isMobile && view !== 'list') {
       setView('list');
     }
@@ -190,23 +195,6 @@ export default function Projects() {
   return (
     <>
       <div className="space-y-4 md:space-y-6 animate-fade-in">
-        {!isMobile && (
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                Manage and track all your hardware projects.
-              </p>
-            </div>
-            {canCreateProject && (
-              <Button className="gap-2 shrink-0" onClick={() => navigate('/projects/new')}>
-                <Plus className="h-4 w-4" />
-                New Project
-              </Button>
-            )}
-          </div>
-        )}
-
         <div className="space-y-2.5 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-sm p-2.5 md:p-0 md:border-0 md:bg-transparent md:backdrop-blur-0">
           <div className={cn('flex items-center gap-2 md:gap-4')}>
             {isMobile ? (
@@ -245,23 +233,31 @@ export default function Projects() {
                 </Button>
               ) : null
             ) : (
-              <div className="flex border border-border/70 rounded-xl md:rounded-lg bg-background/60 shrink-0">
-                <Button
-                  variant={view === 'grid' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-10 w-10 md:h-9 md:w-9 rounded-r-none"
-                  onClick={() => setView('grid')}
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={view === 'list' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-10 w-10 md:h-9 md:w-9 rounded-l-none"
-                  onClick={() => setView('list')}
-                >
-                  <List className="h-4 w-4" />
-                </Button>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex border border-border/70 rounded-xl md:rounded-lg bg-background/60">
+                  <Button
+                    variant={view === 'grid' ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className="h-10 w-10 md:h-9 md:w-9 rounded-r-none"
+                    onClick={() => setView('grid')}
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={view === 'list' ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className="h-10 w-10 md:h-9 md:w-9 rounded-l-none"
+                    onClick={() => setView('list')}
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                </div>
+                {canCreateProject && (
+                  <Button className="gap-2 shrink-0" onClick={() => navigate('/projects/new')}>
+                    <Plus className="h-4 w-4" />
+                    New Project
+                  </Button>
+                )}
               </div>
             )}
         </div>

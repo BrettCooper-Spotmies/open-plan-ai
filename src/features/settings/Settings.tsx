@@ -99,6 +99,11 @@ function normalizeTheme(value: unknown): ThemePreference {
 
 
 const Settings = () => {
+  useEffect(() => {
+    document.title = 'Settings | Open Plan AI';
+    return () => { document.title = 'Open Plan AI'; };
+  }, []);
+
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, refreshProfile, updatePassword, deleteAccount, signOut } = useAuth();
