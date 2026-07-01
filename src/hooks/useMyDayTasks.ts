@@ -95,7 +95,7 @@ export function useMyDayTasks() {
           projectName,
           isOverdue: dueDateStatus === 'overdue',
           isDueToday: dueDateStatus === 'today',
-          isBlocked: issue.status === 'in-progress',
+          isBlocked: false,
           originalIssue: issue,
         } as MyDayItem;
       });
