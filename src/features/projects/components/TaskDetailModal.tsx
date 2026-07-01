@@ -200,7 +200,6 @@ export const TaskDetailModal = ({
   const { user: profile } = useAuth();
   const { currentOrganization } = useOrganization();
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
-  const { createNotification } = useNotifications();
   const availableAssignees = assignableMembers ?? organizationMembers;
   const currentOrganizationMembership = organizationMembers.find((m) => m.id === profile?.id);
   const currentOrganizationRole = (currentOrganizationMembership?.role || '').toLowerCase();
@@ -805,21 +804,6 @@ export const TaskDetailModal = ({
           comments: [...(prev.comments || []), newCommentObj]
         }));
 
-        // Send notifications to all other assignees
-        const otherAssignees = (editedTask.assignees || []).filter(a => a.id !== profile.id);
-
-        for (const assignee of otherAssignees) {
-          createNotification.mutate({
-            user_id: assignee.id,
-            actor_id: profile.id,
-            type: 'comment',
-            title: 'New Comment',
-            description: `${profile.name || 'Someone'} commented on "${editedTask.title}"`,
-            project_id: projectId,
-            entity_id: editedTask.id,
-            entity_type: 'task',
-          });
-        }
       } catch (error) {
         logger.error('Failed to add comment:', error);
         setNewComment(content); // Restore content on error

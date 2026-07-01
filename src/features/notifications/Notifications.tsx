@@ -13,10 +13,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
     Bell,
-    MessageSquare,
     CheckCircle2,
     AlertCircle,
-    Users,
     FolderKanban,
     Clock,
     MoreHorizontal,
@@ -24,7 +22,7 @@ import {
     Trash2,
     BellOff,
     CheckCheck,
-    Loader2,
+    Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
@@ -32,18 +30,17 @@ import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 
 const getNotificationIcon = (type: AppNotification['type']) => {
     switch (type) {
-        case 'mention':
-            return <Users className="h-4 w-4 text-blue-500" />;
-        case 'assignment':
+        case 'task_assigned':
             return <FolderKanban className="h-4 w-4 text-purple-500" />;
-        case 'completed':
-            return <CheckCircle2 className="h-4 w-4 text-green-500" />;
-        case 'comment':
-            return <MessageSquare className="h-4 w-4 text-orange-500" />;
-        case 'message':
-            return <MessageSquare className="h-4 w-4 text-emerald-500" />;
-        case 'deadline':
+        case 'issue_assigned':
+        case 'issue_resolved':
+        case 'issue_linked_to_task':
             return <AlertCircle className="h-4 w-4 text-red-500" />;
+        case 'bom_approval_requested':
+        case 'bom_approval_decided':
+            return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+        case 'eco_decision_requested':
+            return <Activity className="h-4 w-4 text-blue-500" />;
         default:
             return <Bell className="h-4 w-4 text-muted-foreground" />;
     }
@@ -51,18 +48,17 @@ const getNotificationIcon = (type: AppNotification['type']) => {
 
 const getNotificationTypeLabel = (type: AppNotification['type']) => {
     switch (type) {
-        case 'mention':
-            return 'Mention';
-        case 'assignment':
-            return 'Assignment';
-        case 'completed':
-            return 'Completed';
-        case 'comment':
-            return 'Comment';
-        case 'message':
-            return 'Message';
-        case 'deadline':
-            return 'Deadline';
+        case 'task_assigned':
+            return 'Task';
+        case 'issue_assigned':
+        case 'issue_resolved':
+        case 'issue_linked_to_task':
+            return 'Issue';
+        case 'bom_approval_requested':
+        case 'bom_approval_decided':
+            return 'BOM';
+        case 'eco_decision_requested':
+            return 'ECO';
         default:
             return 'Notification';
     }
@@ -75,7 +71,6 @@ const Notifications = () => {
         isLoading,
         markAsRead,
         markAllAsRead,
-        clearRead,
         deleteNotification,
         unreadCount
     } = useNotifications();
@@ -84,6 +79,7 @@ const Notifications = () => {
     const filteredNotifications = notifications.filter((n) => {
         if (activeTab === 'all') return true;
         if (activeTab === 'unread') return !n.read;
+        if (activeTab === 'issue') return n.type.startsWith('issue');
         return n.type === activeTab;
     });
 
@@ -97,10 +93,6 @@ const Notifications = () => {
 
     const handleDeleteNotification = (id: string) => {
         deleteNotification.mutate(id);
-    };
-
-    const handleClearAllRead = () => {
-        clearRead.mutate();
     };
 
     if (isLoading) {
@@ -132,7 +124,7 @@ const Notifications = () => {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={handleClearAllRead}>
+                                <DropdownMenuItem>
                                     <Trash2 className="h-4 w-4 mr-2" />
                                     Clear read notifications
                                 </DropdownMenuItem>
@@ -171,14 +163,14 @@ const Notifications = () => {
                     </Card>
                     <Card>
                         <CardContent className="p-4 flex items-center gap-3">
-                            <div className="p-2 rounded-lg bg-blue-500/10">
-                                <Users className="h-5 w-5 text-blue-500" />
+                            <div className="p-2 rounded-lg bg-red-500/10">
+                                <AlertCircle className="h-5 w-5 text-red-500" />
                             </div>
                             <div>
                                 <p className="text-2xl font-bold">
-                                    {notifications.filter((n) => n.type === 'mention').length}
+                                    {notifications.filter((n) => n.type.startsWith('issue')).length}
                                 </p>
-                                <p className="text-xs text-muted-foreground">Mentions</p>
+                                <p className="text-xs text-muted-foreground">Issues</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -189,9 +181,9 @@ const Notifications = () => {
                             </div>
                             <div>
                                 <p className="text-2xl font-bold">
-                                    {notifications.filter((n) => n.type === 'assignment').length}
+                                    {notifications.filter((n) => n.type === 'task_assigned').length}
                                 </p>
-                                <p className="text-xs text-muted-foreground">Assignments</p>
+                                <p className="text-xs text-muted-foreground">Tasks</p>
                             </div>
                         </CardContent>
                     </Card>
@@ -216,9 +208,9 @@ const Notifications = () => {
                                 </Badge>
                             )}
                         </TabsTrigger>
-                        <TabsTrigger value="mention">Mentions</TabsTrigger>
-                        <TabsTrigger value="assignment">Assignments</TabsTrigger>
-                        <TabsTrigger value="comment">Comments</TabsTrigger>
+                        <TabsTrigger value="task_assigned">Tasks</TabsTrigger>
+                        <TabsTrigger value="issue">Issues</TabsTrigger>
+                        <TabsTrigger value="eco_decision_requested">ECO</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value={activeTab} className="mt-4">
@@ -248,10 +240,8 @@ const Notifications = () => {
                                             )}
                                             onClick={() => {
                                                 handleMarkAsRead(notification.id);
-                                                if (notification.type === 'message' && notification.conversation_id) {
-                                                    navigate(`/chat/${notification.conversation_id}`);
-                                                } else if (notification.project_id) {
-                                                    navigate(`/projects/${notification.project_id}`);
+                                                if (notification.actionUrl) {
+                                                    navigate(notification.actionUrl);
                                                 }
                                             }}
                                         >
@@ -296,10 +286,6 @@ const Notifications = () => {
                                                             <Badge variant="outline" className="text-xs">
                                                                 {getNotificationTypeLabel(notification.type)}
                                                             </Badge>
-                                                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
-                                                                <FolderKanban className="h-3 w-3" />
-                                                                {notification.project}
-                                                            </span>
                                                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
                                                                 <Clock className="h-3 w-3" />
                                                                 {notification.time}

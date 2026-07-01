@@ -355,6 +355,7 @@ interface ImpactState {
 
 interface PipelineStepWizard extends PipelineStep {
   justification: string;
+  isCustom?: boolean;
 }
 
 // ── ECOWizard ─────────────────────────────────────────────────────────────────
@@ -1182,7 +1183,7 @@ export function ECOWizard({
         </div>
       )}
       {pipeline.map((p, idx) => {
-        const locked = lockStage(p.stage);
+        const locked = !p.isCustom && lockStage(p.stage);
         const removalLocked = locked || pipeline.length <= 2;
         const moved = stageMoved(p, idx);
         const needsReason = p.optional || moved;
@@ -1197,7 +1198,15 @@ export function ECOWizard({
               <ECOAvatar name={p.name || '?'} size={26} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
-                  {p.stage}
+                  {p.isCustom ? (
+                    <input
+                      value={p.stage}
+                      onChange={e => setPipeline(pl => pl.map((x, i) => i === idx ? { ...x, stage: e.target.value } : x))}
+                      placeholder="Stage name…"
+                      className={inputCls}
+                      style={{ fontSize: 13, fontWeight: 600, padding: '1px 6px', width: 160, borderColor: p.stage.trim() ? undefined : '#F59E0B88' }}
+                    />
+                  ) : p.stage}
                   {moved && (
                     <span
                       className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
@@ -1295,6 +1304,17 @@ export function ECOWizard({
           </div>
         );
       })}
+      <button
+        onClick={() => setPipeline(pl => [
+          ...pl,
+          { stage: '', name: '', role: '', approverId: null, optional: false, justification: '', isCustom: true },
+        ])}
+        className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors w-fit font-[inherit]"
+        style={{ background: 'none', border: '1px dashed hsl(var(--border))', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
+      >
+        <Plus className="w-3.5 h-3.5" />
+        Add stage
+      </button>
       {basics.priority === 'LOW' && (
         <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
           <AlertCircle className="w-3 h-3" style={{ color: '#F59E0B' }} />
