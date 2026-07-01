@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, fromApiRevision, formatLeadTime, getCategoryMeta, type BOMApprovalRequestScope } from './bomData';
-import { BOMStatusPill, ReqTag, PartThumb, PartImageThumb } from './BOMShared';
+import { BOMStatusPill, ReqTag, PartThumb, PartImageThumb, ImageViewerModal } from './BOMShared';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
@@ -444,6 +444,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const [showCreateNewSub, setShowCreateNewSub] = useState(false);
   const [showImportExcel, setShowImportExcel] = useState(false);
   const [showSendForReview, setShowSendForReview] = useState(false);
+  const [viewingImage, setViewingImage] = useState(false);
 
   // ── Approval workflow ──
   const { data: project } = useProjectDetail(projectId);
@@ -654,7 +655,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         <div className="px-6 pb-4 flex items-start justify-between gap-5">
           <div className="flex gap-4 items-start min-w-0">
             <div className="w-16 shrink-0">
-              <PartThumb cat={node.cat} size={64} radius={12} imageUrl={photoUrl} />
+              <PartThumb cat={node.cat} size={64} radius={12} imageUrl={photoUrl} onImageClick={photoUrl ? () => setViewingImage(true) : undefined} />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2.5 mb-1 flex-wrap">
@@ -779,7 +780,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             {/* Overview */}
             <Card title="Overview">
               <div className="flex gap-4">
-                <div className="w-48 shrink-0"><PartThumb cat={node.cat} big imageUrl={photoUrl} /></div>
+                <div className="w-48 shrink-0"><PartThumb cat={node.cat} big imageUrl={photoUrl} onImageClick={photoUrl ? () => setViewingImage(true) : undefined} /></div>
                 <div className="flex-1 min-w-0">
                   {node.desc && (
                     <div className="mb-3.5">
@@ -1175,6 +1176,11 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         onClose={() => setShowSendForReview(false)}
         onSubmit={handleSendForReview}
       />
+
+      {/* Image viewer */}
+      {viewingImage && photoUrl && (
+        <ImageViewerModal src={photoUrl} onClose={() => setViewingImage(false)} />
+      )}
     </div>
   );
 }

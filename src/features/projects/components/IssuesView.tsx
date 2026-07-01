@@ -47,6 +47,7 @@ interface IssuesViewProps {
   severityFilter?: IssueSeverity[];
   statusFilter?: IssueStatus[];
   assigneeFilter?: string[];
+  assignedByFilter?: string[];
   dueDateFilter?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
   reportedDateFilter?: 'today' | 'this-week' | 'this-month';
   isAddDialogOpen?: boolean;
@@ -125,6 +126,7 @@ export function IssuesView({
   severityFilter: externalSeverityFilter = [],
   statusFilter: externalStatusFilter = [],
   assigneeFilter: externalAssigneeFilter = [],
+  assignedByFilter: externalAssignedByFilter = [],
   dueDateFilter: externalDueDateFilter,
   reportedDateFilter: externalReportedDateFilter,
   isAddDialogOpen: externalIsAddDialogOpen,
@@ -169,6 +171,7 @@ export function IssuesView({
   const severityFilter = externalSeverityFilter ?? internalSeverityFilter;
   const statusFilter = externalStatusFilter ?? internalStatusFilter;
   const assigneeFilter = externalAssigneeFilter;
+  const assignedByFilter = externalAssignedByFilter;
   const dueDateFilter = externalDueDateFilter;
   const reportedDateFilter = externalReportedDateFilter;
 
@@ -205,6 +208,8 @@ export function IssuesView({
     const matchesAssignee = !assigneeFilter.length ||
       (assigneeFilter.includes('unassigned') && (!issue.assignees || issue.assignees.length === 0)) ||
       (issue.assignees?.some(a => assigneeFilter.includes(a.id)));
+    const matchesAssignedBy = !assignedByFilter.length ||
+      assignedByFilter.includes(issue.reportedBy.id);
     let matchesDueDate = true;
     if (dueDateFilter) {
       const today = new Date();
@@ -258,7 +263,7 @@ export function IssuesView({
       }
     }
 
-    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesDueDate && matchesReportedDate;
+    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesAssignedBy && matchesDueDate && matchesReportedDate;
   });
 
   // Sort by severity (critical first), then by date

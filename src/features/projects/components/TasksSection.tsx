@@ -139,6 +139,7 @@ export function TasksSection({
     if (filters.priority?.length) count++;
     if (filters.moduleIds?.length || filters.module?.length) count++;
     if (filters.assignee?.length) count++;
+    if (filters.assignedBy?.length) count++;
     if (filters.milestoneId) count++;
     if (filters.dueDate) count++;
     if (filters.tags?.length) count++;
@@ -206,6 +207,13 @@ export function TasksSection({
         }
       }
 
+      // Assigned By filter (task creator)
+      if (filters.assignedBy?.length) {
+        const createdById = task.createdBy?.id;
+        if (!createdById && !filters.assignedBy.includes('unassigned')) return false;
+        if (createdById && !filters.assignedBy.includes(createdById)) return false;
+      }
+
       // Milestone filter
       if (filters.milestoneId && task.milestoneId !== filters.milestoneId) {
         return false;
@@ -260,7 +268,7 @@ export function TasksSection({
     setFilters({});
   };
 
-  // Get unique team members from tasks
+  // Get unique team members from tasks (assignees + creators for filter options)
   const teamMembers = useMemo(() => {
     const members = new Map<string, { id: string; name: string; initials: string }>();
     tasks.forEach(task => {
@@ -271,6 +279,13 @@ export function TasksSection({
             name: assignee.name,
             initials: assignee.initials,
           });
+        });
+      }
+      if (task.createdBy) {
+        members.set(task.createdBy.id, {
+          id: task.createdBy.id,
+          name: task.createdBy.name,
+          initials: task.createdBy.initials,
         });
       }
     });

@@ -85,6 +85,7 @@ interface IssueFilter {
   status?: IssueStatus[];
   severity?: IssueSeverity[];
   assigneeId?: string[];
+  assignedById?: string[];
   dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
   reportedDate?: 'today' | 'this-week' | 'this-month';
 }
@@ -234,11 +235,11 @@ function IssueViewControls({
               />
             </div>
 
-            {/* Assignee Filter */}
+            {/* Assigned To Filter */}
             <div className="space-y-2">
               <Label className="text-xs flex items-center gap-1">
                 <User className="h-3 w-3" />
-                Assignee
+                Assigned To
               </Label>
               <MultiSelect
                 options={[
@@ -248,6 +249,20 @@ function IssueViewControls({
                 selected={filters.assigneeId || []}
                 onChange={(values) => onFiltersChange({ ...filters, assigneeId: values.length ? values : undefined })}
                 placeholder="All Assignees"
+              />
+            </div>
+
+            {/* Assigned By Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <User className="h-3 w-3" />
+                Assigned By
+              </Label>
+              <MultiSelect
+                options={teamMembers.map(member => ({ value: member.id, label: member.name }))}
+                selected={filters.assignedById || []}
+                onChange={(values) => onFiltersChange({ ...filters, assignedById: values.length ? values : undefined })}
+                placeholder="All Members"
               />
             </div>
 
@@ -507,6 +522,7 @@ export default function ProjectDetail() {
     if (issueFilters.status?.length) count++;
     if (issueFilters.severity?.length) count++;
     if (issueFilters.assigneeId?.length) count++;
+    if (issueFilters.assignedById?.length) count++;
     if (issueFilters.dueDate !== undefined) count++;
     if (issueFilters.reportedDate !== undefined) count++;
     return count;
@@ -1505,6 +1521,7 @@ export default function ProjectDetail() {
               severityFilter={issueFilters.severity}
               statusFilter={issueFilters.status}
               assigneeFilter={issueFilters.assigneeId}
+              assignedByFilter={issueFilters.assignedById}
               dueDateFilter={issueFilters.dueDate}
               reportedDateFilter={issueFilters.reportedDate}
               isAddDialogOpen={isAddIssueDialogOpen}

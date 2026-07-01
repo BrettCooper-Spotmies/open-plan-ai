@@ -156,6 +156,13 @@ export function IssueDetailContent({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+    const [pendingFileUrls, setPendingFileUrls] = useState<(string | null)[]>([]);
+
+    useEffect(() => {
+        const urls = pendingFiles.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+        setPendingFileUrls(urls);
+        return () => { urls.forEach(url => { if (url) URL.revokeObjectURL(url); }); };
+    }, [pendingFiles]);
 
     const projectId = issue?.projectId;
     const { data: apiIssueColumns } = useIssueColumns(projectId);
@@ -1046,23 +1053,46 @@ export function IssueDetailContent({
                             {/* Pending files (create mode only, uploaded once the issue is created) */}
                             {mode === 'create' && pendingFiles.length > 0 && (
                                 <div className="space-y-1">
-                                    {pendingFiles.map((f, i) => (
-                                        <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <File className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                                <span className="truncate">{f.name}</span>
-                                                <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
-                                            </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6 shrink-0"
-                                                onClick={() => handleRemovePendingFile(i)}
+                                    {pendingFiles.map((f, i) => {
+                                        const previewUrl = pendingFileUrls[i];
+                                        const isImage = f.type.startsWith('image/');
+                                        return (
+                                            <div
+                                                key={i}
+                                                className={cn(
+                                                    "flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm",
+                                                    isImage && previewUrl && "cursor-pointer hover:bg-muted"
+                                                )}
+                                                onClick={() => {
+                                                    if (isImage && previewUrl) {
+                                                        setPreviewingFile({ url: previewUrl, fileName: f.name, mimeType: f.type });
+                                                    }
+                                                }}
                                             >
-                                                <X className="h-3 w-3" />
-                                            </Button>
-                                        </div>
-                                    ))}
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    {isImage && previewUrl ? (
+                                                        <img
+                                                            src={previewUrl}
+                                                            alt={f.name}
+                                                            className="h-10 w-10 rounded object-cover shrink-0 border"
+                                                        />
+                                                    ) : (
+                                                        <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                    )}
+                                                    <span className="truncate">{f.name}</span>
+                                                    <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 shrink-0"
+                                                    onClick={(e) => { e.stopPropagation(); handleRemovePendingFile(i); }}
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
 

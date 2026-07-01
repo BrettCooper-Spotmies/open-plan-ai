@@ -91,6 +91,14 @@ export function TaskFiltersDropdown({
     onFiltersChange({ ...filters, assignee: updated.length ? updated : undefined });
   };
 
+  const toggleAssignedBy = (memberId: string) => {
+    const current = filters.assignedBy || [];
+    const updated = current.includes(memberId)
+      ? current.filter(a => a !== memberId)
+      : [...current, memberId];
+    onFiltersChange({ ...filters, assignedBy: updated.length ? updated : undefined });
+  };
+
   const toggleTag = (tag: string) => {
     const current = filters.tags || [];
     const updated = current.includes(tag)
@@ -250,10 +258,10 @@ export function TaskFiltersDropdown({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
-        {/* Assignee Filter */}
+        {/* Assigned To Filter */}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <span>Assignee</span>
+            <span>Assigned To</span>
             {filters.assignee?.length ? (
               <Badge variant="secondary" className="ml-auto h-4 px-1.5 text-[10px]">
                 {filters.assignee.length}
@@ -273,6 +281,29 @@ export function TaskFiltersDropdown({
                 key={member.id}
                 checked={filters.assignee?.includes(member.id) || false}
                 onCheckedChange={() => toggleAssignee(member.id)}
+              >
+                {member.name}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        {/* Assigned By Filter */}
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span>Assigned By</span>
+            {filters.assignedBy?.length ? (
+              <Badge variant="secondary" className="ml-auto h-4 px-1.5 text-[10px]">
+                {filters.assignedBy.length}
+              </Badge>
+            ) : null}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="max-h-[300px] overflow-y-auto">
+            {teamMembers.map(member => (
+              <DropdownMenuCheckboxItem
+                key={member.id}
+                checked={filters.assignedBy?.includes(member.id) || false}
+                onCheckedChange={() => toggleAssignedBy(member.id)}
               >
                 {member.name}
               </DropdownMenuCheckboxItem>

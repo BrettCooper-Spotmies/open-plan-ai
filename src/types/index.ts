@@ -274,6 +274,7 @@ export interface TaskFilter {
   module?: ModuleType[];
   moduleIds?: string[];
   assignee?: string[];
+  assignedBy?: string[];
   milestoneId?: string;
   dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
   tags?: string[];
