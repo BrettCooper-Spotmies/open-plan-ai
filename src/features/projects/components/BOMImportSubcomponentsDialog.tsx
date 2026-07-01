@@ -17,7 +17,7 @@ import {
 import {
   BOMNode, ApiPartResponse, ParsedImportRow,
   SUBCOMPONENT_IMPORT_COLUMNS, parseSubcomponentImportRows,
-  checkColumnMappingConfidence, applyColumnMapping,
+  checkColumnMappingConfidence, applyColumnMapping, validateLevels,
 } from './bomData';
 import { useOrgParts, useCreatePart } from '@/hooks/useParts';
 import { useCreateBomNode, useMapImportColumns, useFixImportRow } from '@/hooks/useBom';
@@ -69,15 +69,22 @@ async function buildTemplateWorkbook(): Promise<Workbook> {
   const sheet = workbook.addWorksheet('Sub-components');
   const headerRow = sheet.addRow(SUBCOMPONENT_IMPORT_COLUMNS.map(c => c.required ? `${c.label} *` : c.label));
   headerRow.font = { bold: true };
-  // Highlight required columns in light yellow
+  // Highlight required columns in light yellow; Level column gets light blue (optional)
   headerRow.eachCell((cell, colNumber) => {
     const col = SUBCOMPONENT_IMPORT_COLUMNS[colNumber - 1];
     if (col?.required) {
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF99' } };
+    } else if (col?.label === 'Level') {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F0FF' } };
     }
   });
+  // Example rows: level 0 (top-level assembly) + level 1 (sub-component)
   sheet.addRow([
-    'EV-CONN-010', 'Charging Port Connector', 'IP67 waterproof charging port connector', 'power',
+    '0', 'EV-CHG-001', 'EV Charging Assembly', 'Top-level EV charging assembly', 'power',
+    'Acme Corp', 'ACM-0001', 'Digi-Key', '0', '0', '1', 'EA',
+  ]);
+  sheet.addRow([
+    '1', 'EV-CONN-010', 'Charging Port Connector', 'IP67 waterproof charging port connector', 'power',
     'Acme Corp', 'ACM-1234', 'Digi-Key', '12.50', '4', '2', 'EA',
   ]);
   sheet.columns.forEach(col => { col.width = 22; });
@@ -86,6 +93,7 @@ async function buildTemplateWorkbook(): Promise<Workbook> {
   instructions.addRow(['Column', 'Required', 'Notes']);
   instructions.getRow(1).font = { bold: true };
   const notes: Record<string, string> = {
+    'Level': 'Optional. 0 = top-level part, 1 = sub-component of the preceding 0-level row, 2 = sub-sub-component, etc. If omitted, all rows are treated as the same level.',
     'Part Number': 'Unique per organization. A matching part number attaches the existing part instead of creating a duplicate.',
     'Part Name': 'Short descriptive name for the part',
     'Description': 'Brief technical description of the part',
@@ -278,14 +286,27 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
     }
   };
 
-  const validRows = parsedRows.filter(r => r.errors.length === 0);
+  const levelIssues = validateLevels(parsedRows);
+  const validRows = parsedRows.filter(r => r.errors.length === 0 && !levelIssues.has(r.rowNumber));
+  const isMultiLevel = parsedRows.some(r => r.level > 0);
 
   const handleImport = async () => {
     setStage('result');
     setProgress({ done: 0, total: validRows.length });
     const acc: ImportResult[] = [];
+
+    // parentIdStack[N] holds the node id of the most-recently-created node at level N-1,
+    // which becomes the parentId for the next node at level N.
+    // Index 0 is pre-seeded with the dialog's parentNode so level-0 rows attach correctly.
+    const parentIdStack: (string | undefined)[] = [parentNode?.id ?? undefined];
+
     for (const row of validRows) {
       try {
+        const level = row.level ?? 0;
+        const resolvedParentId = level === 0
+          ? (parentNode?.id ?? undefined)
+          : parentIdStack[level]; // holds the last-created (level-1) node id
+
         let partId = row.existingPart?.id;
         if (!partId) {
           const part = await createPart.mutateAsync({
@@ -303,13 +324,18 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
           });
           partId = part.id;
         }
-        await createNode.mutateAsync({
+        const node = await createNode.mutateAsync({
           partId, quantity: row.quantity, unit: row.uom,
           status: row.status,
-          ...(parentNode ? { parentId: parentNode.id } : {}),
-          // Imported rows have no per-row owner picker — default to whoever ran the import.
+          parentId: resolvedParentId ?? null,
           ownerId: user?.id,
         });
+
+        // Register this node's id as the parent for the next deeper level.
+        // Splice to clear any stale entries from a previously deeper branch.
+        parentIdStack[level + 1] = node.id;
+        parentIdStack.splice(level + 2);
+
         acc.push({ row, success: true });
       } catch (err) {
         acc.push({ row, success: false, error: err instanceof Error ? err.message : 'Import failed' });
@@ -333,8 +359,8 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">
             {parentNode
-              ? <>Bulk-add sub-components to <span className="font-mono text-foreground">{parentNode.pn}</span> from a spreadsheet.</>
-              : 'Bulk-add top-level parts to the BOM from a spreadsheet.'}
+              ? <>Bulk-add sub-components to <span className="font-mono text-foreground">{parentNode.pn}</span> from a spreadsheet. Use the <span className="font-medium text-foreground">Level</span> column to import nested hierarchies.</>
+              : 'Bulk-add parts to the BOM from a spreadsheet. Use the Level column (0, 1, 2…) to import a full multi-level hierarchy.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -411,11 +437,15 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
             <div className="flex-1 overflow-y-auto px-5 pb-3 min-h-0">
               <div className="space-y-1">
                 {parsedRows.map(row => {
-                  const isValid = row.errors.length === 0;
+                  const levelError = levelIssues.get(row.rowNumber);
+                  const isValid = row.errors.length === 0 && !levelError;
+                  const allErrors = levelError ? [...row.errors, levelError] : row.errors;
                   return (
                     <div key={row.rowNumber}
+                      style={isMultiLevel ? { paddingLeft: `${12 + row.level * 16}px` } : undefined}
                       className={cn(
-                        'flex items-start gap-2.5 px-3 py-2 rounded-lg border text-xs',
+                        'flex items-start gap-2.5 pr-3 py-2 rounded-lg border text-xs',
+                        isMultiLevel ? '' : 'px-3',
                         isValid ? 'border-border' : 'border-destructive/30 bg-destructive/5 opacity-70',
                       )}
                     >
@@ -424,6 +454,9 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
                         : <AlertCircle className="w-3.5 h-3.5 text-destructive shrink-0 mt-0.5" />}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
+                          {isMultiLevel && row.level > 0 && (
+                            <span className="text-muted-foreground/50 shrink-0">{'↳'}</span>
+                          )}
                           <span className="font-mono font-medium text-foreground">{row.partNumber || `Row ${row.rowNumber}`}</span>
                           <span className="text-muted-foreground truncate">{row.name || row.description}</span>
                           {row.existingPart && (
@@ -434,7 +467,7 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
                         </div>
                         {!isValid && (
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span className="text-destructive">{row.errors.join(' · ')}</span>
+                            <span className="text-destructive">{allErrors.join(' · ')}</span>
                             {row.errors.some(e => ['Missing Part Name', 'Missing Description', 'Missing Category'].includes(e)) && (
                               <button
                                 onClick={() => handleAiFix(row)}
@@ -483,14 +516,19 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
               <div className="space-y-1">
                 {results.map(r => (
                   <div key={r.row.rowNumber}
+                    style={isMultiLevel ? { paddingLeft: `${12 + r.row.level * 16}px` } : undefined}
                     className={cn(
-                      'flex items-center gap-2.5 px-3 py-2 rounded-lg border text-xs',
+                      'flex items-center gap-2.5 py-2 rounded-lg border text-xs',
+                      isMultiLevel ? 'pr-3' : 'px-3',
                       r.success ? 'border-border' : 'border-destructive/30 bg-destructive/5',
                     )}
                   >
                     {r.success
                       ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       : <X className="w-3.5 h-3.5 text-destructive shrink-0" />}
+                    {isMultiLevel && r.row.level > 0 && (
+                      <span className="text-muted-foreground/50 shrink-0">↳</span>
+                    )}
                     <span className="font-mono font-medium text-foreground">{r.row.partNumber}</span>
                     <span className="text-muted-foreground truncate flex-1">{r.row.name || r.row.description}</span>
                     {r.error && <span className="text-destructive shrink-0">{r.error}</span>}

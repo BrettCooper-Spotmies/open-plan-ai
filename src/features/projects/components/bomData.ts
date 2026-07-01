@@ -426,6 +426,7 @@ interface ImportColumnDef {
 }
 
 export const SUBCOMPONENT_IMPORT_COLUMNS: ImportColumnDef[] = [
+  { label: 'Level',              required: false, aliases: ['level', 'bom level', 'lvl', 'depth', 'indent', 'indentation'] },
   { label: 'Part Number',        required: true,  aliases: ['part number', 'partnumber', 'pn'] },
   { label: 'Part Name',          required: true,  aliases: ['part name', 'name'] },
   { label: 'Description',        required: true,  aliases: ['description', 'desc'] },
@@ -441,6 +442,7 @@ export const SUBCOMPONENT_IMPORT_COLUMNS: ImportColumnDef[] = [
 
 export interface ParsedImportRow {
   rowNumber: number; // 1-based spreadsheet row, header row counts as row 1
+  level: number;    // tree depth: 0 = top-level, 1+ = nested; defaults to 0 if column absent
   partNumber: string;
   name: string;
   description: string;
@@ -537,6 +539,17 @@ export function parseSubcomponentImportRows(
   return rows.map((row, i) => {
     const errors: string[] = [];
 
+    const levelRaw     = pickField(row, colAliases('Level'));
+    let level = 0;
+    if (levelRaw !== '') {
+      const n = parseInt(levelRaw, 10);
+      if (!Number.isInteger(n) || n < 0 || String(n) !== levelRaw.trim()) {
+        errors.push('Level must be a non-negative integer');
+      } else {
+        level = n;
+      }
+    }
+
     const partNumber   = pickField(row, colAliases('Part Number'));
     const name         = pickField(row, colAliases('Part Name'));
     const description  = pickField(row, colAliases('Description'));
@@ -606,10 +619,32 @@ export function parseSubcomponentImportRows(
 
     return {
       rowNumber: i + 2,
+      level,
       partNumber, name, description, category, status,
       manufacturer, mpn, supplier, unitPrice, leadTimeWeeks, quantity, uom,
       existingPart,
       errors,
     };
   });
+}
+
+/**
+ * Validates level-chain integrity across all parsed rows.
+ * Returns a map of rowNumber → error string for any row whose level skips ahead
+ * (e.g. level 2 with no preceding level-1 row). Only rows with no other errors
+ * are checked — invalid rows are excluded from the import anyway.
+ */
+export function validateLevels(rows: ParsedImportRow[]): Map<number, string> {
+  const issues = new Map<number, string>();
+  // Track the highest level seen so far (starts at -1 so level 0 is always valid)
+  let maxReachedLevel = -1;
+  for (const row of rows) {
+    if (row.errors.length > 0) continue; // skip already-invalid rows
+    if (row.level > maxReachedLevel + 1) {
+      issues.set(row.rowNumber, `Level ${row.level} skips ahead — a level ${row.level - 1} row must appear first`);
+    } else {
+      maxReachedLevel = Math.max(maxReachedLevel, row.level);
+    }
+  }
+  return issues;
 }
