@@ -339,7 +339,7 @@ export function MyDayKanbanView({
                                     </Avatar>
                                   )}
                                   {task.dueDate && (
-                                    <span className="text-[10px] text-muted-foreground">
+                                    <span className="text-[10px] text-muted-foreground ml-auto">
                                       {formatTaskDateRange(task.originalTask?.startDate, task.dueDate)}
                                     </span>
                                   )}
