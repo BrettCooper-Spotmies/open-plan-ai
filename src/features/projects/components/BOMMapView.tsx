@@ -11,8 +11,9 @@ interface Props {
   filtersActive?: boolean;
 }
 
-const NW = 216, NH = 98, HGAP = 104, VGAP = 22;
+const NW = 216, NH = 98, HGAP = 200, VGAP = 8;
 const MM_W = 168, MM_H = 110, MM_PAD = 8, MM_GRID = 240;
+const LEVEL_HEADER_H = 44;
 
 const STATUS_COLORS = {
   approved: { color: '#16A34A', soft: 'rgba(34,197,94,0.5)' },
@@ -62,10 +63,12 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
   const dim = (n: BOMNode) => filtersActive && pred && !pred(n);
 
   // tidy layout
-  const layoutVersion = useMemo(() => {
-    let leafY = 0;
+  const { layoutVersion, depthMap } = useMemo(() => {
+    const depthMap = new Map<string, number>();
+    let leafY = LEVEL_HEADER_H;
     const place = (node: BOMNode, depth: number): number => {
       node._x = depth * (NW + HGAP);
+      depthMap.set(node.id, depth);
       const kids = (node.children && !collapsed[node.id]) ? node.children : null;
       if (!kids || !kids.length) { node._y = leafY; leafY += NH + VGAP; return node._y + NH / 2; }
       const centers = kids.map(k => place(k, depth + 1));
@@ -74,7 +77,7 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
       return center;
     };
     nodes.forEach(r => place(r, 0));
-    return Date.now();
+    return { layoutVersion: Date.now(), depthMap };
   }, [collapsed, nodes]);
 
   // visible + edges
@@ -89,6 +92,12 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
     nodes.forEach(walk);
     return { visible, edges };
   }, [collapsed, nodes, layoutVersion]);
+
+  const usedDepths = useMemo(() => {
+    const depths = new Set<number>();
+    visible.forEach(n => { const d = depthMap.get(n.id); if (d !== undefined) depths.add(d); });
+    return Array.from(depths).sort((a, b) => a - b);
+  }, [visible, depthMap]);
 
   const eff = (n: BOMNode) => positions[n.id] ?? { x: n._x ?? 0, y: n._y ?? 0 };
 
@@ -199,6 +208,64 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
     >
       {/* Canvas */}
       <div style={{ position: 'absolute', top: 0, left: 0, transformOrigin: '0 0', transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
+        {/* Level column headers */}
+        {usedDepths.map(d => (
+          <div
+            key={d}
+            style={{
+              position: 'absolute',
+              left: d * (NW + HGAP),
+              top: 0,
+              width: NW,
+              height: LEVEL_HEADER_H - 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 5,
+            }}
+          >
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              background: 'var(--card)',
+              border: '1px solid var(--border)',
+              borderRadius: 20,
+              padding: '3px 12px',
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--muted-foreground)',
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+            }}>
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: d === 0 ? '#2563EB' : d === 1 ? '#16A34A' : d === 2 ? '#D97706' : d === 3 ? '#9333EA' : '#6B7280',
+                flexShrink: 0,
+              }} />
+              Level {d + 1}
+            </div>
+          </div>
+        ))}
+
+        {/* Level column background stripes */}
+        {usedDepths.map(d => (
+          <div
+            key={`stripe-${d}`}
+            style={{
+              position: 'absolute',
+              left: d * (NW + HGAP) - 12,
+              top: 0,
+              width: NW + 24,
+              height: bounds.h + LEVEL_HEADER_H + 20,
+              background: d % 2 === 0 ? 'rgba(0,0,0,0.018)' : 'transparent',
+              borderRadius: 10,
+              zIndex: 0,
+              pointerEvents: 'none',
+            }}
+          />
+        ))}
+
         {/* Edges */}
         <svg
           width={bounds.w + 40} height={bounds.h + 40}

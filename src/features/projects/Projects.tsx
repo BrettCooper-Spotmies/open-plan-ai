@@ -233,7 +233,7 @@ export default function Projects() {
                 </Button>
               ) : null
             ) : (
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 ml-auto">
                 <div className="flex border border-border/70 rounded-xl md:rounded-lg bg-background/60">
                   <Button
                     variant={view === 'grid' ? 'secondary' : 'ghost'}
