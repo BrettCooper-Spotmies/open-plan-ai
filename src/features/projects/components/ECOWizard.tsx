@@ -67,11 +67,13 @@ function ParamCombobox({
   onChange,
   onSelectOther,
   firstSelectedNode,
+  usedParams,
 }: {
   value: string;
   onChange: (label: string, autoFrom: string) => void;
   onSelectOther: () => void;
   firstSelectedNode: Record<string, unknown> | null;
+  usedParams: Set<string>;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -88,7 +90,7 @@ function ParamCombobox({
           <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="p-0 w-[260px]" align="start">
+      <PopoverContent className="p-0 w-[260px] z-[300]" align="start">
         <Command>
           <CommandInput placeholder="Search parameters…" />
           <CommandList>
@@ -98,6 +100,7 @@ function ParamCombobox({
                 <CommandItem
                   key={o.key}
                   value={o.label}
+                  disabled={usedParams.has(o.label) && value !== o.label}
                   onSelect={() => {
                     const autoFrom = o.key === 'rev'
                       ? ''
@@ -118,6 +121,7 @@ function ParamCombobox({
                 <CommandItem
                   key={p}
                   value={p}
+                  disabled={usedParams.has(p) && value !== p}
                   onSelect={() => {
                     onChange(p, '');
                     setOpen(false);
@@ -959,46 +963,17 @@ export function ECOWizard({
             ) : (() => {
               const usedParams = new Set(diffRows.filter((_, i) => i !== idx).map(x => x.param).filter(Boolean));
               return (
-                <select
-                  value={
-                    BOM_PARAM_OPTIONS.find(o => o.label === r.param)?.key
-                    ?? (ECO_RECOMMENDED_PARAMS.includes(r.param) ? r.param : '')
-                  }
-                  onChange={e => {
-                    const val = e.target.value;
-                    if (val === '__other__') {
-                      setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: true } : x));
-                      return;
-                    }
-                    const bomOpt = BOM_PARAM_OPTIONS.find(o => o.key === val);
-                    if (bomOpt) {
-                      const autoFrom = bomOpt.key === 'rev'
-                        ? (items[0]?.revFrom ?? '')
-                        : firstSelectedNode
-                          ? String((firstSelectedNode as Record<string, unknown>)[bomOpt.key] ?? '')
-                          : '';
-                      setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: bomOpt.label, from: autoFrom, paramIsCustom: false } : x));
-                    } else {
-                      setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: val, from: '', paramIsCustom: false } : x));
-                    }
+                <ParamCombobox
+                  value={r.param}
+                  usedParams={usedParams}
+                  firstSelectedNode={firstSelectedNode}
+                  onChange={(label, autoFrom) => {
+                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: label, from: autoFrom, paramIsCustom: false } : x));
                   }}
-                  className={cn(ECO_SELECT_CLS, 'flex-[1.2]')}
-                >
-                  <option value="" className="bg-card">— select parameter —</option>
-                  <optgroup label="BOM Fields">
-                    {BOM_PARAM_OPTIONS.map(o => (
-                      <option key={o.key} value={o.key} className="bg-card" disabled={usedParams.has(o.label)}>{o.label}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Recommended">
-                    {ECO_RECOMMENDED_PARAMS.map(p => (
-                      <option key={p} value={p} className="bg-card" disabled={usedParams.has(p)}>{p}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Custom">
-                    <option value="__other__" className="bg-card">Other…</option>
-                  </optgroup>
-                </select>
+                  onSelectOther={() => {
+                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: true } : x));
+                  }}
+                />
               );
             })()
           ) : (
