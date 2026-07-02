@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Plus, Minus, Maximize, RefreshCw } from 'lucide-react';
+import { Plus, Minus, Maximize, RefreshCw, Maximize2, Minimize2 } from 'lucide-react';
 import { BOMNode } from './bomData';
 import { BOMStatusPill, PartImageThumb } from './BOMShared';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -13,7 +13,7 @@ interface Props {
 
 const NW = 216, NH = 98, HGAP = 200, VGAP = 8;
 const MM_W = 168, MM_H = 110, MM_PAD = 8, MM_GRID = 240;
-const LEVEL_HEADER_H = 44;
+
 
 const STATUS_COLORS = {
   approved: { color: '#16A34A', soft: 'rgba(34,197,94,0.5)' },
@@ -47,6 +47,16 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
   const [hovered, setHovered] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [vp, setVp] = useState({ w: 0, h: 0 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const toggleFullscreen = () => setIsFullscreen(f => !f);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isFullscreen]);
 
   useEffect(() => {
     const el = containerRef.current; if (!el) return;
@@ -65,7 +75,7 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
   // tidy layout
   const { layoutVersion, depthMap } = useMemo(() => {
     const depthMap = new Map<string, number>();
-    let leafY = LEVEL_HEADER_H;
+    let leafY = 0;
     const place = (node: BOMNode, depth: number): number => {
       node._x = depth * (NW + HGAP);
       depthMap.set(node.id, depth);
@@ -144,7 +154,7 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
       const rect = el.getBoundingClientRect();
       const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
       setZoom(z => {
-        const nz = Math.min(2, Math.max(0.3, z * (e.deltaY < 0 ? 1.12 : 0.89)));
+        const nz = Math.min(2, Math.max(0.08, z * (e.deltaY < 0 ? 1.12 : 0.89)));
         setPan(p => ({ x: cx - ((cx - p.x) / z) * nz, y: cy - ((cy - p.y) / z) * nz }));
         return nz;
       });
@@ -166,7 +176,7 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
   };
 
   const zoomBy = (f: number) => setZoom(z => {
-    const nz = Math.min(2, Math.max(0.3, z * f));
+    const nz = Math.min(2, Math.max(0.08, z * f));
     const el = containerRef.current;
     if (el) { const r = el.getBoundingClientRect(); const cx = r.width / 2, cy = r.height / 2; setPan(p => ({ x: cx - ((cx - p.x) / z) * nz, y: cy - ((cy - p.y) / z) * nz })); }
     return nz;
@@ -175,7 +185,7 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
   const fit = () => {
     const el = containerRef.current; if (!el) return;
     const r = el.getBoundingClientRect();
-    const nz = Math.min(2, Math.max(0.3, Math.min((r.width - 100) / bounds.w, (r.height - 100) / bounds.h)));
+    const nz = Math.min(2, Math.max(0.08, Math.min((r.width - 100) / bounds.w, (r.height - 100) / bounds.h)));
     setZoom(nz);
     setPan({ x: (r.width - bounds.w * nz) / 2, y: (r.height - bounds.h * nz) / 2 });
   };
@@ -183,10 +193,16 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
 
   const didFit = useRef(false);
   useEffect(() => {
-    if (didFit.current || Object.keys(positions).length) { didFit.current = true; return; }
+    if (didFit.current) return;
     const t = setTimeout(() => { fit(); didFit.current = true; }, 60);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const t = setTimeout(fit, 60);
+    return () => clearTimeout(t);
+  }, [isFullscreen]);
 
   const CtrlBtn = ({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) => (
     <button onClick={onClick} title={title}
@@ -204,63 +220,41 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
         backgroundImage: `radial-gradient(var(--border) 1px, transparent 1px)`,
         backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
         backgroundPosition: `${pan.x}px ${pan.y}px`,
+        ...(isFullscreen ? { position: 'fixed', inset: 0, zIndex: 9999 } : {}),
       }}
     >
       {/* Canvas */}
       <div style={{ position: 'absolute', top: 0, left: 0, transformOrigin: '0 0', transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
-        {/* Level column headers */}
+        {/* Level column backgrounds (alternating neutral) */}
         {usedDepths.map(d => (
           <div
-            key={d}
+            key={`lane-${d}`}
             style={{
               position: 'absolute',
-              left: d * (NW + HGAP),
-              top: 0,
-              width: NW,
-              height: LEVEL_HEADER_H - 8,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              zIndex: 5,
+              left: d * (NW + HGAP) - (d === 0 ? 0 : HGAP / 2),
+              top: -20,
+              width: NW + (d === 0 ? HGAP / 2 : HGAP),
+              height: bounds.h + 60,
+              background: d % 2 === 0 ? 'rgba(0,0,0,0.025)' : 'transparent',
+              zIndex: 0,
+              pointerEvents: 'none',
             }}
-          >
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderRadius: 20,
-              padding: '3px 12px',
-              fontSize: 11,
-              fontWeight: 600,
-              color: 'var(--muted-foreground)',
-              letterSpacing: '0.04em',
-              textTransform: 'uppercase',
-            }}>
-              <span style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: d === 0 ? '#2563EB' : d === 1 ? '#16A34A' : d === 2 ? '#D97706' : d === 3 ? '#9333EA' : '#6B7280',
-                flexShrink: 0,
-              }} />
-              Level {d + 1}
-            </div>
-          </div>
+          />
         ))}
 
-        {/* Level column background stripes */}
-        {usedDepths.map(d => (
+        {/* Level vertical dividers */}
+        {usedDepths.slice(1).map(d => (
           <div
-            key={`stripe-${d}`}
+            key={`div-${d}`}
             style={{
               position: 'absolute',
-              left: d * (NW + HGAP) - 12,
-              top: 0,
-              width: NW + 24,
-              height: bounds.h + LEVEL_HEADER_H + 20,
-              background: d % 2 === 0 ? 'rgba(0,0,0,0.018)' : 'transparent',
-              borderRadius: 10,
-              zIndex: 0,
+              left: d * (NW + HGAP) - HGAP / 2 - 0.5,
+              top: -20,
+              width: 1,
+              height: bounds.h + 60,
+              background: 'var(--border)',
+              opacity: 0.6,
+              zIndex: 1,
               pointerEvents: 'none',
             }}
           />
@@ -358,6 +352,10 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
 
       {/* Controls */}
       <div className="absolute top-3.5 right-4 flex flex-col gap-1.5 z-50">
+        <CtrlBtn onClick={toggleFullscreen} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}>
+          {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+        </CtrlBtn>
+        <div className="w-full h-px bg-border my-0.5" />
         <CtrlBtn onClick={() => zoomBy(1.15)} title="Zoom in"><Plus className="w-4 h-4" /></CtrlBtn>
         <div className="text-center text-[10.5px] text-muted-foreground tabular-nums">{Math.round(zoom * 100)}%</div>
         <CtrlBtn onClick={() => zoomBy(0.87)} title="Zoom out"><Minus className="w-4 h-4" /></CtrlBtn>

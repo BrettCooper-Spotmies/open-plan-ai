@@ -6,37 +6,17 @@ import { modulesService, type ModuleInsert, type ModuleUpdate } from '@/services
 import { queryKeys } from '@/lib/queryClient';
 import { Task, Issue, Milestone } from '@/types';
 import { toast } from 'sonner';
-import { useNotifications } from '@/hooks/useNotifications';
-import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/services/monitoring/logger';
 
 // ==================== Task Mutations ====================
 
 export function useCreateTask(projectId: string) {
   const queryClient = useQueryClient();
-  const { createNotification } = useNotifications();
-  const { user } = useAuth();
 
   return useMutation({
     mutationFn: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) =>
       tasksService.create(projectId, task),
-    onSuccess: (newTask, variables) => {
-      variables.assignees?.forEach((assignee) => {
-        if (assignee.id !== user?.id) {
-          createNotification.mutate({
-            user_id: assignee.id,
-            actor_id: user?.id,
-            type: 'assignment',
-            title: 'New task assigned',
-            description: `You have been assigned to "${variables.title}"`,
-            project_id: projectId,
-            entity_id: newTask.id,
-            entity_type: 'task',
-          }, {
-            onError: (err) => logger.error('Failed to send task-assignment notification:', err),
-          });
-        }
-      });
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });
@@ -53,8 +33,6 @@ export function useCreateTask(projectId: string) {
 
 export function useUpdateTask(projectId: string) {
   const queryClient = useQueryClient();
-  const { createNotification } = useNotifications();
-  const { user } = useAuth();
 
   return useMutation({
     mutationFn: ({ taskId, updates }: { taskId: string; updates: Partial<Task> }) =>
@@ -87,57 +65,7 @@ export function useUpdateTask(projectId: string) {
       }
       toast.error('Failed to update task');
     },
-    onSuccess: (updatedTask, variables, context) => {
-      // Find newly added assignees
-      if (variables.updates.assignees) {
-        const previousTask = context?.previousTask;
-
-        const previousAssigneeIds = new Set(previousTask?.assignees?.map((a: any) => a.id) || []);
-
-        variables.updates.assignees.forEach((assignee: any) => {
-          if (assignee.id !== user?.id && !previousAssigneeIds.has(assignee.id)) {
-            createNotification.mutate({
-              user_id: assignee.id,
-              actor_id: user?.id,
-              type: 'assignment',
-              title: 'New task assigned',
-              description: `You have been assigned to "${updatedTask.title || variables.updates.title || previousTask?.title}"`,
-              project_id: projectId,
-              entity_id: variables.taskId,
-              entity_type: 'task',
-            }, {
-              onError: (err) => logger.error('Failed to send task-update notification:', err),
-            });
-          }
-        });
-      }
-
-      // Notify on completion
-      const wasDone = context?.previousTask?.status === 'done';
-      const isNowDone = updatedTask.status === 'done';
-      if (!wasDone && isNowDone) {
-        const task = updatedTask;
-
-        if (task) {
-          task.assignees?.forEach((assignee: any) => {
-            if (assignee.id && assignee.id !== user?.id) {
-              createNotification.mutate({
-                user_id: assignee.id,
-                actor_id: user?.id || undefined,
-                type: 'completed',
-                title: 'Task completed',
-                description: `Task "${task.title}" has been marked as completed`,
-                project_id: projectId || undefined,
-                entity_id: variables.taskId || undefined,
-                entity_type: 'task',
-              }, {
-                onError: (err) => logger.error('Failed to send task-completed notification:', err),
-              });
-            }
-          });
-        }
-      }
-
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.list(projectId) });

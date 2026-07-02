@@ -137,6 +137,10 @@ export const tasksService = {
       payload.dependsOnIds = payload.blockedBy;
       delete payload.blockedBy;
     }
+    if (payload.assignees !== undefined) {
+      payload.assigneeIds = (payload.assignees as any[]).map((a: any) => a.id ?? a).filter(Boolean);
+      delete payload.assignees;
+    }
     const data = await apiClient.patch<any>(ENDPOINTS.TASKS.BY_ID(taskId), payload);
     return fromApi(data);
   },
