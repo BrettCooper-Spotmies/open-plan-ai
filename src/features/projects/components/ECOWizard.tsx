@@ -449,55 +449,55 @@ export function ECOWizard({
     if (!editDetail || seeded) return;
     const d = editDetail;
     setBasics({
-      title:       d.title,
+      title: d.title,
       description: d.description ?? '',
-      type:        (d.type?.toUpperCase() ?? 'DESIGN_CHANGE') as ECOType,
-      typeOther:   d.typeOther ?? '',
-      priority:    (d.priority?.toUpperCase() ?? 'MEDIUM') as ECOPriority,
-      reason:      (d.reason?.toUpperCase() ?? 'PERFORMANCE') as ECOReason,
+      type: (d.type?.toUpperCase() ?? 'DESIGN_CHANGE') as ECOType,
+      typeOther: d.typeOther ?? '',
+      priority: (d.priority?.toUpperCase() ?? 'MEDIUM') as ECOPriority,
+      reason: (d.reason?.toUpperCase() ?? 'PERFORMANCE') as ECOReason,
       reasonOther: d.reasonOther ?? '',
       changeClass: (d.changeClass ?? 'II') as ChangeClass,
-      ecr:         d.originatingEcr ?? '',
-      effType:     (d.effectivityType?.toUpperCase() ?? 'DATE') as EffectivityType,
-      effValue:    d.effectivityValue ?? '',
-      scope:       'BOM_PART',
+      ecr: d.originatingEcr ?? '',
+      effType: (d.effectivityType?.toUpperCase() ?? 'DATE') as EffectivityType,
+      effValue: d.effectivityValue ?? '',
+      scope: 'BOM_PART',
     });
     setItems(
       d.parts.map(p => ({
-        pn:        p.partNumber,
-        desc:      p.description,
-        impact:    (p.impactLevel?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
-        disp:      (p.disposition?.toUpperCase() ?? 'REWORK') as ECODisposition,
-        revFrom:   p.revFrom ?? '',
-        revTo:     p.revTo ?? '',
-        partId:    p.partId,
-        nodeId:    p.bomNodeId ?? '',
+        pn: p.partNumber,
+        desc: p.description,
+        impact: (p.impactLevel?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
+        disp: (p.disposition?.toUpperCase() ?? 'REWORK') as ECODisposition,
+        revFrom: p.revFrom ?? '',
+        revTo: p.revTo ?? '',
+        partId: p.partId,
+        nodeId: p.bomNodeId ?? '',
         whereUsed: (p.whereUsedPaths ?? []).map(path => path.join(' › ')),
       })),
     );
     setDiffRows(
       d.diffRows.length > 0
         ? d.diffRows
-            .slice()
-            .sort((a, b) => a.order - b.order)
-            .map(r => {
-              const isKnown = ALL_KNOWN_PARAM_LABELS.has(r.parameter ?? '');
-              return {
-                param: r.parameter,
-                from:  r.fromValue ?? '',
-                to:    r.toValue   ?? '',
-                cls:   (r.changeLabel?.toUpperCase() ?? 'MODIFIED') as ChangeLabel,
-                paramIsCustom: !!r.parameter && !isKnown,
-              };
-            })
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .map(r => {
+            const isKnown = ALL_KNOWN_PARAM_LABELS.has(r.parameter ?? '');
+            return {
+              param: r.parameter,
+              from: r.fromValue ?? '',
+              to: r.toValue ?? '',
+              cls: (r.changeLabel?.toUpperCase() ?? 'MODIFIED') as ChangeLabel,
+              paramIsCustom: !!r.parameter && !isKnown,
+            };
+          })
         : [{ param: '', from: '', to: '', cls: 'MODIFIED' }],
     );
     setImpact({
-      schedule:      (d.scheduleImpact?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
-      recert:        d.requiresRecertification ?? false,
-      firmware:      d.firmwareCoupling ?? false,
+      schedule: (d.scheduleImpact?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
+      recert: d.requiresRecertification ?? false,
+      firmware: d.firmwareCoupling ?? false,
       unitCostDelta: d.unitCostDelta != null ? String(parseFloat(d.unitCostDelta.toFixed(6))) : '',
-      oneTimeCost:   d.oneTimeCost   != null ? String(parseFloat(d.oneTimeCost.toFixed(6)))   : '',
+      oneTimeCost: d.oneTimeCost != null ? String(parseFloat(d.oneTimeCost.toFixed(6))) : '',
     });
     if (d.steps?.length) {
       setPipeline(
@@ -505,14 +505,14 @@ export function ECOWizard({
           .slice()
           .sort((a, b) => a.order - b.order)
           .map(s => ({
-            stage:          s.stage,
-            stageLabel:     s.stageLabel ?? s.stage,
-            approverId:     s.approverUserId ?? null,
-            name:           s.approverName   ?? '',
-            role:           s.approverRole   ?? '',
-            optional:       s.isOptional,
+            stage: s.stage,
+            stageLabel: s.stageLabel ?? s.stage,
+            approverId: s.approverUserId ?? null,
+            name: s.approverName ?? '',
+            role: s.approverRole ?? '',
+            optional: s.isOptional,
             optionalReason: s.optionalReason ?? '',
-            justification:  s.justification  ?? '',
+            justification: s.justification ?? '',
           })),
       );
     }
@@ -1373,8 +1373,8 @@ export function ECOWizard({
         <div className="w-[680px] max-w-full flex items-center justify-center bg-card border border-border rounded-xl shadow-2xl h-48">
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <svg className="animate-spin w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
             <span className="text-sm">Loading ECO…</span>
           </div>

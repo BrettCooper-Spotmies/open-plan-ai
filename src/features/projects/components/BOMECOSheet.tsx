@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   GitMerge, X, AlertCircle, ChevronDown, ChevronRight, ChevronLeft, Check, CheckCircle, Clock, Plus,
 } from 'lucide-react';
@@ -135,6 +135,27 @@ export function BOMECOSheet({
   const [ecoTitle, setEcoTitle] = useState('');
   const [revFrom, setRevFrom] = useState(node.rev ?? 'A');
   const [revTo, setRevTo] = useState('');
+
+  // Resync editable state whenever the sheet is (re)opened for a node — the
+  // component stays mounted between opens, so without this, fields silently
+  // retain values from whichever part was last edited instead of the current one.
+  useEffect(() => {
+    if (!open) return;
+    setDesc(node.desc ?? '');
+    setStatus(node.status ?? 'pending');
+    setMpn(node.mpn ?? '');
+    setManufacturer(node.manufacturer ?? '');
+    setDistributor(node.distributor ?? '');
+    setPrice(node.price != null ? String(node.price) : '');
+    setLeadTime(node.leadTime != null ? String(node.leadTime) : '');
+    setQty(node.qty != null ? String(node.qty) : '');
+    setUom(node.uom ?? 'EA');
+    setEcoTitle('');
+    setRevFrom(node.rev ?? 'A');
+    setRevTo('');
+    setErrors({});
+    setActiveTab('part');
+  }, [open, node.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Impact tab state ──
   const [impactArea, setImpactArea] = useState<ImpactArea>('schedule');
