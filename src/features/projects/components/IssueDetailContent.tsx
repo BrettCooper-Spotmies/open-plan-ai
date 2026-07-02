@@ -86,6 +86,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ISSUE_SEVERITY_DISPLAY, ISSUE_SEVERITY_OPTIONS } from './issueSeverity';
 import { attachmentsService } from '@/services/attachments.service';
+import { commentsService } from '@/services/comments.service';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectTags, useCreateTag } from '@/hooks/useProjectTags';
 import { getFallbackTagColor } from '@/lib/tagColors';
@@ -186,7 +187,8 @@ export function IssueDetailContent({
 
     useEffect(() => {
         if (issue) {
-            setEditedIssue(issue);
+            // Preserve loaded comments — they're fetched separately via API
+            setEditedIssue(prev => ({ ...issue, comments: prev?.comments ?? issue.comments ?? [] }));
         }
     }, [issue]);
 
@@ -199,6 +201,31 @@ export function IssueDetailContent({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [issue?.id]);
+
+    // Load comments from API whenever an existing issue is opened.
+    useEffect(() => {
+        if (mode === 'create' || !issue?.id) return;
+        let cancelled = false;
+        commentsService.getByEntity(issue.id, 'issue').then(dbComments => {
+            if (cancelled) return;
+            const mappedComments: Comment[] = dbComments.map(c => ({
+                id: c.id,
+                content: c.content,
+                author: {
+                    id: c.author?.id || '',
+                    name: c.author?.name || 'Unknown',
+                    initials: c.author?.initials || '?',
+                    avatar: c.author?.avatarUrl || undefined,
+                    email: '',
+                    role: 'member',
+                },
+                createdAt: c.createdAt || new Date().toISOString(),
+            }));
+            setEditedIssue(prev => (prev && prev.id === issue.id ? { ...prev, comments: mappedComments } : prev));
+        }).catch(() => {});
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [issue?.id, mode]);
 
     // The issue payload returned by the project/issue endpoints never embeds
     // attachments (they live behind a separate uploads endpoint), so fetch them
@@ -411,16 +438,50 @@ export function IssueDetailContent({
 
     const getTaskById = (id: string) => tasks.find(t => t.id === id);
 
-    const handleAddComment = () => {
+    const handleAddComment = async () => {
         if (!newComment.trim()) return;
-        const newCommentObj: Comment = {
-            id: `comment-${Date.now()}`,
-            content: newComment,
-            author: teamMembers[0] || { id: 'unknown', name: 'Unknown User', initials: 'UN', email: '', role: 'member' },
-            createdAt: new Date().toISOString(),
-        };
-        handleFieldChange('comments', [...comments, newCommentObj]);
+        const content = newComment.trim();
         setNewComment('');
+
+        if (mode !== 'create' && issue?.id) {
+            try {
+                const dbComment = await commentsService.create({
+                    content,
+                    entity_id: issue.id,
+                    entity_type: 'issue',
+                });
+                const newCommentObj: Comment = {
+                    id: dbComment.id,
+                    content: dbComment.content,
+                    author: {
+                        id: dbComment.author?.id || profile?.id || '',
+                        name: dbComment.author?.name || profile?.name || 'You',
+                        initials: dbComment.author?.initials || profile?.initials || '?',
+                        avatar: dbComment.author?.avatarUrl || undefined,
+                        email: profile?.email || '',
+                        role: 'member',
+                    },
+                    createdAt: dbComment.createdAt || new Date().toISOString(),
+                };
+                setEditedIssue(prev => {
+                    if (!prev) return prev;
+                    return { ...prev, comments: [...(prev.comments || []), newCommentObj] };
+                });
+            } catch {
+                setNewComment(content);
+                toast.error('Failed to add comment');
+            }
+        } else {
+            const newCommentObj: Comment = {
+                id: `comment-${Date.now()}`,
+                content,
+                author: profile
+                    ? { id: profile.id, name: profile.name || profile.email, initials: profile.initials || '?', avatar: profile.avatarUrl || undefined, email: profile.email, role: profile.role || 'member' }
+                    : { id: 'unknown', name: 'Unknown User', initials: '?', email: '', role: 'member' },
+                createdAt: new Date().toISOString(),
+            };
+            handleFieldChange('comments', [...comments, newCommentObj]);
+        }
     };
 
     return (

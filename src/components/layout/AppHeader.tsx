@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
-import { Sun, Moon, ChevronLeft } from 'lucide-react';
+import { Sun, Moon, ChevronLeft, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
@@ -103,9 +103,14 @@ export function AppHeader() {
             </Badge>
           </div>
         ) : (
-          <h1 className="text-2xl font-semibold text-foreground leading-none">
-            {pageTitle}
-          </h1>
+          <div className="flex items-center gap-2">
+            {location.pathname.startsWith('/reports') && (
+              <BarChart3 className="h-5 w-5 text-primary shrink-0" />
+            )}
+            <h1 className="text-2xl font-semibold text-foreground leading-none">
+              {pageTitle}
+            </h1>
+          </div>
         )}
       </div>
 

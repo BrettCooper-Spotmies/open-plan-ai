@@ -60,6 +60,7 @@ import {
   Pencil,
   Check,
   Loader2,
+  Send,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { commentsService } from '@/services/comments.service';
@@ -392,14 +393,14 @@ export const TaskDetailModal = ({
             id: c.id,
             content: c.content,
             author: {
-              id: c.profiles?.id || c.author_id,
-              name: c.profiles?.name || 'Unknown',
-              initials: c.profiles?.initials || 'UN',
-              avatar: c.profiles?.avatar_url || undefined,
-              email: c.profiles?.email || '',
-              role: 'member'
+              id: c.author?.id || '',
+              name: c.author?.name || 'Unknown',
+              initials: c.author?.initials || '?',
+              avatar: c.author?.avatarUrl || undefined,
+              email: '',
+              role: 'member',
             },
-            createdAt: c.created_at || new Date().toISOString(),
+            createdAt: c.createdAt || new Date().toISOString(),
           }));
           setEditedTask(prev => ({ ...prev, comments: mappedComments }));
         })
@@ -810,7 +811,8 @@ export const TaskDetailModal = ({
 
       } catch (error) {
         logger.error('Failed to add comment:', error);
-        setNewComment(content); // Restore content on error
+        setNewComment(content);
+        toast.error('Failed to add comment');
       }
     } else {
       // Just update local state for new tasks
@@ -2054,30 +2056,24 @@ export const TaskDetailModal = ({
             <Separator />
 
             {/* Comments Section */}
-            <section className="space-y-3">
-              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <section className="space-y-4">
+              <h3 className="text-sm font-medium flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
                 Comments ({comments.length})
               </h3>
 
-              <div className="space-y-3">
-                {/* {comments.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No comments yet. Start the conversation!
-                  </p>
-                )} */}
-
+              <div className="space-y-3 max-h-[300px] overflow-y-auto">
                 {comments.map((comment) => {
                   const isOwnComment = profile?.id === comment.author.id;
                   const isEditingThisComment = editingCommentId === comment.id;
                   return (
-                    <div key={comment.id} className="flex gap-3 group">
+                    <div key={comment.id} className="flex gap-3 p-3 bg-muted/50 rounded-lg group">
                       <Avatar className="h-8 w-8">
                         <AvatarFallback className="text-xs">
                           {comment.author.initials}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="flex-1">
+                      <div className="flex-1 space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium">{comment.author.name}</span>
                           <span className="text-xs text-muted-foreground">
@@ -2105,7 +2101,7 @@ export const TaskDetailModal = ({
                           )}
                         </div>
                         {isEditingThisComment ? (
-                          <div className="mt-1 space-y-2">
+                          <div className="space-y-2">
                             <Textarea
                               autoFocus
                               value={editingCommentValue}
@@ -2128,29 +2124,24 @@ export const TaskDetailModal = ({
                             </div>
                           </div>
                         ) : (
-                          <p className="text-sm text-muted-foreground mt-1">{comment.content}</p>
+                          <p className="text-sm text-muted-foreground">{comment.content}</p>
                         )}
                       </div>
                     </div>
                   );
                 })}
+              </div>
 
-                <div className="flex gap-3">
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback className="text-xs">SC</AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 space-y-2">
-                    <Textarea
-                      placeholder="Add a comment..."
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      className="min-h-[80px]"
-                    />
-                    <Button size="sm" onClick={handleAddComment} disabled={!newComment.trim()}>
-                      Post Comment
-                    </Button>
-                  </div>
-                </div>
+              <div className="flex gap-2">
+                <Textarea
+                  placeholder="Add a comment..."
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  className="min-h-[80px]"
+                />
+                <Button className="h-auto" onClick={handleAddComment} disabled={!newComment.trim()}>
+                  <Send className="h-4 w-4" />
+                </Button>
               </div>
             </section>
           </div>
