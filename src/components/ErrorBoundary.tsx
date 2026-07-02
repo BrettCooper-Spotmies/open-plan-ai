@@ -61,7 +61,7 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4 bg-background">
           <Card className="max-w-md w-full">
             <CardHeader>
               <div className="flex items-center gap-2 text-destructive">
@@ -83,10 +83,6 @@ export class ErrorBoundary extends Component<Props, State> {
               <div className="flex gap-2">
                 <Button onClick={this.handleReset} variant="outline">
                   Try Again
-                </Button>
-                <Button onClick={this.handleReload} variant="outline">
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh Page
                 </Button>
                 <Button onClick={() => window.location.href = '/'}>
                   <Home className="h-4 w-4 mr-2" />

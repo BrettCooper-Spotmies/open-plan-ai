@@ -19,7 +19,7 @@ function normalizeStatus(status: string | undefined): string {
  * Normalize a raw API task response so that `moduleIds` is always populated
  * from the `modules` array the backend returns.
  */
-function fromApi(raw: any): Task {
+export function fromApi(raw: any): Task {
   const apiModules: { id: string }[] = raw.modules || [];
   const moduleIds: string[] =
     raw.moduleIds?.length > 0
