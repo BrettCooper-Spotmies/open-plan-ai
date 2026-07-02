@@ -1473,6 +1473,7 @@ export default function ProjectDetail() {
               onTaskUpdate={handleTaskUpdate}
               onBatchTaskUpdate={handleBatchTaskUpdate}
               onTaskDelete={handleTaskDelete}
+              userProjectRole={project?.myRole}
               onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
             />
           </TabsContent>
@@ -1529,6 +1530,7 @@ export default function ProjectDetail() {
               onIssueCreate={handleIssueCreate}
               onIssueUpdate={handleIssueUpdate}
               onIssueDelete={handleIssueDelete}
+              userProjectRole={project?.myRole}
             />
           </TabsContent>
           <TabsContent value="bom" className="mt-0 -mx-6 -mb-6 flex flex-col">

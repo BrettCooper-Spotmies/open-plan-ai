@@ -134,6 +134,7 @@ export default function IssuePage() {
             teamMembers={teamMembers}
             onUpdate={handleUpdate}
             onDelete={handleDelete}
+            userProjectRole={project.myRole}
             isExpanded={true}
           />
         </div>

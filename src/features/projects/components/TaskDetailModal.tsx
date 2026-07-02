@@ -105,6 +105,7 @@ interface TaskDetailModalProps {
   onUpdate: (task: Task) => Promise<void> | void;
   onBatchUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => Promise<void> | void;
   onDelete?: (taskId: string) => void;
+  userProjectRole?: string;
   mode?: 'view' | 'create';
   onCreate?: (task: Task, pendingFiles?: File[]) => void;
   modules?: { id: string; name: string; type: ModuleType }[];
@@ -192,6 +193,7 @@ export const TaskDetailModal = ({
   onUpdate,
   onBatchUpdate,
   onDelete,
+  userProjectRole,
   mode = 'view',
   onCreate,
   modules = [],
@@ -2159,8 +2161,8 @@ export const TaskDetailModal = ({
         )}
         {mode === 'view' && (
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-t flex items-center justify-between gap-2 bg-background">
-            {/* Delete button on the bottom left */}
-            {onDelete ? (
+            {/* Delete button on the bottom left — only for task creator or project admin */}
+            {onDelete && (userProjectRole === 'admin' || editedTask.createdBy?.id === profile?.id) ? (
               <Button
                 variant="ghost"
                 size="sm"

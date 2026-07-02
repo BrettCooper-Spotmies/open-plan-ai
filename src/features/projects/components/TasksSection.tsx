@@ -29,6 +29,7 @@ interface TasksSectionProps {
   onTaskUpdate?: (task: Task, onError?: () => void) => void;
   onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
+  userProjectRole?: string;
   onAddModule?: () => void;
 }
 
@@ -116,6 +117,7 @@ export function TasksSection({
   onTaskUpdate,
   onBatchTaskUpdate,
   onTaskDelete,
+  userProjectRole,
   onAddModule,
 }: TasksSectionProps) {
   const dependencyTasks = allTasks ?? tasks;
@@ -328,6 +330,7 @@ export function TasksSection({
             onTaskUpdate={onTaskUpdate}
             onBatchTaskUpdate={onBatchTaskUpdate}
             onTaskDelete={onTaskDelete}
+            userProjectRole={userProjectRole}
             modules={modules}
             onAddModule={onAddModule}
           />
@@ -343,6 +346,7 @@ export function TasksSection({
             onTaskUpdate={onTaskUpdate}
             onBatchTaskUpdate={onBatchTaskUpdate}
             onTaskDelete={onTaskDelete}
+            userProjectRole={userProjectRole}
             onAddModule={onAddModule}
           />
         )}

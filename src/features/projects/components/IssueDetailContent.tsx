@@ -99,6 +99,7 @@ interface IssueDetailContentProps {
     teamMembers?: TeamMember[];
     onUpdate: (issue: Issue) => void;
     onDelete?: (issueId: string) => void;
+    userProjectRole?: string;
     onExpand?: () => void; // Optional expanded view action
     isExpanded?: boolean;
     isDraft?: boolean;
@@ -135,6 +136,7 @@ export function IssueDetailContent({
     teamMembers = [],
     onUpdate,
     onDelete,
+    userProjectRole,
     onExpand,
     isExpanded = false,
     isDraft = false,
@@ -1358,7 +1360,7 @@ export function IssueDetailContent({
                         <div className="pt-6 border-t flex items-center justify-between">
                             {/* Left side: delete button */}
                             <div className="flex items-center gap-4">
-                                {onDelete && (
+                                {onDelete && (userProjectRole === 'admin' || editedIssue?.reportedBy?.id === profile?.id) && (
                                     <Button
                                         variant="ghost"
                                         size="sm"

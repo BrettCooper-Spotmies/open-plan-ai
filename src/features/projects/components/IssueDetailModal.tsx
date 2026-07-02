@@ -20,6 +20,7 @@ import { Trash2, Maximize2, X } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { logger } from '@/services/monitoring/logger';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface IssueDetailModalProps {
   issue: Issue | null;
@@ -29,6 +30,7 @@ interface IssueDetailModalProps {
   onClose: () => void;
   onUpdate: (issue: Issue) => void;
   onDelete?: (issueId: string) => void;
+  userProjectRole?: string;
   mode?: 'view' | 'create';
   onCreate?: (issue: Issue, pendingFiles?: File[]) => void;
 }
@@ -48,10 +50,12 @@ export function IssueDetailModal({
   onClose,
   onUpdate,
   onDelete,
+  userProjectRole,
   mode = 'view',
   onCreate,
 }: IssueDetailModalProps) {
   const navigate = useNavigate();
+  const { user: profile } = useAuth();
   const [editedIssue, setEditedIssue] = useState<Issue | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
@@ -157,8 +161,8 @@ export function IssueDetailModal({
         {mode === 'view' && (
           <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full">
             <div className="flex-1">
-              {/* Delete button on the bottom left */}
-              {onDelete && (
+              {/* Delete button — only for issue creator or project admin */}
+              {onDelete && (userProjectRole === 'admin' || editedIssue?.reportedBy?.id === profile?.id) && (
                 <Button
                   variant="ghost"
                   size="sm"

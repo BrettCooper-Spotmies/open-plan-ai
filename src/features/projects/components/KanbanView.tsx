@@ -112,6 +112,7 @@ interface KanbanViewProps {
   onTaskUpdate?: (task: Task, onError?: () => void) => void;
   onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
+  userProjectRole?: string;
   modules?: { id: string; name: string; type: ModuleType }[];
   projectId?: string;
   onAddModule?: () => void;
@@ -162,6 +163,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   onTaskUpdate,
   onBatchTaskUpdate,
   onTaskDelete,
+  userProjectRole,
   modules = [],
   projectId,
   onAddModule,
@@ -968,6 +970,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         onUpdate={handleTaskUpdate}
         onBatchUpdate={handleBatchTaskUpdateLocal}
         onDelete={onTaskDelete}
+        userProjectRole={userProjectRole}
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}

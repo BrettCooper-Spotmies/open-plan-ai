@@ -56,6 +56,7 @@ interface IssuesViewProps {
   onIssueUpdate?: (issue: Issue) => void;
   onIssueCreate?: (issue: Partial<Issue>, pendingFiles?: File[]) => void;
   onIssueDelete?: (issueId: string) => void;
+  userProjectRole?: string;
 }
 
 interface IssuesKanbanColumn {
@@ -135,6 +136,7 @@ export function IssuesView({
   onIssueUpdate,
   onIssueCreate,
   onIssueDelete,
+  userProjectRole,
 }: IssuesViewProps) {
   const { id: routeProjectId } = useParams();
   const { user } = useAuth();
@@ -868,6 +870,7 @@ export function IssuesView({
         onClose={handleModalClose}
         onUpdate={handleIssueUpdateFromModal}
         onDelete={onIssueDelete}
+        userProjectRole={userProjectRole}
         mode={modalMode}
         onCreate={handleCreateSubmit}
       />
