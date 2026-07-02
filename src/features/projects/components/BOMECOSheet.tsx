@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import {
-  GitMerge, X, AlertCircle, ChevronDown, ChevronRight, ChevronLeft, Check, CheckCircle, Clock,
+  GitMerge, X, AlertCircle, ChevronDown, ChevronRight, ChevronLeft, Check, CheckCircle, Clock, Plus,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -98,6 +98,7 @@ const IMPACT_AREA_LABEL: Record<ImpactArea, string> = {
 
 interface PipelineStepLocal extends PipelineStep {
   justification: string;
+  isCustom?: boolean;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -619,7 +620,15 @@ export function BOMECOSheet({
                         <ECOAvatar name={p.name || '?'} size={26} />
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground">
-                            {p.stage}
+                            {p.isCustom ? (
+                              <input
+                                value={p.stage}
+                                onChange={e => setPipeline(pl => pl.map((x, i) => i === idx ? { ...x, stage: e.target.value } : x))}
+                                placeholder="Stage name…"
+                                className={inputCls}
+                                style={{ fontSize: 13, fontWeight: 600, padding: '1px 6px', width: 160, borderColor: p.stage.trim() ? undefined : '#F59E0B88' }}
+                              />
+                            ) : p.stage}
                             {moved && (
                               <span
                                 className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
@@ -699,6 +708,17 @@ export function BOMECOSheet({
                     </div>
                   );
                 })}
+                <button
+                  onClick={() => setPipeline(pl => [
+                    ...pl,
+                    { stage: '', name: '', role: '', approverId: null, optional: false, justification: '', isCustom: true },
+                  ])}
+                  className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors w-fit font-[inherit]"
+                  style={{ background: 'none', border: '1px dashed hsl(var(--border))', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Add stage
+                </button>
                 {priority === 'LOW' && (
                   <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1">
                     <AlertCircle className="w-3 h-3" style={{ color: '#F59E0B' }} />
