@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { tasksService } from '@/services/tasks.service';
+import { tasksService, fromApi } from '@/services/tasks.service';
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { useProjectStore } from '@/stores/useProjectStore';
@@ -19,9 +19,10 @@ export function useAllTasks() {
 
   return useQuery({
     queryKey: [...queryKeys.tasks.all, 'org-all', orgId],
-    queryFn: (): Promise<Task[]> => {
-      if (!orgId) return Promise.resolve([]);
-      return apiClient.get<Task[]>(ENDPOINTS.ORGANIZATIONS.ALL_TASKS(orgId));
+    queryFn: async (): Promise<Task[]> => {
+      if (!orgId) return [];
+      const data = await apiClient.get<any[]>(ENDPOINTS.ORGANIZATIONS.ALL_TASKS(orgId));
+      return (data || []).map(fromApi);
     },
     enabled: !!orgId,
   });
@@ -37,9 +38,10 @@ export function useOrgAllTasks() {
 
   return useQuery({
     queryKey: [...queryKeys.tasks.all, 'org', orgId],
-    queryFn: (): Promise<Task[]> => {
-      if (!orgId) return Promise.resolve([]);
-      return apiClient.get<Task[]>(ENDPOINTS.ORGANIZATIONS.ALL_TASKS(orgId));
+    queryFn: async (): Promise<Task[]> => {
+      if (!orgId) return [];
+      const data = await apiClient.get<any[]>(ENDPOINTS.ORGANIZATIONS.ALL_TASKS(orgId));
+      return (data || []).map(fromApi);
     },
     enabled: !!orgId,
   });
