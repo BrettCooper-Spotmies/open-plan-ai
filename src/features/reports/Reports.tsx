@@ -118,16 +118,24 @@ export default function Reports() {
     [serviceTeamMembers]
   );
 
+  // Org-level task/issue endpoints return data from ALL projects regardless of
+  // membership. Restrict to projects visible in the dropdown so "All Projects"
+  // and a single-project view are consistent when the org has one member-project.
+  const visibleProjectIds = useMemo(
+    () => new Set(allProjects.map(p => p.id)),
+    [allProjects]
+  );
+
   // ─── Project-scoped data ─────────────────────────────────────────────────
   const tasks = useMemo(() => {
-    if (!filter.projectId) return allTasks;
+    if (!filter.projectId) return allTasks.filter(t => visibleProjectIds.has(t.projectId));
     return allTasks.filter(t => t.projectId === filter.projectId);
-  }, [allTasks, filter.projectId]);
+  }, [allTasks, visibleProjectIds, filter.projectId]);
 
   const issues = useMemo(() => {
-    if (!filter.projectId) return allIssues;
+    if (!filter.projectId) return allIssues.filter(i => visibleProjectIds.has(i.projectId));
     return allIssues.filter(i => i.projectId === filter.projectId);
-  }, [allIssues, filter.projectId]);
+  }, [allIssues, visibleProjectIds, filter.projectId]);
 
   const milestones = useMemo(() => {
     if (!filter.projectId) return allAdaptedMilestones;
