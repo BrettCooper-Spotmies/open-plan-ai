@@ -7,7 +7,7 @@ import { ECOListView } from './ECOListView';
 import { ECODetailView } from './ECODetailView';
 import { ECOWizard } from './ECOWizard';
 
-type WizardState = { ecoId: string | null } | null;
+type WizardState = { ecoId: string | null; isRework?: boolean } | null;
 
 export function ECOView({
   projectId,
@@ -49,7 +49,7 @@ export function ECOView({
             eco={resolvedEco}
             projectId={projectId}
             onBack={() => setOpenEco(null)}
-            onEdit={eco => setWizard({ ecoId: eco.id })}
+            onEdit={eco => setWizard({ ecoId: eco.id, isRework: eco.status === 'REWORK' })}
           />
         ) : listLoading ? (
           <div className="flex items-center justify-center h-[50vh]">
@@ -73,6 +73,7 @@ export function ECOView({
         <ECOWizard
           projectId={projectId}
           ecoId={wizard.ecoId ?? undefined}
+          isRework={wizard.isRework}
           onClose={() => setWizard(null)}
         />
       )}

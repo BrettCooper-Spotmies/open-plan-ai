@@ -8,11 +8,11 @@ import {
   ECOType, ECOReason, ECOPriority, ChangeClass, EffectivityType, ImpactLevel, ECODisposition,
   ECO_TYPE_LABEL, REASON_LABEL, PRIORITY_LABEL, CHANGE_CLASS_LABEL,
   EFFECTIVITY_LABEL, IMPACT_LABEL, DISPOSITION_LABEL, CHANGE_LABEL_MAP, ChangeLabel,
-  PipelineStep, PIPELINE_STAGE_DEFS,
+  PipelineStep, PIPELINE_STAGE_DEFS, rejectionsFromSteps,
 } from './ecoData';
 import { ECOAvatar } from './ECOShared';
 import { cn } from '@/lib/utils';
-import { useCreateECO, useUpdateECO, useECODetail } from '@/hooks/useECOs';
+import { useCreateECO, useUpdateECO, useSubmitECO, useECODetail } from '@/hooks/useECOs';
 import { useBomTree } from '@/hooks/useBom';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { useAuth } from '@/modules/auth';
@@ -363,16 +363,23 @@ interface PipelineStepWizard extends PipelineStep {
 export function ECOWizard({
   projectId,
   ecoId,
+  isRework,
   onClose,
 }: {
   projectId: string;
   ecoId?: string;
+  isRework?: boolean;
   onClose: (result?: { saved: boolean }) => void;
 }) {
   const isEdit = !!ecoId;
   const createMutation = useCreateECO(projectId);
   const updateMutation = useUpdateECO(projectId, ecoId ?? '');
+  const submitMutation = useSubmitECO(projectId, ecoId ?? '');
   const { data: editDetail, isLoading: editLoading } = useECODetail(isEdit ? projectId : undefined, ecoId);
+  const reworkRejection = useMemo(
+    () => (isRework && editDetail ? rejectionsFromSteps(editDetail.steps).at(-1) ?? null : null),
+    [isRework, editDetail],
+  );
 
   const [seeded, setSeeded] = useState(false);
   const [step, setStep] = useState(0);
@@ -562,7 +569,8 @@ export function ECOWizard({
   const pipelineValid = true;
 
   const activeMutation = isEdit ? updateMutation : createMutation;
-  const canSubmit = !activeMutation.isPending;
+  const savePending = activeMutation.isPending || (isRework && submitMutation.isPending);
+  const canSubmit = !savePending;
 
   // Auto-fill "From" in Details when scope is BOM_PART
   const firstSelectedNode = useMemo(() => {
@@ -1151,7 +1159,16 @@ export function ECOWizard({
   );
 
   const StepApproval = (
-    <div className="flex flex-col gap-2.5">
+    <div className={cn('flex flex-col gap-2.5', isRework && 'opacity-60 pointer-events-none')}>
+      {isRework && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+          style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
+        >
+          <Lock className="w-3 h-3 shrink-0" />
+          Pipeline locked during rework — resubmitting automatically reactivates the step that rejected this ECO.
+        </div>
+      )}
       <div className="text-[13px] text-muted-foreground mb-1">
         Ordered sign-off pipeline · assign a project member to each stage · reorder with arrows · mark stages optional. Any change to the default requires a justification.
       </div>
@@ -1367,9 +1384,11 @@ export function ECOWizard({
               </div>
               <div>
                 <div className="text-[15px] font-semibold text-foreground">
-                  {isEdit ? 'Edit Engineering Change Order' : 'New Engineering Change Order'}
+                  {isRework ? 'Revise & Resubmit' : isEdit ? 'Edit Engineering Change Order' : 'New Engineering Change Order'}
                 </div>
-                <div className="text-[12px] text-muted-foreground">Draft · eco_number assigned on save</div>
+                <div className="text-[12px] text-muted-foreground">
+                  {isRework ? 'Rework · resubmitting reactivates the rejected approval step' : 'Draft · eco_number assigned on save'}
+                </div>
               </div>
             </div>
             <button
@@ -1384,13 +1403,31 @@ export function ECOWizard({
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-5">
+          {isRework && reworkRejection && (
+            <div
+              className="flex items-start gap-3 p-3 rounded-lg mb-4"
+              style={{ background: 'rgba(249,115,22,0.07)', border: '1px solid rgba(249,115,22,0.22)' }}
+            >
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: '#f97316' }} />
+              <div>
+                <div className="text-[12px] font-semibold text-foreground">
+                  Rejected at {reworkRejection.stage} · {reworkRejection.when}
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                  {reworkRejection.by}: "{reworkRejection.reason}"
+                </div>
+              </div>
+            </div>
+          )}
           {stepContent}
         </div>
 
         {/* Footer */}
         <div className="px-5 py-3.5 border-t border-border flex items-center justify-between">
           <div className="text-[11px] flex items-center gap-1.5">
-            <span className="text-muted-foreground">Ready to save draft</span>
+            <span className="text-muted-foreground">
+              {isRework ? 'Ready to resubmit for review' : 'Ready to save draft'}
+            </span>
           </div>
           <div className="flex gap-2">
             {step > 0 && (
@@ -1412,7 +1449,7 @@ export function ECOWizard({
               <button
                 onClick={async () => {
                   if (!canSubmit) return;
-                  const payload = {
+                  const basePayload = {
                     title: basics.title,
                     description: basics.description || null,
                     type: basics.type.toLowerCase() as any,
@@ -1446,6 +1483,11 @@ export function ECOWizard({
                         toValue: r.to || null,
                         changeLabel: r.cls.toLowerCase() as any,
                       })),
+                  };
+                  // Pipeline steps are locked during rework — resubmit() reactivates the
+                  // rejected step server-side, so the field must be omitted, not just unchanged.
+                  const payload = isRework ? basePayload : {
+                    ...basePayload,
                     pipelineSteps: pipeline.map((p, i) => ({
                       order: i + 1,
                       stage: p.stage,
@@ -1460,24 +1502,29 @@ export function ECOWizard({
                   };
                   try {
                     await activeMutation.mutateAsync(payload);
-                    toast.success(isEdit ? 'ECO updated' : 'ECO created');
+                    if (isRework) {
+                      await submitMutation.mutateAsync();
+                      toast.success('ECO revised and resubmitted');
+                    } else {
+                      toast.success(isEdit ? 'ECO updated' : 'ECO created');
+                    }
                     onClose({ saved: true });
                   } catch (err) {
-                    toast.error(isEdit ? 'Failed to update ECO' : 'Failed to create ECO', {
+                    toast.error(isRework ? 'Failed to resubmit ECO' : isEdit ? 'Failed to update ECO' : 'Failed to create ECO', {
                       description: err instanceof Error ? err.message : undefined,
                     });
                   }
                 }}
-                disabled={!canSubmit || activeMutation.isPending}
+                disabled={!canSubmit}
                 className={cn(
                   'flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors font-[inherit]',
-                  canSubmit && !activeMutation.isPending
+                  canSubmit
                     ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
                     : 'bg-muted/50 text-muted-foreground cursor-default',
                 )}
               >
                 <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
-                {activeMutation.isPending ? 'Saving…' : isEdit ? 'Save Changes' : 'Save Draft'}
+                {savePending ? 'Saving…' : isRework ? 'Revise & Resubmit' : isEdit ? 'Save Changes' : 'Save Draft'}
               </button>
             )}
           </div>

@@ -729,7 +729,7 @@ function fromApiStep(raw: ApiEcoPipelineStep): PipelineStep {
   };
 }
 
-function rejectionsFromSteps(steps: ApiEcoPipelineStep[]): Rejection[] {
+export function rejectionsFromSteps(steps: ApiEcoPipelineStep[]): Rejection[] {
   return steps
     .filter((s) => s.decision === 'rejected')
     .sort((a, b) => (a.decidedAt ?? '').localeCompare(b.decidedAt ?? ''))
