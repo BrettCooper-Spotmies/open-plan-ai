@@ -207,7 +207,6 @@ function IssueViewControls({
                   { value: 'open', label: 'Open' },
                   { value: 'in-progress', label: 'In Progress' },
                   { value: 'resolved', label: 'Resolved' },
-                  { value: 'closed', label: 'Closed' },
                   { value: 'wont-fix', label: "Won't Fix" },
                 ]}
                 selected={filters.status || []}
@@ -1019,8 +1018,8 @@ export default function ProjectDetail() {
     );
   }
 
-  const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix').length || 0;
-  const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix').length || 0;
+  const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'wont-fix').length || 0;
+  const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'wont-fix').length || 0;
 
   return (
     <>
@@ -1473,6 +1472,7 @@ export default function ProjectDetail() {
               onTaskUpdate={handleTaskUpdate}
               onBatchTaskUpdate={handleBatchTaskUpdate}
               onTaskDelete={handleTaskDelete}
+              userProjectRole={project?.myRole}
               onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
             />
           </TabsContent>
@@ -1529,6 +1529,7 @@ export default function ProjectDetail() {
               onIssueCreate={handleIssueCreate}
               onIssueUpdate={handleIssueUpdate}
               onIssueDelete={handleIssueDelete}
+              userProjectRole={project?.myRole}
             />
           </TabsContent>
           <TabsContent value="bom" className="mt-0 -mx-6 -mb-6 flex flex-col">
@@ -1549,6 +1550,7 @@ export default function ProjectDetail() {
           <TabsContent value="eng-changes" className="mt-6 -mx-6 -mb-6 flex flex-col">
             <ECOView
               projectId={id!}
+              projectName={project?.name}
               newTrigger={ecoNewOpen}
               onNewConsumed={() => setEcoNewOpen(false)}
               openEcoId={ecoId ?? null}

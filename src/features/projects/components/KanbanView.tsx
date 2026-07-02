@@ -112,6 +112,7 @@ interface KanbanViewProps {
   onTaskUpdate?: (task: Task, onError?: () => void) => void;
   onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
+  userProjectRole?: string;
   modules?: { id: string; name: string; type: ModuleType }[];
   projectId?: string;
   onAddModule?: () => void;
@@ -162,6 +163,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   onTaskUpdate,
   onBatchTaskUpdate,
   onTaskDelete,
+  userProjectRole,
   modules = [],
   projectId,
   onAddModule,
@@ -265,7 +267,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       if (task.linkedIssueIds && task.linkedIssueIds.length > 0) {
         const hasBlockingIssue = task.linkedIssueIds.some(issueId => {
           const issue = issues.find(i => i.id === issueId);
-          return issue && issue.status !== 'resolved' && issue.status !== 'closed';
+          return issue && issue.status !== 'resolved';
         });
         if (hasBlockingIssue) {
           blocked.add(task.id);
@@ -293,7 +295,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     if (task.linkedIssueIds) {
       task.linkedIssueIds.forEach(issueId => {
         const issue = issues.find(i => i.id === issueId);
-        if (issue && issue.status !== 'resolved' && issue.status !== 'closed') {
+        if (issue && issue.status !== 'resolved') {
           blockers.push(`${issue.title} (Issue)`);
         }
       });
@@ -968,6 +970,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         onUpdate={handleTaskUpdate}
         onBatchUpdate={handleBatchTaskUpdateLocal}
         onDelete={onTaskDelete}
+        userProjectRole={userProjectRole}
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}

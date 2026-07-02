@@ -25,7 +25,6 @@ export const DEFAULT_ISSUE_COLUMNS: ProjectIssueColumn[] = [
   { id: 'open',          status: 'open',          label: 'Open',          color: '#ef4444', isSpecial: true },
   { id: 'in-progress',   status: 'in-progress',   label: 'In Progress',   color: '#f97316', isSpecial: true },
   { id: 'resolved',      status: 'resolved',      label: 'Resolved',      color: '#10b981', isSpecial: true },
-  { id: 'closed',        status: 'closed',         label: 'Closed',        color: '#6b7280', isSpecial: true },
   { id: 'wont-fix',      status: 'wont-fix',       label: "Won't Fix",     color: '#6b7280', isSpecial: true },
 ];
 

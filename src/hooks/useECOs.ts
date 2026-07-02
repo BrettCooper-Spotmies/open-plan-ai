@@ -57,6 +57,7 @@ export interface ApiEcoPart {
   id: string;
   partId: string;
   partNumber: string;
+  name: string;
   description: string;
   bomNodeId: string | null;
   revFrom: string | null;
@@ -99,6 +100,7 @@ export interface ApiEcoActivity {
   title: string;
   description: string | null;
   userId: string | null;
+  userName: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
 }

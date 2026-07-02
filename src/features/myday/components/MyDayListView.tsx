@@ -31,7 +31,6 @@ const statusColors: Record<string, string> = {
   // Issue statuses
   open: 'bg-destructive/20 text-destructive',
   resolved: 'bg-status-done/20 text-status-done',
-  closed: 'bg-muted-foreground/20 text-muted-foreground',
   'wont-fix': 'bg-muted-foreground/20 text-muted-foreground',
 };
 
@@ -44,7 +43,6 @@ const statusLabels: Record<string, string> = {
   // Issue statuses
   open: 'Open',
   resolved: 'Resolved',
-  closed: 'Closed',
   'wont-fix': "Won't Fix",
 };
 
@@ -156,7 +154,7 @@ export function MyDayListView({
               </TableCell>
               <TableCell>
                 <div className="flex items-start gap-2">
-                  {(task.status === 'done' || task.status === 'resolved' || task.status === 'closed') && (
+                  {(task.status === 'done' || task.status === 'resolved') && (
                     <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center shrink-0 mt-0.5">
                       <Check className="h-3 w-3 text-status-done" />
                     </div>

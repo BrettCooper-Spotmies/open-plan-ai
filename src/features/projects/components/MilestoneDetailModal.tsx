@@ -148,7 +148,6 @@ export function MilestoneDetailModal({
   const availableIssues = issues.filter(i =>
     !milestoneIssues.some(mi => mi.id === i.id) &&
     i.status !== 'resolved' &&
-    i.status !== 'closed' &&
     i.status !== 'wont-fix'
   );
 

@@ -11,12 +11,14 @@ type WizardState = { ecoId: string | null; isRework?: boolean } | null;
 
 export function ECOView({
   projectId,
+  projectName,
   newTrigger,
   onNewConsumed,
   openEcoId = null,
   onOpenEcoIdChange,
 }: {
   projectId: string;
+  projectName?: string;
   newTrigger?: boolean;
   onNewConsumed?: () => void;
   openEcoId?: string | null;
@@ -48,6 +50,7 @@ export function ECOView({
           <ECODetailView
             eco={resolvedEco}
             projectId={projectId}
+            projectName={projectName}
             onBack={() => setOpenEco(null)}
             onEdit={eco => setWizard({ ecoId: eco.id, isRework: eco.status === 'REWORK' })}
           />

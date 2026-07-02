@@ -471,6 +471,12 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     setActiveRevIdx(Math.max(0, revHistory.length - 1));
   }, [originalNode.id, revHistory.length]);
 
+  // Scroll to top whenever the displayed node changes
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [originalNode.id]);
+
   // ── Mutations ──
   const createNode = useCreateBomNode(projectId);
   const updateNode = useUpdateBomNode(projectId);
@@ -656,7 +662,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       </div>
 
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {/* Back button */}
         {/* <div className="px-6 pt-3">
           <button

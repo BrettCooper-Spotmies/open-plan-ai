@@ -62,8 +62,8 @@ import { useOrganization } from "@/contexts/OrganizationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDetail } from "@/hooks/useProjectDetail";
 import { useUpdateProject, useProject, useDeleteProject } from "@/hooks/useProjects";
-import { useOrganizationMembers } from "@/hooks/useProjectTeam";
-import { useProjectAttachments, useCreateAttachment, useDeleteAttachment } from "@/hooks/useProjectAttachments";
+import { useOrganizationMembers, useProjectMembers } from "@/hooks/useProjectTeam";
+import { useProjectAttachments, useDeleteAttachment } from "@/hooks/useProjectAttachments";
 import { useProjectLinks, useCreateProjectLink, useDeleteProjectLink } from "@/hooks/useProjectLinks";
 import { projectStorageService } from "@/services/projectStorage.service";
 import { modulesService } from "@/services/modules.service";
@@ -161,6 +161,7 @@ const EditProject = () => {
     const updateProjectMutation = useUpdateProject();
     const deleteProjectMutation = useDeleteProject();
     const { data: orgMembers = [] } = useOrganizationMembers(currentOrganization?.id);
+    const { data: projectMembers = [] } = useProjectMembers(id);
 
     // Fetch project data
     const { data: project, isLoading, error } = useProject(id);
@@ -168,7 +169,6 @@ const EditProject = () => {
     const { data: projectLinks = [] } = useProjectLinks(id);
 
     // Mutations
-    const createAttachmentMutation = useCreateAttachment();
     const deleteAttachmentMutation = useDeleteAttachment();
     const createLinkMutation = useCreateProjectLink();
     const deleteLinkMutation = useDeleteProjectLink();
@@ -369,9 +369,9 @@ const EditProject = () => {
     const canManageProjectMembers = useMemo(() => {
         if (!project || !user?.id) return false;
         if (project.createdBy === user.id) return true;
-        const myMembership = (project.team || []).find((member) => member.id === user.id);
+        const myMembership = projectMembers.find((member) => member.id === user.id);
         return (myMembership?.role || '').toLowerCase() === 'admin';
-    }, [project?.createdBy, project?.team, user?.id]);
+    }, [project?.createdBy, projectMembers, user?.id]);
 
     const isProjectOwner = useMemo(() => {
         if (!project?.createdBy || !user?.id) return false;
@@ -381,9 +381,9 @@ const EditProject = () => {
     const canEditProject = useMemo(() => {
         if (!project || !user?.id) return false;
         if (project.createdBy === user.id) return true;
-        const myMembership = (project.team || []).find((member) => member.id === user.id);
+        const myMembership = projectMembers.find((member) => member.id === user.id);
         return (myMembership?.role || '').toLowerCase() === 'admin';
-    }, [project?.createdBy, project?.team, user?.id]);
+    }, [project?.createdBy, projectMembers, user?.id]);
 
     const selectedOrgMember = useMemo(
         () => orgMembers.find((member: any) => member.id === selectedMember),
@@ -562,16 +562,6 @@ const EditProject = () => {
                 }
             }
 
-            // Populating team members
-            if (project.team) {
-                setAssignedMembers(project.team.map(m => ({
-                    memberId: m.id,
-                    role: m.role,
-                    name: m.name,
-                    avatar: m.avatar
-                })));
-            }
-
             // Populating modules
             if (project.projectModules) {
                 // First-class modules initialization
@@ -601,6 +591,18 @@ const EditProject = () => {
         }
     }, [project]);
 
+    // Populate team members from the dedicated project members endpoint
+    useEffect(() => {
+        if (projectMembers.length > 0) {
+            setAssignedMembers(projectMembers.map(m => ({
+                memberId: m.id,
+                role: m.role,
+                name: m.name,
+                avatar: m.avatar,
+            })));
+        }
+    }, [projectMembers]);
+
     const formatFileSize = (bytes: number): string => {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -623,20 +625,13 @@ const EditProject = () => {
                 }
 
                 try {
-                    const uploadResult = await projectStorageService.uploadFile(file, id);
-                    await createAttachmentMutation.mutateAsync({
-                        entity_id: id,
-                        entity_type: 'project',
-                        file_name: uploadResult.name,
-                        file_path: uploadResult.path,
-                        file_size: file.size,
-                        mime_type: file.type,
-                        project_id: id,
-                    });
+                    await projectStorageService.upload(id, file);
                 } catch (err) {
                     errors.push(`${file.name}: Upload failed`);
                 }
             }
+
+            queryClient.invalidateQueries({ queryKey: ['project-attachments', id] });
 
             if (errors.length > 0) {
                 toast.error('Some files failed to upload', { description: errors.join('\n') });
@@ -646,7 +641,7 @@ const EditProject = () => {
         } finally {
             setIsUploading(false);
         }
-    }, [id, createAttachmentMutation]);
+    }, [id, queryClient]);
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -776,7 +771,7 @@ const EditProject = () => {
                 return;
             }
 
-            const currentInDbIds = (project.team?.map((m: any) => m.id) ?? []).filter(isValidUuidLike);
+            const currentInDbIds = projectMembers.map((m) => m.id).filter(isValidUuidLike);
             const assignedIds = assignedMembers.map((m) => m.memberId).filter(isValidUuidLike);
 
             // Members to add
@@ -969,7 +964,7 @@ const EditProject = () => {
             return;
         }
 
-        const currentInDbIds = project.team?.map((m: any) => m.id) || [];
+        const currentInDbIds = projectMembers.map((m) => m.id);
         const assignedIds = assignedMembers.map(m => m.memberId);
         const removedMemberIds = currentInDbIds.filter(memberId => !assignedIds.includes(memberId));
 
@@ -1858,21 +1853,21 @@ const EditProject = () => {
                                         >
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                {attachment.url ? (
+                                                {(attachment.url || attachment.fileUrl) ? (
                                                     <a
-                                                        href={attachment.url}
+                                                        href={attachment.url || attachment.fileUrl}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="text-sm truncate hover:underline text-foreground"
                                                         title="Click to view file"
                                                     >
-                                                        {attachment.file_name || attachment.name}
+                                                        {attachment.file_name || attachment.fileName}
                                                     </a>
                                                 ) : (
-                                                    <span className="text-sm truncate">{attachment.file_name || attachment.name}</span>
+                                                    <span className="text-sm truncate">{attachment.file_name || attachment.fileName}</span>
                                                 )}
                                                 <span className="text-xs text-muted-foreground">
-                                                    ({formatFileSize(attachment.file_size || 0)})
+                                                    ({formatFileSize(attachment.file_size ?? attachment.fileSize ?? 0)})
                                                 </span>
                                             </div>
                                             <Button

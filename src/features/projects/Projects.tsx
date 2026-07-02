@@ -29,7 +29,7 @@ import { useProjects, useDeleteProject } from '@/hooks/useProjects';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useProjectAttachments } from '@/hooks/useProjectAttachments';
 import { useProjectLinks } from '@/hooks/useProjectLinks';
-import { useOrganizationMembers } from '@/hooks/useProjectTeam';
+import { useOrganizationMembers, useProjectMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
@@ -70,6 +70,68 @@ const formatDisplayDate = (value?: string | number | Date | null) => {
 
   return `${day}-${month}-${year}`;
 };
+
+function ProjectTeamHoverCard({ projectId, memberCount }: { projectId: string; memberCount?: number }) {
+  const [open, setOpen] = useState(false);
+  const { data: members, isLoading } = useProjectMembers(open ? projectId : undefined);
+
+  return (
+    <HoverCard open={open} onOpenChange={setOpen} openDelay={150}>
+      <HoverCardTrigger asChild>
+        <div
+          className="flex items-center gap-2 text-muted-foreground cursor-help"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          <Users className="h-4 w-4" />
+          <span className="text-xs">{memberCount ?? 0}</span>
+        </div>
+      </HoverCardTrigger>
+      <HoverCardContent
+        className="w-72"
+        align="start"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      >
+        <div className="space-y-2">
+          <p className="text-sm font-medium">Project Team</p>
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-7 w-full" />
+              <Skeleton className="h-7 w-3/4" />
+            </div>
+          ) : members && members.length > 0 ? (
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {members.map((member) => {
+                const initials = member.initials || member.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+                return (
+                  <div key={member.id} className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar className="h-8 w-8 ring-2 ring-background">
+                        <AvatarImage src={member.avatar || undefined} alt={member.name} referrerPolicy="no-referrer" />
+                        <AvatarFallback className="text-[11px] font-medium">{initials}</AvatarFallback>
+                      </Avatar>
+                      <p className="text-sm truncate">{member.name}</p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
+                      {member.role || 'Member'}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">No team members assigned yet.</p>
+          )}
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
 
 export default function Projects() {
   const navigate = useNavigate();
@@ -329,64 +391,10 @@ export default function Projects() {
                   <ProjectListProgress projectId={project.id} progress={project.progress || 0} />
 
                   <div className="flex items-center justify-between pt-3 border-t border-border/60">
-                    <HoverCard openDelay={150}>
-                      <HoverCardTrigger asChild>
-                        <div
-                          className="flex items-center gap-2 text-muted-foreground cursor-help"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                          }}
-                        >
-                          <Users className="h-4 w-4" />
-                          <span className="text-xs">{project.memberCount ?? project.team?.length ?? 0}</span>
-                          {(project.team?.length || 0) > 0 && (
-                            <div className="flex items-center -space-x-2">
-                              {project.team.slice(0, 3).map((member) => (
-                                <Avatar key={member.id} className="h-5 w-5 border border-background">
-                                  <AvatarImage src={member.avatar || undefined} alt={member.name} />
-                                  <AvatarFallback className="text-[10px]">
-                                    {member.initials || member.name.slice(0, 2).toUpperCase()}
-                                  </AvatarFallback>
-                                </Avatar>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </HoverCardTrigger>
-                      <HoverCardContent
-                        className="w-72"
-                        align="start"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                        }}
-                      >
-                        <div className="space-y-2">
-                          <p className="text-sm font-medium">Project Team</p>
-                          {project.team && project.team.length > 0 ? (
-                            <div className="space-y-2 max-h-48 overflow-y-auto">
-                              {project.team.map((member) => (
-                                <div key={member.id} className="flex items-center justify-between gap-3">
-                                  <div className="flex items-center gap-2 min-w-0">
-                                    <Avatar className="h-7 w-7">
-                                      <AvatarImage src={member.avatar || undefined} alt={member.name} />
-                                      <AvatarFallback className="text-[11px]">{member.initials}</AvatarFallback>
-                                    </Avatar>
-                                    <p className="text-sm truncate">{member.name}</p>
-                                  </div>
-                                  <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
-                                    {member.role || 'Member'}
-                                  </Badge>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">No team members assigned yet.</p>
-                          )}
-                        </div>
-                      </HoverCardContent>
-                    </HoverCard>
+                    <ProjectTeamHoverCard
+                      projectId={project.id}
+                      memberCount={project.memberCount ?? project.team?.length}
+                    />
                     <span className="text-[11px] text-muted-foreground">
                       Updated {formatDisplayDate(project.updatedAt)}
                     </span>

@@ -113,7 +113,7 @@ export function ModulesSection({
       const moduleTasks = getModuleTasks(module.id, tasks);
       const progress = getModuleProgress(module.id, tasks);
       const openIssues = issues.filter(
-        i => i.moduleId === module.id && i.status !== 'resolved' && i.status !== 'closed'
+        i => i.moduleId === module.id && i.status !== 'resolved'
       ).length;
 
       return {
@@ -152,7 +152,7 @@ export function ModulesSection({
           taskCount: updatedTasks.length,
           progress: getModuleProgress(updatedModule.id, tasks),
           openIssues: issues.filter(
-            i => i.moduleId === updatedModule.id && i.status !== 'resolved' && i.status !== 'closed'
+            i => i.moduleId === updatedModule.id && i.status !== 'resolved'
           ).length,
         };
       });

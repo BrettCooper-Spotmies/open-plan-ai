@@ -265,7 +265,7 @@ export function MyDayKanbanView({
                               <div className="space-y-2">
                                 <div className="flex items-start justify-between gap-2">
                                   <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
-                                    {(task.status === 'done' || task.status === 'resolved' || task.status === 'closed') ? (
+                                    {(task.status === 'done' || task.status === 'resolved') ? (
                                       <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
                                         <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
                                           <Check className="h-3 w-3 text-status-done" />

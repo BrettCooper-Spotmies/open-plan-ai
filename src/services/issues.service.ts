@@ -50,6 +50,7 @@ export const issuesService = {
     if (issue.tags && issue.tags.length > 0) payload.tags = issue.tags;
     if (issue.checklist && issue.checklist.length > 0) payload.checklist = issue.checklist;
     if (issue.descriptionBlocks && issue.descriptionBlocks.length > 0) payload.descriptionBlocks = issue.descriptionBlocks;
+    if (issue.videoLinks && issue.videoLinks.length > 0) payload.videoLinks = issue.videoLinks;
     return apiClient.post<Issue>(ENDPOINTS.ISSUES.LIST(projectId), payload);
   },
 
@@ -98,6 +99,10 @@ export const issuesService = {
       payload.descriptionBlocks = u.descriptionBlocks;
     }
 
+    if (u.videoLinks !== undefined) {
+      payload.videoLinks = u.videoLinks;
+    }
+
     return apiClient.patch<Issue>(ENDPOINTS.ISSUES.BY_ID(issueId), payload);
   },
 
@@ -139,7 +144,7 @@ export const issuesService = {
       const projects = await projectsService.getAll(orgId);
       const allResults = await Promise.all(projects.map(p => this.getByProject(p.id).catch(() => [])));
       const allIssues = allResults.flat();
-      const open = allIssues.filter(i => i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont_fix');
+      const open = allIssues.filter(i => i.status !== 'resolved' && i.status !== 'wont-fix');
       const critical = open.filter(i => (i as any).severity === 'critical' || (i as any).priority === 'critical');
       return { total: open.length, critical: critical.length };
     } catch {

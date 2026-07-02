@@ -25,7 +25,7 @@ export type ProjectStage = 'concept' | 'design' | 'development' | 'testing' | 'p
 
 // Issue types
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'trivial';
-export type IssueStatus = 'open' | 'in-progress' | 'resolved' | 'closed' | 'wont-fix';
+export type IssueStatus = 'open' | 'in-progress' | 'resolved' | 'wont-fix';
 export type IssueCategory =
   | 'defect'           // Product defect
   | 'risk'             // Identified risk
@@ -66,6 +66,14 @@ export interface Comment {
   content: string;
   author: TeamMember;
   createdAt: string;
+}
+
+export interface VideoLink {
+  id: string;
+  url: string;
+  title?: string;
+  addedBy: TeamMember;
+  addedAt: string;
 }
 
 // First-class Module entity
@@ -117,6 +125,7 @@ export interface Task {
   checklist?: ChecklistItem[];
   attachments?: Attachment[];
   comments?: Comment[];
+  videoLinks?: VideoLink[];
   createdAt: string;
   updatedAt: string;
   createdBy?: TeamMember;  // Who created this task
@@ -158,6 +167,7 @@ export interface Issue {
   resolution?: string;         // How it was resolved
   attachments?: Attachment[];
   comments?: Comment[];
+  videoLinks?: VideoLink[];
   tags?: string[];
   checklist?: ChecklistItem[];
   blockedBy?: string[];

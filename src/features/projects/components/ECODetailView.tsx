@@ -6,6 +6,7 @@ import {
   Package, Shield, Cpu, Scissors, RefreshCw, Send, Download, Edit,
   History, Link2, X, Pause, Plus, ClipboardCheck, Loader2,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   ECOListItem, ECODetail, PipelineStep,
   ECO_TYPE_LABEL, REASON_LABEL, CHANGE_CLASS_LABEL, EFFECTIVITY_LABEL,
@@ -528,7 +529,8 @@ function VersionDiff({ detail }: { detail: ECODetail }) {
 
 // ── Affected parts ────────────────────────────────────────────────────────────
 
-function AffectedParts({ detail }: { detail: ECODetail }) {
+function AffectedParts({ detail, projectId }: { detail: ECODetail; projectId: string }) {
+  const navigate = useNavigate();
   const sorted = [...detail.parts].sort((a, b) => (
     ({ HIGH: 0, MEDIUM: 1, LOW: 2 }[a.impact] ?? 2) - ({ HIGH: 0, MEDIUM: 1, LOW: 2 }[b.impact] ?? 2)
   ));
@@ -556,7 +558,18 @@ function AffectedParts({ detail }: { detail: ECODetail }) {
             style={{ borderBottom: i < sorted.length - 1 ? '1px solid hsl(var(--border)/0.5)' : 'none' }}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[12px] font-mono font-semibold text-blue-500">{p.pn}</span>
+              <div className="flex flex-col min-w-0">
+                <span
+                  className={cn(
+                    'text-[12px] font-mono font-semibold text-blue-500',
+                    p.bomNodeId && 'cursor-pointer hover:underline',
+                  )}
+                  onClick={() => p.bomNodeId && navigate(`/projects/${projectId}/bom/${p.bomNodeId}`)}
+                >
+                  {p.pn}
+                </span>
+                {p.name && <span className="text-[11px] text-foreground font-medium leading-tight">{p.name}</span>}
+              </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {p.rev && (
                   <span
@@ -744,10 +757,20 @@ function ActivityTimeline({ detail }: { detail: ECODetail }) {
                 {!last && <div className="w-px flex-1 bg-border/50 min-h-[14px]" />}
               </div>
               <div className={cn('min-w-0', last ? 'pb-0' : 'pb-4')}>
-                <div className="text-[12px]">
+                <div className="text-[12px] flex items-center gap-1.5 flex-wrap">
+                  <span
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize"
+                    style={{
+                      color: meta.color,
+                      background: meta.color + '18',
+                      border: `1px solid ${meta.color}33`,
+                    }}
+                  >
+                    {a.action.replace(/_/g, ' ').toLowerCase()}
+                  </span>
+                  <span className="text-muted-foreground">by</span>
                   <strong className="font-semibold text-foreground">{a.actor}</strong>
-                  <span className="text-muted-foreground"> {a.action.replace(/_/g, ' ').toLowerCase()}</span>
-                  <span className="text-muted-foreground/60"> · {a.when}</span>
+                  <span className="text-muted-foreground/60">· {a.when}</span>
                 </div>
                 {a.note && (
                   <div className="text-[12px] text-muted-foreground mt-0.5 leading-relaxed">{a.note}</div>
@@ -1087,11 +1110,13 @@ function Toast({ message }: { message: string }) {
 export function ECODetailView({
   eco,
   projectId,
+  projectName,
   onBack,
   onEdit,
 }: {
   eco: ECOListItem;
   projectId: string;
+  projectName?: string;
   onBack: () => void;
   onEdit?: (eco: ECOListItem) => void;
 }) {
@@ -1217,10 +1242,12 @@ export function ECODetailView({
     <div className="flex-1 overflow-y-auto bg-background px-6 py-5 pb-12 h-full">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground mb-3">
-        <span onClick={onBack} className="text-muted-foreground/70 cursor-pointer hover:text-foreground transition-colors">EV Charging Station</span>
-        {/* <ChevronRight className="w-3 h-3" />
-        <span onClick={onBack} className="text-blue-500 cursor-pointer hover:underline">Engineering Changes</span> */}
-        <ChevronRight className="w-3 h-3" />
+        {projectName && (
+          <>
+            <span onClick={onBack} className="text-muted-foreground/70 cursor-pointer hover:text-foreground transition-colors">{projectName}</span>
+            <ChevronRight className="w-3 h-3" />
+          </>
+        )}
         <span className="text-foreground font-medium">{detail.num}</span>
       </div>
 
@@ -1384,7 +1411,7 @@ export function ECODetailView({
           ) : (
             <>
               <ImpactAssessment detail={detail} />
-              <AffectedParts detail={detail} />
+              <AffectedParts detail={detail} projectId={projectId} />
             </>
           )}
         </div>
