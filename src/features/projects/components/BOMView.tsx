@@ -2,11 +2,12 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
   CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check, Download, ExternalLink,
-  FileSpreadsheet, PenLine,
+  FileSpreadsheet, PenLine, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useBomTree, useCreateBomNode, useDecideApprovalRequest, useAddRequirement, useProjectApprovalRequests } from '@/hooks/useBom';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { useBomTree, useCreateBomNode, useDecideApprovalRequest, useDeleteBomNode, useAddRequirement, useProjectApprovalRequests } from '@/hooks/useBom';
 import { useCreatePart } from '@/hooks/useParts';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useAuth } from '@/contexts/AuthContext';
@@ -61,6 +62,7 @@ import {
   bomFlatAll, bomFlatten, bomFind,
   bomFilterTree, bomFlattenInclude, bomTypeOf,
   fromApiNode, applyPriceRollup, assignLevelLabels, formatLeadTime,
+  describeDeleteImpact,
 } from './bomData';
 import { BOMStatusPill, ReqTag, PartImageThumb } from './BOMShared';
 import { BOMDetailScreen, AddSubcomponentDialog } from './BOMDetailScreen';
@@ -464,12 +466,12 @@ const HEADERS = [
   { key: 'rev', label: 'Rev', w: 50 },
   { key: 'status', label: 'Status', w: 92 },
   { key: 'owner', label: 'Owner', w: 140 },
-  { key: 'req', label: 'Traceability', w: 170 },
+  { key: 'supplier', label: 'Supplier', w: 170 },
   { key: 'act', label: '', w: 110 },
 ] as const;
 
 function ListView({
-  rows, expanded, toggle, filtersActive, onOpen, onAddSub, totalCount, formatCurrency,
+  rows, expanded, toggle, filtersActive, onOpen, onAddSub, onDeleteRequest, totalCount, formatCurrency,
   canDecideRow, onApprove, onReject, approvingId,
 }: {
   rows: BOMNode[];
@@ -478,6 +480,7 @@ function ListView({
   filtersActive: boolean;
   onOpen: (id: string) => void;
   onAddSub: (node: BOMNode) => void;
+  onDeleteRequest: (node: BOMNode) => void;
   totalCount: number;
   formatCurrency: (n: number) => string;
   canDecideRow: (nodeId: string) => boolean;
@@ -580,12 +583,9 @@ function ListView({
               <div style={{ flexBasis: 140, flexShrink: 0 }} className="px-2 min-w-0">
                 <OwnerBadge name={row.owner} />
               </div>
-              {/* Traceability */}
-              <div style={{ flexBasis: 170, flexShrink: 0 }} className="px-2 flex gap-1 overflow-hidden flex-nowrap">
-                {row.req.length === 0
-                  ? <span className="text-[11px] text-muted-foreground">—</span>
-                  : row.req.slice(0, 2).map(r => <ReqTag key={r} label={r} />)}
-                {row.req.length > 2 && <span className="text-[11px] text-muted-foreground self-center">+{row.req.length - 2}</span>}
+              {/* Supplier */}
+              <div style={{ flexBasis: 170, flexShrink: 0 }} className="px-2 text-xs text-muted-foreground truncate">
+                {row.distributor || <span className="text-[11px]">—</span>}
               </div>
               {/* Actions */}
               <div style={{ flexBasis: 110, flexShrink: 0 }} className={cn('flex items-center justify-end gap-1 transition-opacity', isHovered ? 'opacity-100' : 'opacity-0')}>
@@ -615,6 +615,13 @@ function ListView({
                   className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); onDeleteRequest(row); }}
+                  title="Delete part"
+                  className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:bg-muted transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" style={{ color: '#DC2626' }} />
                 </button>
                 <ChevronRight className="w-4 h-4 text-muted-foreground" />
               </div>
@@ -821,6 +828,7 @@ export function BOMView({
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
   const [rejectTarget, setRejectTarget] = useState<BOMNode | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BOMNode | null>(null);
   const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('bom_view') as ViewMode) ?? 'list');
   const [filterOpen, setFilterOpen] = useState(false);
   const [filters, setFilters] = useState<BOMFilters>({ ...EMPTY_FILTERS });
@@ -839,6 +847,7 @@ export function BOMView({
   const createPart = useCreatePart(orgId);
   const createNode = useCreateBomNode(projectId);
   const decideApprovalRequest = useDecideApprovalRequest(projectId);
+  const deleteBomNode = useDeleteBomNode(projectId);
   const addRequirement = useAddRequirement(projectId);
   const { data: pendingApprovalRequests = [] } = useProjectApprovalRequests(projectId, 'pending');
 
@@ -891,6 +900,21 @@ export function BOMView({
         description: err instanceof Error ? err.message : undefined,
       });
       throw err;
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      const { deletedCount } = await deleteBomNode.mutateAsync(deleteTarget.id);
+      toast.success(deletedCount > 1 ? `Deleted ${deletedCount} parts` : `${deleteTarget.pn} deleted`);
+      if (selected === deleteTarget.id) setSelected(null);
+    } catch (err) {
+      toast.error('Failed to delete part', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -1230,6 +1254,7 @@ export function BOMView({
           filtersActive={filtersActive}
           onOpen={setSelected}
           onAddSub={setAddSubNode}
+          onDeleteRequest={setDeleteTarget}
           totalCount={totalCount}
           formatCurrency={formatCurrency}
           canDecideRow={canDecideRow}
@@ -1353,6 +1378,16 @@ export function BOMView({
         partLabel={rejectTarget?.pn}
         onClose={() => setRejectTarget(null)}
         onConfirm={handleRejectConfirm}
+      />
+
+      {/* Delete confirmation (warns about cascading sub-component deletion) */}
+      <ConfirmationDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={handleConfirmDelete}
+        variant="destructive"
+        confirmText={deleteTarget && bomFlatAll(deleteTarget.children ?? []).length > 0 ? 'Delete All' : 'Delete Part'}
+        {...(deleteTarget ? describeDeleteImpact(deleteTarget) : { title: '', description: '' })}
       />
     </div>
   );

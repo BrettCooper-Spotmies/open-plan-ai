@@ -1162,7 +1162,6 @@ export function ECODetailView({
 
   const actionPending: Record<string, boolean> = {
     submit: submitMutation.isPending,
-    resubmit: submitMutation.isPending,
     resume: resumeMutation.isPending,
     hold: holdMutation.isPending,
     close: closeMutation.isPending,
@@ -1217,10 +1216,11 @@ export function ECODetailView({
       setExportOpen(false);
       return;
     }
-    if (k === 'submit' || k === 'resubmit') {
+    if (k === 'resubmit') { onEdit?.(eco); return; }
+    if (k === 'submit') {
       try {
         await submitMutation.mutateAsync();
-        flash(k === 'submit' ? 'Submitted for review' : 'Resubmitted — back in review');
+        flash('Submitted for review');
       } catch { flash('Failed to submit'); }
       return;
     }

@@ -8,11 +8,11 @@ import type {
 
 export type ECOType =
   | 'DESIGN_CHANGE' | 'COMPONENT_CHANGE' | 'SUPPLIER_CHANGE' | 'PROCESS_CHANGE'
-  | 'DOCUMENTATION_CHANGE' | 'COST_REDUCTION' | 'DEVIATION' | 'OBSOLESCENCE';
+  | 'DOCUMENTATION_CHANGE' | 'COST_REDUCTION' | 'DEVIATION' | 'OBSOLESCENCE' | 'OTHER';
 
 export type ECOReason =
   | 'PERFORMANCE' | 'COST' | 'QUALITY' | 'SUPPLY_CHAIN' | 'SAFETY' | 'COMPLIANCE'
-  | 'CUSTOMER_REQUEST' | 'EOL_OBSOLESCENCE' | 'MANUFACTURABILITY';
+  | 'CUSTOMER_REQUEST' | 'EOL_OBSOLESCENCE' | 'MANUFACTURABILITY' | 'OTHER';
 
 export type ECODisposition =
   | 'USE_AS_IS' | 'REWORK' | 'SCRAP' | 'RETURN_TO_SUPPLIER' | 'USE_UP_THEN_CHANGE';
@@ -44,6 +44,7 @@ export const ECO_TYPE_LABEL: Record<ECOType, string> = {
   COST_REDUCTION: 'Cost Reduction',
   DEVIATION: 'Deviation',
   OBSOLESCENCE: 'Obsolescence',
+  OTHER: 'Other',
 };
 
 export const REASON_LABEL: Record<ECOReason, string> = {
@@ -56,6 +57,7 @@ export const REASON_LABEL: Record<ECOReason, string> = {
   CUSTOMER_REQUEST: 'Customer Request',
   EOL_OBSOLESCENCE: 'EOL / Obsolescence',
   MANUFACTURABILITY: 'Manufacturability',
+  OTHER: 'Other',
 };
 
 export const DISPOSITION_LABEL: Record<ECODisposition, string> = {
@@ -251,9 +253,11 @@ export interface ECOListItem {
   title: string;
   desc: string;
   type: ECOType;
+  typeOther?: string | null;
   status: ECOStatus;
   priority: ECOPriority;
   reason: ECOReason;
+  reasonOther?: string | null;
   changeClass: ChangeClass;
   ecr: string | null;
   effectivity: Effectivity;
@@ -672,9 +676,11 @@ export function fromApiEcoListItem(raw: ApiEcoListItem): ECOListItem {
     title:       raw.title,
     desc:        raw.description ?? '',
     type:        raw.type.toUpperCase() as ECOType,
+    typeOther:   raw.typeOther ?? null,
     status:      raw.status.toUpperCase() as ECOStatus,
     priority:    raw.priority.toUpperCase() as ECOPriority,
     reason:      raw.reason.toUpperCase() as ECOReason,
+    reasonOther: raw.reasonOther ?? null,
     changeClass: raw.changeClass as ChangeClass,
     ecr:         raw.originatingEcr,
     effectivity: {
@@ -733,7 +739,7 @@ function fromApiStep(raw: ApiEcoPipelineStep): PipelineStep {
   };
 }
 
-function rejectionsFromSteps(steps: ApiEcoPipelineStep[]): Rejection[] {
+export function rejectionsFromSteps(steps: ApiEcoPipelineStep[]): Rejection[] {
   return steps
     .filter((s) => s.decision === 'rejected')
     .sort((a, b) => (a.decidedAt ?? '').localeCompare(b.decidedAt ?? ''))

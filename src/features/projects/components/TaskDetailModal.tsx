@@ -490,7 +490,7 @@ export const TaskDetailModal = ({
     setInitialBlockedByIds(baseTask.blockedBy || []);
 
     const linkedTaskIds = baseTask.id
-      ? allTasks.filter(t => t.blockedBy.includes(baseTask.id)).map(t => t.id)
+      ? allTasks.filter(t => t.blockedBy?.includes(baseTask.id)).map(t => t.id)
       : [];
 
     setLocalBlockingToIds(linkedTaskIds);
@@ -505,7 +505,7 @@ export const TaskDetailModal = ({
   const blockingToTaskIds = localBlockingToIds;
   const dependencyExcludedTaskIds = useMemo(() => new Set([
     editedTask.id,
-    ...editedTask.blockedBy,
+    ...(editedTask.blockedBy || []),
     ...blockingToTaskIds,
   ]), [blockingToTaskIds, editedTask.blockedBy, editedTask.id]);
 

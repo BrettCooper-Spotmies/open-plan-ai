@@ -11,7 +11,9 @@ export interface ApiEcoListItem {
   title: string;
   description: string | null;
   type: string;
+  typeOther: string | null;
   reason: string;
+  reasonOther: string | null;
   priority: string;
   status: string;
   changeClass: string;

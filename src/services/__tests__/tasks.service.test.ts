@@ -71,7 +71,8 @@ describe('tasksService', () => {
       const tasks = await tasksService.getByProject('project-1');
 
       expect(apiClient.get).toHaveBeenCalledWith(
-        expect.stringContaining('/projects/project-1/tasks')
+        expect.stringContaining('/projects/project-1/tasks'),
+        { signal: undefined }
       );
       expect(tasks).toHaveLength(1);
       expect(tasks[0].id).toBe('task-1');
@@ -83,7 +84,8 @@ describe('tasksService', () => {
       await tasksService.getByProject('project-1', 50);
 
       expect(apiClient.get).toHaveBeenCalledWith(
-        expect.stringContaining('limit=50')
+        expect.stringContaining('limit=50'),
+        { signal: undefined }
       );
     });
 
