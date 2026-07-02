@@ -211,10 +211,10 @@ export function MyDayKanbanView({
             {columns.map((column) => (
               <div
                 key={column.id}
-                className="w-[250px] min-w-[250px] space-y-3 snap-start md:w-auto md:min-w-0 md:flex-1"
+                className="w-[250px] min-w-[250px] flex flex-col snap-start md:w-auto md:min-w-0 md:flex-1 max-h-[calc(100vh-280px)]"
               >
-                {/* Column Header - Sticky */}
-                <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
+                {/* Column Header */}
+                <div className="flex-shrink-0 bg-background pb-3 space-y-3">
                   <div className="flex items-center gap-2 px-1">
                     <div className={cn('w-2 h-2 rounded-full', column.color)} />
                     <h3 className="font-medium text-sm">{column.label}</h3>
@@ -224,7 +224,8 @@ export function MyDayKanbanView({
                   </div>
                 </div>
 
-                {/* Tasks Droppable */}
+                {/* Tasks Droppable - scrollable */}
+                <div className="flex-1 overflow-y-auto min-h-0">
                 <Droppable
                   droppableId={column.id}
                   type="TASK"
@@ -353,6 +354,7 @@ export function MyDayKanbanView({
                     </div>
                   )}
                 </Droppable>
+                </div>
               </div>
             ))}
           </div>
