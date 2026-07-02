@@ -267,7 +267,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       if (task.linkedIssueIds && task.linkedIssueIds.length > 0) {
         const hasBlockingIssue = task.linkedIssueIds.some(issueId => {
           const issue = issues.find(i => i.id === issueId);
-          return issue && issue.status !== 'resolved' && issue.status !== 'closed';
+          return issue && issue.status !== 'resolved';
         });
         if (hasBlockingIssue) {
           blocked.add(task.id);
@@ -295,7 +295,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     if (task.linkedIssueIds) {
       task.linkedIssueIds.forEach(issueId => {
         const issue = issues.find(i => i.id === issueId);
-        if (issue && issue.status !== 'resolved' && issue.status !== 'closed') {
+        if (issue && issue.status !== 'resolved') {
           blockers.push(`${issue.title} (Issue)`);
         }
       });

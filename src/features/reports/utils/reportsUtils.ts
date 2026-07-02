@@ -167,9 +167,9 @@ export function calculateProjectProgress(
     )
     : 0;
 
-  // Issue progress: % of issues resolved/closed
+  // Issue progress: % of issues resolved
   const resolvedIssues = issues.filter(i =>
-    i.status === 'resolved' || i.status === 'closed'
+    i.status === 'resolved'
   ).length;
   const issueProgress = issues.length > 0
     ? Math.round((resolvedIssues / issues.length) * 100)
@@ -194,12 +194,11 @@ export function calculateProjectProgress(
   };
 }
 
-// Count open issues — issues in the two primary active states ('open' and 'in-progress').
-// Custom column statuses (e.g. 'future-scope') and orphaned/stale statuses are excluded
-// so the number matches what the board's active columns show.
+// Count open issues — all issues except 'resolved' and 'wont-fix'.
+// Custom column statuses are included so the count matches the full active board.
 export function countOpenIssues(issues: Issue[]): { total: number; critical: number } {
   const openIssues = issues.filter(i =>
-    i.status === 'open' || i.status === 'in-progress'
+    i.status !== 'resolved' && i.status !== 'wont-fix'
   );
   const criticalIssues = openIssues.filter(i => i.severity === 'critical');
 
@@ -337,8 +336,8 @@ export function getTeamWorkload(
     const memberIssues = issues.filter(i =>
       i.assignees?.some((a: { id: string }) => a.id === member.id)
     );
-    const openIssues = memberIssues.filter(i => i.status === 'open' || i.status === 'in-progress').length;
-    const resolvedIssues = memberIssues.filter(i => i.status === 'resolved' || i.status === 'closed' || i.status === 'wont-fix').length;
+    const openIssues = memberIssues.filter(i => i.status !== 'resolved' && i.status !== 'wont-fix').length;
+    const resolvedIssues = memberIssues.filter(i => i.status === 'resolved' || i.status === 'wont-fix').length;
 
     return {
       member,

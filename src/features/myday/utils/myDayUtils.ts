@@ -154,7 +154,7 @@ export function getUserIssues(projects: Project[], userId: string): Issue[] {
   return projects.flatMap(project =>
     (project.issues || []).filter(issue =>
       (issue.assignees?.some(a => a.id === userId) ?? false) &&
-      ((issue.status !== 'resolved' && issue.status !== 'closed') || isCompletedToday(issue))
+      ((issue.status !== 'resolved') || isCompletedToday(issue))
     )
   );
 }
@@ -233,7 +233,7 @@ export function getUserItems(projects: Project[], userId: string): MyDayItem[] {
     (project.issues || [])
       .filter(issue =>
         (issue.assignees?.some(a => a.id === userId) ?? false) &&
-        ((issue.status !== 'resolved' && issue.status !== 'closed') || isCompletedToday(issue))
+        ((issue.status !== 'resolved') || isCompletedToday(issue))
       )
       .forEach(issue => {
         items.push(mapIssueToMyDayItem(issue, project));
@@ -315,7 +315,7 @@ export function categorizeMyDayItems(items: MyDayItem[]): {
   const waitingBlocked: MyDayItem[] = [];
 
   for (const item of items) {
-    if (item.status === 'done' || item.status === 'resolved' || item.status === 'closed') {
+    if (item.status === 'done' || item.status === 'resolved') {
       continue;
     }
 
@@ -530,7 +530,7 @@ export function groupTasksByProgress(items: MyDayTask[] | MyDayItem[]): {
   };
 
   for (const item of items) {
-    if (item.status === 'done' || item.status === 'resolved' || item.status === 'closed') {
+    if (item.status === 'done' || item.status === 'resolved') {
       groups.completed.push(item);
     } else if (item.status === 'in-progress' || item.status === 'review') {
       groups.inProgress.push(item);

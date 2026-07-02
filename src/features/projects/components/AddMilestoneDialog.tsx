@@ -147,7 +147,7 @@ export function AddMilestoneDialog({
   };
 
   const openIssues = issues.filter(i =>
-    i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix'
+    i.status !== 'resolved' && i.status !== 'wont-fix'
   );
 
   // Filtered lists based on search

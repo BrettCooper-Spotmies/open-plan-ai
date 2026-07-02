@@ -207,7 +207,6 @@ function IssueViewControls({
                   { value: 'open', label: 'Open' },
                   { value: 'in-progress', label: 'In Progress' },
                   { value: 'resolved', label: 'Resolved' },
-                  { value: 'closed', label: 'Closed' },
                   { value: 'wont-fix', label: "Won't Fix" },
                 ]}
                 selected={filters.status || []}
@@ -1551,6 +1550,7 @@ export default function ProjectDetail() {
           <TabsContent value="eng-changes" className="mt-6 -mx-6 -mb-6 flex flex-col">
             <ECOView
               projectId={id!}
+              projectName={project?.name}
               newTrigger={ecoNewOpen}
               onNewConsumed={() => setEcoNewOpen(false)}
               openEcoId={ecoId ?? null}

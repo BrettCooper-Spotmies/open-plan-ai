@@ -312,81 +312,6 @@ const Team = () => {
   return (
     <>
       <div className="space-y-6">
-        {isAdminOrOwner && (
-          <div className="flex justify-end">
-            <Dialog open={isInviteDialogOpen} onOpenChange={(open) => { setIsInviteDialogOpen(open); if (!open) { setInviteEmail(''); setInviteEmailError(''); setInviteRole(''); setInviteDepartment(''); } }}>
-              <DialogTrigger asChild>
-                <Button>
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Invite Member
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Invite Team Member</DialogTitle>
-                  <DialogDescription>
-                    Send an invitation email to join your workspace
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email Address *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="colleague@company.com"
-                      value={inviteEmail}
-                      onChange={(e) => {
-                        setInviteEmail(e.target.value);
-                        if (inviteEmailError) setInviteEmailError('');
-                      }}
-                      className={inviteEmailError ? 'border-destructive focus-visible:ring-destructive' : ''}
-                    />
-                    {inviteEmailError && (
-                      <p className="text-xs text-destructive">{inviteEmailError}</p>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="role">Role *</Label>
-                    <Select value={inviteRole} onValueChange={setInviteRole}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a role" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="manager">Manager</SelectItem>
-                        <SelectItem value="member">Member</SelectItem>
-                        <SelectItem value="viewer">Viewer</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="department">Department</Label>
-                    <Select value={inviteDepartment} onValueChange={setInviteDepartment}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a department" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="engineering">Engineering</SelectItem>
-                        <SelectItem value="design">Design</SelectItem>
-                        <SelectItem value="management">Management</SelectItem>
-                        <SelectItem value="qa">Quality Assurance</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsInviteDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleInvite} disabled={inviteMutation.isPending}>
-                    {inviteMutation.isPending ? 'Sending...' : 'Send Invitation'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        )}
-
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
@@ -486,6 +411,78 @@ const Team = () => {
               className="pl-10"
             />
           </div>
+          {isAdminOrOwner && (
+            <Dialog open={isInviteDialogOpen} onOpenChange={(open) => { setIsInviteDialogOpen(open); if (!open) { setInviteEmail(''); setInviteEmailError(''); setInviteRole(''); setInviteDepartment(''); } }}>
+              <DialogTrigger asChild>
+                <Button>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Invite Member
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Invite Team Member</DialogTitle>
+                  <DialogDescription>
+                    Send an invitation email to join your workspace
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="colleague@company.com"
+                      value={inviteEmail}
+                      onChange={(e) => {
+                        setInviteEmail(e.target.value);
+                        if (inviteEmailError) setInviteEmailError('');
+                      }}
+                      className={inviteEmailError ? 'border-destructive focus-visible:ring-destructive' : ''}
+                    />
+                    {inviteEmailError && (
+                      <p className="text-xs text-destructive">{inviteEmailError}</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Role *</Label>
+                    <Select value={inviteRole} onValueChange={setInviteRole}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="manager">Manager</SelectItem>
+                        <SelectItem value="member">Member</SelectItem>
+                        <SelectItem value="viewer">Viewer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="department">Department</Label>
+                    <Select value={inviteDepartment} onValueChange={setInviteDepartment}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="engineering">Engineering</SelectItem>
+                        <SelectItem value="design">Design</SelectItem>
+                        <SelectItem value="management">Management</SelectItem>
+                        <SelectItem value="qa">Quality Assurance</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsInviteDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleInvite} disabled={inviteMutation.isPending}>
+                    {inviteMutation.isPending ? 'Sending...' : 'Send Invitation'}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         {/* Team Members */}

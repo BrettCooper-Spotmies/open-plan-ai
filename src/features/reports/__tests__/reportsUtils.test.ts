@@ -86,7 +86,7 @@ describe('reportsUtils', () => {
         createIssue({ status: 'open' }),
         createIssue({ status: 'in-progress' }),
         createIssue({ status: 'resolved' }),
-        createIssue({ status: 'closed' }),
+        createIssue({ status: 'wont-fix' }),
       ];
 
       const result = countOpenIssues(issues);

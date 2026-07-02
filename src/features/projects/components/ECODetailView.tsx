@@ -556,7 +556,10 @@ function AffectedParts({ detail }: { detail: ECODetail }) {
             style={{ borderBottom: i < sorted.length - 1 ? '1px solid hsl(var(--border)/0.5)' : 'none' }}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[12px] font-mono font-semibold text-blue-500">{p.pn}</span>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[12px] font-mono font-semibold text-blue-500">{p.pn}</span>
+                {p.name && <span className="text-[11px] text-foreground font-medium leading-tight">{p.name}</span>}
+              </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {p.rev && (
                   <span
@@ -1087,11 +1090,13 @@ function Toast({ message }: { message: string }) {
 export function ECODetailView({
   eco,
   projectId,
+  projectName,
   onBack,
   onEdit,
 }: {
   eco: ECOListItem;
   projectId: string;
+  projectName?: string;
   onBack: () => void;
   onEdit?: (eco: ECOListItem) => void;
 }) {
@@ -1217,10 +1222,12 @@ export function ECODetailView({
     <div className="flex-1 overflow-y-auto bg-background px-6 py-5 pb-12 h-full">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground mb-3">
-        <span onClick={onBack} className="text-muted-foreground/70 cursor-pointer hover:text-foreground transition-colors">EV Charging Station</span>
-        {/* <ChevronRight className="w-3 h-3" />
-        <span onClick={onBack} className="text-blue-500 cursor-pointer hover:underline">Engineering Changes</span> */}
-        <ChevronRight className="w-3 h-3" />
+        {projectName && (
+          <>
+            <span onClick={onBack} className="text-muted-foreground/70 cursor-pointer hover:text-foreground transition-colors">{projectName}</span>
+            <ChevronRight className="w-3 h-3" />
+          </>
+        )}
         <span className="text-foreground font-medium">{detail.num}</span>
       </div>
 

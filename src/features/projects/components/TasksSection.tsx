@@ -229,7 +229,7 @@ export function TasksSection({
 
         switch (filters.dueDate) {
           case 'overdue':
-            if (!taskDueDate || taskDueDate >= today) return false;
+            if (!taskDueDate || taskDueDate >= today || task.status === 'done') return false;
             break;
           case 'today':
             if (!taskDueDate || taskDueDate.toDateString() !== today.toDateString()) return false;

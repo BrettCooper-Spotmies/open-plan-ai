@@ -144,7 +144,7 @@ export const issuesService = {
       const projects = await projectsService.getAll(orgId);
       const allResults = await Promise.all(projects.map(p => this.getByProject(p.id).catch(() => [])));
       const allIssues = allResults.flat();
-      const open = allIssues.filter(i => i.status !== 'resolved' && i.status !== 'closed' && i.status !== 'wont-fix');
+      const open = allIssues.filter(i => i.status !== 'resolved' && i.status !== 'wont-fix');
       const critical = open.filter(i => (i as any).severity === 'critical' || (i as any).priority === 'critical');
       return { total: open.length, critical: critical.length };
     } catch {

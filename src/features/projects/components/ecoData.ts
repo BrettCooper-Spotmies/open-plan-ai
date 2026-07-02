@@ -196,6 +196,7 @@ export interface DiffRow {
 
 export interface ECOPart {
   pn: string;
+  name?: string;
   desc: string;
   rev: { from: string; to: string } | null;
   impact: ImpactLevel;
@@ -695,6 +696,7 @@ export function fromApiEcoListItem(raw: ApiEcoListItem): ECOListItem {
 function fromApiPart(raw: ApiEcoPart): ECOPart {
   return {
     pn:     raw.partNumber,
+    name:   raw.name,
     desc:   raw.description,
     rev:    (raw.revFrom || raw.revTo)
               ? { from: raw.revFrom ?? '', to: raw.revTo ?? '' }
@@ -753,7 +755,7 @@ function fromApiDiffRow(raw: ApiEcoDiffRow): DiffRow {
 function fromApiActivity(raw: ApiEcoActivity): ActivityEntry {
   const actionKey = raw.type.replace(/^eco\./, '').toUpperCase();
   return {
-    actor: '—',
+    actor: raw.userName ?? '—',
     action: actionKey,
     when:   fmtDate(raw.createdAt),
     note:   raw.description ?? raw.title,

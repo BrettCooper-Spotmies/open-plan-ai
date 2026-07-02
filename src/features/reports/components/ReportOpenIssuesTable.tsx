@@ -33,7 +33,7 @@ export const ReportOpenIssuesTable = memo(function ReportOpenIssuesTable({ issue
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   
   const openIssues = useMemo(() => issues.filter(i =>
-    i.status === 'open' || i.status === 'in-progress'
+    i.status !== 'resolved' && i.status !== 'wont-fix'
   ), [issues]);
   
   const sortedIssues = useMemo(() => [...openIssues].sort((a, b) => {

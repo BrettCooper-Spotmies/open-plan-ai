@@ -25,7 +25,7 @@ export type ProjectStage = 'concept' | 'design' | 'development' | 'testing' | 'p
 
 // Issue types
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'trivial';
-export type IssueStatus = 'open' | 'in-progress' | 'resolved' | 'closed' | 'wont-fix';
+export type IssueStatus = 'open' | 'in-progress' | 'resolved' | 'wont-fix';
 export type IssueCategory =
   | 'defect'           // Product defect
   | 'risk'             // Identified risk
