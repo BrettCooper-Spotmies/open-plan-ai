@@ -216,6 +216,17 @@ export function countOverdueTasks(tasks: Task[]): number {
   }).length;
 }
 
+// Format cycle time into a human-readable string.
+// Values under 2 days are shown as hours since decimals like "0.3d" are hard to parse at a glance.
+export function formatCycleTime(days: number): { value: string; subtitle: string } {
+  if (days === 0) return { value: 'N/A', subtitle: 'days per task' };
+  if (days < 2) {
+    const hours = Math.round(days * 24);
+    return { value: `${hours} hrs`, subtitle: 'hours per task' };
+  }
+  return { value: `${days}d`, subtitle: 'days per task' };
+}
+
 // Calculate average cycle time
 export function calculateAvgCycleTime(tasks: Task[]): number {
   const completedTasks = tasks.filter(t =>

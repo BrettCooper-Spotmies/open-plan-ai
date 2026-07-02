@@ -31,6 +31,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { IssueDetailModal } from './IssueDetailModal';
 import { ISSUE_SEVERITY_DISPLAY } from './issueSeverity';
 import { useIssueColumns, useCreateIssueColumn, useDeleteIssueColumn, useReorderIssueColumns } from '@/hooks/useIssueColumns';
@@ -776,24 +777,31 @@ export function IssuesView({
                   return (
                     <TableRow
                       key={issue.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-muted/50 h-[72px]"
                       onClick={() => handleIssueClick(issue)}
                     >
-                      <TableCell>
+                      <TableCell className="align-middle">
                         <Badge className={cn('gap-1', ISSUE_SEVERITY_DISPLAY[issue.severity].color)}>
                           <SeverityIcon className="h-3 w-3" />
                           {ISSUE_SEVERITY_DISPLAY[issue.severity].label}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="align-middle">
                         <div className="flex items-start gap-2">
                           {(issue.status === 'resolved' || issue.status === 'closed') && (
                             <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center shrink-0 mt-0.5">
                               <Check className="h-3 w-3 text-status-done" />
                             </div>
                           )}
-                          <div>
-                            <p className="font-medium">{issue.title}</p>
+                          <div className="min-w-0">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <p className="font-medium line-clamp-2 cursor-pointer">{issue.title}</p>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-xs">
+                                {issue.title}
+                              </TooltipContent>
+                            </Tooltip>
                             <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
                               {issue.description}
                             </p>

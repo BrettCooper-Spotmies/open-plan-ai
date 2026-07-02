@@ -83,6 +83,8 @@ import { resolveFileUrl } from '@/utils/fileUrl';
 import { FilePreviewDialog, FilePreviewTarget } from '@/components/FilePreviewDialog';
 import { useProjectTags, useCreateTag, useUpdateTag } from '@/hooks/useProjectTags';
 import { getFallbackTagColor } from '@/lib/tagColors';
+import { Switch } from '@/components/ui/switch';
+import { SlashBlockEditor } from '@/components/ui/SlashBlockEditor';
 
 // Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
 const toDateOnly = (date: Date | undefined | null): string | undefined => {
@@ -241,6 +243,7 @@ export const TaskDetailModal = ({
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isAdvancedDescription, setIsAdvancedDescription] = useState(false);
   const [initialTaskSnapshot, setInitialTaskSnapshot] = useState('');
   const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
   const [initialBlockedByIds, setInitialBlockedByIds] = useState<string[]>([]);
@@ -470,6 +473,7 @@ export const TaskDetailModal = ({
     setEditedTask(baseTask);
     setPendingFiles([]);
     setIsSaving(false);
+    setIsAdvancedDescription(!!(baseTask.descriptionBlocks && baseTask.descriptionBlocks.length > 0));
     setInitialTaskSnapshot(serializeTaskForDirtyCheck(baseTask));
     
     // Track initial blocked by items
@@ -1114,15 +1118,10 @@ export const TaskDetailModal = ({
               />
             </div>
 
-            {/* Task Overview Section */}
-            <section className="space-y-4">
-              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <CheckSquare className="h-4 w-4" />
-                Task Overview
-              </h3>
-
-              {/* Assignees — Teams-style stacked avatars, dedicated full-width row */}
-              <div className="space-y-2">
+            {/* Metadata Section */}
+            <div className="flex flex-col gap-6">
+              {/* Assigned To — full-width row */}
+              <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <User className="h-3 w-3" />
                   Assigned To
@@ -1218,9 +1217,10 @@ export const TaskDetailModal = ({
                 </Popover>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
-                {/* Status */}
-                <div className="space-y-2">
+              {/* 4-column metadata grid */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-start">
+                {/* Bucket */}
+                <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <AlertCircle className="h-3 w-3" />
                     Bucket <span className="text-destructive" aria-hidden="true">*</span>
@@ -1229,7 +1229,7 @@ export const TaskDetailModal = ({
                     value={editedTask.status}
                     onValueChange={(value) => handleStatusChange(value as TaskStatus)}
                   >
-                    <SelectTrigger aria-required="true">
+                    <SelectTrigger className="h-9" aria-required="true">
                       <SelectValue>
                         <div className="flex items-center gap-2">
                           <StatusDot color={currentStatusColor} />
@@ -1250,14 +1250,116 @@ export const TaskDetailModal = ({
                   </Select>
                 </div>
 
+                {/* Start Date */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <CalendarIcon className="h-3 w-3" />
+                    Start Date
+                    <span className="text-destructive">*</span>
+                  </Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          'w-full justify-start text-left font-normal h-9 px-3',
+                          !editedTask.startDate && 'text-muted-foreground'
+                        )}
+                      >
+                        {editedTask.startDate
+                          ? format(new Date(editedTask.startDate), 'PPP')
+                          : 'Pick a date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={editedTask.startDate ? new Date(editedTask.startDate) : undefined}
+                        onSelect={(date) => handleFieldChange('startDate', toDateOnly(date || undefined))}
+                        disabled={(date) => {
+                          if (editedTask.dueDate) {
+                            return isAfter(date, parseISO(editedTask.dueDate));
+                          }
+                          return false;
+                        }}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Due Date */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <CalendarIcon className="h-3 w-3" />
+                    Due Date <span className="text-destructive" aria-hidden="true">*</span>
+                  </Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        aria-required="true"
+                        className={cn(
+                          'w-full justify-start text-left font-normal h-9 px-3',
+                          !editedTask.dueDate && 'text-muted-foreground'
+                        )}
+                      >
+                        {editedTask.dueDate
+                          ? format(new Date(editedTask.dueDate), 'PPP')
+                          : 'Set date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={editedTask.dueDate ? new Date(editedTask.dueDate) : undefined}
+                        onSelect={(date) => handleFieldChange('dueDate', toDateOnly(date || undefined))}
+                        disabled={(date) => {
+                          if (editedTask.startDate) {
+                            return isBefore(date, parseISO(editedTask.startDate));
+                          }
+                          return false;
+                        }}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Reported By */}
+                {(mode === 'create' ? profile : editedTask.createdBy) && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <User className="h-3 w-3" />
+                      Reported By
+                    </Label>
+                    <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/20">
+                      <Avatar className="h-5 w-5">
+                        <AvatarFallback className="text-[9px]">
+                          {mode === 'create'
+                            ? (profile?.initials || (profile?.name || '').slice(0, 2).toUpperCase())
+                            : editedTask.createdBy?.initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">
+                        {mode === 'create'
+                          ? (profile?.name || profile?.email)
+                          : editedTask.createdBy?.name}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Priority */}
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground">Priority <span className="text-destructive" aria-hidden="true">*</span></Label>
                   <Select
                     value={editedTask.priority}
                     onValueChange={(value) => handleFieldChange('priority', value as Priority)}
                   >
-                    <SelectTrigger aria-required="true">
+                    <SelectTrigger className="h-9" aria-required="true">
                       <SelectValue>
                         <Badge className={cn('text-xs', priorityOptions.find(p => p.value === editedTask.priority)?.color)}>
                           {priorityOptions.find(p => p.value === editedTask.priority)?.label}
@@ -1274,25 +1376,25 @@ export const TaskDetailModal = ({
                   </Select>
                 </div>
 
-                {/* Module Selection */}
-                <div className="space-y-2">
+                {/* Modules */}
+                <div className="space-y-1.5">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <Tag className="h-3 w-3" />
                     Modules
                   </Label>
                   <div
-                    className="min-h-10 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
+                    className="min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
                     onClick={() => setIsModulePopoverOpen(true)}
                   >
                     {(editedTask.moduleIds || []).length === 0 && (
-                      <span className="text-muted-foreground">Select modules...</span>
+                      <span className="text-muted-foreground text-xs">Select modules...</span>
                     )}
                     {(editedTask.moduleIds || []).map((moduleId) => {
                       const module = modules?.find(m => m.id === moduleId);
                       if (!module) return null;
                       return (
                         <Badge key={module.id} variant="secondary" className="max-w-full px-2 py-0.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
-                          <span className="text-xs font-normal truncate max-w-[180px] sm:max-w-[220px]">{module.name}</span>
+                          <span className="text-xs font-normal truncate max-w-[120px]">{module.name}</span>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1351,10 +1453,8 @@ export const TaskDetailModal = ({
                                     key={module.id}
                                     value={module.name}
                                     onSelect={() => {
-                                      // If this is the first module, also set the primary module type for compatibility
                                       const isFirst = (editedTask.moduleIds || []).length === 0;
                                       const updatedIds = [...(editedTask.moduleIds || []), module.id];
-
                                       setEditedTask(prev => {
                                         const updated = {
                                           ...prev,
@@ -1363,7 +1463,6 @@ export const TaskDetailModal = ({
                                           module: isFirst ? module.type : prev.module,
                                           updatedAt: new Date().toISOString()
                                         };
-                                        // Only call onUpdate when editing an existing task, not during creation
                                         if (mode !== 'create') {
                                           onUpdate(updated);
                                         }
@@ -1403,119 +1502,13 @@ export const TaskDetailModal = ({
                   </div>
                 </div>
 
-                {/* Start Date */}
-                <div className="space-y-2">
+                {/* Tags — spans 2 cols */}
+                <div className="space-y-1.5 md:col-span-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <CalendarIcon className="h-3 w-3" />
-                    Start Date
-                    <span className="text-destructive">*</span>
+                    <Tag className="h-3 w-3" />
+                    Tags
                   </Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          'w-full justify-start text-left font-normal',
-                          !editedTask.startDate && 'text-muted-foreground'
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {editedTask.startDate
-                          ? format(new Date(editedTask.startDate), 'PPP')
-                          : 'Pick a date'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={editedTask.startDate ? new Date(editedTask.startDate) : undefined}
-                        onSelect={(date) => handleFieldChange('startDate', toDateOnly(date || undefined))}
-                        disabled={(date) => {
-                          if (editedTask.dueDate) {
-                            return isAfter(date, parseISO(editedTask.dueDate));
-                          }
-                          return false;
-                        }}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* Due Date */}
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <CalendarIcon className="h-3 w-3" />
-                    Due Date <span className="text-destructive" aria-hidden="true">*</span>
-                  </Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        aria-required="true"
-                        className={cn(
-                          'w-full justify-start text-left font-normal',
-                          !editedTask.dueDate && 'text-muted-foreground'
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {editedTask.dueDate
-                          ? format(new Date(editedTask.dueDate), 'PPP')
-                          : 'Pick a date'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={editedTask.dueDate ? new Date(editedTask.dueDate) : undefined}
-                        onSelect={(date) => handleFieldChange('dueDate', toDateOnly(date || undefined))}
-                        disabled={(date) => {
-                          if (editedTask.startDate) {
-                            return isBefore(date, parseISO(editedTask.startDate));
-                          }
-                          return false;
-                        }}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                {/* Reported By */}
-                {(mode === 'create' ? profile : editedTask.createdBy) && (
-                  <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <User className="h-3 w-3" />
-                      Reported By
-                    </Label>
-                    <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-input bg-muted/30">
-                      <Avatar className="h-5 w-5">
-                        <AvatarFallback className="text-[9px]">
-                          {mode === 'create'
-                            ? (profile?.initials || (profile?.name || '').slice(0, 2).toUpperCase())
-                            : editedTask.createdBy?.initials}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm">
-                        {mode === 'create'
-                          ? (profile?.name || profile?.email)
-                          : editedTask.createdBy?.name}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Tags */}
-              <div className="space-y-2">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <Tag className="h-3 w-3" />
-                  Tags
-                </Label>
-                <div className="space-y-2 rounded-md border border-input px-3 py-2">
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm">
                     {editedTask.tags.map((tag, index) => (
                       <Badge
                         key={`${tag}-${index}`}
@@ -1585,10 +1578,9 @@ export const TaskDetailModal = ({
                       }}
                     >
                       <PopoverTrigger asChild>
-                        <Button type="button" variant="outline" size="sm" className="h-7 gap-1 border-dashed">
+                        <button className="h-6 w-6 rounded-full border border-dashed border-muted-foreground/40 hover:border-primary hover:text-primary flex items-center justify-center transition-colors text-muted-foreground">
                           <Plus className="h-3 w-3" />
-                          Add tag
-                        </Button>
+                        </button>
                       </PopoverTrigger>
                       <PopoverContent className="p-0 w-[240px] flex flex-col overflow-hidden" align="start">
                         <div className="p-2 border-b">
@@ -1627,7 +1619,6 @@ export const TaskDetailModal = ({
                           </div>
                         )}
 
-                        {/* Persistent "Create new tag" footer — always visible */}
                         <div className="border-t p-1.5">
                           <button
                             type="button"
@@ -1651,22 +1642,39 @@ export const TaskDetailModal = ({
                   </div>
                 </div>
               </div>
-            </section>
+            </div>
 
             <Separator />
 
             {/* Description Section */}
             <section className="space-y-3">
-              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Description
-              </h3>
-              <Textarea
-                value={editedTask.description || ''}
-                onChange={(e) => handleFieldChange('description', e.target.value)}
-                placeholder="Add a detailed description for this task..."
-                className="min-h-[120px] resize-none"
-              />
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Description</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="task-advanced-mode" className="text-xs text-muted-foreground cursor-pointer">Advanced Editor</Label>
+                  <Switch
+                    id="task-advanced-mode"
+                    checked={isAdvancedDescription}
+                    onCheckedChange={setIsAdvancedDescription}
+                  />
+                </div>
+              </div>
+              {isAdvancedDescription ? (
+                <div className="min-h-[200px] border rounded-md p-4 bg-background">
+                  <SlashBlockEditor
+                    key={editedTask.id || 'create'}
+                    initialBlocks={editedTask.descriptionBlocks}
+                    onChange={(blocks) => handleFieldChange('descriptionBlocks', blocks as any)}
+                  />
+                </div>
+              ) : (
+                <Textarea
+                  value={editedTask.description || ''}
+                  onChange={(e) => handleFieldChange('description', e.target.value)}
+                  placeholder="Describe the task in detail..."
+                  className="min-h-[150px] resize-none"
+                />
+              )}
             </section>
 
             <Separator />

@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { ArrowUpDown, AlertTriangle, Link2, Plus, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TaskDetailModal } from './TaskDetailModal';
 import { formatModuleType } from '../utils/projectUtils';
 import { playCompleteSound } from '@/lib/playSound';
@@ -248,10 +249,10 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
               return (
                 <TableRow
                   key={task.id}
-                  className="cursor-pointer hover:bg-muted/50"
+                  className="cursor-pointer hover:bg-muted/50 h-[72px]"
                   onClick={() => handleRowClick(task)}
                 >
-                  <TableCell>
+                  <TableCell className="align-middle">
                     <div className="flex items-start gap-2">
                       {blockerCount > 0 && (
                         <AlertTriangle className="h-4 w-4 text-status-blocked shrink-0 mt-0.5" />
@@ -268,8 +269,15 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
                           <Check className="h-3 w-3 text-foreground opacity-0 hover:opacity-100" />
                         </button>
                       )}
-                      <div>
-                        <p className="font-medium">{task.title}</p>
+                      <div className="min-w-0">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p className="font-medium line-clamp-2 cursor-pointer">{task.title}</p>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-xs">
+                            {task.title}
+                          </TooltipContent>
+                        </Tooltip>
                         {task.description && (
                           <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
                             {task.description}
