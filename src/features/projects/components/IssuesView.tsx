@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ColorSwatchPicker } from '@/components/shared/ColorSwatchPicker';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useParams } from 'react-router-dom';
@@ -31,6 +31,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { IssueDetailModal } from './IssueDetailModal';
 import { ISSUE_SEVERITY_DISPLAY } from './issueSeverity';
 import { useIssueColumns, useCreateIssueColumn, useDeleteIssueColumn, useReorderIssueColumns } from '@/hooks/useIssueColumns';
@@ -47,6 +48,7 @@ interface IssuesViewProps {
   severityFilter?: IssueSeverity[];
   statusFilter?: IssueStatus[];
   assigneeFilter?: string[];
+  assignedByFilter?: string[];
   dueDateFilter?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
   reportedDateFilter?: 'today' | 'this-week' | 'this-month';
   isAddDialogOpen?: boolean;
@@ -66,7 +68,7 @@ interface IssuesKanbanColumn {
 
 const STATUS_BADGE_CONFIG: Record<string, { color: string; label: string }> = {
   open: { color: 'bg-destructive/20 text-destructive border-destructive/30', label: 'Open' },
-  investigating: { color: 'bg-orange-500/20 text-orange-600 border-orange-500/30', label: 'Investigating' },
+  'in-progress': { color: 'bg-orange-500/20 text-orange-600 border-orange-500/30', label: 'In Progress' },
   resolved: { color: 'bg-status-done/20 text-status-done border-status-done/30', label: 'Resolved' },
   closed: { color: 'bg-muted text-muted-foreground border-muted', label: 'Closed' },
   'wont-fix': { color: 'bg-muted text-muted-foreground border-muted line-through', label: "Won't Fix" },
@@ -85,16 +87,6 @@ const categoryConfig: Record<IssueCategory, { icon: typeof Bug; label: string }>
   'design-change': { icon: Pencil, label: 'Design Change' },
   other: { icon: Info, label: 'Other' },
 };
-
-const COLUMN_COLOR_OPTIONS = [
-  { value: '#ef4444', label: 'Red' },
-  { value: '#f97316', label: 'Orange' },
-  { value: '#eab308', label: 'Yellow' },
-  { value: '#10b981', label: 'Green' },
-  { value: '#3b82f6', label: 'Blue' },
-  { value: '#8b5cf6', label: 'Purple' },
-  { value: '#6b7280', label: 'Gray' },
-];
 
 const DEPENDENCIES_COLUMN: IssuesKanbanColumn = {
   id: 'col-dependencies',
@@ -135,6 +127,7 @@ export function IssuesView({
   severityFilter: externalSeverityFilter = [],
   statusFilter: externalStatusFilter = [],
   assigneeFilter: externalAssigneeFilter = [],
+  assignedByFilter: externalAssignedByFilter = [],
   dueDateFilter: externalDueDateFilter,
   reportedDateFilter: externalReportedDateFilter,
   isAddDialogOpen: externalIsAddDialogOpen,
@@ -179,6 +172,7 @@ export function IssuesView({
   const severityFilter = externalSeverityFilter ?? internalSeverityFilter;
   const statusFilter = externalStatusFilter ?? internalStatusFilter;
   const assigneeFilter = externalAssigneeFilter;
+  const assignedByFilter = externalAssignedByFilter;
   const dueDateFilter = externalDueDateFilter;
   const reportedDateFilter = externalReportedDateFilter;
 
@@ -215,6 +209,8 @@ export function IssuesView({
     const matchesAssignee = !assigneeFilter.length ||
       (assigneeFilter.includes('unassigned') && (!issue.assignees || issue.assignees.length === 0)) ||
       (issue.assignees?.some(a => assigneeFilter.includes(a.id)));
+    const matchesAssignedBy = !assignedByFilter.length ||
+      assignedByFilter.includes(issue.reportedBy.id);
     let matchesDueDate = true;
     if (dueDateFilter) {
       const today = new Date();
@@ -268,7 +264,7 @@ export function IssuesView({
       }
     }
 
-    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesDueDate && matchesReportedDate;
+    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesAssignedBy && matchesDueDate && matchesReportedDate;
   });
 
   // Sort by severity (critical first), then by date
@@ -729,21 +725,10 @@ export function IssuesView({
                             </div>
                             <div className="space-y-2">
                               <Label>Color</Label>
-                              <Select value={newColumnColor} onValueChange={setNewColumnColor}>
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {COLUMN_COLOR_OPTIONS.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: option.value }} />
-                                        {option.label}
-                                      </div>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <ColorSwatchPicker
+                                value={newColumnColor}
+                                onChange={setNewColumnColor}
+                              />
                             </div>
                             <Button
                               onClick={handleAddColumn}
@@ -792,24 +777,31 @@ export function IssuesView({
                   return (
                     <TableRow
                       key={issue.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-muted/50 h-[72px]"
                       onClick={() => handleIssueClick(issue)}
                     >
-                      <TableCell>
+                      <TableCell className="align-middle">
                         <Badge className={cn('gap-1', ISSUE_SEVERITY_DISPLAY[issue.severity].color)}>
                           <SeverityIcon className="h-3 w-3" />
                           {ISSUE_SEVERITY_DISPLAY[issue.severity].label}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="align-middle">
                         <div className="flex items-start gap-2">
                           {(issue.status === 'resolved' || issue.status === 'closed') && (
                             <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center shrink-0 mt-0.5">
                               <Check className="h-3 w-3 text-status-done" />
                             </div>
                           )}
-                          <div>
-                            <p className="font-medium">{issue.title}</p>
+                          <div className="min-w-0">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <p className="font-medium line-clamp-2 cursor-pointer">{issue.title}</p>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" className="max-w-xs">
+                                {issue.title}
+                              </TooltipContent>
+                            </Tooltip>
                             <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
                               {issue.description}
                             </p>

@@ -73,13 +73,12 @@ export function useMyDayTasks() {
         } as MyDayItem;
       });
 
-    // Resolved/closed/wont-fix issues never belong in My Day — only open/investigating.
+    // Resolved/closed/wont-fix issues never belong in My Day — only open/in-progress.
     const issueItems: MyDayItem[] = rawIssues
       .filter(({ issue }) => {
         const isAssignedToUser = issue.assignees?.some(a => a.id === user.id) ?? false;
-        const isDueToday = getDueDateStatus(issue.dueDate) === 'today';
         const isUnresolved = issue.status !== 'resolved' && issue.status !== 'closed' && issue.status !== 'wont-fix';
-        return isUnresolved && (isAssignedToUser || isDueToday);
+        return isUnresolved && isAssignedToUser;
       })
       .map(({ issue, projectName }) => {
         const dueDateStatus = getDueDateStatus(issue.dueDate);
@@ -96,7 +95,7 @@ export function useMyDayTasks() {
           projectName,
           isOverdue: dueDateStatus === 'overdue',
           isDueToday: dueDateStatus === 'today',
-          isBlocked: issue.status === 'investigating',
+          isBlocked: false,
           originalIssue: issue,
         } as MyDayItem;
       });

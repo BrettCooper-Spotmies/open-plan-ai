@@ -40,12 +40,18 @@ function fromApi(raw: any): Task {
       }
     : creatorByTaskId.get(raw.id);
 
+  const assignees = (raw.assignees || []).map((a: any) => ({
+    ...a,
+    avatar: a.avatar ?? a.avatarUrl ?? '',
+  }));
+
   return {
     ...raw,
     moduleIds,
     blockedBy: (raw.blockedBy || []).map((d: any) => (typeof d === 'string' ? d : d.id)),
     checklist: Array.isArray(raw.checklist) ? raw.checklist : [],
     createdBy: resolvedCreator,
+    assignees,
   };
 }
 
@@ -86,11 +92,11 @@ export const tasksService = {
   /**
    * Get tasks for a specific project
    */
-  async getByProject(projectId: string, limit?: number): Promise<Task[]> {
+  async getByProject(projectId: string, limit?: number, signal?: AbortSignal): Promise<Task[]> {
     const url = limit
       ? `${ENDPOINTS.TASKS.LIST(projectId)}?limit=${limit}`
       : ENDPOINTS.TASKS.LIST(projectId);
-    const data = await apiClient.get<any[]>(url);
+    const data = await apiClient.get<any[]>(url, { signal });
     return (data || []).map(fromApi);
   },
 
@@ -130,6 +136,10 @@ export const tasksService = {
     if (payload.blockedBy !== undefined) {
       payload.dependsOnIds = payload.blockedBy;
       delete payload.blockedBy;
+    }
+    if (payload.assignees !== undefined) {
+      payload.assigneeIds = (payload.assignees as any[]).map((a: any) => a.id ?? a).filter(Boolean);
+      delete payload.assignees;
     }
     const data = await apiClient.patch<any>(ENDPOINTS.TASKS.BY_ID(taskId), payload);
     return fromApi(data);

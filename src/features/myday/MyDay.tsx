@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useQueries } from '@tanstack/react-query';
 import { LayoutGrid, List } from 'lucide-react';
 import { MyDayStats } from './components/MyDayStats';
 import { MyDayKanbanView } from './components/MyDayKanbanView';
@@ -15,9 +14,6 @@ import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
 import { useUpdateTask, useBatchUpdateTasks } from '@/hooks/useTasks';
 import { useUpdateIssue } from '@/hooks/useIssues';
 import { useProjects } from '@/hooks/useProjects';
-import { projectTaskColumnsService } from '@/services/projectTaskColumns.service';
-import { issueColumnsService } from '@/services/issueColumns.service';
-import { queryKeys } from '@/lib/queryClient';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
 
@@ -45,49 +41,6 @@ export default function MyDay() {
   const allTasks = useMemo(() => {
     return projects.flatMap(p => p.tasks || []);
   }, [projects]);
-
-  // Per-project Kanban columns are fully customizable (see task-columns /
-  // issue-columns modules), so My Day's "group by progress" board — which
-  // shows a single universal Dependency/Not Started/In Progress/Completed
-  // layout across every project — can't assume a project has a column for
-  // each bucket. Fetch each represented project's columns so the Kanban view
-  // can disable drop targets that don't map to a real column for that task.
-  const projectIdsWithItems = useMemo(
-    () => Array.from(new Set(userTasks.map(item => item.projectId))),
-    [userTasks],
-  );
-
-  const taskColumnQueries = useQueries({
-    queries: projectIdsWithItems.map(projectId => ({
-      queryKey: queryKeys.taskColumns.list(projectId),
-      queryFn: () => projectTaskColumnsService.getByProjectId(projectId),
-    })),
-  });
-
-  const issueColumnQueries = useQueries({
-    queries: projectIdsWithItems.map(projectId => ({
-      queryKey: queryKeys.issueColumns.list(projectId),
-      queryFn: () => issueColumnsService.getByProjectId(projectId),
-    })),
-  });
-
-  const projectTaskColumnKeys = useMemo(() => {
-    const map: Record<string, Set<string>> = {};
-    projectIdsWithItems.forEach((projectId, index) => {
-      const data = taskColumnQueries[index]?.data;
-      if (data) map[projectId] = new Set(data.map(c => c.status));
-    });
-    return map;
-  }, [projectIdsWithItems, taskColumnQueries]);
-
-  const projectIssueColumnKeys = useMemo(() => {
-    const map: Record<string, Set<string>> = {};
-    projectIdsWithItems.forEach((projectId, index) => {
-      const data = issueColumnQueries[index]?.data;
-      if (data) map[projectId] = new Set(data.map(c => c.status));
-    });
-    return map;
-  }, [projectIdsWithItems, issueColumnQueries]);
 
   const { needsAttention, readyToWork, waitingBlocked } = useMemo(() => {
     return categorizeMyDayItems(userTasks);
@@ -121,9 +74,9 @@ export default function MyDay() {
         // a clear 1-to-1 IssueStatus counterpart.
         const issueStatusMap: Partial<Record<TaskStatus, IssueStatus>> = {
           'todo':        'open',
-          'in-progress': 'investigating',
+          'in-progress': 'in-progress',
           'done':        'resolved',
-          'blocked':     'investigating',
+          'blocked':     'in-progress',
           // 'review' intentionally omitted — no equivalent IssueStatus exists.
         };
         const mappedStatus = issueStatusMap[status];
@@ -259,8 +212,6 @@ export default function MyDay() {
                   onTaskClick={handleTaskClick}
                   onStatusUpdate={handleStatusUpdate}
                   onChecklistToggle={handleChecklistToggle}
-                  projectTaskColumnKeys={projectTaskColumnKeys}
-                  projectIssueColumnKeys={projectIssueColumnKeys}
                 />
               ) : (
                 <MyDayListView

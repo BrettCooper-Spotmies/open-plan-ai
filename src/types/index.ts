@@ -25,7 +25,7 @@ export type ProjectStage = 'concept' | 'design' | 'development' | 'testing' | 'p
 
 // Issue types
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'trivial';
-export type IssueStatus = 'open' | 'investigating' | 'resolved' | 'closed' | 'wont-fix';
+export type IssueStatus = 'open' | 'in-progress' | 'resolved' | 'closed' | 'wont-fix';
 export type IssueCategory =
   | 'defect'           // Product defect
   | 'risk'             // Identified risk
@@ -274,6 +274,7 @@ export interface TaskFilter {
   module?: ModuleType[];
   moduleIds?: string[];
   assignee?: string[];
+  assignedBy?: string[];
   milestoneId?: string;
   dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
   tags?: string[];

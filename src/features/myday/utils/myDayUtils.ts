@@ -129,8 +129,7 @@ export function getUserTasks(projects: Project[], userId: string): MyDayTask[] {
     (project.tasks || [])
       .filter(task => {
         const isAssignedToUser = task.assignees?.some(a => a.id === userId) ?? false;
-        const isDueToday = getDueDateStatus(task.dueDate) === 'today';
-        return (isAssignedToUser || isDueToday) && (task.status !== 'done' || isCompletedToday(task));
+        return isAssignedToUser && (task.status !== 'done' || isCompletedToday(task));
       })
       .map(task => {
         const dueDateStatus = getDueDateStatus(task.dueDate);
@@ -154,7 +153,7 @@ export function getUserTasks(projects: Project[], userId: string): MyDayTask[] {
 export function getUserIssues(projects: Project[], userId: string): Issue[] {
   return projects.flatMap(project =>
     (project.issues || []).filter(issue =>
-      ((issue.assignees?.some(a => a.id === userId) ?? false) || getDueDateStatus(issue.dueDate) === 'today') &&
+      (issue.assignees?.some(a => a.id === userId) ?? false) &&
       ((issue.status !== 'resolved' && issue.status !== 'closed') || isCompletedToday(issue))
     )
   );
@@ -205,7 +204,7 @@ export function mapIssueToMyDayItem(issue: Issue, project: Project): MyDayItem {
     projectName: project.name,
     isOverdue: dueDateStatus === 'overdue',
     isDueToday: dueDateStatus === 'today',
-    isBlocked: issue.status === 'investigating',
+    isBlocked: false,
     originalIssue: issue,
   };
 }
@@ -222,8 +221,7 @@ export function getUserItems(projects: Project[], userId: string): MyDayItem[] {
     (project.tasks || [])
       .filter(task => {
         const isAssignedToUser = task.assignees?.some(a => a.id === userId) ?? false;
-        const isDueToday = getDueDateStatus(task.dueDate) === 'today';
-        return (isAssignedToUser || isDueToday) && (task.status !== 'done' || isCompletedToday(task));
+        return isAssignedToUser && (task.status !== 'done' || isCompletedToday(task));
       })
       .forEach(task => {
         items.push(mapTaskToMyDayItem(task, project, allTasks));
@@ -234,7 +232,7 @@ export function getUserItems(projects: Project[], userId: string): MyDayItem[] {
   projects.forEach(project => {
     (project.issues || [])
       .filter(issue =>
-        ((issue.assignees?.some(a => a.id === userId) ?? false) || getDueDateStatus(issue.dueDate) === 'today') &&
+        (issue.assignees?.some(a => a.id === userId) ?? false) &&
         ((issue.status !== 'resolved' && issue.status !== 'closed') || isCompletedToday(issue))
       )
       .forEach(issue => {
@@ -534,10 +532,10 @@ export function groupTasksByProgress(items: MyDayTask[] | MyDayItem[]): {
   for (const item of items) {
     if (item.status === 'done' || item.status === 'resolved' || item.status === 'closed') {
       groups.completed.push(item);
+    } else if (item.status === 'in-progress' || item.status === 'review') {
+      groups.inProgress.push(item);
     } else if (item.status === 'blocked' || item.isBlocked || item.hasUnresolvedDependencies) {
       groups.dependency.push(item);
-    } else if (item.status === 'in-progress' || item.status === 'review' || item.status === 'investigating') {
-      groups.inProgress.push(item);
     } else {
       groups.notStarted.push(item);
     }

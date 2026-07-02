@@ -197,7 +197,7 @@ export function calculateProjectProgress(
 // Count open issues
 export function countOpenIssues(issues: Issue[]): { total: number; critical: number } {
   const openIssues = issues.filter(i =>
-    i.status === 'open' || i.status === 'investigating'
+    i.status === 'open' || i.status === 'in-progress'
   );
   const criticalIssues = openIssues.filter(i => i.severity === 'critical');
 
@@ -214,6 +214,17 @@ export function countOverdueTasks(tasks: Task[]): number {
     if (!task.dueDate || task.status === 'done') return false;
     return isBefore(parse(task.dueDate, 'yyyy-MM-dd', new Date()), today);
   }).length;
+}
+
+// Format cycle time into a human-readable string.
+// Values under 2 days are shown as hours since decimals like "0.3d" are hard to parse at a glance.
+export function formatCycleTime(days: number): { value: string; subtitle: string } {
+  if (days === 0) return { value: 'N/A', subtitle: 'days per task' };
+  if (days < 2) {
+    const hours = Math.round(days * 24);
+    return { value: `${hours} hrs`, subtitle: 'hours per task' };
+  }
+  return { value: `${days}d`, subtitle: 'days per task' };
 }
 
 // Calculate average cycle time
@@ -324,7 +335,7 @@ export function getTeamWorkload(
     const memberIssues = issues.filter(i =>
       i.assignees?.some((a: { id: string }) => a.id === member.id)
     );
-    const openIssues = memberIssues.filter(i => i.status === 'open' || i.status === 'investigating').length;
+    const openIssues = memberIssues.filter(i => i.status === 'open' || i.status === 'in-progress').length;
     const resolvedIssues = memberIssues.filter(i => i.status === 'resolved' || i.status === 'closed' || i.status === 'wont-fix').length;
 
     return {

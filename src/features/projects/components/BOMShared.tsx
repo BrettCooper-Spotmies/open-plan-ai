@@ -1,8 +1,8 @@
 // Shared micro-components for BOM views
 import {
-  Zap, Cpu, Package, Box, Monitor, Shield, Layers,
+  Zap, Cpu, Package, Box, Monitor, Shield, Layers, X,
 } from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BOMCategory, BOMStatus, getCategoryMeta } from './bomData';
 import { Link2 } from 'lucide-react';
@@ -15,8 +15,8 @@ const CAT_ICONS: Record<BOMCategory, React.ElementType> = {
 };
 
 export function PartThumb({
-  cat, size = 32, radius = 7, big = false, imageUrl,
-}: { cat: BOMCategory; size?: number; radius?: number; big?: boolean; imageUrl?: string | null }) {
+  cat, size = 32, radius = 7, big = false, imageUrl, onImageClick,
+}: { cat: BOMCategory; size?: number; radius?: number; big?: boolean; imageUrl?: string | null; onImageClick?: () => void }) {
   const meta = getCategoryMeta(cat);
   const Icon = CAT_ICONS[cat] ?? Package;
   const iconSize = big ? 34 : Math.round(size * 0.46);
@@ -39,7 +39,10 @@ export function PartThumb({
 
   if (imageUrl) {
     return (
-      <div style={containerStyle}>
+      <div
+        style={{ ...containerStyle, cursor: onImageClick ? 'zoom-in' : undefined }}
+        onClick={onImageClick}
+      >
         <img src={imageUrl} alt="" className="w-full h-full object-contain" />
       </div>
     );
@@ -56,6 +59,42 @@ export function PartThumb({
         </span>
       )}
     </div>
+  );
+}
+
+export function ImageViewerModal({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      style={{ background: 'rgba(0,0,0,0.85)' }}
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 w-9 h-9 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+      >
+        <X className="w-5 h-5" />
+      </button>
+      <img
+        src={src}
+        alt=""
+        onClick={e => e.stopPropagation()}
+        style={{
+          maxWidth: '90vw',
+          maxHeight: '90vh',
+          objectFit: 'contain',
+          borderRadius: 8,
+          boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+        }}
+      />
+    </div>,
+    document.body,
   );
 }
 

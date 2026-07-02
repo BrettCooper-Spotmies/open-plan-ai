@@ -3,9 +3,10 @@ import { format } from 'date-fns';
 import { Flag, AlertCircle, CheckSquare, Users, Calendar, Folder } from 'lucide-react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { CalendarEvent } from '../utils/calendarUtils';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 interface CalendarEventPreviewProps {
   event: CalendarEvent;
@@ -135,6 +136,7 @@ export const CalendarEventPreview: React.FC<CalendarEventPreviewProps> = ({
                 <div className="flex items-center gap-1">
                   {event.assignees.map((assignee) => (
                     <Avatar key={assignee.id} className="h-5 w-5">
+                      <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
                       <AvatarFallback className="text-[10px] bg-muted">
                         {assignee.initials}
                       </AvatarFallback>

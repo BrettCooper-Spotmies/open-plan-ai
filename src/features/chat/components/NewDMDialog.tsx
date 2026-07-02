@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { OnlineStatus } from './OnlineStatus';
 import { chatService } from '@/services/chat.service';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -86,6 +86,7 @@ export function NewDMDialog({ open, onOpenChange, onSelect, onConversationCreate
               >
                 <div className="relative">
                   <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.avatarUrl} alt={user.name} />
                     <AvatarFallback className="text-xs">{user.initials}</AvatarFallback>
                   </Avatar>
                   <OnlineStatus isOnline={user.isOnline} className="absolute -bottom-0.5 -right-0.5" />

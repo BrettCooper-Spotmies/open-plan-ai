@@ -100,7 +100,7 @@ function calculateKPIs(
 
   // Count open issues
   const openIssuesList = issues.filter(i =>
-    i.status === 'open' || i.status === 'investigating'
+    i.status === 'open' || i.status === 'in-progress'
   );
   const openIssues = openIssuesList.length;
   const criticalIssues = openIssuesList.filter(i => i.severity === 'critical').length;

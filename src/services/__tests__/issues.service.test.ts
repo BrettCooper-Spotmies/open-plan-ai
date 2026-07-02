@@ -113,15 +113,15 @@ describe('issuesService', () => {
 
   describe('update', () => {
     it('should PATCH the issue and return the updated result', async () => {
-      const updated = { ...mockIssue, status: 'investigating', title: 'Updated' };
+      const updated = { ...mockIssue, status: 'in-progress', title: 'Updated' };
       vi.mocked(apiClient.patch).mockResolvedValueOnce(updated);
 
       const issue = await issuesService.update('issue-1', {
-        status: 'investigating',
+        status: 'in-progress',
         title: 'Updated',
       });
 
-      expect(issue.status).toBe('investigating');
+      expect(issue.status).toBe('in-progress');
       expect(issue.title).toBe('Updated');
     });
 

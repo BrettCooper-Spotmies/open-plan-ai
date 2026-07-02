@@ -86,6 +86,7 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ISSUE_SEVERITY_DISPLAY, ISSUE_SEVERITY_OPTIONS } from './issueSeverity';
 import { attachmentsService } from '@/services/attachments.service';
+import { commentsService } from '@/services/comments.service';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectTags, useCreateTag } from '@/hooks/useProjectTags';
 import { getFallbackTagColor } from '@/lib/tagColors';
@@ -156,6 +157,13 @@ export function IssueDetailContent({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+    const [pendingFileUrls, setPendingFileUrls] = useState<(string | null)[]>([]);
+
+    useEffect(() => {
+        const urls = pendingFiles.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+        setPendingFileUrls(urls);
+        return () => { urls.forEach(url => { if (url) URL.revokeObjectURL(url); }); };
+    }, [pendingFiles]);
 
     const projectId = issue?.projectId;
     const { data: apiIssueColumns } = useIssueColumns(projectId);
@@ -179,7 +187,8 @@ export function IssueDetailContent({
 
     useEffect(() => {
         if (issue) {
-            setEditedIssue(issue);
+            // Preserve loaded comments — they're fetched separately via API
+            setEditedIssue(prev => ({ ...issue, comments: prev?.comments ?? issue.comments ?? [] }));
         }
     }, [issue]);
 
@@ -192,6 +201,31 @@ export function IssueDetailContent({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [issue?.id]);
+
+    // Load comments from API whenever an existing issue is opened.
+    useEffect(() => {
+        if (mode === 'create' || !issue?.id) return;
+        let cancelled = false;
+        commentsService.getByEntity(issue.id, 'issue').then(dbComments => {
+            if (cancelled) return;
+            const mappedComments: Comment[] = dbComments.map(c => ({
+                id: c.id,
+                content: c.content,
+                author: {
+                    id: c.author?.id || '',
+                    name: c.author?.name || 'Unknown',
+                    initials: c.author?.initials || '?',
+                    avatar: c.author?.avatarUrl || undefined,
+                    email: '',
+                    role: 'member',
+                },
+                createdAt: c.createdAt || new Date().toISOString(),
+            }));
+            setEditedIssue(prev => (prev && prev.id === issue.id ? { ...prev, comments: mappedComments } : prev));
+        }).catch(() => {});
+        return () => { cancelled = true; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [issue?.id, mode]);
 
     // The issue payload returned by the project/issue endpoints never embeds
     // attachments (they live behind a separate uploads endpoint), so fetch them
@@ -404,16 +438,50 @@ export function IssueDetailContent({
 
     const getTaskById = (id: string) => tasks.find(t => t.id === id);
 
-    const handleAddComment = () => {
+    const handleAddComment = async () => {
         if (!newComment.trim()) return;
-        const newCommentObj: Comment = {
-            id: `comment-${Date.now()}`,
-            content: newComment,
-            author: teamMembers[0] || { id: 'unknown', name: 'Unknown User', initials: 'UN', email: '', role: 'member' },
-            createdAt: new Date().toISOString(),
-        };
-        handleFieldChange('comments', [...comments, newCommentObj]);
+        const content = newComment.trim();
         setNewComment('');
+
+        if (mode !== 'create' && issue?.id) {
+            try {
+                const dbComment = await commentsService.create({
+                    content,
+                    entity_id: issue.id,
+                    entity_type: 'issue',
+                });
+                const newCommentObj: Comment = {
+                    id: dbComment.id,
+                    content: dbComment.content,
+                    author: {
+                        id: dbComment.author?.id || profile?.id || '',
+                        name: dbComment.author?.name || profile?.name || 'You',
+                        initials: dbComment.author?.initials || profile?.initials || '?',
+                        avatar: dbComment.author?.avatarUrl || undefined,
+                        email: profile?.email || '',
+                        role: 'member',
+                    },
+                    createdAt: dbComment.createdAt || new Date().toISOString(),
+                };
+                setEditedIssue(prev => {
+                    if (!prev) return prev;
+                    return { ...prev, comments: [...(prev.comments || []), newCommentObj] };
+                });
+            } catch {
+                setNewComment(content);
+                toast.error('Failed to add comment');
+            }
+        } else {
+            const newCommentObj: Comment = {
+                id: `comment-${Date.now()}`,
+                content,
+                author: profile
+                    ? { id: profile.id, name: profile.name || profile.email, initials: profile.initials || '?', avatar: profile.avatarUrl || undefined, email: profile.email, role: profile.role || 'member' }
+                    : { id: 'unknown', name: 'Unknown User', initials: '?', email: '', role: 'member' },
+                createdAt: new Date().toISOString(),
+            };
+            handleFieldChange('comments', [...comments, newCommentObj]);
+        }
     };
 
     return (
@@ -1046,23 +1114,46 @@ export function IssueDetailContent({
                             {/* Pending files (create mode only, uploaded once the issue is created) */}
                             {mode === 'create' && pendingFiles.length > 0 && (
                                 <div className="space-y-1">
-                                    {pendingFiles.map((f, i) => (
-                                        <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <File className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                                <span className="truncate">{f.name}</span>
-                                                <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
-                                            </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-6 w-6 shrink-0"
-                                                onClick={() => handleRemovePendingFile(i)}
+                                    {pendingFiles.map((f, i) => {
+                                        const previewUrl = pendingFileUrls[i];
+                                        const isImage = f.type.startsWith('image/');
+                                        return (
+                                            <div
+                                                key={i}
+                                                className={cn(
+                                                    "flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm",
+                                                    isImage && previewUrl && "cursor-pointer hover:bg-muted"
+                                                )}
+                                                onClick={() => {
+                                                    if (isImage && previewUrl) {
+                                                        setPreviewingFile({ url: previewUrl, fileName: f.name, mimeType: f.type });
+                                                    }
+                                                }}
                                             >
-                                                <X className="h-3 w-3" />
-                                            </Button>
-                                        </div>
-                                    ))}
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    {isImage && previewUrl ? (
+                                                        <img
+                                                            src={previewUrl}
+                                                            alt={f.name}
+                                                            className="h-10 w-10 rounded object-cover shrink-0 border"
+                                                        />
+                                                    ) : (
+                                                        <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                    )}
+                                                    <span className="truncate">{f.name}</span>
+                                                    <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-6 w-6 shrink-0"
+                                                    onClick={(e) => { e.stopPropagation(); handleRemovePendingFile(i); }}
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
 

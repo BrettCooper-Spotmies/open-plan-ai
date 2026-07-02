@@ -1,7 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import { projectsService } from '@/services/projects.service';
 import { modulesService } from '@/services/modules.service';
 import { queryKeys } from '@/lib/queryClient';
+
+/** Degrade a failed sub-fetch to a default value, but let abort errors propagate so React Query can discard the canceled result instead of caching a partial one. */
+function orDefaultUnlessAborted<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  return promise.catch((err) => {
+    if (axios.isCancel(err)) throw err;
+    return fallback;
+  });
+}
 
 /**
  * Fetch a single project with all related data (tasks, milestones, issues).
@@ -11,12 +20,12 @@ import { queryKeys } from '@/lib/queryClient';
 export function useProjectDetail(projectId: string | undefined, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: queryKeys.projects.detail(projectId || ''),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const [project, tasks, milestones, issues] = await Promise.all([
-        projectsService.getById(projectId!),
-        projectsService.getTasks(projectId!).catch(() => []),
-        projectsService.getMilestones(projectId!).catch(() => []),
-        projectsService.getIssues(projectId!).catch(() => []),
+        projectsService.getById(projectId!, signal),
+        orDefaultUnlessAborted(projectsService.getTasks(projectId!, 100, signal), []),
+        orDefaultUnlessAborted(projectsService.getMilestones(projectId!, 100, signal), []),
+        orDefaultUnlessAborted(projectsService.getIssues(projectId!, 100, signal), []),
       ]);
       if (!project) return null;
       return {

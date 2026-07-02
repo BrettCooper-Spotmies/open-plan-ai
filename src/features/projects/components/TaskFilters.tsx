@@ -80,6 +80,14 @@ export function TaskFilters({
     onFiltersChange({ ...filters, assignee: updated.length ? updated : undefined });
   };
 
+  const toggleAssignedBy = (memberId: string) => {
+    const current = filters.assignedBy || [];
+    const updated = current.includes(memberId)
+      ? current.filter(a => a !== memberId)
+      : [...current, memberId];
+    onFiltersChange({ ...filters, assignedBy: updated.length ? updated : undefined });
+  };
+
   const toggleTag = (tag: string) => {
     const current = filters.tags || [];
     const updated = current.includes(tag)
@@ -219,11 +227,11 @@ export function TaskFilters({
         </SelectContent>
       </Select>
 
-      {/* Assignee Filter */}
+      {/* Assigned To Filter */}
       <Popover>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="gap-1">
-            Assignee
+            Assigned To
             {filters.assignee?.length ? (
               <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
                 {filters.assignee.length}
@@ -247,6 +255,35 @@ export function TaskFilters({
                 <Checkbox
                   checked={filters.assignee?.includes(member.id) || false}
                   onCheckedChange={() => toggleAssignee(member.id)}
+                />
+                <span className="text-sm">{member.name}</span>
+              </label>
+            ))}
+          </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Assigned By Filter */}
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="outline" size="sm" className="gap-1">
+            Assigned By
+            {filters.assignedBy?.length ? (
+              <Badge variant="secondary" className="ml-1 h-4 px-1 text-[10px]">
+                {filters.assignedBy.length}
+              </Badge>
+            ) : (
+              <ChevronDown className="h-3 w-3 opacity-50" />
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-48 p-2" align="start">
+          <div className="space-y-2 max-h-60 overflow-y-auto">
+            {teamMembers.map(member => (
+              <label key={member.id} className="flex items-center gap-2 cursor-pointer hover:bg-muted/50 p-1 rounded">
+                <Checkbox
+                  checked={filters.assignedBy?.includes(member.id) || false}
+                  onCheckedChange={() => toggleAssignedBy(member.id)}
                 />
                 <span className="text-sm">{member.name}</span>
               </label>

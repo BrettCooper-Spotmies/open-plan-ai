@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Dialog,
   DialogContent,
@@ -78,12 +78,14 @@ import { calculateProjectProgress } from './utils/projectUtils';
 import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember } from '@/types';
 import { logger } from '@/services/monitoring/logger';
 import { format } from 'date-fns';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 // Issue Filter interface
 interface IssueFilter {
   status?: IssueStatus[];
   severity?: IssueSeverity[];
   assigneeId?: string[];
+  assignedById?: string[];
   dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
   reportedDate?: 'today' | 'this-week' | 'this-month';
 }
@@ -203,7 +205,7 @@ function IssueViewControls({
               <MultiSelect
                 options={[
                   { value: 'open', label: 'Open' },
-                  { value: 'investigating', label: 'Investigating' },
+                  { value: 'in-progress', label: 'In Progress' },
                   { value: 'resolved', label: 'Resolved' },
                   { value: 'closed', label: 'Closed' },
                   { value: 'wont-fix', label: "Won't Fix" },
@@ -233,11 +235,11 @@ function IssueViewControls({
               />
             </div>
 
-            {/* Assignee Filter */}
+            {/* Assigned To Filter */}
             <div className="space-y-2">
               <Label className="text-xs flex items-center gap-1">
                 <User className="h-3 w-3" />
-                Assignee
+                Assigned To
               </Label>
               <MultiSelect
                 options={[
@@ -247,6 +249,20 @@ function IssueViewControls({
                 selected={filters.assigneeId || []}
                 onChange={(values) => onFiltersChange({ ...filters, assigneeId: values.length ? values : undefined })}
                 placeholder="All Assignees"
+              />
+            </div>
+
+            {/* Assigned By Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <User className="h-3 w-3" />
+                Assigned By
+              </Label>
+              <MultiSelect
+                options={teamMembers.map(member => ({ value: member.id, label: member.name }))}
+                selected={filters.assignedById || []}
+                onChange={(values) => onFiltersChange({ ...filters, assignedById: values.length ? values : undefined })}
+                placeholder="All Members"
               />
             </div>
 
@@ -506,6 +522,7 @@ export default function ProjectDetail() {
     if (issueFilters.status?.length) count++;
     if (issueFilters.severity?.length) count++;
     if (issueFilters.assigneeId?.length) count++;
+    if (issueFilters.assignedById?.length) count++;
     if (issueFilters.dueDate !== undefined) count++;
     if (issueFilters.reportedDate !== undefined) count++;
     return count;
@@ -1120,6 +1137,7 @@ export default function ProjectDetail() {
                             <div key={member.id} className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2 min-w-0">
                                 <Avatar className="h-7 w-7">
+                                  <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
                                   <AvatarFallback className="text-[11px]">
                                     {member.initials}
                                   </AvatarFallback>
@@ -1503,6 +1521,7 @@ export default function ProjectDetail() {
               severityFilter={issueFilters.severity}
               statusFilter={issueFilters.status}
               assigneeFilter={issueFilters.assigneeId}
+              assignedByFilter={issueFilters.assignedById}
               dueDateFilter={issueFilters.dueDate}
               reportedDateFilter={issueFilters.reportedDate}
               isAddDialogOpen={isAddIssueDialogOpen}

@@ -296,33 +296,32 @@ export function ReportsFilters({
             </PopoverContent>
           </Popover>
 
-          {/* Export (mobile only; desktop keeps it in header) */}
-          {isMobile && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="shrink-0 h-8 px-2.5">
-                  <Download className="h-4 w-4" />
-                  <ChevronDown className="h-3 w-3 ml-1 opacity-60" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44 bg-popover border border-border shadow-md z-50">
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={() => onExport?.('csv')}
-                >
-                  <Download className="h-4 w-4 mr-2 text-muted-foreground" />
-                  Export as CSV
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="cursor-pointer"
-                  onClick={() => onExport?.('pdf')}
-                >
-                  <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
-                  Export as PDF
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          {/* Export */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className={`shrink-0 ${isMobile ? 'h-8 px-2.5' : 'h-9'}`}>
+                <Download className="h-4 w-4" />
+                {!isMobile && <span className="ml-2 hidden xs:inline">Export</span>}
+                <ChevronDown className="h-3 w-3 ml-1 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44 bg-popover border border-border shadow-md z-50">
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => onExport?.('csv')}
+              >
+                <Download className="h-4 w-4 mr-2 text-muted-foreground" />
+                Export as CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                onClick={() => onExport?.('pdf')}
+              >
+                <FileText className="h-4 w-4 mr-2 text-muted-foreground" />
+                Export as PDF
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Custom Date Range */}

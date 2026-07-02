@@ -4,9 +4,8 @@ import { Project, Task, Milestone, Issue, IssueCategory, IssueSeverity, IssueSta
 import { tasksService } from '@/services/tasks.service';
 
 const LEGACY_ISSUE_STATUS_MAP: Record<string, IssueStatus> = {
-  'in-progress': 'investigating',
-  'in_progress': 'investigating',
-  'pending':     'investigating',
+  'in_progress': 'in-progress',
+  'pending':     'in-progress',
 };
 
 /** Normalise an issue status value from the API. Passes custom statuses through as-is. */
@@ -94,8 +93,8 @@ export const projectsService = {
   /**
    * Get project by ID with full details
    */
-  async getById(id: string): Promise<Project | null> {
-    return apiClient.get<Project>(ENDPOINTS.PROJECTS.BY_ID(id));
+  async getById(id: string, signal?: AbortSignal): Promise<Project | null> {
+    return apiClient.get<Project>(ENDPOINTS.PROJECTS.BY_ID(id), { signal });
   },
 
   /**
@@ -160,23 +159,23 @@ export const projectsService = {
   /**
    * Get tasks for a project
    */
-  async getTasks(projectId: string, limit = 100): Promise<Task[]> {
-    return tasksService.getByProject(projectId, limit);
+  async getTasks(projectId: string, limit = 100, signal?: AbortSignal): Promise<Task[]> {
+    return tasksService.getByProject(projectId, limit, signal);
   },
 
   /**
    * Get milestones for a project
    */
-  async getMilestones(projectId: string, limit = 100): Promise<Milestone[]> {
-    const data = await apiClient.get<Record<string, unknown>[]>(`${ENDPOINTS.MILESTONES.LIST(projectId)}?limit=${limit}`);
+  async getMilestones(projectId: string, limit = 100, signal?: AbortSignal): Promise<Milestone[]> {
+    const data = await apiClient.get<Record<string, unknown>[]>(`${ENDPOINTS.MILESTONES.LIST(projectId)}?limit=${limit}`, { signal });
     return (data || []).map(fromApiMilestone);
   },
 
   /**
    * Get issues for a project
    */
-  async getIssues(projectId: string, limit = 100): Promise<Issue[]> {
-    const data = await apiClient.get<Record<string, unknown>[]>(`${ENDPOINTS.ISSUES.LIST(projectId)}?limit=${limit}`);
+  async getIssues(projectId: string, limit = 100, signal?: AbortSignal): Promise<Issue[]> {
+    const data = await apiClient.get<Record<string, unknown>[]>(`${ENDPOINTS.ISSUES.LIST(projectId)}?limit=${limit}`, { signal });
     return (data || []).map(fromApiIssue);
   },
 

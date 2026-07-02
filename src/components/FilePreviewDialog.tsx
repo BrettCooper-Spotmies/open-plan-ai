@@ -232,7 +232,18 @@ export function FilePreviewDialog({
               ) : blobLoading ? (
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
               ) : blobUrl ? (
-                <iframe src={blobUrl} title={current.fileName} className="w-full h-full border-0" />
+                <object data={blobUrl} type="application/pdf" className="w-full h-full border-0">
+                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                    <FileIcon className="w-10 h-10" />
+                    <p className="text-sm">Unable to preview this PDF.</p>
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={current.url} target="_blank" rel="noopener noreferrer">
+                        <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                        Open in new tab
+                      </a>
+                    </Button>
+                  </div>
+                </object>
               ) : (
                 <div className="flex flex-col items-center gap-3 text-muted-foreground">
                   <FileIcon className="w-10 h-10" />

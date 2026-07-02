@@ -2,8 +2,9 @@ import { useMemo } from 'react';
 import { format, parse } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import { CheckSquare, Bug, Check } from 'lucide-react';
 import {
   MyDayItem,
@@ -29,7 +30,6 @@ const statusColors: Record<string, string> = {
   blocked: 'bg-status-blocked/20 text-status-blocked',
   // Issue statuses
   open: 'bg-destructive/20 text-destructive',
-  investigating: 'bg-orange-500/20 text-orange-600',
   resolved: 'bg-status-done/20 text-status-done',
   closed: 'bg-muted-foreground/20 text-muted-foreground',
   'wont-fix': 'bg-muted-foreground/20 text-muted-foreground',
@@ -43,7 +43,6 @@ const statusLabels: Record<string, string> = {
   blocked: 'Blocked',
   // Issue statuses
   open: 'Open',
-  investigating: 'Investigating',
   resolved: 'Resolved',
   closed: 'Closed',
   'wont-fix': "Won't Fix",
@@ -189,6 +188,7 @@ export function MyDayListView({
                 {task.assignees && task.assignees.length > 0 ? (
                   <div className="flex items-center gap-2">
                     <Avatar className="h-6 w-6">
+                      <AvatarImage src={resolveFileUrl(task.assignees[0].avatar) ?? task.assignees[0].avatar} alt={task.assignees[0].name} />
                       <AvatarFallback className="text-[10px]">
                         {task.assignees[0].initials}
                       </AvatarFallback>

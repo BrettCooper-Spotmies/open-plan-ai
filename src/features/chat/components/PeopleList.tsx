@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { OnlineStatus } from './OnlineStatus';
 import type { ReachableUser } from '../types';
 
@@ -25,6 +25,7 @@ export function PeopleList({ users, onSelect, onlineUserIds }: PeopleListProps) 
                     >
                         <div className="relative shrink-0">
                             <Avatar className="h-8 w-8">
+                                <AvatarImage src={user.avatarUrl} alt={user.name} />
                                 <AvatarFallback className="text-xs">
                                     {user.initials}
                                 </AvatarFallback>
