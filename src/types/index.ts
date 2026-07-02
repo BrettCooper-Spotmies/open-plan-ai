@@ -68,6 +68,14 @@ export interface Comment {
   createdAt: string;
 }
 
+export interface VideoLink {
+  id: string;
+  url: string;
+  title?: string;
+  addedBy: TeamMember;
+  addedAt: string;
+}
+
 // First-class Module entity
 export interface Module {
   id: string;
@@ -117,6 +125,7 @@ export interface Task {
   checklist?: ChecklistItem[];
   attachments?: Attachment[];
   comments?: Comment[];
+  videoLinks?: VideoLink[];
   createdAt: string;
   updatedAt: string;
   createdBy?: TeamMember;  // Who created this task
@@ -158,6 +167,7 @@ export interface Issue {
   resolution?: string;         // How it was resolved
   attachments?: Attachment[];
   comments?: Comment[];
+  videoLinks?: VideoLink[];
   tags?: string[];
   checklist?: ChecklistItem[];
   blockedBy?: string[];

@@ -61,6 +61,8 @@ import {
   Check,
   Loader2,
   Send,
+  Video,
+  Play,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { commentsService } from '@/services/comments.service';
@@ -74,6 +76,7 @@ import {
   ChecklistItem,
   Attachment,
   Comment,
+  VideoLink,
 } from '@/types';
 import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -81,7 +84,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
 import { resolveFileUrl } from '@/utils/fileUrl';
-import { FilePreviewDialog, FilePreviewTarget } from '@/components/FilePreviewDialog';
+import { FilePreviewDialog, FilePreviewTarget, getVideoThumbnail } from '@/components/FilePreviewDialog';
 import { useProjectTags, useCreateTag, useUpdateTag } from '@/hooks/useProjectTags';
 import { getFallbackTagColor } from '@/lib/tagColors';
 import { Switch } from '@/components/ui/switch';
@@ -141,6 +144,7 @@ const priorityOptions: { value: Priority; label: string; color: string }[] = [
 
 const getFileIcon = (fileType: string) => {
   if (fileType.startsWith('image/')) return ImageIcon;
+  if (fileType.startsWith('video/')) return Video;
   if (fileType.includes('pdf') || fileType.includes('document')) return FileText;
   return File;
 };
@@ -182,6 +186,7 @@ const serializeTaskForDirtyCheck = (task: Task): string => {
     })),
     blockedBy: [...(task.blockedBy || [])].sort(),
     attachments: attachmentSnapshot,
+    videoLinks: (task.videoLinks || []).map(v => v.id).sort(),
   });
 };
 
@@ -221,6 +226,7 @@ export const TaskDetailModal = ({
     blockedBy: [],
     comments: [],
     attachments: [],
+    videoLinks: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
@@ -249,6 +255,7 @@ export const TaskDetailModal = ({
   const [isAdvancedDescription, setIsAdvancedDescription] = useState(false);
   const [initialTaskSnapshot, setInitialTaskSnapshot] = useState('');
   const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
+  const [videoLinkInput, setVideoLinkInput] = useState('');
   const [initialBlockedByIds, setInitialBlockedByIds] = useState<string[]>([]);
   const [initialBlockingToIds, setInitialBlockingToIds] = useState<string[]>([]);
   const [initializedForKey, setInitializedForKey] = useState<string | null>(null);
@@ -727,6 +734,37 @@ export const TaskDetailModal = ({
     } catch {
       handleFieldChange('attachments', attachments.filter((a: any) => a.id !== attachmentId));
     }
+  };
+
+  const videoLinks: VideoLink[] = editedTask.videoLinks || [];
+
+  const handleAddVideoLink = () => {
+    const url = videoLinkInput.trim();
+    if (!url) return;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      toast.error('Please enter a valid URL starting with http:// or https://');
+      return;
+    }
+    const alreadyExists = videoLinks.some(v => v.url === url);
+    if (alreadyExists) {
+      toast.error('This video link has already been added');
+      return;
+    }
+    const newLink: VideoLink = {
+      id: crypto.randomUUID(),
+      url,
+      title: url,
+      addedBy: profile
+        ? { id: profile.id, name: profile.name || profile.email, email: profile.email, role: profile.role || 'member', initials: profile.initials ?? '' }
+        : { id: '', name: 'You', email: '', role: '', initials: '' },
+      addedAt: new Date().toISOString(),
+    };
+    handleFieldChange('videoLinks', [...videoLinks, newLink]);
+    setVideoLinkInput('');
+  };
+
+  const handleRemoveVideoLink = (id: string) => {
+    handleFieldChange('videoLinks', videoLinks.filter(v => v.id !== id));
   };
 
   const hasSelectedModules = (editedTask.moduleIds || []).length > 0;
@@ -1882,8 +1920,97 @@ export const TaskDetailModal = ({
                   <span className="text-sm text-muted-foreground">
                     {isUploading ? "Uploading..." : "Drop files, click to upload, or paste image"}
                   </span>
-                  <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={isUploading} />
+                  <input type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,video/*" className="hidden" onChange={handleFileUpload} disabled={isUploading} />
                 </label>
+              </div>
+            </section>
+
+            <Separator />
+
+            {/* Video Links Section */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Video className="h-4 w-4" />
+                Videos
+              </h3>
+
+              <div className="space-y-2">
+                {videoLinks.map((vl) => {
+                  const thumbnail = getVideoThumbnail(vl.url);
+                  return (
+                    <div
+                      key={vl.id}
+                      className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 group cursor-pointer hover:bg-muted"
+                      onClick={() => setPreviewingFile({ url: vl.url, fileName: vl.title || vl.url })}
+                    >
+                      <div className="relative h-10 w-16 rounded overflow-hidden bg-black/20 shrink-0 flex items-center justify-center">
+                        {thumbnail ? (
+                          <img src={thumbnail} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <Video className="h-5 w-5 text-muted-foreground" />
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="bg-black/50 rounded-full p-1">
+                            <Play className="h-3 w-3 text-white fill-white" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{vl.title || vl.url}</p>
+                        <p className="text-xs text-muted-foreground truncate">{vl.url}</p>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveVideoLink(vl.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Uploaded video files in pending mode */}
+                {mode === 'create' && pendingFiles.filter(f => f.type.startsWith('video/')).length > 0 && (
+                  <div className="space-y-1">
+                    {pendingFiles.filter(f => f.type.startsWith('video/')).map((f, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Video className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{f.name}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Paste YouTube, Vimeo, or direct video URL…"
+                    value={videoLinkInput}
+                    onChange={(e) => setVideoLinkInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddVideoLink(); } }}
+                    className="text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddVideoLink}
+                    disabled={!videoLinkInput.trim()}
+                    className="shrink-0"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
               </div>
             </section>
 
@@ -2208,7 +2335,10 @@ export const TaskDetailModal = ({
     </Dialog>
     <FilePreviewDialog
       file={previewingFile}
-      files={attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType }))}
+      files={[
+        ...attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType })),
+        ...videoLinks.map(v => ({ url: v.url, fileName: v.title || v.url })),
+      ]}
       onClose={() => setPreviewingFile(null)}
     />
     </>

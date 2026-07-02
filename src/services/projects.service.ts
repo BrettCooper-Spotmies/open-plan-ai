@@ -71,6 +71,7 @@ function fromApiIssue(raw: Record<string, unknown>): Issue {
     tags: (raw.tags as string[]) ?? [],
     checklist: (raw.checklist as Issue['checklist']) ?? [],
     descriptionBlocks: (raw.descriptionBlocks as Issue['descriptionBlocks']) ?? [],
+    videoLinks: (raw.videoLinks as Issue['videoLinks']) ?? [],
   } as Issue;
 }
 

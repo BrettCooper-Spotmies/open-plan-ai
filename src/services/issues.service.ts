@@ -50,6 +50,7 @@ export const issuesService = {
     if (issue.tags && issue.tags.length > 0) payload.tags = issue.tags;
     if (issue.checklist && issue.checklist.length > 0) payload.checklist = issue.checklist;
     if (issue.descriptionBlocks && issue.descriptionBlocks.length > 0) payload.descriptionBlocks = issue.descriptionBlocks;
+    if (issue.videoLinks && issue.videoLinks.length > 0) payload.videoLinks = issue.videoLinks;
     return apiClient.post<Issue>(ENDPOINTS.ISSUES.LIST(projectId), payload);
   },
 
@@ -96,6 +97,10 @@ export const issuesService = {
 
     if (u.descriptionBlocks !== undefined) {
       payload.descriptionBlocks = u.descriptionBlocks;
+    }
+
+    if (u.videoLinks !== undefined) {
+      payload.videoLinks = u.videoLinks;
     }
 
     return apiClient.patch<Issue>(ENDPOINTS.ISSUES.BY_ID(issueId), payload);
