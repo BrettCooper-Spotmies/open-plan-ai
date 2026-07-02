@@ -14,13 +14,14 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, fromApiRevision, formatLeadTime, getCategoryMeta, type BOMApprovalRequestScope } from './bomData';
+import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, bomCountAll, describeDeleteImpact, fromApiRevision, formatLeadTime, getCategoryMeta, type BOMApprovalRequestScope } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb, PartImageThumb, ImageViewerModal } from './BOMShared';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision } from '@/hooks/useParts';
-import { useCreateBomNode, useUpdateBomNode, useAddRequirement, useRemoveRequirement, useCreateApprovalRequest, useDecideApprovalRequest, useBomNodeApprovals, useBomApprovalRequests, useActiveBomApprovalRequest } from '@/hooks/useBom';
+import { useCreateBomNode, useUpdateBomNode, useDeleteBomNode, useAddRequirement, useRemoveRequirement, useCreateApprovalRequest, useDecideApprovalRequest, useBomNodeApprovals, useBomApprovalRequests, useActiveBomApprovalRequest } from '@/hooks/useBom';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useAuth } from '@/contexts/AuthContext';
 import { BOMSendForReviewModal } from './BOMSendForReviewModal';
@@ -445,6 +446,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const [showImportExcel, setShowImportExcel] = useState(false);
   const [showSendForReview, setShowSendForReview] = useState(false);
   const [viewingImage, setViewingImage] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // ── Approval workflow ──
   const { data: project } = useProjectDetail(projectId);
@@ -472,6 +474,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   // ── Mutations ──
   const createNode = useCreateBomNode(projectId);
   const updateNode = useUpdateBomNode(projectId);
+  const deleteBomNode = useDeleteBomNode(projectId);
   const createPart = useCreatePart(orgId);
   const updatePart = useUpdatePart();
   const createRev = useCreateRevision();
@@ -623,6 +626,19 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
     }
   };
 
+  const handleConfirmDelete = async () => {
+    try {
+      const { deletedCount } = await deleteBomNode.mutateAsync(originalNode.id);
+      toast.success(deletedCount > 1 ? `Deleted ${deletedCount} parts` : `${originalNode.pn} deleted`);
+      setShowDeleteConfirm(false);
+      onBack();
+    } catch (err) {
+      toast.error('Failed to delete part', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
+  };
+
   const showApprovalActions = canDecide && isLatest && !!activeRequest;
 
   return (
@@ -714,6 +730,16 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
             >
               <SquarePen className="w-3.5 h-3.5" /> Edit Part
             </button>
+            {canApprove && (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                title="Delete this part"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card hover:bg-destructive/10 hover:border-destructive/30 transition-colors whitespace-nowrap"
+                style={{ color: '#DC2626' }}
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Delete Part
+              </button>
+            )}
           </div>
         </div>
 
@@ -1181,6 +1207,16 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       {viewingImage && photoUrl && (
         <ImageViewerModal src={photoUrl} onClose={() => setViewingImage(false)} />
       )}
+
+      {/* Delete confirmation (warns about cascading sub-component deletion) */}
+      <ConfirmationDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleConfirmDelete}
+        variant="destructive"
+        confirmText={bomCountAll(node.children ?? []) > 0 ? 'Delete All' : 'Delete Part'}
+        {...describeDeleteImpact(node)}
+      />
     </div>
   );
 }

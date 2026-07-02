@@ -89,8 +89,8 @@ export const bomService = {
     return apiClient.patch<ApiNodeResponse>(ENDPOINTS.BOM.NODE_MOVE(nodeId), dto);
   },
 
-  async deleteNode(nodeId: string): Promise<void> {
-    await apiClient.delete(ENDPOINTS.BOM.NODE(nodeId));
+  async deleteNode(nodeId: string): Promise<{ deletedCount: number }> {
+    return apiClient.delete<{ deletedCount: number }>(ENDPOINTS.BOM.NODE(nodeId));
   },
 
   async addRequirement(nodeId: string, requirementId: string): Promise<ApiReqLinkResponse> {

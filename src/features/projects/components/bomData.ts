@@ -367,6 +367,20 @@ export const bomFlatten = (nodes: BOMNode[], expanded: Record<string, boolean>):
 
 export const bomCountAll = (nodes: BOMNode[]) => bomFlatAll(nodes).length;
 
+export function describeDeleteImpact(node: BOMNode): { title: string; description: string } {
+  const descendantCount = bomCountAll(node.children ?? []);
+  if (descendantCount === 0) {
+    return {
+      title: 'Delete Part',
+      description: `Delete ${node.pn} — ${node.name}? This cannot be undone.`,
+    };
+  }
+  return {
+    title: 'Delete Part & Sub-components',
+    description: `Delete ${node.pn} — ${node.name} and its ${descendantCount} sub-component${descendantCount === 1 ? '' : 's'}? All nested parts, their revisions, and requirement links will be permanently removed. This cannot be undone.`,
+  };
+}
+
 export const bomFind = (id: string, nodes: BOMNode[] = BOM_NODES): BOMNode | null => {
   for (const n of nodes) {
     if (n.id === id) return n;
