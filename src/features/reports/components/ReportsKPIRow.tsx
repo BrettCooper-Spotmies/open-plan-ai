@@ -135,7 +135,7 @@ export const ReportsKPIRow = memo(function ReportsKPIRow({ kpis, statusBreakdown
         value={kpis.openIssues}
         subtitle={kpis.criticalIssues > 0 ? `${kpis.criticalIssues} critical` : 'No critical issues'}
         icon={<AlertCircle className="h-4 w-4" />}
-        tooltip="Count of issues with status 'open' or 'in-progress'"
+        tooltip="Issues in 'Open' or 'In Progress' status — excludes custom columns and resolved/closed issues"
         variant={kpis.criticalIssues > 0 ? 'danger' : 'default'}
         onClick={handleIssuesClick}
       />

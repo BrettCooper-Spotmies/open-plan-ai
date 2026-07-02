@@ -98,7 +98,7 @@ function calculateKPIs(
   const total = tasks.length;
   const completed = tasks.filter(t => t.status === 'done').length;
 
-  // Count open issues
+  // Count open issues — primary active statuses only (excludes custom columns + orphaned statuses)
   const openIssuesList = issues.filter(i =>
     i.status === 'open' || i.status === 'in-progress'
   );

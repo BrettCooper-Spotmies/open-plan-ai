@@ -194,7 +194,9 @@ export function calculateProjectProgress(
   };
 }
 
-// Count open issues
+// Count open issues — issues in the two primary active states ('open' and 'in-progress').
+// Custom column statuses (e.g. 'future-scope') and orphaned/stale statuses are excluded
+// so the number matches what the board's active columns show.
 export function countOpenIssues(issues: Issue[]): { total: number; critical: number } {
   const openIssues = issues.filter(i =>
     i.status === 'open' || i.status === 'in-progress'

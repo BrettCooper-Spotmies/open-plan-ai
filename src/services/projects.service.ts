@@ -174,8 +174,8 @@ export const projectsService = {
   /**
    * Get issues for a project
    */
-  async getIssues(projectId: string, limit = 100, signal?: AbortSignal): Promise<Issue[]> {
-    const data = await apiClient.get<Record<string, unknown>[]>(`${ENDPOINTS.ISSUES.LIST(projectId)}?limit=${limit}`, { signal });
+  async getIssues(projectId: string, _limit = 100, signal?: AbortSignal): Promise<Issue[]> {
+    const data = await apiClient.get<Record<string, unknown>[]>(ENDPOINTS.ISSUES.LIST_ALL(projectId), { signal });
     return (data || []).map(fromApiIssue);
   },
 
