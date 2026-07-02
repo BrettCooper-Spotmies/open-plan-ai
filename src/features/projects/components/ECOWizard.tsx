@@ -324,7 +324,8 @@ type ECOScope = 'BOM_PART' | 'REQUIREMENT';
 
 interface BasicsState {
   title: string; description: string;
-  type: ECOType | string; priority: ECOPriority; reason: ECOReason | string;
+  type: ECOType | string; typeOther: string;
+  priority: ECOPriority; reason: ECOReason | string; reasonOther: string;
   changeClass: ChangeClass;
   ecr: string;
   effType: EffectivityType; effValue: string;
@@ -393,8 +394,10 @@ export function ECOWizard({
   // Step 1 — Basics
   const [basics, setBasics] = useState<BasicsState>({
     title: '', description: '',
-    type: 'DESIGN_CHANGE', priority: 'MEDIUM',
-    reason: 'PERFORMANCE', changeClass: 'II',
+    type: 'DESIGN_CHANGE', typeOther: '',
+    priority: 'MEDIUM',
+    reason: 'PERFORMANCE', reasonOther: '',
+    changeClass: 'II',
     ecr: '',
     effType: 'DATE', effValue: '',
     scope: 'BOM_PART',
@@ -449,8 +452,10 @@ export function ECOWizard({
       title:       d.title,
       description: d.description ?? '',
       type:        (d.type?.toUpperCase() ?? 'DESIGN_CHANGE') as ECOType,
+      typeOther:   d.typeOther ?? '',
       priority:    (d.priority?.toUpperCase() ?? 'MEDIUM') as ECOPriority,
       reason:      (d.reason?.toUpperCase() ?? 'PERFORMANCE') as ECOReason,
+      reasonOther: d.reasonOther ?? '',
       changeClass: (d.changeClass ?? 'II') as ChangeClass,
       ecr:         d.originatingEcr ?? '',
       effType:     (d.effectivityType?.toUpperCase() ?? 'DATE') as EffectivityType,
@@ -585,6 +590,8 @@ export function ECOWizard({
   const validateStep = (s: number): boolean => {
     const e: Record<string, string> = {};
     if (s === 0 && !basics.title.trim()) e.title = 'Title is required';
+    if (s === 0 && basics.type === 'OTHER' && !basics.typeOther.trim()) e.typeOther = 'Describe the change type';
+    if (s === 0 && basics.reason === 'OTHER' && !basics.reasonOther.trim()) e.reasonOther = 'Describe the reason';
     if (s === 1) {
       if (basics.scope === 'BOM_PART' && items.length < 1) e.items = 'At least 1 affected part is required';
       if (basics.scope === 'BOM_PART' && items.length > 0 && items.some(it => !it.revTo.trim())) e.revTo = 'Rev To is required for all parts';
@@ -687,10 +694,46 @@ export function ECOWizard({
         <div>
           <FieldLabel required>Change Type</FieldLabel>
           <EcoSelect value={basics.type as ECOType} onChange={v => setBasics({ ...basics, type: v })} options={Object.keys(ECO_TYPE_LABEL) as ECOType[]} labels={ECO_TYPE_LABEL} />
+          {basics.type === 'OTHER' && (
+            <>
+              <input
+                value={basics.typeOther}
+                onChange={e => {
+                  setBasics({ ...basics, typeOther: e.target.value });
+                  if (errors.typeOther) setErrors(({ typeOther: _typeOther, ...rest }) => rest);
+                }}
+                placeholder="Describe the change type…"
+                className={cn(inputCls, 'mt-1.5', errors.typeOther && 'border-destructive')}
+              />
+              {errors.typeOther && (
+                <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3 h-3" />{errors.typeOther}
+                </p>
+              )}
+            </>
+          )}
         </div>
         <div>
           <FieldLabel required>Reason Code</FieldLabel>
           <EcoSelect value={basics.reason as ECOReason} onChange={v => setBasics({ ...basics, reason: v })} options={Object.keys(REASON_LABEL) as ECOReason[]} labels={REASON_LABEL} />
+          {basics.reason === 'OTHER' && (
+            <>
+              <input
+                value={basics.reasonOther}
+                onChange={e => {
+                  setBasics({ ...basics, reasonOther: e.target.value });
+                  if (errors.reasonOther) setErrors(({ reasonOther: _reasonOther, ...rest }) => rest);
+                }}
+                placeholder="Describe the reason…"
+                className={cn(inputCls, 'mt-1.5', errors.reasonOther && 'border-destructive')}
+              />
+              {errors.reasonOther && (
+                <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3 h-3" />{errors.reasonOther}
+                </p>
+              )}
+            </>
+          )}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -1428,7 +1471,9 @@ export function ECOWizard({
                     title: basics.title,
                     description: basics.description || null,
                     type: basics.type.toLowerCase() as any,
+                    typeOther: basics.type === 'OTHER' ? basics.typeOther.trim() : null,
                     reason: basics.reason.toLowerCase() as any,
+                    reasonOther: basics.reason === 'OTHER' ? basics.reasonOther.trim() : null,
                     priority: basics.priority.toLowerCase() as any,
                     changeClass: basics.changeClass as any,
                     effectivityType: basics.effType.toLowerCase() as any,

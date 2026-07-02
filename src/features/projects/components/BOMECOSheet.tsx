@@ -144,7 +144,9 @@ export function BOMECOSheet({
 
   // ── Reason tab state ──
   const [changeType, setChangeType] = useState<ECOType>('DESIGN_CHANGE');
+  const [changeTypeOther, setChangeTypeOther] = useState('');
   const [reasonCode, setReasonCode] = useState<ECOReason>('PERFORMANCE');
+  const [reasonCodeOther, setReasonCodeOther] = useState('');
   const [priority, setPriority] = useState<ECOPriority>('MEDIUM');
   const [reasonDesc, setReasonDesc] = useState('');
 
@@ -213,6 +215,10 @@ export function BOMECOSheet({
     if (tab === 'impact' && impactArea === 'other' && !impactAreaOther.trim()) {
       e.impactAreaOther = 'Specify the impact area';
     }
+    if (tab === 'reason') {
+      if (changeType === 'OTHER' && !changeTypeOther.trim()) e.changeTypeOther = 'Describe the change type';
+      if (reasonCode === 'OTHER' && !reasonCodeOther.trim()) e.reasonCodeOther = 'Describe the reason';
+    }
     if (tab === 'approval') {
       if (pipeline.length < 1) e.pipeline = 'At least 1 approval stage is required';
       else if (!pipelineValid) e.pipeline = 'Every stage needs an approver, and optional/reordered stages need a justification';
@@ -235,7 +241,9 @@ export function BOMECOSheet({
         title: ecoTitle.trim(),
         description: reasonDesc || null,
         type: changeType.toLowerCase(),
+        typeOther: changeType === 'OTHER' ? changeTypeOther.trim() : null,
         reason: reasonCode.toLowerCase(),
+        reasonOther: reasonCode === 'OTHER' ? reasonCodeOther.trim() : null,
         priority: priority.toLowerCase(),
         changeClass: 'II',
         revFrom: revFrom || null,
@@ -577,6 +585,46 @@ export function BOMECOSheet({
                     />
                   </FL>
                 </div>
+                {(changeType === 'OTHER' || reasonCode === 'OTHER') && (
+                  <div className="grid grid-cols-2 gap-4">
+                    {changeType === 'OTHER' && (
+                      <FL label="Specify Change Type" required>
+                        <FInput
+                          value={changeTypeOther}
+                          onChange={e => {
+                            setChangeTypeOther(e.target.value);
+                            if (errors.changeTypeOther) setErrors(({ changeTypeOther: _c, ...rest }) => rest);
+                          }}
+                          placeholder="e.g. Tooling Change"
+                          className={cn(errors.changeTypeOther && 'border-destructive')}
+                        />
+                        {errors.changeTypeOther && (
+                          <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                            <AlertCircle className="w-3 h-3" />{errors.changeTypeOther}
+                          </p>
+                        )}
+                      </FL>
+                    )}
+                    {reasonCode === 'OTHER' && (
+                      <FL label="Specify Reason" required>
+                        <FInput
+                          value={reasonCodeOther}
+                          onChange={e => {
+                            setReasonCodeOther(e.target.value);
+                            if (errors.reasonCodeOther) setErrors(({ reasonCodeOther: _r, ...rest }) => rest);
+                          }}
+                          placeholder="e.g. Field Failure"
+                          className={cn(errors.reasonCodeOther && 'border-destructive')}
+                        />
+                        {errors.reasonCodeOther && (
+                          <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                            <AlertCircle className="w-3 h-3" />{errors.reasonCodeOther}
+                          </p>
+                        )}
+                      </FL>
+                    )}
+                  </div>
+                )}
                 <FL label="Reason Description">
                   <textarea
                     value={reasonDesc}
