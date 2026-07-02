@@ -81,16 +81,18 @@ describe('reportsUtils', () => {
       expect(result).toEqual({ total: 0, critical: 0 });
     });
 
-    it('should count open and in-progress issues', () => {
+    it('should count all issues except resolved and wont-fix', () => {
       const issues = [
         createIssue({ status: 'open' }),
         createIssue({ status: 'in-progress' }),
+        createIssue({ status: 'future-scope' }),
+        createIssue({ status: 'mobile-view-open-issues' }),
         createIssue({ status: 'resolved' }),
         createIssue({ status: 'wont-fix' }),
       ];
 
       const result = countOpenIssues(issues);
-      expect(result.total).toBe(2);
+      expect(result.total).toBe(4);
     });
 
     it('should count critical issues separately', () => {
