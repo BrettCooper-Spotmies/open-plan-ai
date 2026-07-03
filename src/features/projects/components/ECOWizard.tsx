@@ -1107,7 +1107,7 @@ export function ECOWizard({
   const StepImpact = (
     <div className="flex flex-col gap-3.5">
       <div>
-        <FieldLabel>Schedule Impact</FieldLabel>
+        <FieldLabel required>Schedule Impact</FieldLabel>
         <EcoSelect value={impact.schedule} onChange={v => setImpact({ ...impact, schedule: v })} options={Object.keys(IMPACT_LABEL) as ImpactLevel[]} labels={IMPACT_LABEL} />
       </div>
       <div className="grid grid-cols-2 gap-3">
