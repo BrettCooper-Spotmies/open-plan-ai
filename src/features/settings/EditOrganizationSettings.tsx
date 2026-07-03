@@ -21,12 +21,12 @@ import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { logger } from '@/services/monitoring/logger';
 import { SUPPORTED_CURRENCIES } from '@/hooks/useCurrency';
+import { useOrgPermissions } from '@/hooks/useProjectPermissions';
 
 const EditOrganizationSettings = () => {
   const navigate = useNavigate();
   const { currentOrganization, refreshOrganizations, isLoading: orgContextLoading } = useOrganization();
-  const currentOrgRole = (currentOrganization?.myRole ?? null) as 'admin' | 'manager' | 'member' | 'viewer' | null;
-  const canEditOrganizationSettings = currentOrgRole === 'admin' || currentOrgRole === 'manager';
+  const { myOrgRole: currentOrgRole, canManageOrgSettings: canEditOrganizationSettings } = useOrgPermissions();
   const roleLabel = currentOrgRole ? currentOrgRole.charAt(0).toUpperCase() + currentOrgRole.slice(1) : 'Member';
 
   const [orgForm, setOrgForm] = useState({

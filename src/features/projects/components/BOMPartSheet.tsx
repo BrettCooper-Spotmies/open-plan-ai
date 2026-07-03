@@ -429,7 +429,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   const { data: projectMembers = [] } = useProjectMembers(projectId);
   const { data: project } = useProjectDetail(projectId);
   const projectRole = (project?.myRole || '').toLowerCase();
-  const canEditStatus = projectRole === 'admin' || projectRole === 'manager';
+  const canEditStatus = projectRole === 'admin' || projectRole === 'maintainer';
   const isAdmin = projectRole === 'admin';
 
   const decideApprovalRequest = useDecideApprovalRequest(projectId);

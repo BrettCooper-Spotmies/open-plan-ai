@@ -1131,13 +1131,13 @@ export function ECODetailView({
   const detail: ECODetail = liveRaw ? fromApiEcoDetail(liveRaw) : buildDetail(eco);
   const isFirstLoad = detailLoading && !liveRaw;
 
-  // Approval rights: the assigned approver acts normally; project managers/admins
+  // Approval rights: the assigned approver acts normally; project maintainers/admins
   // can act on the assignee's behalf (override). `awaitingMe` is server-computed
   // and true only for the assignee.
   const { user } = useAuth();
   const { data: projectMembers = [] } = useProjectMembers(projectId);
   const myRole = projectMembers.find(m => m.id === user?.id)?.role?.toLowerCase();
-  const canOverride = myRole === 'manager' || myRole === 'admin';
+  const canOverride = myRole === 'maintainer' || myRole === 'admin';
   const canAct = detail.awaitingMe || canOverride;
   const isOverride = !detail.awaitingMe && canOverride;
 

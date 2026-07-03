@@ -69,6 +69,7 @@ import { getPasswordRequirements } from '@/lib/passwordValidation';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { logger } from '@/services/monitoring/logger';
 import { SUPPORTED_CURRENCIES } from '@/hooks/useCurrency';
+import { useOrgPermissions } from '@/hooks/useProjectPermissions';
 
 const COMPANY_SIZE_LABELS: Record<string, string> = {
   '1-10': '1-10 employees',
@@ -109,6 +110,7 @@ const Settings = () => {
   const { user, refreshProfile, updatePassword, deleteAccount, signOut } = useAuth();
   const profile = user;
   const { currentOrganization, createOrganization, refreshOrganizations, isLoading: orgContextLoading } = useOrganization();
+  const { canManageOrgSettings: canEditOrganizationSettings } = useOrgPermissions();
   const { theme, changeTheme } = useAppTheme();
   const preferences = useUserStore((s) => s.preferences);
   const updatePreferences = useUserStore((s) => s.updatePreferences);
@@ -151,7 +153,6 @@ const Settings = () => {
   const [logoLoading, setLogoLoading] = useState(false);
   const [isEditingOrg, setIsEditingOrg] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
-  const currentOrgRole = (currentOrganization?.myRole ?? null) as 'admin' | 'manager' | 'member' | 'viewer' | null;
 
   // New organization creation state
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
@@ -221,7 +222,6 @@ const Settings = () => {
   }, [currentOrganization]);
 
 
-  const canEditOrganizationSettings = currentOrgRole === 'admin' || currentOrgRole === 'manager';
   const handleCreateOrganization = async () => {
     if (!newOrgForm.name.trim()) {
       toast.error('Workspace name is required');

@@ -74,6 +74,7 @@ import { projectLinksService } from "@/services/projectLinks.service";
 import { projectMembersService } from "@/services/projectMembers.service";
 import { isValidUuid } from "@/utils/uuid";
 import { logger } from '@/services/monitoring/logger';
+import type { ProjectRole } from "@/types";
 
 const projectTypes = [
   "Hardware Development",
@@ -109,7 +110,7 @@ const departments = [
 
 interface TeamMemberAssignment {
   memberId: string;
-  role: string;
+  role: ProjectRole;
 }
 
 interface Department {
@@ -374,15 +375,16 @@ const NewProject = () => {
 
   const handleAddTeamMembers = () => {
     if (selectedMembers.length === 0) return;
-    const newAssignments = selectedMembers
+    const newAssignments: TeamMemberAssignment[] = selectedMembers
       .filter(id => !assignedMembers.find(am => am.memberId === id))
-      .map(id => {
-        const member = getMemberById(id);
-        return { memberId: id, role: member?.role || 'member' };
-      });
+      .map(id => ({ memberId: id, role: 'member' as ProjectRole }));
     setAssignedMembers([...assignedMembers, ...newAssignments]);
     setSelectedMembers([]);
     setIsMemberDropdownOpen(false);
+  };
+
+  const handleChangeAssignedMemberRole = (memberId: string, role: ProjectRole) => {
+    setAssignedMembers(prev => prev.map(m => (m.memberId === memberId ? { ...m, role } : m)));
   };
 
   const handleToggleMemberSelection = (memberId: string) => {
@@ -1019,7 +1021,7 @@ const NewProject = () => {
               <Users className="h-5 w-5 text-primary" />
               Team Members
             </CardTitle>
-            <CardDescription>Assign team members to this project (organization role is inherited automatically)</CardDescription>
+            <CardDescription>Assign team members to this project and set their project role (defaults to Member)</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Multi-select dropdown with checkboxes */}
@@ -1113,7 +1115,19 @@ const NewProject = () => {
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {assignment.role && <Badge variant="secondary">{assignment.role}</Badge>}
+                        <Select
+                          value={assignment.role}
+                          onValueChange={(v) => handleChangeAssignedMemberRole(assignment.memberId, v as ProjectRole)}
+                        >
+                          <SelectTrigger className="h-8 w-[120px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="maintainer">Maintainer</SelectItem>
+                            <SelectItem value="member">Member</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <Button
                           variant="ghost"
                           size="icon"

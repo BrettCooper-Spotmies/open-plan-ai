@@ -45,6 +45,7 @@ import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
 import { useOrganizationMembers, useProjectMembers } from '@/hooks/useProjectTeam';
+import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import { useProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useUpdateProject } from '@/hooks/useProjects';
@@ -75,7 +76,7 @@ import { attachmentsService } from '@/services/attachments.service';
 import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
 import { calculateProjectProgress } from './utils/projectUtils';
-import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember } from '@/types';
+import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember, ProjectRole } from '@/types';
 import { logger } from '@/services/monitoring/logger';
 import { format } from 'date-fns';
 import { resolveFileUrl } from '@/utils/fileUrl';
@@ -100,6 +101,13 @@ const DEFAULT_MEMBER_REMOVAL_PROMPT: {
   open: false,
   memberId: null,
   memberName: '',
+};
+
+/** Normalizes a loosely-typed TeamMember.role (or missing role) to a ProjectRole. */
+const toProjectRole = (role: string | undefined | null): ProjectRole => {
+  const normalized = (role || '').toLowerCase();
+  if (normalized === 'admin' || normalized === 'maintainer') return normalized;
+  return 'member';
 };
 
 // Milestone View Controls Component — only the toggle (search is in parent)
@@ -371,6 +379,7 @@ export default function ProjectDetail() {
   const [isAddIssueDialogOpen, setIsAddIssueDialogOpen] = useState(false);
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
   const [selectedMemberToAdd, setSelectedMemberToAdd] = useState('');
+  const [selectedMemberRoleToAdd, setSelectedMemberRoleToAdd] = useState<ProjectRole>('member');
   const [isAddingProjectMember, setIsAddingProjectMember] = useState(false);
   const [isStartingChat, setIsStartingChat] = useState(false);
   const [memberRemovalPrompt, setMemberRemovalPrompt] = useState<{
@@ -379,6 +388,7 @@ export default function ProjectDetail() {
     memberName: string;
   }>(DEFAULT_MEMBER_REMOVAL_PROMPT);
   const [isRemovingMember, setIsRemovingMember] = useState(false);
+  const [memberRoleUpdatingId, setMemberRoleUpdatingId] = useState<string | null>(null);
   const isRemovingMemberRef = useRef(isRemovingMember);
 
   useEffect(() => {
@@ -390,6 +400,11 @@ export default function ProjectDetail() {
   const { data: projectModules = [] } = useProjectModules(id);
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const { data: projectMembers = [] } = useProjectMembers(id);
+  const {
+    canManageMembers,
+    isProjectMaintainerPlus,
+    isProjectMemberPlus,
+  } = useProjectPermissions(id);
 
   // Mutation hooks
   const createTaskMutation = useCreateTask(id || '');
@@ -531,21 +546,12 @@ export default function ProjectDetail() {
     setIssueFilters({});
   };
 
-  const canManageProjectMembers = useMemo(() => {
-    if (!project || !user?.id) return false;
-    if (project.createdBy === user.id) return true;
-    const projectRole = (project.myRole || '').toLowerCase();
-    return projectRole === 'admin';
-  }, [project, user?.id]);
+  // Member management (add/remove/change role) is Admin-only.
+  const canManageProjectMembers = canManageMembers;
 
-  const canAddModulesAndMilestones = useMemo(() => {
-    if (!user?.id) return false;
-    const membership = organizationMembers.find((member) => member.id === user.id);
-    const orgRole = (membership?.role || '').toLowerCase();
-    if (orgRole === 'admin' || orgRole === 'manager') return true;
-    const projectRole = (project?.myRole || '').toLowerCase();
-    return projectRole === 'admin' || projectRole === 'manager';
-  }, [organizationMembers, user?.id, project?.myRole]);
+  // Adding modules/milestones plus changing project stage/status is
+  // Maintainer+ (manages all content, not just their own).
+  const canAddModulesAndMilestones = isProjectMaintainerPlus;
 
   // Sync calculated progress — only for users who can PUT the project (manager/admin)
   useEffect(() => {
@@ -562,26 +568,18 @@ export default function ProjectDetail() {
     }
   }, [project, progressBreakdown.overallProgress, canAddModulesAndMilestones]);
 
-  const canStartProjectChat = useMemo(() => {
-    if (!project || !user?.id) return false;
-    if (project.createdBy === user.id) return true;
-    return !!project.myRole;
-  }, [project, user?.id]);
+  // Starting the project chat is available to any project member (any access at all).
+  const canStartProjectChat = isProjectMemberPlus;
 
   const availableOrganizationMembers = useMemo(() => {
     const projectMemberIds = new Set(projectMembers.map((member) => member.id));
     return organizationMembers.filter((member) => !projectMemberIds.has(member.id));
   }, [organizationMembers, projectMembers]);
 
-  const selectedOrganizationMember = useMemo(
-    () => availableOrganizationMembers.find((member) => member.id === selectedMemberToAdd),
-    [availableOrganizationMembers, selectedMemberToAdd]
-  );
-
   const handleAddProjectMember = async () => {
     if (!project || !selectedMemberToAdd) return;
     if (!canManageProjectMembers) {
-      toast.error('Only the project creator or an Admin can add or remove members');
+      toast.error('Only a project Admin can add or remove members');
       return;
     }
 
@@ -604,7 +602,7 @@ export default function ProjectDetail() {
       await projectMembersService.addMember({
         project_id: project.id,
         user_id: selectedMemberToAdd,
-        role: selectedOrganizationMember?.role || 'member',
+        role: selectedMemberRoleToAdd,
       });
 
       await queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
@@ -613,11 +611,28 @@ export default function ProjectDetail() {
 
       toast.success('Member added to project');
       setSelectedMemberToAdd('');
+      setSelectedMemberRoleToAdd('member');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add member to project';
       toast.error(message);
     } finally {
       setIsAddingProjectMember(false);
+    }
+  };
+
+  const handleUpdateProjectMemberRole = async (memberId: string, role: ProjectRole) => {
+    if (!project || !canManageProjectMembers) return;
+
+    setMemberRoleUpdatingId(memberId);
+    try {
+      await projectMembersService.updateRole(project.id, memberId, role);
+      await queryClient.invalidateQueries({ queryKey: ['project-members', project.id] });
+      toast.success('Member role updated');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update member role';
+      toast.error(message);
+    } finally {
+      setMemberRoleUpdatingId(null);
     }
   };
 
@@ -701,7 +716,7 @@ export default function ProjectDetail() {
   const handleRemoveProjectMember = async (removeFromChatToo: boolean) => {
     if (!project || !memberRemovalPrompt.memberId) return;
     if (!canManageProjectMembers) {
-      toast.error('Only the project creator or an Admin can add or remove members');
+      toast.error('Only a project Admin can add or remove members');
       return;
     }
 
@@ -1143,25 +1158,44 @@ export default function ProjectDetail() {
                                 </Avatar>
                                 <span className="text-sm truncate">{member.name}</span>
                               </div>
-                              <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
-                                {member.role || 'Member'}
-                              </Badge>
-                              {canManageProjectMembers && member.role?.toLowerCase() !== 'admin' && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                  onClick={() => {
-                                    const memberId = member.id;
-                                    const memberName = typeof member.name === 'string' ? member.name : '';
-                                    if (!memberId) return;
-                                    setMemberRemovalPrompt({ open: true, memberId, memberName });
-                                  }}
-                                  title="Remove member"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              )}
+                              <div className="flex items-center gap-1 shrink-0">
+                                {canManageProjectMembers ? (
+                                  <Select
+                                    value={toProjectRole(member.role)}
+                                    onValueChange={(v) => handleUpdateProjectMemberRole(member.id, v as ProjectRole)}
+                                    disabled={memberRoleUpdatingId === member.id}
+                                  >
+                                    <SelectTrigger className="h-7 w-[100px] text-[10px]">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="admin">Admin</SelectItem>
+                                      <SelectItem value="maintainer">Maintainer</SelectItem>
+                                      <SelectItem value="member">Member</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                ) : (
+                                  <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
+                                    {member.role || 'Member'}
+                                  </Badge>
+                                )}
+                                {canManageProjectMembers && member.role?.toLowerCase() !== 'admin' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                    onClick={() => {
+                                      const memberId = member.id;
+                                      const memberName = typeof member.name === 'string' ? member.name : '';
+                                      if (!memberId) return;
+                                      setMemberRemovalPrompt({ open: true, memberId, memberName });
+                                    }}
+                                    title="Remove member"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1190,14 +1224,16 @@ export default function ProjectDetail() {
                                 )}
                               </SelectContent>
                             </Select>
-                            {selectedOrganizationMember && (
-                              <p className="text-[11px] text-muted-foreground">
-                                Role will be inherited automatically from organization:{" "}
-                                <span className="font-medium text-foreground capitalize">
-                                  {selectedOrganizationMember.role || 'member'}
-                                </span>
-                              </p>
-                            )}
+                            <Select value={selectedMemberRoleToAdd} onValueChange={(v) => setSelectedMemberRoleToAdd(v as ProjectRole)}>
+                              <SelectTrigger className="h-8">
+                                <SelectValue placeholder="Select project role" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="maintainer">Maintainer</SelectItem>
+                                <SelectItem value="member">Member</SelectItem>
+                              </SelectContent>
+                            </Select>
                             <Button
                               size="sm"
                               className="w-full"
@@ -1217,7 +1253,7 @@ export default function ProjectDetail() {
                       ) : (
                         <div className="pt-3 mt-2 border-t">
                           <p className="text-[11px] text-muted-foreground">
-                            Only the project creator or an Admin can add or remove project members.
+                            Only a project Admin can add or remove project members.
                           </p>
                         </div>
                       )}

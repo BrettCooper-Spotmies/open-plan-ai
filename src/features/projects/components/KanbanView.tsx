@@ -36,6 +36,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { TaskDetailModal } from './TaskDetailModal';
+import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import {
   useProjectTaskColumns,
   useCreateTaskColumn,
@@ -169,6 +170,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   onAddModule,
 }: KanbanViewProps) {
   const [columns, setColumns] = useState<KanbanColumn[]>(defaultColumns);
+  const { canEditResource } = useProjectPermissions(projectId);
   const { data: persistedColumns } = useProjectTaskColumns(projectId);
   const createTaskColumn = useCreateTaskColumn(projectId);
   const deleteTaskColumn = useDeleteTaskColumn(projectId);
@@ -426,6 +428,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   const handleCompleteTask = (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
+    if (!canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) })) return;
 
     const prevTasks = [...tasks];
     const updatedTask = { ...task, status: 'done' as TaskStatus };
@@ -742,7 +745,9 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                                 e.stopPropagation();
                                                                 handleCompleteTask(task.id);
                                                               }}
-                                                              className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
+                                                              disabled={!canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) })}
+                                                              title={canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) }) ? undefined : 'You can only complete tasks you created or are assigned to'}
+                                                              className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-foreground/30 disabled:hover:bg-background"
                                                               aria-label="Mark task complete"
                                                             >
                                                               <span className="sr-only">Mark complete</span>

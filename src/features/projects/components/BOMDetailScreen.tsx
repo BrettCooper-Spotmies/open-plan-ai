@@ -451,7 +451,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   // ── Approval workflow ──
   const { data: project } = useProjectDetail(projectId);
   const projectRole = (project?.myRole || '').toLowerCase();
-  const canApprove = projectRole === 'admin' || projectRole === 'manager';
+  const canApprove = projectRole === 'admin' || projectRole === 'maintainer';
   const isAdmin = projectRole === 'admin';
   const createApprovalRequest = useCreateApprovalRequest(projectId);
   const decideApprovalRequest = useDecideApprovalRequest(projectId);

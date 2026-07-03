@@ -95,6 +95,7 @@ import { useProjectTags, useCreateTag } from '@/hooks/useProjectTags';
 import { getFallbackTagColor } from '@/lib/tagColors';
 import { useIssueColumns } from '@/hooks/useIssueColumns';
 import { DEFAULT_ISSUE_COLUMNS } from '@/services/issueColumns.service';
+import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 
 interface IssueDetailContentProps {
     issue: Issue | null;
@@ -173,6 +174,16 @@ export function IssueDetailContent({
     }, [pendingFiles]);
 
     const projectId = issue?.projectId;
+    const { canEditResource } = useProjectPermissions(projectId);
+    const canEditIssue = useMemo(
+        () =>
+            canEditResource({
+                createdBy: editedIssue?.reportedBy?.id,
+                assigneeIds: (editedIssue?.assignees || []).map((a) => a.id),
+            }),
+        [canEditResource, editedIssue?.reportedBy?.id, editedIssue?.assignees]
+    );
+    const editLockTitle = 'You can only edit items you created or are assigned to';
     const { data: apiIssueColumns } = useIssueColumns(projectId);
     const statusOptions = (apiIssueColumns && apiIssueColumns.length > 0 ? apiIssueColumns : DEFAULT_ISSUE_COLUMNS)
         .filter((c) => !c.isSpecial || c.status !== 'wont-fix' ? true : true)
@@ -534,6 +545,8 @@ export function IssueDetailContent({
                             className="text-base font-semibold w-full"
                             placeholder="Issue title..."
                             aria-required="true"
+                            disabled={!canEditIssue}
+                            title={canEditIssue ? undefined : editLockTitle}
                         />
                     </div>
                 </div>
@@ -558,9 +571,16 @@ export function IssueDetailContent({
                             <User className="h-3 w-3" />
                             Assigned To
                         </Label>
-                        <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
+                        <Popover open={isAssigneePopoverOpen} onOpenChange={(open) => canEditIssue && setIsAssigneePopoverOpen(open)}>
                             <PopoverTrigger asChild>
-                                <button className="flex items-center gap-2 h-10 px-2 w-full text-left rounded-md hover:bg-muted/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                <button
+                                    disabled={!canEditIssue}
+                                    title={canEditIssue ? undefined : editLockTitle}
+                                    className={cn(
+                                        'flex items-center gap-2 h-10 px-2 w-full text-left rounded-md hover:bg-muted/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                        !canEditIssue && 'cursor-not-allowed opacity-60 hover:bg-transparent'
+                                    )}
+                                >
                                     <TooltipProvider delayDuration={150}>
                                         <div className="flex items-center">
                                             {(editedIssue.assignees || []).slice(0, 6).map((assignee, index) => (
@@ -620,11 +640,16 @@ export function IssueDetailContent({
                                                 </Avatar>
                                                 <span className="flex-1 text-sm">{assignee.name}</span>
                                                 <button
+                                                    disabled={!canEditIssue}
+                                                    title={canEditIssue ? undefined : editLockTitle}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleFieldChange('assignees', (editedIssue.assignees || []).filter(a => a.id !== assignee.id));
                                                     }}
-                                                    className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                                                    className={cn(
+                                                        'text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100',
+                                                        !canEditIssue && 'cursor-not-allowed group-hover:opacity-60'
+                                                    )}
                                                 >
                                                     <X className="h-3 w-3" />
                                                 </button>
@@ -673,8 +698,9 @@ export function IssueDetailContent({
                             <Select
                                 value={editedIssue.status}
                                 onValueChange={(value) => handleFieldChange('status', value as IssueStatus)}
+                                disabled={!canEditIssue}
                             >
-                                <SelectTrigger className="h-9" aria-required="true">
+                                <SelectTrigger className="h-9" aria-required="true" title={canEditIssue ? undefined : editLockTitle}>
                                     <SelectValue>
                                         <div className="flex items-center gap-2">
                                             <div
@@ -719,6 +745,8 @@ export function IssueDetailContent({
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
+                                        disabled={!canEditIssue}
+                                        title={canEditIssue ? undefined : editLockTitle}
                                         className={cn(
                                             'w-full justify-start text-left font-normal h-9 px-3',
                                             !editedIssue.dueDate && 'text-muted-foreground'
@@ -776,8 +804,9 @@ export function IssueDetailContent({
                             <Select
                                 value={editedIssue.severity}
                                 onValueChange={(value) => handleFieldChange('severity', value as IssueSeverity)}
+                                disabled={!canEditIssue}
                             >
-                                <SelectTrigger className="h-9" aria-required="true">
+                                <SelectTrigger className="h-9" aria-required="true" title={canEditIssue ? undefined : editLockTitle}>
                                     <SelectValue>
                                         <Badge className={cn('text-xs gap-1', ISSUE_SEVERITY_DISPLAY[editedIssue.severity].color)}>
                                             {(() => {
@@ -810,8 +839,9 @@ export function IssueDetailContent({
                             <Select
                                 value={editedIssue.category}
                                 onValueChange={(value) => handleFieldChange('category', value as IssueCategory)}
+                                disabled={!canEditIssue}
                             >
-                                <SelectTrigger className="h-9" aria-required="true">
+                                <SelectTrigger className="h-9" aria-required="true" title={canEditIssue ? undefined : editLockTitle}>
                                     <SelectValue>
                                         {(() => {
                                             const cat = categoryOptions.find(c => c.value === editedIssue.category);
@@ -961,14 +991,19 @@ export function IssueDetailContent({
                                     id="advanced-mode"
                                     checked={isAdvancedDescription}
                                     onCheckedChange={setIsAdvancedDescription}
+                                    disabled={!canEditIssue}
                                 />
                             </div>
                         </div>
 
                         {isAdvancedDescription ? (
-                            <div className="min-h-[200px] border rounded-md p-4 bg-background">
+                            <div
+                                className={cn('min-h-[200px] border rounded-md p-4 bg-background', !canEditIssue && 'opacity-60 cursor-not-allowed')}
+                                title={canEditIssue ? undefined : editLockTitle}
+                            >
                                 <SlashBlockEditor
                                     key={editedIssue.id}
+                                    readOnly={!canEditIssue}
                                     initialBlocks={editedIssue.descriptionBlocks}
                                     onChange={(blocks) => handleFieldChange('descriptionBlocks', blocks)}
                                 />
@@ -979,6 +1014,8 @@ export function IssueDetailContent({
                                 onChange={(e) => handleFieldChange('description', e.target.value)}
                                 placeholder="Describe the issue in detail..."
                                 className="min-h-[150px] resize-none"
+                                disabled={!canEditIssue}
+                                title={canEditIssue ? undefined : editLockTitle}
                             />
                         )}
                     </div>
@@ -1486,12 +1523,17 @@ export function IssueDetailContent({
                         <div className="pt-6 border-t flex items-center justify-between">
                             {/* Left side: delete button */}
                             <div className="flex items-center gap-4">
-                                {onDelete && (userProjectRole === 'admin' || editedIssue?.reportedBy?.id === profile?.id) && (
+                                {onDelete && (
                                     <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => setShowDeleteConfirm(true)}
-                                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
+                                        disabled={!canEditIssue}
+                                        title={canEditIssue ? 'Delete this issue' : editLockTitle}
+                                        className={cn(
+                                            'text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2',
+                                            !canEditIssue && 'cursor-not-allowed opacity-60'
+                                        )}
                                     >
                                         <Trash2 className="h-4 w-4" />
                                         Delete Issue

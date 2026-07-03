@@ -1,11 +1,12 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
+import type { ProjectRole } from '@/types';
 
 export interface ProjectMember {
   id: string;
   project_id: string;
   user_id: string;
-  role: string;
+  role: ProjectRole;
   added_at: string | null;
   added_by: string | null;
 }
@@ -23,7 +24,7 @@ export interface ProjectMemberWithProfile extends ProjectMember {
 export interface AddProjectMemberInput {
   project_id: string;
   user_id: string;
-  role?: string;
+  role?: ProjectRole;
 }
 
 export const projectMembersService = {
@@ -40,7 +41,7 @@ export const projectMembersService = {
 
   async addMembers(
     projectId: string,
-    members: { userId: string; role?: string }[]
+    members: { userId: string; role?: ProjectRole }[]
   ): Promise<ProjectMember[]> {
     if (members.length === 0) return [];
     return Promise.all(
@@ -50,8 +51,8 @@ export const projectMembersService = {
     );
   },
 
-  async updateRole(projectId: string, userId: string, role: string): Promise<void> {
-    await apiClient.patch(ENDPOINTS.PROJECTS.MEMBER(projectId, userId), { role });
+  async updateRole(projectId: string, userId: string, role: ProjectRole): Promise<void> {
+    await apiClient.put(ENDPOINTS.PROJECTS.MEMBER_ROLE(projectId, userId), { role });
   },
 
   async removeMember(projectId: string, userId: string): Promise<void> {

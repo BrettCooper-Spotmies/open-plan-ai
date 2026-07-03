@@ -29,9 +29,10 @@ import { useProjects, useDeleteProject } from '@/hooks/useProjects';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useProjectAttachments } from '@/hooks/useProjectAttachments';
 import { useProjectLinks } from '@/hooks/useProjectLinks';
-import { useOrganizationMembers, useProjectMembers } from '@/hooks/useProjectTeam';
+import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrgPermissions } from '@/hooks/useProjectPermissions';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
@@ -139,7 +140,6 @@ export default function Projects() {
   const { user } = useAuth();
   const { currentOrganization, isLoading: orgLoading } = useOrganization();
   const { data: projects, isLoading, error } = useProjects();
-  const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -157,9 +157,7 @@ export default function Projects() {
   const [deleteProjectConfirmText, setDeleteProjectConfirmText] = useState('');
 
   const projectList = projects || [];
-  const currentMembership = organizationMembers.find((member) => member.id === user?.id);
-  const myRole = (currentOrganization?.myRole || currentMembership?.role || '').toLowerCase();
-  const canCreateProject = myRole === 'admin' || myRole === 'manager';
+  const { canCreateProject } = useOrgPermissions();
 
   useEffect(() => {
     document.title = 'Projects | Open Plan AI';

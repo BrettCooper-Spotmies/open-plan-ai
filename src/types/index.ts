@@ -1,5 +1,10 @@
 // OpenPlan AI Type Definitions
 
+// Organization roles are decoupled from project roles — a user's role on a
+// given project is independent of whatever role they hold at the org level.
+export type OrgRole = 'admin' | 'maintainer';
+export type ProjectRole = 'admin' | 'maintainer' | 'member';
+
 // Projects can define custom Kanban columns (see useProjectTaskColumns), so a
 // task's status is any project-defined column key, not a fixed set of values.
 export type TaskStatus = string;

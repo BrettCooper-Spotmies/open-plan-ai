@@ -62,8 +62,7 @@ import { toast } from 'sonner';
 
 const DEPARTMENTS = ['Engineering', 'Design', 'Management', 'Quality Assurance', 'Operations', 'Sales', 'Marketing', 'Support'];
 
-const ROLE_RANK: Record<string, number> = { admin: 3, manager: 2, member: 1, viewer: 0 };
-const ASSIGNABLE_ROLES = ['admin', 'manager', 'member', 'viewer'] as const;
+const ASSIGNABLE_ROLES = ['admin', 'maintainer'] as const;
 
 const formatUiDate = (value?: string | null) => {
   if (!value) return 'N/A';
@@ -112,22 +111,19 @@ const Team = () => {
   // Check if current user has management privileges
   const currentMember = teamMembers?.find(m => m.userId === user?.id || m.email === user?.email);
   const currentRole = normalizeRole(currentMember?.role);
-  const isAdminOrOwner = currentRole === 'admin' || currentRole === 'manager';
+  // Org membership management (invite/add/remove/change-role) is admin-only —
+  // Maintainer has zero org-membership management power under the 2-tier model.
+  const isOrgAdminUser = currentRole === 'admin';
 
-  // Hierarchy: admins can manage everyone; managers can only manage members
-  // ranked below them (member, viewer) — never admins or other managers.
+  // Only Admin can manage org members at all — Maintainer has no elevated
+  // management power over other members.
   const canManageMember = (member: TeamMember): boolean => {
-    if (currentRole === 'admin') return true;
-    if (currentRole !== 'manager') return false;
-    const targetRole = normalizeRole(member.role);
-    return ROLE_RANK[currentRole] > (ROLE_RANK[targetRole] ?? 0);
+    return currentRole === 'admin' && member.userId !== user?.id;
   };
 
-  // Roles the current user is allowed to assign to others (must rank below
-  // their own, unless they're an admin who can assign any role).
-  const assignableRoles = currentRole === 'admin'
-    ? ASSIGNABLE_ROLES
-    : ASSIGNABLE_ROLES.filter((r) => ROLE_RANK[r] < (ROLE_RANK[currentRole] ?? 0));
+  // Roles the current user is allowed to assign to others — always both
+  // tiers when the current user is admin, since only admin can manage anyone.
+  const assignableRoles = currentRole === 'admin' ? ASSIGNABLE_ROLES : [];
 
   const [searchQuery, setSearchQuery] = useState('');
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -361,7 +357,7 @@ const Team = () => {
         </div>
 
         {/* Pending Invitations */}
-        {isAdminOrOwner && visiblePendingInvitations.length > 0 && (
+        {isOrgAdminUser && visiblePendingInvitations.length > 0 && (
           <Card>
             <CardContent className="p-4">
               <h3 className="text-sm font-semibold text-muted-foreground mb-3 flex items-center gap-2">
@@ -411,7 +407,7 @@ const Team = () => {
               className="pl-10"
             />
           </div>
-          {isAdminOrOwner && (
+          {isOrgAdminUser && (
             <Dialog open={isInviteDialogOpen} onOpenChange={(open) => { setIsInviteDialogOpen(open); if (!open) { setInviteEmail(''); setInviteEmailError(''); setInviteRole(''); setInviteDepartment(''); } }}>
               <DialogTrigger asChild>
                 <Button>
@@ -451,9 +447,8 @@ const Team = () => {
                         <SelectValue placeholder="Select a role" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="manager">Manager</SelectItem>
-                        <SelectItem value="member">Member</SelectItem>
-                        <SelectItem value="viewer">Viewer</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="maintainer">Maintainer</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -520,9 +515,7 @@ const Team = () => {
                   <TableCell>
                     <Badge variant="outline" className={
                       member.role === 'admin' ? 'border-purple-500/50 text-purple-600 bg-purple-500/10' :
-                      member.role === 'manager' ? 'border-blue-500/50 text-blue-600 bg-blue-500/10' :
-                      member.role === 'member' ? 'border-green-500/50 text-green-600 bg-green-500/10' :
-                      member.role === 'viewer' ? 'border-gray-500/50 text-gray-500 bg-gray-500/10' :
+                      member.role === 'maintainer' ? 'border-blue-500/50 text-blue-600 bg-blue-500/10' :
                       ''
                     }>
                       {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
@@ -652,9 +645,6 @@ const Team = () => {
               </Select>
               {editMember?.userId === user?.id && (
                 <p className="text-xs text-muted-foreground">You cannot change your own role.</p>
-              )}
-              {currentRole === 'manager' && (
-                <p className="text-xs text-muted-foreground">Managers can only assign Member or Viewer roles.</p>
               )}
             </div>
           </div>
