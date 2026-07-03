@@ -223,11 +223,11 @@ function IssueViewControls({
               />
             </div>
 
-            {/* Severity Filter */}
+            {/* Priority Filter */}
             <div className="space-y-2">
               <Label className="text-xs flex items-center gap-1">
                 <Flag className="h-3 w-3" />
-                Severity
+                Priority
               </Label>
               <MultiSelect
                 options={[
@@ -238,7 +238,7 @@ function IssueViewControls({
                 ]}
                 selected={filters.severity || []}
                 onChange={(values) => onFiltersChange({ ...filters, severity: values.length ? (values as IssueSeverity[]) : undefined })}
-                placeholder="All Severity"
+                placeholder="All Priorities"
               />
             </div>
 

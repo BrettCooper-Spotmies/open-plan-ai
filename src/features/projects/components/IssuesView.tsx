@@ -754,7 +754,7 @@ export function IssuesView({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px]">Severity</TableHead>
+                <TableHead className="w-[80px]">Priority</TableHead>
                 <TableHead className="w-[300px]">Issue</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Status</TableHead>

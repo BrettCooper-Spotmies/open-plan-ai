@@ -108,7 +108,7 @@ export const ReportOpenIssuesTable = memo(function ReportOpenIssuesTable({ issue
               <thead>
                 <tr className="border-b">
                   <th className="text-left py-3 px-2">
-                    <SortHeader field="severity">Severity</SortHeader>
+                    <SortHeader field="severity">Priority</SortHeader>
                   </th>
                   <th className="text-left py-3 px-2">
                     <SortHeader field="title">Issue</SortHeader>
