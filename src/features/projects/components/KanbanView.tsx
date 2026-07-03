@@ -36,6 +36,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { TaskDetailModal } from './TaskDetailModal';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileKanbanColumn } from '@/components/shared/MobileKanbanColumn';
 import {
   useProjectTaskColumns,
   useCreateTaskColumn,
@@ -166,6 +168,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   projectId,
   onAddModule,
 }: KanbanViewProps) {
+  const isMobile = useIsMobile();
   const [columns, setColumns] = useState<KanbanColumn[]>(defaultColumns);
   const { data: persistedColumns } = useProjectTaskColumns(projectId);
   const createTaskColumn = useCreateTaskColumn(projectId);
@@ -565,18 +568,20 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     <div className="space-y-4">
       {/* Kanban Board */}
       <DragDropContext onDragEnd={handleDragEnd}>
-        <Droppable droppableId="board" type="COLUMN" direction="horizontal">
+        <Droppable droppableId="board" type="COLUMN" direction={isMobile ? 'vertical' : 'horizontal'}>
           {(provided) => (
             <div
               ref={provided.innerRef}
               {...provided.droppableProps}
-              className="w-full overflow-x-auto pb-4"
+              className={isMobile ? 'w-full' : 'w-full overflow-x-auto pb-4'}
             >
               <div
-                className="inline-flex gap-4 min-w-full md:min-h-[calc(100vh-320px)]"
-                style={{
-                  width: 'max-content',
-                }}
+                className={
+                  isMobile
+                    ? 'flex flex-col gap-3 w-full'
+                    : 'inline-flex gap-4 min-w-full md:min-h-[calc(100vh-320px)]'
+                }
+                style={isMobile ? undefined : { width: 'max-content' }}
               >
                 {columns.map((column, index) => {
                   const columnTasks = getColumnTasks(column);
@@ -589,94 +594,42 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                       index={index}
                       isDragDisabled={column.isSpecial}
                     >
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          className={cn(
-                            'w-[280px] flex-shrink-0 flex flex-col transition-shadow',
-                            'max-h-[calc(100vh-220px)]',
-                            snapshot.isDragging && 'shadow-lg'
-                          )}
-                        >
-                          {/* Column Header - stays at top */}
-                          <div className="flex-shrink-0 bg-background pb-3 space-y-3">
-                            <div className="flex items-center gap-2 px-1">
-                              {!column.isSpecial && (
-                                <div
-                                  {...provided.dragHandleProps}
-                                  className="cursor-grab active:cursor-grabbing"
-                                >
-                                  <GripVertical className="h-4 w-4 text-muted-foreground" />
-                                </div>
-                              )}
-                              {column.isSpecial && <div {...provided.dragHandleProps} />}
-                              {isDependenciesColumn ? (
-                                <Link2 className="h-4 w-4 text-status-blocked" />
-                              ) : (
-                                <ColumnColorDot color={column.color} />
-                              )}
-                              <h3 
-                                title={column.label}
-                                className={cn(
-                                'font-medium text-sm truncate',
-                                isDependenciesColumn && 'text-status-blocked'
-                              )}>
-                                {column.label}
-                              </h3>
-                              <span className="text-xs text-muted-foreground">
-                                {columnTasks.length}
-                              </span>
-                              {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5 ml-auto opacity-50 hover:opacity-100"
-                                  onClick={() => handleRemoveColumn(column.id)}
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              )}
-                            </div>
-
-                            {/* Add Task Button at Top - not shown for Dependencies */}
-                            {!isDependenciesColumn && (
-                              <div className="px-2">
-                                <Button
-                                  variant="ghost"
-                                  className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                                  onClick={() => {
-                                    setAddTaskToColumn(column.id);
-                                    setNewTask(createEmptyTaskDraft(column?.status as TaskStatus || 'todo'));
-                                    setIsMaximizedAddTask(true);
-                                  }}
-                                >
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Add Task
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Tasks Droppable - scrollable area */}
-                          <div className="flex-1 overflow-y-auto min-h-0">
-                            <Droppable
-                              droppableId={column.id}
-                              type="TASK"
-                              isDropDisabled={isDependenciesColumn}
+                      {(provided, snapshot) => {
+                        const addTaskButton = !isDependenciesColumn && (
+                          <div className={isMobile ? '' : 'px-2'}>
+                            <Button
+                              variant="ghost"
+                              className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                              onClick={() => {
+                                setAddTaskToColumn(column.id);
+                                setNewTask(createEmptyTaskDraft(column?.status as TaskStatus || 'todo'));
+                                setIsMaximizedAddTask(true);
+                              }}
                             >
-                              {(provided, snapshot) => (
-                                <div
-                                  ref={provided.innerRef}
-                                  {...provided.droppableProps}
-                                  className={cn(
-                                    'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
-                                    snapshot.isDraggingOver
-                                      ? 'bg-muted/50'
-                                      : 'bg-muted/30'
-                                  )}
-                                >
-                                  {columnTasks.map((task, taskIndex) => {
+                              <Plus className="h-3 w-3 mr-1" />
+                              Add Task
+                            </Button>
+                          </div>
+                        );
+
+                        const cardsDroppable = (
+                          <Droppable
+                            droppableId={column.id}
+                            type="TASK"
+                            isDropDisabled={isDependenciesColumn}
+                          >
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.droppableProps}
+                                className={cn(
+                                  'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
+                                  snapshot.isDraggingOver
+                                    ? 'bg-muted/50'
+                                    : 'bg-muted/30'
+                                )}
+                              >
+                                {columnTasks.map((task, taskIndex) => {
                                     const isBlocked = blockedTaskIds.has(task.id);
                                     const blockingInfo = getBlockingInfo(task);
                                     const blockingToInfo = getBlockingToInfo(task);
@@ -892,21 +845,108 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                 </div>
                               )}
                             </Droppable>
+                        );
+
+                        if (isMobile) {
+                          return (
+                            <div ref={provided.innerRef} {...provided.draggableProps} className="w-full">
+                              <MobileKanbanColumn
+                                label={column.label}
+                                count={columnTasks.length}
+                                countLabel="tasks"
+                                dot={isDependenciesColumn ? (
+                                  <Link2 className="h-4 w-4 text-status-blocked shrink-0" />
+                                ) : (
+                                  <ColumnColorDot color={column.color} />
+                                )}
+                                labelClassName={isDependenciesColumn ? 'text-status-blocked' : undefined}
+                                dragHandleProps={column.isSpecial ? null : provided.dragHandleProps}
+                                isDragging={snapshot.isDragging}
+                              >
+                                <div className="space-y-3">
+                                  {addTaskButton}
+                                  {cardsDroppable}
+                                </div>
+                              </MobileKanbanColumn>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            className={cn(
+                              'w-[280px] flex-shrink-0 flex flex-col transition-shadow',
+                              'max-h-[calc(100vh-220px)]',
+                              snapshot.isDragging && 'shadow-lg'
+                            )}
+                          >
+                            {/* Column Header - stays at top */}
+                            <div className="flex-shrink-0 bg-background pb-3 space-y-3">
+                              <div className="flex items-center gap-2 px-1">
+                                {!column.isSpecial && (
+                                  <div
+                                    {...provided.dragHandleProps}
+                                    className="cursor-grab active:cursor-grabbing"
+                                  >
+                                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                )}
+                                {column.isSpecial && <div {...provided.dragHandleProps} />}
+                                {isDependenciesColumn ? (
+                                  <Link2 className="h-4 w-4 text-status-blocked" />
+                                ) : (
+                                  <ColumnColorDot color={column.color} />
+                                )}
+                                <h3
+                                  title={column.label}
+                                  className={cn(
+                                    'font-medium text-sm truncate',
+                                    isDependenciesColumn && 'text-status-blocked'
+                                  )}>
+                                  {column.label}
+                                </h3>
+                                <span className="text-xs text-muted-foreground">
+                                  {columnTasks.length}
+                                </span>
+                                {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 ml-auto opacity-50 hover:opacity-100"
+                                    onClick={() => handleRemoveColumn(column.id)}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+
+                              {/* Add Task Button at Top - not shown for Dependencies */}
+                              {addTaskButton}
+                            </div>
+
+                            {/* Tasks Droppable - scrollable area */}
+                            <div className="flex-1 overflow-y-auto min-h-0">
+                              {cardsDroppable}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      }}
                     </Draggable>
                   );
                 })}
                 {provided.placeholder}
 
                 {/* Add Bucket Button */}
-                <div className="w-[280px] flex-shrink-0">
-                  <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
-                    <div className="flex items-center gap-2 px-1">
-                      <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
-                      <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
-                    </div>
+                <div className={isMobile ? 'w-full' : 'w-[280px] flex-shrink-0'}>
+                  <div className={isMobile ? 'pb-1' : 'sticky top-0 bg-background z-10 pb-3 space-y-3'}>
+                    {!isMobile && (
+                      <div className="flex items-center gap-2 px-1">
+                        <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                        <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
+                      </div>
+                    )}
                     <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
                       <DialogTrigger asChild>
                         <div className="px-2">

@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileKanbanColumn } from '@/components/shared/MobileKanbanColumn';
 import { Check, CheckSquare, Bug } from 'lucide-react';
 import {
   MyDayItem,
@@ -94,6 +96,8 @@ export function MyDayKanbanView({
   onStatusUpdate,
 }: MyDayKanbanViewProps) {
   const [localTasks, setLocalTasks] = useState<MyDayItem[]>(initialTasks);
+  const isMobile = useIsMobile();
+  const [mobileColumnOrder, setMobileColumnOrder] = useState<string[]>([]);
 
   useEffect(() => {
     setLocalTasks(initialTasks);
@@ -136,10 +140,37 @@ export function MyDayKanbanView({
     }
   }, [localTasks, groupBy]);
 
+  // Column order is local-only (My Day groupings are computed, not persisted columns).
+  // Re-sync whenever the available column ids change (e.g. groupBy switch), keeping
+  // any existing relative order and appending newly-seen ids at the end.
+  useEffect(() => {
+    setMobileColumnOrder((prev) => {
+      const currentIds = columns.map((c) => c.id);
+      const kept = prev.filter((id) => currentIds.includes(id));
+      const missing = currentIds.filter((id) => !kept.includes(id));
+      return [...kept, ...missing];
+    });
+  }, [columns]);
+
+  const orderedColumns = isMobile
+    ? mobileColumnOrder.map((id) => columns.find((c) => c.id === id)).filter((c): c is KanbanColumn => Boolean(c))
+    : columns;
+
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
 
-    const { source, destination, draggableId } = result;
+    const { source, destination, draggableId, type } = result;
+
+    if (type === 'COLUMN') {
+      if (destination.index === source.index) return;
+      setMobileColumnOrder((prev) => {
+        const next = Array.from(prev);
+        const [removed] = next.splice(source.index, 1);
+        next.splice(destination.index, 0, removed);
+        return next;
+      });
+      return;
+    }
 
     // Only allow status updates when grouping by progress
     if (groupBy === 'progress') {
@@ -198,49 +229,22 @@ export function MyDayKanbanView({
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <DragDropContext onDragEnd={handleDragEnd}>
-        <div className="w-full pb-4 overflow-x-auto md:overflow-visible touch-pan-x">
-          <div
-            className="flex gap-3 min-w-max snap-x snap-mandatory md:grid md:gap-4 md:min-w-0"
-            style={{
-              gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
-            }}
-          >
-            {columns.map((column) => (
-              <div
-                key={column.id}
-                className="w-[250px] min-w-[250px] flex flex-col snap-start md:w-auto md:min-w-0 md:flex-1 max-h-[calc(100vh-280px)]"
-              >
-                {/* Column Header */}
-                <div className="flex-shrink-0 bg-background pb-3 space-y-3">
-                  <div className="flex items-center gap-2 px-1">
-                    <div className={cn('w-2 h-2 rounded-full', column.color)} />
-                    <h3 className="font-medium text-sm">{column.label}</h3>
-                    <span className="text-xs text-muted-foreground">
-                      {column.tasks.length}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Tasks Droppable - scrollable */}
-                <div className="flex-1 overflow-y-auto min-h-0">
-                <Droppable
-                  droppableId={column.id}
-                  type="TASK"
-                  isDropDisabled={groupBy !== 'progress' || column.id === 'dependency'}
-                >
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={cn(
-                        'flex flex-col gap-2 min-h-[200px] p-2 rounded-lg',
-                        snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30',
-                      )}
-                    >
-                      {column.tasks.map((task, taskIndex) => (
+  const renderCardsDroppable = (column: KanbanColumn) => (
+    <Droppable
+      droppableId={column.id}
+      type="TASK"
+      isDropDisabled={groupBy !== 'progress' || column.id === 'dependency'}
+    >
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.droppableProps}
+          className={cn(
+            'flex flex-col gap-2 min-h-[200px] p-2 rounded-lg',
+            snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30',
+          )}
+        >
+          {column.tasks.map((task, taskIndex) => (
                         <Draggable
                           key={task.id}
                           draggableId={task.id}
@@ -350,15 +354,74 @@ export function MyDayKanbanView({
                           )}
                         </Draggable>
                       ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-                </div>
-              </div>
-            ))}
-          </div>
+          {provided.placeholder}
         </div>
+      )}
+    </Droppable>
+  );
+
+  return (
+    <div className="space-y-4">
+      <DragDropContext onDragEnd={handleDragEnd}>
+        {isMobile ? (
+          <Droppable droppableId="myday-board" type="COLUMN" direction="vertical">
+            {(provided) => (
+              <div ref={provided.innerRef} {...provided.droppableProps} className="flex flex-col gap-3 w-full">
+                {orderedColumns.map((column, index) => (
+                  <Draggable key={column.id} draggableId={column.id} index={index}>
+                    {(dragProvided, dragSnapshot) => (
+                      <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} className="w-full">
+                        <MobileKanbanColumn
+                          label={column.label}
+                          count={column.tasks.length}
+                          countLabel="tasks"
+                          dot={<div className={cn('w-2 h-2 rounded-full shrink-0', column.color)} />}
+                          dragHandleProps={dragProvided.dragHandleProps}
+                          isDragging={dragSnapshot.isDragging}
+                        >
+                          {renderCardsDroppable(column)}
+                        </MobileKanbanColumn>
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        ) : (
+          <div className="w-full pb-4 overflow-x-auto md:overflow-visible touch-pan-x">
+            <div
+              className="flex gap-3 min-w-max snap-x snap-mandatory md:grid md:gap-4 md:min-w-0"
+              style={{
+                gridTemplateColumns: `repeat(${columns.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {columns.map((column) => (
+                <div
+                  key={column.id}
+                  className="w-[250px] min-w-[250px] flex flex-col snap-start md:w-auto md:min-w-0 md:flex-1 max-h-[calc(100vh-280px)]"
+                >
+                  {/* Column Header */}
+                  <div className="flex-shrink-0 bg-background pb-3 space-y-3">
+                    <div className="flex items-center gap-2 px-1">
+                      <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                      <h3 className="font-medium text-sm">{column.label}</h3>
+                      <span className="text-xs text-muted-foreground">
+                        {column.tasks.length}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tasks Droppable - scrollable */}
+                  <div className="flex-1 overflow-y-auto min-h-0">
+                    {renderCardsDroppable(column)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </DragDropContext>
     </div>
   );
