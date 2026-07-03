@@ -11,6 +11,7 @@ import { AppLayoutSkeleton } from "@/components/layout/AppLayoutSkeleton";
 import { AppLayoutOutlet } from "@/components/layout/AppLayoutOutlet";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { useUserStore } from "@/stores/useUserStore";
+import { ChatNotificationsProvider } from "@/features/chat/providers/ChatNotificationsProvider";
 
 // ── Auth module (new canonical location) ──────────────────────────────────────
 import {
@@ -76,6 +77,7 @@ const App = () => {
                 <Toaster />
                 <Sonner />
                 <BrowserRouter>
+                  <ChatNotificationsProvider />
                   <Routes>
                     {/* ── Public (auth) routes ─────────────────────────────── */}
                     <Route path="/login"           element={<LoginPage />} />

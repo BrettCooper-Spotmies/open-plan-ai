@@ -48,6 +48,7 @@ function mapConversation(raw: any): Conversation {
       lastReadAt: m.lastReadAt ?? m.last_read_at ?? null,
       joinedAt: m.joinedAt ?? m.joined_at ?? null,
       leftAt: m.leftAt ?? m.left_at ?? null,
+      notificationsEnabled: m.notificationsEnabled ?? m.notifications_enabled ?? true,
     };
   });
 
@@ -154,6 +155,10 @@ export const chatService = {
 
   async markConversationAsRead(conversationId: string): Promise<void> {
     await apiClient.patch(ENDPOINTS.CONVERSATIONS.READ(conversationId), {});
+  },
+
+  async updateNotificationSettings(conversationId: string, enabled: boolean): Promise<void> {
+    await apiClient.patch(ENDPOINTS.CONVERSATIONS.NOTIFICATIONS(conversationId), { enabled });
   },
 
   async getMembers(conversationId: string): Promise<unknown[]> {

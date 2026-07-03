@@ -603,11 +603,17 @@ export function ECOWizard({
       if (paramNames.length !== new Set(paramNames).size) e.details = 'Each parameter must be unique — remove the duplicate rows';
     }
     if (s === 3) {
-      if (impact.unitCostDelta.trim() && isNaN(parseFloat(impact.unitCostDelta))) e.unitCostDelta = 'Enter a valid number (e.g. -4.55)';
+      const MAX_COST = 99999999.9999;
+      if (impact.unitCostDelta.trim()) {
+        const v = parseFloat(impact.unitCostDelta);
+        if (isNaN(v)) e.unitCostDelta = 'Enter a valid number (e.g. -4.55)';
+        else if (Math.abs(v) > MAX_COST) e.unitCostDelta = `Must be within ±${MAX_COST.toLocaleString()}`;
+      }
       if (impact.oneTimeCost.trim()) {
         const v = parseFloat(impact.oneTimeCost);
         if (isNaN(v)) e.oneTimeCost = 'Enter a valid number';
         else if (v < 0) e.oneTimeCost = 'Cost must be 0 or greater';
+        else if (v > MAX_COST) e.oneTimeCost = `Must be ${MAX_COST.toLocaleString()} or less`;
       }
     }
     setErrors(e);
@@ -1115,8 +1121,9 @@ export function ECOWizard({
           <FieldLabel>Unit Cost Δ ($/unit)</FieldLabel>
           <input
             value={impact.unitCostDelta}
-            onChange={e => { const v = e.target.value; if (/^[+-]?\d*\.?\d{0,6}$/.test(v)) { setImpact({ ...impact, unitCostDelta: v }); if (errors.unitCostDelta) setErrors(({ unitCostDelta: _, ...rest }) => rest); } }}
-            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, unitCostDelta: String(parseFloat(n.toFixed(6))) })); }}
+            inputMode="decimal"
+            onChange={e => { const v = e.target.value; if (/^[+-]?\d{0,8}(\.\d{0,4})?$/.test(v)) { setImpact({ ...impact, unitCostDelta: v }); if (errors.unitCostDelta) setErrors(({ unitCostDelta: _, ...rest }) => rest); } }}
+            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, unitCostDelta: String(parseFloat(n.toFixed(4))) })); }}
             placeholder="+4.55"
             className={cn(inputCls, errors.unitCostDelta && 'border-destructive')}
           />
@@ -1130,8 +1137,9 @@ export function ECOWizard({
           <FieldLabel>One-Time Cost ($)</FieldLabel>
           <input
             value={impact.oneTimeCost}
-            onChange={e => { const v = e.target.value; if (/^\d*\.?\d{0,6}$/.test(v)) { setImpact({ ...impact, oneTimeCost: v }); if (errors.oneTimeCost) setErrors(({ oneTimeCost: _, ...rest }) => rest); } }}
-            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, oneTimeCost: String(parseFloat(n.toFixed(6))) })); }}
+            inputMode="decimal"
+            onChange={e => { const v = e.target.value; if (/^\d{0,8}(\.\d{0,4})?$/.test(v)) { setImpact({ ...impact, oneTimeCost: v }); if (errors.oneTimeCost) setErrors(({ oneTimeCost: _, ...rest }) => rest); } }}
+            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, oneTimeCost: String(parseFloat(n.toFixed(4))) })); }}
             placeholder="12400"
             className={cn(inputCls, errors.oneTimeCost && 'border-destructive')}
           />

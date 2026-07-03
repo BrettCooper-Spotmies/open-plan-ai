@@ -18,6 +18,7 @@ export interface ConversationMember {
   isOnline: boolean;
   lastSeenAt?: string;
   lastReadAt?: string | null;
+  notificationsEnabled?: boolean;
 }
 
 export interface MessageAttachment {

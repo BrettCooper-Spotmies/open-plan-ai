@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCircle2, AlertCircle, FolderKanban, Clock, Activity } from 'lucide-react';
+import { Bell, CheckCircle2, AlertCircle, FolderKanban, Clock, Activity, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -25,6 +25,8 @@ const getNotificationIcon = (type: AppNotification['type']) => {
             return <CheckCircle2 className="h-4 w-4 text-green-500" />;
         case 'eco_decision_requested':
             return <Activity className="h-4 w-4 text-blue-500" />;
+        case 'chat_message':
+            return <MessageSquare className="h-4 w-4 text-primary" />;
         default:
             return <Bell className="h-4 w-4 text-muted-foreground" />;
     }

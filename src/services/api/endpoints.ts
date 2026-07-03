@@ -182,6 +182,7 @@ export const ENDPOINTS = {
     MESSAGES: (id: string) => `/conversations/${id}/messages`,
     FILE_MESSAGE: (id: string) => `/conversations/${id}/messages/file`,
     READ: (id: string) => `/conversations/${id}/read`,
+    NOTIFICATIONS: (id: string) => `/conversations/${id}/notifications`,
     MEMBERS: (id: string) => `/conversations/${id}/members`,
     MEMBER: (conversationId: string, userId: string) => `/conversations/${conversationId}/members/${userId}`,
     FILES: (id: string) => `/conversations/${id}/files`,

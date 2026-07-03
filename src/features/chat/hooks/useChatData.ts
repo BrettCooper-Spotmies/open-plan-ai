@@ -35,18 +35,12 @@ const generateId = () => {
  * Stale-while-revalidate hook for conversations.
  */
 export function useConversations() {
-  const { user } = useAuth();
-  const {
-    conversations: cachedConversations,
-    setConversations,
-    isConversationsStale,
-  } = useChatStore();
+  const conversations = useChatStore((s) => s.conversations);
+  const setConversations = useChatStore((s) => s.setConversations);
+  const isConversationsStale = useChatStore((s) => s.isConversationsStale);
 
-  const hasCachedData = cachedConversations.length > 0;
-
-  const [conversations, setLocalConversations] = useState<Conversation[]>(cachedConversations);
+  const hasCachedData = conversations.length > 0;
   const [loading, setLoading] = useState(!hasCachedData);
-  const channelRef = useRef<Unsubscribe | null>(null);
   const isMountedRef = useRef(true);
 
   const fetchConversations = useCallback(async (background = false) => {
@@ -54,7 +48,6 @@ export function useConversations() {
       if (!background) setLoading(true);
       const data = await chatService.getConversations();
       if (isMountedRef.current) {
-        setLocalConversations(data);
         setConversations(data);
         useChatStore.getState().hydrateUnreadCounts(data);
       }
@@ -68,7 +61,6 @@ export function useConversations() {
   useEffect(() => {
     isMountedRef.current = true;
     if (hasCachedData) {
-      setLocalConversations(cachedConversations);
       setLoading(false);
       if (isConversationsStale()) fetchConversations(true);
     } else {
@@ -77,68 +69,9 @@ export function useConversations() {
     return () => { isMountedRef.current = false; };
   }, []);
 
-  useEffect(() => {
-    if (!conversations.length) return;
-    const convIds = conversations.map((c) => c.id);
-    channelRef.current = chatTransport.subscribeToConversationUpdates(
-      convIds,
-      () => { fetchConversations(true); }
-    );
-
-    const memberChannel = chatTransport.subscribeToMemberUpdates(
-      null,
-      () => { fetchConversations(true); }
-    );
-
-    // Subscribe to every conversation room so we can track unread counts
-    // when messages arrive for non-active conversations.
-    const unreadUnsubs = convIds.map((convId) =>
-      chatTransport.subscribeToMessages(convId, (payload) => {
-        const raw = (payload as any)?.new ?? payload as any;
-        const store = useChatStore.getState();
-        const activeId = store.activeConversationId;
-        const isOwnMessage = (raw.senderId ?? raw.sender?.id) === user?.id;
-
-        if (convId !== activeId) {
-          store.incrementUnread(convId);
-        }
-
-        // Update both the Zustand cache and the locally-rendered state — this hook
-        // returns its own `conversations` state, which the store update alone doesn't touch.
-        const nextConversations = store.conversations.map((c) =>
-          c.id === convId
-            ? {
-                ...c,
-                lastMessage: {
-                  content: raw.content ?? '',
-                  senderId: raw.senderId ?? raw.sender?.id ?? undefined,
-                  senderName: raw.sender?.name ?? raw.senderName ?? '',
-                  createdAt: raw.createdAt ?? new Date().toISOString(),
-                },
-                lastMessageAt: raw.createdAt ?? new Date().toISOString(),
-              }
-            : c
-        );
-        store.setConversations(nextConversations);
-        setLocalConversations(nextConversations);
-
-        if (convId !== activeId && !isOwnMessage) {
-          const conv = nextConversations.find((c) => c.id === convId);
-          const senderName = raw.sender?.name ?? raw.senderName ?? 'Someone';
-          const preview = (raw.content ?? '').slice(0, 80);
-          toast.message(conv?.type === 'group' && conv.name ? `${senderName} in ${conv.name}` : senderName, {
-            description: preview,
-          });
-        }
-      })
-    );
-
-    return () => {
-      if (channelRef.current) chatTransport.unsubscribe(channelRef.current);
-      chatTransport.unsubscribe(memberChannel);
-      unreadUnsubs.forEach((unsub) => chatTransport.unsubscribe(unsub));
-    };
-  }, [conversations.length, fetchConversations]);
+  // Real-time subscriptions (new-message unread tracking, toasts, conversation/member
+  // updates) are handled once app-wide by ChatNotificationsProvider — this hook only
+  // reads the resulting store state so it stays in sync wherever it's used.
 
   return { conversations, loading, refetch: () => fetchConversations(true) };
 }
