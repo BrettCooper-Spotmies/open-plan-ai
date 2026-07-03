@@ -169,6 +169,19 @@ function fmtSize(b: number) {
   return (b / 1048576).toFixed(1) + ' MB';
 }
 
+// `<input type="date">` only accepts a strict "YYYY-MM-DD" value — any other
+// format (legacy free-text entries, alternate separators) is silently ignored
+// by the browser and renders blank. Normalize whatever was saved so a
+// previously-entered date always redisplays when reopening the ECO.
+function toDateInputValue(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+}
+
 // ── Shared field label ────────────────────────────────────────────────────────
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
@@ -785,7 +798,7 @@ export function ECOWizard({
           </div>
           <input
             type={basics.effType === 'DATE' ? 'date' : 'text'}
-            value={basics.effValue}
+            value={basics.effType === 'DATE' ? toDateInputValue(basics.effValue) : basics.effValue}
             onChange={e => setBasics({ ...basics, effValue: e.target.value })}
             placeholder={
               basics.effType === 'SERIAL' ? 'Effective from S/N EVC-1450'
