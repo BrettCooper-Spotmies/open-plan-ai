@@ -526,10 +526,6 @@ export default function ProjectDetail() {
     );
   }, [project?.tasks, searchQuery]);
 
-  const clearFilters = () => {
-    setFilters({});
-  };
-
   // Calculate active issue filter count
   const activeIssueFilterCount = useMemo(() => {
     let count = 0;
@@ -1361,7 +1357,7 @@ export default function ProjectDetail() {
                       </Button>
                     )}
                   </div>
-                  {/* Right: View toggle + Filter + Clear */}
+                  {/* Right: View toggle + Filter */}
                   <div className="flex items-center gap-2 shrink-0">
                     <ViewControls
                       viewMode={viewMode}
@@ -1376,17 +1372,6 @@ export default function ProjectDetail() {
                       onFiltersChange={setFilters}
                       activeFilterCount={activeFilterCount}
                     />
-                    {activeFilterCount > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={clearFilters}
-                        className="gap-1 text-muted-foreground hover:text-foreground h-9 px-2 shrink-0"
-                      >
-                        <X className="h-4 w-4" />
-                        <span className="hidden sm:inline">Clear</span>
-                      </Button>
-                    )}
                   </div>
                 </>
               )}
