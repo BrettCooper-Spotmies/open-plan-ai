@@ -7,6 +7,7 @@ import { ModulesKanbanView } from './ModulesKanbanView';
 import { ModulesListView } from './ModulesListView';
 import { ModuleDetailModal } from './ModuleDetailModal';
 import { TaskDetailModal } from './TaskDetailModal';
+import { IssueDetailModal } from './IssueDetailModal';
 import { AddModuleDialog } from './AddModuleDialog';
 import { getModuleTasks, getModuleProgress } from '../utils/projectUtils';
 
@@ -93,9 +94,13 @@ export function ModulesSection({
   const [selectedModule, setSelectedModule] = useState<ModuleWithStats | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
 
   const handleInternalTaskClick = (task: Task) => setSelectedTask(task);
   const effectiveOnTaskClick = onTaskClick ?? handleInternalTaskClick;
+
+  const handleInternalIssueClick = (issue: Issue) => setSelectedIssue(issue);
+  const effectiveOnIssueClick = onIssueClick ?? handleInternalIssueClick;
 
   const viewMode = externalViewMode || 'kanban';
 
@@ -246,7 +251,7 @@ export function ModulesSection({
         onUpdate={handleModuleUpdateFromModal}
         onDelete={onModuleDelete}
         onTaskClick={effectiveOnTaskClick}
-        onIssueClick={onIssueClick}
+        onIssueClick={effectiveOnIssueClick}
         onLinkTask={handleLinkTask}
         onUnlinkTask={handleUnlinkTask}
         onLinkIssue={handleLinkIssue}
@@ -265,6 +270,20 @@ export function ModulesSection({
           }}
           modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
           assignableMembers={teamMembers}
+        />
+      )}
+
+      {!onIssueClick && (
+        <IssueDetailModal
+          issue={selectedIssue}
+          tasks={tasks}
+          teamMembers={teamMembers}
+          isOpen={selectedIssue !== null}
+          onClose={() => setSelectedIssue(null)}
+          onUpdate={(updatedIssue) => {
+            onIssueUpdate?.(updatedIssue);
+            setSelectedIssue(updatedIssue);
+          }}
         />
       )}
     </>
