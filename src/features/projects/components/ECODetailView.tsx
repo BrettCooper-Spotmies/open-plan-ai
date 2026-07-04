@@ -670,7 +670,7 @@ function ImpactAssessment({ detail }: { detail: ECODetail }) {
 
   return (
     <div className="bg-card border border-border rounded-lg px-4 py-3.5">
-      <div className="flex items-center justify-between mb-2">
+      {/* <div className="flex items-center justify-between mb-2">
         <div className="text-[14px] font-semibold text-foreground">Impact Assessment</div>
         <span
           className="px-2 py-0.5 rounded text-[10px] font-semibold"
@@ -678,7 +678,7 @@ function ImpactAssessment({ detail }: { detail: ECODetail }) {
         >
           Schedule {sched.label}
         </span>
-      </div>
+      </div> */}
       <Row icon={Flag} label="Affected Milestones">
         <div className="flex flex-col items-end gap-1">
           {im.milestones.length
@@ -713,7 +713,7 @@ function ImpactAssessment({ detail }: { detail: ECODetail }) {
           {im.firmware ? 'Yes — FW dependency' : 'None'}
         </span>
       </Row>
-      <div className="flex items-start justify-between gap-3 pt-2">
+      {/* <div className="flex items-start justify-between gap-3 pt-2">
         <span className="flex items-center gap-2 text-[12px] text-muted-foreground">
           <Boxes className="w-3.5 h-3.5" />
           Inventory Impact
@@ -721,7 +721,7 @@ function ImpactAssessment({ detail }: { detail: ECODetail }) {
         <span className="text-[12px] font-medium text-foreground">
           {im.inventoryQty > 0 ? `${im.inventoryQty} units to rework/scrap` : <span className="text-muted-foreground">None</span>}
         </span>
-      </div>
+      </div> */}
     </div>
   );
 }
