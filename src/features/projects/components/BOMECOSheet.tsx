@@ -18,7 +18,7 @@ import {
 import { ECOAvatar } from './ECOShared';
 import { useCreateECO } from '@/hooks/useECOs';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
-import { BOMNode, BOMStatus, getCategoryMeta } from './bomData';
+import { BOMNode, BOMStatus, getCategoryMeta, UOM_OPTIONS } from './bomData';
 import { toast } from 'sonner';
 
 // ── Local helpers ─────────────────────────────────────────────────────────────
@@ -64,8 +64,6 @@ function FSelect<T extends string>({
     </select>
   );
 }
-
-const UOM_OPTIONS = ['EA', 'SET', 'LIC', 'KG', 'M', 'FT', 'PCS', 'LOT'];
 
 const TABS = ['part', 'impact', 'reason', 'approval'] as const;
 type TabId = typeof TABS[number];

@@ -16,7 +16,7 @@ import { useCreateECO, useUpdateECO, useSubmitECO, useECODetail } from '@/hooks/
 import { useBomTree } from '@/hooks/useBom';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { useAuth } from '@/modules/auth';
-import { fromApiNode, bomFlatAll, bomPath } from './bomData';
+import { fromApiNode, bomFlatAll, bomPath, KNOWN_BOM_CATEGORIES, BOM_CAT_META, UOM_OPTIONS } from './bomData';
 import { REQS } from './requirementsData';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -37,6 +37,14 @@ const BOM_PARAM_OPTIONS: { key: string; label: string }[] = [
   { key: 'leadTime', label: 'Lead Time (days)' },
   { key: 'mpn', label: 'MPN' },
 ];
+
+// Parameter keys whose From/To value should be constrained to the BOM's known
+// option set (same lists used in BOMPartSheet.tsx's create/edit form) rather
+// than free text.
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  KNOWN_BOM_CATEGORIES.map(c => [c, BOM_CAT_META[c].label]),
+);
+const UOM_LABELS: Record<string, string> = {};
 
 const ECO_RECOMMENDED_PARAMS = [
   'Drawing Number',
@@ -1048,8 +1056,34 @@ export function ECOWizard({
           ) : (
             <input value={r.param} onChange={e => upRow(idx, 'param', e.target.value)} placeholder="Parameter" className={cn(inputCls, 'flex-[1.2]')} />
           )}
-          <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
-          <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+          {(() => {
+            const paramKey = BOM_PARAM_OPTIONS.find(o => o.label === r.param)?.key;
+            const knownOptions = paramKey === 'uom'
+              ? { options: UOM_OPTIONS as readonly string[], labels: UOM_LABELS }
+              : paramKey === 'cat'
+                ? { options: KNOWN_BOM_CATEGORIES as readonly string[], labels: CATEGORY_LABELS }
+                : null;
+
+            if (knownOptions) {
+              return (
+                <>
+                  <div className="flex-1">
+                    <EcoSelectWithCustom value={r.from} onChange={v => upRow(idx, 'from', v)} options={[...knownOptions.options]} labels={knownOptions.labels} />
+                  </div>
+                  <div className="flex-1">
+                    <EcoSelectWithCustom value={r.to} onChange={v => upRow(idx, 'to', v)} options={[...knownOptions.options]} labels={knownOptions.labels} />
+                  </div>
+                </>
+              );
+            }
+
+            return (
+              <>
+                <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+                <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+              </>
+            );
+          })()}
           <div className="w-32">
             <EcoSelect value={r.cls} onChange={v => upRow(idx, 'cls', v)} options={Object.keys(CHANGE_LABEL_MAP) as ChangeLabel[]} labels={CHANGE_LABEL_MAP} />
           </div>
