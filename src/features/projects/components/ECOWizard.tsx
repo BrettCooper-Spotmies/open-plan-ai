@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   GitMerge, Check, X, Plus, ChevronDown, Lock, AlertCircle,
-  Upload, FileText, Image, Box, Boxes, Package, Scissors,
+  Upload, FileText, Image, Box, Boxes, Package, Scissors, Search,
 } from 'lucide-react';
 import {
   ECOType, ECOReason, ECOPriority, ChangeClass, EffectivityType, ImpactLevel, ECODisposition,
@@ -419,7 +419,8 @@ export function ECOWizard({
   );
 
   const [items, setItems] = useState<ItemState[]>([]);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(true);
+  const [partSearch, setPartSearch] = useState('');
   const [reqItems, setReqItems] = useState<ReqItemState[]>([]);
   const [reqPickerOpen, setReqPickerOpen] = useState(false);
 
@@ -436,7 +437,16 @@ export function ECOWizard({
         }],
     );
     setPickerOpen(false);
+    setPartSearch('');
   };
+
+  const filteredBomPool = useMemo(
+    () => bomPool.filter(p => {
+      const q = partSearch.trim().toLowerCase();
+      return !q || p.pn.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q);
+    }),
+    [bomPool, partSearch],
+  );
 
   // Step 3 — Diff rows + attachments
   const [diffRows, setDiffRows] = useState<DiffRowState[]>([{ param: '', from: '', to: '', cls: 'MODIFIED' }]);
@@ -801,9 +811,9 @@ export function ECOWizard({
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div className="text-[13px] text-muted-foreground">
-          {items.length === 0 ? 'No part selected yet' : '1 affected part · where-used auto-rolls up from BOM'}
+          {items.length === 0 ? 'Select parts to be affected by this ECO' : '1 affected part · where-used auto-rolls up from BOM'}
         </div>
-        {items.length === 0 && (
+        {/* {items.length === 0 && (
           <button
             onClick={() => setPickerOpen(p => !p)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors font-[inherit]"
@@ -811,29 +821,45 @@ export function ECOWizard({
             <Plus className="w-3 h-3" />
             Add part
           </button>
-        )}
+        )} */}
       </div>
       {pickerOpen && (
         <div className="border border-border rounded-lg overflow-hidden">
-          {bomPool.length === 0 ? (
-            <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
-              No parts in this project's BOM yet.
-            </div>
-          ) : (
-            bomPool.map(p => (
-              <div
-                key={p.pn}
-                onClick={() => addItem(p)}
-                className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
-              >
-                <div>
-                  <span className="text-[12px] font-mono font-semibold text-foreground">{p.pn}</span>
-                  <span className="text-[12px] text-muted-foreground ml-2.5">{p.desc}</span>
-                </div>
-                <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/20">
+            <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <input
+              autoFocus
+              value={partSearch}
+              onChange={e => setPartSearch(e.target.value)}
+              placeholder="Search by part number or description…"
+              className="flex-1 bg-transparent border-none outline-none text-[12px] text-foreground placeholder:text-muted-foreground font-[inherit]"
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            {bomPool.length === 0 ? (
+              <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
+                No parts in this project's BOM yet.
               </div>
-            ))
-          )}
+            ) : filteredBomPool.length === 0 ? (
+              <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
+                No parts match "{partSearch}".
+              </div>
+            ) : (
+              filteredBomPool.map(p => (
+                <div
+                  key={p.pn}
+                  onClick={() => addItem(p)}
+                  className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
+                >
+                  <div>
+                    <span className="text-[12px] font-mono font-semibold text-foreground">{p.pn}</span>
+                    <span className="text-[12px] text-muted-foreground ml-2.5">{p.desc}</span>
+                  </div>
+                  <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
       {items.length === 0 && !pickerOpen && (

@@ -642,10 +642,10 @@ function AffectedParts({ detail, projectId }: { detail: ECODetail; projectId: st
           </div>
         );
       })}
-      <div className="px-4 py-2 bg-muted/20 border-t border-border/50 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+      {/* <div className="px-4 py-2 bg-muted/20 border-t border-border/50 flex items-center gap-1.5 text-[10px] text-muted-foreground">
         <GitBranch className="w-2.5 h-2.5" />
         Where-used paths auto-rolled up from BOM hierarchy to top-level assembly
-      </div>
+      </div> */}
     </div>
   );
 }
