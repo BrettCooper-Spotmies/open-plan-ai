@@ -195,14 +195,18 @@ export function BOMECOSheet({
         rows.push({ param, from: orig || '—', to: cur, label });
       }
     };
-    check('Description',            node.desc ?? '',                                    desc);
-    check('Manufacturer',           node.manufacturer ?? '',                            manufacturer);
-    check('Manufacturer PN (MPN)', node.mpn ?? '',                                     mpn);
-    check('Supplier / Distributor', node.distributor ?? '',                             distributor);
-    check('Unit Price',             node.price != null ? String(node.price) : '',       price);
-    check('Lead Time (days)',       node.leadTime != null ? String(node.leadTime) : '', leadTime);
-    check('Quantity',               node.qty != null ? String(node.qty) : '',           qty);
-    check('Unit of Measure',        node.uom ?? 'EA',                                  uom);
+    // Parameter names here must match BOM_PARAM_OPTIONS in ECOWizard.tsx — the
+    // backend's mapDiffRowsToRevisionFields() matches on these exact labels to
+    // route the change to the right bom_parts/bom_nodes column instead of
+    // dumping it into customFields.
+    check('Description',   node.desc ?? '',                                    desc);
+    check('Manufacturer',  node.manufacturer ?? '',                            manufacturer);
+    check('MPN',            node.mpn ?? '',                                     mpn);
+    check('Distributor',    node.distributor ?? '',                             distributor);
+    check('Unit Price',     node.price != null ? String(node.price) : '',       price);
+    check('Lead Time (days)', node.leadTime != null ? String(node.leadTime) : '', leadTime);
+    check('Quantity',       node.qty != null ? String(node.qty) : '',           qty);
+    check('Unit of Measure', node.uom ?? 'EA',                                  uom);
     return rows;
   }, [node, desc, manufacturer, mpn, distributor, price, leadTime, qty, uom]);
 
@@ -449,12 +453,12 @@ export function BOMECOSheet({
                         placeholder="0.00"
                       />
                     </FL>
-                    <FL label="Lead Time (weeks)">
+                    <FL label="Lead Time (days)">
                       <FInput
                         value={leadTime}
                         onChange={e => setLeadTime(e.target.value)}
                         type="number"
-                        placeholder="8"
+                        placeholder="14"
                       />
                     </FL>
                     <FL label="Quantity">
