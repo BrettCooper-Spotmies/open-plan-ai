@@ -88,6 +88,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSave: (payload: BOMPartPayload) => void | Promise<void>;
+  resubmitMode?: boolean;   // true when editing a rejected node — save also resubmits for review
 }
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -421,7 +422,7 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
 }
 
 // ── Main component ─────────────────────────────────────────────────
-export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSave }: Props) {
+export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSave, resubmitMode }: Props) {
   const isEdit = mode === 'edit';
 
   const { user } = useAuth();
@@ -1401,7 +1402,9 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                   {saving
                     ? 'Saving…'
                     : isEdit
-                      ? versionMode === 'new' ? `Save as Rev ${newRevLabel || '?'}` : 'Save Changes'
+                      ? resubmitMode
+                        ? 'Save & Resubmit'
+                        : versionMode === 'new' ? `Save as Rev ${newRevLabel || '?'}` : 'Save Changes'
                       : 'Add Part'}
                 </Button>
               )}
