@@ -395,7 +395,7 @@ export function ECOWizard({
   projectId: string;
   ecoId?: string;
   isRework?: boolean;
-  onClose: (result?: { saved: boolean }) => void;
+  onClose: (result?: { saved: boolean; ecoId?: string }) => void;
 }) {
   const isEdit = !!ecoId;
   const createMutation = useCreateECO(projectId);
@@ -1602,14 +1602,14 @@ export function ECOWizard({
                     })),
                   };
                   try {
-                    await activeMutation.mutateAsync(payload);
+                    const saved = await activeMutation.mutateAsync(payload);
                     if (isRework) {
                       await submitMutation.mutateAsync();
                       toast.success('ECO revised and resubmitted');
                     } else {
                       toast.success(isEdit ? 'ECO updated' : 'ECO created');
                     }
-                    onClose({ saved: true });
+                    onClose({ saved: true, ecoId: isEdit ? undefined : saved?.id });
                   } catch (err) {
                     toast.error(isRework ? 'Failed to resubmit ECO' : isEdit ? 'Failed to update ECO' : 'Failed to create ECO', {
                       description: err instanceof Error ? err.message : undefined,

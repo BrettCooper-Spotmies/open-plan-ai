@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, GitMerge, GitBranch, Check, CheckCircle,
   XCircle, Clock, Lock, AlertCircle, Boxes, Info, DollarSign, Flag,
   Package, Shield, Cpu, Scissors, RefreshCw, Send, Download, Edit,
-  History, Link2, X, Pause, Plus, ClipboardCheck, Loader2,
+  History, Link2, X, Pause, Plus, ClipboardCheck, Loader2, Target, MessageSquare,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -12,7 +12,7 @@ import {
   ECO_TYPE_LABEL, REASON_LABEL, CHANGE_CLASS_LABEL, EFFECTIVITY_LABEL,
   MODULE_COLORS, ACTIVITY_META, PIPELINE_TEMPLATE,
   statusMeta, priorityMeta, changeClassMeta, changeMeta, impactMeta, dispositionMeta,
-  effectivityText, lifecycleIndex, buildDetail, topAssemblies,
+  effectivityText, lifecycleIndex, buildDetail, topAssemblies, impactAreaLabel,
   ECOStatus, DecisionType, fromApiEcoDetail,
 } from './ecoData';
 import { ECOAvatar, StatusPill } from './ECOShared';
@@ -651,16 +651,13 @@ function AffectedParts({ detail, projectId }: { detail: ECODetail; projectId: st
   );
 }
 
-// ── Impact assessment ─────────────────────────────────────────────────────────
+// ── Shared info row ───────────────────────────────────────────────────────────
 
-function ImpactAssessment({ detail }: { detail: ECODetail }) {
-  const im = detail.impact;
-  const sched = impactMeta(im.schedule);
-
-  const Row = ({ icon: Icon, label, children }: {
-    icon: React.ElementType; label: string; children: React.ReactNode;
-  }) => (
-    <div className="flex items-start justify-between gap-3 py-2 border-b border-border/50">
+function InfoRow({ icon: Icon, label, children, last }: {
+  icon: React.ElementType; label: string; children: React.ReactNode; last?: boolean;
+}) {
+  return (
+    <div className={cn('flex items-start justify-between gap-3 py-2', !last && 'border-b border-border/50')}>
       <span className="flex items-center gap-2 text-[12px] text-muted-foreground">
         <Icon className="w-3.5 h-3.5" />
         {label}
@@ -668,52 +665,89 @@ function ImpactAssessment({ detail }: { detail: ECODetail }) {
       <span className="text-[12px] font-medium text-foreground text-right">{children}</span>
     </div>
   );
+}
+
+// ── Reason details ─────────────────────────────────────────────────────────────
+
+function ReasonDetails({ detail }: { detail: ECODetail }) {
+  const pm = priorityMeta(detail.priority);
+  const typeLabel = ECO_TYPE_LABEL[detail.type] ?? detail.type;
+  const reasonLabel = REASON_LABEL[detail.reason] ?? detail.reason;
 
   return (
     <div className="bg-card border border-border rounded-lg px-4 py-3.5">
-      {/* <div className="flex items-center justify-between mb-2">
-        <div className="text-[14px] font-semibold text-foreground">Impact Assessment</div>
+      <InfoRow icon={Edit} label="Change Type">
+        {typeLabel}
+        {detail.typeOther && <span className="text-muted-foreground"> — {detail.typeOther}</span>}
+      </InfoRow>
+      <InfoRow icon={AlertCircle} label="Reason Code">
+        {reasonLabel}
+        {detail.reasonOther && <span className="text-muted-foreground"> — {detail.reasonOther}</span>}
+      </InfoRow>
+      <InfoRow icon={Flag} label="Priority" last={!detail.desc}>
+        <StatusPill meta={pm} />
+      </InfoRow>
+      {detail.desc && (
+        <div className="pt-2.5 mt-1 border-t border-border/50">
+          <span className="flex items-center gap-2 text-[12px] text-muted-foreground mb-1">
+            <MessageSquare className="w-3.5 h-3.5" />
+            Reason Description
+          </span>
+          <p className="text-[12px] text-foreground leading-relaxed">{detail.desc}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Impact assessment ─────────────────────────────────────────────────────────
+
+function ImpactAssessment({ detail }: { detail: ECODetail }) {
+  const im = detail.impact;
+  const im_level = impactMeta(im.schedule);
+
+  return (
+    <div className="bg-card border border-border rounded-lg px-4 py-3.5">
+      <InfoRow icon={Flag} label="Impact Level">
         <span
-          className="px-2 py-0.5 rounded text-[10px] font-semibold"
-          style={{ background: sched.background, color: sched.color, border: sched.border }}
+          className="px-2 py-0.5 rounded text-[11px] font-semibold"
+          style={{ background: im_level.background, color: im_level.color, border: im_level.border }}
         >
-          Schedule {sched.label}
+          {im_level.label}
         </span>
-      </div> */}
-      <Row icon={Flag} label="Affected Milestones">
+      </InfoRow>
+      <InfoRow icon={Target} label="Impact Area">
+        <span>{impactAreaLabel(im.impactArea)}</span>
+      </InfoRow>
+      <InfoRow icon={Flag} label="Affected Milestones">
         <div className="flex flex-col items-end gap-1">
           {im.milestones.length
             ? im.milestones.map(m => <span key={m} className="text-blue-500 cursor-pointer">{m}</span>)
             : <span className="text-muted-foreground">None</span>}
         </div>
-      </Row>
-      <Row icon={DollarSign} label="Unit Cost Δ">
+      </InfoRow>
+      <InfoRow icon={DollarSign} label="Unit Cost Δ">
         <span style={{
           color: im.unitCostDelta > 0 ? '#F59E0B' : im.unitCostDelta < 0 ? '#16A34A' : undefined,
         }}>
           {im.unitCostDelta > 0 ? '+' : ''}${im.unitCostDelta.toFixed(2)}/unit
         </span>
-      </Row>
-      <Row icon={Package} label="One-Time Cost">
+      </InfoRow>
+      <InfoRow icon={Package} label="One-Time Cost">
         {im.oneTimeCost > 0
           ? `$${im.oneTimeCost.toLocaleString()}`
           : <span className="text-muted-foreground">—</span>}
-      </Row>
-      <Row icon={Shield} label="Recertification">
-        <div className="flex flex-col items-end gap-1">
-          <span style={{ color: im.recert ? '#F59E0B' : undefined, fontWeight: im.recert ? 600 : 500 }}>
-            {im.recert ? 'Required' : 'Not required'}
-          </span>
-          {im.recert && im.certNotes && (
-            <span className="text-[10px] text-muted-foreground max-w-[170px]">{im.certNotes}</span>
-          )}
-        </div>
-      </Row>
-      <Row icon={Cpu} label="Firmware Coupling">
+      </InfoRow>
+      <InfoRow icon={Shield} label="Recertification">
+        <span style={{ color: im.recert ? '#F59E0B' : undefined, fontWeight: im.recert ? 600 : 500 }}>
+          {im.recert ? 'Required' : 'Not required'}
+        </span>
+      </InfoRow>
+      <InfoRow icon={Cpu} label="Firmware Coupling" last={!im.certNotes}>
         <span style={{ color: im.firmware ? '#F59E0B' : undefined, fontWeight: im.firmware ? 600 : 500 }}>
           {im.firmware ? 'Yes — FW dependency' : 'None'}
         </span>
-      </Row>
+      </InfoRow>
       {/* <div className="flex items-start justify-between gap-3 pt-2">
         <span className="flex items-center gap-2 text-[12px] text-muted-foreground">
           <Boxes className="w-3.5 h-3.5" />
@@ -723,6 +757,15 @@ function ImpactAssessment({ detail }: { detail: ECODetail }) {
           {im.inventoryQty > 0 ? `${im.inventoryQty} units to rework/scrap` : <span className="text-muted-foreground">None</span>}
         </span>
       </div> */}
+      {im.certNotes && (
+        <div className="pt-2.5 mt-1 border-t border-border/50">
+          <span className="flex items-center gap-2 text-[12px] text-muted-foreground mb-1">
+            <MessageSquare className="w-3.5 h-3.5" />
+            Impact Notes
+          </span>
+          <p className="text-[12px] text-foreground leading-relaxed">{im.certNotes}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1285,7 +1328,12 @@ export function ECODetailView({
               <span className="text-muted-foreground/60">· {EFFECTIVITY_LABEL[detail.effectivity.type]}</span>
             </span>
           </div>
-          <p className="text-[13px] text-muted-foreground max-w-3xl leading-relaxed">{detail.desc}</p>
+          {detail.desc && (
+            <div>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">Reason</span>
+              <p className="text-[13px] text-muted-foreground max-w-3xl leading-relaxed">{detail.desc}</p>
+            </div>
+          )}
         </div>
         <div className="flex gap-2 flex-wrap shrink-0 w-full sm:w-auto">
           {headerActions(detail.status, detail.originator === user?.name).map(a => {
@@ -1407,10 +1455,12 @@ export function ECODetailView({
           {isFirstLoad ? (
             <>
               <SkeletonSideCard />
+              <SkeletonSideCard />
               <SkeletonPartsCard />
             </>
           ) : (
             <>
+              <ReasonDetails detail={detail} />
               <ImpactAssessment detail={detail} />
               <AffectedParts detail={detail} projectId={projectId} />
             </>

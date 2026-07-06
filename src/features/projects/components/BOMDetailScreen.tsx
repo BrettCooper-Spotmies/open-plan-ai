@@ -297,6 +297,7 @@ interface Props {
   projectId: string;
   onBack: () => void;
   onNavigate: (id: string) => void;
+  onEcoCreated?: (ecoId: string) => void;
 }
 
 // ── Small shared primitives ────────────────────────────────────────
@@ -419,7 +420,7 @@ function RevisionToggle({
 }
 
 // ── Main component ─────────────────────────────────────────────────
-export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectId, onBack, onNavigate }: Props) {
+export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectId, onBack, onNavigate, onEcoCreated }: Props) {
   const { user } = useAuth();
   const { formatCurrency } = useCurrency();
   const queryClient = useQueryClient();
@@ -1216,6 +1217,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         onClose={() => setEcoOpen(false)}
         node={node}
         projectId={projectId}
+        onCreated={onEcoCreated}
       />
 
       {/* Send for review */}

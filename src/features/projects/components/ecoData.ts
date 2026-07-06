@@ -90,6 +90,30 @@ export const IMPACT_LABEL: Record<ImpactLevel, string> = {
   HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low',
 };
 
+export const IMPACT_AREA_OPTIONS = [
+  'schedule', 'cost', 'quality', 'safety', 'compliance',
+  'software', 'firmware', 'manufacturing', 'procurement', 'reliability', 'other',
+] as const;
+export type ImpactArea = typeof IMPACT_AREA_OPTIONS[number];
+export const IMPACT_AREA_LABEL: Record<ImpactArea, string> = {
+  schedule: 'Schedule',
+  cost: 'Cost',
+  quality: 'Quality',
+  safety: 'Safety',
+  compliance: 'Compliance',
+  software: 'Software',
+  firmware: 'Firmware',
+  manufacturing: 'Manufacturing',
+  procurement: 'Procurement',
+  reliability: 'Reliability',
+  other: 'Other',
+};
+
+export function impactAreaLabel(area: string | null | undefined): string {
+  if (!area) return '—';
+  return IMPACT_AREA_LABEL[area as ImpactArea] ?? (area.charAt(0).toUpperCase() + area.slice(1));
+}
+
 export const CHANGE_CLASS_LABEL: Record<ChangeClass, string> = {
   I: 'Class I — Safety / Regulatory',
   II: 'Class II — Form-Fit-Function',
@@ -215,6 +239,7 @@ export interface ECOImpact {
   oneTimeCost: number;
   recert: boolean;
   certNotes: string;
+  impactArea: string | null;
   firmware: boolean;
   inventoryQty: number;
 }
@@ -485,7 +510,7 @@ const DETAIL_OVERRIDES: Record<string, DetailOverride> = {
     impact: {
       schedule: 'HIGH', milestones: ['CDR — Critical Design Review', 'MRR — Mfg Readiness'],
       unitCostDelta: 4.55, oneTimeCost: 12400, recert: true, certNotes: 'CE LVD + IEC 61851 re-test',
-      firmware: false, inventoryQty: 575,
+      impactArea: 'compliance', firmware: false, inventoryQty: 575,
     },
     activity: [
       { actor: 'Sarah Chen',  action: 'RESUBMITTED',  when: 'Apr 20', note: 'Attached 96h salt-spray report; revised artifacts resubmitted to the pipeline.' },
@@ -525,7 +550,7 @@ const DETAIL_OVERRIDES: Record<string, DetailOverride> = {
     impact: {
       schedule: 'LOW', milestones: ['PVT Build'],
       unitCostDelta: -0.45, oneTimeCost: 0, recert: false, certNotes: '',
-      firmware: true, inventoryQty: 320,
+      impactArea: 'cost', firmware: true, inventoryQty: 320,
     },
     activity: [
       { actor: 'Linda Torres', action: 'APPROVED',   when: 'Apr 22', note: 'Approved — pin-compatible, no layout change.' },
@@ -561,7 +586,7 @@ const DETAIL_OVERRIDES: Record<string, DetailOverride> = {
     impact: {
       schedule: 'MEDIUM', milestones: ['EMC Pre-Compliance', 'DVT Exit'],
       unitCostDelta: 0.18, oneTimeCost: 3200, recert: true, certNotes: 'Re-run IEC 61000-4-2 ESD; CE re-declaration',
-      firmware: false, inventoryQty: 120,
+      impactArea: 'safety', firmware: false, inventoryQty: 120,
     },
     activity: [
       { actor: 'Dr. Patel',  action: 'APPROVED',  when: 'Apr 20', note: 'Eng review passed — TVS placement near connector OK.' },
@@ -629,7 +654,7 @@ export function buildDetail(eco: ECOListItem): ECODetail {
     diff: ov.diff ?? defaultDiff(eco),
     impact: ov.impact ?? {
       schedule: 'MEDIUM', milestones: ['DVT Exit'], unitCostDelta: 0, oneTimeCost: 0,
-      recert: false, certNotes: '', firmware: eco.modules.includes('firmware'), inventoryQty: 0,
+      recert: false, certNotes: '', impactArea: null, firmware: eco.modules.includes('firmware'), inventoryQty: 0,
     },
     activity: ov.activity ?? defaultActivity(eco),
     ecn: ov.ecn !== undefined
@@ -786,6 +811,7 @@ export function fromApiEcoDetail(raw: ApiEcoDetail): ECODetail {
       oneTimeCost:   raw.oneTimeCost ?? 0,
       recert:        raw.requiresRecertification,
       certNotes:     raw.certNotes ?? '',
+      impactArea:    raw.impactArea ?? null,
       firmware:      raw.firmwareCoupling,
       inventoryQty:  raw.inventoryQty ?? 0,
     },
