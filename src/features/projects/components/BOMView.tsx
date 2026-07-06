@@ -798,6 +798,7 @@ interface BOMViewProps {
   onAddClose?: () => void;
   selectedId?: string | null;
   onSelectedIdChange?: (id: string | null) => void;
+  onEcoCreated?: (ecoId: string) => void;
 }
 
 export function BOMView({
@@ -807,6 +808,7 @@ export function BOMView({
   onAddClose,
   selectedId = null,
   onSelectedIdChange,
+  onEcoCreated,
 }: BOMViewProps) {
   const selected = selectedId;
   const setSelected = (id: string | null) => onSelectedIdChange?.(id);
@@ -1122,6 +1124,7 @@ export function BOMView({
         projectId={projectId}
         onBack={() => setSelected(null)}
         onNavigate={setSelected}
+        onEcoCreated={onEcoCreated}
       />
     );
     return (

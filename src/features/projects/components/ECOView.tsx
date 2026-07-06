@@ -80,7 +80,10 @@ export function ECOView({
           projectId={projectId}
           ecoId={wizard.ecoId ?? undefined}
           isRework={wizard.isRework}
-          onClose={() => setWizard(null)}
+          onClose={(result) => {
+            setWizard(null);
+            if (result?.ecoId) onOpenEcoIdChange?.(result.ecoId);
+          }}
         />
       )}
     </>

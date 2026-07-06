@@ -1587,6 +1587,7 @@ export default function ProjectDetail() {
               onSelectedIdChange={(newId) =>
                 navigate(`/projects/${id}/bom${newId ? `/${newId}` : ''}`, { replace: !newId })
               }
+              onEcoCreated={(ecoId) => navigate(`/projects/${id}/eng-changes/${ecoId}`)}
             />
           </TabsContent>
           <TabsContent value="requirements" className="mt-6 -mx-6 -mb-6 flex flex-col">

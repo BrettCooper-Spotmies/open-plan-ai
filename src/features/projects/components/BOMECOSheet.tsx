@@ -86,11 +86,13 @@ export function BOMECOSheet({
   onClose,
   node,
   projectId,
+  onCreated,
 }: {
   open: boolean;
   onClose: () => void;
   node: BOMNode;
   projectId: string;
+  onCreated?: (ecoId: string) => void;
 }) {
   const createMutation = useCreateECO(projectId);
   const meta = getCategoryMeta(node.cat);
@@ -240,7 +242,7 @@ export function BOMECOSheet({
   const handleSubmit = async () => {
     if (!canSubmit) return;
     try {
-      await createMutation.mutateAsync({
+      const created = await createMutation.mutateAsync({
         title: ecoTitle.trim(),
         description: reasonDesc || null,
         type: changeType.toLowerCase(),
@@ -284,6 +286,7 @@ export function BOMECOSheet({
       });
       toast.success('ECO created successfully');
       onClose();
+      if (created?.id) onCreated?.(created.id);
     } catch {
       toast.error('Failed to create ECO');
     }
