@@ -16,7 +16,7 @@ import { useCreateECO, useUpdateECO, useSubmitECO, useECODetail } from '@/hooks/
 import { useBomTree } from '@/hooks/useBom';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { useAuth } from '@/modules/auth';
-import { fromApiNode, bomFlatAll, bomPath, KNOWN_BOM_CATEGORIES, BOM_CAT_META, UOM_OPTIONS } from './bomData';
+import { fromApiNode, bomFlatAll, bomPath, KNOWN_BOM_CATEGORIES, BOM_CAT_META, UOM_OPTIONS, type BOMNode } from './bomData';
 import { REQS } from './requirementsData';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -80,7 +80,7 @@ function ParamCombobox({
   value: string;
   onChange: (label: string, autoFrom: string) => void;
   onSelectOther: () => void;
-  firstSelectedNode: Record<string, unknown> | null;
+  firstSelectedNode: BOMNode | null;
   usedParams: Set<string>;
 }) {
   const [open, setOpen] = useState(false);
@@ -113,7 +113,7 @@ function ParamCombobox({
                     const autoFrom = o.key === 'rev'
                       ? ''
                       : firstSelectedNode
-                        ? String(firstSelectedNode[o.key] ?? '')
+                        ? String(firstSelectedNode[o.key as keyof BOMNode] ?? '')
                         : '';
                     onChange(o.label, autoFrom);
                     setOpen(false);
@@ -522,7 +522,8 @@ export function ECOWizard({
         d.steps
           .slice()
           .sort((a, b) => a.order - b.order)
-          .map(s => ({
+          .map((s, i) => ({
+            order: i,
             stage: s.stage,
             stageLabel: s.stageLabel ?? s.stage,
             approverId: s.approverUserId ?? null,
@@ -1417,7 +1418,7 @@ export function ECOWizard({
       <button
         onClick={() => setPipeline(pl => [
           ...pl,
-          { stage: '', name: '', role: '', approverId: null, optional: false, justification: '', isCustom: true },
+          { order: pl.length, stage: '', name: '', role: '', approverId: null, optional: false, justification: '', isCustom: true },
         ])}
         className="flex items-center gap-1.5 text-[12px] font-medium text-muted-foreground hover:text-foreground transition-colors w-fit font-[inherit]"
         style={{ background: 'none', border: '1px dashed hsl(var(--border))', borderRadius: 8, padding: '6px 12px', cursor: 'pointer' }}
@@ -1545,18 +1546,18 @@ export function ECOWizard({
                   const basePayload = {
                     title: basics.title,
                     description: basics.description || null,
-                    type: basics.type.toLowerCase() as any,
+                    type: basics.type.toLowerCase(),
                     typeOther: basics.type === 'OTHER' ? basics.typeOther.trim() : null,
-                    reason: basics.reason.toLowerCase() as any,
+                    reason: basics.reason.toLowerCase(),
                     reasonOther: basics.reason === 'OTHER' ? basics.reasonOther.trim() : null,
-                    priority: basics.priority.toLowerCase() as any,
-                    changeClass: basics.changeClass as any,
-                    effectivityType: basics.effType.toLowerCase() as any,
+                    priority: basics.priority.toLowerCase(),
+                    changeClass: basics.changeClass,
+                    effectivityType: basics.effType.toLowerCase(),
                     effectivityValue: basics.effValue || null,
                     originatingEcr: basics.ecr || null,
                     revFrom: items[0]?.revFrom || null,
                     revTo: items[0]?.revTo || null,
-                    scheduleImpact: impact.schedule.toLowerCase() as any,
+                    scheduleImpact: impact.schedule.toLowerCase(),
                     requiresRecertification: impact.recert,
                     firmwareCoupling: impact.firmware,
                     unitCostDelta: impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
@@ -1566,8 +1567,8 @@ export function ECOWizard({
                       bomNodeId: it.nodeId || null,
                       revFrom: it.revFrom || null,
                       revTo: it.revTo || null,
-                      impactLevel: it.impact.toLowerCase() as any,
-                      disposition: it.disp.toLowerCase() as any,
+                      impactLevel: it.impact.toLowerCase(),
+                      disposition: it.disp.toLowerCase(),
                     })),
                     diffRows: diffRows
                       .filter(r => r.param.trim() !== '')
@@ -1576,7 +1577,7 @@ export function ECOWizard({
                         parameter: r.param,
                         fromValue: r.from || null,
                         toValue: r.to || null,
-                        changeLabel: r.cls.toLowerCase() as any,
+                        changeLabel: r.cls.toLowerCase(),
                       })),
                   };
                   // Pipeline steps are locked during rework — resubmit() reactivates the
