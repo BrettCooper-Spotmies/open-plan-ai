@@ -1,12 +1,10 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { format, parse } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
-import { resolveFileUrl } from '@/utils/fileUrl';
-import { CheckSquare, Bug, Check } from 'lucide-react';
+import { CheckSquare, Bug, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import {
   MyDayItem,
   groupTasksByProject,
@@ -58,13 +56,42 @@ const priorityColors: Record<string, string> = {
   trivial: 'bg-muted-foreground/20 text-muted-foreground',
 };
 
+// Lower number = higher urgency, sorts first in ascending order
+const priorityOrder: Record<string, number> = {
+  critical: 0,
+  high: 1,
+  major: 1, // Issue severity
+  medium: 2,
+  minor: 2, // Issue severity
+  low: 3,
+  trivial: 3, // Issue severity
+};
+
+// Workflow order, not alphabetical
+const statusOrder: Record<string, number> = {
+  blocked: 0,
+  todo: 1,
+  open: 1,
+  'in-progress': 2,
+  review: 3,
+  done: 4,
+  resolved: 4,
+  'wont-fix': 5,
+};
+
+type SortField = 'title' | 'type' | 'status' | 'priority' | 'project' | 'dueDate';
+type SortDirection = 'asc' | 'desc';
+
 export function MyDayListView({
   tasks,
   groupBy,
   onTaskClick,
 }: MyDayListViewProps) {
+  const [sortField, setSortField] = useState<SortField | null>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
+
   // Get all tasks in a flat list based on groupBy order
-  const allTasks = useMemo((): MyDayItem[] => {
+  const groupedTasks = useMemo((): MyDayItem[] => {
     switch (groupBy) {
       case 'project': {
         const grouped = groupTasksByProject(tasks);
@@ -103,6 +130,72 @@ export function MyDayListView({
     }
   }, [tasks, groupBy]);
 
+  const handleSort = useCallback((field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  }, [sortField, sortDirection]);
+
+  // Sorting overrides the groupBy-derived order once a column header is clicked.
+  const allTasks = useMemo((): MyDayItem[] => {
+    if (!sortField) return groupedTasks;
+
+    const direction = sortDirection === 'asc' ? 1 : -1;
+
+    return [...groupedTasks].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case 'title':
+          comparison = a.title.localeCompare(b.title);
+          break;
+        case 'type':
+          comparison = a.itemType.localeCompare(b.itemType);
+          break;
+        case 'status': {
+          const aOrder = statusOrder[a.status] ?? 99;
+          const bOrder = statusOrder[b.status] ?? 99;
+          comparison = aOrder - bOrder;
+          break;
+        }
+        case 'priority': {
+          const aOrder = priorityOrder[a.priority] ?? 99;
+          const bOrder = priorityOrder[b.priority] ?? 99;
+          comparison = aOrder - bOrder;
+          break;
+        }
+        case 'project':
+          comparison = (a.projectName || '').localeCompare(b.projectName || '');
+          break;
+        case 'dueDate': {
+          const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+          const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+          comparison = aTime - bTime;
+          break;
+        }
+      }
+
+      return comparison * direction;
+    });
+  }, [groupedTasks, sortField, sortDirection]);
+
+  const SortableHead = ({ field, children, className }: { field: SortField; children: React.ReactNode; className?: string }) => (
+    <TableHead className={className}>
+      <button
+        className="flex items-center gap-1 hover:text-foreground transition-colors"
+        onClick={() => handleSort(field)}
+      >
+        {children}
+        {sortField === field && (
+          sortDirection === 'asc' ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />
+        )}
+      </button>
+    </TableHead>
+  );
+
   if (allTasks.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
@@ -116,13 +209,13 @@ export function MyDayListView({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[60px]">Type</TableHead>
-            <TableHead className="w-[300px]">Task</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Priority</TableHead>
-            <TableHead>Module</TableHead>
-            <TableHead>Assignee</TableHead>
-            <TableHead>Due Date</TableHead>
+            <SortableHead field="title" className="w-[300px]">Task</SortableHead>
+            <SortableHead field="type" className="w-[60px]">Type</SortableHead>
+            <SortableHead field="status">Status</SortableHead>
+            <SortableHead field="priority">Priority</SortableHead>
+            {/* <TableHead>Module</TableHead> */}
+            <SortableHead field="project">Project</SortableHead>
+            <SortableHead field="dueDate">Due Date</SortableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -132,27 +225,6 @@ export function MyDayListView({
               className="cursor-pointer hover:bg-muted/50"
               onClick={() => onTaskClick(task)}
             >
-              <TableCell>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    'text-[9px] px-1.5 py-0.5 flex items-center gap-1 w-fit',
-                    task.itemType === 'task' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'
-                  )}
-                >
-                  {task.itemType === 'task' ? (
-                    <>
-                      <CheckSquare className="h-3 w-3" />
-                      <span>Task</span>
-                    </>
-                  ) : (
-                    <>
-                      <Bug className="h-3 w-3" />
-                      <span>Issue</span>
-                    </>
-                  )}
-                </Badge>
-              </TableCell>
               <TableCell>
                 <div className="flex items-start gap-2">
                   {(task.status === 'done' || task.status === 'resolved') && (
@@ -178,6 +250,27 @@ export function MyDayListView({
                 </div>
               </TableCell>
               <TableCell>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-[9px] px-1.5 py-0.5 flex items-center gap-1 w-fit',
+                    task.itemType === 'task' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'
+                  )}
+                >
+                  {task.itemType === 'task' ? (
+                    <>
+                      <CheckSquare className="h-3 w-3" />
+                      <span>Task</span>
+                    </>
+                  ) : (
+                    <>
+                      <Bug className="h-3 w-3" />
+                      <span>Issue</span>
+                    </>
+                  )}
+                </Badge>
+              </TableCell>
+              <TableCell>
                 <Badge variant="secondary" className={cn('capitalize', statusColors[task.status])}>
                   {statusLabels[task.status] || task.status}
                 </Badge>
@@ -187,25 +280,14 @@ export function MyDayListView({
                   {task.priority}
                 </Badge>
               </TableCell>
-              <TableCell>
+              {/* <TableCell>
                 <span className="text-sm capitalize">{task.itemType === 'task' && task.originalTask?.module ? task.originalTask.module : '-'}</span>
-              </TableCell>
+              </TableCell> */}
               <TableCell>
-                {task.assignees && task.assignees.length > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <Avatar className="h-6 w-6">
-                      <AvatarImage src={resolveFileUrl(task.assignees[0].avatar) ?? task.assignees[0].avatar} alt={task.assignees[0].name} />
-                      <AvatarFallback className="text-[10px]">
-                        {task.assignees[0].initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm">
-                      {task.assignees[0].name}
-                      {task.assignees.length > 1 && ` +${task.assignees.length - 1}`}
-                    </span>
-                  </div>
+                {task.projectName ? (
+                  <span className="text-sm">{task.projectName}</span>
                 ) : (
-                  <span className="text-muted-foreground text-sm">Unassigned</span>
+                  <span className="text-muted-foreground text-sm">—</span>
                 )}
               </TableCell>
               <TableCell>

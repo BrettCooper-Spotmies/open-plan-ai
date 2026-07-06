@@ -6,9 +6,16 @@ import { tasksService } from '@/services/tasks.service';
 import { projectsService } from '@/services/projects.service';
 import { queryKeys } from '@/lib/queryClient';
 import { getDueDateStatus, isCompletedToday, isBlockingOthers, hasUnresolvedDependencies } from '@/features/myday/utils/myDayUtils';
-import type { MyDayItem } from '@/features/myday/utils/myDayUtils';
+import type { MyDayItem, DueDateStatus } from '@/features/myday/utils/myDayUtils';
 import { useProjects } from './useProjects';
 import { getUserItems } from '@/features/myday/utils/myDayUtils';
+import type { MyDayFilter } from '@/types';
+
+function matchesFilter(status: DueDateStatus, filter: MyDayFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'today') return status === 'today';
+  return status === 'overdue';
+}
 
 /**
  * Fetch all tasks and issues assigned to the current user across all projects.
@@ -17,8 +24,12 @@ import { getUserItems } from '@/features/myday/utils/myDayUtils';
  * populated (the org-wide /organizations/:orgId/issues route is a raw, unjoined
  * select used only by Calendar), so they're fanned out per-project instead —
  * same pattern as issuesService.getOpenCount().
+ *
+ * `filter` narrows the result to today's items or overdue items; the underlying
+ * queries always fetch the full assigned set so switching filters is a client-side
+ * recompute, not a refetch.
  */
-export function useMyDayTasks() {
+export function useMyDayTasks(filter: MyDayFilter = 'all') {
   const { user } = useAuth();
   const { currentOrganization } = useOrganization();
   const orgId = currentOrganization?.id;
@@ -52,9 +63,8 @@ export function useMyDayTasks() {
     if (!user?.id) return [];
 
     // All tasks from /tasks/me/all are already assigned to the current user (filtered server-side)
-    // My Day is a daily agenda — only tasks due today belong here, not overdue/future/undated ones.
     const taskItems: MyDayItem[] = rawTasks
-      .filter(task => getDueDateStatus(task.dueDate) === 'today' && (task.status !== 'done' || isCompletedToday(task)))
+      .filter(task => matchesFilter(getDueDateStatus(task.dueDate), filter) && (task.status !== 'done' || isCompletedToday(task)))
       .map(task => {
         const dueDateStatus = getDueDateStatus(task.dueDate);
         return {
@@ -77,12 +87,12 @@ export function useMyDayTasks() {
         } as MyDayItem;
       });
 
-    // Resolved/wont-fix issues never belong in My Day — only open/in-progress, and only if due today.
+    // Resolved/wont-fix issues never belong here — only open/in-progress, matching the active filter.
     const issueItems: MyDayItem[] = rawIssues
       .filter(({ issue }) => {
         const isAssignedToUser = issue.assignees?.some(a => a.id === user.id) ?? false;
         const isUnresolved = issue.status !== 'resolved' && issue.status !== 'wont-fix';
-        return isUnresolved && isAssignedToUser && getDueDateStatus(issue.dueDate) === 'today';
+        return isUnresolved && isAssignedToUser && matchesFilter(getDueDateStatus(issue.dueDate), filter);
       })
       .map(({ issue, projectName }) => {
         const dueDateStatus = getDueDateStatus(issue.dueDate);
@@ -105,7 +115,7 @@ export function useMyDayTasks() {
       });
 
     return [...taskItems, ...issueItems];
-  }, [user?.id, rawTasks, rawIssues]);
+  }, [user?.id, rawTasks, rawIssues, filter]);
 
   return { data, isLoading: tasksLoading || issuesLoading };
 }
