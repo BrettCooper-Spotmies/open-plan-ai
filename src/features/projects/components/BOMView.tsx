@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
   CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check, Download, ExternalLink,
-  FileSpreadsheet, PenLine, Trash2,
+  FileSpreadsheet, PenLine, Trash2, Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -831,6 +831,7 @@ export function BOMView({
   const [deleteTarget, setDeleteTarget] = useState<BOMNode | null>(null);
   const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('bom_view') as ViewMode) ?? 'list');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [filters, setFilters] = useState<BOMFilters>({ ...EMPTY_FILTERS });
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem('bom_expanded');
@@ -1175,8 +1176,8 @@ export function BOMView({
           <StatCard label="Total BOM Cost" value={formatCurrency(totalCost)} icon={DollarSign} iconColor="#9333EA" />
         </div>
 
-        {/* Toolbar */}
-        <div className="flex items-center gap-2.5 pb-0">
+        {/* Toolbar — desktop/tablet */}
+        <div className="hidden md:flex items-center gap-2.5 pb-0">
           <div className="flex items-center gap-2 bg-muted border border-border rounded-md px-2.5 py-1.5 w-72">
             <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
             <input
@@ -1242,7 +1243,105 @@ export function BOMView({
             <ViewBtn id="grid" icon={LayoutGrid} label="Grid" />
             <ViewBtn id="map" icon={Share2} label="Map" />
           </div>
-        </div>{/* end toolbar */}
+        </div>{/* end desktop toolbar */}
+
+        {/* Toolbar — mobile only */}
+        <div className="flex md:hidden items-center gap-2 pb-0">
+          {mobileSearchOpen ? (
+            <div className="flex items-center gap-2 bg-muted border border-border rounded-md px-2.5 py-1.5 flex-1">
+              <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <input
+                autoFocus
+                value={search} onChange={e => setSearch(e.target.value)}
+                placeholder="Search parts…"
+                className="bg-transparent border-none outline-none text-foreground text-sm w-full placeholder:text-muted-foreground"
+              />
+              <button
+                onClick={() => { setSearch(''); setMobileSearchOpen(false); }}
+                className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <button
+                onClick={() => setMobileSearchOpen(true)}
+                title="Search"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer transition-colors shrink-0"
+              >
+                <Search className="w-4 h-4" />
+              </button>
+
+              {/* Status dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border bg-card text-foreground border-border hover:bg-muted cursor-pointer transition-colors">
+                    {filterStatus === 'all' ? 'All' : filterStatus === 'approved' ? 'Approved' : filterStatus === 'pending' ? 'Pending' : 'Rejected'}
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => setFilterStatus('all')}>All</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setFilterStatus('approved')}>Approved</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setFilterStatus('pending')}>Pending</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setFilterStatus('rejected')}>Rejected</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="flex-1" />
+
+              {/* Export */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="Export"
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-md border bg-card text-foreground border-border hover:bg-muted cursor-pointer transition-colors shrink-0"
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportCsv}>Export as CSV</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportExcel}>Export as Excel</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              {/* Filter */}
+              <button
+                onClick={() => setFilterOpen(true)}
+                title="Filter"
+                className={cn('relative inline-flex items-center justify-center w-8 h-8 rounded-md border cursor-pointer transition-colors shrink-0',
+                  activeCount ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-foreground border-border hover:bg-muted'
+                )}
+              >
+                <Filter className="w-4 h-4" />
+                {activeCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center bg-foreground text-background">
+                    {activeCount}
+                  </span>
+                )}
+              </button>
+
+              {/* View */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="View"
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-md border bg-card text-foreground border-border hover:bg-muted cursor-pointer transition-colors shrink-0"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleView('list')}>List</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleView('grid')}>Grid</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleView('map')}>Map</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
+        </div>{/* end mobile toolbar */}
       </div>{/* end header zone */}
 
       {/* ── Scrollable content (fills remaining height) ────────────── */}
