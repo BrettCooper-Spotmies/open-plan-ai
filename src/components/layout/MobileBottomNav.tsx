@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { matchPath, useLocation, useNavigate } from 'react-router-dom';
 import {
-  Sun,
+  ListTodo,
   FolderKanban,
   BarChart3,
   Calendar,
@@ -22,18 +22,18 @@ interface NavItem {
 
 // Primary tabs shown in the footer
 const primaryNavItems: NavItem[] = [
-  { title: 'My Day',    url: '/my-day',   icon: Sun          },
-  { title: 'Projects',  url: '/projects', icon: FolderKanban },
-  { title: 'Chat',      url: '/chat',     icon: MessageSquare},
-  { title: 'Calendar',  url: '/calendar', icon: Calendar     },
+  { title: 'My Tasks',   url: '/my-day',   icon: ListTodo       },
+  { title: 'Projects',   url: '/projects', icon: FolderKanban   },
+  { title: 'Dashboard',  url: '/',         icon: LayoutDashboard},
+  { title: 'Team',       url: '/team',     icon: Users          },
 ];
 
 // Secondary items shown under "More"
 const moreNavItems: NavItem[] = [
-  { title: 'Dashboard', url: '/',          icon: LayoutDashboard },
-  { title: 'Reports',   url: '/reports',   icon: BarChart3       },
-  { title: 'Team',      url: '/team',      icon: Users           },
-  { title: 'Settings',  url: '/settings',  icon: Settings        },
+  { title: 'Chat',      url: '/chat',     icon: MessageSquare },
+  { title: 'Calendar',  url: '/calendar', icon: Calendar      },
+  { title: 'Reports',   url: '/reports',  icon: BarChart3     },
+  { title: 'Settings',  url: '/settings', icon: Settings      },
 ];
 
 export function MobileBottomNav() {

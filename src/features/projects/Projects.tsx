@@ -171,8 +171,7 @@ export default function Projects() {
   }, [isMobile, view]);
 
   const filteredProjects = projectList.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
-    (p.description || '').toLowerCase().includes(search.toLowerCase())
+    p.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleViewDetails = (projectId: string, e: React.MouseEvent) => {

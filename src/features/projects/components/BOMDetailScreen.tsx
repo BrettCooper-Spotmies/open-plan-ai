@@ -5,7 +5,7 @@ import {
   ArrowLeft, GitMerge, SquarePen, ChevronRight, Factory, Hash,
   Truck, DollarSign, Tag, Clock, FileText, Box, Cpu, Image, Package,
   ChevronDown, Check, History, User, MessageSquare, Send, Trash2, Pencil,
-  Plus, Boxes, FileSpreadsheet, XCircle, Loader2, ShieldCheck, Sliders,
+  Plus, Boxes, FileSpreadsheet, XCircle, Loader2, ShieldCheck, Sliders, RefreshCw,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BOMDocuments } from './BOMDocuments';
@@ -462,6 +462,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const isCreatorOrOwner = !!user && (originalNode.ownerId === user.id || originalNode.createdById === user.id);
   const canSendForReview = (canApprove || isCreatorOrOwner) && !activeRequest
     && (originalNode.status === 'draft' || originalNode.status === 'pending');
+  const canReviseAndResubmit = (canApprove || isCreatorOrOwner) && !activeRequest
+    && originalNode.status === 'rejected';
   const isAssignedApprover = !!user && !!activeRequest && activeRequest.approvers.some(a => a.id === user.id);
   const canDecide = isAssignedApprover || isAdmin;
   const lastRequest = approvalRequests[0];
@@ -588,6 +590,21 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       ...toRemove.map(link => removeRequirement.mutateAsync(link.id)),
     ]);
 
+    if (originalNode.status === 'rejected' && lastRequest) {
+      try {
+        await createApprovalRequest.mutateAsync({
+          nodeId: originalNode.id,
+          scope: lastRequest.scope,
+          approverIds: lastRequest.approvers.map(a => a.id),
+        });
+        toast.success(`${originalNode.pn} resubmitted for review`);
+      } catch (err) {
+        toast.error('Saved, but failed to resubmit for review', {
+          description: err instanceof Error ? err.message : undefined,
+        });
+      }
+    }
+
     setShowEdit(false);
   };
 
@@ -710,6 +727,15 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                 <Send className="w-3.5 h-3.5 text-muted-foreground" /> Send for Review
               </button>
             )}
+            {canReviseAndResubmit && (
+              <button
+                onClick={() => setShowEdit(true)}
+                title="Revise this part and resubmit for review"
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium bg-foreground text-background hover:bg-foreground/90 transition-colors whitespace-nowrap"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Revise &amp; Resubmit
+              </button>
+            )}
             {activeRequest && !canDecide && (
               <span
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap"
@@ -718,13 +744,13 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                 Awaiting review by {activeRequest.approvers.map(a => a.name).join(', ')}
               </span>
             )}
-            <button
+            {!canReviseAndResubmit && <button
               onClick={() => setEcoOpen(true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap"
             >
               <GitMerge className="w-3.5 h-3.5 text-muted-foreground" /> New ECO
-            </button>
-            <button
+            </button>}
+            {!canReviseAndResubmit && <button
               onClick={() => isLatest && setShowEdit(true)}
               disabled={!isLatest}
               title={isLatest ? 'Edit this part' : 'Switch to latest revision to edit'}
@@ -736,7 +762,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               )}
             >
               <SquarePen className="w-3.5 h-3.5" /> Edit Part
-            </button>
+            </button>}
             {canApprove && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
@@ -752,15 +778,15 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
 
         {showRejectionBanner && (
           <div
-            className="mx-6 mb-4 px-4 py-2.5 rounded-lg text-[12px] flex items-start gap-2"
+            className="mx-6 mb-4 px-4 py-2.5 rounded-lg text-[12px] flex flex-col items-start gap-2"
             style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
           >
-            <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            <div>
+            <div className='flex items-start gap-2'>
+              <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span className="font-semibold">Review rejected by {lastRequest?.decidedByName ?? 'an approver'}.</span>
-              {lastRequest?.reason && <span> {lastRequest.reason}</span>}
-              {' '}Update the part and click &quot;Send for Review&quot; to resubmit.
             </div>
+            <div><span>Rejection Reason:</span>{lastRequest?.reason && <span> {lastRequest.reason}</span>}</div>
+            <div>Click &quot;Revise &amp; Resubmit&quot; to update the part and resubmit for review.</div>
           </div>
         )}
 
@@ -1209,6 +1235,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         open={showEdit}
         onClose={() => setShowEdit(false)}
         onSave={handleSave}
+        resubmitMode={originalNode.status === 'rejected'}
       />
 
       {/* New ECO sheet */}

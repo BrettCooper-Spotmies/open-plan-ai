@@ -40,7 +40,7 @@ const stageColors: Record<string, string> = {
 
 function getPageTitle(pathname: string): string {
   if (pathname === '/') return 'Dashboard';
-  if (pathname.startsWith('/my-day')) return 'My Day';
+  if (pathname.startsWith('/my-day')) return 'My Tasks';
   if (pathname.startsWith('/projects')) return 'Projects';
   if (pathname.startsWith('/calendar')) return 'Calendar';
   if (pathname.startsWith('/reports')) return 'Reports';

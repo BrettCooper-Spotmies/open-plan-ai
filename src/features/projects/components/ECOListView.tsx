@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   GitMerge, GitBranch, Clock, ClipboardCheck,
   Boxes, Calendar, ChevronRight, CheckCircle, Download, Loader2,
@@ -147,18 +148,18 @@ function Toast({ message }: { message: string }) {
 // ── List row ──────────────────────────────────────────────────────────────────
 
 function ECORow({
-  eco, selected, onSelect, onOpen,
+  eco, selected, onSelect, onOpen, isMobile,
 }: {
   eco: ECOListItem; selected: boolean;
-  onSelect: () => void; onOpen: () => void;
+  onSelect: () => void; onOpen: () => void; isMobile: boolean;
 }) {
   const sm = statusMeta(eco.status);
   const pm = priorityMeta(eco.priority);
 
   return (
     <div
-      onClick={onSelect}
-      onDoubleClick={onOpen}
+      onClick={isMobile ? onOpen : onSelect}
+      onDoubleClick={isMobile ? undefined : onOpen}
       className={cn(
         'px-3.5 py-3 rounded-lg border cursor-pointer transition-all',
         selected
@@ -331,6 +332,7 @@ export function ECOListView({
   projectId: string;
   onOpen: (eco: ECOListItem) => void;
 }) {
+  const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [fStatus, setFStatus]     = useState<string>('ALL');
   const [fPriority, setFPriority] = useState<string>('ALL');
@@ -442,6 +444,7 @@ export function ECOListView({
                     selected={effectiveSelectedId === eco.id}
                     onSelect={() => setSelectedId(eco.id)}
                     onOpen={() => onOpen(eco)}
+                    isMobile={isMobile}
                   />
                 ))
               ) : (
@@ -452,15 +455,17 @@ export function ECOListView({
             </div>
           </div>
 
-          {/* Right: preview */}
-          {listLoading ? (
-            <SkeletonPreviewPanel />
-          ) : selected ? (
-            <PreviewPanel projectId={projectId} eco={selected} onOpen={() => onOpen(selected)} />
-          ) : (
-            <div className="bg-card border border-border rounded-lg p-8 text-center text-[12px] text-muted-foreground">
-              Select a change order to preview
-            </div>
+          {/* Right: preview (desktop only) */}
+          {!isMobile && (
+            listLoading ? (
+              <SkeletonPreviewPanel />
+            ) : selected ? (
+              <PreviewPanel projectId={projectId} eco={selected} onOpen={() => onOpen(selected)} />
+            ) : (
+              <div className="bg-card border border-border rounded-lg p-8 text-center text-[12px] text-muted-foreground">
+                Select a change order to preview
+              </div>
+            )
           )}
         </div>
       </div>
