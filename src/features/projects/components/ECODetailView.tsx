@@ -1388,9 +1388,9 @@ export function ECODetailView({
         <ApprovalPipeline detail={detail} onDecision={handleDecision} isPending={decisionMutation.isPending} canAct={canAct} isOverride={isOverride} />
       )}
 
-      {/* Two-column content */}
-      <div className="flex gap-3 md:gap-4 items-start flex-wrap">
-        <div className="flex-[2] min-w-0 flex flex-col gap-4">
+      {/* Two-column content — stacked on mobile (right/side column first), side-by-side from md up */}
+      <div className="flex flex-col md:flex-row gap-4 md:gap-4 items-start">
+        <div className="order-2 md:order-1 w-full md:flex-[2] md:min-w-0 flex flex-col gap-4">
           {isFirstLoad ? (
             <>
               <SkeletonTableSection />
@@ -1403,7 +1403,7 @@ export function ECODetailView({
             </>
           )}
         </div>
-        <div className="flex-1 min-w-[280px] flex flex-col gap-4">
+        <div className="order-1 md:order-2 w-full md:flex-1 md:min-w-[280px] flex flex-col gap-4">
           {isFirstLoad ? (
             <>
               <SkeletonSideCard />
