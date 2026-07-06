@@ -469,7 +469,7 @@ export function IssuesView({
                         key={column.id}
                         draggableId={column.id}
                         index={index}
-                        isDragDisabled={column.isSpecial || !apiIssueColumns?.length}
+                        isDragDisabled={isDependenciesColumn || !apiIssueColumns?.length}
                       >
                         {(columnProvided, columnSnapshot) => {
                           const addIssueButton = !isDependenciesColumn && (
@@ -674,7 +674,7 @@ export function IssuesView({
                                   )}
                                   labelClassName={isDependenciesColumn ? 'text-status-blocked' : undefined}
                                   dragHandleProps={
-                                    column.isSpecial || !apiIssueColumns?.length ? null : columnProvided.dragHandleProps
+                                    isDependenciesColumn || !apiIssueColumns?.length ? null : columnProvided.dragHandleProps
                                   }
                                   isDragging={columnSnapshot.isDragging}
                                 >
@@ -698,12 +698,12 @@ export function IssuesView({
                             >
                               <div className="flex-shrink-0 bg-background pb-3 space-y-3">
                                 <div className="flex items-center gap-2 px-1">
-                                  {!column.isSpecial && (
+                                  {!isDependenciesColumn && (
                                     <div {...columnProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
                                       <GripVertical className="h-4 w-4 text-muted-foreground" />
                                     </div>
                                   )}
-                                  {column.isSpecial && <div {...columnProvided.dragHandleProps} />}
+                                  {isDependenciesColumn && <div {...columnProvided.dragHandleProps} />}
                                   {isDependenciesColumn ? (
                                     <Link2 className="h-4 w-4 text-status-blocked" />
                                   ) : (
