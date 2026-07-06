@@ -1,8 +1,11 @@
 import { useState } from 'react';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Milestone, Task, Issue, Module } from '@/types';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileKanbanColumn } from '@/components/shared/MobileKanbanColumn';
 import {
   Tooltip,
   TooltipContent,
@@ -81,6 +84,13 @@ export function MilestonesView({
   const [selectedMilestone, setSelectedMilestone] = useState<Milestone | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [internalIsAddDialogOpen, setInternalIsAddDialogOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const [mobileColumnOrder, setMobileColumnOrder] = useState<string[]>([
+    'on-track',
+    'at-risk',
+    'blocked',
+    'completed',
+  ]);
 
   const isAddDialogOpen = externalIsAddDialogOpen ?? internalIsAddDialogOpen;
 
@@ -103,6 +113,17 @@ export function MilestonesView({
     { key: 'blocked', label: 'Blocked', color: 'bg-destructive' },
     { key: 'completed', label: 'Completed', color: 'bg-status-done' },
   ];
+
+  const handleColumnDragEnd = (result: DropResult) => {
+    const { destination, source } = result;
+    if (!destination || destination.index === source.index) return;
+    setMobileColumnOrder((prev) => {
+      const next = Array.from(prev);
+      const [removed] = next.splice(source.index, 1);
+      next.splice(destination.index, 0, removed);
+      return next;
+    });
+  };
 
   const toggleExpanded = (milestoneId: string) => {
     setExpandedMilestones(prev =>
@@ -153,94 +174,145 @@ export function MilestonesView({
           </p>
         </Card>
       ) : viewMode === 'kanban' ? (
-        <div className="w-full overflow-x-auto pb-4">
-          <div className="inline-flex gap-4 min-w-full" style={{ width: 'max-content' }}>
-            {milestoneKanbanColumns.map((column) => {
-              const columnMilestones = sortedMilestones.filter(
-                (milestone) => getMilestoneStatus(milestone, tasks, issues) === column.key
-              );
+        (() => {
+          const orderedColumns = isMobile
+            ? mobileColumnOrder
+              .map((key) => milestoneKanbanColumns.find((c) => c.key === key))
+              .filter((c): c is (typeof milestoneKanbanColumns)[number] => Boolean(c))
+            : milestoneKanbanColumns;
 
-              return (
-                <div key={column.key} className="w-[300px] flex-shrink-0">
-                  <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
-                    <div className="flex items-center gap-2 px-1">
-                      <div className={cn('w-2 h-2 rounded-full', column.color)} />
-                      <h3 className="font-medium text-sm">{column.label}</h3>
-                      <span className="text-xs text-muted-foreground">{columnMilestones.length}</span>
-                    </div>
-                  </div>
+          const renderMilestoneCards = (columnMilestones: Milestone[]) =>
+            columnMilestones.length === 0 ? (
+              <Card className="p-4 border-dashed">
+                <p className="text-xs text-muted-foreground">No milestones</p>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {columnMilestones.map((milestone) => {
+                  const progress = getMilestoneProgress(milestone, tasks);
+                  const milestoneTasks = getMilestoneTasks(milestone, tasks);
+                  const milestoneIssues = getMilestoneIssues(milestone.id, issues);
+                  const daysUntil = milestone.date ? Math.ceil((new Date(milestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : NaN;
+                  const isOverdue = !milestone.completed && daysUntil < 0;
 
-                  <div className="space-y-3">
-                    {columnMilestones.length === 0 ? (
-                      <Card className="p-4 border-dashed">
-                        <p className="text-xs text-muted-foreground">No milestones</p>
-                      </Card>
-                    ) : (
-                      columnMilestones.map((milestone) => {
-                        const progress = getMilestoneProgress(milestone, tasks);
-                        const milestoneTasks = getMilestoneTasks(milestone, tasks);
-                        const milestoneIssues = getMilestoneIssues(milestone.id, issues);
-                        const daysUntil = milestone.date ? Math.ceil((new Date(milestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : NaN;
-                        const isOverdue = !milestone.completed && daysUntil < 0;
+                  return (
+                    <Card
+                      key={milestone.id}
+                      className={cn(
+                        'p-3 cursor-pointer transition-all hover:shadow-md border-l-2 border-l-primary/70',
+                        milestone.completed && 'opacity-75'
+                      )}
+                      onClick={() => handleMilestoneClick(milestone)}
+                    >
+                      <div className="space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className={cn('text-sm font-medium leading-tight', milestone.completed && 'line-through text-muted-foreground')}>
+                            {milestone.title}
+                          </h4>
+                          <Badge variant="outline" className="text-[10px] shrink-0">
+                            {progress}%
+                          </Badge>
+                        </div>
+
+                        {milestone.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-2">{milestone.description}</p>
+                        )}
+
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <Calendar className="h-3 w-3" />
+                          <span>
+                            {milestone.date ? new Date(milestone.date).toLocaleDateString('en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              year: 'numeric',
+                            }) : 'No date'}
+                          </span>
+                          {!milestone.completed && !isNaN(daysUntil) && (
+                            <span className={cn(isOverdue ? 'text-destructive' : 'text-muted-foreground')}>
+                              {isOverdue ? `• ${Math.abs(daysUntil)}d overdue` : daysUntil === 0 ? '• Due today' : `• ${daysUntil}d left`}
+                            </span>
+                          )}
+                        </div>
+
+                        <Progress value={progress} className="h-1.5" />
+
+                        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span>{milestoneTasks.filter(t => t.status === 'done').length}/{milestoneTasks.length} tasks</span>
+                          {milestoneIssues.length > 0 && (
+                            <span className="text-destructive">{milestoneIssues.length} issues</span>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            );
+
+          if (isMobile) {
+            return (
+              <DragDropContext onDragEnd={handleColumnDragEnd}>
+                <Droppable droppableId="milestone-board" type="COLUMN" direction="vertical">
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.droppableProps} className="flex flex-col gap-3 w-full">
+                      {orderedColumns.map((column, index) => {
+                        const columnMilestones = sortedMilestones.filter(
+                          (milestone) => getMilestoneStatus(milestone, tasks, issues) === column.key
+                        );
 
                         return (
-                          <Card
-                            key={milestone.id}
-                            className={cn(
-                              'p-3 cursor-pointer transition-all hover:shadow-md border-l-2 border-l-primary/70',
-                              milestone.completed && 'opacity-75'
+                          <Draggable key={column.key} draggableId={column.key} index={index}>
+                            {(dragProvided, dragSnapshot) => (
+                              <div ref={dragProvided.innerRef} {...dragProvided.draggableProps} className="w-full">
+                                <MobileKanbanColumn
+                                  label={column.label}
+                                  count={columnMilestones.length}
+                                  countLabel="milestones"
+                                  dot={<div className={cn('w-2 h-2 rounded-full shrink-0', column.color)} />}
+                                  dragHandleProps={dragProvided.dragHandleProps}
+                                  isDragging={dragSnapshot.isDragging}
+                                >
+                                  {renderMilestoneCards(columnMilestones)}
+                                </MobileKanbanColumn>
+                              </div>
                             )}
-                            onClick={() => handleMilestoneClick(milestone)}
-                          >
-                            <div className="space-y-2.5">
-                              <div className="flex items-start justify-between gap-2">
-                                <h4 className={cn('text-sm font-medium leading-tight', milestone.completed && 'line-through text-muted-foreground')}>
-                                  {milestone.title}
-                                </h4>
-                                <Badge variant="outline" className="text-[10px] shrink-0">
-                                  {progress}%
-                                </Badge>
-                              </div>
-
-                              {milestone.description && (
-                                <p className="text-xs text-muted-foreground line-clamp-2">{milestone.description}</p>
-                              )}
-
-                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                                <Calendar className="h-3 w-3" />
-                                <span>
-                                  {milestone.date ? new Date(milestone.date).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric',
-                                  }) : 'No date'}
-                                </span>
-                                {!milestone.completed && !isNaN(daysUntil) && (
-                                  <span className={cn(isOverdue ? 'text-destructive' : 'text-muted-foreground')}>
-                                    {isOverdue ? `• ${Math.abs(daysUntil)}d overdue` : daysUntil === 0 ? '• Due today' : `• ${daysUntil}d left`}
-                                  </span>
-                                )}
-                              </div>
-
-                              <Progress value={progress} className="h-1.5" />
-
-                              <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                                <span>{milestoneTasks.filter(t => t.status === 'done').length}/{milestoneTasks.length} tasks</span>
-                                {milestoneIssues.length > 0 && (
-                                  <span className="text-destructive">{milestoneIssues.length} issues</span>
-                                )}
-                              </div>
-                            </div>
-                          </Card>
+                          </Draggable>
                         );
-                      })
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+                      })}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </DragDropContext>
+            );
+          }
+
+          return (
+            <div className="w-full overflow-x-auto pb-4">
+              <div className="inline-flex gap-4 min-w-full" style={{ width: 'max-content' }}>
+                {orderedColumns.map((column) => {
+                  const columnMilestones = sortedMilestones.filter(
+                    (milestone) => getMilestoneStatus(milestone, tasks, issues) === column.key
+                  );
+
+                  return (
+                    <div key={column.key} className="w-[300px] flex-shrink-0">
+                      <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
+                        <div className="flex items-center gap-2 px-1">
+                          <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                          <h3 className="font-medium text-sm">{column.label}</h3>
+                          <span className="text-xs text-muted-foreground">{columnMilestones.length}</span>
+                        </div>
+                      </div>
+
+                      {renderMilestoneCards(columnMilestones)}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()
       ) : (
         /* Timeline View */
         <Card className="p-6">
