@@ -39,6 +39,7 @@ import { useUpdateIssueStatus } from '@/hooks/useProjectMutations';
 import { DEFAULT_ISSUE_COLUMNS } from '@/services/issueColumns.service';
 import { useAuth } from '@/modules/auth';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useKanbanEdgeAutoScroll, resolveKanbanColumnIdAtPoint } from '@/hooks/useKanbanEdgeAutoScroll';
 import { MobileKanbanColumn } from '@/components/shared/MobileKanbanColumn';
 
 interface IssuesViewProps {
@@ -373,6 +374,8 @@ export function IssuesView({
       && issue.status !== 'wont-fix';
   };
 
+  const { containerRef: boardScrollRef, handleDragStart, handleDragEnd: handleAutoScrollDragEnd, getLastPointerPosition } = useKanbanEdgeAutoScroll();
+
   const dependencyIssuesCount = sortedIssues.filter(isDependencyIssue).length;
 
   // Hide the Dependencies bucket entirely until it has linked issues
@@ -381,6 +384,8 @@ export function IssuesView({
   );
 
   const handleDragEnd = (result: DropResult) => {
+    const pointer = getLastPointerPosition();
+    handleAutoScrollDragEnd();
     const { destination, source, type, draggableId } = result;
     if (!destination) return;
 
@@ -410,7 +415,14 @@ export function IssuesView({
       return;
     }
 
-    const destinationColumn = columns.find((col) => col.id === destination.droppableId);
+    // Auto-scrolling the board mid-drag leaves @hello-pangea/dnd's cached
+    // position for the card stale, so `destination.droppableId` can name a
+    // column that's no longer under the pointer. Hit-test the real DOM
+    // element at the pointer's last known position and prefer that.
+    const hitColumnId = pointer
+      ? resolveKanbanColumnIdAtPoint(pointer.x, pointer.y)
+      : undefined;
+    const destinationColumn = columns.find((col) => col.id === (hitColumnId ?? destination.droppableId));
     if (!destinationColumn) return;
 
     if (destinationColumn.isSpecial && destinationColumn.status === 'dependencies') {
@@ -448,11 +460,14 @@ export function IssuesView({
   return (
     <div className="space-y-4">
       {viewMode === 'kanban' ? (
-        <DragDropContext onDragEnd={handleDragEnd}>
+        <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <Droppable droppableId="board" type="COLUMN" direction={isMobile ? 'vertical' : 'horizontal'}>
             {(provided) => (
               <div
-                ref={provided.innerRef}
+                ref={(node) => {
+                  provided.innerRef(node);
+                  boardScrollRef.current = node;
+                }}
                 {...provided.droppableProps}
                 className={isMobile ? 'w-full' : 'w-full overflow-x-auto pb-4'}
               >
@@ -494,6 +509,7 @@ export function IssuesView({
                                   <div
                                     ref={issuesProvided.innerRef}
                                     {...issuesProvided.droppableProps}
+                                    data-kanban-column-id={column.id}
                                     className={cn(
                                       'space-y-2 min-h-[120px] h-full p-2 rounded-lg transition-colors',
                                       snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30'

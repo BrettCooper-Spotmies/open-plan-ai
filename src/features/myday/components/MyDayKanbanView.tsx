@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useKanbanEdgeAutoScroll, resolveKanbanColumnIdAtPoint } from '@/hooks/useKanbanEdgeAutoScroll';
 import { MobileKanbanColumn } from '@/components/shared/MobileKanbanColumn';
 import { Check, CheckSquare, Bug } from 'lucide-react';
 import {
@@ -156,7 +157,11 @@ export function MyDayKanbanView({
     ? mobileColumnOrder.map((id) => columns.find((c) => c.id === id)).filter((c): c is KanbanColumn => Boolean(c))
     : columns;
 
+  const { containerRef: boardScrollRef, handleDragStart, handleDragEnd: handleAutoScrollDragEnd, getLastPointerPosition } = useKanbanEdgeAutoScroll();
+
   const handleDragEnd = (result: DropResult) => {
+    const pointer = getLastPointerPosition();
+    handleAutoScrollDragEnd();
     if (!result.destination) return;
 
     const { source, destination, draggableId, type } = result;
@@ -172,11 +177,20 @@ export function MyDayKanbanView({
       return;
     }
 
+    // Auto-scrolling the board mid-drag leaves @hello-pangea/dnd's cached
+    // position for the card stale, so `destination.droppableId` can name a
+    // column that's no longer under the pointer. Hit-test the real DOM
+    // element at the pointer's last known position and prefer that.
+    const hitColumnId = pointer
+      ? resolveKanbanColumnIdAtPoint(pointer.x, pointer.y)
+      : undefined;
+    const destinationColumnId = hitColumnId ?? destination.droppableId;
+
     // Only allow status updates when grouping by progress
     if (groupBy === 'progress') {
       // 'dependency' is excluded: it's a derived blocked-state, not a real
       // task_columns key on the backend, and isDropDisabled prevents drops there.
-      const newStatus = taskStatusByBucket[destination.droppableId];
+      const newStatus = taskStatusByBucket[destinationColumnId];
       if (newStatus) {
         // Optimistic local update to prevent blinking AND maintain new dragging order
         const tasksCopy = [...localTasks];
@@ -191,7 +205,7 @@ export function MyDayKanbanView({
           if (item.itemType === 'task' && item.originalTask) {
             updatedItem = { ...updatedItem, status: newStatus, originalTask: { ...item.originalTask, status: newStatus } };
           } else if (item.itemType === 'issue' && item.originalIssue) {
-            const mappedStatus = issueStatusByBucket[destination.droppableId];
+            const mappedStatus = issueStatusByBucket[destinationColumnId];
             updatedItem = { ...updatedItem, status: mappedStatus, originalIssue: { ...item.originalIssue, status: mappedStatus } };
           }
 
@@ -204,7 +218,7 @@ export function MyDayKanbanView({
           setLocalTasks(tasksCopy);
         }
 
-        if (source.droppableId !== destination.droppableId) {
+        if (source.droppableId !== destinationColumnId) {
           const prevTasks = [...localTasks];
           Promise.resolve(onStatusUpdate(draggableId, newStatus)).catch((err) => {
             logger.error('Status update failed', err);
@@ -239,6 +253,7 @@ export function MyDayKanbanView({
         <div
           ref={provided.innerRef}
           {...provided.droppableProps}
+          data-kanban-column-id={column.id}
           className={cn(
             'flex flex-col gap-2 min-h-[200px] h-full p-2 rounded-lg',
             snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30',
@@ -362,7 +377,7 @@ export function MyDayKanbanView({
 
   return (
     <div className="space-y-4">
-      <DragDropContext onDragEnd={handleDragEnd}>
+      <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         {isMobile ? (
           <Droppable droppableId="myday-board" type="COLUMN" direction="vertical">
             {(provided) => (
@@ -390,7 +405,7 @@ export function MyDayKanbanView({
             )}
           </Droppable>
         ) : (
-          <div className="w-full pb-4 overflow-x-auto md:overflow-visible touch-pan-x">
+          <div ref={boardScrollRef} className="w-full pb-4 overflow-x-auto md:overflow-visible touch-pan-x">
             <div
               className="flex gap-3 min-w-max snap-x snap-mandatory md:grid md:gap-4 md:min-w-0"
               style={{

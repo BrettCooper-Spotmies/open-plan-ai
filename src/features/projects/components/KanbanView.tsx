@@ -37,6 +37,7 @@ import { format } from 'date-fns';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { TaskDetailModal } from './TaskDetailModal';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useKanbanEdgeAutoScroll, resolveKanbanColumnIdAtPoint } from '@/hooks/useKanbanEdgeAutoScroll';
 import { MobileKanbanColumn } from '@/components/shared/MobileKanbanColumn';
 import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import {
@@ -383,7 +384,11 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     }
   };
 
+  const { containerRef: boardScrollRef, handleDragStart, handleDragEnd: handleAutoScrollDragEnd, getLastPointerPosition } = useKanbanEdgeAutoScroll();
+
   const handleDragEnd = (result: DropResult) => {
+    const pointer = getLastPointerPosition();
+    handleAutoScrollDragEnd();
     const { destination, source, type, draggableId } = result;
 
     if (!destination) return;
@@ -413,8 +418,16 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       return;
     }
 
+    // Auto-scrolling the board mid-drag leaves @hello-pangea/dnd's cached
+    // position for the card stale, so `destination.droppableId` can name a
+    // column that's no longer under the pointer. Hit-test the real DOM
+    // element at the pointer's last known position and prefer that.
+    const hitColumnId = pointer
+      ? resolveKanbanColumnIdAtPoint(pointer.x, pointer.y)
+      : undefined;
+
     // Prevent dragging INTO the Dependencies bucket (it's auto-populated)
-    const destColumn = columns.find(col => col.id === destination.droppableId);
+    const destColumn = columns.find(col => col.id === (hitColumnId ?? destination.droppableId));
     if (destColumn?.isSpecial && destColumn.status === 'blocked') {
       return;
     }
@@ -590,11 +603,14 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   return (
     <div className="space-y-4">
       {/* Kanban Board */}
-      <DragDropContext onDragEnd={handleDragEnd}>
+      <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
         <Droppable droppableId="board" type="COLUMN" direction={isMobile ? 'vertical' : 'horizontal'}>
           {(provided) => (
             <div
-              ref={provided.innerRef}
+              ref={(node) => {
+                provided.innerRef(node);
+                boardScrollRef.current = node;
+              }}
               {...provided.droppableProps}
               className={isMobile ? 'w-full' : 'w-full overflow-x-auto pb-4'}
             >
@@ -645,6 +661,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                               <div
                                 ref={provided.innerRef}
                                 {...provided.droppableProps}
+                                data-kanban-column-id={column.id}
                                 className={cn(
                                   'space-y-2 min-h-[120px] h-full p-2 rounded-lg transition-colors',
                                   snapshot.isDraggingOver
