@@ -495,7 +495,7 @@ export function IssuesView({
                                     ref={issuesProvided.innerRef}
                                     {...issuesProvided.droppableProps}
                                     className={cn(
-                                      'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
+                                      'space-y-2 min-h-[120px] h-full p-2 rounded-lg transition-colors',
                                       snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30'
                                     )}
                                   >

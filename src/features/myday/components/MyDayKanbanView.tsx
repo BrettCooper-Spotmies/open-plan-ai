@@ -240,7 +240,7 @@ export function MyDayKanbanView({
           ref={provided.innerRef}
           {...provided.droppableProps}
           className={cn(
-            'flex flex-col gap-2 min-h-[200px] p-2 rounded-lg',
+            'flex flex-col gap-2 min-h-[200px] h-full p-2 rounded-lg',
             snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30',
           )}
         >
