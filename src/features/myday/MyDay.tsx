@@ -1,15 +1,16 @@
 import { useState, useMemo, useEffect } from 'react';
-import { LayoutGrid, List } from 'lucide-react';
+// import { LayoutGrid, List } from 'lucide-react'; // Kanban view hidden — re-enable if Kanban toggle is restored
 import { MyDayStats } from './components/MyDayStats';
-import { MyDayKanbanView } from './components/MyDayKanbanView';
+// import { MyDayKanbanView } from './components/MyDayKanbanView'; // Kanban view hidden
 import { MyDayListView } from './components/MyDayListView';
 import { MyDayGroupBySelector } from './components/MyDayGroupBySelector';
 import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
 import { IssueDetailModal } from '@/features/projects/components/IssueDetailModal';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+// import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Kanban view hidden
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
-import { Task, Issue, TaskStatus, IssueStatus, MyDayView, MyDayGroupBy } from '@/types';
+import { Task, Issue, TaskStatus, IssueStatus, MyDayGroupBy } from '@/types';
+// import { MyDayView } from '@/types'; // Kanban view hidden
 import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
 import { useUpdateTask, useBatchUpdateTasks } from '@/hooks/useTasks';
 import { useUpdateIssue } from '@/hooks/useIssues';
@@ -27,7 +28,7 @@ export default function MyDay() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
-  const [view, setView] = useState<MyDayView>('kanban');
+  // const [view, setView] = useState<MyDayView>('kanban'); // Kanban view hidden — list is now the only view
   const [groupBy, setGroupBy] = useState<MyDayGroupBy>('progress');
 
   // Fetch dynamic data
@@ -97,36 +98,37 @@ export default function MyDay() {
     }
   };
 
-  const handleChecklistToggle = async (taskId: string, itemId: string) => {
-    const item = userTasks.find(t => t.id === taskId);
-    if (!item) return;
-
-    try {
-      const checklist = item.itemType === 'task' ? item.originalTask?.checklist : item.originalIssue?.checklist;
-      if (!checklist) return;
-
-      const updatedChecklist = checklist.map(checklistItem =>
-        checklistItem.id === itemId ? { ...checklistItem, completed: !checklistItem.completed } : checklistItem
-      );
-
-      if (item.itemType === 'task') {
-        await updateTaskMutation.mutateAsync({
-          projectId: item.projectId,
-          taskId,
-          updates: { checklist: updatedChecklist },
-        });
-      } else {
-        await updateIssueMutation.mutateAsync({
-          projectId: item.projectId,
-          issueId: taskId,
-          updates: { checklist: updatedChecklist },
-        });
-      }
-    } catch (error) {
-      logger.error('Failed to toggle checklist item:', error);
-      toast.error('Failed to update checklist');
-    }
-  };
+  // Kanban view hidden — handleChecklistToggle was only used by MyDayKanbanView
+  // const handleChecklistToggle = async (taskId: string, itemId: string) => {
+  //   const item = userTasks.find(t => t.id === taskId);
+  //   if (!item) return;
+  //
+  //   try {
+  //     const checklist = item.itemType === 'task' ? item.originalTask?.checklist : item.originalIssue?.checklist;
+  //     if (!checklist) return;
+  //
+  //     const updatedChecklist = checklist.map(checklistItem =>
+  //       checklistItem.id === itemId ? { ...checklistItem, completed: !checklistItem.completed } : checklistItem
+  //     );
+  //
+  //     if (item.itemType === 'task') {
+  //       await updateTaskMutation.mutateAsync({
+  //         projectId: item.projectId,
+  //         taskId,
+  //         updates: { checklist: updatedChecklist },
+  //       });
+  //     } else {
+  //       await updateIssueMutation.mutateAsync({
+  //         projectId: item.projectId,
+  //         issueId: taskId,
+  //         updates: { checklist: updatedChecklist },
+  //       });
+  //     }
+  //   } catch (error) {
+  //     logger.error('Failed to toggle checklist item:', error);
+  //     toast.error('Failed to update checklist');
+  //   }
+  // };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
@@ -176,7 +178,7 @@ export default function MyDay() {
           completedTodayCount={completedTodayCount}
         />
 
-        {/* View controls - always visible once data is ready */}
+        {/* Kanban view hidden — toggle disabled, list is now the only view
         <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
             <Tabs value={view} onValueChange={(v) => setView(v as MyDayView)}>
               <TabsList>
@@ -191,8 +193,9 @@ export default function MyDay() {
               </TabsList>
             </Tabs>
         </div>
+        */}
 
-        {/* Kanban/List content */}
+        {/* List content */}
         {userTasks.length === 0 ? (
           <div className="text-center py-16">
             <h3 className="text-lg font-medium text-foreground mb-2">
@@ -205,6 +208,7 @@ export default function MyDay() {
         ) : (
           <div className="grid grid-cols-1 w-full min-w-0">
             <div className="min-h-[400px] w-full min-w-0">
+              {/* Kanban view hidden
               {view === 'kanban' ? (
                 <MyDayKanbanView
                   tasks={userTasks}
@@ -214,13 +218,14 @@ export default function MyDay() {
                   onChecklistToggle={handleChecklistToggle}
                 />
               ) : (
-                <MyDayListView
-                  tasks={userTasks}
-                  groupBy={groupBy}
-                  onTaskClick={handleTaskClick}
-                  onStatusUpdate={handleStatusUpdate}
-                />
-              )}
+              */}
+              <MyDayListView
+                tasks={userTasks}
+                groupBy={groupBy}
+                onTaskClick={handleTaskClick}
+                onStatusUpdate={handleStatusUpdate}
+              />
+              {/* )} */}
             </div>
           </div>
         )}
