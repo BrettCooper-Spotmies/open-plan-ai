@@ -26,6 +26,15 @@ export function getMilestoneTasks(milestone: Milestone, tasks: Task[]): Task[] {
 }
 
 /**
+ * Get modules linked to a milestone
+ */
+export function getMilestoneModules(milestone: Milestone, modules: Module[]): Module[] {
+  return modules.filter(m =>
+    milestone.linkedModuleIds?.includes(m.id) || m.milestoneId === milestone.id
+  );
+}
+
+/**
  * Get issues blocking a task
  */
 export function getBlockingIssues(taskId: string, issues: Issue[]): Issue[] {

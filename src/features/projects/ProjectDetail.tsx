@@ -495,6 +495,7 @@ export default function ProjectDetail() {
         owner,
         createdBy,
         createdAt: m.created_at || new Date().toISOString(),
+        milestoneId: m.milestone_id || undefined,
       };
     });
   }, [projectModules, organizationMembers]);
@@ -893,6 +894,20 @@ export default function ProjectDetail() {
         batchUpdateModulesMutation.mutate(
           newMilestonePartial.linkedModuleIds.map(moduleId => ({ id: moduleId, milestone_id: createdMilestone.id }))
         );
+      }
+
+      // Link issues if any were selected during creation
+      if (newMilestonePartial.linkedIssueIds && newMilestonePartial.linkedIssueIds.length > 0) {
+        const allIssues = project.issues || [];
+        newMilestonePartial.linkedIssueIds.forEach(issueId => {
+          const issue = allIssues.find(i => i.id === issueId);
+          if (!issue) return;
+          updateIssueMutation.mutate({
+            projectId: issue.projectId || id || '',
+            issueId,
+            updates: { blocksMilestoneIds: [...(issue.blocksMilestoneIds || []), createdMilestone.id] },
+          });
+        });
       }
     } catch (error: any) {
       logger.error('Failed to create milestone and link tasks:', error);

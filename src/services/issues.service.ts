@@ -49,6 +49,8 @@ export const issuesService = {
     if (blocksTaskIds.length > 0) payload.blocksTaskIds = blocksTaskIds;
     const blockedByTaskIds = (issue.blockedBy || []).filter(Boolean);
     if (blockedByTaskIds.length > 0) payload.blockedByTaskIds = blockedByTaskIds;
+    const blocksMilestoneIds = (issue.blocksMilestoneIds || []).filter(Boolean);
+    if (blocksMilestoneIds.length > 0) payload.blocksMilestoneIds = blocksMilestoneIds;
     if (issue.tags && issue.tags.length > 0) payload.tags = issue.tags;
     if (issue.checklist && issue.checklist.length > 0) payload.checklist = issue.checklist;
     if (issue.descriptionBlocks && issue.descriptionBlocks.length > 0) payload.descriptionBlocks = issue.descriptionBlocks;
@@ -95,6 +97,10 @@ export const issuesService = {
 
     if (u.blockedBy !== undefined) {
       payload.blockedByTaskIds = u.blockedBy;
+    }
+
+    if (u.blocksMilestoneIds !== undefined) {
+      payload.blocksMilestoneIds = u.blocksMilestoneIds;
     }
 
     if (u.checklist !== undefined) {

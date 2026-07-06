@@ -109,6 +109,7 @@ export function AddMilestoneDialog({
       completed: false,
       linkedTaskIds: selectedTasks,
       linkedModuleIds: selectedModules,
+      linkedIssueIds: selectedIssues,
     };
 
     onAdd(milestone);

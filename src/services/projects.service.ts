@@ -69,6 +69,7 @@ function fromApiIssue(raw: Record<string, unknown>): Issue {
     assignees,
     blocksTaskIds: ((raw.blockedTasks as any[]) || []).map((t: any) => t.id),
     blockedBy: ((raw.blockedByTasks as any[]) || []).map((t: any) => t.id),
+    blocksMilestoneIds: (raw.blocksMilestoneIds as string[]) ?? [],
     tags: (raw.tags as string[]) ?? [],
     checklist: (raw.checklist as Issue['checklist']) ?? [],
     descriptionBlocks: (raw.descriptionBlocks as Issue['descriptionBlocks']) ?? [],
