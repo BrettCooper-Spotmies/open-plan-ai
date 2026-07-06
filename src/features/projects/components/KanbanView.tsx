@@ -587,6 +587,10 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                   const columnTasks = getColumnTasks(column);
                   const isDependenciesColumn = column.isSpecial && column.status === 'blocked';
 
+                  if (isDependenciesColumn && columnTasks.length === 0) {
+                    return null;
+                  }
+
                   return (
                     <Draggable
                       key={column.id}

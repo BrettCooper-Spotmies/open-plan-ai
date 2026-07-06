@@ -436,6 +436,10 @@ export function IssuesView({
                     const columnIssues = getColumnIssues(column);
                     const isDependenciesColumn = column.isSpecial && column.status === 'dependencies';
 
+                    if (isDependenciesColumn && columnIssues.length === 0) {
+                      return null;
+                    }
+
                     return (
                       <Draggable
                         key={column.id}
