@@ -1570,7 +1570,7 @@ export default function ProjectDetail() {
               onAddClose={() => setBomAddOpen(false)}
               selectedId={partId ?? null}
               onSelectedIdChange={(newId) =>
-                navigate(`/projects/${id}/bom${newId ? `/${newId}` : ''}`, { replace: !newId })
+                navigate(`/projects/${id}/bom${newId ? `/${newId}` : ''}`)
               }
             />
           </TabsContent>
@@ -1585,7 +1585,7 @@ export default function ProjectDetail() {
               onNewConsumed={() => setEcoNewOpen(false)}
               openEcoId={ecoId ?? null}
               onOpenEcoIdChange={(newId) =>
-                navigate(`/projects/${id}/eng-changes${newId ? `/${newId}` : ''}`, { replace: !newId })
+                navigate(`/projects/${id}/eng-changes${newId ? `/${newId}` : ''}`)
               }
             />
           </TabsContent>
