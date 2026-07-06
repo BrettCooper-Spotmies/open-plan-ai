@@ -321,8 +321,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
               {([['all', 'All BOM'], ['top', 'Top Level'], ['catalog', 'Catalog']] as const).map(([id, label]) => (
                 <button key={id} onClick={() => set('bomType', id)}
                   className={cn('flex-1 py-1.5 rounded-md text-xs font-medium cursor-pointer border-none transition-colors',
-                    draft.bomType === id ? 'text-white' : 'bg-transparent text-muted-foreground hover:text-foreground')}
-                  style={{ background: draft.bomType === id ? 'hsl(var(--foreground))' : undefined }}>
+                    draft.bomType === id ? 'bg-foreground text-background' : 'bg-transparent text-muted-foreground hover:text-foreground')}>
                   {label}
                 </button>
               ))}
