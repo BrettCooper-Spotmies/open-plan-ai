@@ -606,11 +606,14 @@ export function ECOWizard({
   const stageMoved = (p: PipelineStep, idx: number) =>
     defaultOrder[p.stage] !== undefined && defaultOrder[p.stage] !== idx;
 
-  const pipelineValid = true;
+  const pipelineMissingApprover = pipeline.some(p => !p.approverId);
+  const pipelineMissingStageName = pipeline.some(p => p.isCustom && !p.stage.trim());
+  const pipelineMissingJustification = pipeline.some((p, idx) => (p.optional || stageMoved(p, idx)) && !(p.justification ?? '').trim());
+  const pipelineValid = pipeline.length >= 2 && !pipelineMissingApprover && !pipelineMissingStageName && !pipelineMissingJustification;
 
   const activeMutation = isEdit ? updateMutation : createMutation;
   const savePending = activeMutation.isPending || (isRework && submitMutation.isPending);
-  const canSubmit = !savePending;
+  const canSubmit = !savePending && (isRework || pipelineValid);
 
   // Auto-fill "From" in Details when scope is BOM_PART
   const firstSelectedNode = useMemo(() => {
@@ -1296,6 +1299,33 @@ export function ECOWizard({
         >
           <AlertCircle className="w-3 h-3 shrink-0" />
           At least one approver besides the Originator is required — this ECO can&apos;t be submitted with nobody to review it.
+        </div>
+      )}
+      {!isRework && pipelineMissingApprover && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+          style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
+        >
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          Assign an approver to every stage before submitting.
+        </div>
+      )}
+      {!isRework && pipelineMissingStageName && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+          style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
+        >
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          Give every custom stage a name before submitting.
+        </div>
+      )}
+      {!isRework && pipelineMissingJustification && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+          style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
+        >
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          Add a justification for every optional or reordered stage before submitting.
         </div>
       )}
       {pipeline.map((p, idx) => {
