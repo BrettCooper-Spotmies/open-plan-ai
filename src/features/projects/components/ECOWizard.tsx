@@ -288,35 +288,35 @@ const STEPS = ['Basics', 'Items', 'Details', 'Impact', 'Approval'];
 
 function Stepper({ step, maxStepReached, onStepClick }: { step: number; maxStepReached: number; onStepClick: (i: number) => void }) {
   return (
-    <div className="flex gap-1">
+    <div className="grid grid-cols-3 gap-y-3 gap-x-1 sm:flex sm:gap-1">
       {STEPS.map((s, i) => {
         const locked = i > maxStepReached;
         return (
           <div
             key={s}
             onClick={() => !locked && onStepClick(i)}
-            className={cn('flex-1 pb-2.5', locked ? 'cursor-not-allowed' : 'cursor-pointer')}
+            className={cn('pb-2.5 sm:flex-1', locked ? 'cursor-not-allowed' : 'cursor-pointer')}
           >
-            <div className="flex items-center gap-1.5 mb-1.5" style={{ opacity: locked ? 0.45 : 1 }}>
+            <div className="flex items-center gap-2 mb-2 sm:gap-1.5 sm:mb-1.5" style={{ opacity: locked ? 0.45 : 1 }}>
               <div
-                className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[11px] font-semibold"
+                className="w-7 h-7 sm:w-5 sm:h-5 rounded-full shrink-0 flex items-center justify-center text-[13px] sm:text-[11px] font-semibold"
                 style={{
                   background: i < step ? 'hsl(var(--primary))' : i === step ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
                   color: i <= step ? 'hsl(var(--primary-foreground))' : undefined,
                   border: i > step ? '1px solid hsl(var(--border))' : 'none',
                 }}
               >
-                {i < step ? <Check className="w-3 h-3 text-white" strokeWidth={3} /> : i + 1}
+                {i < step ? <Check className="w-4 h-4 sm:w-3 sm:h-3 text-white" strokeWidth={3} /> : i + 1}
               </div>
               <span
-                className="text-[12px] whitespace-nowrap"
+                className="text-[14px] sm:text-[12px] whitespace-nowrap"
                 style={{ fontWeight: i === step ? 600 : 500 }}
               >
                 {s}
               </span>
             </div>
             <div
-              className="h-0.5 rounded"
+              className="h-1 sm:h-0.5 rounded"
               style={{ background: i <= step ? 'hsl(var(--primary))' : 'hsl(var(--border))' }}
             />
           </div>
