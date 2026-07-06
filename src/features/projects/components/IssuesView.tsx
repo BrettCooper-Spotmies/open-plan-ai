@@ -38,6 +38,8 @@ import { useIssueColumns, useCreateIssueColumn, useDeleteIssueColumn, useReorder
 import { useUpdateIssueStatus } from '@/hooks/useProjectMutations';
 import { DEFAULT_ISSUE_COLUMNS } from '@/services/issueColumns.service';
 import { useAuth } from '@/modules/auth';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileKanbanColumn } from '@/components/shared/MobileKanbanColumn';
 
 interface IssuesViewProps {
   issues: Issue[];
@@ -139,6 +141,7 @@ export function IssuesView({
 }: IssuesViewProps) {
   const { id: routeProjectId } = useParams();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const { data: apiIssueColumns } = useIssueColumns(routeProjectId);
   const createIssueColumn = useCreateIssueColumn(routeProjectId);
   const deleteIssueColumn = useDeleteIssueColumn(routeProjectId);
@@ -428,10 +431,17 @@ export function IssuesView({
     <div className="space-y-4">
       {viewMode === 'kanban' ? (
         <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable droppableId="board" type="COLUMN" direction="horizontal">
+          <Droppable droppableId="board" type="COLUMN" direction={isMobile ? 'vertical' : 'horizontal'}>
             {(provided) => (
-              <div ref={provided.innerRef} {...provided.droppableProps} className="w-full overflow-x-auto pb-4">
-                <div className="inline-flex gap-4 min-w-full" style={{ width: 'max-content' }}>
+              <div
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+                className={isMobile ? 'w-full' : 'w-full overflow-x-auto pb-4'}
+              >
+                <div
+                  className={isMobile ? 'flex flex-col gap-3 w-full' : 'inline-flex gap-4 min-w-full'}
+                  style={isMobile ? undefined : { width: 'max-content' }}
+                >
                   {columns.map((column, index) => {
                     const columnIssues = getColumnIssues(column);
                     const isDependenciesColumn = column.isSpecial && column.status === 'dependencies';
@@ -443,79 +453,26 @@ export function IssuesView({
                         index={index}
                         isDragDisabled={column.isSpecial || !apiIssueColumns?.length}
                       >
-                        {(columnProvided, columnSnapshot) => (
-                          <div
-                            ref={columnProvided.innerRef}
-                            {...columnProvided.draggableProps}
-                            className={cn(
-                              'w-[280px] flex-shrink-0 flex flex-col transition-shadow max-h-[calc(100vh-220px)]',
-                              columnSnapshot.isDragging && 'shadow-lg'
-                            )}
-                          >
-                            <div className="flex-shrink-0 bg-background pb-3 space-y-3">
-                              <div className="flex items-center gap-2 px-1">
-                                {!column.isSpecial && (
-                                  <div {...columnProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
-                                    <GripVertical className="h-4 w-4 text-muted-foreground" />
-                                  </div>
-                                )}
-                                {column.isSpecial && <div {...columnProvided.dragHandleProps} />}
-                                {isDependenciesColumn ? (
-                                  <Link2 className="h-4 w-4 text-status-blocked" />
-                                ) : (
-                                  <div className={cn('w-2 h-2 rounded-full', column.color)} />
-                                )}
-                                <h3 className={cn('font-medium text-sm', isDependenciesColumn && 'text-status-blocked')}>
-                                  {column.label}
-                                </h3>
-                                <span className="text-xs text-muted-foreground">{columnIssues.length}</span>
-                                {!column.isSpecial && !isDependenciesColumn && (
-                                  <div className="ml-auto">
-                                    <DropdownMenu>
-                                      <DropdownMenuTrigger asChild>
-                                        <Button
-                                          variant="ghost"
-                                          size="icon"
-                                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <MoreHorizontal className="h-3.5 w-3.5" />
-                                        </Button>
-                                      </DropdownMenuTrigger>
-                                      <DropdownMenuContent align="end">
-                                        <DropdownMenuItem
-                                          className="text-destructive focus:text-destructive gap-2"
-                                          onClick={() => handleRemoveColumn(column.id)}
-                                        >
-                                          <Trash2 className="h-3.5 w-3.5" />
-                                          Delete Bucket
-                                        </DropdownMenuItem>
-                                      </DropdownMenuContent>
-                                    </DropdownMenu>
-                                  </div>
-                                )}
-                              </div>
-
-                              {!isDependenciesColumn && (
-                                <div className="px-2">
-                                  <Button
-                                    variant="ghost"
-                                    className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                                    onClick={() => handleCreateIssue(column.status as IssueStatus)}
-                                  >
-                                    + Add Issue
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex-1 overflow-y-auto min-h-0">
-                              <Droppable
-                                droppableId={column.id}
-                                type="ISSUE"
-                                isDropDisabled={isDependenciesColumn}
+                        {(columnProvided, columnSnapshot) => {
+                          const addIssueButton = !isDependenciesColumn && (
+                            <div className={isMobile ? '' : 'px-2'}>
+                              <Button
+                                variant="ghost"
+                                className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                                onClick={() => handleCreateIssue(column.status as IssueStatus)}
                               >
-                                {(issuesProvided, snapshot) => (
+                                + Add Issue
+                              </Button>
+                            </div>
+                          );
+
+                          const cardsDroppable = (
+                            <Droppable
+                              droppableId={column.id}
+                              type="ISSUE"
+                              isDropDisabled={isDependenciesColumn}
+                            >
+                              {(issuesProvided, snapshot) => (
                                   <div
                                     ref={issuesProvided.innerRef}
                                     {...issuesProvided.droppableProps}
@@ -683,21 +640,111 @@ export function IssuesView({
                                   </div>
                                 )}
                               </Droppable>
+                          );
+
+                          if (isMobile) {
+                            return (
+                              <div ref={columnProvided.innerRef} {...columnProvided.draggableProps} className="w-full">
+                                <MobileKanbanColumn
+                                  label={column.label}
+                                  count={columnIssues.length}
+                                  countLabel="issues"
+                                  dot={isDependenciesColumn ? (
+                                    <Link2 className="h-4 w-4 text-status-blocked shrink-0" />
+                                  ) : (
+                                    <div className={cn('w-2 h-2 rounded-full shrink-0', column.color)} />
+                                  )}
+                                  labelClassName={isDependenciesColumn ? 'text-status-blocked' : undefined}
+                                  dragHandleProps={
+                                    column.isSpecial || !apiIssueColumns?.length ? null : columnProvided.dragHandleProps
+                                  }
+                                  isDragging={columnSnapshot.isDragging}
+                                >
+                                  <div className="space-y-3">
+                                    {addIssueButton}
+                                    {cardsDroppable}
+                                  </div>
+                                </MobileKanbanColumn>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <div
+                              ref={columnProvided.innerRef}
+                              {...columnProvided.draggableProps}
+                              className={cn(
+                                'w-[280px] flex-shrink-0 flex flex-col transition-shadow max-h-[calc(100vh-220px)]',
+                                columnSnapshot.isDragging && 'shadow-lg'
+                              )}
+                            >
+                              <div className="flex-shrink-0 bg-background pb-3 space-y-3">
+                                <div className="flex items-center gap-2 px-1">
+                                  {!column.isSpecial && (
+                                    <div {...columnProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
+                                      <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                  )}
+                                  {column.isSpecial && <div {...columnProvided.dragHandleProps} />}
+                                  {isDependenciesColumn ? (
+                                    <Link2 className="h-4 w-4 text-status-blocked" />
+                                  ) : (
+                                    <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                                  )}
+                                  <h3 className={cn('font-medium text-sm', isDependenciesColumn && 'text-status-blocked')}>
+                                    {column.label}
+                                  </h3>
+                                  <span className="text-xs text-muted-foreground">{columnIssues.length}</span>
+                                  {!column.isSpecial && !isDependenciesColumn && (
+                                    <div className="ml-auto">
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                            onClick={(e) => e.stopPropagation()}
+                                          >
+                                            <MoreHorizontal className="h-3.5 w-3.5" />
+                                          </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                          <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive gap-2"
+                                            onClick={() => handleRemoveColumn(column.id)}
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                            Delete Bucket
+                                          </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {addIssueButton}
+                              </div>
+
+                              <div className="flex-1 overflow-y-auto min-h-0">
+                                {cardsDroppable}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          );
+                        }}
                       </Draggable>
                     );
                   })}
                   {provided.placeholder}
 
                   {/* Add Bucket */}
-                  <div className="w-[280px] flex-shrink-0">
-                    <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
+                  <div className={isMobile ? 'w-full' : 'w-[280px] flex-shrink-0'}>
+                    <div className={isMobile ? 'pb-1' : 'sticky top-0 bg-background z-10 pb-3 space-y-3'}>
+                      {!isMobile && (
                       <div className="flex items-center gap-2 px-1">
                         <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
                         <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
                       </div>
+                      )}
                       <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
                         <DialogTrigger asChild>
                           <div className="px-2">
