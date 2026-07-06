@@ -744,13 +744,13 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                 Awaiting review by {activeRequest.approvers.map(a => a.name).join(', ')}
               </span>
             )}
-            <button
+            {!canReviseAndResubmit && <button
               onClick={() => setEcoOpen(true)}
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-sm font-medium border border-border bg-card text-foreground hover:bg-muted transition-colors whitespace-nowrap"
             >
               <GitMerge className="w-3.5 h-3.5 text-muted-foreground" /> New ECO
-            </button>
-            <button
+            </button>}
+            {!canReviseAndResubmit && <button
               onClick={() => isLatest && setShowEdit(true)}
               disabled={!isLatest}
               title={isLatest ? 'Edit this part' : 'Switch to latest revision to edit'}
@@ -762,7 +762,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               )}
             >
               <SquarePen className="w-3.5 h-3.5" /> Edit Part
-            </button>
+            </button>}
             {canApprove && (
               <button
                 onClick={() => setShowDeleteConfirm(true)}
