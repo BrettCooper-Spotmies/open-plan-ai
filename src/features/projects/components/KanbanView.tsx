@@ -36,6 +36,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { TaskDetailModal } from './TaskDetailModal';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileKanbanColumn } from '@/components/shared/MobileKanbanColumn';
 import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import {
   useProjectTaskColumns,
@@ -169,6 +171,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   projectId,
   onAddModule,
 }: KanbanViewProps) {
+  const isMobile = useIsMobile();
   const [columns, setColumns] = useState<KanbanColumn[]>(defaultColumns);
   const { canEditResource } = useProjectPermissions(projectId);
   const { data: persistedColumns } = useProjectTaskColumns(projectId);
@@ -588,18 +591,20 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     <div className="space-y-4">
       {/* Kanban Board */}
       <DragDropContext onDragEnd={handleDragEnd}>
-        <Droppable droppableId="board" type="COLUMN" direction="horizontal">
+        <Droppable droppableId="board" type="COLUMN" direction={isMobile ? 'vertical' : 'horizontal'}>
           {(provided) => (
             <div
               ref={provided.innerRef}
               {...provided.droppableProps}
-              className="w-full overflow-x-auto pb-4"
+              className={isMobile ? 'w-full' : 'w-full overflow-x-auto pb-4'}
             >
               <div
-                className="inline-flex gap-4 min-w-full md:min-h-[calc(100vh-320px)]"
-                style={{
-                  width: 'max-content',
-                }}
+                className={
+                  isMobile
+                    ? 'flex flex-col gap-3 w-full'
+                    : 'inline-flex gap-4 min-w-full md:min-h-[calc(100vh-320px)]'
+                }
+                style={isMobile ? undefined : { width: 'max-content' }}
               >
                 {visibleColumns.map((column, index) => {
                   const columnTasks = getColumnTasks(column);
@@ -612,326 +617,361 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                       index={index}
                       isDragDisabled={column.isSpecial}
                     >
-                      {(provided, snapshot) => (
-                        <div
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          className={cn(
-                            'w-[280px] flex-shrink-0 flex flex-col transition-shadow',
-                            'max-h-[calc(100vh-220px)]',
-                            snapshot.isDragging && 'shadow-lg'
-                          )}
-                        >
-                          {/* Column Header - stays at top */}
-                          <div className="flex-shrink-0 bg-background pb-3 space-y-3">
-                            <div className="flex items-center gap-2 px-1">
-                              {!column.isSpecial && (
-                                <div
-                                  {...provided.dragHandleProps}
-                                  className="cursor-grab active:cursor-grabbing"
-                                >
-                                  <GripVertical className="h-4 w-4 text-muted-foreground" />
-                                </div>
-                              )}
-                              {column.isSpecial && <div {...provided.dragHandleProps} />}
-                              {isDependenciesColumn ? (
-                                <Link2 className="h-4 w-4 text-status-blocked" />
-                              ) : (
-                                <ColumnColorDot color={column.color} />
-                              )}
-                              <h3 
-                                title={column.label}
-                                className={cn(
-                                'font-medium text-sm truncate',
-                                isDependenciesColumn && 'text-status-blocked'
-                              )}>
-                                {column.label}
-                              </h3>
-                              <span className="text-xs text-muted-foreground">
-                                {columnTasks.length}
-                              </span>
-                              {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5 ml-auto opacity-50 hover:opacity-100"
-                                  onClick={() => handleRemoveColumn(column.id)}
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              )}
-                            </div>
-
-                            {/* Add Task Button at Top - not shown for Dependencies */}
-                            {!isDependenciesColumn && (
-                              <div className="px-2">
-                                <Button
-                                  variant="ghost"
-                                  className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                                  onClick={() => {
-                                    setAddTaskToColumn(column.id);
-                                    setNewTask(createEmptyTaskDraft(column?.status as TaskStatus || 'todo'));
-                                    setIsMaximizedAddTask(true);
-                                  }}
-                                >
-                                  <Plus className="h-3 w-3 mr-1" />
-                                  Add Task
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Tasks Droppable - scrollable area */}
-                          <div className="flex-1 overflow-y-auto min-h-0">
-                            <Droppable
-                              droppableId={column.id}
-                              type="TASK"
-                              isDropDisabled={isDependenciesColumn}
+                      {(provided, snapshot) => {
+                        const addTaskButton = !isDependenciesColumn && (
+                          <div className={isMobile ? '' : 'px-2'}>
+                            <Button
+                              variant="ghost"
+                              className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                              onClick={() => {
+                                setAddTaskToColumn(column.id);
+                                setNewTask(createEmptyTaskDraft(column?.status as TaskStatus || 'todo'));
+                                setIsMaximizedAddTask(true);
+                              }}
                             >
-                              {(provided, snapshot) => (
-                                <div
-                                  ref={provided.innerRef}
-                                  {...provided.droppableProps}
-                                  className={cn(
-                                    'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
-                                    snapshot.isDraggingOver
-                                      ? 'bg-muted/50'
-                                      : 'bg-muted/30'
-                                  )}
-                                >
-                                  {columnTasks.map((task, taskIndex) => {
-                                    const isBlocked = blockedTaskIds.has(task.id);
-                                    const blockingInfo = getBlockingInfo(task);
-                                    const blockingToInfo = getBlockingToInfo(task);
-                                    const hasAnyDependencies = blockingInfo.length > 0 || blockingToInfo.length > 0;
-                                    const isBlockingOthers = blockingToInfo.length > 0;
+                              <Plus className="h-3 w-3 mr-1" />
+                              Add Task
+                            </Button>
+                          </div>
+                        );
 
-                                    return (
-                                      <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
-                                        {(provided, snapshot) => (
-                                          <TooltipProvider>
-                                            <Tooltip>
-                                              <TooltipTrigger asChild>
-                                                <Card
-                                                  ref={provided.innerRef}
-                                                  {...provided.draggableProps}
-                                                  {...provided.dragHandleProps}
-                                                  className={cn(
-                                                    'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
-                                                    isDependenciesColumn
-                                                      ? 'border-l-red-500'
-                                                      : (moduleColors[task.module] || 'border-l-muted'),
-                                                    snapshot.isDragging && 'shadow-lg rotate-2'
-                                                  )}
-                                                  onClick={() => handleTaskClick(task)}
-                                                >
+                        const cardsDroppable = (
+                          <Droppable
+                            droppableId={column.id}
+                            type="TASK"
+                            isDropDisabled={isDependenciesColumn}
+                          >
+                            {(provided, snapshot) => (
+                              <div
+                                ref={provided.innerRef}
+                                {...provided.droppableProps}
+                                className={cn(
+                                  'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors',
+                                  snapshot.isDraggingOver
+                                    ? 'bg-muted/50'
+                                    : 'bg-muted/30'
+                                )}
+                              >
+                                {columnTasks.map((task, taskIndex) => {
+                                  const isBlocked = blockedTaskIds.has(task.id);
+                                  const blockingInfo = getBlockingInfo(task);
+                                  const blockingToInfo = getBlockingToInfo(task);
+                                  const hasAnyDependencies = blockingInfo.length > 0 || blockingToInfo.length > 0;
+                                  const isBlockingOthers = blockingToInfo.length > 0;
+
+                                  return (
+                                    <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
+                                      {(provided, snapshot) => (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Card
+                                                ref={provided.innerRef}
+                                                {...provided.draggableProps}
+                                                {...provided.dragHandleProps}
+                                                className={cn(
+                                                  'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
+                                                  isDependenciesColumn
+                                                    ? 'border-l-red-500'
+                                                    : (moduleColors[task.module] || 'border-l-muted'),
+                                                  snapshot.isDragging && 'shadow-lg rotate-2'
+                                                )}
+                                                onClick={() => handleTaskClick(task)}
+                                              >
 
 
-                                                  <div className="space-y-2">
-                                                    <div className="flex items-start justify-between gap-2">
-                                                      <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
-                                                        {isDependenciesColumn ? (
-                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
-                                                            <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
-                                                              <Link2 className="h-3 w-3 text-status-blocked" />
-                                                            </div>
+                                                <div className="space-y-2">
+                                                  <div className="flex items-start justify-between gap-2">
+                                                    <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
+                                                      {isDependenciesColumn ? (
+                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                          <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
+                                                            <Link2 className="h-3 w-3 text-status-blocked" />
                                                           </div>
-                                                        ) : isBlocked ? (
-                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
-                                                            <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
-                                                              <Link2 className="h-3 w-3 text-status-blocked" />
-                                                            </div>
+                                                        </div>
+                                                      ) : isBlocked ? (
+                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                          <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
+                                                            <Link2 className="h-3 w-3 text-status-blocked" />
                                                           </div>
-                                                        ) : isBlockingOthers ? (
-                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
-                                                            <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
-                                                              <Link2 className="h-3 w-3 text-status-blocked" />
-                                                            </div>
+                                                        </div>
+                                                      ) : isBlockingOthers ? (
+                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                          <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
+                                                            <Link2 className="h-3 w-3 text-status-blocked" />
                                                           </div>
-                                                        ) : task.status === 'done' ? (
-                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
-                                                            <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
-                                                              <Check className="h-3 w-3 text-green-500" />
-                                                            </div>
+                                                        </div>
+                                                      ) : task.status === 'done' ? (
+                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                          <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
+                                                            <Check className="h-3 w-3 text-green-500" />
                                                           </div>
-                                                        ) : (
-                                                          <div
-                                                            className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4"
-                                                          >
-                                                            <button
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleCompleteTask(task.id);
-                                                              }}
-                                                              disabled={!canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) })}
-                                                              title={canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) }) ? undefined : 'You can only complete tasks you created or are assigned to'}
-                                                              className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-foreground/30 disabled:hover:bg-background"
-                                                              aria-label="Mark task complete"
-                                                            >
-                                                              <span className="sr-only">Mark complete</span>
-                                                            </button>
-                                                          </div>
-                                                        )}
-                                                        <h4
-                                                          className="text-sm font-medium leading-tight truncate translate-x-6"
+                                                        </div>
+                                                      ) : (
+                                                        <div
+                                                          className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4"
                                                         >
-                                                          {task.title}
-                                                        </h4>
-                                                      </div>
-                                                      <Badge
-                                                        variant="secondary"
-                                                        className={cn(
-                                                          'text-[10px] px-1.5 py-0 shrink-0',
-                                                          priorityColors[task.priority]
-                                                        )}
+                                                          <button
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              handleCompleteTask(task.id);
+                                                            }}
+                                                            disabled={!canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) })}
+                                                            title={canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) }) ? undefined : 'You can only complete tasks you created or are assigned to'}
+                                                            className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-foreground/30 disabled:hover:bg-background"
+                                                            aria-label="Mark task complete"
+                                                          >
+                                                            <span className="sr-only">Mark complete</span>
+                                                          </button>
+                                                        </div>
+                                                      )}
+                                                      <h4
+                                                        className="text-sm font-medium leading-tight truncate translate-x-6"
                                                       >
-                                                        {task.priority}
-                                                      </Badge>
+                                                        {task.title}
+                                                      </h4>
                                                     </div>
+                                                    <Badge
+                                                      variant="secondary"
+                                                      className={cn(
+                                                        'text-[10px] px-1.5 py-0 shrink-0',
+                                                        priorityColors[task.priority]
+                                                      )}
+                                                    >
+                                                      {task.priority}
+                                                    </Badge>
+                                                  </div>
 
-                                                    {task.description && (
-                                                      <p className="text-xs text-muted-foreground line-clamp-2">
-                                                        {task.description}
-                                                      </p>
-                                                    )}
+                                                  {task.description && (
+                                                    <p className="text-xs text-muted-foreground line-clamp-2">
+                                                      {task.description}
+                                                    </p>
+                                                  )}
 
-                                                    {(() => {
-                                                      const boardChecklistItems = (task.checklist || []).filter(
-                                                        (item) => item.showInBoardView === true
-                                                      );
-                                                      if (boardChecklistItems.length === 0) return null;
+                                                  {(() => {
+                                                    const boardChecklistItems = (task.checklist || []).filter(
+                                                      (item) => item.showInBoardView === true
+                                                    );
+                                                    if (boardChecklistItems.length === 0) return null;
 
-                                                      const isExpanded = expandedChecklistPreview[task.id] === true;
-                                                      const visibleItems = isExpanded
-                                                        ? boardChecklistItems
-                                                        : boardChecklistItems.slice(0, BOARD_CHECKLIST_PREVIEW_COUNT);
-                                                      const hasMore = boardChecklistItems.length > BOARD_CHECKLIST_PREVIEW_COUNT;
+                                                    const isExpanded = expandedChecklistPreview[task.id] === true;
+                                                    const visibleItems = isExpanded
+                                                      ? boardChecklistItems
+                                                      : boardChecklistItems.slice(0, BOARD_CHECKLIST_PREVIEW_COUNT);
+                                                    const hasMore = boardChecklistItems.length > BOARD_CHECKLIST_PREVIEW_COUNT;
 
-                                                      return (
-                                                        <div className="space-y-1.5 pt-1">
-                                                          {visibleItems.map((item) => (
-                                                            <div key={item.id} className="flex items-center gap-2">
-                                                              <Checkbox
-                                                                checked={item.completed}
-                                                                onCheckedChange={(checked) => {
-                                                                  if (checked === 'indeterminate') return;
-                                                                  handleToggleChecklistItemOnCard(task.id, item.id);
-                                                                }}
-                                                                className="h-3.5 w-3.5 rounded-[3px]"
-                                                                onClick={(event) => event.stopPropagation()}
-                                                              />
-                                                              <button
-                                                                type="button"
-                                                                onClick={(event) => {
-                                                                  event.stopPropagation();
-                                                                  handleToggleChecklistItemOnCard(task.id, item.id);
-                                                                }}
-                                                                className={cn(
-                                                                  'min-w-0 flex-1 text-left text-[11px] text-muted-foreground truncate',
-                                                                  item.completed && 'line-through'
-                                                                )}
-                                                              >
-                                                                {item.text}
-                                                              </button>
-                                                            </div>
-                                                          ))}
-                                                          {hasMore && (
+                                                    return (
+                                                      <div className="space-y-1.5 pt-1">
+                                                        {visibleItems.map((item) => (
+                                                          <div key={item.id} className="flex items-center gap-2">
+                                                            <Checkbox
+                                                              checked={item.completed}
+                                                              onCheckedChange={(checked) => {
+                                                                if (checked === 'indeterminate') return;
+                                                                handleToggleChecklistItemOnCard(task.id, item.id);
+                                                              }}
+                                                              className="h-3.5 w-3.5 rounded-[3px]"
+                                                              onClick={(event) => event.stopPropagation()}
+                                                            />
                                                             <button
                                                               type="button"
-                                                              className="text-[11px] text-primary hover:underline"
                                                               onClick={(event) => {
                                                                 event.stopPropagation();
-                                                                setExpandedChecklistPreview((prev) => ({
-                                                                  ...prev,
-                                                                  [task.id]: !isExpanded,
-                                                                }));
+                                                                handleToggleChecklistItemOnCard(task.id, item.id);
                                                               }}
+                                                              className={cn(
+                                                                'min-w-0 flex-1 text-left text-[11px] text-muted-foreground truncate',
+                                                                item.completed && 'line-through'
+                                                              )}
                                                             >
-                                                              {isExpanded ? 'View less' : `View more (${boardChecklistItems.length - BOARD_CHECKLIST_PREVIEW_COUNT})`}
+                                                              {item.text}
                                                             </button>
-                                                          )}
-                                                        </div>
-                                                      );
-                                                    })()}
-
-                                                    <div className="flex items-center justify-between pt-2">
-                                                      <div className="flex -space-x-2">
-                                                        {(task.assignees || []).slice(0, 3).map((assignee) => (
-                                                          <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
-                                                            <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
-                                                            <AvatarFallback className="text-[9px] bg-muted">
-                                                              {assignee.initials}
-                                                            </AvatarFallback>
-                                                          </Avatar>
-                                                        ))}
-                                                        {(task.assignees || []).length > 3 && (
-                                                          <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
-                                                            <span className="text-[8px] text-muted-foreground font-medium">
-                                                              +{task.assignees!.length - 3}
-                                                            </span>
                                                           </div>
+                                                        ))}
+                                                        {hasMore && (
+                                                          <button
+                                                            type="button"
+                                                            className="text-[11px] text-primary hover:underline"
+                                                            onClick={(event) => {
+                                                              event.stopPropagation();
+                                                              setExpandedChecklistPreview((prev) => ({
+                                                                ...prev,
+                                                                [task.id]: !isExpanded,
+                                                              }));
+                                                            }}
+                                                          >
+                                                            {isExpanded ? 'View less' : `View more (${boardChecklistItems.length - BOARD_CHECKLIST_PREVIEW_COUNT})`}
+                                                          </button>
                                                         )}
                                                       </div>
-                                                      {task.dueDate && (
-                                                        <span className="text-[10px] text-muted-foreground">
-                                                          {formatTaskDateRange(task.startDate, task.dueDate)}
-                                                        </span>
+                                                    );
+                                                  })()}
+
+                                                  <div className="flex items-center justify-between pt-2">
+                                                    <div className="flex -space-x-2">
+                                                      {(task.assignees || []).slice(0, 3).map((assignee) => (
+                                                        <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
+                                                          <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
+                                                          <AvatarFallback className="text-[9px] bg-muted">
+                                                            {assignee.initials}
+                                                          </AvatarFallback>
+                                                        </Avatar>
+                                                      ))}
+                                                      {(task.assignees || []).length > 3 && (
+                                                        <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
+                                                          <span className="text-[8px] text-muted-foreground font-medium">
+                                                            +{task.assignees!.length - 3}
+                                                          </span>
+                                                        </div>
                                                       )}
                                                     </div>
-                                                  </div>
-                                                </Card>
-                                              </TooltipTrigger>
-                                              {hasAnyDependencies && (
-                                                <TooltipContent side="right" className="max-w-xs">
-                                                  <div className="space-y-2">
-                                                    {blockingInfo.length > 0 && (
-                                                      <div className="space-y-1">
-                                                        <p className="font-medium text-xs text-red-400">⛔ Blocked by:</p>
-                                                        <ul className="text-xs space-y-0.5">
-                                                          {blockingInfo.map((info, i) => (
-                                                            <li key={i} className="text-muted-foreground">• {info}</li>
-                                                          ))}
-                                                        </ul>
-                                                      </div>
-                                                    )}
-                                                    {blockingToInfo.length > 0 && (
-                                                      <div className="space-y-1">
-                                                        <p className="font-medium text-xs text-amber-400">🔗 Blocking:</p>
-                                                        <ul className="text-xs space-y-0.5">
-                                                          {blockingToInfo.map((info, i) => (
-                                                            <li key={i} className="text-muted-foreground">• {info}</li>
-                                                          ))}
-                                                        </ul>
-                                                      </div>
+                                                    {task.dueDate && (
+                                                      <span className="text-[10px] text-muted-foreground">
+                                                        {formatTaskDateRange(task.startDate, task.dueDate)}
+                                                      </span>
                                                     )}
                                                   </div>
-                                                </TooltipContent>
-                                              )}
-                                            </Tooltip>
-                                          </TooltipProvider>
-                                        )}
-                                      </Draggable>
-                                    );
-                                  })}
-                                  {provided.placeholder}
+                                                </div>
+                                              </Card>
+                                            </TooltipTrigger>
+                                            {hasAnyDependencies && (
+                                              <TooltipContent side="right" className="max-w-xs">
+                                                <div className="space-y-2">
+                                                  {blockingInfo.length > 0 && (
+                                                    <div className="space-y-1">
+                                                      <p className="font-medium text-xs text-red-400">⛔ Blocked by:</p>
+                                                      <ul className="text-xs space-y-0.5">
+                                                        {blockingInfo.map((info, i) => (
+                                                          <li key={i} className="text-muted-foreground">• {info}</li>
+                                                        ))}
+                                                      </ul>
+                                                    </div>
+                                                  )}
+                                                  {blockingToInfo.length > 0 && (
+                                                    <div className="space-y-1">
+                                                      <p className="font-medium text-xs text-amber-400">🔗 Blocking:</p>
+                                                      <ul className="text-xs space-y-0.5">
+                                                        {blockingToInfo.map((info, i) => (
+                                                          <li key={i} className="text-muted-foreground">• {info}</li>
+                                                        ))}
+                                                      </ul>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </TooltipContent>
+                                            )}
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      )}
+                                    </Draggable>
+                                  );
+                                })}
+                                {provided.placeholder}
+                              </div>
+                            )}
+                          </Droppable>
+                        );
+
+                        if (isMobile) {
+                          return (
+                            <div ref={provided.innerRef} {...provided.draggableProps} className="w-full">
+                              <MobileKanbanColumn
+                                label={column.label}
+                                count={columnTasks.length}
+                                countLabel="tasks"
+                                dot={isDependenciesColumn ? (
+                                  <Link2 className="h-4 w-4 text-status-blocked shrink-0" />
+                                ) : (
+                                  <ColumnColorDot color={column.color} />
+                                )}
+                                labelClassName={isDependenciesColumn ? 'text-status-blocked' : undefined}
+                                dragHandleProps={column.isSpecial ? null : provided.dragHandleProps}
+                                isDragging={snapshot.isDragging}
+                              >
+                                <div className="space-y-3">
+                                  {addTaskButton}
+                                  {cardsDroppable}
                                 </div>
-                              )}
-                            </Droppable>
+                              </MobileKanbanColumn>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            className={cn(
+                              'w-[280px] flex-shrink-0 flex flex-col transition-shadow',
+                              'max-h-[calc(100vh-220px)]',
+                              snapshot.isDragging && 'shadow-lg'
+                            )}
+                          >
+                            {/* Column Header - stays at top */}
+                            <div className="flex-shrink-0 bg-background pb-3 space-y-3">
+                              <div className="flex items-center gap-2 px-1">
+                                {!column.isSpecial && (
+                                  <div
+                                    {...provided.dragHandleProps}
+                                    className="cursor-grab active:cursor-grabbing"
+                                  >
+                                    <GripVertical className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                )}
+                                {column.isSpecial && <div {...provided.dragHandleProps} />}
+                                {isDependenciesColumn ? (
+                                  <Link2 className="h-4 w-4 text-status-blocked" />
+                                ) : (
+                                  <ColumnColorDot color={column.color} />
+                                )}
+                                <h3
+                                  title={column.label}
+                                  className={cn(
+                                    'font-medium text-sm truncate',
+                                    isDependenciesColumn && 'text-status-blocked'
+                                  )}>
+                                  {column.label}
+                                </h3>
+                                <span className="text-xs text-muted-foreground">
+                                  {columnTasks.length}
+                                </span>
+                                {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 ml-auto opacity-50 hover:opacity-100"
+                                    onClick={() => handleRemoveColumn(column.id)}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                )}
+                              </div>
+
+                              {/* Add Task Button at Top - not shown for Dependencies */}
+                              {addTaskButton}
+                            </div>
+
+                            {/* Tasks Droppable - scrollable area */}
+                            <div className="flex-1 overflow-y-auto min-h-0">
+                              {cardsDroppable}
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        );
+                      }}
                     </Draggable>
                   );
                 })}
                 {provided.placeholder}
 
                 {/* Add Bucket Button */}
-                <div className="w-[280px] flex-shrink-0">
-                  <div className="sticky top-0 bg-background z-10 pb-3 space-y-3">
-                    <div className="flex items-center gap-2 px-1">
-                      <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
-                      <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
-                    </div>
+                <div className={isMobile ? 'w-full' : 'w-[280px] flex-shrink-0'}>
+                  <div className={isMobile ? 'pb-1' : 'sticky top-0 bg-background z-10 pb-3 space-y-3'}>
+                    {!isMobile && (
+                      <div className="flex items-center gap-2 px-1">
+                        <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                        <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
+                      </div>
+                    )}
                     <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
                       <DialogTrigger asChild>
                         <div className="px-2">

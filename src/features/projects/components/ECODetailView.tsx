@@ -32,7 +32,7 @@ import { useProjectMembers } from '@/hooks/useProjectTeam';
 function SkeletonPipelineCard() {
   return (
     <div
-      className="flex-1 min-w-0 border rounded-lg px-4 py-3.5 animate-pulse"
+      className="shrink-0 basis-[210px] md:basis-0 md:flex-1 min-w-[210px] md:min-w-0 border rounded-lg px-4 py-3.5 animate-pulse"
       style={{ background: 'hsl(var(--muted)/0.3)', borderColor: 'hsl(var(--border))' }}
     >
       <div className="flex items-center justify-between mb-3">
@@ -58,7 +58,7 @@ function SkeletonApprovalPipeline() {
         <div className="h-5 rounded bg-muted w-40 animate-pulse" />
         <div className="h-4 rounded bg-muted w-36 animate-pulse" />
       </div>
-      <div className="flex items-stretch py-4">
+      <div className="flex items-stretch py-4 overflow-x-auto -mx-1 px-1 md:mx-0 md:px-0">
         {[0, 1, 2, 3].map((_, i) => (
           <Fragment key={i}>
             <SkeletonPipelineCard />
@@ -181,15 +181,15 @@ function LifecycleTracker({ status }: { status: ECOStatus }) {
         : null;
 
   return (
-    <div className="bg-card border border-border rounded-lg px-6 py-5 mb-4">
-      <div className="flex items-center justify-between mb-6">
+    <div className="bg-card border border-border rounded-lg px-4 md:px-6 py-4 md:py-5 mb-4">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-1.5">
         <div className="text-[14px] font-semibold text-foreground">Change Lifecycle</div>
         <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
           <Info className="w-3.5 h-3.5 shrink-0" />
           Approval authorizes release · release ≠ start of work
         </div>
       </div>
-      <div className="flex items-start">
+      <div className="flex items-start overflow-x-auto -mx-1 px-1 md:mx-0 md:px-0">
         {LC_NODES.map((n, i) => {
           const done = i < cur;
           const here = i === cur;
@@ -235,7 +235,7 @@ function LifecycleTracker({ status }: { status: ECOStatus }) {
               {/* Connector line between nodes */}
               {i < LC_NODES.length - 1 && (
                 <div
-                  className="h-0.5 rounded flex-1 mt-[22px]"
+                  className="h-0.5 rounded flex-1 min-w-[20px] mt-[22px]"
                   style={{ background: i < cur ? '#16A34A' : 'hsl(var(--border))' }}
                 />
               )}
@@ -280,23 +280,24 @@ function ApprovalPipeline({
   };
 
   return (
-    <div className="bg-card border border-border rounded-lg px-5 py-4 mb-4">
-      <div className="flex items-center justify-between mb-1">
+    <div className="bg-card border border-border rounded-lg px-4 md:px-5 py-4 mb-4">
+      <div className="flex items-center justify-between mb-1 flex-wrap gap-1">
         <div className="text-[14px] font-semibold text-foreground">Approval Pipeline</div>
         <div className="text-[12px] text-muted-foreground">
           {detail.steps.filter(s => s.decision === 'APPROVED').length} of {detail.steps.length} approved · single active approver
         </div>
       </div>
 
-      {/* Steps strip — each card is flex-1 so all 4 share equal width */}
-      <div className="flex items-stretch py-4">
+      {/* Steps strip — each card is flex-1 so all 4 share equal width on desktop;
+          on mobile cards keep a fixed min-width and the strip scrolls horizontally */}
+      <div className="flex items-stretch py-4 overflow-x-auto -mx-1 px-1 md:mx-0 md:px-0">
         {detail.steps.map((s, i) => {
           const { color, Icon } = dotFor(s.decision);
           const active = s.decision === 'ACTIVE';
           return (
             <Fragment key={s.order}>
               <div
-                className="flex-1 min-w-0 border rounded-lg px-4 py-3.5"
+                className="shrink-0 basis-[210px] md:basis-0 md:flex-1 min-w-[210px] md:min-w-0 border rounded-lg px-4 py-3.5"
                 style={{
                   background: active
                     ? 'hsl(var(--primary)/0.06)'
@@ -418,7 +419,7 @@ function ApprovalPipeline({
           {err && (
             <div className="text-[11px] text-red-500 mt-1">A comment is required to reject — the originator needs to know what to revise.</div>
           )}
-          <div className="flex gap-2 mt-2.5">
+          <div className="flex gap-2 mt-2.5 flex-wrap">
             <button
               onClick={() => submit('approve')}
               disabled={isPending}
@@ -809,7 +810,7 @@ function ECNReleaseModal({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6"
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-3 md:p-6"
     >
       <div
         onClick={e => e.stopPropagation()}
@@ -1021,7 +1022,7 @@ function VerifyModal({
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   return (
-    <div onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6">
+    <div onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-3 md:p-6">
       <div onClick={e => e.stopPropagation()} className="w-[480px] max-w-full bg-card border border-border rounded-xl shadow-2xl">
         <div className="px-5 py-4 border-b border-border flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#9333EA22' }}>
@@ -1239,7 +1240,7 @@ export function ECODetailView({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background px-6 py-5 pb-12 h-full">
+    <div className="flex-1 overflow-y-auto bg-background px-4 md:px-6 py-4 md:py-5 pb-12 h-full">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground mb-3">
         {projectName && (
@@ -1286,7 +1287,7 @@ export function ECODetailView({
           </div>
           <p className="text-[13px] text-muted-foreground max-w-3xl leading-relaxed">{detail.desc}</p>
         </div>
-        <div className="flex gap-2 shrink-0">
+        <div className="flex gap-2 flex-wrap shrink-0 w-full sm:w-auto">
           {headerActions(detail.status, detail.originator === user?.name).map(a => {
             const thisLoading = !!actionPending[a.k];
 
@@ -1388,7 +1389,7 @@ export function ECODetailView({
       )}
 
       {/* Two-column content */}
-      <div className="flex gap-4 items-start flex-wrap">
+      <div className="flex gap-3 md:gap-4 items-start flex-wrap">
         <div className="flex-[2] min-w-0 flex flex-col gap-4">
           {isFirstLoad ? (
             <>

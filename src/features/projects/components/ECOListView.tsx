@@ -386,8 +386,8 @@ export function ECOListView({
   return (
     <div className="flex flex-col h-full overflow-hidden text-foreground">
       {/* KPI cards */}
-      <div className="shrink-0 px-6 pt-4 pb-3">
-        <div className="flex gap-3 flex-wrap">
+      <div className="shrink-0 px-4 md:px-6 pt-4 pb-3">
+        <div className="flex gap-2.5 md:gap-3 flex-wrap">
           {statsLoading ? (
             <>
               <SkeletonStatCard /><SkeletonStatCard /><SkeletonStatCard /><SkeletonStatCard />
@@ -404,8 +404,8 @@ export function ECOListView({
       </div>
 
       {/* List + preview */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6">
-        <div className="grid gap-4" style={{ gridTemplateColumns: '1fr 320px', alignItems: 'start' }}>
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-6 pb-6">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-4 items-start">
           {/* Left: list */}
           <div className="bg-card border border-border rounded-lg overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-border gap-3 flex-wrap">
