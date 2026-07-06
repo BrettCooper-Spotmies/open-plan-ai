@@ -181,7 +181,7 @@ export default function MyDay() {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-6 w-full min-w-0">
+      <div className="grid grid-cols-1 w-full min-w-0">
         {/* Stats - always visible once data is ready */}
         <MyDayStats
           attentionCount={needsAttention.length}
