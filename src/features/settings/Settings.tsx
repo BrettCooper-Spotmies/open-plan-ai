@@ -539,11 +539,19 @@ const Settings = () => {
           {/* General Tab */}
           <TabsContent value="general">
             <Card>
-              <CardHeader>
-                <CardTitle>Organization Settings</CardTitle>
-                <CardDescription>
-                  Configure your organization preferences and defaults
-                </CardDescription>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <CardTitle>Organization Settings</CardTitle>
+                  <CardDescription>
+                    Configure your organization preferences and defaults
+                  </CardDescription>
+                </div>
+                {currentOrganization && canEditOrganizationSettings && !isEditingOrg && (
+                  <Button variant="outline" size="sm" onClick={() => setIsEditingOrg(true)} className="shrink-0">
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                )}
               </CardHeader>
               <CardContent className="space-y-6">
                 {!currentOrganization ? (
@@ -600,19 +608,11 @@ const Settings = () => {
                 ) : (
                   /* Existing Workspace Settings (editable inline) */
                   <>
-                    <div className="flex items-start justify-between gap-4">
-                      {!canEditOrganizationSettings ? (
-                        <div className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
-                          You have view-only access. Only organization admins and owners can edit these settings.
-                        </div>
-                      ) : <div />}
-                      {canEditOrganizationSettings && !isEditingOrg && (
-                        <Button variant="outline" size="sm" onClick={() => setIsEditingOrg(true)} className="shrink-0">
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Edit
-                        </Button>
-                      )}
-                    </div>
+                    {!canEditOrganizationSettings && (
+                      <div className="rounded-md border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                        You have view-only access. Only organization admins and owners can edit these settings.
+                      </div>
+                    )}
 
                     {/* Organization Logo */}
                     <div className="space-y-2">
