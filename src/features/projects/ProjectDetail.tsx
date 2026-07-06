@@ -368,6 +368,35 @@ export default function ProjectDetail() {
   const setIssueViewMode = (val: 'table' | 'kanban') => setIssueViewModeStr(val);
   const setMilestoneViewMode = (val: 'list' | 'kanban') => setMilestoneViewModeStr(val);
 
+  // Mobile-only: long-press a section tab to reveal its name below the icon.
+  const [longPressedTab, setLongPressedTab] = useState<string | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+      if (longPressHideTimerRef.current) clearTimeout(longPressHideTimerRef.current);
+    };
+  }, []);
+
+  const handleTabLongPressStart = (value: string) => {
+    if (!isMobile) return;
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      setLongPressedTab(value);
+      if (longPressHideTimerRef.current) clearTimeout(longPressHideTimerRef.current);
+      longPressHideTimerRef.current = setTimeout(() => setLongPressedTab(null), 1500);
+    }, 500);
+  };
+
+  const handleTabLongPressEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
   const [filters, setFilters] = useState<TaskFilter>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [moduleSearchQuery, setModuleSearchQuery] = useState('');
@@ -1067,15 +1096,49 @@ export default function ProjectDetail() {
               {/* Left Side: Tabs */}
               <div className="w-full py-1 md:mr-auto md:w-auto">
                 <TabsList className="bg-muted/50 grid grid-cols-8 w-full h-9 md:w-auto md:flex md:shrink-0">
-                  <TabsTrigger value="bom" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Bill of Materials">
+                  <TabsTrigger
+                    value="bom"
+                    className="relative gap-1 sm:gap-2 px-2 justify-center min-w-0"
+                    title="Bill of Materials"
+                    onTouchStart={() => handleTabLongPressStart('bom')}
+                    onTouchEnd={handleTabLongPressEnd}
+                    onTouchCancel={handleTabLongPressEnd}
+                    onTouchMove={handleTabLongPressEnd}
+                  >
                     <Layers className="h-4 w-4 shrink-0" />
                     {!isMobile && <span className="truncate">BOM</span>}
+                    {isMobile && longPressedTab === 'bom' && (
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-[10px] font-medium text-popover-foreground shadow-md">
+                        BOM
+                      </span>
+                    )}
                   </TabsTrigger>
-                  <TabsTrigger value="eng-changes" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Engineering Changes">
+                  <TabsTrigger
+                    value="eng-changes"
+                    className="relative gap-1 sm:gap-2 px-2 justify-center min-w-0"
+                    title="Engineering Changes"
+                    onTouchStart={() => handleTabLongPressStart('eng-changes')}
+                    onTouchEnd={handleTabLongPressEnd}
+                    onTouchCancel={handleTabLongPressEnd}
+                    onTouchMove={handleTabLongPressEnd}
+                  >
                     <GitMerge className="h-4 w-4 shrink-0" />
                     {!isMobile && <span className="truncate">Eng. Changes</span>}
+                    {isMobile && longPressedTab === 'eng-changes' && (
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-[10px] font-medium text-popover-foreground shadow-md">
+                        Eng. Changes
+                      </span>
+                    )}
                   </TabsTrigger>
-                  <TabsTrigger value="tasks" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Tasks">
+                  <TabsTrigger
+                    value="tasks"
+                    className="relative gap-1 sm:gap-2 px-2 justify-center min-w-0"
+                    title="Tasks"
+                    onTouchStart={() => handleTabLongPressStart('tasks')}
+                    onTouchEnd={handleTabLongPressEnd}
+                    onTouchCancel={handleTabLongPressEnd}
+                    onTouchMove={handleTabLongPressEnd}
+                  >
                     <ListTodo className="h-4 w-4 shrink-0" />
                     {!isMobile && <span className="truncate">Tasks</span>}
                     {!isMobile && (
@@ -1083,8 +1146,21 @@ export default function ProjectDetail() {
                         {(project.tasks || []).length}
                       </Badge>
                     )}
+                    {isMobile && longPressedTab === 'tasks' && (
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-[10px] font-medium text-popover-foreground shadow-md">
+                        Tasks
+                      </span>
+                    )}
                   </TabsTrigger>
-                  <TabsTrigger value="modules" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Modules">
+                  <TabsTrigger
+                    value="modules"
+                    className="relative gap-1 sm:gap-2 px-2 justify-center min-w-0"
+                    title="Modules"
+                    onTouchStart={() => handleTabLongPressStart('modules')}
+                    onTouchEnd={handleTabLongPressEnd}
+                    onTouchCancel={handleTabLongPressEnd}
+                    onTouchMove={handleTabLongPressEnd}
+                  >
                     <Boxes className="h-4 w-4 shrink-0" />
                     {!isMobile && <span className="truncate">Modules</span>}
                     {!isMobile && (
@@ -1092,8 +1168,21 @@ export default function ProjectDetail() {
                         {modules.length}
                       </Badge>
                     )}
+                    {isMobile && longPressedTab === 'modules' && (
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-[10px] font-medium text-popover-foreground shadow-md">
+                        Modules
+                      </span>
+                    )}
                   </TabsTrigger>
-                  <TabsTrigger value="milestones" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Milestones">
+                  <TabsTrigger
+                    value="milestones"
+                    className="relative gap-1 sm:gap-2 px-2 justify-center min-w-0"
+                    title="Milestones"
+                    onTouchStart={() => handleTabLongPressStart('milestones')}
+                    onTouchEnd={handleTabLongPressEnd}
+                    onTouchCancel={handleTabLongPressEnd}
+                    onTouchMove={handleTabLongPressEnd}
+                  >
                     <Flag className="h-4 w-4 shrink-0" />
                     {!isMobile && <span className="truncate">Milestones</span>}
                     {!isMobile && (
@@ -1101,14 +1190,32 @@ export default function ProjectDetail() {
                         {(project.milestones || []).length}
                       </Badge>
                     )}
+                    {isMobile && longPressedTab === 'milestones' && (
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-[10px] font-medium text-popover-foreground shadow-md">
+                        Milestones
+                      </span>
+                    )}
                   </TabsTrigger>
-                  <TabsTrigger value="issues" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Issues">
+                  <TabsTrigger
+                    value="issues"
+                    className="relative gap-1 sm:gap-2 px-2 justify-center min-w-0"
+                    title="Issues"
+                    onTouchStart={() => handleTabLongPressStart('issues')}
+                    onTouchEnd={handleTabLongPressEnd}
+                    onTouchCancel={handleTabLongPressEnd}
+                    onTouchMove={handleTabLongPressEnd}
+                  >
                     <AlertTriangle className="h-4 w-4 shrink-0" />
                     {!isMobile && <span className="truncate">Issues</span>}
                     {!isMobile && openIssuesCount > 0 && (
                       <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
                         {openIssuesCount}
                       </Badge>
+                    )}
+                    {isMobile && longPressedTab === 'issues' && (
+                      <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-[10px] font-medium text-popover-foreground shadow-md">
+                        Issues
+                      </span>
                     )}
                   </TabsTrigger>
                   {/* <TabsTrigger value="requirements" className="gap-1 sm:gap-2 px-2 justify-center min-w-0 overflow-hidden" title="Requirements">

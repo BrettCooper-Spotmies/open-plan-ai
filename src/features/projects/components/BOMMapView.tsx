@@ -355,7 +355,7 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
           if (cr) setPan({ x: cr.width / 2 - cx * zoom, y: cr.height / 2 - cy * zoom });
         }}
         title="Click to jump to area"
-        className="absolute bottom-3.5 right-4 bg-card border border-border rounded-lg overflow-hidden cursor-pointer z-50"
+        className="hidden md:block absolute bottom-3.5 right-4 bg-card border border-border rounded-lg overflow-hidden cursor-pointer z-50"
         style={{ width: MM_W, height: MM_H }}
       >
         {/* Grid (anchored to canvas origin, same as main canvas) */}
