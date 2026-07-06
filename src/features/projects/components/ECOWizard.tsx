@@ -1015,83 +1015,98 @@ export function ECOWizard({
         </button>
       </div>
       {diffRows.length > 0 && (
-        <div className="flex gap-2 text-[10px] text-muted-foreground uppercase tracking-wider">
-          <div className="flex-[1.2]">Parameter</div>
-          <div className="flex-1">From</div>
-          <div className="flex-1">To</div>
-          <div className="w-32">Class</div>
-          <div className="w-5" />
+        <div className="flex flex-col gap-1 sm:flex-row sm:gap-2 text-[10px] text-muted-foreground uppercase tracking-wider">
+          <div className="flex gap-2 sm:contents">
+            <div className="flex-1 sm:flex-[1.2]">Parameter</div>
+            <div className="flex-1">From</div>
+          </div>
+          <div className="hidden sm:contents">
+            <div className="flex-1">To</div>
+            <div className="w-32">Class</div>
+            <div className="w-5" />
+          </div>
         </div>
       )}
-      {diffRows.map((r, idx) => (
-        <div key={idx} className="flex gap-2 items-center">
-          {basics.scope === 'BOM_PART' && items.length > 0 ? (
-            r.paramIsCustom ? (
-              <input
-                autoFocus
-                value={r.param}
-                onChange={e => setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: e.target.value } : x))}
-                onKeyDown={e => {
-                  if (e.key === 'Escape') setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: false } : x));
-                }}
-                placeholder="Type parameter name…"
-                className={cn(inputCls, 'flex-[1.2]')}
-              />
-            ) : (() => {
-              const usedParams = new Set(diffRows.filter((_, i) => i !== idx).map(x => x.param).filter(Boolean));
-              return (
-                <ParamCombobox
-                  value={r.param}
-                  usedParams={usedParams}
-                  firstSelectedNode={firstSelectedNode}
-                  onChange={(label, autoFrom) => {
-                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: label, from: autoFrom, paramIsCustom: false } : x));
-                  }}
-                  onSelectOther={() => {
-                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: true } : x));
-                  }}
-                />
-              );
-            })()
-          ) : (
-            <input value={r.param} onChange={e => upRow(idx, 'param', e.target.value)} placeholder="Parameter" className={cn(inputCls, 'flex-[1.2]')} />
-          )}
-          {(() => {
-            const paramKey = BOM_PARAM_OPTIONS.find(o => o.label === r.param)?.key;
-            const knownOptions = paramKey === 'uom'
-              ? { options: UOM_OPTIONS as readonly string[], labels: UOM_LABELS }
-              : paramKey === 'cat'
-                ? { options: KNOWN_BOM_CATEGORIES as readonly string[], labels: CATEGORY_LABELS }
-                : null;
-
-            if (knownOptions) {
-              return (
-                <>
-                  <div className="flex-1">
-                    <EcoSelectWithCustom value={r.from} onChange={v => upRow(idx, 'from', v)} options={[...knownOptions.options]} labels={knownOptions.labels} />
-                  </div>
-                  <div className="flex-1">
-                    <EcoSelectWithCustom value={r.to} onChange={v => upRow(idx, 'to', v)} options={[...knownOptions.options]} labels={knownOptions.labels} />
-                  </div>
-                </>
-              );
-            }
-
+      {diffRows.map((r, idx) => {
+        const paramField = basics.scope === 'BOM_PART' && items.length > 0 ? (
+          r.paramIsCustom ? (
+            <input
+              autoFocus
+              value={r.param}
+              onChange={e => setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: e.target.value } : x))}
+              onKeyDown={e => {
+                if (e.key === 'Escape') setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: false } : x));
+              }}
+              placeholder="Type parameter name…"
+              className={cn(inputCls, 'flex-[1.2]')}
+            />
+          ) : (() => {
+            const usedParams = new Set(diffRows.filter((_, i) => i !== idx).map(x => x.param).filter(Boolean));
             return (
-              <>
-                <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
-                <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
-              </>
+              <ParamCombobox
+                value={r.param}
+                usedParams={usedParams}
+                firstSelectedNode={firstSelectedNode}
+                onChange={(label, autoFrom) => {
+                  setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: label, from: autoFrom, paramIsCustom: false } : x));
+                }}
+                onSelectOther={() => {
+                  setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: true } : x));
+                }}
+              />
             );
-          })()}
-          <div className="w-32">
-            <EcoSelect value={r.cls} onChange={v => upRow(idx, 'cls', v)} options={Object.keys(CHANGE_LABEL_MAP) as ChangeLabel[]} labels={CHANGE_LABEL_MAP} />
+          })()
+        ) : (
+          <input value={r.param} onChange={e => upRow(idx, 'param', e.target.value)} placeholder="Parameter" className={cn(inputCls, 'flex-[1.2]')} />
+        );
+
+        const paramKey = BOM_PARAM_OPTIONS.find(o => o.label === r.param)?.key;
+        const knownOptions = paramKey === 'uom'
+          ? { options: UOM_OPTIONS as readonly string[], labels: UOM_LABELS }
+          : paramKey === 'cat'
+            ? { options: KNOWN_BOM_CATEGORIES as readonly string[], labels: CATEGORY_LABELS }
+            : null;
+
+        const fromField = knownOptions ? (
+          <div className="flex-1">
+            <EcoSelectWithCustom value={r.from} onChange={v => upRow(idx, 'from', v)} options={[...knownOptions.options]} labels={knownOptions.labels} />
           </div>
-          <button onClick={() => setDiffRows(d => d.filter((_, i) => i !== idx))} className="w-5 text-muted-foreground hover:text-foreground transition-colors shrink-0">
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      ))}
+        ) : (
+          <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+        );
+
+        const toField = knownOptions ? (
+          <div className="flex-1">
+            <EcoSelectWithCustom value={r.to} onChange={v => upRow(idx, 'to', v)} options={[...knownOptions.options]} labels={knownOptions.labels} />
+          </div>
+        ) : (
+          <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+        );
+
+        return (
+          <div key={idx} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex gap-2 sm:contents">
+              {paramField}
+              {fromField}
+            </div>
+            <div className="flex flex-col gap-1 sm:contents">
+              <div className="flex gap-2 sm:hidden text-[10px] text-muted-foreground uppercase tracking-wider">
+                <div className="flex-1">To</div>
+                <div className="flex-1">Class</div>
+              </div>
+              <div className="flex gap-2 items-center sm:contents">
+                {toField}
+                <div className="w-32">
+                  <EcoSelect value={r.cls} onChange={v => upRow(idx, 'cls', v)} options={Object.keys(CHANGE_LABEL_MAP) as ChangeLabel[]} labels={CHANGE_LABEL_MAP} />
+                </div>
+                <button onClick={() => setDiffRows(d => d.filter((_, i) => i !== idx))} className="w-5 text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
       {errors.details && (
         <p className="text-[11px] text-destructive flex items-center gap-1 -mt-1">
           <AlertCircle className="w-3 h-3 shrink-0" />{errors.details}
