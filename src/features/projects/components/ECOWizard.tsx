@@ -1144,7 +1144,7 @@ export function ECOWizard({
         >
           <Upload className="w-5 h-5" style={{ color: dragOver ? 'hsl(var(--primary))' : undefined }} />
           <div className="text-[12px] text-muted-foreground text-center">
-            <span className="text-primary font-semibold">Click to upload</span> or drag &amp; drop
+            <span className="text-primary font-semibold">Click to upload</span>
           </div>
           <div className="text-[10px] text-muted-foreground">Drawings, CAD (STEP/SLDPRT), PDFs, test reports, photos</div>
         </div>
