@@ -75,7 +75,7 @@ import { useCurrency } from '@/hooks/useCurrency';
 // ── Skeletons ──────────────────────────────────────────────────────
 function StatCardSkeleton() {
   return (
-    <div className="bg-card rounded-lg p-2.5 flex-1 min-w-0 border border-border flex items-center gap-2.5">
+    <div className="bg-card rounded-lg p-2.5 flex-1 min-w-[140px] border border-border flex items-center gap-2.5">
       <Skeleton className="w-8 h-8 rounded-lg shrink-0" />
       <div className="min-w-0 flex-1">
         <Skeleton className="h-4 w-10 mb-1.5" />
@@ -147,7 +147,7 @@ function BOMViewSkeleton() {
   return (
     <div className="flex flex-col h-full px-6 overflow-hidden bg-background" style={{ height: 'calc(100vh - 140px)' }}>
       <div className="shrink-0 py-4">
-        <div className="flex gap-3 mb-4">
+        <div className="flex gap-2.5 md:gap-3 flex-wrap mb-4">
           {[0, 1, 2, 3].map(i => <StatCardSkeleton key={i} />)}
         </div>
         <div className="flex items-center gap-2.5 pb-0">
@@ -186,7 +186,7 @@ function StatCard({ label, value, icon: Icon, iconColor, accent }: {
   iconColor: string; accent?: boolean;
 }) {
   return (
-    <div className={cn('bg-card rounded-lg px-3.5 py-2.5 flex-1 min-w-0 border flex items-center gap-2.5', accent ? 'border-primary/25' : 'border-border')}>
+    <div className={cn('bg-card rounded-lg px-3.5 py-2.5 flex-1 min-w-[140px] border flex items-center gap-2.5', accent ? 'border-primary/25' : 'border-border')}>
       <span
         className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
         style={{ backgroundColor: softTint(iconColor, 0.12) }}
@@ -1168,7 +1168,7 @@ export function BOMView({
       {/* ── Fixed header zone (no scroll) ─────────────────────────── */}
       <div className="shrink-0 py-4">
         {/* Stat cards */}
-        <div className="flex gap-3 mb-4">
+        <div className="flex gap-2.5 md:gap-3 flex-wrap mb-4">
           <StatCard label="Total Parts" value={String(totalCount)} icon={Layers} iconColor="#2563EB" accent />
           <StatCard label="Approved" value={String(approvedCount)} icon={CheckCircle} iconColor="#16A34A" />
           <StatCard label="Pending Review" value={String(pendingCount)} icon={Clock} iconColor="#D97706" />
