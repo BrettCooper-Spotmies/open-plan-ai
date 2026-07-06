@@ -321,6 +321,13 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     return blockedTasks;
   };
 
+  const dependencyColumnTaskCount = tasks.filter((t) => t.status === 'blocked').length;
+
+  // Hide the Dependencies bucket entirely until it has blocked tasks
+  const visibleColumns = columns.filter(
+    (column) => !(column.isSpecial && column.status === 'blocked' && dependencyColumnTaskCount === 0),
+  );
+
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
     setIsTaskModalOpen(true);
@@ -385,9 +392,20 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
 
     // Dragging columns
     if (type === 'COLUMN') {
+      // source/destination indices refer to positions within visibleColumns (the
+      // Dependencies bucket may be hidden), so translate them back into `columns`.
+      const draggedColumn = visibleColumns[source.index];
+      if (!draggedColumn) return;
+      const sourceIndex = columns.findIndex((c) => c.id === draggedColumn.id);
+      if (sourceIndex === -1) return;
+      let destIndex = destination.index >= visibleColumns.length
+        ? columns.length
+        : columns.findIndex((c) => c.id === visibleColumns[destination.index].id);
+
       const newColumns = Array.from(columns);
-      const [removed] = newColumns.splice(source.index, 1);
-      newColumns.splice(destination.index, 0, removed);
+      const [removed] = newColumns.splice(sourceIndex, 1);
+      if (destIndex > sourceIndex) destIndex -= 1;
+      newColumns.splice(destIndex, 0, removed);
       reorderColumns(newColumns);
       return;
     }
@@ -583,13 +601,9 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                   width: 'max-content',
                 }}
               >
-                {columns.map((column, index) => {
+                {visibleColumns.map((column, index) => {
                   const columnTasks = getColumnTasks(column);
                   const isDependenciesColumn = column.isSpecial && column.status === 'blocked';
-
-                  if (isDependenciesColumn && columnTasks.length === 0) {
-                    return null;
-                  }
 
                   return (
                     <Draggable

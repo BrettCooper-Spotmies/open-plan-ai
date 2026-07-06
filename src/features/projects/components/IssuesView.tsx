@@ -370,6 +370,13 @@ export function IssuesView({
       && issue.status !== 'wont-fix';
   };
 
+  const dependencyIssuesCount = sortedIssues.filter(isDependencyIssue).length;
+
+  // Hide the Dependencies bucket entirely until it has linked issues
+  const visibleColumns = columns.filter(
+    (column) => !(column.isSpecial && column.status === 'dependencies' && dependencyIssuesCount === 0),
+  );
+
   const handleDragEnd = (result: DropResult) => {
     const { destination, source, type, draggableId } = result;
     if (!destination) return;
@@ -379,9 +386,20 @@ export function IssuesView({
     }
 
     if (type === 'COLUMN') {
+      // source/destination indices refer to positions within visibleColumns (the
+      // Dependencies bucket may be hidden), so translate them back into `columns`.
+      const draggedColumn = visibleColumns[source.index];
+      if (!draggedColumn) return;
+      const sourceIndex = columns.findIndex((c) => c.id === draggedColumn.id);
+      if (sourceIndex === -1) return;
+      let destIndex = destination.index >= visibleColumns.length
+        ? columns.length
+        : columns.findIndex((c) => c.id === visibleColumns[destination.index].id);
+
       const newColumns = Array.from(columns);
-      const [removed] = newColumns.splice(source.index, 1);
-      newColumns.splice(destination.index, 0, removed);
+      const [removed] = newColumns.splice(sourceIndex, 1);
+      if (destIndex > sourceIndex) destIndex -= 1;
+      newColumns.splice(destIndex, 0, removed);
       setColumns(newColumns);
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const persistableIds = newColumns.filter(col => UUID_RE.test(col.id)).map(col => col.id);
@@ -432,13 +450,9 @@ export function IssuesView({
             {(provided) => (
               <div ref={provided.innerRef} {...provided.droppableProps} className="w-full overflow-x-auto pb-4">
                 <div className="inline-flex gap-4 min-w-full" style={{ width: 'max-content' }}>
-                  {columns.map((column, index) => {
+                  {visibleColumns.map((column, index) => {
                     const columnIssues = getColumnIssues(column);
                     const isDependenciesColumn = column.isSpecial && column.status === 'dependencies';
-
-                    if (isDependenciesColumn && columnIssues.length === 0) {
-                      return null;
-                    }
 
                     return (
                       <Draggable

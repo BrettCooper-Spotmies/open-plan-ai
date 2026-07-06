@@ -47,6 +47,8 @@ export const issuesService = {
     if (assigneeIds.length > 0) payload.assigneeIds = assigneeIds;
     const blocksTaskIds = (issue.blocksTaskIds || []).filter(Boolean);
     if (blocksTaskIds.length > 0) payload.blocksTaskIds = blocksTaskIds;
+    const blockedByTaskIds = (issue.blockedBy || []).filter(Boolean);
+    if (blockedByTaskIds.length > 0) payload.blockedByTaskIds = blockedByTaskIds;
     if (issue.tags && issue.tags.length > 0) payload.tags = issue.tags;
     if (issue.checklist && issue.checklist.length > 0) payload.checklist = issue.checklist;
     if (issue.descriptionBlocks && issue.descriptionBlocks.length > 0) payload.descriptionBlocks = issue.descriptionBlocks;
@@ -89,6 +91,10 @@ export const issuesService = {
 
     if (u.blocksTaskIds !== undefined) {
       payload.blocksTaskIds = u.blocksTaskIds;
+    }
+
+    if (u.blockedBy !== undefined) {
+      payload.blockedByTaskIds = u.blockedBy;
     }
 
     if (u.checklist !== undefined) {
