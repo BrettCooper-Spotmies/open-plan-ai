@@ -121,7 +121,8 @@ export function MyDayListView({
             <TableHead>Status</TableHead>
             <TableHead>Priority</TableHead>
             <TableHead>Module</TableHead>
-            <TableHead>Assignee</TableHead>
+            <TableHead>Project</TableHead>
+            <TableHead>Assigned By</TableHead>
             <TableHead>Due Date</TableHead>
           </TableRow>
         </TableHeader>
@@ -191,22 +192,31 @@ export function MyDayListView({
                 <span className="text-sm capitalize">{task.itemType === 'task' && task.originalTask?.module ? task.originalTask.module : '-'}</span>
               </TableCell>
               <TableCell>
-                {task.assignees && task.assignees.length > 0 ? (
-                  <div className="flex items-center gap-2">
-                    <Avatar className="h-6 w-6">
-                      <AvatarImage src={resolveFileUrl(task.assignees[0].avatar) ?? task.assignees[0].avatar} alt={task.assignees[0].name} />
-                      <AvatarFallback className="text-[10px]">
-                        {task.assignees[0].initials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm">
-                      {task.assignees[0].name}
-                      {task.assignees.length > 1 && ` +${task.assignees.length - 1}`}
-                    </span>
-                  </div>
+                {task.projectName ? (
+                  <Badge variant="outline" className="text-xs">
+                    {task.projectName}
+                  </Badge>
                 ) : (
-                  <span className="text-muted-foreground text-sm">Unassigned</span>
+                  <span className="text-muted-foreground text-sm">—</span>
                 )}
+              </TableCell>
+              <TableCell>
+                {(() => {
+                  const assignedBy = task.itemType === 'task' ? task.originalTask?.createdBy : task.originalIssue?.reportedBy;
+                  return assignedBy ? (
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage src={resolveFileUrl(assignedBy.avatar) ?? assignedBy.avatar} alt={assignedBy.name} />
+                        <AvatarFallback className="text-[10px]">
+                          {assignedBy.initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{assignedBy.name}</span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  );
+                })()}
               </TableCell>
               <TableCell>
                 {task.dueDate ? (
