@@ -38,6 +38,7 @@ import { resolveFileUrl } from '@/utils/fileUrl';
 import { TaskDetailModal } from './TaskDetailModal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileKanbanColumn } from '@/components/shared/MobileKanbanColumn';
+import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import {
   useProjectTaskColumns,
   useCreateTaskColumn,
@@ -114,6 +115,7 @@ interface KanbanViewProps {
   onTaskUpdate?: (task: Task, onError?: () => void) => void;
   onBatchTaskUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => void;
   onTaskDelete?: (taskId: string) => void;
+  userProjectRole?: string;
   modules?: { id: string; name: string; type: ModuleType }[];
   projectId?: string;
   onAddModule?: () => void;
@@ -164,12 +166,14 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   onTaskUpdate,
   onBatchTaskUpdate,
   onTaskDelete,
+  userProjectRole,
   modules = [],
   projectId,
   onAddModule,
 }: KanbanViewProps) {
   const isMobile = useIsMobile();
   const [columns, setColumns] = useState<KanbanColumn[]>(defaultColumns);
+  const { canEditResource } = useProjectPermissions(projectId);
   const { data: persistedColumns } = useProjectTaskColumns(projectId);
   const createTaskColumn = useCreateTaskColumn(projectId);
   const deleteTaskColumn = useDeleteTaskColumn(projectId);
@@ -268,7 +272,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       if (task.linkedIssueIds && task.linkedIssueIds.length > 0) {
         const hasBlockingIssue = task.linkedIssueIds.some(issueId => {
           const issue = issues.find(i => i.id === issueId);
-          return issue && issue.status !== 'resolved' && issue.status !== 'closed';
+          return issue && issue.status !== 'resolved';
         });
         if (hasBlockingIssue) {
           blocked.add(task.id);
@@ -296,7 +300,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
     if (task.linkedIssueIds) {
       task.linkedIssueIds.forEach(issueId => {
         const issue = issues.find(i => i.id === issueId);
-        if (issue && issue.status !== 'resolved' && issue.status !== 'closed') {
+        if (issue && issue.status !== 'resolved') {
           blockers.push(`${issue.title} (Issue)`);
         }
       });
@@ -427,6 +431,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   const handleCompleteTask = (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
+    if (!canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) })) return;
 
     const prevTasks = [...tasks];
     const updatedTask = { ...task, status: 'done' as TaskStatus };
@@ -630,221 +635,223 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                 )}
                               >
                                 {columnTasks.map((task, taskIndex) => {
-                                    const isBlocked = blockedTaskIds.has(task.id);
-                                    const blockingInfo = getBlockingInfo(task);
-                                    const blockingToInfo = getBlockingToInfo(task);
-                                    const hasAnyDependencies = blockingInfo.length > 0 || blockingToInfo.length > 0;
-                                    const isBlockingOthers = blockingToInfo.length > 0;
+                                  const isBlocked = blockedTaskIds.has(task.id);
+                                  const blockingInfo = getBlockingInfo(task);
+                                  const blockingToInfo = getBlockingToInfo(task);
+                                  const hasAnyDependencies = blockingInfo.length > 0 || blockingToInfo.length > 0;
+                                  const isBlockingOthers = blockingToInfo.length > 0;
 
-                                    return (
-                                      <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
-                                        {(provided, snapshot) => (
-                                          <TooltipProvider>
-                                            <Tooltip>
-                                              <TooltipTrigger asChild>
-                                                <Card
-                                                  ref={provided.innerRef}
-                                                  {...provided.draggableProps}
-                                                  {...provided.dragHandleProps}
-                                                  className={cn(
-                                                    'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
-                                                    isDependenciesColumn
-                                                      ? 'border-l-red-500'
-                                                      : (moduleColors[task.module] || 'border-l-muted'),
-                                                    snapshot.isDragging && 'shadow-lg rotate-2'
-                                                  )}
-                                                  onClick={() => handleTaskClick(task)}
-                                                >
+                                  return (
+                                    <Draggable key={task.id} draggableId={task.id} index={taskIndex}>
+                                      {(provided, snapshot) => (
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <Card
+                                                ref={provided.innerRef}
+                                                {...provided.draggableProps}
+                                                {...provided.dragHandleProps}
+                                                className={cn(
+                                                  'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
+                                                  isDependenciesColumn
+                                                    ? 'border-l-red-500'
+                                                    : (moduleColors[task.module] || 'border-l-muted'),
+                                                  snapshot.isDragging && 'shadow-lg rotate-2'
+                                                )}
+                                                onClick={() => handleTaskClick(task)}
+                                              >
 
 
-                                                  <div className="space-y-2">
-                                                    <div className="flex items-start justify-between gap-2">
-                                                      <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
-                                                        {isDependenciesColumn ? (
-                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
-                                                            <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
-                                                              <Link2 className="h-3 w-3 text-status-blocked" />
-                                                            </div>
+                                                <div className="space-y-2">
+                                                  <div className="flex items-start justify-between gap-2">
+                                                    <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
+                                                      {isDependenciesColumn ? (
+                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                          <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
+                                                            <Link2 className="h-3 w-3 text-status-blocked" />
                                                           </div>
-                                                        ) : isBlocked ? (
-                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
-                                                            <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
-                                                              <Link2 className="h-3 w-3 text-status-blocked" />
-                                                            </div>
+                                                        </div>
+                                                      ) : isBlocked ? (
+                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                          <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
+                                                            <Link2 className="h-3 w-3 text-status-blocked" />
                                                           </div>
-                                                        ) : isBlockingOthers ? (
-                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
-                                                            <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
-                                                              <Link2 className="h-3 w-3 text-status-blocked" />
-                                                            </div>
+                                                        </div>
+                                                      ) : isBlockingOthers ? (
+                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                          <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
+                                                            <Link2 className="h-3 w-3 text-status-blocked" />
                                                           </div>
-                                                        ) : task.status === 'done' ? (
-                                                          <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
-                                                            <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
-                                                              <Check className="h-3 w-3 text-green-500" />
-                                                            </div>
+                                                        </div>
+                                                      ) : task.status === 'done' ? (
+                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                          <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
+                                                            <Check className="h-3 w-3 text-green-500" />
                                                           </div>
-                                                        ) : (
-                                                          <div
-                                                            className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4"
-                                                          >
-                                                            <button
-                                                              onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleCompleteTask(task.id);
-                                                              }}
-                                                              className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background"
-                                                              aria-label="Mark task complete"
-                                                            >
-                                                              <span className="sr-only">Mark complete</span>
-                                                            </button>
-                                                          </div>
-                                                        )}
-                                                        <h4
-                                                          className="text-sm font-medium leading-tight truncate translate-x-6"
+                                                        </div>
+                                                      ) : (
+                                                        <div
+                                                          className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4"
                                                         >
-                                                          {task.title}
-                                                        </h4>
-                                                      </div>
-                                                      <Badge
-                                                        variant="secondary"
-                                                        className={cn(
-                                                          'text-[10px] px-1.5 py-0 shrink-0',
-                                                          priorityColors[task.priority]
-                                                        )}
+                                                          <button
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              handleCompleteTask(task.id);
+                                                            }}
+                                                            disabled={!canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) })}
+                                                            title={canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) }) ? undefined : 'You can only complete tasks you created or are assigned to'}
+                                                            className="h-4 w-4 rounded-full border border-foreground/30 flex items-center justify-center hover:border-foreground hover:bg-muted transition-all bg-background disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:border-foreground/30 disabled:hover:bg-background"
+                                                            aria-label="Mark task complete"
+                                                          >
+                                                            <span className="sr-only">Mark complete</span>
+                                                          </button>
+                                                        </div>
+                                                      )}
+                                                      <h4
+                                                        className="text-sm font-medium leading-tight truncate translate-x-6"
                                                       >
-                                                        {task.priority}
-                                                      </Badge>
+                                                        {task.title}
+                                                      </h4>
                                                     </div>
+                                                    <Badge
+                                                      variant="secondary"
+                                                      className={cn(
+                                                        'text-[10px] px-1.5 py-0 shrink-0',
+                                                        priorityColors[task.priority]
+                                                      )}
+                                                    >
+                                                      {task.priority}
+                                                    </Badge>
+                                                  </div>
 
-                                                    {task.description && (
-                                                      <p className="text-xs text-muted-foreground line-clamp-2">
-                                                        {task.description}
-                                                      </p>
-                                                    )}
+                                                  {task.description && (
+                                                    <p className="text-xs text-muted-foreground line-clamp-2">
+                                                      {task.description}
+                                                    </p>
+                                                  )}
 
-                                                    {(() => {
-                                                      const boardChecklistItems = (task.checklist || []).filter(
-                                                        (item) => item.showInBoardView === true
-                                                      );
-                                                      if (boardChecklistItems.length === 0) return null;
+                                                  {(() => {
+                                                    const boardChecklistItems = (task.checklist || []).filter(
+                                                      (item) => item.showInBoardView === true
+                                                    );
+                                                    if (boardChecklistItems.length === 0) return null;
 
-                                                      const isExpanded = expandedChecklistPreview[task.id] === true;
-                                                      const visibleItems = isExpanded
-                                                        ? boardChecklistItems
-                                                        : boardChecklistItems.slice(0, BOARD_CHECKLIST_PREVIEW_COUNT);
-                                                      const hasMore = boardChecklistItems.length > BOARD_CHECKLIST_PREVIEW_COUNT;
+                                                    const isExpanded = expandedChecklistPreview[task.id] === true;
+                                                    const visibleItems = isExpanded
+                                                      ? boardChecklistItems
+                                                      : boardChecklistItems.slice(0, BOARD_CHECKLIST_PREVIEW_COUNT);
+                                                    const hasMore = boardChecklistItems.length > BOARD_CHECKLIST_PREVIEW_COUNT;
 
-                                                      return (
-                                                        <div className="space-y-1.5 pt-1">
-                                                          {visibleItems.map((item) => (
-                                                            <div key={item.id} className="flex items-center gap-2">
-                                                              <Checkbox
-                                                                checked={item.completed}
-                                                                onCheckedChange={(checked) => {
-                                                                  if (checked === 'indeterminate') return;
-                                                                  handleToggleChecklistItemOnCard(task.id, item.id);
-                                                                }}
-                                                                className="h-3.5 w-3.5 rounded-[3px]"
-                                                                onClick={(event) => event.stopPropagation()}
-                                                              />
-                                                              <button
-                                                                type="button"
-                                                                onClick={(event) => {
-                                                                  event.stopPropagation();
-                                                                  handleToggleChecklistItemOnCard(task.id, item.id);
-                                                                }}
-                                                                className={cn(
-                                                                  'min-w-0 flex-1 text-left text-[11px] text-muted-foreground truncate',
-                                                                  item.completed && 'line-through'
-                                                                )}
-                                                              >
-                                                                {item.text}
-                                                              </button>
-                                                            </div>
-                                                          ))}
-                                                          {hasMore && (
+                                                    return (
+                                                      <div className="space-y-1.5 pt-1">
+                                                        {visibleItems.map((item) => (
+                                                          <div key={item.id} className="flex items-center gap-2">
+                                                            <Checkbox
+                                                              checked={item.completed}
+                                                              onCheckedChange={(checked) => {
+                                                                if (checked === 'indeterminate') return;
+                                                                handleToggleChecklistItemOnCard(task.id, item.id);
+                                                              }}
+                                                              className="h-3.5 w-3.5 rounded-[3px]"
+                                                              onClick={(event) => event.stopPropagation()}
+                                                            />
                                                             <button
                                                               type="button"
-                                                              className="text-[11px] text-primary hover:underline"
                                                               onClick={(event) => {
                                                                 event.stopPropagation();
-                                                                setExpandedChecklistPreview((prev) => ({
-                                                                  ...prev,
-                                                                  [task.id]: !isExpanded,
-                                                                }));
+                                                                handleToggleChecklistItemOnCard(task.id, item.id);
                                                               }}
+                                                              className={cn(
+                                                                'min-w-0 flex-1 text-left text-[11px] text-muted-foreground truncate',
+                                                                item.completed && 'line-through'
+                                                              )}
                                                             >
-                                                              {isExpanded ? 'View less' : `View more (${boardChecklistItems.length - BOARD_CHECKLIST_PREVIEW_COUNT})`}
+                                                              {item.text}
                                                             </button>
-                                                          )}
-                                                        </div>
-                                                      );
-                                                    })()}
-
-                                                    <div className="flex items-center justify-between pt-2">
-                                                      <div className="flex -space-x-2">
-                                                        {(task.assignees || []).slice(0, 3).map((assignee) => (
-                                                          <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
-                                                            <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
-                                                            <AvatarFallback className="text-[9px] bg-muted">
-                                                              {assignee.initials}
-                                                            </AvatarFallback>
-                                                          </Avatar>
-                                                        ))}
-                                                        {(task.assignees || []).length > 3 && (
-                                                          <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
-                                                            <span className="text-[8px] text-muted-foreground font-medium">
-                                                              +{task.assignees!.length - 3}
-                                                            </span>
                                                           </div>
+                                                        ))}
+                                                        {hasMore && (
+                                                          <button
+                                                            type="button"
+                                                            className="text-[11px] text-primary hover:underline"
+                                                            onClick={(event) => {
+                                                              event.stopPropagation();
+                                                              setExpandedChecklistPreview((prev) => ({
+                                                                ...prev,
+                                                                [task.id]: !isExpanded,
+                                                              }));
+                                                            }}
+                                                          >
+                                                            {isExpanded ? 'View less' : `View more (${boardChecklistItems.length - BOARD_CHECKLIST_PREVIEW_COUNT})`}
+                                                          </button>
                                                         )}
                                                       </div>
-                                                      {task.dueDate && (
-                                                        <span className="text-[10px] text-muted-foreground">
-                                                          {formatTaskDateRange(task.startDate, task.dueDate)}
-                                                        </span>
+                                                    );
+                                                  })()}
+
+                                                  <div className="flex items-center justify-between pt-2">
+                                                    <div className="flex -space-x-2">
+                                                      {(task.assignees || []).slice(0, 3).map((assignee) => (
+                                                        <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
+                                                          <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
+                                                          <AvatarFallback className="text-[9px] bg-muted">
+                                                            {assignee.initials}
+                                                          </AvatarFallback>
+                                                        </Avatar>
+                                                      ))}
+                                                      {(task.assignees || []).length > 3 && (
+                                                        <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
+                                                          <span className="text-[8px] text-muted-foreground font-medium">
+                                                            +{task.assignees!.length - 3}
+                                                          </span>
+                                                        </div>
                                                       )}
                                                     </div>
-                                                  </div>
-                                                </Card>
-                                              </TooltipTrigger>
-                                              {hasAnyDependencies && (
-                                                <TooltipContent side="right" className="max-w-xs">
-                                                  <div className="space-y-2">
-                                                    {blockingInfo.length > 0 && (
-                                                      <div className="space-y-1">
-                                                        <p className="font-medium text-xs text-red-400">⛔ Blocked by:</p>
-                                                        <ul className="text-xs space-y-0.5">
-                                                          {blockingInfo.map((info, i) => (
-                                                            <li key={i} className="text-muted-foreground">• {info}</li>
-                                                          ))}
-                                                        </ul>
-                                                      </div>
-                                                    )}
-                                                    {blockingToInfo.length > 0 && (
-                                                      <div className="space-y-1">
-                                                        <p className="font-medium text-xs text-amber-400">🔗 Blocking:</p>
-                                                        <ul className="text-xs space-y-0.5">
-                                                          {blockingToInfo.map((info, i) => (
-                                                            <li key={i} className="text-muted-foreground">• {info}</li>
-                                                          ))}
-                                                        </ul>
-                                                      </div>
+                                                    {task.dueDate && (
+                                                      <span className="text-[10px] text-muted-foreground">
+                                                        {formatTaskDateRange(task.startDate, task.dueDate)}
+                                                      </span>
                                                     )}
                                                   </div>
-                                                </TooltipContent>
-                                              )}
-                                            </Tooltip>
-                                          </TooltipProvider>
-                                        )}
-                                      </Draggable>
-                                    );
-                                  })}
-                                  {provided.placeholder}
-                                </div>
-                              )}
-                            </Droppable>
+                                                </div>
+                                              </Card>
+                                            </TooltipTrigger>
+                                            {hasAnyDependencies && (
+                                              <TooltipContent side="right" className="max-w-xs">
+                                                <div className="space-y-2">
+                                                  {blockingInfo.length > 0 && (
+                                                    <div className="space-y-1">
+                                                      <p className="font-medium text-xs text-red-400">⛔ Blocked by:</p>
+                                                      <ul className="text-xs space-y-0.5">
+                                                        {blockingInfo.map((info, i) => (
+                                                          <li key={i} className="text-muted-foreground">• {info}</li>
+                                                        ))}
+                                                      </ul>
+                                                    </div>
+                                                  )}
+                                                  {blockingToInfo.length > 0 && (
+                                                    <div className="space-y-1">
+                                                      <p className="font-medium text-xs text-amber-400">🔗 Blocking:</p>
+                                                      <ul className="text-xs space-y-0.5">
+                                                        {blockingToInfo.map((info, i) => (
+                                                          <li key={i} className="text-muted-foreground">• {info}</li>
+                                                        ))}
+                                                      </ul>
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </TooltipContent>
+                                            )}
+                                          </Tooltip>
+                                        </TooltipProvider>
+                                      )}
+                                    </Draggable>
+                                  );
+                                })}
+                                {provided.placeholder}
+                              </div>
+                            )}
+                          </Droppable>
                         );
 
                         if (isMobile) {
@@ -1008,6 +1015,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         onUpdate={handleTaskUpdate}
         onBatchUpdate={handleBatchTaskUpdateLocal}
         onDelete={onTaskDelete}
+        userProjectRole={userProjectRole}
         modules={modules}
         projectId={projectId}
         onAddModule={onAddModule}

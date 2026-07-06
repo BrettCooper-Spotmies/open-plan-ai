@@ -58,6 +58,7 @@ interface IssuesViewProps {
   onIssueUpdate?: (issue: Issue) => void;
   onIssueCreate?: (issue: Partial<Issue>, pendingFiles?: File[]) => void;
   onIssueDelete?: (issueId: string) => void;
+  userProjectRole?: string;
 }
 
 interface IssuesKanbanColumn {
@@ -72,7 +73,6 @@ const STATUS_BADGE_CONFIG: Record<string, { color: string; label: string }> = {
   open: { color: 'bg-destructive/20 text-destructive border-destructive/30', label: 'Open' },
   'in-progress': { color: 'bg-orange-500/20 text-orange-600 border-orange-500/30', label: 'In Progress' },
   resolved: { color: 'bg-status-done/20 text-status-done border-status-done/30', label: 'Resolved' },
-  closed: { color: 'bg-muted text-muted-foreground border-muted', label: 'Closed' },
   'wont-fix': { color: 'bg-muted text-muted-foreground border-muted line-through', label: "Won't Fix" },
 };
 
@@ -137,6 +137,7 @@ export function IssuesView({
   onIssueUpdate,
   onIssueCreate,
   onIssueDelete,
+  userProjectRole,
 }: IssuesViewProps) {
   const { id: routeProjectId } = useParams();
   const { user } = useAuth();
@@ -220,9 +221,11 @@ export function IssuesView({
       today.setHours(0, 0, 0, 0);
       const issueDueDate = issue.dueDate ? new Date(issue.dueDate) : null;
       switch (dueDateFilter) {
-        case 'overdue':
-          matchesDueDate = !!issueDueDate && issueDueDate < today;
+        case 'overdue': {
+          const resolvedStatuses = ['resolved', 'wont-fix'];
+          matchesDueDate = !!issueDueDate && issueDueDate < today && !resolvedStatuses.includes(issue.status);
           break;
+        }
         case 'today':
           matchesDueDate = !!issueDueDate && issueDueDate.toDateString() === today.toDateString();
           break;
@@ -367,7 +370,6 @@ export function IssuesView({
     const blockingCount = (issue.blocksTaskIds?.length || 0) + (issue.blocksMilestoneIds?.length || 0);
     return (blockingCount > 0 || (issue.blockedBy?.length || 0) > 0)
       && issue.status !== 'resolved'
-      && issue.status !== 'closed'
       && issue.status !== 'wont-fix';
   };
 
@@ -835,7 +837,7 @@ export function IssuesView({
                       </TableCell>
                       <TableCell className="align-middle">
                         <div className="flex items-start gap-2">
-                          {(issue.status === 'resolved' || issue.status === 'closed') && (
+                          {issue.status === 'resolved' && (
                             <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center shrink-0 mt-0.5">
                               <Check className="h-3 w-3 text-status-done" />
                             </div>
@@ -915,6 +917,7 @@ export function IssuesView({
         onClose={handleModalClose}
         onUpdate={handleIssueUpdateFromModal}
         onDelete={onIssueDelete}
+        userProjectRole={userProjectRole}
         mode={modalMode}
         onCreate={handleCreateSubmit}
       />

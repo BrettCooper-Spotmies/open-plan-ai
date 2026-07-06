@@ -61,9 +61,10 @@ import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectDetail } from "@/hooks/useProjectDetail";
-import { useUpdateProject, useProject, useDeleteProject } from "@/hooks/useProjects";
-import { useOrganizationMembers } from "@/hooks/useProjectTeam";
-import { useProjectAttachments, useCreateAttachment, useDeleteAttachment } from "@/hooks/useProjectAttachments";
+import { useUpdateProject, useUpdateProjectStage, useProject, useDeleteProject } from "@/hooks/useProjects";
+import { useOrganizationMembers, useProjectMembers } from "@/hooks/useProjectTeam";
+import { useProjectPermissions } from "@/hooks/useProjectPermissions";
+import { useProjectAttachments, useDeleteAttachment } from "@/hooks/useProjectAttachments";
 import { useProjectLinks, useCreateProjectLink, useDeleteProjectLink } from "@/hooks/useProjectLinks";
 import { projectStorageService } from "@/services/projectStorage.service";
 import { modulesService } from "@/services/modules.service";
@@ -73,6 +74,7 @@ import { chatService } from "@/services/chat.service";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryClient";
 import { logger } from '@/services/monitoring/logger';
+import type { ProjectRole } from "@/types";
 
 const projectTypes = [
     "Hardware Development",
@@ -115,7 +117,7 @@ interface ProjectLink {
 
 interface TeamMemberAssignment {
     memberId: string;
-    role: string;
+    role: ProjectRole;
     name?: string;
     avatar?: string;
 }
@@ -152,6 +154,13 @@ const projectEmojis = [
     "✨", "🌟", "⭐", "💎", "🏆", "🎖️", "🥇", "🎁", "📦", "🗃️"
 ];
 
+/** Normalizes a loosely-typed TeamMember.role (or missing role) to a ProjectRole. */
+const toProjectRole = (role: string | undefined | null): ProjectRole => {
+    const normalized = (role || "").toLowerCase();
+    if (normalized === "admin" || normalized === "maintainer") return normalized;
+    return "member";
+};
+
 const EditProject = () => {
     const queryClient = useQueryClient();
     const navigate = useNavigate();
@@ -159,8 +168,15 @@ const EditProject = () => {
     const { user } = useAuth();
     const { currentOrganization } = useOrganization();
     const updateProjectMutation = useUpdateProject();
+    const updateProjectStageMutation = useUpdateProjectStage();
     const deleteProjectMutation = useDeleteProject();
     const { data: orgMembers = [] } = useOrganizationMembers(currentOrganization?.id);
+    const { data: projectMembers = [] } = useProjectMembers(id);
+    const {
+        canManageMembers,
+        canManageProjectSettings,
+        isProjectMaintainerPlus,
+    } = useProjectPermissions(id);
 
     // Fetch project data
     const { data: project, isLoading, error } = useProject(id);
@@ -168,7 +184,6 @@ const EditProject = () => {
     const { data: projectLinks = [] } = useProjectLinks(id);
 
     // Mutations
-    const createAttachmentMutation = useCreateAttachment();
     const deleteAttachmentMutation = useDeleteAttachment();
     const createLinkMutation = useCreateProjectLink();
     const deleteLinkMutation = useDeleteProjectLink();
@@ -198,6 +213,8 @@ const EditProject = () => {
     // Team Members
     const [assignedMembers, setAssignedMembers] = useState<TeamMemberAssignment[]>([]);
     const [selectedMember, setSelectedMember] = useState("");
+    const [selectedMemberRole, setSelectedMemberRole] = useState<ProjectRole>("member");
+    const [memberRoleUpdatingId, setMemberRoleUpdatingId] = useState<string | null>(null);
 
     // Departments
     const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
@@ -366,29 +383,22 @@ const EditProject = () => {
     const [isDragOver, setIsDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const canManageProjectMembers = useMemo(() => {
-        if (!project || !user?.id) return false;
-        if (project.createdBy === user.id) return true;
-        const myMembership = (project.team || []).find((member) => member.id === user.id);
-        return (myMembership?.role || '').toLowerCase() === 'admin';
-    }, [project?.createdBy, project?.team, user?.id]);
+    // Member management (add/remove/change role) is Admin-only.
+    const canManageProjectMembers = canManageMembers;
 
     const isProjectOwner = useMemo(() => {
         if (!project?.createdBy || !user?.id) return false;
         return project.createdBy === user.id;
     }, [project?.createdBy, user?.id]);
 
-    const canEditProject = useMemo(() => {
-        if (!project || !user?.id) return false;
-        if (project.createdBy === user.id) return true;
-        const myMembership = (project.team || []).find((member) => member.id === user.id);
-        return (myMembership?.role || '').toLowerCase() === 'admin';
-    }, [project?.createdBy, project?.team, user?.id]);
-
-    const selectedOrgMember = useMemo(
-        () => orgMembers.find((member: any) => member.id === selectedMember),
-        [orgMembers, selectedMember]
-    );
+    // This page conflates "rename/settings" and "stage" edits into a single
+    // form gated by one early-return (see the `!canEditProject` guard below).
+    // Splitting them would require restructuring the page into two
+    // independently-gated sections; instead we gate page access with the
+    // broader isProjectMaintainerPlus (Maintainers can change stage/status)
+    // and disable the Admin-only fields (name, type, departments, members,
+    // dates, optional details) individually via canManageProjectSettings.
+    const canEditProject = isProjectMaintainerPlus;
 
     const handleAddModule = () => {
         if (newModuleName.trim()) {
@@ -472,7 +482,7 @@ const EditProject = () => {
 
     const handleAddTeamMember = () => {
         if (!canManageProjectMembers) {
-            toast.error('Only the project creator or an Admin can add or remove members');
+            toast.error('Only a project Admin can add or remove members');
             return;
         }
 
@@ -480,23 +490,47 @@ const EditProject = () => {
             const exists = assignedMembers.find(m => m.memberId === selectedMember);
             if (!exists) {
                 const memberObj = orgMembers.find(m => m.id === selectedMember);
-                const inheritedRole = memberObj?.role || "member";
                 setAssignedMembers([...assignedMembers, {
                     memberId: selectedMember,
-                    role: inheritedRole,
+                    role: selectedMemberRole,
                     name: memberObj?.name,
                     avatar: memberObj?.avatar
                 }]);
                 setSelectedMember("");
+                setSelectedMemberRole("member");
             } else {
                 toast.error("Member already assigned");
             }
         }
     };
 
+    const handleUpdateAssignedMemberRole = async (memberId: string, role: ProjectRole) => {
+        if (!canManageProjectMembers) return;
+
+        // For members already persisted in the DB, call the update-role endpoint
+        // directly and invalidate the project-members query. For members only
+        // staged locally (not yet saved via handleSave), just update local state.
+        const isPersisted = projectMembers.some((m) => m.id === memberId);
+        setAssignedMembers((prev) => prev.map((m) => (m.memberId === memberId ? { ...m, role } : m)));
+
+        if (isPersisted && id) {
+            setMemberRoleUpdatingId(memberId);
+            try {
+                await projectMembersService.updateRole(id, memberId, role);
+                await queryClient.invalidateQueries({ queryKey: ['project-members', id] });
+                toast.success('Member role updated');
+            } catch (err) {
+                logger.error('[handleUpdateAssignedMemberRole] Failed to update role', { projectId: id, memberId, error: err });
+                toast.error('Failed to update member role');
+            } finally {
+                setMemberRoleUpdatingId(null);
+            }
+        }
+    };
+
     const handleRemoveTeamMember = (memberId: string) => {
         if (!canManageProjectMembers) {
-            toast.error('Only the project creator or an Admin can add or remove members');
+            toast.error('Only a project Admin can add or remove members');
             return;
         }
 
@@ -562,16 +596,6 @@ const EditProject = () => {
                 }
             }
 
-            // Populating team members
-            if (project.team) {
-                setAssignedMembers(project.team.map(m => ({
-                    memberId: m.id,
-                    role: m.role,
-                    name: m.name,
-                    avatar: m.avatar
-                })));
-            }
-
             // Populating modules
             if (project.projectModules) {
                 // First-class modules initialization
@@ -601,6 +625,18 @@ const EditProject = () => {
         }
     }, [project]);
 
+    // Populate team members from the dedicated project members endpoint
+    useEffect(() => {
+        if (projectMembers.length > 0) {
+            setAssignedMembers(projectMembers.map(m => ({
+                memberId: m.id,
+                role: toProjectRole(m.role),
+                name: m.name,
+                avatar: m.avatar,
+            })));
+        }
+    }, [projectMembers]);
+
     const formatFileSize = (bytes: number): string => {
         if (bytes === 0) return '0 Bytes';
         const k = 1024;
@@ -623,20 +659,13 @@ const EditProject = () => {
                 }
 
                 try {
-                    const uploadResult = await projectStorageService.uploadFile(file, id);
-                    await createAttachmentMutation.mutateAsync({
-                        entity_id: id,
-                        entity_type: 'project',
-                        file_name: uploadResult.name,
-                        file_path: uploadResult.path,
-                        file_size: file.size,
-                        mime_type: file.type,
-                        project_id: id,
-                    });
+                    await projectStorageService.upload(id, file);
                 } catch (err) {
                     errors.push(`${file.name}: Upload failed`);
                 }
             }
+
+            queryClient.invalidateQueries({ queryKey: ['project-attachments', id] });
 
             if (errors.length > 0) {
                 toast.error('Some files failed to upload', { description: errors.join('\n') });
@@ -646,7 +675,7 @@ const EditProject = () => {
         } finally {
             setIsUploading(false);
         }
-    }, [id, createAttachmentMutation]);
+    }, [id, queryClient]);
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -743,23 +772,30 @@ const EditProject = () => {
 
         setIsSaving(true);
         try {
-            await updateProjectMutation.mutateAsync({
-                id,
-                updates: {
-                    name: projectName,
-                    description: projectDescription,
-                    type: projectType,
-                    stage: projectStage as any,
-                    icon: projectEmoji,
-                    startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
-                    targetDate: targetDate ? format(targetDate, 'yyyy-MM-dd') : undefined,
-                    clientName: clientName || undefined,
-                    clientOrganization: clientOrganization || undefined,
-                    clientContact: clientContact || undefined,
-                    notes: notes || undefined,
-                    departments: selectedDepartments,
-                },
-            });
+            // A Maintainer (not Admin) can only change Stage on this page — the
+            // general update endpoint is Admin-only, so route stage-only saves
+            // through the dedicated Maintainer-accessible stage endpoint instead.
+            if (!canManageProjectSettings && isProjectMaintainerPlus) {
+                await updateProjectStageMutation.mutateAsync({ id, stage: projectStage });
+            } else {
+                await updateProjectMutation.mutateAsync({
+                    id,
+                    updates: {
+                        name: projectName,
+                        description: projectDescription,
+                        type: projectType,
+                        stage: projectStage as any,
+                        icon: projectEmoji,
+                        startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
+                        targetDate: targetDate ? format(targetDate, 'yyyy-MM-dd') : undefined,
+                        clientName: clientName || undefined,
+                        clientOrganization: clientOrganization || undefined,
+                        clientContact: clientContact || undefined,
+                        notes: notes || undefined,
+                        departments: selectedDepartments,
+                    },
+                });
+            }
 
             // Sync team members (authorization must be enforced server-side)
             const isValidUuidLike = (value: unknown): value is string => {
@@ -776,7 +812,7 @@ const EditProject = () => {
                 return;
             }
 
-            const currentInDbIds = (project.team?.map((m: any) => m.id) ?? []).filter(isValidUuidLike);
+            const currentInDbIds = projectMembers.map((m) => m.id).filter(isValidUuidLike);
             const assignedIds = assignedMembers.map((m) => m.memberId).filter(isValidUuidLike);
 
             // Members to add
@@ -969,7 +1005,7 @@ const EditProject = () => {
             return;
         }
 
-        const currentInDbIds = project.team?.map((m: any) => m.id) || [];
+        const currentInDbIds = projectMembers.map((m) => m.id);
         const assignedIds = assignedMembers.map(m => m.memberId);
         const removedMemberIds = currentInDbIds.filter(memberId => !assignedIds.includes(memberId));
 
@@ -1034,7 +1070,7 @@ const EditProject = () => {
                     <AlertTriangle className="h-12 w-12 text-muted-foreground" />
                     <h2 className="text-xl font-medium">Access Denied</h2>
                     <p className="text-muted-foreground text-center max-w-sm">
-                        You don't have permission to edit this project. Only the project owner or an Admin can make changes.
+                        You don't have permission to edit this project. Only a project Admin or Maintainer can make changes.
                     </p>
                     <Button onClick={() => navigate(`/projects/${id}`)}>
                         Back to Project
@@ -1095,6 +1131,7 @@ const EditProject = () => {
                                                 size="icon"
                                                 className="h-10 w-10 shrink-0 text-xl"
                                                 title="Select project icon"
+                                                disabled={!canManageProjectSettings}
                                             >
                                                 {projectEmoji}
                                             </Button>
@@ -1134,6 +1171,7 @@ const EditProject = () => {
                                         maxLength={100}
                                         onChange={(e) => setProjectName(e.target.value)}
                                         className="flex-1"
+                                        disabled={!canManageProjectSettings}
                                     />
                                 </div>
                             </div>
@@ -1142,7 +1180,7 @@ const EditProject = () => {
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
                                 <Label htmlFor="projectType">Project Type <span className="text-destructive">*</span></Label>
-                                <Select value={projectType} onValueChange={setProjectType}>
+                                <Select value={projectType} onValueChange={setProjectType} disabled={!canManageProjectSettings}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select type" />
                                     </SelectTrigger>
@@ -1157,6 +1195,7 @@ const EditProject = () => {
                             </div>
                             <div className="space-y-2">
                                 <Label htmlFor="projectStage">Project Stage <span className="text-destructive">*</span></Label>
+                                {/* Stage is editable by Maintainer+ (not settings-gated) — page access itself is already gated by isProjectMaintainerPlus */}
                                 <Select value={projectStage} onValueChange={setProjectStage}>
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select stage" />
@@ -1182,6 +1221,7 @@ const EditProject = () => {
                                     maxLength={1000}
                                     onChange={(e) => setProjectDescription(e.target.value)}
                                     rows={4}
+                                    disabled={!canManageProjectSettings}
                                 />
                                 <div className="flex justify-end">
                                     <span className={cn(
@@ -1205,6 +1245,7 @@ const EditProject = () => {
                                                 "w-full justify-start text-left font-normal",
                                                 !startDate && "text-muted-foreground"
                                             )}
+                                            disabled={!canManageProjectSettings}
                                         >
                                             <CalendarIcon className="mr-2 h-4 w-4" />
                                             {startDate ? format(startDate, "PPP") : "Select start date"}
@@ -1233,6 +1274,7 @@ const EditProject = () => {
                                                 "w-full justify-start text-left font-normal",
                                                 !targetDate && "text-muted-foreground"
                                             )}
+                                            disabled={!canManageProjectSettings}
                                         >
                                             <CalendarIcon className="mr-2 h-4 w-4" />
                                             {targetDate ? format(targetDate, "PPP") : "Select target date"}
@@ -1460,49 +1502,56 @@ const EditProject = () => {
                         </CardTitle>
                         <CardDescription>
                             {canManageProjectMembers
-                                ? 'Assign team members to this project (organization role is inherited automatically)'
-                                : 'Only the project creator or an Admin can manage team members'}
+                                ? 'Assign team members to this project and set their project role'
+                                : 'Only a project Admin can manage team members and roles'}
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="flex flex-col md:flex-row gap-3">
-                            <div className="flex-1 space-y-2">
-                                <Label>Member</Label>
-                                <Select value={selectedMember} onValueChange={setSelectedMember} disabled={!canManageProjectMembers}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select member" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {orgMembers.map((member: any) => (
-                                            <SelectItem key={member.id} value={member.id}>
-                                                <div className="flex items-center gap-2">
-                                                    <Avatar className="h-6 w-6">
-                                                        <AvatarImage src={member.avatar} />
-                                                        <AvatarFallback>{member.name?.charAt(0)}</AvatarFallback>
-                                                    </Avatar>
-                                                    {member.name}
-                                                </div>
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                        {canManageProjectMembers && (
+                            <div className="flex flex-col md:flex-row gap-3">
+                                <div className="flex-1 space-y-2">
+                                    <Label>Member</Label>
+                                    <Select value={selectedMember} onValueChange={setSelectedMember}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select member" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {orgMembers.map((member: any) => (
+                                                <SelectItem key={member.id} value={member.id}>
+                                                    <div className="flex items-center gap-2">
+                                                        <Avatar className="h-6 w-6">
+                                                            <AvatarImage src={member.avatar} />
+                                                            <AvatarFallback>{member.name?.charAt(0)}</AvatarFallback>
+                                                        </Avatar>
+                                                        {member.name}
+                                                    </div>
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="w-full md:w-40 space-y-2">
+                                    <Label>Project Role</Label>
+                                    <Select value={selectedMemberRole} onValueChange={(v) => setSelectedMemberRole(v as ProjectRole)}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Select role" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="admin">Admin</SelectItem>
+                                            <SelectItem value="maintainer">Maintainer</SelectItem>
+                                            <SelectItem value="member">Member</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <Button
+                                    className="md:mt-8"
+                                    onClick={handleAddTeamMember}
+                                    disabled={!selectedMember}
+                                >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Add
+                                </Button>
                             </div>
-                            <Button
-                                className="md:mt-8"
-                                onClick={handleAddTeamMember}
-                                disabled={!canManageProjectMembers || !selectedMember}
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add
-                            </Button>
-                        </div>
-                        {selectedOrgMember && (
-                            <p className="text-[11px] text-muted-foreground">
-                                Role will be inherited automatically from organization:{" "}
-                                <span className="font-medium text-foreground capitalize">
-                                    {selectedOrgMember.role || 'member'}
-                                </span>
-                            </p>
                         )}
 
                         {assignedMembers.length > 0 && (
@@ -1522,22 +1571,41 @@ const EditProject = () => {
                                                     </Avatar>
                                                     <div>
                                                         <p className="text-sm font-medium">{displayName}</p>
-                                                        {assignment.role && (
-                                                            <Badge variant="secondary" className="text-[10px] h-4">
-                                                                {assignment.role}
-                                                            </Badge>
-                                                        )}
                                                     </div>
                                                 </div>
-                                                {canManageProjectMembers && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => handleRemoveTeamMember(assignment.memberId)}
-                                                    >
-                                                        <X className="h-4 w-4" />
-                                                    </Button>
-                                                )}
+                                                <div className="flex items-center gap-2">
+                                                    {canManageProjectMembers ? (
+                                                        <Select
+                                                            value={assignment.role}
+                                                            onValueChange={(v) => handleUpdateAssignedMemberRole(assignment.memberId, v as ProjectRole)}
+                                                            disabled={memberRoleUpdatingId === assignment.memberId}
+                                                        >
+                                                            <SelectTrigger className="h-7 w-[110px] text-[11px]">
+                                                                <SelectValue />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                <SelectItem value="admin">Admin</SelectItem>
+                                                                <SelectItem value="maintainer">Maintainer</SelectItem>
+                                                                <SelectItem value="member">Member</SelectItem>
+                                                            </SelectContent>
+                                                        </Select>
+                                                    ) : (
+                                                        assignment.role && (
+                                                            <Badge variant="secondary" className="text-[10px] h-4 capitalize">
+                                                                {assignment.role}
+                                                            </Badge>
+                                                        )
+                                                    )}
+                                                    {canManageProjectMembers && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={() => handleRemoveTeamMember(assignment.memberId)}
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </div>
                                         );
                                     })}
@@ -1858,21 +1926,21 @@ const EditProject = () => {
                                         >
                                             <div className="flex items-center gap-2 min-w-0">
                                                 <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                {attachment.url ? (
+                                                {(attachment.url || attachment.fileUrl) ? (
                                                     <a
-                                                        href={attachment.url}
+                                                        href={attachment.url || attachment.fileUrl}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="text-sm truncate hover:underline text-foreground"
                                                         title="Click to view file"
                                                     >
-                                                        {attachment.file_name || attachment.name}
+                                                        {attachment.file_name || attachment.fileName}
                                                     </a>
                                                 ) : (
-                                                    <span className="text-sm truncate">{attachment.file_name || attachment.name}</span>
+                                                    <span className="text-sm truncate">{attachment.file_name || attachment.fileName}</span>
                                                 )}
                                                 <span className="text-xs text-muted-foreground">
-                                                    ({formatFileSize(attachment.file_size || 0)})
+                                                    ({formatFileSize(attachment.file_size ?? attachment.fileSize ?? 0)})
                                                 </span>
                                             </div>
                                             <Button

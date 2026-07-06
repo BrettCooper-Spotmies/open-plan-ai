@@ -1,21 +1,58 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Download, Copy, File as FileIcon, ExternalLink, ChevronLeft, ChevronRight, X, Loader2 } from 'lucide-react';
+import { Download, Copy, File as FileIcon, ExternalLink, ChevronLeft, ChevronRight, X, Loader2, Video } from 'lucide-react';
 import { toast } from 'sonner';
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'avif'];
+const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'm4v'];
 
 function extOf(fileName: string, url: string): string {
   return (fileName || url).split(/[?#]/)[0].split('.').pop()?.toLowerCase() ?? '';
 }
 
-function kindOf(fileName: string, url: string, mimeType?: string | null): 'image' | 'pdf' | 'other' {
+function getYouTubeId(url: string): string | null {
+  const match = url.match(
+    /(?:youtube\.com\/(?:watch\?.*v=|embed\/|v\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+  );
+  return match ? match[1] : null;
+}
+
+function getVimeoId(url: string): string | null {
+  const match = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  return match ? match[1] : null;
+}
+
+function getEmbedUrl(url: string): string | null {
+  const ytId = getYouTubeId(url);
+  if (ytId) return `https://www.youtube.com/embed/${ytId}?autoplay=1`;
+  const vimeoId = getVimeoId(url);
+  if (vimeoId) return `https://player.vimeo.com/video/${vimeoId}?autoplay=1`;
+  return null;
+}
+
+export function getVideoThumbnail(url: string): string | null {
+  const ytId = getYouTubeId(url);
+  if (ytId) return `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`;
+  return null;
+}
+
+export function isVideoUrl(url: string): boolean {
+  if (getYouTubeId(url) || getVimeoId(url)) return true;
+  const ext = extOf('', url);
+  return VIDEO_EXTENSIONS.includes(ext);
+}
+
+function kindOf(fileName: string, url: string, mimeType?: string | null): 'image' | 'pdf' | 'video' | 'embed' | 'other' {
+  // Check for embed URLs first (YouTube, Vimeo) before generic video/* check
+  if (getEmbedUrl(url)) return 'embed';
   if (mimeType?.startsWith('image/')) return 'image';
   if (mimeType === 'application/pdf') return 'pdf';
+  if (mimeType?.startsWith('video/')) return 'video';
   const ext = extOf(fileName, url);
   if (IMAGE_EXTENSIONS.includes(ext)) return 'image';
   if (ext === 'pdf') return 'pdf';
+  if (VIDEO_EXTENSIONS.includes(ext)) return 'video';
   return 'other';
 }
 
@@ -117,17 +154,18 @@ export function FilePreviewDialog({
 
   if (!current) return null;
   const kind = kindOf(current.fileName, current.url, current.mimeType);
+  const isMedia = kind === 'image' || kind === 'pdf' || kind === 'video' || kind === 'embed';
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={
-          kind === 'other'
+          !isMedia
             ? 'max-w-md'
             : 'max-w-[90vw] max-h-[90vh] w-full h-full sm:w-[90vw] sm:h-[90vh] p-0 flex flex-col overflow-hidden [&>button]:hidden'
         }
       >
-        {kind === 'other' ? (
+        {!isMedia ? (
           <div className="flex flex-col items-center gap-4 py-4">
             <DialogTitle className="sr-only">{current.fileName}</DialogTitle>
             <div className="w-14 h-14 rounded-xl bg-muted border border-border flex items-center justify-center">
@@ -153,7 +191,8 @@ export function FilePreviewDialog({
         ) : (
           <>
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-border shrink-0">
-              <DialogTitle className="text-sm font-medium text-foreground truncate pr-4">
+              <DialogTitle className="text-sm font-medium text-foreground truncate pr-4 flex items-center gap-2">
+                {(kind === 'video' || kind === 'embed') && <Video className="w-4 h-4 shrink-0 text-muted-foreground" />}
                 {current.fileName}
               </DialogTitle>
               <div className="flex items-center gap-3 shrink-0">
@@ -162,26 +201,39 @@ export function FilePreviewDialog({
                     {currentIdx + 1} / {list.length}
                   </span>
                 )}
-                <button
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                  title="Download"
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(current.url);
-                      const blob = await res.blob();
-                      const blobUrl = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = blobUrl;
-                      a.download = current.fileName;
-                      a.click();
-                      URL.revokeObjectURL(blobUrl);
-                    } catch {
-                      window.open(current.url, '_blank');
-                    }
-                  }}
-                >
-                  <Download className="w-4 h-4" />
-                </button>
+                {kind !== 'embed' && (
+                  <button
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    title="Download"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(current.url);
+                        const blob = await res.blob();
+                        const blobUrl = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = blobUrl;
+                        a.download = current.fileName;
+                        a.click();
+                        URL.revokeObjectURL(blobUrl);
+                      } catch {
+                        window.open(current.url, '_blank');
+                      }
+                    }}
+                  >
+                    <Download className="w-4 h-4" />
+                  </button>
+                )}
+                {kind === 'embed' && (
+                  <a
+                    href={current.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                    title="Open in new tab"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                )}
                 {kind === 'image' && (
                   <button
                     className="text-muted-foreground hover:text-foreground transition-colors"
@@ -229,6 +281,24 @@ export function FilePreviewDialog({
               )}
               {kind === 'image' ? (
                 <img src={current.url} alt={current.fileName} className="max-w-full max-h-full object-contain" />
+              ) : kind === 'video' ? (
+                <video
+                  src={current.url}
+                  controls
+                  autoPlay
+                  className="max-w-full max-h-full"
+                  style={{ maxHeight: 'calc(90vh - 56px)' }}
+                >
+                  Your browser does not support the video tag.
+                </video>
+              ) : kind === 'embed' ? (
+                <iframe
+                  src={getEmbedUrl(current.url) ?? current.url}
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  title={current.fileName}
+                />
               ) : blobLoading ? (
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
               ) : blobUrl ? (

@@ -451,7 +451,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   // ── Approval workflow ──
   const { data: project } = useProjectDetail(projectId);
   const projectRole = (project?.myRole || '').toLowerCase();
-  const canApprove = projectRole === 'admin' || projectRole === 'manager';
+  const canApprove = projectRole === 'admin' || projectRole === 'maintainer';
   const isAdmin = projectRole === 'admin';
   const createApprovalRequest = useCreateApprovalRequest(projectId);
   const decideApprovalRequest = useDecideApprovalRequest(projectId);
@@ -470,6 +470,12 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   useEffect(() => {
     setActiveRevIdx(Math.max(0, revHistory.length - 1));
   }, [originalNode.id, revHistory.length]);
+
+  // Scroll to top whenever the displayed node changes
+  const scrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [originalNode.id]);
 
   // ── Mutations ──
   const createNode = useCreateBomNode(projectId);
@@ -656,7 +662,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       </div>
 
       {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         {/* Back button */}
         {/* <div className="px-6 pt-3">
           <button
@@ -797,6 +803,25 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               </span>
             </Field>
           )}
+          {Array.isArray(node.customFields) && node.customFields.length > 0 && (
+            <>
+              {/* <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-2">Additional Fields</p> */}
+              {node.customFields.map((cf, i) => (
+                // <div key={i} className="flex items-center gap-3 mb-2 last:mb-0">
+                //   <div className="w-8 h-8 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0">
+                //     <Sliders className="w-3.5 h-3.5 text-muted-foreground" />
+                //   </div>
+                //   <span className="text-xs text-muted-foreground flex-1">{cf.label}</span>
+                //   <span className="text-sm font-medium text-foreground text-right">{cf.value}</span>
+                // </div>
+                <Field label={cf.label}>
+                  <span className="flex items-center gap-1.5">
+                    {cf.value}
+                  </span>
+                </Field>
+              ))}
+            </>
+          )}
         </div>
 
         {/* Two-column body */}
@@ -920,7 +945,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
           {/* RIGHT */}
           <div className="flex flex-col gap-4 min-w-0">
             {/* Sourcing */}
-            <Card title="Sourcing">
+            {/* <Card title="Sourcing">
               <div className="flex flex-col gap-3">
                 {[
                   { label: 'Manufacturer', value: node.manufacturer, icon: 'Factory' },
@@ -961,7 +986,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   </>
                 )}
               </div>
-            </Card>
+            </Card> */}
 
             {/* Revision History */}
             <Card

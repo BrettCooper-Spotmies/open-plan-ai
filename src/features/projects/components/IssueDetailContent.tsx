@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
-import { FilePreviewDialog, FilePreviewTarget } from '@/components/FilePreviewDialog';
+import { FilePreviewDialog, FilePreviewTarget, getVideoThumbnail } from '@/components/FilePreviewDialog';
 import {
     Calendar as CalendarIcon,
     MessageSquare,
@@ -60,6 +60,8 @@ import {
     Maximize2,
     Loader2,
     Upload,
+    Video,
+    Play,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import {
@@ -80,6 +82,7 @@ import {
     Attachment,
     Task,
     TeamMember,
+    VideoLink,
 } from '@/types';
 import { SlashBlockEditor, EditorBlock } from '@/components/ui/SlashBlockEditor';
 import { Switch } from '@/components/ui/switch';
@@ -92,6 +95,7 @@ import { useProjectTags, useCreateTag } from '@/hooks/useProjectTags';
 import { getFallbackTagColor } from '@/lib/tagColors';
 import { useIssueColumns } from '@/hooks/useIssueColumns';
 import { DEFAULT_ISSUE_COLUMNS } from '@/services/issueColumns.service';
+import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 
 interface IssueDetailContentProps {
     issue: Issue | null;
@@ -99,6 +103,7 @@ interface IssueDetailContentProps {
     teamMembers?: TeamMember[];
     onUpdate: (issue: Issue) => void;
     onDelete?: (issueId: string) => void;
+    userProjectRole?: string;
     onExpand?: () => void; // Optional expanded view action
     isExpanded?: boolean;
     isDraft?: boolean;
@@ -119,6 +124,7 @@ const categoryOptions: { value: IssueCategory; label: string; icon: typeof Bug }
 
 const getFileIcon = (fileType: string) => {
     if (fileType.startsWith('image/')) return ImageIcon;
+    if (fileType.startsWith('video/')) return Video;
     if (fileType.includes('pdf') || fileType.includes('document')) return FileText;
     return File;
 };
@@ -135,6 +141,7 @@ export function IssueDetailContent({
     teamMembers = [],
     onUpdate,
     onDelete,
+    userProjectRole,
     onExpand,
     isExpanded = false,
     isDraft = false,
@@ -158,6 +165,7 @@ export function IssueDetailContent({
     const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
     const [pendingFileUrls, setPendingFileUrls] = useState<(string | null)[]>([]);
+    const [videoLinkInput, setVideoLinkInput] = useState('');
 
     useEffect(() => {
         const urls = pendingFiles.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
@@ -166,6 +174,16 @@ export function IssueDetailContent({
     }, [pendingFiles]);
 
     const projectId = issue?.projectId;
+    const { canEditResource } = useProjectPermissions(projectId);
+    const canEditIssue = useMemo(
+        () =>
+            canEditResource({
+                createdBy: editedIssue?.reportedBy?.id,
+                assigneeIds: (editedIssue?.assignees || []).map((a) => a.id),
+            }),
+        [canEditResource, editedIssue?.reportedBy?.id, editedIssue?.assignees]
+    );
+    const editLockTitle = 'You can only edit items you created or are assigned to';
     const { data: apiIssueColumns } = useIssueColumns(projectId);
     const statusOptions = (apiIssueColumns && apiIssueColumns.length > 0 ? apiIssueColumns : DEFAULT_ISSUE_COLUMNS)
         .filter((c) => !c.isSpecial || c.status !== 'wont-fix' ? true : true)
@@ -402,6 +420,36 @@ export function IssueDetailContent({
         handleFieldChange('attachments', attachments.filter(a => a.id !== attachmentId));
     };
 
+    const videoLinks: VideoLink[] = editedIssue.videoLinks || [];
+
+    const handleAddVideoLink = () => {
+        const url = videoLinkInput.trim();
+        if (!url) return;
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            toast.error('Please enter a valid URL starting with http:// or https://');
+            return;
+        }
+        if (videoLinks.some(v => v.url === url)) {
+            toast.error('This video link has already been added');
+            return;
+        }
+        const newLink: VideoLink = {
+            id: crypto.randomUUID(),
+            url,
+            title: url,
+            addedBy: profile
+                ? { id: profile.id, name: profile.name || profile.email, email: profile.email, role: profile.role || 'member', initials: profile.initials ?? '' }
+                : { id: '', name: 'You', email: '', role: '', initials: '' },
+            addedAt: new Date().toISOString(),
+        };
+        handleFieldChange('videoLinks', [...videoLinks, newLink]);
+        setVideoLinkInput('');
+    };
+
+    const handleRemoveVideoLink = (id: string) => {
+        handleFieldChange('videoLinks', videoLinks.filter(v => v.id !== id));
+    };
+
     const comments = editedIssue.comments || [];
 
     const availableTasksForBlocking = tasks.filter(
@@ -497,6 +545,8 @@ export function IssueDetailContent({
                             className="text-base font-semibold w-full"
                             placeholder="Issue title..."
                             aria-required="true"
+                            disabled={!canEditIssue}
+                            title={canEditIssue ? undefined : editLockTitle}
                         />
                     </div>
                 </div>
@@ -521,9 +571,16 @@ export function IssueDetailContent({
                             <User className="h-3 w-3" />
                             Assigned To
                         </Label>
-                        <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
+                        <Popover open={isAssigneePopoverOpen} onOpenChange={(open) => canEditIssue && setIsAssigneePopoverOpen(open)}>
                             <PopoverTrigger asChild>
-                                <button className="flex items-center gap-2 h-10 px-2 w-full text-left rounded-md hover:bg-muted/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                                <button
+                                    disabled={!canEditIssue}
+                                    title={canEditIssue ? undefined : editLockTitle}
+                                    className={cn(
+                                        'flex items-center gap-2 h-10 px-2 w-full text-left rounded-md hover:bg-muted/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                                        !canEditIssue && 'cursor-not-allowed opacity-60 hover:bg-transparent'
+                                    )}
+                                >
                                     <TooltipProvider delayDuration={150}>
                                         <div className="flex items-center">
                                             {(editedIssue.assignees || []).slice(0, 6).map((assignee, index) => (
@@ -583,11 +640,16 @@ export function IssueDetailContent({
                                                 </Avatar>
                                                 <span className="flex-1 text-sm">{assignee.name}</span>
                                                 <button
+                                                    disabled={!canEditIssue}
+                                                    title={canEditIssue ? undefined : editLockTitle}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleFieldChange('assignees', (editedIssue.assignees || []).filter(a => a.id !== assignee.id));
                                                     }}
-                                                    className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                                                    className={cn(
+                                                        'text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100',
+                                                        !canEditIssue && 'cursor-not-allowed group-hover:opacity-60'
+                                                    )}
                                                 >
                                                     <X className="h-3 w-3" />
                                                 </button>
@@ -636,8 +698,9 @@ export function IssueDetailContent({
                             <Select
                                 value={editedIssue.status}
                                 onValueChange={(value) => handleFieldChange('status', value as IssueStatus)}
+                                disabled={!canEditIssue}
                             >
-                                <SelectTrigger className="h-9" aria-required="true">
+                                <SelectTrigger className="h-9" aria-required="true" title={canEditIssue ? undefined : editLockTitle}>
                                     <SelectValue>
                                         <div className="flex items-center gap-2">
                                             <div
@@ -682,6 +745,8 @@ export function IssueDetailContent({
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
+                                        disabled={!canEditIssue}
+                                        title={canEditIssue ? undefined : editLockTitle}
                                         className={cn(
                                             'w-full justify-start text-left font-normal h-9 px-3',
                                             !editedIssue.dueDate && 'text-muted-foreground'
@@ -739,8 +804,9 @@ export function IssueDetailContent({
                             <Select
                                 value={editedIssue.severity}
                                 onValueChange={(value) => handleFieldChange('severity', value as IssueSeverity)}
+                                disabled={!canEditIssue}
                             >
-                                <SelectTrigger className="h-9" aria-required="true">
+                                <SelectTrigger className="h-9" aria-required="true" title={canEditIssue ? undefined : editLockTitle}>
                                     <SelectValue>
                                         <Badge className={cn('text-xs gap-1', ISSUE_SEVERITY_DISPLAY[editedIssue.severity].color)}>
                                             {(() => {
@@ -773,8 +839,9 @@ export function IssueDetailContent({
                             <Select
                                 value={editedIssue.category}
                                 onValueChange={(value) => handleFieldChange('category', value as IssueCategory)}
+                                disabled={!canEditIssue}
                             >
-                                <SelectTrigger className="h-9" aria-required="true">
+                                <SelectTrigger className="h-9" aria-required="true" title={canEditIssue ? undefined : editLockTitle}>
                                     <SelectValue>
                                         {(() => {
                                             const cat = categoryOptions.find(c => c.value === editedIssue.category);
@@ -924,14 +991,19 @@ export function IssueDetailContent({
                                     id="advanced-mode"
                                     checked={isAdvancedDescription}
                                     onCheckedChange={setIsAdvancedDescription}
+                                    disabled={!canEditIssue}
                                 />
                             </div>
                         </div>
 
                         {isAdvancedDescription ? (
-                            <div className="min-h-[200px] border rounded-md p-4 bg-background">
+                            <div
+                                className={cn('min-h-[200px] border rounded-md p-4 bg-background', !canEditIssue && 'opacity-60 cursor-not-allowed')}
+                                title={canEditIssue ? undefined : editLockTitle}
+                            >
                                 <SlashBlockEditor
                                     key={editedIssue.id}
+                                    readOnly={!canEditIssue}
                                     initialBlocks={editedIssue.descriptionBlocks}
                                     onChange={(blocks) => handleFieldChange('descriptionBlocks', blocks)}
                                 />
@@ -942,6 +1014,8 @@ export function IssueDetailContent({
                                 onChange={(e) => handleFieldChange('description', e.target.value)}
                                 placeholder="Describe the issue in detail..."
                                 className="min-h-[150px] resize-none"
+                                disabled={!canEditIssue}
+                                title={canEditIssue ? undefined : editLockTitle}
                             />
                         )}
                     </div>
@@ -1180,11 +1254,102 @@ export function IssueDetailContent({
                                         </div>
                                         {!isUploading && <p className="text-xs text-muted-foreground mt-1">or drag and drop, or paste image</p>}
                                     </div>
-                                    <input type="file" className="hidden" multiple onChange={handleFileUpload} disabled={isUploading} />
+                                    <input type="file" className="hidden" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,video/*" onChange={handleFileUpload} disabled={isUploading} />
                                 </label>
                             </div>
                         </div>
                     </section>
+
+                    <Separator />
+
+                    {/* Video Links Section */}
+                    <section className="space-y-3">
+                        <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                            <Video className="h-4 w-4" />
+                            Videos
+                        </h3>
+
+                        <div className="space-y-2">
+                            {videoLinks.map((vl) => {
+                                const thumbnail = getVideoThumbnail(vl.url);
+                                return (
+                                    <div
+                                        key={vl.id}
+                                        className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 group cursor-pointer hover:bg-muted"
+                                        onClick={() => setPreviewingFile({ url: vl.url, fileName: vl.title || vl.url })}
+                                    >
+                                        <div className="relative h-10 w-16 rounded overflow-hidden bg-black/20 shrink-0 flex items-center justify-center">
+                                            {thumbnail ? (
+                                                <img src={thumbnail} alt="" className="h-full w-full object-cover" />
+                                            ) : (
+                                                <Video className="h-5 w-5 text-muted-foreground" />
+                                            )}
+                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                <div className="bg-black/50 rounded-full p-1">
+                                                    <Play className="h-3 w-3 text-white fill-white" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium truncate">{vl.title || vl.url}</p>
+                                            <p className="text-xs text-muted-foreground truncate">{vl.url}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRemoveVideoLink(vl.id);
+                                                }}
+                                            >
+                                                <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {/* Pending video files (create mode) */}
+                            {mode === 'create' && pendingFiles.filter(f => f.type.startsWith('video/')).length > 0 && (
+                                <div className="space-y-1">
+                                    {pendingFiles.filter(f => f.type.startsWith('video/')).map((f, i) => (
+                                        <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <Video className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                                <span className="truncate">{f.name}</span>
+                                                <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="Paste YouTube, Vimeo, or direct video URL…"
+                                    value={videoLinkInput}
+                                    onChange={(e) => setVideoLinkInput(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddVideoLink(); } }}
+                                    className="text-sm"
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleAddVideoLink}
+                                    disabled={!videoLinkInput.trim()}
+                                    className="shrink-0"
+                                >
+                                    <Plus className="h-4 w-4 mr-1" />
+                                    Add
+                                </Button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <Separator />
 
                     {/* Dependencies (2 Columns) */}
                     <section className="space-y-4">
@@ -1363,7 +1528,12 @@ export function IssueDetailContent({
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => setShowDeleteConfirm(true)}
-                                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
+                                        disabled={!canEditIssue}
+                                        title={canEditIssue ? 'Delete this issue' : editLockTitle}
+                                        className={cn(
+                                            'text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2',
+                                            !canEditIssue && 'cursor-not-allowed opacity-60'
+                                        )}
                                     >
                                         <Trash2 className="h-4 w-4" />
                                         Delete Issue
@@ -1408,7 +1578,10 @@ export function IssueDetailContent({
             </div>
             <FilePreviewDialog
                 file={previewingFile}
-                files={attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType }))}
+                files={[
+                    ...attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType })),
+                    ...videoLinks.map(v => ({ url: v.url, fileName: v.title || v.url })),
+                ]}
                 onClose={() => setPreviewingFile(null)}
             />
         </div >

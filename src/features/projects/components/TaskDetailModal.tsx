@@ -61,6 +61,8 @@ import {
   Check,
   Loader2,
   Send,
+  Video,
+  Play,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { commentsService } from '@/services/comments.service';
@@ -74,6 +76,7 @@ import {
   ChecklistItem,
   Attachment,
   Comment,
+  VideoLink,
 } from '@/types';
 import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -81,11 +84,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
 import { resolveFileUrl } from '@/utils/fileUrl';
-import { FilePreviewDialog, FilePreviewTarget } from '@/components/FilePreviewDialog';
+import { FilePreviewDialog, FilePreviewTarget, getVideoThumbnail } from '@/components/FilePreviewDialog';
 import { useProjectTags, useCreateTag, useUpdateTag } from '@/hooks/useProjectTags';
 import { getFallbackTagColor } from '@/lib/tagColors';
 import { Switch } from '@/components/ui/switch';
 import { SlashBlockEditor } from '@/components/ui/SlashBlockEditor';
+import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 
 // Utility function to convert Date to YYYY-MM-DD format (date-only, no timezone shift)
 const toDateOnly = (date: Date | undefined | null): string | undefined => {
@@ -105,6 +109,7 @@ interface TaskDetailModalProps {
   onUpdate: (task: Task) => Promise<void> | void;
   onBatchUpdate?: (updates: Array<{ id: string; updates: Partial<Task> }>) => Promise<void> | void;
   onDelete?: (taskId: string) => void;
+  userProjectRole?: string;
   mode?: 'view' | 'create';
   onCreate?: (task: Task, pendingFiles?: File[]) => void;
   modules?: { id: string; name: string; type: ModuleType }[];
@@ -140,6 +145,7 @@ const priorityOptions: { value: Priority; label: string; color: string }[] = [
 
 const getFileIcon = (fileType: string) => {
   if (fileType.startsWith('image/')) return ImageIcon;
+  if (fileType.startsWith('video/')) return Video;
   if (fileType.includes('pdf') || fileType.includes('document')) return FileText;
   return File;
 };
@@ -181,6 +187,7 @@ const serializeTaskForDirtyCheck = (task: Task): string => {
     })),
     blockedBy: [...(task.blockedBy || [])].sort(),
     attachments: attachmentSnapshot,
+    videoLinks: (task.videoLinks || []).map(v => v.id).sort(),
   });
 };
 
@@ -192,6 +199,7 @@ export const TaskDetailModal = ({
   onUpdate,
   onBatchUpdate,
   onDelete,
+  userProjectRole,
   mode = 'view',
   onCreate,
   modules = [],
@@ -219,6 +227,7 @@ export const TaskDetailModal = ({
     blockedBy: [],
     comments: [],
     attachments: [],
+    videoLinks: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   });
@@ -247,6 +256,7 @@ export const TaskDetailModal = ({
   const [isAdvancedDescription, setIsAdvancedDescription] = useState(false);
   const [initialTaskSnapshot, setInitialTaskSnapshot] = useState('');
   const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
+  const [videoLinkInput, setVideoLinkInput] = useState('');
   const [initialBlockedByIds, setInitialBlockedByIds] = useState<string[]>([]);
   const [initialBlockingToIds, setInitialBlockingToIds] = useState<string[]>([]);
   const [initializedForKey, setInitializedForKey] = useState<string | null>(null);
@@ -274,6 +284,16 @@ export const TaskDetailModal = ({
     editedTask.status.replace(/-/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
   const currentStatusColor = currentStatusOption?.color || 'bg-muted-foreground/60';
   const effectiveProjectId = editedTask.projectId ?? projectId;
+  const { canEditResource } = useProjectPermissions(effectiveProjectId);
+  const canEditTask = useMemo(
+    () =>
+      canEditResource({
+        createdBy: editedTask.createdBy?.id,
+        assigneeIds: (editedTask.assignees || []).map((a) => a.id),
+      }),
+    [canEditResource, editedTask.createdBy?.id, editedTask.assignees]
+  );
+  const editLockTitle = 'You can only edit items you created or are assigned to';
   const { data: projectTags = [] } = useProjectTags(effectiveProjectId);
   const createTagMutation = useCreateTag(effectiveProjectId);
   const updateTagMutation = useUpdateTag(effectiveProjectId);
@@ -727,6 +747,37 @@ export const TaskDetailModal = ({
     }
   };
 
+  const videoLinks: VideoLink[] = editedTask.videoLinks || [];
+
+  const handleAddVideoLink = () => {
+    const url = videoLinkInput.trim();
+    if (!url) return;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      toast.error('Please enter a valid URL starting with http:// or https://');
+      return;
+    }
+    const alreadyExists = videoLinks.some(v => v.url === url);
+    if (alreadyExists) {
+      toast.error('This video link has already been added');
+      return;
+    }
+    const newLink: VideoLink = {
+      id: crypto.randomUUID(),
+      url,
+      title: url,
+      addedBy: profile
+        ? { id: profile.id, name: profile.name || profile.email, email: profile.email, role: profile.role || 'member', initials: profile.initials ?? '' }
+        : { id: '', name: 'You', email: '', role: '', initials: '' },
+      addedAt: new Date().toISOString(),
+    };
+    handleFieldChange('videoLinks', [...videoLinks, newLink]);
+    setVideoLinkInput('');
+  };
+
+  const handleRemoveVideoLink = (id: string) => {
+    handleFieldChange('videoLinks', videoLinks.filter(v => v.id !== id));
+  };
+
   const hasSelectedModules = (editedTask.moduleIds || []).length > 0;
   const normalizedEditedTaskSnapshot = useMemo(
     () => serializeTaskForDirtyCheck(editedTask),
@@ -1117,6 +1168,8 @@ export const TaskDetailModal = ({
                 className="text-base font-medium h-10"
                 placeholder="Task title..."
                 aria-required="true"
+                disabled={!canEditTask}
+                title={canEditTask ? undefined : editLockTitle}
               />
             </div>
 
@@ -1128,9 +1181,16 @@ export const TaskDetailModal = ({
                   <User className="h-3 w-3" />
                   Assigned To
                 </Label>
-                <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
+                <Popover open={isAssigneePopoverOpen} onOpenChange={(open) => canEditTask && setIsAssigneePopoverOpen(open)}>
                   <PopoverTrigger asChild>
-                    <button className="flex items-center gap-2 h-10 px-2 w-full text-left rounded-md hover:bg-muted/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                    <button
+                      disabled={!canEditTask}
+                      title={canEditTask ? undefined : editLockTitle}
+                      className={cn(
+                        'flex items-center gap-2 h-10 px-2 w-full text-left rounded-md hover:bg-muted/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                        !canEditTask && 'cursor-not-allowed opacity-60 hover:bg-transparent'
+                      )}
+                    >
                       <div className="flex items-center">
                         {(editedTask.assignees || []).slice(0, 5).map((assignee, index) => (
                           <div
@@ -1175,11 +1235,16 @@ export const TaskDetailModal = ({
                             </Avatar>
                             <span className="flex-1 text-sm">{assignee.name}</span>
                             <button
+                              disabled={!canEditTask}
+                              title={canEditTask ? undefined : editLockTitle}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleFieldChange('assignees', (editedTask.assignees || []).filter(a => a.id !== assignee.id));
                               }}
-                              className="text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                              className={cn(
+                                'text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100',
+                                !canEditTask && 'cursor-not-allowed group-hover:opacity-60'
+                              )}
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -1230,8 +1295,9 @@ export const TaskDetailModal = ({
                   <Select
                     value={editedTask.status}
                     onValueChange={(value) => handleStatusChange(value as TaskStatus)}
+                    disabled={!canEditTask}
                   >
-                    <SelectTrigger className="h-9" aria-required="true">
+                    <SelectTrigger className="h-9" aria-required="true" title={canEditTask ? undefined : editLockTitle}>
                       <SelectValue>
                         <div className="flex items-center gap-2">
                           <StatusDot color={currentStatusColor} />
@@ -1263,6 +1329,8 @@ export const TaskDetailModal = ({
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
+                        disabled={!canEditTask}
+                        title={canEditTask ? undefined : editLockTitle}
                         className={cn(
                           'w-full justify-start text-left font-normal h-9 px-3',
                           !editedTask.startDate && 'text-muted-foreground'
@@ -1302,6 +1370,8 @@ export const TaskDetailModal = ({
                       <Button
                         variant="outline"
                         aria-required="true"
+                        disabled={!canEditTask}
+                        title={canEditTask ? undefined : editLockTitle}
                         className={cn(
                           'w-full justify-start text-left font-normal h-9 px-3',
                           !editedTask.dueDate && 'text-muted-foreground'
@@ -1360,8 +1430,9 @@ export const TaskDetailModal = ({
                   <Select
                     value={editedTask.priority}
                     onValueChange={(value) => handleFieldChange('priority', value as Priority)}
+                    disabled={!canEditTask}
                   >
-                    <SelectTrigger className="h-9" aria-required="true">
+                    <SelectTrigger className="h-9" aria-required="true" title={canEditTask ? undefined : editLockTitle}>
                       <SelectValue>
                         <Badge className={cn('text-xs', priorityOptions.find(p => p.value === editedTask.priority)?.color)}>
                           {priorityOptions.find(p => p.value === editedTask.priority)?.label}
@@ -1385,8 +1456,12 @@ export const TaskDetailModal = ({
                     Modules
                   </Label>
                   <div
-                    className="min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 cursor-pointer hover:border-primary/50 transition-colors"
-                    onClick={() => setIsModulePopoverOpen(true)}
+                    className={cn(
+                      'min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 transition-colors',
+                      canEditTask ? 'cursor-pointer hover:border-primary/50' : 'cursor-not-allowed opacity-60'
+                    )}
+                    title={canEditTask ? undefined : editLockTitle}
+                    onClick={() => canEditTask && setIsModulePopoverOpen(true)}
                   >
                     {(editedTask.moduleIds || []).length === 0 && (
                       <span className="text-muted-foreground text-xs">Select modules...</span>
@@ -1398,6 +1473,8 @@ export const TaskDetailModal = ({
                         <Badge key={module.id} variant="secondary" className="max-w-full px-2 py-0.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
                           <span className="text-xs font-normal truncate max-w-[120px]">{module.name}</span>
                           <button
+                            disabled={!canEditTask}
+                            title={canEditTask ? undefined : editLockTitle}
                             onClick={(e) => {
                               e.stopPropagation();
                               const updatedIds = (editedTask.moduleIds || []).filter(id => id !== module.id);
@@ -1411,16 +1488,27 @@ export const TaskDetailModal = ({
                                 updatedAt: new Date().toISOString()
                               }));
                             }}
-                            className="ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none"
+                            className={cn(
+                              'ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none',
+                              !canEditTask && 'cursor-not-allowed opacity-60'
+                            )}
                           >
                             <X className="h-3 w-3" />
                           </button>
                         </Badge>
                       );
                     })}
-                    <Popover open={isModulePopoverOpen} onOpenChange={setIsModulePopoverOpen}>
+                    <Popover open={isModulePopoverOpen} onOpenChange={(open) => canEditTask && setIsModulePopoverOpen(open)}>
                       <PopoverTrigger asChild>
-                        <button className="h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center">
+                        <button
+                          disabled={!canEditTask}
+                          title={canEditTask ? undefined : editLockTitle}
+                          onClick={(e) => e.stopPropagation()}
+                          className={cn(
+                            'h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center',
+                            !canEditTask && 'cursor-not-allowed opacity-60'
+                          )}
+                        >
                           <span>
                             <Plus className="h-3 w-3" />
                           </span>
@@ -1658,13 +1746,18 @@ export const TaskDetailModal = ({
                     id="task-advanced-mode"
                     checked={isAdvancedDescription}
                     onCheckedChange={setIsAdvancedDescription}
+                    disabled={!canEditTask}
                   />
                 </div>
               </div>
               {isAdvancedDescription ? (
-                <div className="min-h-[200px] border rounded-md p-4 bg-background">
+                <div
+                  className={cn('min-h-[200px] border rounded-md p-4 bg-background', !canEditTask && 'opacity-60 cursor-not-allowed')}
+                  title={canEditTask ? undefined : editLockTitle}
+                >
                   <SlashBlockEditor
                     key={editedTask.id || 'create'}
+                    readOnly={!canEditTask}
                     initialBlocks={editedTask.descriptionBlocks}
                     onChange={(blocks) => handleFieldChange('descriptionBlocks', blocks as any)}
                   />
@@ -1675,6 +1768,8 @@ export const TaskDetailModal = ({
                   onChange={(e) => handleFieldChange('description', e.target.value)}
                   placeholder="Describe the task in detail..."
                   className="min-h-[150px] resize-none"
+                  disabled={!canEditTask}
+                  title={canEditTask ? undefined : editLockTitle}
                 />
               )}
             </section>
@@ -1880,8 +1975,97 @@ export const TaskDetailModal = ({
                   <span className="text-sm text-muted-foreground">
                     {isUploading ? "Uploading..." : "Drop files, click to upload, or paste image"}
                   </span>
-                  <input type="file" multiple className="hidden" onChange={handleFileUpload} disabled={isUploading} />
+                  <input type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,video/*" className="hidden" onChange={handleFileUpload} disabled={isUploading} />
                 </label>
+              </div>
+            </section>
+
+            <Separator />
+
+            {/* Video Links Section */}
+            <section className="space-y-3">
+              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Video className="h-4 w-4" />
+                Videos
+              </h3>
+
+              <div className="space-y-2">
+                {videoLinks.map((vl) => {
+                  const thumbnail = getVideoThumbnail(vl.url);
+                  return (
+                    <div
+                      key={vl.id}
+                      className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 group cursor-pointer hover:bg-muted"
+                      onClick={() => setPreviewingFile({ url: vl.url, fileName: vl.title || vl.url })}
+                    >
+                      <div className="relative h-10 w-16 rounded overflow-hidden bg-black/20 shrink-0 flex items-center justify-center">
+                        {thumbnail ? (
+                          <img src={thumbnail} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <Video className="h-5 w-5 text-muted-foreground" />
+                        )}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="bg-black/50 rounded-full p-1">
+                            <Play className="h-3 w-3 text-white fill-white" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{vl.title || vl.url}</p>
+                        <p className="text-xs text-muted-foreground truncate">{vl.url}</p>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveVideoLink(vl.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Uploaded video files in pending mode */}
+                {mode === 'create' && pendingFiles.filter(f => f.type.startsWith('video/')).length > 0 && (
+                  <div className="space-y-1">
+                    {pendingFiles.filter(f => f.type.startsWith('video/')).map((f, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Video className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span className="truncate">{f.name}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Paste YouTube, Vimeo, or direct video URL…"
+                    value={videoLinkInput}
+                    onChange={(e) => setVideoLinkInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddVideoLink(); } }}
+                    className="text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddVideoLink}
+                    disabled={!videoLinkInput.trim()}
+                    className="shrink-0"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
               </div>
             </section>
 
@@ -2159,13 +2343,18 @@ export const TaskDetailModal = ({
         )}
         {mode === 'view' && (
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-t flex items-center justify-between gap-2 bg-background">
-            {/* Delete button on the bottom left */}
+            {/* Delete button on the bottom left — enabled for Maintainer+, the task creator, or an assignee */}
             {onDelete ? (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowDeleteConfirm(true)}
-                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
+                disabled={!canEditTask}
+                title={canEditTask ? 'Delete this task' : editLockTitle}
+                className={cn(
+                  'text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2',
+                  !canEditTask && 'cursor-not-allowed opacity-60'
+                )}
               >
                 <Trash2 className="h-4 w-4" />
                 Delete Task
@@ -2177,7 +2366,11 @@ export const TaskDetailModal = ({
               <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
                 Cancel
               </Button>
-              <Button onClick={handleUpdateTask} disabled={isSaving || !editedTask.title || !editedTask.dueDate || !isFormDirty || isBlockedWithoutDependencies}>
+              <Button
+                onClick={handleUpdateTask}
+                disabled={isSaving || !editedTask.title || !editedTask.dueDate || !isFormDirty || isBlockedWithoutDependencies || !canEditTask}
+                title={canEditTask ? undefined : editLockTitle}
+              >
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Update Task
               </Button>
@@ -2206,7 +2399,10 @@ export const TaskDetailModal = ({
     </Dialog>
     <FilePreviewDialog
       file={previewingFile}
-      files={attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType }))}
+      files={[
+        ...attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType })),
+        ...videoLinks.map(v => ({ url: v.url, fileName: v.title || v.url })),
+      ]}
       onClose={() => setPreviewingFile(null)}
     />
     </>

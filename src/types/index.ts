@@ -1,5 +1,10 @@
 // OpenPlan AI Type Definitions
 
+// Organization roles are decoupled from project roles — a user's role on a
+// given project is independent of whatever role they hold at the org level.
+export type OrgRole = 'admin' | 'maintainer';
+export type ProjectRole = 'admin' | 'maintainer' | 'member';
+
 // Projects can define custom Kanban columns (see useProjectTaskColumns), so a
 // task's status is any project-defined column key, not a fixed set of values.
 export type TaskStatus = string;
@@ -25,7 +30,7 @@ export type ProjectStage = 'concept' | 'design' | 'development' | 'testing' | 'p
 
 // Issue types
 export type IssueSeverity = 'critical' | 'major' | 'minor' | 'trivial';
-export type IssueStatus = 'open' | 'in-progress' | 'resolved' | 'closed' | 'wont-fix';
+export type IssueStatus = 'open' | 'in-progress' | 'resolved' | 'wont-fix';
 export type IssueCategory =
   | 'defect'           // Product defect
   | 'risk'             // Identified risk
@@ -66,6 +71,14 @@ export interface Comment {
   content: string;
   author: TeamMember;
   createdAt: string;
+}
+
+export interface VideoLink {
+  id: string;
+  url: string;
+  title?: string;
+  addedBy: TeamMember;
+  addedAt: string;
 }
 
 // First-class Module entity
@@ -117,6 +130,7 @@ export interface Task {
   checklist?: ChecklistItem[];
   attachments?: Attachment[];
   comments?: Comment[];
+  videoLinks?: VideoLink[];
   createdAt: string;
   updatedAt: string;
   createdBy?: TeamMember;  // Who created this task
@@ -158,6 +172,7 @@ export interface Issue {
   resolution?: string;         // How it was resolved
   attachments?: Attachment[];
   comments?: Comment[];
+  videoLinks?: VideoLink[];
   tags?: string[];
   checklist?: ChecklistItem[];
   blockedBy?: string[];

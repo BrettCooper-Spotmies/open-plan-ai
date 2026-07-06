@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, Coffee, ChevronsUpDown, Check, Plus, Building2, Loader2, MessageSquare, Plug } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
@@ -12,9 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { useOrganization } from '@/contexts/OrganizationContext';
-import { useAuth } from '@/contexts/AuthContext';
-import { apiClient } from '@/services/api/client';
-import { ENDPOINTS } from '@/services/api/endpoints';
+import { useOrgPermissions } from '@/hooks/useProjectPermissions';
 import { OrganizationSettings } from '@/services/organizations.service';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { toast } from 'sonner';
@@ -65,30 +63,12 @@ export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { organizations, currentOrganization, setCurrentOrganization, createOrganization, isLoading: orgLoading } = useOrganization();
-  const { user } = useAuth();
+  const { isOrgAdmin: canCreateOrg } = useOrgPermissions();
 
   const [orgPopoverOpen, setOrgPopoverOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [newOrgForm, setNewOrgForm] = useState({ name: '', description: '' });
-  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
-
-  // Fetch current user's role in the current org
-  useEffect(() => {
-    if (!user?.id || !currentOrganization?.id) {
-      setCurrentUserRole(null);
-      return;
-    }
-    apiClient
-      .get<{ role: string }[]>(ENDPOINTS.ORGANIZATIONS.MEMBERS(currentOrganization.id))
-      .then((members) => {
-        const me = members.find((m: any) => m.userId === user.id || m.user_id === user.id);
-        setCurrentUserRole(me?.role || null);
-      })
-      .catch(() => setCurrentUserRole(null));
-  }, [user?.id, currentOrganization?.id]);
-
-  const canCreateOrg = currentOrganization?.myRole === 'admin' || currentOrganization?.myRole === 'manager' || currentUserRole === 'admin' || currentUserRole === 'manager';
   const organizationNavItems = teamNavItems;
 
   const orgSettings = (currentOrganization?.settings || {}) as OrganizationSettings;
@@ -269,7 +249,7 @@ export function AppSidebar() {
                 {mainNavItems.map(item => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={collapsed ? item.title : undefined}>
-                      <NavLink to={item.url} end={item.url === '/'} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
+                      <NavLink id={item.url} to={item.url} end={item.url === '/'} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
                         <item.icon className="h-4 w-4 shrink-0" />
                         {!collapsed && <span>{item.title}</span>}
                       </NavLink>

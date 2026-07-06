@@ -3,6 +3,7 @@ import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { queryKeys } from '@/lib/queryClient';
 import { TeamMember } from '@/types';
+import { resolveFileUrl } from '@/utils/fileUrl';
 
 const isValidUuid = (value: unknown): value is string => {
   if (typeof value !== 'string') return false;
@@ -41,7 +42,8 @@ export function useOrganizationMembers(orgId: string | undefined) {
           const u = (m.user ?? {}) as Record<string, unknown>;
           const email = (u.email ?? m.email ?? '') as string;
           const name = ((u.name ?? m.name ?? '') as string).trim() || email.split('@')[0] || 'Member';
-          const avatarUrl = (u.avatarUrl ?? u.avatar_url ?? m.avatarUrl ?? m.avatar_url ?? undefined) as string | undefined;
+          const rawAvatarUrl = (u.avatarUrl ?? u.avatar_url ?? u.avatar ?? m.avatarUrl ?? m.avatar_url ?? m.avatar ?? undefined) as string | undefined;
+          const avatarUrl = resolveFileUrl(rawAvatarUrl) ?? rawAvatarUrl;
           const initials = ((u.initials ?? m.initials ?? name.slice(0, 2).toUpperCase()) as string);
 
           return {
@@ -83,7 +85,8 @@ export function useProjectMembers(projectId: string | undefined) {
           const u = (m.user ?? {}) as Record<string, unknown>;
           const email = (u.email ?? m.email ?? '') as string;
           const name = ((u.name ?? m.name ?? '') as string).trim() || email.split('@')[0] || 'Member';
-          const avatarUrl = (u.avatarUrl ?? u.avatar_url ?? m.avatarUrl ?? m.avatar_url ?? undefined) as string | undefined;
+          const rawAvatarUrl = (u.avatarUrl ?? u.avatar_url ?? u.avatar ?? m.avatarUrl ?? m.avatar_url ?? m.avatar ?? undefined) as string | undefined;
+          const avatarUrl = resolveFileUrl(rawAvatarUrl) ?? rawAvatarUrl;
           const initials = ((u.initials ?? m.initials ?? name.slice(0, 2).toUpperCase()) as string);
 
           return {

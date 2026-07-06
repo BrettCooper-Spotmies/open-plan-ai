@@ -6,6 +6,7 @@ import {
   Package, Shield, Cpu, Scissors, RefreshCw, Send, Download, Edit,
   History, Link2, X, Pause, Plus, ClipboardCheck, Loader2,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   ECOListItem, ECODetail, PipelineStep,
   ECO_TYPE_LABEL, REASON_LABEL, CHANGE_CLASS_LABEL, EFFECTIVITY_LABEL,
@@ -529,7 +530,8 @@ function VersionDiff({ detail }: { detail: ECODetail }) {
 
 // ── Affected parts ────────────────────────────────────────────────────────────
 
-function AffectedParts({ detail }: { detail: ECODetail }) {
+function AffectedParts({ detail, projectId }: { detail: ECODetail; projectId: string }) {
+  const navigate = useNavigate();
   const sorted = [...detail.parts].sort((a, b) => (
     ({ HIGH: 0, MEDIUM: 1, LOW: 2 }[a.impact] ?? 2) - ({ HIGH: 0, MEDIUM: 1, LOW: 2 }[b.impact] ?? 2)
   ));
@@ -557,7 +559,18 @@ function AffectedParts({ detail }: { detail: ECODetail }) {
             style={{ borderBottom: i < sorted.length - 1 ? '1px solid hsl(var(--border)/0.5)' : 'none' }}
           >
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[12px] font-mono font-semibold text-blue-500">{p.pn}</span>
+              <div className="flex flex-col min-w-0">
+                <span
+                  className={cn(
+                    'text-[12px] font-mono font-semibold text-blue-500',
+                    p.bomNodeId && 'cursor-pointer hover:underline',
+                  )}
+                  onClick={() => p.bomNodeId && navigate(`/projects/${projectId}/bom/${p.bomNodeId}`)}
+                >
+                  {p.pn}
+                </span>
+                {p.name && <span className="text-[11px] text-foreground font-medium leading-tight">{p.name}</span>}
+              </div>
               <div className="flex items-center gap-1.5 shrink-0">
                 {p.rev && (
                   <span
@@ -630,10 +643,10 @@ function AffectedParts({ detail }: { detail: ECODetail }) {
           </div>
         );
       })}
-      <div className="px-4 py-2 bg-muted/20 border-t border-border/50 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+      {/* <div className="px-4 py-2 bg-muted/20 border-t border-border/50 flex items-center gap-1.5 text-[10px] text-muted-foreground">
         <GitBranch className="w-2.5 h-2.5" />
         Where-used paths auto-rolled up from BOM hierarchy to top-level assembly
-      </div>
+      </div> */}
     </div>
   );
 }
@@ -658,7 +671,7 @@ function ImpactAssessment({ detail }: { detail: ECODetail }) {
 
   return (
     <div className="bg-card border border-border rounded-lg px-4 py-3.5">
-      <div className="flex items-center justify-between mb-2">
+      {/* <div className="flex items-center justify-between mb-2">
         <div className="text-[14px] font-semibold text-foreground">Impact Assessment</div>
         <span
           className="px-2 py-0.5 rounded text-[10px] font-semibold"
@@ -666,7 +679,7 @@ function ImpactAssessment({ detail }: { detail: ECODetail }) {
         >
           Schedule {sched.label}
         </span>
-      </div>
+      </div> */}
       <Row icon={Flag} label="Affected Milestones">
         <div className="flex flex-col items-end gap-1">
           {im.milestones.length
@@ -701,7 +714,7 @@ function ImpactAssessment({ detail }: { detail: ECODetail }) {
           {im.firmware ? 'Yes — FW dependency' : 'None'}
         </span>
       </Row>
-      <div className="flex items-start justify-between gap-3 pt-2">
+      {/* <div className="flex items-start justify-between gap-3 pt-2">
         <span className="flex items-center gap-2 text-[12px] text-muted-foreground">
           <Boxes className="w-3.5 h-3.5" />
           Inventory Impact
@@ -709,7 +722,7 @@ function ImpactAssessment({ detail }: { detail: ECODetail }) {
         <span className="text-[12px] font-medium text-foreground">
           {im.inventoryQty > 0 ? `${im.inventoryQty} units to rework/scrap` : <span className="text-muted-foreground">None</span>}
         </span>
-      </div>
+      </div> */}
     </div>
   );
 }
@@ -745,10 +758,20 @@ function ActivityTimeline({ detail }: { detail: ECODetail }) {
                 {!last && <div className="w-px flex-1 bg-border/50 min-h-[14px]" />}
               </div>
               <div className={cn('min-w-0', last ? 'pb-0' : 'pb-4')}>
-                <div className="text-[12px]">
+                <div className="text-[12px] flex items-center gap-1.5 flex-wrap">
+                  <span
+                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize"
+                    style={{
+                      color: meta.color,
+                      background: meta.color + '18',
+                      border: `1px solid ${meta.color}33`,
+                    }}
+                  >
+                    {a.action.replace(/_/g, ' ').toLowerCase()}
+                  </span>
+                  <span className="text-muted-foreground">by</span>
                   <strong className="font-semibold text-foreground">{a.actor}</strong>
-                  <span className="text-muted-foreground"> {a.action.replace(/_/g, ' ').toLowerCase()}</span>
-                  <span className="text-muted-foreground/60"> · {a.when}</span>
+                  <span className="text-muted-foreground/60">· {a.when}</span>
                 </div>
                 {a.note && (
                   <div className="text-[12px] text-muted-foreground mt-0.5 leading-relaxed">{a.note}</div>
@@ -1088,11 +1111,13 @@ function Toast({ message }: { message: string }) {
 export function ECODetailView({
   eco,
   projectId,
+  projectName,
   onBack,
   onEdit,
 }: {
   eco: ECOListItem;
   projectId: string;
+  projectName?: string;
   onBack: () => void;
   onEdit?: (eco: ECOListItem) => void;
 }) {
@@ -1107,13 +1132,13 @@ export function ECODetailView({
   const detail: ECODetail = liveRaw ? fromApiEcoDetail(liveRaw) : buildDetail(eco);
   const isFirstLoad = detailLoading && !liveRaw;
 
-  // Approval rights: the assigned approver acts normally; project managers/admins
+  // Approval rights: the assigned approver acts normally; project maintainers/admins
   // can act on the assignee's behalf (override). `awaitingMe` is server-computed
   // and true only for the assignee.
   const { user } = useAuth();
   const { data: projectMembers = [] } = useProjectMembers(projectId);
   const myRole = projectMembers.find(m => m.id === user?.id)?.role?.toLowerCase();
-  const canOverride = myRole === 'manager' || myRole === 'admin';
+  const canOverride = myRole === 'maintainer' || myRole === 'admin';
   const canAct = detail.awaitingMe || canOverride;
   const isOverride = !detail.awaitingMe && canOverride;
 
@@ -1218,10 +1243,12 @@ export function ECODetailView({
     <div className="flex-1 overflow-y-auto bg-background px-4 md:px-6 py-4 md:py-5 pb-12 h-full">
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground mb-3">
-        <span onClick={onBack} className="text-muted-foreground/70 cursor-pointer hover:text-foreground transition-colors">EV Charging Station</span>
-        {/* <ChevronRight className="w-3 h-3" />
-        <span onClick={onBack} className="text-blue-500 cursor-pointer hover:underline">Engineering Changes</span> */}
-        <ChevronRight className="w-3 h-3" />
+        {projectName && (
+          <>
+            <span onClick={onBack} className="text-muted-foreground/70 cursor-pointer hover:text-foreground transition-colors">{projectName}</span>
+            <ChevronRight className="w-3 h-3" />
+          </>
+        )}
         <span className="text-foreground font-medium">{detail.num}</span>
       </div>
 
@@ -1385,7 +1412,7 @@ export function ECODetailView({
           ) : (
             <>
               <ImpactAssessment detail={detail} />
-              <AffectedParts detail={detail} />
+              <AffectedParts detail={detail} projectId={projectId} />
             </>
           )}
         </div>

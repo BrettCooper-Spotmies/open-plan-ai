@@ -1,6 +1,7 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import type { OrgRole } from '@/types';
 
 export interface OrganizationSettings {
   companyName?: string;
@@ -17,7 +18,7 @@ export interface Organization {
   slug: string;
   description: string | null;
   settings: Record<string, unknown>;
-  myRole: 'admin' | 'manager' | 'member' | 'viewer' | null;
+  myRole: OrgRole | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -26,7 +27,7 @@ export interface OrganizationMember {
   id: string;
   organizationId: string;
   userId: string;
-  role: 'owner' | 'admin' | 'member';
+  role: OrgRole;
   joinedAt: string;
   profile?: {
     id: string;
@@ -87,7 +88,7 @@ export const organizationsService = {
   /**
    * Update member role
    */
-  async updateMemberRole(orgId: string, userId: string, role: 'admin' | 'member'): Promise<void> {
+  async updateMemberRole(orgId: string, userId: string, role: OrgRole): Promise<void> {
     return apiClient.put<void>(ENDPOINTS.ORGANIZATIONS.MEMBER_ROLE(orgId, userId), { role });
   },
 
@@ -108,7 +109,7 @@ export const organizationsService = {
   /**
    * Add member to organization
    */
-  async addMember(orgId: string, userId: string, role: 'admin' | 'member' = 'member'): Promise<void> {
+  async addMember(orgId: string, userId: string, role: OrgRole = 'maintainer'): Promise<void> {
     return apiClient.post<void>(ENDPOINTS.ORGANIZATIONS.MEMBERS(orgId), { userId, role });
   },
 

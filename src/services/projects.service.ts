@@ -71,6 +71,7 @@ function fromApiIssue(raw: Record<string, unknown>): Issue {
     tags: (raw.tags as string[]) ?? [],
     checklist: (raw.checklist as Issue['checklist']) ?? [],
     descriptionBlocks: (raw.descriptionBlocks as Issue['descriptionBlocks']) ?? [],
+    videoLinks: (raw.videoLinks as Issue['videoLinks']) ?? [],
   } as Issue;
 }
 
@@ -143,6 +144,14 @@ export const projectsService = {
   },
 
   /**
+   * Sync computed project progress — Maintainer+ accessible, unlike the
+   * general update() endpoint which is Admin-only (project identity/settings).
+   */
+  async updateProgress(id: string, progress: number): Promise<Project> {
+    return apiClient.patch<Project>(ENDPOINTS.PROJECTS.PROGRESS(id), { progress });
+  },
+
+  /**
    * Get project team members
    */
   async getTeam(id: string): Promise<TeamMember[]> {
@@ -174,8 +183,8 @@ export const projectsService = {
   /**
    * Get issues for a project
    */
-  async getIssues(projectId: string, limit = 100, signal?: AbortSignal): Promise<Issue[]> {
-    const data = await apiClient.get<Record<string, unknown>[]>(`${ENDPOINTS.ISSUES.LIST(projectId)}?limit=${limit}`, { signal });
+  async getIssues(projectId: string, _limit = 100, signal?: AbortSignal): Promise<Issue[]> {
+    const data = await apiClient.get<Record<string, unknown>[]>(ENDPOINTS.ISSUES.LIST_ALL(projectId), { signal });
     return (data || []).map(fromApiIssue);
   },
 

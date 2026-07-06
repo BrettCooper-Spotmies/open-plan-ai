@@ -225,40 +225,6 @@ export function BOMMapView({ nodes, onOpen, pred, filtersActive }: Props) {
     >
       {/* Canvas */}
       <div style={{ position: 'absolute', top: 0, left: 0, transformOrigin: '0 0', transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
-        {/* Level column backgrounds (alternating neutral) */}
-        {usedDepths.map(d => (
-          <div
-            key={`lane-${d}`}
-            style={{
-              position: 'absolute',
-              left: d * (NW + HGAP) - (d === 0 ? 0 : HGAP / 2),
-              top: -20,
-              width: NW + (d === 0 ? HGAP / 2 : HGAP),
-              height: bounds.h + 60,
-              background: d % 2 === 0 ? 'rgba(0,0,0,0.025)' : 'transparent',
-              zIndex: 0,
-              pointerEvents: 'none',
-            }}
-          />
-        ))}
-
-        {/* Level vertical dividers */}
-        {usedDepths.slice(1).map(d => (
-          <div
-            key={`div-${d}`}
-            style={{
-              position: 'absolute',
-              left: d * (NW + HGAP) - HGAP / 2 - 0.5,
-              top: -20,
-              width: 1,
-              height: bounds.h + 60,
-              background: 'var(--border)',
-              opacity: 0.6,
-              zIndex: 1,
-              pointerEvents: 'none',
-            }}
-          />
-        ))}
 
         {/* Edges */}
         <svg

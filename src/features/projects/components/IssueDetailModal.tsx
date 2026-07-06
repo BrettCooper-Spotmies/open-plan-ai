@@ -17,9 +17,12 @@ import { IssueDetailContent } from './IssueDetailContent';
 import { Button } from '@/components/ui/button';
 import { DialogClose } from '@/components/ui/dialog';
 import { Trash2, Maximize2, X } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { logger } from '@/services/monitoring/logger';
+import { useAuth } from '@/contexts/AuthContext';
+import { useProjectPermissions } from '@/hooks/useProjectPermissions';
+import { cn } from '@/lib/utils';
 
 interface IssueDetailModalProps {
   issue: Issue | null;
@@ -29,6 +32,7 @@ interface IssueDetailModalProps {
   onClose: () => void;
   onUpdate: (issue: Issue) => void;
   onDelete?: (issueId: string) => void;
+  userProjectRole?: string;
   mode?: 'view' | 'create';
   onCreate?: (issue: Issue, pendingFiles?: File[]) => void;
 }
@@ -48,13 +52,25 @@ export function IssueDetailModal({
   onClose,
   onUpdate,
   onDelete,
+  userProjectRole,
   mode = 'view',
   onCreate,
 }: IssueDetailModalProps) {
   const navigate = useNavigate();
+  const { user: profile } = useAuth();
   const [editedIssue, setEditedIssue] = useState<Issue | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const { canEditResource } = useProjectPermissions(editedIssue?.projectId);
+  const canEditIssue = useMemo(
+    () =>
+      canEditResource({
+        createdBy: editedIssue?.reportedBy?.id,
+        assigneeIds: (editedIssue?.assignees || []).map((a) => a.id),
+      }),
+    [canEditResource, editedIssue?.reportedBy?.id, editedIssue?.assignees]
+  );
+  const editLockTitle = 'You can only edit items you created or are assigned to';
 
   useEffect(() => {
     if (isOpen && issue) {
@@ -157,13 +173,18 @@ export function IssueDetailModal({
         {mode === 'view' && (
           <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full">
             <div className="flex-1">
-              {/* Delete button on the bottom left */}
+              {/* Delete button — enabled for Maintainer+, the issue reporter, or an assignee */}
               {onDelete && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2"
+                  disabled={!canEditIssue}
+                  title={canEditIssue ? 'Delete this issue' : editLockTitle}
+                  className={cn(
+                    'text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2',
+                    !canEditIssue && 'cursor-not-allowed opacity-60'
+                  )}
                 >
                   <Trash2 className="h-4 w-4" />
                   Delete Issue
@@ -171,9 +192,10 @@ export function IssueDetailModal({
               )}
             </div>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button 
+            <Button
               onClick={handleUpdateIssue}
-              disabled={!editedIssue.title.trim()}
+              disabled={!editedIssue.title.trim() || !canEditIssue}
+              title={canEditIssue ? undefined : editLockTitle}
             >
               Update Issue
             </Button>

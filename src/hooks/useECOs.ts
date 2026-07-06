@@ -11,7 +11,9 @@ export interface ApiEcoListItem {
   title: string;
   description: string | null;
   type: string;
+  typeOther: string | null;
   reason: string;
+  reasonOther: string | null;
   priority: string;
   status: string;
   changeClass: string;
@@ -55,6 +57,7 @@ export interface ApiEcoPart {
   id: string;
   partId: string;
   partNumber: string;
+  name: string;
   description: string;
   bomNodeId: string | null;
   revFrom: string | null;
@@ -97,6 +100,7 @@ export interface ApiEcoActivity {
   title: string;
   description: string | null;
   userId: string | null;
+  userName: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
 }

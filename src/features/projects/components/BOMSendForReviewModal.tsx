@@ -24,8 +24,8 @@ interface Props {
 
 export function BOMSendForReviewModal({ open, projectId, partLabel, hasChildren, onClose, onSubmit }: Props) {
   const { data: allMembers = [] } = useProjectMembers(projectId);
-  // Only managers/admins can be assigned as approvers — members/viewers are excluded.
-  const members = allMembers.filter(m => m.role === 'admin' || m.role === 'manager');
+  // Only maintainers/admins can be assigned as approvers — members are excluded.
+  const members = allMembers.filter(m => m.role === 'admin' || m.role === 'maintainer');
   const [scope, setScope] = useState<BOMApprovalRequestScope>('node');
   const [approverIds, setApproverIds] = useState<string[]>([]);
   const [comment, setComment] = useState('');

@@ -166,7 +166,7 @@ export function TaskFiltersDropdown({
           <div className="space-y-2">
             <Label className="text-xs flex items-center gap-1">
               <User className="h-3 w-3" />
-              Assignee
+              Assigned To
             </Label>
             <MultiSelect
               options={[

@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   GitMerge, Check, X, Plus, ChevronDown, Lock, AlertCircle,
-  Upload, FileText, Image, Box, Boxes, Package, Scissors,
+  Upload, FileText, Image, Box, Boxes, Package, Scissors, Search,
 } from 'lucide-react';
 import {
   ECOType, ECOReason, ECOPriority, ChangeClass, EffectivityType, ImpactLevel, ECODisposition,
@@ -16,7 +16,7 @@ import { useCreateECO, useUpdateECO, useSubmitECO, useECODetail } from '@/hooks/
 import { useBomTree } from '@/hooks/useBom';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { useAuth } from '@/modules/auth';
-import { fromApiNode, bomFlatAll, bomPath } from './bomData';
+import { fromApiNode, bomFlatAll, bomPath, KNOWN_BOM_CATEGORIES, BOM_CAT_META, UOM_OPTIONS } from './bomData';
 import { REQS } from './requirementsData';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -37,6 +37,14 @@ const BOM_PARAM_OPTIONS: { key: string; label: string }[] = [
   { key: 'leadTime', label: 'Lead Time (days)' },
   { key: 'mpn', label: 'MPN' },
 ];
+
+// Parameter keys whose From/To value should be constrained to the BOM's known
+// option set (same lists used in BOMPartSheet.tsx's create/edit form) rather
+// than free text.
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  KNOWN_BOM_CATEGORIES.map(c => [c, BOM_CAT_META[c].label]),
+);
+const UOM_LABELS: Record<string, string> = {};
 
 const ECO_RECOMMENDED_PARAMS = [
   'Drawing Number',
@@ -67,11 +75,13 @@ function ParamCombobox({
   onChange,
   onSelectOther,
   firstSelectedNode,
+  usedParams,
 }: {
   value: string;
   onChange: (label: string, autoFrom: string) => void;
   onSelectOther: () => void;
   firstSelectedNode: Record<string, unknown> | null;
+  usedParams: Set<string>;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -88,7 +98,7 @@ function ParamCombobox({
           <ChevronDown className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="p-0 w-[260px]" align="start">
+      <PopoverContent className="p-0 w-[260px] z-[300]" align="start">
         <Command>
           <CommandInput placeholder="Search parameters…" />
           <CommandList>
@@ -98,6 +108,7 @@ function ParamCombobox({
                 <CommandItem
                   key={o.key}
                   value={o.label}
+                  disabled={usedParams.has(o.label) && value !== o.label}
                   onSelect={() => {
                     const autoFrom = o.key === 'rev'
                       ? ''
@@ -118,6 +129,7 @@ function ParamCombobox({
                 <CommandItem
                   key={p}
                   value={p}
+                  disabled={usedParams.has(p) && value !== p}
                   onSelect={() => {
                     onChange(p, '');
                     setOpen(false);
@@ -320,7 +332,8 @@ type ECOScope = 'BOM_PART' | 'REQUIREMENT';
 
 interface BasicsState {
   title: string; description: string;
-  type: ECOType | string; priority: ECOPriority; reason: ECOReason | string;
+  type: ECOType | string; typeOther: string;
+  priority: ECOPriority; reason: ECOReason | string; reasonOther: string;
   changeClass: ChangeClass;
   ecr: string;
   effType: EffectivityType; effValue: string;
@@ -389,8 +402,10 @@ export function ECOWizard({
   // Step 1 — Basics
   const [basics, setBasics] = useState<BasicsState>({
     title: '', description: '',
-    type: 'DESIGN_CHANGE', priority: 'MEDIUM',
-    reason: 'PERFORMANCE', changeClass: 'II',
+    type: 'DESIGN_CHANGE', typeOther: '',
+    priority: 'MEDIUM',
+    reason: 'PERFORMANCE', reasonOther: '',
+    changeClass: 'II',
     ecr: '',
     effType: 'DATE', effValue: '',
     scope: 'BOM_PART',
@@ -412,7 +427,8 @@ export function ECOWizard({
   );
 
   const [items, setItems] = useState<ItemState[]>([]);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(true);
+  const [partSearch, setPartSearch] = useState('');
   const [reqItems, setReqItems] = useState<ReqItemState[]>([]);
   const [reqPickerOpen, setReqPickerOpen] = useState(false);
 
@@ -429,7 +445,16 @@ export function ECOWizard({
         }],
     );
     setPickerOpen(false);
+    setPartSearch('');
   };
+
+  const filteredBomPool = useMemo(
+    () => bomPool.filter(p => {
+      const q = partSearch.trim().toLowerCase();
+      return !q || p.pn.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q);
+    }),
+    [bomPool, partSearch],
+  );
 
   // Step 3 — Diff rows + attachments
   const [diffRows, setDiffRows] = useState<DiffRowState[]>([{ param: '', from: '', to: '', cls: 'MODIFIED' }]);
@@ -442,53 +467,55 @@ export function ECOWizard({
     if (!editDetail || seeded) return;
     const d = editDetail;
     setBasics({
-      title:       d.title,
+      title: d.title,
       description: d.description ?? '',
-      type:        (d.type?.toUpperCase() ?? 'DESIGN_CHANGE') as ECOType,
-      priority:    (d.priority?.toUpperCase() ?? 'MEDIUM') as ECOPriority,
-      reason:      (d.reason?.toUpperCase() ?? 'PERFORMANCE') as ECOReason,
+      type: (d.type?.toUpperCase() ?? 'DESIGN_CHANGE') as ECOType,
+      typeOther: d.typeOther ?? '',
+      priority: (d.priority?.toUpperCase() ?? 'MEDIUM') as ECOPriority,
+      reason: (d.reason?.toUpperCase() ?? 'PERFORMANCE') as ECOReason,
+      reasonOther: d.reasonOther ?? '',
       changeClass: (d.changeClass ?? 'II') as ChangeClass,
-      ecr:         d.originatingEcr ?? '',
-      effType:     (d.effectivityType?.toUpperCase() ?? 'DATE') as EffectivityType,
-      effValue:    d.effectivityValue ?? '',
-      scope:       'BOM_PART',
+      ecr: d.originatingEcr ?? '',
+      effType: (d.effectivityType?.toUpperCase() ?? 'DATE') as EffectivityType,
+      effValue: d.effectivityValue ?? '',
+      scope: 'BOM_PART',
     });
     setItems(
       d.parts.map(p => ({
-        pn:        p.partNumber,
-        desc:      p.description,
-        impact:    (p.impactLevel?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
-        disp:      (p.disposition?.toUpperCase() ?? 'REWORK') as ECODisposition,
-        revFrom:   p.revFrom ?? '',
-        revTo:     p.revTo ?? '',
-        partId:    p.partId,
-        nodeId:    p.bomNodeId ?? '',
+        pn: p.partNumber,
+        desc: p.description,
+        impact: (p.impactLevel?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
+        disp: (p.disposition?.toUpperCase() ?? 'REWORK') as ECODisposition,
+        revFrom: p.revFrom ?? '',
+        revTo: p.revTo ?? '',
+        partId: p.partId,
+        nodeId: p.bomNodeId ?? '',
         whereUsed: (p.whereUsedPaths ?? []).map(path => path.join(' › ')),
       })),
     );
     setDiffRows(
       d.diffRows.length > 0
         ? d.diffRows
-            .slice()
-            .sort((a, b) => a.order - b.order)
-            .map(r => {
-              const isKnown = ALL_KNOWN_PARAM_LABELS.has(r.parameter ?? '');
-              return {
-                param: r.parameter,
-                from:  r.fromValue ?? '',
-                to:    r.toValue   ?? '',
-                cls:   (r.changeLabel?.toUpperCase() ?? 'MODIFIED') as ChangeLabel,
-                paramIsCustom: !!r.parameter && !isKnown,
-              };
-            })
+          .slice()
+          .sort((a, b) => a.order - b.order)
+          .map(r => {
+            const isKnown = ALL_KNOWN_PARAM_LABELS.has(r.parameter ?? '');
+            return {
+              param: r.parameter,
+              from: r.fromValue ?? '',
+              to: r.toValue ?? '',
+              cls: (r.changeLabel?.toUpperCase() ?? 'MODIFIED') as ChangeLabel,
+              paramIsCustom: !!r.parameter && !isKnown,
+            };
+          })
         : [{ param: '', from: '', to: '', cls: 'MODIFIED' }],
     );
     setImpact({
-      schedule:      (d.scheduleImpact?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
-      recert:        d.requiresRecertification ?? false,
-      firmware:      d.firmwareCoupling ?? false,
+      schedule: (d.scheduleImpact?.toUpperCase() ?? 'MEDIUM') as ImpactLevel,
+      recert: d.requiresRecertification ?? false,
+      firmware: d.firmwareCoupling ?? false,
       unitCostDelta: d.unitCostDelta != null ? String(parseFloat(d.unitCostDelta.toFixed(6))) : '',
-      oneTimeCost:   d.oneTimeCost   != null ? String(parseFloat(d.oneTimeCost.toFixed(6)))   : '',
+      oneTimeCost: d.oneTimeCost != null ? String(parseFloat(d.oneTimeCost.toFixed(6))) : '',
     });
     if (d.steps?.length) {
       setPipeline(
@@ -496,14 +523,14 @@ export function ECOWizard({
           .slice()
           .sort((a, b) => a.order - b.order)
           .map(s => ({
-            stage:          s.stage,
-            stageLabel:     s.stageLabel ?? s.stage,
-            approverId:     s.approverUserId ?? null,
-            name:           s.approverName   ?? '',
-            role:           s.approverRole   ?? '',
-            optional:       s.isOptional,
+            stage: s.stage,
+            stageLabel: s.stageLabel ?? s.stage,
+            approverId: s.approverUserId ?? null,
+            name: s.approverName ?? '',
+            role: s.approverRole ?? '',
+            optional: s.isOptional,
             optionalReason: s.optionalReason ?? '',
-            justification:  s.justification  ?? '',
+            justification: s.justification ?? '',
           })),
       );
     }
@@ -581,6 +608,8 @@ export function ECOWizard({
   const validateStep = (s: number): boolean => {
     const e: Record<string, string> = {};
     if (s === 0 && !basics.title.trim()) e.title = 'Title is required';
+    if (s === 0 && basics.type === 'OTHER' && !basics.typeOther.trim()) e.typeOther = 'Describe the change type';
+    if (s === 0 && basics.reason === 'OTHER' && !basics.reasonOther.trim()) e.reasonOther = 'Describe the reason';
     if (s === 1) {
       if (basics.scope === 'BOM_PART' && items.length < 1) e.items = 'At least 1 affected part is required';
       if (basics.scope === 'BOM_PART' && items.length > 0 && items.some(it => !it.revTo.trim())) e.revTo = 'Rev To is required for all parts';
@@ -683,10 +712,46 @@ export function ECOWizard({
         <div>
           <FieldLabel required>Change Type</FieldLabel>
           <EcoSelect value={basics.type as ECOType} onChange={v => setBasics({ ...basics, type: v })} options={Object.keys(ECO_TYPE_LABEL) as ECOType[]} labels={ECO_TYPE_LABEL} />
+          {basics.type === 'OTHER' && (
+            <>
+              <input
+                value={basics.typeOther}
+                onChange={e => {
+                  setBasics({ ...basics, typeOther: e.target.value });
+                  if (errors.typeOther) setErrors(({ typeOther: _typeOther, ...rest }) => rest);
+                }}
+                placeholder="Describe the change type…"
+                className={cn(inputCls, 'mt-1.5', errors.typeOther && 'border-destructive')}
+              />
+              {errors.typeOther && (
+                <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3 h-3" />{errors.typeOther}
+                </p>
+              )}
+            </>
+          )}
         </div>
         <div>
           <FieldLabel required>Reason Code</FieldLabel>
           <EcoSelect value={basics.reason as ECOReason} onChange={v => setBasics({ ...basics, reason: v })} options={Object.keys(REASON_LABEL) as ECOReason[]} labels={REASON_LABEL} />
+          {basics.reason === 'OTHER' && (
+            <>
+              <input
+                value={basics.reasonOther}
+                onChange={e => {
+                  setBasics({ ...basics, reasonOther: e.target.value });
+                  if (errors.reasonOther) setErrors(({ reasonOther: _reasonOther, ...rest }) => rest);
+                }}
+                placeholder="Describe the reason…"
+                className={cn(inputCls, 'mt-1.5', errors.reasonOther && 'border-destructive')}
+              />
+              {errors.reasonOther && (
+                <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3 h-3" />{errors.reasonOther}
+                </p>
+              )}
+            </>
+          )}
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -754,9 +819,9 @@ export function ECOWizard({
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div className="text-[13px] text-muted-foreground">
-          {items.length === 0 ? 'No part selected yet' : '1 affected part · where-used auto-rolls up from BOM'}
+          {items.length === 0 ? 'Select parts to be affected by this ECO' : '1 affected part · where-used auto-rolls up from BOM'}
         </div>
-        {items.length === 0 && (
+        {/* {items.length === 0 && (
           <button
             onClick={() => setPickerOpen(p => !p)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors font-[inherit]"
@@ -764,29 +829,45 @@ export function ECOWizard({
             <Plus className="w-3 h-3" />
             Add part
           </button>
-        )}
+        )} */}
       </div>
       {pickerOpen && (
         <div className="border border-border rounded-lg overflow-hidden">
-          {bomPool.length === 0 ? (
-            <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
-              No parts in this project's BOM yet.
-            </div>
-          ) : (
-            bomPool.map(p => (
-              <div
-                key={p.pn}
-                onClick={() => addItem(p)}
-                className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
-              >
-                <div>
-                  <span className="text-[12px] font-mono font-semibold text-foreground">{p.pn}</span>
-                  <span className="text-[12px] text-muted-foreground ml-2.5">{p.desc}</span>
-                </div>
-                <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/20">
+            <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <input
+              autoFocus
+              value={partSearch}
+              onChange={e => setPartSearch(e.target.value)}
+              placeholder="Search by part number or description…"
+              className="flex-1 bg-transparent border-none outline-none text-[12px] text-foreground placeholder:text-muted-foreground font-[inherit]"
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            {bomPool.length === 0 ? (
+              <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
+                No parts in this project's BOM yet.
               </div>
-            ))
-          )}
+            ) : filteredBomPool.length === 0 ? (
+              <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
+                No parts match "{partSearch}".
+              </div>
+            ) : (
+              filteredBomPool.map(p => (
+                <div
+                  key={p.pn}
+                  onClick={() => addItem(p)}
+                  className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
+                >
+                  <div>
+                    <span className="text-[12px] font-mono font-semibold text-foreground">{p.pn}</span>
+                    <span className="text-[12px] text-muted-foreground ml-2.5">{p.desc}</span>
+                  </div>
+                  <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
       {items.length === 0 && !pickerOpen && (
@@ -959,53 +1040,50 @@ export function ECOWizard({
             ) : (() => {
               const usedParams = new Set(diffRows.filter((_, i) => i !== idx).map(x => x.param).filter(Boolean));
               return (
-                <select
-                  value={
-                    BOM_PARAM_OPTIONS.find(o => o.label === r.param)?.key
-                    ?? (ECO_RECOMMENDED_PARAMS.includes(r.param) ? r.param : '')
-                  }
-                  onChange={e => {
-                    const val = e.target.value;
-                    if (val === '__other__') {
-                      setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: true } : x));
-                      return;
-                    }
-                    const bomOpt = BOM_PARAM_OPTIONS.find(o => o.key === val);
-                    if (bomOpt) {
-                      const autoFrom = bomOpt.key === 'rev'
-                        ? (items[0]?.revFrom ?? '')
-                        : firstSelectedNode
-                          ? String((firstSelectedNode as Record<string, unknown>)[bomOpt.key] ?? '')
-                          : '';
-                      setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: bomOpt.label, from: autoFrom, paramIsCustom: false } : x));
-                    } else {
-                      setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: val, from: '', paramIsCustom: false } : x));
-                    }
+                <ParamCombobox
+                  value={r.param}
+                  usedParams={usedParams}
+                  firstSelectedNode={firstSelectedNode}
+                  onChange={(label, autoFrom) => {
+                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: label, from: autoFrom, paramIsCustom: false } : x));
                   }}
-                  className={cn(ECO_SELECT_CLS, 'flex-[1.2]')}
-                >
-                  <option value="" className="bg-card">— select parameter —</option>
-                  <optgroup label="BOM Fields">
-                    {BOM_PARAM_OPTIONS.map(o => (
-                      <option key={o.key} value={o.key} className="bg-card" disabled={usedParams.has(o.label)}>{o.label}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Recommended">
-                    {ECO_RECOMMENDED_PARAMS.map(p => (
-                      <option key={p} value={p} className="bg-card" disabled={usedParams.has(p)}>{p}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Custom">
-                    <option value="__other__" className="bg-card">Other…</option>
-                  </optgroup>
-                </select>
+                  onSelectOther={() => {
+                    setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: true } : x));
+                  }}
+                />
               );
             })()
           ) : (
             <input value={r.param} onChange={e => upRow(idx, 'param', e.target.value)} placeholder="Parameter" className={cn(inputCls, 'flex-[1.2]')} />
           )}
-          <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
-          <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+          {(() => {
+            const paramKey = BOM_PARAM_OPTIONS.find(o => o.label === r.param)?.key;
+            const knownOptions = paramKey === 'uom'
+              ? { options: UOM_OPTIONS as readonly string[], labels: UOM_LABELS }
+              : paramKey === 'cat'
+                ? { options: KNOWN_BOM_CATEGORIES as readonly string[], labels: CATEGORY_LABELS }
+                : null;
+
+            if (knownOptions) {
+              return (
+                <>
+                  <div className="flex-1">
+                    <EcoSelectWithCustom value={r.from} onChange={v => upRow(idx, 'from', v)} options={[...knownOptions.options]} labels={knownOptions.labels} />
+                  </div>
+                  <div className="flex-1">
+                    <EcoSelectWithCustom value={r.to} onChange={v => upRow(idx, 'to', v)} options={[...knownOptions.options]} labels={knownOptions.labels} />
+                  </div>
+                </>
+              );
+            }
+
+            return (
+              <>
+                <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+                <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+              </>
+            );
+          })()}
           <div className="w-32">
             <EcoSelect value={r.cls} onChange={v => upRow(idx, 'cls', v)} options={Object.keys(CHANGE_LABEL_MAP) as ChangeLabel[]} labels={CHANGE_LABEL_MAP} />
           </div>
@@ -1089,7 +1167,7 @@ export function ECOWizard({
   const StepImpact = (
     <div className="flex flex-col gap-3.5">
       <div>
-        <FieldLabel>Schedule Impact</FieldLabel>
+        <FieldLabel required>Schedule Impact</FieldLabel>
         <EcoSelect value={impact.schedule} onChange={v => setImpact({ ...impact, schedule: v })} options={Object.keys(IMPACT_LABEL) as ImpactLevel[]} labels={IMPACT_LABEL} />
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -1355,8 +1433,8 @@ export function ECOWizard({
         <div className="w-[680px] max-w-full flex items-center justify-center bg-card border border-border rounded-xl shadow-2xl h-48">
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <svg className="animate-spin w-6 h-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
             <span className="text-sm">Loading ECO…</span>
           </div>
@@ -1453,7 +1531,9 @@ export function ECOWizard({
                     title: basics.title,
                     description: basics.description || null,
                     type: basics.type.toLowerCase() as any,
+                    typeOther: basics.type === 'OTHER' ? basics.typeOther.trim() : null,
                     reason: basics.reason.toLowerCase() as any,
+                    reasonOther: basics.reason === 'OTHER' ? basics.reasonOther.trim() : null,
                     priority: basics.priority.toLowerCase() as any,
                     changeClass: basics.changeClass as any,
                     effectivityType: basics.effType.toLowerCase() as any,

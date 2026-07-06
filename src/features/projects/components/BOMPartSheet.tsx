@@ -28,7 +28,7 @@ import {
   Check, XCircle, History, Loader2,
 } from 'lucide-react';
 import {
-  BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, KNOWN_BOM_CATEGORIES, SupplierEntry, CustomFieldEntry,
+  BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, KNOWN_BOM_CATEGORIES, UOM_OPTIONS, SupplierEntry, CustomFieldEntry,
 } from './bomData';
 import { BOMStatusPill } from './BOMShared';
 import { BOMRejectDialog } from './BOMRejectDialog';
@@ -104,7 +104,6 @@ const CAT_ICONS: Record<BOMCategory, React.ElementType> = {
   enclosure: Box, hmi: Monitor, safety: Shield,
 };
 const isKnownCategory = (cat: BOMCategory) => (CATEGORIES as string[]).includes(cat);
-const UOM_OPTIONS = ['EA', 'SET', 'LIC', 'KG', 'M', 'FT', 'PCS', 'LOT'];
 
 type LeadTimeUnit = 'days' | 'weeks' | 'months';
 // BOMPartPayload.leadTime is always expressed in days downstream — these factors convert into days.
@@ -429,7 +428,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   const { data: projectMembers = [] } = useProjectMembers(projectId);
   const { data: project } = useProjectDetail(projectId);
   const projectRole = (project?.myRole || '').toLowerCase();
-  const canEditStatus = projectRole === 'admin' || projectRole === 'manager';
+  const canEditStatus = projectRole === 'admin' || projectRole === 'maintainer';
   const isAdmin = projectRole === 'admin';
 
   const decideApprovalRequest = useDecideApprovalRequest(projectId);

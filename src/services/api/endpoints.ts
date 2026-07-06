@@ -48,8 +48,10 @@ export const ENDPOINTS = {
     UPDATE: (id: string) => `/projects/${id}`,
     DELETE: (id: string) => `/projects/${id}`,
     STAGE: (id: string) => `/projects/${id}/stage`,
+    PROGRESS: (id: string) => `/projects/${id}/progress`,
     MEMBERS: (id: string) => `/projects/${id}/members`,
     MEMBER: (projectId: string, userId: string) => `/projects/${projectId}/members/${userId}`,
+    MEMBER_ROLE: (projectId: string, userId: string) => `/projects/${projectId}/members/${userId}/role`,
     CHAT: (id: string) => `/projects/${id}/chat`,
     TEAM: (id: string) => `/projects/${id}/team`,
     LINKS: (id: string) => `/projects/${id}/links`,
@@ -115,6 +117,7 @@ export const ENDPOINTS = {
   // Issues
   ISSUES: {
     LIST: (projectId: string) => `/projects/${projectId}/issues`,
+    LIST_ALL: (projectId: string) => `/projects/${projectId}/issues/all`,
     CREATE: (projectId: string) => `/projects/${projectId}/issues`,
     BY_ID: (id: string) => `/issues/${id}`,
     STATUS: (id: string) => `/issues/${id}/status`,

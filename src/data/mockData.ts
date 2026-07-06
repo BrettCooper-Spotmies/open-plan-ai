@@ -727,11 +727,11 @@ export const dashboardStats = {
     p.milestones.filter(m => !m.completed).slice(0, 2)
   ),
   openIssues: projects.reduce(
-    (sum, p) => sum + (p.issues?.filter(i => i.status !== 'resolved' && i.status !== 'closed').length || 0),
+    (sum, p) => sum + (p.issues?.filter(i => i.status !== 'resolved').length || 0),
     0
   ),
   criticalIssues: projects.reduce(
-    (sum, p) => sum + (p.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'closed').length || 0),
+    (sum, p) => sum + (p.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved').length || 0),
     0
   ),
 };

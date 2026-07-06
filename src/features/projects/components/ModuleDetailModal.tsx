@@ -133,7 +133,7 @@ export function ModuleDetailModal({
   );
   const moduleIssues = useMemo(() =>
     module
-      ? allIssues.filter(i => i.moduleId === module.id && i.status !== 'resolved' && i.status !== 'closed')
+      ? allIssues.filter(i => i.moduleId === module.id && i.status !== 'resolved')
       : [],
     [allIssues, module]
   );

@@ -466,7 +466,7 @@ const HEADERS = [
   { key: 'rev', label: 'Rev', w: 50 },
   { key: 'status', label: 'Status', w: 92 },
   { key: 'owner', label: 'Owner', w: 140 },
-  { key: 'req', label: 'Traceability', w: 170 },
+  { key: 'supplier', label: 'Supplier', w: 170 },
   { key: 'act', label: '', w: 110 },
 ] as const;
 
@@ -583,12 +583,9 @@ function ListView({
               <div style={{ flexBasis: 140, flexShrink: 0 }} className="px-2 min-w-0">
                 <OwnerBadge name={row.owner} />
               </div>
-              {/* Traceability */}
-              <div style={{ flexBasis: 170, flexShrink: 0 }} className="px-2 flex gap-1 overflow-hidden flex-nowrap">
-                {row.req.length === 0
-                  ? <span className="text-[11px] text-muted-foreground">—</span>
-                  : row.req.slice(0, 2).map(r => <ReqTag key={r} label={r} />)}
-                {row.req.length > 2 && <span className="text-[11px] text-muted-foreground self-center">+{row.req.length - 2}</span>}
+              {/* Supplier */}
+              <div style={{ flexBasis: 170, flexShrink: 0 }} className="px-2 text-xs text-muted-foreground truncate">
+                {row.distributor || <span className="text-[11px]">—</span>}
               </div>
               {/* Actions */}
               <div style={{ flexBasis: 110, flexShrink: 0 }} className={cn('flex items-center justify-end gap-1 transition-opacity', isHovered ? 'opacity-100' : 'opacity-0')}>

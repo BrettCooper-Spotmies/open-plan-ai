@@ -105,6 +105,59 @@ export function useUpdateProject() {
 }
 
 /**
+ * Update project stage — hits the Maintainer+-accessible
+ * PATCH /projects/:id/stage endpoint, unlike useUpdateProject's general
+ * PUT (Admin-only, for project identity/settings fields). Use this when the
+ * caller may only be a Maintainer (not Admin) and is changing stage alone.
+ */
+export function useUpdateProjectStage() {
+  const queryClient = useQueryClient();
+  const updateProject = useProjectStore((state) => state.updateProject);
+
+  return useMutation({
+    mutationFn: ({ id, stage }: { id: string; stage: string }) =>
+      projectsService.updateStage(id, stage),
+    onSuccess: (updatedProject) => {
+      updateProject(updatedProject.id, updatedProject);
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(updatedProject.id) });
+    },
+  });
+}
+
+/**
+ * Sync computed project progress — hits the Maintainer+-accessible
+ * PATCH /projects/:id/progress endpoint, unlike useUpdateProject's general
+ * PUT (Admin-only, for project identity/settings fields).
+ */
+export function useUpdateProjectProgress() {
+  const queryClient = useQueryClient();
+  const updateProject = useProjectStore((state) => state.updateProject);
+
+  return useMutation({
+    mutationFn: ({ id, progress }: { id: string; progress: number }) =>
+      projectsService.updateProgress(id, progress),
+    onMutate: async ({ id, progress }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.projects.detail(id) });
+      const previousProject = queryClient.getQueryData(queryKeys.projects.detail(id));
+      queryClient.setQueryData(queryKeys.projects.detail(id), (old: Project | undefined) =>
+        old ? { ...old, progress } : old
+      );
+      return { previousProject };
+    },
+    onError: (_err, { id }, context) => {
+      if (context?.previousProject) {
+        queryClient.setQueryData(queryKeys.projects.detail(id), context.previousProject);
+      }
+    },
+    onSuccess: (updatedProject) => {
+      updateProject(updatedProject.id, updatedProject);
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(updatedProject.id) });
+    },
+  });
+}
+
+/**
  * Delete project
  */
 export function useDeleteProject() {
