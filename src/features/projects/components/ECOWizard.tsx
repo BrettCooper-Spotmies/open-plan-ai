@@ -177,6 +177,19 @@ function fmtSize(b: number) {
   return (b / 1048576).toFixed(1) + ' MB';
 }
 
+// `<input type="date">` only accepts a strict "YYYY-MM-DD" value — any other
+// format (legacy free-text entries, alternate separators) is silently ignored
+// by the browser and renders blank. Normalize whatever was saved so a
+// previously-entered date always redisplays when reopening the ECO.
+function toDateInputValue(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+}
+
 // ── Shared field label ────────────────────────────────────────────────────────
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
@@ -621,11 +634,17 @@ export function ECOWizard({
       if (paramNames.length !== new Set(paramNames).size) e.details = 'Each parameter must be unique — remove the duplicate rows';
     }
     if (s === 3) {
-      if (impact.unitCostDelta.trim() && isNaN(parseFloat(impact.unitCostDelta))) e.unitCostDelta = 'Enter a valid number (e.g. -4.55)';
+      const MAX_COST = 99999999.9999;
+      if (impact.unitCostDelta.trim()) {
+        const v = parseFloat(impact.unitCostDelta);
+        if (isNaN(v)) e.unitCostDelta = 'Enter a valid number (e.g. -4.55)';
+        else if (Math.abs(v) > MAX_COST) e.unitCostDelta = `Must be within ±${MAX_COST.toLocaleString()}`;
+      }
       if (impact.oneTimeCost.trim()) {
         const v = parseFloat(impact.oneTimeCost);
         if (isNaN(v)) e.oneTimeCost = 'Enter a valid number';
         else if (v < 0) e.oneTimeCost = 'Cost must be 0 or greater';
+        else if (v > MAX_COST) e.oneTimeCost = `Must be ${MAX_COST.toLocaleString()} or less`;
       }
     }
     setErrors(e);
@@ -797,7 +816,7 @@ export function ECOWizard({
           </div>
           <input
             type={basics.effType === 'DATE' ? 'date' : 'text'}
-            value={basics.effValue}
+            value={basics.effType === 'DATE' ? toDateInputValue(basics.effValue) : basics.effValue}
             onChange={e => setBasics({ ...basics, effValue: e.target.value })}
             placeholder={
               basics.effType === 'SERIAL' ? 'Effective from S/N EVC-1450'
@@ -1175,8 +1194,9 @@ export function ECOWizard({
           <FieldLabel>Unit Cost Δ ($/unit)</FieldLabel>
           <input
             value={impact.unitCostDelta}
-            onChange={e => { const v = e.target.value; if (/^[+-]?\d*\.?\d{0,6}$/.test(v)) { setImpact({ ...impact, unitCostDelta: v }); if (errors.unitCostDelta) setErrors(({ unitCostDelta: _, ...rest }) => rest); } }}
-            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, unitCostDelta: String(parseFloat(n.toFixed(6))) })); }}
+            inputMode="decimal"
+            onChange={e => { const v = e.target.value; if (/^[+-]?\d{0,8}(\.\d{0,4})?$/.test(v)) { setImpact({ ...impact, unitCostDelta: v }); if (errors.unitCostDelta) setErrors(({ unitCostDelta: _, ...rest }) => rest); } }}
+            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, unitCostDelta: String(parseFloat(n.toFixed(4))) })); }}
             placeholder="+4.55"
             className={cn(inputCls, errors.unitCostDelta && 'border-destructive')}
           />
@@ -1190,8 +1210,9 @@ export function ECOWizard({
           <FieldLabel>One-Time Cost ($)</FieldLabel>
           <input
             value={impact.oneTimeCost}
-            onChange={e => { const v = e.target.value; if (/^\d*\.?\d{0,6}$/.test(v)) { setImpact({ ...impact, oneTimeCost: v }); if (errors.oneTimeCost) setErrors(({ oneTimeCost: _, ...rest }) => rest); } }}
-            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, oneTimeCost: String(parseFloat(n.toFixed(6))) })); }}
+            inputMode="decimal"
+            onChange={e => { const v = e.target.value; if (/^\d{0,8}(\.\d{0,4})?$/.test(v)) { setImpact({ ...impact, oneTimeCost: v }); if (errors.oneTimeCost) setErrors(({ oneTimeCost: _, ...rest }) => rest); } }}
+            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, oneTimeCost: String(parseFloat(n.toFixed(4))) })); }}
             placeholder="12400"
             className={cn(inputCls, errors.oneTimeCost && 'border-destructive')}
           />

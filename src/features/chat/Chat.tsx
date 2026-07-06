@@ -27,6 +27,13 @@ export default function Chat() {
     return () => { document.title = 'Open Plan AI'; };
   }, []);
 
+  // Clear the "currently viewing" conversation on unmount so the app-wide chat
+  // listener (ChatNotificationsProvider) correctly treats every conversation as
+  // inactive — and therefore notifiable — once the user navigates away from Chat.
+  useEffect(() => {
+    return () => { useChatStore.getState().setActiveConversation(null); };
+  }, []);
+
   const { conversationId } = useParams<{ conversationId?: string }>();
   const navigate = useNavigate();
   const isMobile = useIsMobile();

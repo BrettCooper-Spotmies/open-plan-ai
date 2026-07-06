@@ -109,6 +109,7 @@ export interface Milestone {
   status?: MilestoneStatus;  // Manual status override; falls back to computed status when unset
   linkedTaskIds?: string[];  // Tasks linked to this milestone
   linkedModuleIds?: string[]; // Modules linked to this milestone
+  linkedIssueIds?: string[]; // Issues linked to this milestone (create-time only; edits go through Issue.blocksMilestoneIds)
   createdBy?: TeamMember;  // Who created this milestone
 }
 

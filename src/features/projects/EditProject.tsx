@@ -60,7 +60,8 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { toast } from "sonner";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { useProjectDetail } from "@/hooks/useProjectDetail";
+import { useProjectModules } from "@/hooks/useProjectDetail";
+import { useProjectMilestones } from "@/hooks/useMilestones";
 import { useUpdateProject, useUpdateProjectStage, useProject, useDeleteProject } from "@/hooks/useProjects";
 import { useOrganizationMembers, useProjectMembers } from "@/hooks/useProjectTeam";
 import { useProjectPermissions } from "@/hooks/useProjectPermissions";
@@ -180,6 +181,9 @@ const EditProject = () => {
 
     // Fetch project data
     const { data: project, isLoading, error } = useProject(id);
+    // Modules and milestones are not included in the project payload — they live behind their own endpoints.
+    const { data: projectModulesData = [] } = useProjectModules(id);
+    const { data: projectMilestonesData = [] } = useProjectMilestones(id || '');
     const { data: projectAttachments = [] } = useProjectAttachments(id);
     const { data: projectLinks = [] } = useProjectLinks(id);
 
@@ -596,34 +600,26 @@ const EditProject = () => {
                 }
             }
 
-            // Populating modules
-            if (project.projectModules) {
-                // First-class modules initialization
-                const projectModules = project.projectModules || [];
-                setModules(projectModules.map(m => ({
-                    id: m.id,
-                    name: m.name,
-                    type: m.type
-                })));
-            } else if (project.modules) {
-                // Fallback for legacy modules
-                setModules(project.modules.map(m => ({
-                    id: Math.random().toString(36).substr(2, 9),
-                    name: m.name
-                })));
-            }
-
-            // Populating milestones
-            if (project.milestones) {
-                setMilestones(project.milestones.map(m => ({
-                    id: m.id,
-                    name: m.title,
-                    startDate: undefined, // Milestone model doesn't have startDate yet? 
-                    endDate: m.date ? new Date(m.date) : undefined
-                })));
-            }
         }
     }, [project]);
+
+    // Populate modules from the dedicated project-modules endpoint (the project payload doesn't include them)
+    useEffect(() => {
+        setModules(projectModulesData.map(m => ({
+            id: m.id,
+            name: m.name,
+        })));
+    }, [projectModulesData]);
+
+    // Populate milestones from the dedicated project-milestones endpoint (the project payload doesn't include them)
+    useEffect(() => {
+        setMilestones(projectMilestonesData.map(m => ({
+            id: m.id,
+            name: m.name,
+            startDate: undefined,
+            endDate: m.due_date ? new Date(m.due_date) : undefined,
+        })));
+    }, [projectMilestonesData]);
 
     // Populate team members from the dedicated project members endpoint
     useEffect(() => {
@@ -877,7 +873,7 @@ const EditProject = () => {
 
             // Sync Modules
             try {
-                const initialModules = project.projectModules || [];
+                const initialModules = projectModulesData || [];
                 const initialModuleIds = initialModules.map(m => m.id);
                 const currentModuleIds = modules.map(m => m.id);
 
@@ -919,7 +915,7 @@ const EditProject = () => {
 
             // Sync Milestones
             try {
-                const initialMilestones = project.milestones || [];
+                const initialMilestones = projectMilestonesData || [];
                 const initialMilestoneIds = initialMilestones.map(m => m.id);
                 const currentMilestoneIds = milestones.map(m => m.id);
 
@@ -931,9 +927,9 @@ const EditProject = () => {
                 const milestonesToUpdate = milestones.filter(m => {
                     const initial = initialMilestones.find(im => im.id === m.id);
                     if (!initial) return false;
-                    const initialDate = initial.date ? format(new Date(initial.date), 'yyyy-MM-dd') : null;
+                    const initialDate = initial.due_date ? format(new Date(initial.due_date), 'yyyy-MM-dd') : null;
                     const currentDate = m.endDate ? format(m.endDate, 'yyyy-MM-dd') : null;
-                    return initial.title !== m.name || initialDate !== currentDate;
+                    return initial.name !== m.name || initialDate !== currentDate;
                 });
 
                 if (milestonesToAdd.length > 0) {

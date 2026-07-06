@@ -373,6 +373,13 @@ export function IssuesView({
       && issue.status !== 'wont-fix';
   };
 
+  const dependencyIssuesCount = sortedIssues.filter(isDependencyIssue).length;
+
+  // Hide the Dependencies bucket entirely until it has linked issues
+  const visibleColumns = columns.filter(
+    (column) => !(column.isSpecial && column.status === 'dependencies' && dependencyIssuesCount === 0),
+  );
+
   const handleDragEnd = (result: DropResult) => {
     const { destination, source, type, draggableId } = result;
     if (!destination) return;
@@ -382,9 +389,20 @@ export function IssuesView({
     }
 
     if (type === 'COLUMN') {
+      // source/destination indices refer to positions within visibleColumns (the
+      // Dependencies bucket may be hidden), so translate them back into `columns`.
+      const draggedColumn = visibleColumns[source.index];
+      if (!draggedColumn) return;
+      const sourceIndex = columns.findIndex((c) => c.id === draggedColumn.id);
+      if (sourceIndex === -1) return;
+      let destIndex = destination.index >= visibleColumns.length
+        ? columns.length
+        : columns.findIndex((c) => c.id === visibleColumns[destination.index].id);
+
       const newColumns = Array.from(columns);
-      const [removed] = newColumns.splice(source.index, 1);
-      newColumns.splice(destination.index, 0, removed);
+      const [removed] = newColumns.splice(sourceIndex, 1);
+      if (destIndex > sourceIndex) destIndex -= 1;
+      newColumns.splice(destIndex, 0, removed);
       setColumns(newColumns);
       const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       const persistableIds = newColumns.filter(col => UUID_RE.test(col.id)).map(col => col.id);
@@ -442,7 +460,7 @@ export function IssuesView({
                   className={isMobile ? 'flex flex-col gap-3 w-full' : 'inline-flex gap-4 min-w-full'}
                   style={isMobile ? undefined : { width: 'max-content' }}
                 >
-                  {columns.map((column, index) => {
+                  {visibleColumns.map((column, index) => {
                     const columnIssues = getColumnIssues(column);
                     const isDependenciesColumn = column.isSpecial && column.status === 'dependencies';
 
@@ -451,7 +469,7 @@ export function IssuesView({
                         key={column.id}
                         draggableId={column.id}
                         index={index}
-                        isDragDisabled={column.isSpecial || !apiIssueColumns?.length}
+                        isDragDisabled={isDependenciesColumn || !apiIssueColumns?.length}
                       >
                         {(columnProvided, columnSnapshot) => {
                           const addIssueButton = !isDependenciesColumn && (
@@ -656,7 +674,7 @@ export function IssuesView({
                                   )}
                                   labelClassName={isDependenciesColumn ? 'text-status-blocked' : undefined}
                                   dragHandleProps={
-                                    column.isSpecial || !apiIssueColumns?.length ? null : columnProvided.dragHandleProps
+                                    isDependenciesColumn || !apiIssueColumns?.length ? null : columnProvided.dragHandleProps
                                   }
                                   isDragging={columnSnapshot.isDragging}
                                 >
@@ -680,12 +698,12 @@ export function IssuesView({
                             >
                               <div className="flex-shrink-0 bg-background pb-3 space-y-3">
                                 <div className="flex items-center gap-2 px-1">
-                                  {!column.isSpecial && (
+                                  {!isDependenciesColumn && (
                                     <div {...columnProvided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
                                       <GripVertical className="h-4 w-4 text-muted-foreground" />
                                     </div>
                                   )}
-                                  {column.isSpecial && <div {...columnProvided.dragHandleProps} />}
+                                  {isDependenciesColumn && <div {...columnProvided.dragHandleProps} />}
                                   {isDependenciesColumn ? (
                                     <Link2 className="h-4 w-4 text-status-blocked" />
                                   ) : (
@@ -801,7 +819,7 @@ export function IssuesView({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px]">Severity</TableHead>
+                <TableHead className="w-[80px]">Priority</TableHead>
                 <TableHead className="w-[300px]">Issue</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Status</TableHead>

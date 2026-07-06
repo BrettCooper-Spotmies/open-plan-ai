@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { format, parse } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
@@ -159,8 +160,15 @@ export function MyDayListView({
                       <Check className="h-3 w-3 text-status-done" />
                     </div>
                   )}
-                  <div>
-                    <p className="font-medium">{task.title}</p>
+                  <div className="min-w-0">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p className="font-medium line-clamp-2 cursor-pointer">{task.title}</p>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-xs">
+                        {task.title}
+                      </TooltipContent>
+                    </Tooltip>
                     {task.description && (
                       <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
                         {task.description}

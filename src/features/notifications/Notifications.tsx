@@ -23,6 +23,7 @@ import {
     BellOff,
     CheckCheck,
     Activity,
+    MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
@@ -43,6 +44,8 @@ const getNotificationIcon = (type: AppNotification['type']) => {
             return <CheckCircle2 className="h-4 w-4 text-green-500" />;
         case 'eco_decision_requested':
             return <Activity className="h-4 w-4 text-blue-500" />;
+        case 'chat_message':
+            return <MessageSquare className="h-4 w-4 text-primary" />;
         default:
             return <Bell className="h-4 w-4 text-muted-foreground" />;
     }
@@ -63,6 +66,8 @@ const getNotificationTypeLabel = (type: AppNotification['type']) => {
             return 'BOM';
         case 'eco_decision_requested':
             return 'ECO';
+        case 'chat_message':
+            return 'Chat';
         default:
             return 'Notification';
     }

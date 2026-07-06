@@ -152,8 +152,8 @@ export function IssueDetailContent({
     const [editedIssue, setEditedIssue] = useState<Issue | null>(issue);
     const [newComment, setNewComment] = useState('');
     const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
-    const [selectedBlockingTask, setSelectedBlockingTask] = useState('');
-    const [selectedBlockedByTask, setSelectedBlockedByTask] = useState('');
+    const [isBlockingTaskPopoverOpen, setIsBlockingTaskPopoverOpen] = useState(false);
+    const [isBlockedByTaskPopoverOpen, setIsBlockedByTaskPopoverOpen] = useState(false);
     const [isAdvancedDescription, setIsAdvancedDescription] = useState(false);
     const [newChecklistItem, setNewChecklistItem] = useState('');
     const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
@@ -460,11 +460,9 @@ export function IssueDetailContent({
         t => !editedIssue.blockedBy?.includes(t.id)
     );
 
-    const handleAddBlockingTask = () => {
-        if (!selectedBlockingTask) return;
+    const handleAddBlockingTask = (taskId: string) => {
         const currentBlocks = editedIssue.blocksTaskIds || [];
-        handleFieldChange('blocksTaskIds', [...currentBlocks, selectedBlockingTask]);
-        setSelectedBlockingTask('');
+        handleFieldChange('blocksTaskIds', [...currentBlocks, taskId]);
     };
 
     const handleRemoveBlockingTask = (taskId: string) => {
@@ -472,11 +470,9 @@ export function IssueDetailContent({
         handleFieldChange('blocksTaskIds', currentBlocks.filter(id => id !== taskId));
     };
 
-    const handleAddBlockedByTask = () => {
-        if (!selectedBlockedByTask) return;
+    const handleAddBlockedByTask = (taskId: string) => {
         const currentBlockedBy = editedIssue.blockedBy || [];
-        handleFieldChange('blockedBy', [...currentBlockedBy, selectedBlockedByTask]);
-        setSelectedBlockedByTask('');
+        handleFieldChange('blockedBy', [...currentBlockedBy, taskId]);
     };
 
     const handleRemoveBlockedByTask = (taskId: string) => {
@@ -795,11 +791,11 @@ export function IssueDetailContent({
                             </div>
                         </div>
 
-                        {/* Severity */}
+                        {/* Priority */}
                         <div className="space-y-1.5">
                             <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                                 <AlertTriangle className="h-3 w-3" />
-                                Severity <span className="text-destructive" aria-hidden="true">*</span>
+                                Priority <span className="text-destructive" aria-hidden="true">*</span>
                             </Label>
                             <Select
                                 value={editedIssue.severity}
@@ -1369,21 +1365,43 @@ export function IssueDetailContent({
 
                                 <div className="space-y-2">
                                     <div className="flex gap-2">
-                                        <Select value={selectedBlockingTask} onValueChange={setSelectedBlockingTask}>
-                                            <SelectTrigger className="flex-1">
-                                                <SelectValue placeholder="Select task..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {availableTasksForBlocking.map((t) => (
-                                                    <SelectItem key={t.id} value={t.id}>
-                                                        {t.title}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <Button size="icon" variant="outline" onClick={handleAddBlockingTask}>
-                                            <Plus className="h-4 w-4" />
-                                        </Button>
+                                        <Popover open={isBlockingTaskPopoverOpen} onOpenChange={setIsBlockingTaskPopoverOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    aria-expanded={isBlockingTaskPopoverOpen}
+                                                    className="flex-1 justify-start font-normal text-muted-foreground"
+                                                >
+                                                    Select task...
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                                                <Command>
+                                                    <CommandInput placeholder="Search tasks..." />
+                                                    <CommandList>
+                                                        <CommandEmpty>
+                                                            {availableTasksForBlocking.length === 0 ? "No available tasks" : "No results found."}
+                                                        </CommandEmpty>
+                                                        <CommandGroup>
+                                                            {availableTasksForBlocking.map((t) => (
+                                                                <CommandItem
+                                                                    key={t.id}
+                                                                    value={t.title}
+                                                                    onSelect={() => {
+                                                                        handleAddBlockingTask(t.id);
+                                                                        setIsBlockingTaskPopoverOpen(false);
+                                                                    }}
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    {t.title}
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
                                     </div>
 
                                     {(editedIssue.blocksTaskIds || []).map((taskId) => {
@@ -1427,21 +1445,43 @@ export function IssueDetailContent({
 
                                 <div className="space-y-2">
                                     <div className="flex gap-2">
-                                        <Select value={selectedBlockedByTask} onValueChange={setSelectedBlockedByTask}>
-                                            <SelectTrigger className="flex-1">
-                                                <SelectValue placeholder="Select task..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {availableTasksForBlockedBy.map((t) => (
-                                                    <SelectItem key={t.id} value={t.id}>
-                                                        {t.title}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <Button size="icon" variant="outline" onClick={handleAddBlockedByTask}>
-                                            <Plus className="h-4 w-4" />
-                                        </Button>
+                                        <Popover open={isBlockedByTaskPopoverOpen} onOpenChange={setIsBlockedByTaskPopoverOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    aria-expanded={isBlockedByTaskPopoverOpen}
+                                                    className="flex-1 justify-start font-normal text-muted-foreground"
+                                                >
+                                                    Select task...
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                                                <Command>
+                                                    <CommandInput placeholder="Search tasks..." />
+                                                    <CommandList>
+                                                        <CommandEmpty>
+                                                            {availableTasksForBlockedBy.length === 0 ? "No available tasks" : "No results found."}
+                                                        </CommandEmpty>
+                                                        <CommandGroup>
+                                                            {availableTasksForBlockedBy.map((t) => (
+                                                                <CommandItem
+                                                                    key={t.id}
+                                                                    value={t.title}
+                                                                    onSelect={() => {
+                                                                        handleAddBlockedByTask(t.id);
+                                                                        setIsBlockedByTaskPopoverOpen(false);
+                                                                    }}
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    {t.title}
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
                                     </div>
 
                                     {(editedIssue.blockedBy || []).map((taskId) => {

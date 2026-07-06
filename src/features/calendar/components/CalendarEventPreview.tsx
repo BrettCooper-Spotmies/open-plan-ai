@@ -101,7 +101,7 @@ export const CalendarEventPreview: React.FC<CalendarEventPreviewProps> = ({
                 event.severity === 'major' && 'bg-orange-500/10 text-orange-600'
               )}
             >
-              {event.severity.charAt(0).toUpperCase() + event.severity.slice(1)} Severity
+              {event.severity.charAt(0).toUpperCase() + event.severity.slice(1)} Priority
             </Badge>
           )}
 

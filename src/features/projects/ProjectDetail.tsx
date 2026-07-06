@@ -223,11 +223,11 @@ function IssueViewControls({
               />
             </div>
 
-            {/* Severity Filter */}
+            {/* Priority Filter */}
             <div className="space-y-2">
               <Label className="text-xs flex items-center gap-1">
                 <Flag className="h-3 w-3" />
-                Severity
+                Priority
               </Label>
               <MultiSelect
                 options={[
@@ -238,7 +238,7 @@ function IssueViewControls({
                 ]}
                 selected={filters.severity || []}
                 onChange={(values) => onFiltersChange({ ...filters, severity: values.length ? (values as IssueSeverity[]) : undefined })}
-                placeholder="All Severity"
+                placeholder="All Priorities"
               />
             </div>
 
@@ -495,6 +495,7 @@ export default function ProjectDetail() {
         owner,
         createdBy,
         createdAt: m.created_at || new Date().toISOString(),
+        milestoneId: m.milestone_id || undefined,
       };
     });
   }, [projectModules, organizationMembers]);
@@ -529,10 +530,6 @@ export default function ProjectDetail() {
       task.title.toLowerCase().includes(query)
     );
   }, [project?.tasks, searchQuery]);
-
-  const clearFilters = () => {
-    setFilters({});
-  };
 
   // Calculate active issue filter count
   const activeIssueFilterCount = useMemo(() => {
@@ -897,6 +894,20 @@ export default function ProjectDetail() {
         batchUpdateModulesMutation.mutate(
           newMilestonePartial.linkedModuleIds.map(moduleId => ({ id: moduleId, milestone_id: createdMilestone.id }))
         );
+      }
+
+      // Link issues if any were selected during creation
+      if (newMilestonePartial.linkedIssueIds && newMilestonePartial.linkedIssueIds.length > 0) {
+        const allIssues = project.issues || [];
+        newMilestonePartial.linkedIssueIds.forEach(issueId => {
+          const issue = allIssues.find(i => i.id === issueId);
+          if (!issue) return;
+          updateIssueMutation.mutate({
+            projectId: issue.projectId || id || '',
+            issueId,
+            updates: { blocksMilestoneIds: [...(issue.blocksMilestoneIds || []), createdMilestone.id] },
+          });
+        });
       }
     } catch (error: any) {
       logger.error('Failed to create milestone and link tasks:', error);
@@ -1370,7 +1381,7 @@ export default function ProjectDetail() {
                       </Button>
                     )}
                   </div>
-                  {/* Right: View toggle + Filter + Clear */}
+                  {/* Right: View toggle + Filter */}
                   <div className="flex items-center gap-2 shrink-0">
                     <ViewControls
                       viewMode={viewMode}
@@ -1385,17 +1396,6 @@ export default function ProjectDetail() {
                       onFiltersChange={setFilters}
                       activeFilterCount={activeFilterCount}
                     />
-                    {activeFilterCount > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={clearFilters}
-                        className="gap-1 text-muted-foreground hover:text-foreground h-9 px-2 shrink-0"
-                      >
-                        <X className="h-4 w-4" />
-                        <span className="hidden sm:inline">Clear</span>
-                      </Button>
-                    )}
                   </div>
                 </>
               )}
@@ -1585,7 +1585,7 @@ export default function ProjectDetail() {
               onAddClose={() => setBomAddOpen(false)}
               selectedId={partId ?? null}
               onSelectedIdChange={(newId) =>
-                navigate(`/projects/${id}/bom${newId ? `/${newId}` : ''}`, { replace: !newId })
+                navigate(`/projects/${id}/bom${newId ? `/${newId}` : ''}`)
               }
               onEcoCreated={(ecoId) => navigate(`/projects/${id}/eng-changes/${ecoId}`)}
             />
@@ -1601,7 +1601,7 @@ export default function ProjectDetail() {
               onNewConsumed={() => setEcoNewOpen(false)}
               openEcoId={ecoId ?? null}
               onOpenEcoIdChange={(newId) =>
-                navigate(`/projects/${id}/eng-changes${newId ? `/${newId}` : ''}`, { replace: !newId })
+                navigate(`/projects/${id}/eng-changes${newId ? `/${newId}` : ''}`)
               }
             />
           </TabsContent>

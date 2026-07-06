@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { useOrganization } from '@/contexts/OrganizationContext';
 import { tasksService } from '@/services/tasks.service';
 import { projectsService } from '@/services/projects.service';
 import { queryKeys } from '@/lib/queryClient';
@@ -19,12 +20,14 @@ import { getUserItems } from '@/features/myday/utils/myDayUtils';
  */
 export function useMyDayTasks() {
   const { user } = useAuth();
+  const { currentOrganization } = useOrganization();
+  const orgId = currentOrganization?.id;
   const { data: projects = [] } = useProjects();
 
   const { data: rawTasks = [], isLoading: tasksLoading } = useQuery({
-    queryKey: [...queryKeys.myDay.all, 'tasks', user?.id],
-    queryFn: () => tasksService.getMyTasks(),
-    enabled: !!user?.id,
+    queryKey: [...queryKeys.myDay.all, 'tasks', user?.id, orgId],
+    queryFn: () => tasksService.getMyTasks(orgId),
+    enabled: !!user?.id && !!orgId,
     staleTime: 30 * 1000,
   });
 
@@ -49,8 +52,9 @@ export function useMyDayTasks() {
     if (!user?.id) return [];
 
     // All tasks from /tasks/me/all are already assigned to the current user (filtered server-side)
+    // My Day is a daily agenda — only tasks due today belong here, not overdue/future/undated ones.
     const taskItems: MyDayItem[] = rawTasks
-      .filter(task => task.status !== 'done' || isCompletedToday(task))
+      .filter(task => getDueDateStatus(task.dueDate) === 'today' && (task.status !== 'done' || isCompletedToday(task)))
       .map(task => {
         const dueDateStatus = getDueDateStatus(task.dueDate);
         return {
@@ -73,12 +77,12 @@ export function useMyDayTasks() {
         } as MyDayItem;
       });
 
-    // Resolved/wont-fix issues never belong in My Day — only open/in-progress.
+    // Resolved/wont-fix issues never belong in My Day — only open/in-progress, and only if due today.
     const issueItems: MyDayItem[] = rawIssues
       .filter(({ issue }) => {
         const isAssignedToUser = issue.assignees?.some(a => a.id === user.id) ?? false;
         const isUnresolved = issue.status !== 'resolved' && issue.status !== 'wont-fix';
-        return isUnresolved && isAssignedToUser;
+        return isUnresolved && isAssignedToUser && getDueDateStatus(issue.dueDate) === 'today';
       })
       .map(({ issue, projectName }) => {
         const dueDateStatus = getDueDateStatus(issue.dueDate);
