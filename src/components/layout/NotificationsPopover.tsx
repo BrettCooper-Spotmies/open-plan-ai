@@ -22,6 +22,8 @@ const getNotificationIcon = (type: AppNotification['type']) => {
             return <AlertCircle className="h-4 w-4 text-red-500" />;
         case 'bom_approval_requested':
         case 'bom_approval_decided':
+        case 'task_completed':
+        case 'issue_completed':
             return <CheckCircle2 className="h-4 w-4 text-green-500" />;
         case 'eco_decision_requested':
             return <Activity className="h-4 w-4 text-blue-500" />;

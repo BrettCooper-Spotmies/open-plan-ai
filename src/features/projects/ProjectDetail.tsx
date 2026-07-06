@@ -48,7 +48,7 @@ import { useOrganizationMembers, useProjectMembers } from '@/hooks/useProjectTea
 import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import { useProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useUpdateProject } from '@/hooks/useProjects';
+import { useUpdateProjectProgress } from '@/hooks/useProjects';
 import {
   useCreateTask,
   useUpdateTask,
@@ -422,7 +422,7 @@ export default function ProjectDetail() {
   const deleteModuleMutation = useDeleteModule(id || '');
   const batchUpdateTasksMutation = useBatchUpdateTasks(id || '');
   const batchUpdateModulesMutation = useBatchUpdateModules(id || '');
-  const updateProjectMutation = useUpdateProject();
+  const updateProjectProgressMutation = useUpdateProjectProgress();
 
   // Calculate active filter count - moved before early returns
   const activeFilterCount = useMemo(() => {
@@ -512,10 +512,14 @@ export default function ProjectDetail() {
   }, [project?.tasks, project?.milestones, modules, project?.issues]);
 
   // Refs for progress-sync effect (defined here so they're stable across renders)
-  const updateProjectMutateRef = useRef(updateProjectMutation.mutate);
-  updateProjectMutateRef.current = updateProjectMutation.mutate;
-  const updateProjectIsPendingRef = useRef(updateProjectMutation.isPending);
-  updateProjectIsPendingRef.current = updateProjectMutation.isPending;
+  const updateProjectProgressMutateRef = useRef(updateProjectProgressMutation.mutate);
+  updateProjectProgressMutateRef.current = updateProjectProgressMutation.mutate;
+  const updateProjectIsPendingRef = useRef(updateProjectProgressMutation.isPending);
+  updateProjectIsPendingRef.current = updateProjectProgressMutation.isPending;
+  // Tracks the last progress value we attempted to sync, so a failed sync
+  // (e.g. permission or network error) can't be retried on every re-render —
+  // only a genuinely NEW target value triggers another attempt.
+  const lastAttemptedProgressRef = useRef<number | null>(null);
 
   // Filter tasks by search query
   const filteredTasks = useMemo(() => {
@@ -549,17 +553,22 @@ export default function ProjectDetail() {
   // Maintainer+ (manages all content, not just their own).
   const canAddModulesAndMilestones = isProjectMaintainerPlus;
 
-  // Sync calculated progress — only for users who can PUT the project (manager/admin)
+  // Sync calculated progress — Maintainer+ only, via the dedicated
+  // Maintainer-accessible progress endpoint (not the Admin-only general
+  // project-update endpoint). Guarded by lastAttemptedProgressRef so a
+  // failed sync is attempted once per distinct target value, never looped.
   useEffect(() => {
     if (
       project &&
       progressBreakdown.overallProgress !== project.progress &&
+      progressBreakdown.overallProgress !== lastAttemptedProgressRef.current &&
       !updateProjectIsPendingRef.current &&
       canAddModulesAndMilestones
     ) {
-      updateProjectMutateRef.current({
+      lastAttemptedProgressRef.current = progressBreakdown.overallProgress;
+      updateProjectProgressMutateRef.current({
         id: project.id,
-        updates: { progress: progressBreakdown.overallProgress }
+        progress: progressBreakdown.overallProgress
       });
     }
   }, [project, progressBreakdown.overallProgress, canAddModulesAndMilestones]);

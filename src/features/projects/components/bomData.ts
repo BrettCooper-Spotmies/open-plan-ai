@@ -13,6 +13,7 @@ export type BOMCategory = string;
 export const KNOWN_BOM_CATEGORIES = [
   'assembly', 'power', 'control', 'connector', 'enclosure', 'hmi', 'safety',
 ] as const;
+export const UOM_OPTIONS = ['EA', 'SET', 'LIC', 'KG', 'M', 'FT', 'PCS', 'LOT'] as const;
 
 export interface BOMRevision {
   rev: string;

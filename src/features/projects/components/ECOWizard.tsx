@@ -2,7 +2,7 @@ import { useState, useRef, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   GitMerge, Check, X, Plus, ChevronDown, Lock, AlertCircle,
-  Upload, FileText, Image, Box, Boxes, Package, Scissors,
+  Upload, FileText, Image, Box, Boxes, Package, Scissors, Search,
 } from 'lucide-react';
 import {
   ECOType, ECOReason, ECOPriority, ChangeClass, EffectivityType, ImpactLevel, ECODisposition,
@@ -16,7 +16,7 @@ import { useCreateECO, useUpdateECO, useSubmitECO, useECODetail } from '@/hooks/
 import { useBomTree } from '@/hooks/useBom';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { useAuth } from '@/modules/auth';
-import { fromApiNode, bomFlatAll, bomPath } from './bomData';
+import { fromApiNode, bomFlatAll, bomPath, KNOWN_BOM_CATEGORIES, BOM_CAT_META, UOM_OPTIONS } from './bomData';
 import { REQS } from './requirementsData';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -37,6 +37,14 @@ const BOM_PARAM_OPTIONS: { key: string; label: string }[] = [
   { key: 'leadTime', label: 'Lead Time (days)' },
   { key: 'mpn', label: 'MPN' },
 ];
+
+// Parameter keys whose From/To value should be constrained to the BOM's known
+// option set (same lists used in BOMPartSheet.tsx's create/edit form) rather
+// than free text.
+const CATEGORY_LABELS: Record<string, string> = Object.fromEntries(
+  KNOWN_BOM_CATEGORIES.map(c => [c, BOM_CAT_META[c].label]),
+);
+const UOM_LABELS: Record<string, string> = {};
 
 const ECO_RECOMMENDED_PARAMS = [
   'Drawing Number',
@@ -432,7 +440,8 @@ export function ECOWizard({
   );
 
   const [items, setItems] = useState<ItemState[]>([]);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(true);
+  const [partSearch, setPartSearch] = useState('');
   const [reqItems, setReqItems] = useState<ReqItemState[]>([]);
   const [reqPickerOpen, setReqPickerOpen] = useState(false);
 
@@ -449,7 +458,16 @@ export function ECOWizard({
         }],
     );
     setPickerOpen(false);
+    setPartSearch('');
   };
+
+  const filteredBomPool = useMemo(
+    () => bomPool.filter(p => {
+      const q = partSearch.trim().toLowerCase();
+      return !q || p.pn.toLowerCase().includes(q) || p.desc.toLowerCase().includes(q);
+    }),
+    [bomPool, partSearch],
+  );
 
   // Step 3 — Diff rows + attachments
   const [diffRows, setDiffRows] = useState<DiffRowState[]>([{ param: '', from: '', to: '', cls: 'MODIFIED' }]);
@@ -820,9 +838,9 @@ export function ECOWizard({
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div className="text-[13px] text-muted-foreground">
-          {items.length === 0 ? 'No part selected yet' : '1 affected part · where-used auto-rolls up from BOM'}
+          {items.length === 0 ? 'Select parts to be affected by this ECO' : '1 affected part · where-used auto-rolls up from BOM'}
         </div>
-        {items.length === 0 && (
+        {/* {items.length === 0 && (
           <button
             onClick={() => setPickerOpen(p => !p)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors font-[inherit]"
@@ -830,29 +848,45 @@ export function ECOWizard({
             <Plus className="w-3 h-3" />
             Add part
           </button>
-        )}
+        )} */}
       </div>
       {pickerOpen && (
         <div className="border border-border rounded-lg overflow-hidden">
-          {bomPool.length === 0 ? (
-            <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
-              No parts in this project's BOM yet.
-            </div>
-          ) : (
-            bomPool.map(p => (
-              <div
-                key={p.pn}
-                onClick={() => addItem(p)}
-                className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
-              >
-                <div>
-                  <span className="text-[12px] font-mono font-semibold text-foreground">{p.pn}</span>
-                  <span className="text-[12px] text-muted-foreground ml-2.5">{p.desc}</span>
-                </div>
-                <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-muted/20">
+            <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+            <input
+              autoFocus
+              value={partSearch}
+              onChange={e => setPartSearch(e.target.value)}
+              placeholder="Search by part number or description…"
+              className="flex-1 bg-transparent border-none outline-none text-[12px] text-foreground placeholder:text-muted-foreground font-[inherit]"
+            />
+          </div>
+          <div className="max-h-56 overflow-y-auto">
+            {bomPool.length === 0 ? (
+              <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
+                No parts in this project's BOM yet.
               </div>
-            ))
-          )}
+            ) : filteredBomPool.length === 0 ? (
+              <div className="px-3 py-4 text-center text-[12px] text-muted-foreground">
+                No parts match "{partSearch}".
+              </div>
+            ) : (
+              filteredBomPool.map(p => (
+                <div
+                  key={p.pn}
+                  onClick={() => addItem(p)}
+                  className="flex items-center justify-between px-3 py-2.5 border-b border-border/50 last:border-0 cursor-pointer hover:bg-accent/30 transition-colors"
+                >
+                  <div>
+                    <span className="text-[12px] font-mono font-semibold text-foreground">{p.pn}</span>
+                    <span className="text-[12px] text-muted-foreground ml-2.5">{p.desc}</span>
+                  </div>
+                  <Plus className="w-3.5 h-3.5 text-muted-foreground" />
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
       {items.length === 0 && !pickerOpen && (
@@ -1041,8 +1075,34 @@ export function ECOWizard({
           ) : (
             <input value={r.param} onChange={e => upRow(idx, 'param', e.target.value)} placeholder="Parameter" className={cn(inputCls, 'flex-[1.2]')} />
           )}
-          <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
-          <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+          {(() => {
+            const paramKey = BOM_PARAM_OPTIONS.find(o => o.label === r.param)?.key;
+            const knownOptions = paramKey === 'uom'
+              ? { options: UOM_OPTIONS as readonly string[], labels: UOM_LABELS }
+              : paramKey === 'cat'
+                ? { options: KNOWN_BOM_CATEGORIES as readonly string[], labels: CATEGORY_LABELS }
+                : null;
+
+            if (knownOptions) {
+              return (
+                <>
+                  <div className="flex-1">
+                    <EcoSelectWithCustom value={r.from} onChange={v => upRow(idx, 'from', v)} options={[...knownOptions.options]} labels={knownOptions.labels} />
+                  </div>
+                  <div className="flex-1">
+                    <EcoSelectWithCustom value={r.to} onChange={v => upRow(idx, 'to', v)} options={[...knownOptions.options]} labels={knownOptions.labels} />
+                  </div>
+                </>
+              );
+            }
+
+            return (
+              <>
+                <input value={r.from} onChange={e => upRow(idx, 'from', e.target.value)} placeholder="from" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+                <input value={r.to} onChange={e => upRow(idx, 'to', e.target.value)} placeholder="to" {...(r.param === 'Revision' ? { maxLength: 3 } : {})} className={cn(inputCls, 'flex-1')} />
+              </>
+            );
+          })()}
           <div className="w-32">
             <EcoSelect value={r.cls} onChange={v => upRow(idx, 'cls', v)} options={Object.keys(CHANGE_LABEL_MAP) as ChangeLabel[]} labels={CHANGE_LABEL_MAP} />
           </div>
@@ -1126,7 +1186,7 @@ export function ECOWizard({
   const StepImpact = (
     <div className="flex flex-col gap-3.5">
       <div>
-        <FieldLabel>Schedule Impact</FieldLabel>
+        <FieldLabel required>Schedule Impact</FieldLabel>
         <EcoSelect value={impact.schedule} onChange={v => setImpact({ ...impact, schedule: v })} options={Object.keys(IMPACT_LABEL) as ImpactLevel[]} labels={IMPACT_LABEL} />
       </div>
       <div className="grid grid-cols-2 gap-3">

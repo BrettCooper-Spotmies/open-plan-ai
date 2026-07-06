@@ -39,6 +39,8 @@ const getNotificationIcon = (type: AppNotification['type']) => {
             return <AlertCircle className="h-4 w-4 text-red-500" />;
         case 'bom_approval_requested':
         case 'bom_approval_decided':
+        case 'task_completed':
+        case 'issue_completed':
             return <CheckCircle2 className="h-4 w-4 text-green-500" />;
         case 'eco_decision_requested':
             return <Activity className="h-4 w-4 text-blue-500" />;
@@ -52,10 +54,12 @@ const getNotificationIcon = (type: AppNotification['type']) => {
 const getNotificationTypeLabel = (type: AppNotification['type']) => {
     switch (type) {
         case 'task_assigned':
+        case 'task_completed':
             return 'Task';
         case 'issue_assigned':
         case 'issue_resolved':
         case 'issue_linked_to_task':
+        case 'issue_completed':
             return 'Issue';
         case 'bom_approval_requested':
         case 'bom_approval_decided':

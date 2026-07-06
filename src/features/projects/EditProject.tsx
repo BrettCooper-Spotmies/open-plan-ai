@@ -62,7 +62,7 @@ import { useOrganization } from "@/contexts/OrganizationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useProjectModules } from "@/hooks/useProjectDetail";
 import { useProjectMilestones } from "@/hooks/useMilestones";
-import { useUpdateProject, useProject, useDeleteProject } from "@/hooks/useProjects";
+import { useUpdateProject, useUpdateProjectStage, useProject, useDeleteProject } from "@/hooks/useProjects";
 import { useOrganizationMembers, useProjectMembers } from "@/hooks/useProjectTeam";
 import { useProjectPermissions } from "@/hooks/useProjectPermissions";
 import { useProjectAttachments, useDeleteAttachment } from "@/hooks/useProjectAttachments";
@@ -169,6 +169,7 @@ const EditProject = () => {
     const { user } = useAuth();
     const { currentOrganization } = useOrganization();
     const updateProjectMutation = useUpdateProject();
+    const updateProjectStageMutation = useUpdateProjectStage();
     const deleteProjectMutation = useDeleteProject();
     const { data: orgMembers = [] } = useOrganizationMembers(currentOrganization?.id);
     const { data: projectMembers = [] } = useProjectMembers(id);
@@ -767,23 +768,30 @@ const EditProject = () => {
 
         setIsSaving(true);
         try {
-            await updateProjectMutation.mutateAsync({
-                id,
-                updates: {
-                    name: projectName,
-                    description: projectDescription,
-                    type: projectType,
-                    stage: projectStage as any,
-                    icon: projectEmoji,
-                    startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
-                    targetDate: targetDate ? format(targetDate, 'yyyy-MM-dd') : undefined,
-                    clientName: clientName || undefined,
-                    clientOrganization: clientOrganization || undefined,
-                    clientContact: clientContact || undefined,
-                    notes: notes || undefined,
-                    departments: selectedDepartments,
-                },
-            });
+            // A Maintainer (not Admin) can only change Stage on this page — the
+            // general update endpoint is Admin-only, so route stage-only saves
+            // through the dedicated Maintainer-accessible stage endpoint instead.
+            if (!canManageProjectSettings && isProjectMaintainerPlus) {
+                await updateProjectStageMutation.mutateAsync({ id, stage: projectStage });
+            } else {
+                await updateProjectMutation.mutateAsync({
+                    id,
+                    updates: {
+                        name: projectName,
+                        description: projectDescription,
+                        type: projectType,
+                        stage: projectStage as any,
+                        icon: projectEmoji,
+                        startDate: startDate ? format(startDate, 'yyyy-MM-dd') : undefined,
+                        targetDate: targetDate ? format(targetDate, 'yyyy-MM-dd') : undefined,
+                        clientName: clientName || undefined,
+                        clientOrganization: clientOrganization || undefined,
+                        clientContact: clientContact || undefined,
+                        notes: notes || undefined,
+                        departments: selectedDepartments,
+                    },
+                });
+            }
 
             // Sync team members (authorization must be enforced server-side)
             const isValidUuidLike = (value: unknown): value is string => {
