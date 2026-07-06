@@ -778,15 +778,15 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
 
         {showRejectionBanner && (
           <div
-            className="mx-6 mb-4 px-4 py-2.5 rounded-lg text-[12px] flex items-start gap-2"
+            className="mx-6 mb-4 px-4 py-2.5 rounded-lg text-[12px] flex flex-col items-start gap-2"
             style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
           >
-            <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            <div>
+            <div className='flex items-start gap-2'>
+              <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span className="font-semibold">Review rejected by {lastRequest?.decidedByName ?? 'an approver'}.</span>
-              {lastRequest?.reason && <span> {lastRequest.reason}</span>}
-              {' '}Click &quot;Revise &amp; Resubmit&quot; to update the part and resubmit for review.
             </div>
+            <div><span>Rejection Reason:</span>{lastRequest?.reason && <span> {lastRequest.reason}</span>}</div>
+            <div>Click &quot;Revise &amp; Resubmit&quot; to update the part and resubmit for review.</div>
           </div>
         )}
 
