@@ -11,8 +11,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import {
-  ECOType, ECOReason, ECOPriority, ImpactLevel, ChangeLabel,
+  ECOType, ECOReason, ECOPriority, ImpactLevel, ChangeLabel, ImpactArea,
   ECO_TYPE_LABEL, REASON_LABEL, PRIORITY_LABEL, IMPACT_LABEL,
+  IMPACT_AREA_OPTIONS, IMPACT_AREA_LABEL,
   PipelineStep, PIPELINE_STAGE_DEFS,
 } from './ecoData';
 import { ECOAvatar } from './ECOShared';
@@ -69,27 +70,6 @@ const TABS = ['part', 'impact', 'reason', 'approval'] as const;
 type TabId = typeof TABS[number];
 const TAB_LABEL: Record<TabId, string> = {
   part: 'Part Details', impact: 'Impact', reason: 'Reason', approval: 'Approval',
-};
-
-// ── Impact area options ───────────────────────────────────────────────────────
-
-const IMPACT_AREA_OPTIONS = [
-  'schedule', 'cost', 'quality', 'safety', 'compliance',
-  'software', 'firmware', 'manufacturing', 'procurement', 'reliability', 'other',
-] as const;
-type ImpactArea = typeof IMPACT_AREA_OPTIONS[number];
-const IMPACT_AREA_LABEL: Record<ImpactArea, string> = {
-  schedule: 'Schedule',
-  cost: 'Cost',
-  quality: 'Quality',
-  safety: 'Safety',
-  compliance: 'Compliance',
-  software: 'Software',
-  firmware: 'Firmware',
-  manufacturing: 'Manufacturing',
-  procurement: 'Procurement',
-  reliability: 'Reliability',
-  other: 'Other',
 };
 
 // ── Pipeline step with justification ─────────────────────────────────────────
