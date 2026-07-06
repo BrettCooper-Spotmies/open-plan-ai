@@ -43,12 +43,12 @@ function ownerColor(name: string) {
 function OwnerBadge({ name, size = 'sm' }: { name: string; size?: 'sm' | 'xs' }) {
   const sz = size === 'xs' ? 'w-4 h-4 text-[8px]' : 'w-5 h-5 text-[9px]';
   return (
-    <span className="inline-flex items-center gap-1.5 min-w-0">
+    <span className="inline-flex items-center gap-1.5 min-w-0 w-full">
       <span className={`${sz} rounded-full flex items-center justify-center font-bold text-white shrink-0`}
         style={{ background: ownerColor(name) }}>
         {ownerInitials(name)}
       </span>
-      <span className="text-xs text-muted-foreground truncate">{name}</span>
+      <span className="text-xs text-muted-foreground truncate min-w-0">{name}</span>
     </span>
   );
 }
@@ -467,7 +467,7 @@ const HEADERS = [
   { key: 'status', label: 'Status', w: 92 },
   { key: 'owner', label: 'Owner', w: 140 },
   { key: 'supplier', label: 'Supplier', w: 170 },
-  { key: 'act', label: '', w: 110 },
+  { key: 'act', label: 'Action', w: 110 },
 ] as const;
 
 function ListView({
@@ -580,7 +580,7 @@ function ListView({
               {/* Status */}
               <div style={{ flexBasis: 92, flexShrink: 0 }} className="px-2"><BOMStatusPill status={row.status} /></div>
               {/* Owner */}
-              <div style={{ flexBasis: 140, flexShrink: 0 }} className="px-2 min-w-0">
+              <div style={{ flexBasis: 140, flexShrink: 0 }} className="px-2 min-w-0 overflow-hidden">
                 <OwnerBadge name={row.owner} />
               </div>
               {/* Supplier */}
