@@ -86,6 +86,7 @@ export function MyDayListView({
   tasks,
   groupBy,
   onTaskClick,
+  onStatusUpdate,
 }: MyDayListViewProps) {
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
@@ -227,11 +228,25 @@ export function MyDayListView({
             >
               <TableCell>
                 <div className="flex items-start gap-2">
-                  {(task.status === 'done' || task.status === 'resolved') && (
-                    <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center shrink-0 mt-0.5">
-                      <Check className="h-3 w-3 text-status-done" />
-                    </div>
-                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const isComplete = task.status === 'done' || task.status === 'resolved';
+                      onStatusUpdate(task.id, isComplete ? 'todo' : 'done');
+                    }}
+                    aria-label={(task.status === 'done' || task.status === 'resolved') ? 'Mark as incomplete' : 'Mark as complete'}
+                    className={cn(
+                      'h-4 w-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-colors',
+                      (task.status === 'done' || task.status === 'resolved')
+                        ? 'bg-status-done border-status-done'
+                        : 'border-muted-foreground/40 hover:border-status-done'
+                    )}
+                  >
+                    {(task.status === 'done' || task.status === 'resolved') && (
+                      <Check className="h-3 w-3 text-white" />
+                    )}
+                  </button>
                   <div className="min-w-0">
                     <Tooltip>
                       <TooltipTrigger asChild>
