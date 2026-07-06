@@ -301,9 +301,9 @@ interface Props {
 
 // ── Small shared primitives ────────────────────────────────────────
 const Field = ({ label, children, mono }: { label: string; children: React.ReactNode; mono?: boolean }) => (
-  <div>
+  <div className="min-w-0">
     <div className="text-[10.5px] text-muted-foreground uppercase tracking-wider mb-1">{label}</div>
-    <div className={`text-sm font-medium text-foreground ${mono ? 'font-mono' : ''}`}>{children}</div>
+    <div className={`text-sm font-medium text-foreground break-words ${mono ? 'font-mono' : ''}`}>{children}</div>
   </div>
 );
 
