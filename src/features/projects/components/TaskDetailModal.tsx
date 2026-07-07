@@ -63,6 +63,7 @@ import {
   Send,
   Video,
   Play,
+  FolderKanban,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { commentsService } from '@/services/comments.service';
@@ -117,6 +118,8 @@ interface TaskDetailModalProps {
   onAddModule?: () => void;
   assignableMembers?: TeamMember[];
   statusOptions?: Array<{ value: string; label: string; color?: string }>;
+  /** Shown as a read-only "Project" field in the metadata grid when provided. Only pass this from contexts (like My Day) where the task's project isn't already implied by the surrounding page. */
+  projectName?: string;
 }
 
 /** Renders a status colour dot that works for both hex colours and Tailwind classes. */
@@ -207,6 +210,7 @@ export const TaskDetailModal = ({
   onAddModule,
   assignableMembers,
   statusOptions: providedStatusOptions,
+  projectName,
 }: TaskDetailModalProps) => {
   const { user: profile } = useAuth();
   const { currentOrganization } = useOrganization();
@@ -1448,6 +1452,19 @@ export const TaskDetailModal = ({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Project — only shown when explicitly provided (e.g. My Day, which aggregates tasks across projects) */}
+                {projectName && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <FolderKanban className="h-3 w-3" />
+                      Project
+                    </Label>
+                    <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/20">
+                      <span className="text-sm truncate">{projectName}</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Modules */}
                 <div className="space-y-1.5">

@@ -15,6 +15,7 @@ import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
 import { useUpdateTask, useBatchUpdateTasks } from '@/hooks/useTasks';
 import { useUpdateIssue } from '@/hooks/useIssues';
 import { useProjects } from '@/hooks/useProjects';
+import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
 
@@ -169,10 +170,16 @@ export default function MyDay() {
     }
   };
 
-  // derived data for issue modal
+  // derived data for the open task/issue modal
   const selectedIssueProject = selectedIssue ? projects.find(p => p.id === selectedIssue.projectId) : null;
-  const issueTeamMembers = selectedIssueProject?.team || [];
+  const selectedTaskProject = selectedTask ? projects.find(p => p.id === selectedTask.projectId) : null;
   const issueTasks = selectedIssueProject?.tasks || [];
+
+  // My Day aggregates items across projects, so `project.team` (unpopulated for
+  // API-backed projects) can't be used for the assignee picker — fetch the real
+  // membership list for whichever project the open task/issue belongs to.
+  const activeProjectId = selectedTask?.projectId ?? selectedIssue?.projectId;
+  const { data: activeProjectMembers = [] } = useProjectMembers(activeProjectId);
 
   // Early return: show identical skeleton to Suspense fallback while data loads
   if (tasksLoading) {
@@ -206,7 +213,7 @@ export default function MyDay() {
             onFiltersChange={setColumnFilters}
           />
 
-          {/* <Tabs value={view} onValueChange={(v) => setView(v as MyDayView)}>
+          <Tabs value={view} onValueChange={(v) => setView(v as MyDayView)}>
             <TabsList>
               <TabsTrigger value="kanban" className="gap-2">
                 <LayoutGrid className="h-4 w-4" />
@@ -217,7 +224,7 @@ export default function MyDay() {
                 List
               </TabsTrigger>
             </TabsList>
-          </Tabs> */}
+          </Tabs>
         </div>
         */}
 
@@ -271,6 +278,8 @@ export default function MyDay() {
           allTasks={allTasks}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
+          assignableMembers={activeProjectMembers}
+          projectName={selectedTaskProject?.name}
           onUpdate={async (updatedTask) => {
             try {
               const item = userTasks.find(t => t.id === updatedTask.id);
@@ -313,7 +322,8 @@ export default function MyDay() {
         <IssueDetailModal
           issue={selectedIssue}
           tasks={issueTasks}
-          teamMembers={issueTeamMembers}
+          teamMembers={activeProjectMembers}
+          projectName={selectedIssueProject?.name}
           isOpen={isIssueModalOpen}
           onClose={handleCloseIssueModal}
           onUpdate={handleIssueUpdate}

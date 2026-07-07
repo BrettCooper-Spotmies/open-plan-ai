@@ -62,6 +62,7 @@ import {
     Upload,
     Video,
     Play,
+    FolderKanban,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import {
@@ -109,6 +110,8 @@ interface IssueDetailContentProps {
     isDraft?: boolean;
     mode?: 'view' | 'create';
     onPendingFilesChange?: (files: File[]) => void;
+    /** Shown as a read-only "Project" field when provided. Only pass this from contexts (like My Day) where the issue's project isn't already implied by the surrounding page. */
+    projectName?: string;
 }
 
 
@@ -147,6 +150,7 @@ export function IssueDetailContent({
     isDraft = false,
     mode = 'view',
     onPendingFilesChange,
+    projectName,
 }: IssueDetailContentProps) {
     const { user: profile } = useAuth();
     const [editedIssue, setEditedIssue] = useState<Issue | null>(issue);
@@ -790,6 +794,19 @@ export function IssueDetailContent({
                                 <span className="text-sm">{editedIssue.reportedBy.name}</span>
                             </div>
                         </div>
+
+                        {/* Project — only shown when explicitly provided (e.g. My Day, which aggregates issues across projects) */}
+                        {projectName && (
+                            <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                    <FolderKanban className="h-3 w-3" />
+                                    Project
+                                </Label>
+                                <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/20">
+                                    <span className="text-sm truncate">{projectName}</span>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Priority */}
                         <div className="space-y-1.5">
