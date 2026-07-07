@@ -11,8 +11,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import {
-  ECOType, ECOReason, ECOPriority, ImpactLevel, ChangeLabel,
+  ECOType, ECOReason, ECOPriority, ImpactLevel, ChangeLabel, ImpactArea,
   ECO_TYPE_LABEL, REASON_LABEL, PRIORITY_LABEL, IMPACT_LABEL,
+  IMPACT_AREA_OPTIONS, IMPACT_AREA_LABEL,
   PipelineStep, PIPELINE_STAGE_DEFS,
 } from './ecoData';
 import { ECOAvatar } from './ECOShared';
@@ -71,27 +72,6 @@ const TAB_LABEL: Record<TabId, string> = {
   part: 'Part Details', impact: 'Impact', reason: 'Reason', approval: 'Approval',
 };
 
-// ── Impact area options ───────────────────────────────────────────────────────
-
-const IMPACT_AREA_OPTIONS = [
-  'schedule', 'cost', 'quality', 'safety', 'compliance',
-  'software', 'firmware', 'manufacturing', 'procurement', 'reliability', 'other',
-] as const;
-type ImpactArea = typeof IMPACT_AREA_OPTIONS[number];
-const IMPACT_AREA_LABEL: Record<ImpactArea, string> = {
-  schedule: 'Schedule',
-  cost: 'Cost',
-  quality: 'Quality',
-  safety: 'Safety',
-  compliance: 'Compliance',
-  software: 'Software',
-  firmware: 'Firmware',
-  manufacturing: 'Manufacturing',
-  procurement: 'Procurement',
-  reliability: 'Reliability',
-  other: 'Other',
-};
-
 // ── Pipeline step with justification ─────────────────────────────────────────
 
 interface PipelineStepLocal extends PipelineStep {
@@ -106,11 +86,13 @@ export function BOMECOSheet({
   onClose,
   node,
   projectId,
+  onCreated,
 }: {
   open: boolean;
   onClose: () => void;
   node: BOMNode;
   projectId: string;
+  onCreated?: (ecoId: string) => void;
 }) {
   const createMutation = useCreateECO(projectId);
   const meta = getCategoryMeta(node.cat);
@@ -260,7 +242,7 @@ export function BOMECOSheet({
   const handleSubmit = async () => {
     if (!canSubmit) return;
     try {
-      await createMutation.mutateAsync({
+      const created = await createMutation.mutateAsync({
         title: ecoTitle.trim(),
         description: reasonDesc || null,
         type: changeType.toLowerCase(),
@@ -304,6 +286,7 @@ export function BOMECOSheet({
       });
       toast.success('ECO created successfully');
       onClose();
+      if (created?.id) onCreated?.(created.id);
     } catch {
       toast.error('Failed to create ECO');
     }

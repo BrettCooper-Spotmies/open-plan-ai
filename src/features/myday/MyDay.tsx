@@ -4,12 +4,13 @@ import { MyDayStats } from './components/MyDayStats';
 import { MyDayKanbanView } from './components/MyDayKanbanView';
 import { MyDayListView } from './components/MyDayListView';
 import { MyDayGroupBySelector } from './components/MyDayGroupBySelector';
+import { MyTasksFiltersDropdown } from './components/MyTasksFiltersDropdown';
 import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
 import { IssueDetailModal } from '@/features/projects/components/IssueDetailModal';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
-import { Task, Issue, TaskStatus, IssueStatus, MyDayView, MyDayGroupBy } from '@/types';
+import { Task, Issue, TaskStatus, IssueStatus, MyDayView, MyDayGroupBy, MyDayFilter, MyTasksColumnFilters } from '@/types';
 import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
 import { useUpdateTask, useBatchUpdateTasks } from '@/hooks/useTasks';
 import { useUpdateIssue } from '@/hooks/useIssues';
@@ -19,7 +20,7 @@ import { logger } from '@/services/monitoring/logger';
 
 export default function MyDay() {
   useEffect(() => {
-    document.title = 'My Day | Open Plan AI';
+    document.title = 'My Tasks | Open Plan AI';
     return () => { document.title = 'Open Plan AI'; };
   }, []);
 
@@ -27,11 +28,13 @@ export default function MyDay() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
-  const [view, setView] = useState<MyDayView>('kanban');
+  const [view, setView] = useState<MyDayView>('list');
   const [groupBy, setGroupBy] = useState<MyDayGroupBy>('progress');
+  const [filter, setFilter] = useState<MyDayFilter>('today');
+  const [columnFilters, setColumnFilters] = useState<MyTasksColumnFilters>({});
 
   // Fetch dynamic data
-  const { data: userTasks = [], isLoading: tasksLoading } = useMyDayTasks();
+  const { data: userTasks = [], isLoading: tasksLoading } = useMyDayTasks(filter);
   const { data: completedTodayCount = 0 } = useCompletedTodayCount();
   const { data: projects = [] } = useProjects();
   const updateTaskMutation = useUpdateTask();
@@ -42,9 +45,20 @@ export default function MyDay() {
     return projects.flatMap(p => p.tasks || []);
   }, [projects]);
 
+  // Column filters (type/status/priority/project) apply on top of the date filter
+  const filteredTasks = useMemo(() => {
+    return userTasks.filter((item) => {
+      if (columnFilters.type?.length && !columnFilters.type.includes(item.itemType)) return false;
+      if (columnFilters.status?.length && !columnFilters.status.includes(item.status)) return false;
+      if (columnFilters.priority?.length && (!item.priority || !columnFilters.priority.includes(item.priority))) return false;
+      if (columnFilters.projectIds?.length && !columnFilters.projectIds.includes(item.projectId)) return false;
+      return true;
+    });
+  }, [userTasks, columnFilters]);
+
   const { needsAttention, readyToWork, waitingBlocked } = useMemo(() => {
-    return categorizeMyDayItems(userTasks);
-  }, [userTasks]);
+    return categorizeMyDayItems(filteredTasks);
+  }, [filteredTasks]);
 
   const handleTaskClick = (item: MyDayItem) => {
     // Only open modal for tasks (issues have their own modal)
@@ -73,10 +87,10 @@ export default function MyDay() {
         // a valid drop target for issue cards. Only map statuses that have
         // a clear 1-to-1 IssueStatus counterpart.
         const issueStatusMap: Partial<Record<TaskStatus, IssueStatus>> = {
-          'todo':        'open',
+          'todo': 'open',
           'in-progress': 'in-progress',
-          'done':        'resolved',
-          'blocked':     'in-progress',
+          'done': 'resolved',
+          'blocked': 'in-progress',
           // 'review' intentionally omitted — no equivalent IssueStatus exists.
         };
         const mappedStatus = issueStatusMap[status];
@@ -167,7 +181,7 @@ export default function MyDay() {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-6 w-full min-w-0">
+      <div className="grid grid-cols-1 w-full min-w-0">
         {/* Stats - always visible once data is ready */}
         <MyDayStats
           attentionCount={needsAttention.length}
@@ -178,28 +192,50 @@ export default function MyDay() {
 
         {/* View controls - always visible once data is ready */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-            <Tabs value={view} onValueChange={(v) => setView(v as MyDayView)}>
-              <TabsList>
-                <TabsTrigger value="kanban" className="gap-2">
-                  <LayoutGrid className="h-4 w-4" />
-                  Kanban
-                </TabsTrigger>
-                <TabsTrigger value="list" className="gap-2">
-                  <List className="h-4 w-4" />
-                  List
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as MyDayFilter)}>
+            <TabsList>
+              <TabsTrigger value="today">My Day</TabsTrigger>
+              <TabsTrigger value="overdue">Overdue</TabsTrigger>
+              <TabsTrigger value="all">All</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <MyTasksFiltersDropdown
+            items={userTasks}
+            filters={columnFilters}
+            onFiltersChange={setColumnFilters}
+          />
+
+          {/* <Tabs value={view} onValueChange={(v) => setView(v as MyDayView)}>
+            <TabsList>
+              <TabsTrigger value="kanban" className="gap-2">
+                <LayoutGrid className="h-4 w-4" />
+                Kanban
+              </TabsTrigger>
+              <TabsTrigger value="list" className="gap-2">
+                <List className="h-4 w-4" />
+                List
+              </TabsTrigger>
+            </TabsList>
+          </Tabs> */}
         </div>
 
         {/* Kanban/List content */}
-        {userTasks.length === 0 ? (
+        {filteredTasks.length === 0 ? (
           <div className="text-center py-16">
             <h3 className="text-lg font-medium text-foreground mb-2">
-              All caught up!
+              {userTasks.length > 0
+                ? 'No matching tasks'
+                : filter === 'overdue' ? 'No overdue tasks' : filter === 'today' ? 'Nothing due today' : 'All caught up!'}
             </h3>
             <p className="text-muted-foreground max-w-md mx-auto">
-              You have no active tasks assigned to you. Check the Projects page to see available work.
+              {userTasks.length > 0
+                ? 'No tasks or issues match the selected filters. Try clearing a filter.'
+                : filter === 'overdue'
+                  ? "You're all caught up — nothing assigned to you is overdue."
+                  : filter === 'today'
+                    ? 'No tasks or issues assigned to you are due today.'
+                    : 'You have no active tasks assigned to you. Check the Projects page to see available work.'}
             </p>
           </div>
         ) : (
@@ -207,7 +243,7 @@ export default function MyDay() {
             <div className="min-h-[400px] w-full min-w-0">
               {view === 'kanban' ? (
                 <MyDayKanbanView
-                  tasks={userTasks}
+                  tasks={filteredTasks}
                   groupBy={groupBy}
                   onTaskClick={handleTaskClick}
                   onStatusUpdate={handleStatusUpdate}
@@ -215,7 +251,7 @@ export default function MyDay() {
                 />
               ) : (
                 <MyDayListView
-                  tasks={userTasks}
+                  tasks={filteredTasks}
                   groupBy={groupBy}
                   onTaskClick={handleTaskClick}
                   onStatusUpdate={handleStatusUpdate}

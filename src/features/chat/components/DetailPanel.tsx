@@ -85,6 +85,32 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
+  // Per-conversation notifications toggle
+  const [notificationsEnabled, setNotificationsEnabled] = useState(currentMember?.notificationsEnabled ?? true);
+  const [isTogglingNotifications, setIsTogglingNotifications] = useState(false);
+
+  useEffect(() => {
+    setNotificationsEnabled(currentMember?.notificationsEnabled ?? true);
+  }, [conversation.id, currentMember?.notificationsEnabled]);
+
+  const handleToggleNotifications = async (checked: boolean) => {
+    const previous = notificationsEnabled;
+    setNotificationsEnabled(checked);
+    setIsTogglingNotifications(true);
+    try {
+      await chatService.updateNotificationSettings(conversation.id, checked);
+    } catch (err) {
+      setNotificationsEnabled(previous);
+      logger.warn('[DetailPanel] Failed to update notification settings', {
+        conversationId: conversation.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      toast.error('Failed to update notification settings');
+    } finally {
+      setIsTogglingNotifications(false);
+    }
+  };
+
   useEffect(() => {
     setEditName(conversation.name);
     setEditDescription(conversation.description || '');
@@ -615,7 +641,11 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
               <Bell className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm">Notifications</span>
             </div>
-            <Switch defaultChecked />
+            <Switch
+              checked={notificationsEnabled}
+              disabled={isTogglingNotifications}
+              onCheckedChange={handleToggleNotifications}
+            />
           </div>
 
           {isGroup && (

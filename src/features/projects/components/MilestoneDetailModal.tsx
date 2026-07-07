@@ -43,7 +43,7 @@ import {
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { Milestone, MilestoneStatus, Task, Issue, Module } from '@/types';
-import { getMilestoneProgress, getMilestoneTasks, getMilestoneIssues, getMilestoneStatus, getModuleProgress } from '../utils/projectUtils';
+import { getMilestoneTasks, getMilestoneModules, getMilestoneIssues, getMilestoneStatus, getModuleProgress } from '../utils/projectUtils';
 import { resolveFileUrl } from '@/utils/fileUrl';
 
 interface MilestoneDetailModalProps {
@@ -82,6 +82,8 @@ export function MilestoneDetailModal({
   const [milestoneDateCalendarMonth, setMilestoneDateCalendarMonth] = useState<Date>(() =>
     startOfMonth(new Date())
   );
+  const [taskSearchQuery, setTaskSearchQuery] = useState('');
+  const [issueSearchQuery, setIssueSearchQuery] = useState('');
 
   useLayoutEffect(() => {
     if (!editedMilestone?.date) return;
@@ -89,9 +91,19 @@ export function MilestoneDetailModal({
   }, [editedMilestone?.id, editedMilestone?.date, isMilestoneDateOpen]);
 
   useEffect(() => {
-    // Only set initial state when opening modal with a new milestone
+    // Only set initial state when opening modal with a new milestone.
+    // Seed linkedTaskIds/linkedModuleIds from the real link state (which includes
+    // tasks/modules linked via their own milestoneId, not just the milestone's own
+    // array) so toggling a fallback-linked item to remove it behaves symmetrically
+    // instead of silently no-op'ing.
     if (isOpen && milestone) {
-      setEditedMilestone(milestone);
+      setEditedMilestone({
+        ...milestone,
+        linkedTaskIds: getMilestoneTasks(milestone, tasks).map(t => t.id),
+        linkedModuleIds: getMilestoneModules(milestone, modules).map(m => m.id),
+      });
+      setTaskSearchQuery('');
+      setIssueSearchQuery('');
     }
   }, [isOpen, milestone?.id]); // Only depend on isOpen and milestone.id to prevent re-runs
 
@@ -127,8 +139,13 @@ export function MilestoneDetailModal({
     });
   };
 
-  const progress = getMilestoneProgress(editedMilestone, tasks);
-  const milestoneTasks = getMilestoneTasks(editedMilestone, tasks);
+  // editedMilestone.linkedTaskIds/linkedModuleIds are seeded with the full real
+  // link state (fallback-matched) when the modal opens, so from here on they are
+  // the sole source of truth for "is this linked in the current edit session" —
+  // falling back to the live task/module fields again (via getMilestoneTasks/
+  // getMilestoneModules) would make removing a fallback-linked item a no-op,
+  // since those live fields don't change until the milestone is saved.
+  const milestoneTasks = tasks.filter(t => editedMilestone.linkedTaskIds?.includes(t.id));
   const milestoneIssues = getMilestoneIssues(editedMilestone.id, issues);
   const status = getMilestoneStatus(editedMilestone, tasks, issues);
   const daysUntil = editedMilestone.date ? Math.ceil((new Date(editedMilestone.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : NaN;
@@ -136,19 +153,27 @@ export function MilestoneDetailModal({
   const completedTasks = milestoneTasks.filter(t => t.status === 'done').length;
   const inProgressTasks = milestoneTasks.filter(t => t.status === 'in-progress').length;
   const blockedTasks = milestoneTasks.filter(t => t.status === 'blocked').length;
+  const progress = milestoneTasks.length === 0
+    ? (editedMilestone.completed ? 100 : 0)
+    : Math.round((completedTasks / milestoneTasks.length) * 100);
 
   // Get linked modules
-  const linkedModules = modules.filter(m =>
-    editedMilestone.linkedModuleIds?.includes(m.id)
-  );
+  const linkedModules = modules.filter(m => editedMilestone.linkedModuleIds?.includes(m.id));
 
   // Available items for linking (not already linked)
   const availableTasks = tasks.filter(t => !editedMilestone.linkedTaskIds?.includes(t.id));
-  const availableModules = modules.filter(m => !editedMilestone.linkedModuleIds?.includes(m.id));
+  const availableModules = modules.filter(m => !linkedModules.some(lm => lm.id === m.id));
   const availableIssues = issues.filter(i =>
     !milestoneIssues.some(mi => mi.id === i.id) &&
     i.status !== 'resolved' &&
     i.status !== 'wont-fix'
+  );
+
+  const filteredAvailableTasks = availableTasks.filter(t =>
+    t.title.toLowerCase().includes(taskSearchQuery.trim().toLowerCase())
+  );
+  const filteredAvailableIssues = availableIssues.filter(i =>
+    i.title.toLowerCase().includes(issueSearchQuery.trim().toLowerCase())
   );
 
   // Handlers for adding/removing linked items
@@ -460,35 +485,42 @@ export function MilestoneDetailModal({
               {availableTasks.length > 0 && (
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Add Tasks</Label>
-                  <div className="border rounded-lg max-h-[120px] overflow-y-auto">
+                  <Input
+                    value={taskSearchQuery}
+                    onChange={(e) => setTaskSearchQuery(e.target.value)}
+                    placeholder="Search tasks..."
+                    className="h-8 text-sm"
+                  />
+                  <div className="border rounded-lg max-h-[200px] overflow-y-auto">
                     <div className="p-2 space-y-1">
-                      {availableTasks.slice(0, 5).map(task => (
-                        <div
-                          key={task.id}
-                          className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => handleToggleTask(task.id)}
-                        >
-                          <Checkbox
-                            checked={false}
-                            onCheckedChange={() => handleToggleTask(task.id)}
-                          />
-                          <div className={cn(
-                            'w-2 h-2 rounded-full shrink-0',
-                            task.status === 'done' ? 'bg-status-done' :
-                              task.status === 'in-progress' ? 'bg-status-in-progress' :
-                                task.status === 'blocked' ? 'bg-status-blocked' :
-                                  'bg-status-todo'
-                          )} />
-                          <span className="text-sm flex-1 truncate">{task.title}</span>
-                          <Badge variant="outline" className="text-xs capitalize shrink-0">
-                            {task.status.replace('-', ' ')}
-                          </Badge>
-                        </div>
-                      ))}
-                      {availableTasks.length > 5 && (
-                        <p className="text-xs text-muted-foreground text-center py-1">
-                          +{availableTasks.length - 5} more available
+                      {filteredAvailableTasks.length === 0 ? (
+                        <p className="text-sm text-muted-foreground italic py-2 text-center">
+                          No matching tasks
                         </p>
+                      ) : (
+                        filteredAvailableTasks.map(task => (
+                          <div
+                            key={task.id}
+                            className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+                            onClick={() => handleToggleTask(task.id)}
+                          >
+                            <Checkbox
+                              checked={false}
+                              onCheckedChange={() => handleToggleTask(task.id)}
+                            />
+                            <div className={cn(
+                              'w-2 h-2 rounded-full shrink-0',
+                              task.status === 'done' ? 'bg-status-done' :
+                                task.status === 'in-progress' ? 'bg-status-in-progress' :
+                                  task.status === 'blocked' ? 'bg-status-blocked' :
+                                    'bg-status-todo'
+                            )} />
+                            <span className="text-sm flex-1 truncate">{task.title}</span>
+                            <Badge variant="outline" className="text-xs capitalize shrink-0">
+                              {task.status.replace('-', ' ')}
+                            </Badge>
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>
@@ -634,36 +666,43 @@ export function MilestoneDetailModal({
               {onIssueUpdate && availableIssues.length > 0 && (
                 <div className="space-y-2">
                   <Label className="text-xs text-muted-foreground">Add Issues</Label>
-                  <div className="border rounded-lg max-h-[120px] overflow-y-auto">
+                  <Input
+                    value={issueSearchQuery}
+                    onChange={(e) => setIssueSearchQuery(e.target.value)}
+                    placeholder="Search issues..."
+                    className="h-8 text-sm"
+                  />
+                  <div className="border rounded-lg max-h-[200px] overflow-y-auto">
                     <div className="p-2 space-y-1">
-                      {availableIssues.slice(0, 5).map(issue => (
-                        <div
-                          key={issue.id}
-                          className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => handleToggleIssue(issue.id)}
-                        >
-                          <Checkbox
-                            checked={false}
-                            onCheckedChange={() => handleToggleIssue(issue.id)}
-                          />
-                          <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
-                          <span className="text-sm flex-1 truncate">{issue.title}</span>
-                          <Badge
-                            variant="outline"
-                            className={cn(
-                              'text-xs capitalize shrink-0',
-                              issue.severity === 'critical' && 'border-destructive text-destructive',
-                              issue.severity === 'major' && 'border-orange-500 text-orange-500'
-                            )}
-                          >
-                            {issue.severity}
-                          </Badge>
-                        </div>
-                      ))}
-                      {availableIssues.length > 5 && (
-                        <p className="text-xs text-muted-foreground text-center py-1">
-                          +{availableIssues.length - 5} more available
+                      {filteredAvailableIssues.length === 0 ? (
+                        <p className="text-sm text-muted-foreground italic py-2 text-center">
+                          No matching issues
                         </p>
+                      ) : (
+                        filteredAvailableIssues.map(issue => (
+                          <div
+                            key={issue.id}
+                            className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted/50 transition-colors"
+                            onClick={() => handleToggleIssue(issue.id)}
+                          >
+                            <Checkbox
+                              checked={false}
+                              onCheckedChange={() => handleToggleIssue(issue.id)}
+                            />
+                            <AlertTriangle className="h-3 w-3 text-destructive shrink-0" />
+                            <span className="text-sm flex-1 truncate">{issue.title}</span>
+                            <Badge
+                              variant="outline"
+                              className={cn(
+                                'text-xs capitalize shrink-0',
+                                issue.severity === 'critical' && 'border-destructive text-destructive',
+                                issue.severity === 'major' && 'border-orange-500 text-orange-500'
+                              )}
+                            >
+                              {issue.severity}
+                            </Badge>
+                          </div>
+                        ))
                       )}
                     </div>
                   </div>

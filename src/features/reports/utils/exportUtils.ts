@@ -127,7 +127,7 @@ export function buildCSV(data: ReportExportData): string {
 
   // Open Issues
   lines.push('=== OPEN ISSUES ===');
-  lines.push(csvRow(['Title', 'Severity', 'Category', 'Status', 'Reported Date']));
+  lines.push(csvRow(['Title', 'Priority', 'Category', 'Status', 'Reported Date']));
   const openIssues = data.issues.filter(i => i.status === 'open' || i.status === 'in-progress');
   for (const issue of openIssues) {
     lines.push(csvRow([

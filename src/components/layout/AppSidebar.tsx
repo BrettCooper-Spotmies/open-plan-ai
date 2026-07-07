@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, Coffee, ChevronsUpDown, Check, Plus, Building2, Loader2, MessageSquare, Plug } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Settings, Users, Calendar, BarChart3, ListTodo, ChevronsUpDown, Check, Plus, Building2, Loader2, MessageSquare, Plug } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { Logo } from '@/components/Logo';
 import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, SidebarTrigger, useSidebar } from '@/components/ui/sidebar';
@@ -16,11 +16,12 @@ import { useOrgPermissions } from '@/hooks/useProjectPermissions';
 import { OrganizationSettings } from '@/services/organizations.service';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { toast } from 'sonner';
+import { useChatStore } from '@/features/chat/stores/useChatStore';
 
 const mainNavItems = [{
-  title: 'My Day',
+  title: 'My Tasks',
   url: '/my-day',
-  icon: Coffee
+  icon: ListTodo
 }, {
   title: 'Dashboard',
   url: '/',
@@ -64,6 +65,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { organizations, currentOrganization, setCurrentOrganization, createOrganization, isLoading: orgLoading } = useOrganization();
   const { isOrgAdmin: canCreateOrg } = useOrgPermissions();
+  const chatUnreadCount = useChatStore((s) => s.getTotalUnread());
 
   const [orgPopoverOpen, setOrgPopoverOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -246,16 +248,26 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {mainNavItems.map(item => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={collapsed ? item.title : undefined}>
-                      <NavLink id={item.url} to={item.url} end={item.url === '/'} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
-                        <item.icon className="h-4 w-4 shrink-0" />
-                        {!collapsed && <span>{item.title}</span>}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {mainNavItems.map(item => {
+                  const showChatBadge = item.title === 'Chat' && chatUnreadCount > 0;
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={collapsed ? item.title : undefined}>
+                        <NavLink id={item.url} to={item.url} end={item.url === '/'} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
+                          <span className="relative shrink-0">
+                            <item.icon className="h-4 w-4" />
+                            {showChatBadge && (
+                              <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-in-progress px-1 text-[10px] font-medium text-white">
+                                {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                              </span>
+                            )}
+                          </span>
+                          {!collapsed && <span>{item.title}</span>}
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>

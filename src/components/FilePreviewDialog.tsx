@@ -1,8 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Download, Copy, File as FileIcon, ExternalLink, ChevronLeft, ChevronRight, X, Loader2, Video } from 'lucide-react';
+import { Document, Page, pdfjs } from 'react-pdf';
+import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { Download, Copy, File as FileIcon, ExternalLink, ChevronLeft, ChevronRight, X, Loader2, Video, ZoomIn, ZoomOut } from 'lucide-react';
 import { toast } from 'sonner';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
+
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
 
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'avif'];
 const VIDEO_EXTENSIONS = ['mp4', 'webm', 'ogg', 'mov', 'avi', 'mkv', 'm4v'];
@@ -115,6 +121,29 @@ export function FilePreviewDialog({
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [blobLoading, setBlobLoading] = useState(false);
   const blobUrlRef = useRef<string | null>(null);
+
+  const [numPages, setNumPages] = useState(0);
+  const [pdfError, setPdfError] = useState(false);
+  const [pdfScale, setPdfScale] = useState(1);
+  const [pdfContainerWidth, setPdfContainerWidth] = useState(800);
+  const pdfContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setNumPages(0);
+    setPdfError(false);
+    setPdfScale(1);
+  }, [current?.url]);
+
+  useEffect(() => {
+    const el = pdfContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(entries => {
+      const width = entries[0]?.contentRect.width;
+      if (width) setPdfContainerWidth(width);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!current) return;
@@ -234,6 +263,27 @@ export function FilePreviewDialog({
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 )}
+                {kind === 'pdf' && !pdfError && blobUrl && (
+                  <>
+                    <button
+                      className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                      title="Zoom out"
+                      disabled={pdfScale <= 0.5}
+                      onClick={() => setPdfScale(s => Math.max(0.5, +(s - 0.25).toFixed(2)))}
+                    >
+                      <ZoomOut className="w-4 h-4" />
+                    </button>
+                    <span className="text-xs text-muted-foreground w-10 text-center">{Math.round(pdfScale * 100)}%</span>
+                    <button
+                      className="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+                      title="Zoom in"
+                      disabled={pdfScale >= 3}
+                      onClick={() => setPdfScale(s => Math.min(3, +(s + 0.25).toFixed(2)))}
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
                 {kind === 'image' && (
                   <button
                     className="text-muted-foreground hover:text-foreground transition-colors"
@@ -302,7 +352,7 @@ export function FilePreviewDialog({
               ) : blobLoading ? (
                 <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
               ) : blobUrl ? (
-                <object data={blobUrl} type="application/pdf" className="w-full h-full border-0">
+                pdfError ? (
                   <div className="flex flex-col items-center gap-3 text-muted-foreground">
                     <FileIcon className="w-10 h-10" />
                     <p className="text-sm">Unable to preview this PDF.</p>
@@ -313,7 +363,26 @@ export function FilePreviewDialog({
                       </a>
                     </Button>
                   </div>
-                </object>
+                ) : (
+                  <div ref={pdfContainerRef} className="w-full h-full overflow-auto flex justify-center">
+                    <Document
+                      file={blobUrl}
+                      onLoadSuccess={({ numPages: n }) => setNumPages(n)}
+                      onLoadError={() => setPdfError(true)}
+                      loading={<Loader2 className="w-8 h-8 animate-spin text-muted-foreground mt-8" />}
+                      className="flex flex-col items-center gap-4 py-4"
+                    >
+                      {Array.from({ length: numPages }, (_, i) => (
+                        <Page
+                          key={i}
+                          pageNumber={i + 1}
+                          width={Math.min(pdfContainerWidth - 32, 900) * pdfScale}
+                          className="shadow-md"
+                        />
+                      ))}
+                    </Document>
+                  </div>
+                )
               ) : (
                 <div className="flex flex-col items-center gap-3 text-muted-foreground">
                   <FileIcon className="w-10 h-10" />

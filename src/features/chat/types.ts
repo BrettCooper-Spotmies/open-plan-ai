@@ -2,6 +2,15 @@ export type ConversationType = 'dm' | 'group';
 export type MessageContentType = 'text' | 'system' | 'file';
 export type ConversationMemberRole = 'owner' | 'admin' | 'member';
 
+export type ChatEntityType = 'task' | 'issue' | 'milestone' | 'hardware_module' | 'bom_node' | 'eco';
+
+export interface EntityTagRef {
+  entityType: ChatEntityType;
+  entityId: string;
+  projectId: string;
+  label: string;
+}
+
 export interface ReadReceipt {
   messageId: string;
   userId: string;
@@ -18,6 +27,7 @@ export interface ConversationMember {
   isOnline: boolean;
   lastSeenAt?: string;
   lastReadAt?: string | null;
+  notificationsEnabled?: boolean;
 }
 
 export interface MessageAttachment {
@@ -51,6 +61,7 @@ export interface ChatMessage {
   contentType: MessageContentType;
   content: string;
   attachments: MessageAttachment[];
+  entityTags?: EntityTagRef[];
   createdAt: string;
   updatedAt?: string;
   isEdited: boolean;

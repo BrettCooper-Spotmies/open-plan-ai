@@ -28,6 +28,7 @@ import {
 import {
   getMilestoneProgress,
   getMilestoneTasks,
+  getMilestoneModules,
   getMilestoneIssues,
   getMilestoneStatus,
   sortMilestonesByDate,
@@ -325,7 +326,7 @@ export function MilestonesView({
                 const progress = getMilestoneProgress(milestone, tasks);
                 const milestoneTasks = getMilestoneTasks(milestone, tasks);
                 const milestoneIssues = getMilestoneIssues(milestone.id, issues);
-                const linkedModules = modules.filter(m => milestone.linkedModuleIds?.includes(m.id));
+                const linkedModules = getMilestoneModules(milestone, modules);
                 const status = getMilestoneStatus(milestone, tasks, issues);
                 const StatusIcon = statusConfig[status].icon;
                 const isExpanded = expandedMilestones.includes(milestone.id);

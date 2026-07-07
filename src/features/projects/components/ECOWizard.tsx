@@ -177,6 +177,19 @@ function fmtSize(b: number) {
   return (b / 1048576).toFixed(1) + ' MB';
 }
 
+// `<input type="date">` only accepts a strict "YYYY-MM-DD" value — any other
+// format (legacy free-text entries, alternate separators) is silently ignored
+// by the browser and renders blank. Normalize whatever was saved so a
+// previously-entered date always redisplays when reopening the ECO.
+function toDateInputValue(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+}
+
 // ── Shared field label ────────────────────────────────────────────────────────
 
 function FieldLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
@@ -382,7 +395,7 @@ export function ECOWizard({
   projectId: string;
   ecoId?: string;
   isRework?: boolean;
-  onClose: (result?: { saved: boolean }) => void;
+  onClose: (result?: { saved: boolean; ecoId?: string }) => void;
 }) {
   const isEdit = !!ecoId;
   const createMutation = useCreateECO(projectId);
@@ -594,11 +607,14 @@ export function ECOWizard({
   const stageMoved = (p: PipelineStep, idx: number) =>
     defaultOrder[p.stage] !== undefined && defaultOrder[p.stage] !== idx;
 
-  const pipelineValid = true;
+  const pipelineMissingApprover = pipeline.some(p => !p.approverId);
+  const pipelineMissingStageName = pipeline.some(p => p.isCustom && !p.stage.trim());
+  const pipelineMissingJustification = pipeline.some((p, idx) => (p.optional || stageMoved(p, idx)) && !(p.justification ?? '').trim());
+  const pipelineValid = pipeline.length >= 2 && !pipelineMissingApprover && !pipelineMissingStageName && !pipelineMissingJustification;
 
   const activeMutation = isEdit ? updateMutation : createMutation;
   const savePending = activeMutation.isPending || (isRework && submitMutation.isPending);
-  const canSubmit = !savePending;
+  const canSubmit = !savePending && (isRework || pipelineValid);
 
   // Auto-fill "From" in Details when scope is BOM_PART
   const firstSelectedNode = useMemo(() => {
@@ -622,11 +638,17 @@ export function ECOWizard({
       if (paramNames.length !== new Set(paramNames).size) e.details = 'Each parameter must be unique — remove the duplicate rows';
     }
     if (s === 3) {
-      if (impact.unitCostDelta.trim() && isNaN(parseFloat(impact.unitCostDelta))) e.unitCostDelta = 'Enter a valid number (e.g. -4.55)';
+      const MAX_COST = 99999999.9999;
+      if (impact.unitCostDelta.trim()) {
+        const v = parseFloat(impact.unitCostDelta);
+        if (isNaN(v)) e.unitCostDelta = 'Enter a valid number (e.g. -4.55)';
+        else if (Math.abs(v) > MAX_COST) e.unitCostDelta = `Must be within ±${MAX_COST.toLocaleString()}`;
+      }
       if (impact.oneTimeCost.trim()) {
         const v = parseFloat(impact.oneTimeCost);
         if (isNaN(v)) e.oneTimeCost = 'Enter a valid number';
         else if (v < 0) e.oneTimeCost = 'Cost must be 0 or greater';
+        else if (v > MAX_COST) e.oneTimeCost = `Must be ${MAX_COST.toLocaleString()} or less`;
       }
     }
     setErrors(e);
@@ -798,7 +820,7 @@ export function ECOWizard({
           </div>
           <input
             type={basics.effType === 'DATE' ? 'date' : 'text'}
-            value={basics.effValue}
+            value={basics.effType === 'DATE' ? toDateInputValue(basics.effValue) : basics.effValue}
             onChange={e => setBasics({ ...basics, effValue: e.target.value })}
             placeholder={
               basics.effType === 'SERIAL' ? 'Effective from S/N EVC-1450'
@@ -1191,8 +1213,9 @@ export function ECOWizard({
           <FieldLabel>Unit Cost Δ ($/unit)</FieldLabel>
           <input
             value={impact.unitCostDelta}
-            onChange={e => { const v = e.target.value; if (/^[+-]?\d*\.?\d{0,6}$/.test(v)) { setImpact({ ...impact, unitCostDelta: v }); if (errors.unitCostDelta) setErrors(({ unitCostDelta: _, ...rest }) => rest); } }}
-            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, unitCostDelta: String(parseFloat(n.toFixed(6))) })); }}
+            inputMode="decimal"
+            onChange={e => { const v = e.target.value; if (/^[+-]?\d{0,8}(\.\d{0,4})?$/.test(v)) { setImpact({ ...impact, unitCostDelta: v }); if (errors.unitCostDelta) setErrors(({ unitCostDelta: _, ...rest }) => rest); } }}
+            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, unitCostDelta: String(parseFloat(n.toFixed(4))) })); }}
             placeholder="+4.55"
             className={cn(inputCls, errors.unitCostDelta && 'border-destructive')}
           />
@@ -1206,8 +1229,9 @@ export function ECOWizard({
           <FieldLabel>One-Time Cost ($)</FieldLabel>
           <input
             value={impact.oneTimeCost}
-            onChange={e => { const v = e.target.value; if (/^\d*\.?\d{0,6}$/.test(v)) { setImpact({ ...impact, oneTimeCost: v }); if (errors.oneTimeCost) setErrors(({ oneTimeCost: _, ...rest }) => rest); } }}
-            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, oneTimeCost: String(parseFloat(n.toFixed(6))) })); }}
+            inputMode="decimal"
+            onChange={e => { const v = e.target.value; if (/^\d{0,8}(\.\d{0,4})?$/.test(v)) { setImpact({ ...impact, oneTimeCost: v }); if (errors.oneTimeCost) setErrors(({ oneTimeCost: _, ...rest }) => rest); } }}
+            onBlur={e => { const n = parseFloat(e.target.value); if (!isNaN(n)) setImpact(s => ({ ...s, oneTimeCost: String(parseFloat(n.toFixed(4))) })); }}
             placeholder="12400"
             className={cn(inputCls, errors.oneTimeCost && 'border-destructive')}
           />
@@ -1291,6 +1315,33 @@ export function ECOWizard({
         >
           <AlertCircle className="w-3 h-3 shrink-0" />
           At least one approver besides the Originator is required — this ECO can&apos;t be submitted with nobody to review it.
+        </div>
+      )}
+      {!isRework && pipelineMissingApprover && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+          style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
+        >
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          Assign an approver to every stage before submitting.
+        </div>
+      )}
+      {!isRework && pipelineMissingStageName && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+          style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
+        >
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          Give every custom stage a name before submitting.
+        </div>
+      )}
+      {!isRework && pipelineMissingJustification && (
+        <div
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-[11px]"
+          style={{ color: '#DC2626', background: '#DC262614', border: '1px solid #DC262633' }}
+        >
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          Add a justification for every optional or reordered stage before submitting.
         </div>
       )}
       {pipeline.map((p, idx) => {
@@ -1597,14 +1648,14 @@ export function ECOWizard({
                     })),
                   };
                   try {
-                    await activeMutation.mutateAsync(payload);
+                    const saved = await activeMutation.mutateAsync(payload);
                     if (isRework) {
                       await submitMutation.mutateAsync();
                       toast.success('ECO revised and resubmitted');
                     } else {
                       toast.success(isEdit ? 'ECO updated' : 'ECO created');
                     }
-                    onClose({ saved: true });
+                    onClose({ saved: true, ecoId: isEdit ? undefined : saved?.id });
                   } catch (err) {
                     toast.error(isRework ? 'Failed to resubmit ECO' : isEdit ? 'Failed to update ECO' : 'Failed to create ECO', {
                       description: err instanceof Error ? err.message : undefined,

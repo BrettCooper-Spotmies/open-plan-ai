@@ -56,6 +56,7 @@ export default defineConfig(({ mode }) => {
           'vendor-charts': ['recharts'],
           'vendor-dates': ['date-fns'],
           'vendor-dnd': ['@hello-pangea/dnd'],
+          'vendor-pdf': ['react-pdf', 'pdfjs-dist'],
           'vendor-ui': [
             '@radix-ui/react-dialog',
             '@radix-ui/react-dropdown-menu',

@@ -83,8 +83,11 @@ export const tasksService = {
   /**
    * Get all tasks assigned to the current user across all projects.
    */
-  async getMyTasks(): Promise<(Task & { projectName?: string })[]> {
-    const data = await apiClient.get<any>(ENDPOINTS.TASKS.ME_ALL);
+  async getMyTasks(organizationId?: string): Promise<(Task & { projectName?: string })[]> {
+    const url = organizationId
+      ? `${ENDPOINTS.TASKS.ME_ALL}?limit=100&organizationId=${encodeURIComponent(organizationId)}`
+      : `${ENDPOINTS.TASKS.ME_ALL}?limit=100`;
+    const data = await apiClient.get<any>(url);
     const rows: any[] = data?.data ?? data ?? [];
     return rows.map((raw: any) => ({ ...fromApi(raw), projectName: raw.projectName ?? raw.project_name ?? '' }));
   },
