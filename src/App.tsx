@@ -151,6 +151,30 @@ const App = () => {
                           }
                         />
                         <Route
+                          path="/projects/:id/tasks/:taskId"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="project-detail" />}>
+                              <ProjectDetail />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/projects/:id/modules/:moduleId"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="project-detail" />}>
+                              <ProjectDetail />
+                            </Suspense>
+                          }
+                        />
+                        <Route
+                          path="/projects/:id/milestones/:milestoneId"
+                          element={
+                            <Suspense fallback={<AppLayoutSkeleton variant="project-detail" />}>
+                              <ProjectDetail />
+                            </Suspense>
+                          }
+                        />
+                        <Route
                           path="/projects/:id/edit"
                           element={
                             <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
