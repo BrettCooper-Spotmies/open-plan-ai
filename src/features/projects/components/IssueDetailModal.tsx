@@ -100,7 +100,14 @@ export function IssueDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent hideClose className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden">
+      <DialogContent
+        hideClose
+        className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+
         {/* Header - create mode */}
         {mode === 'create' && (
           <DialogHeader className="px-6 py-4 border-b flex-row items-center justify-between">

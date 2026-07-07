@@ -376,7 +376,7 @@ interface AttachmentState { name: string; size: number }
 
 interface ImpactState {
   schedule: ImpactLevel; recert: boolean; firmware: boolean;
-  unitCostDelta: string; oneTimeCost: string;
+  unitCostDelta: string; oneTimeCost: string; certNotes: string;
 }
 
 interface PipelineStepWizard extends PipelineStep {
@@ -529,6 +529,7 @@ export function ECOWizard({
       firmware: d.firmwareCoupling ?? false,
       unitCostDelta: d.unitCostDelta != null ? String(parseFloat(d.unitCostDelta.toFixed(6))) : '',
       oneTimeCost: d.oneTimeCost != null ? String(parseFloat(d.oneTimeCost.toFixed(6))) : '',
+      certNotes: d.certNotes ?? '',
     });
     if (d.steps?.length) {
       setPipeline(
@@ -564,7 +565,7 @@ export function ECOWizard({
   // Step 4 — Impact
   const [impact, setImpact] = useState<ImpactState>({
     schedule: 'MEDIUM', recert: false, firmware: false,
-    unitCostDelta: '', oneTimeCost: '',
+    unitCostDelta: '', oneTimeCost: '', certNotes: '',
   });
 
   // Step 5 — Pipeline (approvers are real project members, picked by the user)
@@ -649,6 +650,11 @@ export function ECOWizard({
         if (isNaN(v)) e.oneTimeCost = 'Enter a valid number';
         else if (v < 0) e.oneTimeCost = 'Cost must be 0 or greater';
         else if (v > MAX_COST) e.oneTimeCost = `Must be ${MAX_COST.toLocaleString()} or less`;
+      }
+      if ((impact.recert || impact.firmware) && !impact.certNotes.trim()) {
+        e.certNotes = impact.recert
+          ? 'Specify the certification type required (e.g. CE, UL, ISO)'
+          : 'Describe the firmware/software dependency';
       }
     }
     setErrors(e);
@@ -1273,6 +1279,34 @@ export function ECOWizard({
           </div>
         </div>
       ))}
+      {(impact.recert || impact.firmware) && (
+        <div>
+          <FieldLabel required>
+            {impact.recert && impact.firmware
+              ? 'Certification Type & Firmware Dependency'
+              : impact.recert
+                ? 'Certification Type Required'
+                : 'Firmware Dependency Details'}
+          </FieldLabel>
+          <textarea
+            value={impact.certNotes}
+            onChange={e => { setImpact({ ...impact, certNotes: e.target.value }); if (errors.certNotes) setErrors(({ certNotes: _certNotes, ...rest }) => rest); }}
+            placeholder={
+              impact.recert && impact.firmware
+                ? 'e.g. CE / UL re-test scope, and the SW/FW dependency this change introduces'
+                : impact.recert
+                  ? 'e.g. CE LVD, UL 60950, ISO 13485 re-test scope'
+                  : 'e.g. requires firmware v2.3+ to support the new sensor'
+            }
+            className={cn(inputCls, 'h-16 resize-none', errors.certNotes && 'border-destructive')}
+          />
+          {errors.certNotes && (
+            <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+              <AlertCircle className="w-3 h-3" />{errors.certNotes}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -1611,6 +1645,7 @@ export function ECOWizard({
                     scheduleImpact: impact.schedule.toLowerCase(),
                     requiresRecertification: impact.recert,
                     firmwareCoupling: impact.firmware,
+                    certNotes: (impact.recert || impact.firmware) ? impact.certNotes.trim() : null,
                     unitCostDelta: impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
                     oneTimeCost: impact.oneTimeCost ? parseFloat(impact.oneTimeCost) : null,
                     parts: items.map(it => ({
