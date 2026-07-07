@@ -2,8 +2,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { format, parse } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import { CheckSquare, Bug, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import {
   MyDayItem,
@@ -216,6 +218,7 @@ export function MyDayListView({
             <SortableHead field="priority">Priority</SortableHead>
             {/* <TableHead>Module</TableHead> */}
             <SortableHead field="project">Project</SortableHead>
+            <TableHead>Assigned By</TableHead>
             <SortableHead field="dueDate">Due Date</SortableHead>
           </TableRow>
         </TableHeader>
@@ -300,10 +303,30 @@ export function MyDayListView({
               </TableCell> */}
               <TableCell>
                 {task.projectName ? (
-                  <span className="text-sm">{task.projectName}</span>
+                  <Badge variant="outline" className="text-xs">
+                    {task.projectName}
+                  </Badge>
                 ) : (
                   <span className="text-muted-foreground text-sm">—</span>
                 )}
+              </TableCell>
+              <TableCell>
+                {(() => {
+                  const assignedBy = task.itemType === 'task' ? task.originalTask?.createdBy : task.originalIssue?.reportedBy;
+                  return assignedBy ? (
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarImage src={resolveFileUrl(assignedBy.avatar) ?? assignedBy.avatar} alt={assignedBy.name} />
+                        <AvatarFallback className="text-[10px]">
+                          {assignedBy.initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">{assignedBy.name}</span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  );
+                })()}
               </TableCell>
               <TableCell>
                 {task.dueDate ? (

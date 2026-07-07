@@ -31,12 +31,15 @@ const stageLabels = {
 };
 
 const RAG_RANK = { red: 0, amber: 1, green: 2 };
+const MAX_VISIBLE_PROJECTS = 7;
 
 export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOverviewProps) {
   const ranked = projects
     .map((p) => ({ project: p, health: projectHealth(p, atRiskProjectIds.has(p.id)) }))
     .sort((a, b) => RAG_RANK[a.health.rag] - RAG_RANK[b.health.rag]);
   const onTrack = ranked.filter((r) => r.health.rag === 'green').length;
+  const visible = ranked.slice(0, MAX_VISIBLE_PROJECTS);
+  const remaining = ranked.length - visible.length;
 
   return (
     <Card className="h-full flex flex-col overflow-hidden">
@@ -77,7 +80,7 @@ export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOvervie
               need attention
             </div>
             <div className="divide-y divide-border/50">
-              {ranked.map(({ project, health }) => (
+              {visible.map(({ project, health }) => (
                 <Link
                   key={project.id}
                   to={`/projects/${project.id}`}
@@ -104,6 +107,14 @@ export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOvervie
                 </Link>
               ))}
             </div>
+            {remaining > 0 && (
+              <Button variant="ghost" size="sm" className="w-full mt-1 text-muted-foreground hover:text-foreground" asChild>
+                <Link to="/projects">
+                  View all {ranked.length} projects
+                  <ArrowRight className="h-4 w-4 ml-1" />
+                </Link>
+              </Button>
+            )}
           </>
         )}
       </CardContent>

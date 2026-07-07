@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
   GitMerge, GitBranch, Clock, ClipboardCheck,
-  Boxes, Calendar, ChevronRight, CheckCircle, Download, Loader2,
+  Boxes, Calendar, ChevronLeft, ChevronRight, CheckCircle, Download, Loader2,
 } from 'lucide-react';
 import {
   ECOListItem, MAIN_STATUSES, ECO_TYPE_LABEL, REASON_LABEL,
@@ -15,9 +15,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from '@/lib/utils';
 import {
   useECOList, useECOStats, useECODetail,
-  useExportEcoSummaryCsv, useExportEcoDetailedCsv,
+  useExportEcoSummaryCsv, useExportEcoDetailedCsv, fetchAllEcoIds,
 } from '@/hooks/useECOs';
 import { downloadEcoCsv } from '@/features/reports/utils/exportUtils';
+
+const ECO_PAGE_SIZE = 10;
 
 // ── KPI stat card ─────────────────────────────────────────────────────────────
 
@@ -336,33 +338,53 @@ export function ECOListView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [fStatus, setFStatus]     = useState<string>('ALL');
   const [fPriority, setFPriority] = useState<string>('ALL');
+  const [page, setPage] = useState(1);
   const [toast, setToast] = useState<string | null>(null);
   const flash = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2600); };
 
   const exportDetailedCsv = useExportEcoDetailedCsv(projectId);
-  const exporting = exportDetailedCsv.isPending;
+  const [exportingAll, setExportingAll] = useState(false);
+  const exporting = exportDetailedCsv.isPending || exportingAll;
 
   const apiFilters: Record<string, string> = {};
   if (fStatus   !== 'ALL') apiFilters.status   = fStatus.toLowerCase();
   if (fPriority !== 'ALL') apiFilters.priority = fPriority.toLowerCase();
 
-  const { data: listData, isLoading: listLoading } = useECOList(projectId, apiFilters);
+  const { data: listData, isLoading: listLoading } = useECOList(projectId, {
+    ...apiFilters,
+    page: String(page),
+    limit: String(ECO_PAGE_SIZE),
+  });
   const { data: stats, isLoading: statsLoading }   = useECOStats(projectId);
 
   const list: ECOListItem[] = (listData?.data ?? []).map(fromApiEcoListItem);
+  const total = listData?.meta?.total ?? 0;
+  const totalPages = Math.max(1, listData?.meta?.totalPages ?? 1);
 
   const effectiveSelectedId = selectedId ?? list[0]?.id ?? null;
   const selected = list.find(e => e.id === effectiveSelectedId) ?? list[0] ?? null;
 
+  useEffect(() => {
+    if (listData && page > totalPages) setPage(totalPages);
+  }, [listData, page, totalPages]);
+
+  const changeFilter = (setter: (v: string) => void) => (v: string) => {
+    setter(v);
+    setPage(1);
+  };
+
   const handleExport = async () => {
-    if (list.length === 0) return;
+    if (total === 0) return;
     try {
-      const ids = list.map(e => e.id);
+      setExportingAll(true);
+      const ids = await fetchAllEcoIds(projectId, apiFilters);
       const blob = await exportDetailedCsv.mutateAsync(ids);
       downloadEcoCsv(blob, 'detailed', ids.length);
       flash(`Exported ${ids.length} change order(s)`);
     } catch {
       flash('Failed to export');
+    } finally {
+      setExportingAll(false);
     }
   };
 
@@ -414,15 +436,15 @@ export function ECOListView({
               <span className="text-[13px] font-semibold">
                 Change Orders{' '}
                 <span className="font-normal text-muted-foreground">
-                  · {listLoading ? '…' : list.length}
+                  · {listLoading ? '…' : total}
                 </span>
               </span>
               <div className="flex gap-2 items-center">
-                <Sel value={fStatus}   onChange={setFStatus}   opts={MAIN_STATUSES}                          allLabel="All statuses" />
-                <Sel value={fPriority} onChange={setFPriority} opts={['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']} allLabel="All priorities" />
+                <Sel value={fStatus}   onChange={changeFilter(setFStatus)}   opts={MAIN_STATUSES}                          allLabel="All statuses" />
+                <Sel value={fPriority} onChange={changeFilter(setFPriority)} opts={['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']} allLabel="All priorities" />
                 <button
                   onClick={handleExport}
-                  disabled={list.length === 0 || exporting}
+                  disabled={total === 0 || exporting}
                   title="Export complete ECO list"
                   className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-medium bg-card text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -453,6 +475,35 @@ export function ECOListView({
                 </div>
               )}
             </div>
+            {!listLoading && total > 0 && (
+              <div className="flex items-center justify-between px-4 py-2.5 border-t border-border gap-3 flex-wrap">
+                <span className="text-[11px] text-muted-foreground">
+                  Showing {(page - 1) * ECO_PAGE_SIZE + 1}
+                  –{Math.min(page * ECO_PAGE_SIZE, total)} of {total}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="flex items-center justify-center w-7 h-7 rounded-md border border-border bg-card text-foreground hover:bg-accent/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                  </button>
+                  <span className="text-[11px] text-muted-foreground px-1 tabular-nums">
+                    Page {page} of {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="flex items-center justify-center w-7 h-7 rounded-md border border-border bg-card text-foreground hover:bg-accent/50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    aria-label="Next page"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right: preview (desktop only) */}

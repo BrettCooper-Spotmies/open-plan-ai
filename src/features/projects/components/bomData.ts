@@ -268,6 +268,7 @@ export interface ApiSummaryResponse {
   totalNodes: number;
   pendingCount: number;
   approvedCount: number;
+  rejectedCount: number;
   totalCost: number;
   byCategory: Array<{ category: string; count: number; totalCost: number }>;
 }

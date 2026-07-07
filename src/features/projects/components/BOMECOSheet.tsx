@@ -392,6 +392,13 @@ export function BOMECOSheet({
                     </span>
                   </div>
 
+                  {errors.changes && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-destructive/10 border border-destructive/30 text-[12px] text-destructive">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {errors.changes}
+                    </div>
+                  )}
+
                   {/* Description */}
                   <FL label="Description">
                     <Textarea
@@ -491,11 +498,6 @@ export function BOMECOSheet({
                         </span>
                       )}
                     </div>
-                  )}
-                  {errors.changes && (
-                    <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
-                      <AlertCircle className="w-3 h-3 shrink-0" />{errors.changes}
-                    </p>
                   )}
                 </div>
               </div>
@@ -793,7 +795,12 @@ export function BOMECOSheet({
         {/* Footer */}
         <div className="px-7 py-4 border-t border-border flex items-center justify-between gap-4 shrink-0 bg-card">
           <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-            {activeTab !== 'approval' ? (
+            {activeTab === 'part' && errors.changes ? (
+              <>
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-destructive" />
+                <span className="text-destructive">{errors.changes}</span>
+              </>
+            ) : activeTab !== 'approval' ? (
               <span>Step {TABS.indexOf(activeTab) + 1} of {TABS.length}</span>
             ) : canSubmit ? (
               <>

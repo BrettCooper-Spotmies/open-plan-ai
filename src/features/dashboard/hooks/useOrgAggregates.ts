@@ -61,17 +61,14 @@ export function useOrgEcoAggregate(projectIds: string[]): OrgEcoAggregate {
   const reworked = allEcos.filter((e) => e.status === 'rework').length;
   const firstPassPct = total > 0 ? Math.round(((total - reworked) / total) * 100) : null;
 
-  const cycleDays = allEcos
-    .map((e) => {
-      if (!e.targetDate) return null;
-      const created = new Date(e.initiatedAt).getTime();
-      const target = new Date(e.targetDate).getTime();
-      return (target - created) / 86400000;
-    })
-    .filter((d): d is number => d != null && !Number.isNaN(d));
-  const avgCycleDays = cycleDays.length > 0
-    ? Math.round(cycleDays.reduce((s, d) => s + d, 0) / cycleDays.length)
-    : null;
+  // Weighted average across projects: each project's avgCycleDays is itself an
+  // average over cycleSampleCount released/verified/closed ECOs (see getEcoStats).
+  const cycleSampleTotal = statsQueries.reduce((sum, q) => sum + (q.data?.cycleSampleCount ?? 0), 0);
+  const cycleDaySum = statsQueries.reduce(
+    (sum, q) => sum + (q.data?.avgCycleDays ?? 0) * (q.data?.cycleSampleCount ?? 0),
+    0,
+  );
+  const avgCycleDays = cycleSampleTotal > 0 ? Math.round(cycleDaySum / cycleSampleTotal) : null;
 
   return { isLoading, open, awaitingMyAction, firstPassPct, avgCycleDays };
 }
@@ -113,6 +110,7 @@ export interface OrgBomAggregate {
   total: number;
   approved: number;
   pending: number;
+  rejected: number;
   pct: number; // approved / total, 0 when total is 0
 }
 
@@ -128,7 +126,8 @@ export function useOrgBomAggregate(projectIds: string[]): OrgBomAggregate {
   const total = summaryQueries.reduce((sum, q) => sum + (q.data?.totalNodes ?? 0), 0);
   const approved = summaryQueries.reduce((sum, q) => sum + (q.data?.approvedCount ?? 0), 0);
   const pending = summaryQueries.reduce((sum, q) => sum + (q.data?.pendingCount ?? 0), 0);
+  const rejected = summaryQueries.reduce((sum, q) => sum + (q.data?.rejectedCount ?? 0), 0);
   const pct = total > 0 ? Math.round((approved / total) * 100) : 0;
 
-  return { isLoading, total, approved, pending, pct };
+  return { isLoading, total, approved, pending, rejected, pct };
 }

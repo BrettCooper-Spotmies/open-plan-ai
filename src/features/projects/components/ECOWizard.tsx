@@ -11,6 +11,7 @@ import {
   PipelineStep, PIPELINE_STAGE_DEFS, rejectionsFromSteps,
 } from './ecoData';
 import { ECOAvatar } from './ECOShared';
+import { clearDraft, readFreshDraft, useDraftAutosave } from '@/hooks/useDraftPersistence';
 import { cn } from '@/lib/utils';
 import { useCreateECO, useUpdateECO, useSubmitECO, useECODetail } from '@/hooks/useECOs';
 import { useBomTree } from '@/hooks/useBom';
@@ -376,12 +377,27 @@ interface AttachmentState { name: string; size: number }
 
 interface ImpactState {
   schedule: ImpactLevel; recert: boolean; firmware: boolean;
-  unitCostDelta: string; oneTimeCost: string;
+  unitCostDelta: string; oneTimeCost: string; certNotes: string;
 }
 
 interface PipelineStepWizard extends PipelineStep {
   justification: string;
   isCustom?: boolean;
+}
+
+// ── Draft persistence (create mode only — editing an existing ECO already reflects
+// saved server state). Attachments are excluded: actual File objects can't survive
+// JSON serialization, so restoring their metadata alone would be misleading.
+interface ECODraft {
+  savedAt: number;
+  basics: BasicsState;
+  items: ItemState[];
+  reqItems: ReqItemState[];
+  diffRows: DiffRowState[];
+  impact: ImpactState;
+  pipeline: PipelineStepWizard[];
+  step: number;
+  maxStepReached: number;
 }
 
 // ── ECOWizard ─────────────────────────────────────────────────────────────────
@@ -398,6 +414,10 @@ export function ECOWizard({
   onClose: (result?: { saved: boolean; ecoId?: string }) => void;
 }) {
   const isEdit = !!ecoId;
+  const draftKey = `eco-draft:${projectId}`;
+  // Read once at mount — restores an in-progress "New ECO" that was interrupted by an
+  // accidental close/refresh. Not applicable in edit/rework mode (server data wins there).
+  const [initialDraft] = useState<ECODraft | null>(() => (isEdit ? null : readFreshDraft<ECODraft>(draftKey)));
   const createMutation = useCreateECO(projectId);
   const updateMutation = useUpdateECO(projectId, ecoId ?? '');
   const submitMutation = useSubmitECO(projectId, ecoId ?? '');
@@ -408,12 +428,12 @@ export function ECOWizard({
   );
 
   const [seeded, setSeeded] = useState(false);
-  const [step, setStep] = useState(0);
-  const [maxStepReached, setMaxStepReached] = useState(0);
+  const [step, setStep] = useState(() => initialDraft?.step ?? 0);
+  const [maxStepReached, setMaxStepReached] = useState(() => initialDraft?.maxStepReached ?? 0);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Step 1 — Basics
-  const [basics, setBasics] = useState<BasicsState>({
+  const [basics, setBasics] = useState<BasicsState>(() => initialDraft?.basics ?? {
     title: '', description: '',
     type: 'DESIGN_CHANGE', typeOther: '',
     priority: 'MEDIUM',
@@ -439,10 +459,10 @@ export function ECOWizard({
     [bomRootNodes],
   );
 
-  const [items, setItems] = useState<ItemState[]>([]);
+  const [items, setItems] = useState<ItemState[]>(() => initialDraft?.items ?? []);
   const [pickerOpen, setPickerOpen] = useState(true);
   const [partSearch, setPartSearch] = useState('');
-  const [reqItems, setReqItems] = useState<ReqItemState[]>([]);
+  const [reqItems, setReqItems] = useState<ReqItemState[]>(() => initialDraft?.reqItems ?? []);
   const [reqPickerOpen, setReqPickerOpen] = useState(false);
 
   // Selecting a part auto-populates Rev From from its current BOM revision;
@@ -470,7 +490,7 @@ export function ECOWizard({
   );
 
   // Step 3 — Diff rows + attachments
-  const [diffRows, setDiffRows] = useState<DiffRowState[]>([{ param: '', from: '', to: '', cls: 'MODIFIED' }]);
+  const [diffRows, setDiffRows] = useState<DiffRowState[]>(() => initialDraft?.diffRows ?? [{ param: '', from: '', to: '', cls: 'MODIFIED' }]);
   const [attachments, setAttachments] = useState<AttachmentState[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -529,6 +549,7 @@ export function ECOWizard({
       firmware: d.firmwareCoupling ?? false,
       unitCostDelta: d.unitCostDelta != null ? String(parseFloat(d.unitCostDelta.toFixed(6))) : '',
       oneTimeCost: d.oneTimeCost != null ? String(parseFloat(d.oneTimeCost.toFixed(6))) : '',
+      certNotes: d.certNotes ?? '',
     });
     if (d.steps?.length) {
       setPipeline(
@@ -562,9 +583,9 @@ export function ECOWizard({
   };
 
   // Step 4 — Impact
-  const [impact, setImpact] = useState<ImpactState>({
+  const [impact, setImpact] = useState<ImpactState>(() => initialDraft?.impact ?? {
     schedule: 'MEDIUM', recert: false, firmware: false,
-    unitCostDelta: '', oneTimeCost: '',
+    unitCostDelta: '', oneTimeCost: '', certNotes: '',
   });
 
   // Step 5 — Pipeline (approvers are real project members, picked by the user)
@@ -578,7 +599,7 @@ export function ECOWizard({
   }, []);
 
   const [pipeline, setPipeline] = useState<PipelineStepWizard[]>(
-    PIPELINE_STAGE_DEFS.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
+    () => initialDraft?.pipeline ?? PIPELINE_STAGE_DEFS.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
   );
 
   // Auto-fill Originator slot with the current user once members load
@@ -611,6 +632,13 @@ export function ECOWizard({
   const pipelineMissingStageName = pipeline.some(p => p.isCustom && !p.stage.trim());
   const pipelineMissingJustification = pipeline.some((p, idx) => (p.optional || stageMoved(p, idx)) && !(p.justification ?? '').trim());
   const pipelineValid = pipeline.length >= 2 && !pipelineMissingApprover && !pipelineMissingStageName && !pipelineMissingJustification;
+
+  // Autosave the in-progress "New ECO" as a draft so it survives an accidental close/refresh.
+  const draftSnapshot = useMemo<ECODraft>(() => ({
+    savedAt: Date.now(), basics, items, reqItems, diffRows, impact, pipeline, step, maxStepReached,
+  }), [basics, items, reqItems, diffRows, impact, pipeline, step, maxStepReached]);
+  const hasDraftContent = !!(basics.title.trim() || basics.description.trim() || items.length || reqItems.length);
+  useDraftAutosave(draftKey, draftSnapshot, !isEdit && hasDraftContent);
 
   const activeMutation = isEdit ? updateMutation : createMutation;
   const savePending = activeMutation.isPending || (isRework && submitMutation.isPending);
@@ -649,6 +677,11 @@ export function ECOWizard({
         if (isNaN(v)) e.oneTimeCost = 'Enter a valid number';
         else if (v < 0) e.oneTimeCost = 'Cost must be 0 or greater';
         else if (v > MAX_COST) e.oneTimeCost = `Must be ${MAX_COST.toLocaleString()} or less`;
+      }
+      if ((impact.recert || impact.firmware) && !impact.certNotes.trim()) {
+        e.certNotes = impact.recert
+          ? 'Specify the certification type required (e.g. CE, UL, ISO)'
+          : 'Describe the firmware/software dependency';
       }
     }
     setErrors(e);
@@ -1273,6 +1306,34 @@ export function ECOWizard({
           </div>
         </div>
       ))}
+      {(impact.recert || impact.firmware) && (
+        <div>
+          <FieldLabel required>
+            {impact.recert && impact.firmware
+              ? 'Certification Type & Firmware Dependency'
+              : impact.recert
+                ? 'Certification Type Required'
+                : 'Firmware Dependency Details'}
+          </FieldLabel>
+          <textarea
+            value={impact.certNotes}
+            onChange={e => { setImpact({ ...impact, certNotes: e.target.value }); if (errors.certNotes) setErrors(({ certNotes: _certNotes, ...rest }) => rest); }}
+            placeholder={
+              impact.recert && impact.firmware
+                ? 'e.g. CE / UL re-test scope, and the SW/FW dependency this change introduces'
+                : impact.recert
+                  ? 'e.g. CE LVD, UL 60950, ISO 13485 re-test scope'
+                  : 'e.g. requires firmware v2.3+ to support the new sensor'
+            }
+            className={cn(inputCls, 'h-16 resize-none', errors.certNotes && 'border-destructive')}
+          />
+          {errors.certNotes && (
+            <p className="text-[11px] text-destructive flex items-center gap-1 mt-1">
+              <AlertCircle className="w-3 h-3" />{errors.certNotes}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -1611,6 +1672,7 @@ export function ECOWizard({
                     scheduleImpact: impact.schedule.toLowerCase(),
                     requiresRecertification: impact.recert,
                     firmwareCoupling: impact.firmware,
+                    certNotes: (impact.recert || impact.firmware) ? impact.certNotes.trim() : null,
                     unitCostDelta: impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
                     oneTimeCost: impact.oneTimeCost ? parseFloat(impact.oneTimeCost) : null,
                     parts: items.map(it => ({
@@ -1655,6 +1717,7 @@ export function ECOWizard({
                     } else {
                       toast.success(isEdit ? 'ECO updated' : 'ECO created');
                     }
+                    if (!isEdit) clearDraft(draftKey);
                     onClose({ saved: true, ecoId: isEdit ? undefined : saved?.id });
                   } catch (err) {
                     toast.error(isRework ? 'Failed to resubmit ECO' : isEdit ? 'Failed to update ECO' : 'Failed to create ECO', {

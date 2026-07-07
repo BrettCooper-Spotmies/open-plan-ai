@@ -49,6 +49,8 @@ import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
 import { useOrganizationMembers, useProjectMembers } from '@/hooks/useProjectTeam';
 import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import { useProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
+import { useIssueColumns } from '@/hooks/useIssueColumns';
+import { DEFAULT_ISSUE_COLUMNS, type ProjectIssueColumn } from '@/services/issueColumns.service';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useUpdateProjectProgress } from '@/hooks/useProjects';
 import {
@@ -85,7 +87,7 @@ import { resolveFileUrl } from '@/utils/fileUrl';
 
 // Issue Filter interface
 interface IssueFilter {
-  status?: IssueStatus[];
+  status?: string[]; // status keys from the project's issue buckets (custom, not a fixed enum)
   severity?: IssueSeverity[];
   assigneeId?: string[];
   assignedById?: string[];
@@ -149,6 +151,7 @@ function IssueViewControls({
   filters,
   onFiltersChange,
   teamMembers,
+  issueColumns,
   activeFilterCount,
   onClearFilters,
 }: {
@@ -157,6 +160,7 @@ function IssueViewControls({
   filters: IssueFilter;
   onFiltersChange: (filters: IssueFilter) => void;
   teamMembers: TeamMember[];
+  issueColumns: ProjectIssueColumn[];
   activeFilterCount: number;
   onClearFilters: () => void;
 }) {
@@ -213,14 +217,9 @@ function IssueViewControls({
                 Status
               </Label>
               <MultiSelect
-                options={[
-                  { value: 'open', label: 'Open' },
-                  { value: 'in-progress', label: 'In Progress' },
-                  { value: 'resolved', label: 'Resolved' },
-                  { value: 'wont-fix', label: "Won't Fix" },
-                ]}
+                options={issueColumns.map((column) => ({ value: column.status, label: column.label }))}
                 selected={filters.status || []}
-                onChange={(values) => onFiltersChange({ ...filters, status: values.length ? (values as IssueStatus[]) : undefined })}
+                onChange={(values) => onFiltersChange({ ...filters, status: values.length ? values : undefined })}
                 placeholder="All Status"
               />
             </div>
@@ -340,6 +339,8 @@ export default function ProjectDetail() {
   const navigate = useNavigate();
   const { id, tab: tabParam, partId, ecoId, taskId, moduleId, milestoneId } = useParams();
   const { data: boardColumns } = useProjectTaskColumns(id);
+  const { data: apiIssueColumns } = useIssueColumns(id);
+  const issueColumns = apiIssueColumns && apiIssueColumns.length > 0 ? apiIssueColumns : DEFAULT_ISSUE_COLUMNS;
 
   // The /bom/:partId, /eng-changes/:ecoId, /tasks/:taskId, /modules/:moduleId, and
   // /milestones/:milestoneId routes encode the section as a literal path segment
@@ -1626,7 +1627,8 @@ export default function ProjectDetail() {
                       onViewModeChange={setIssueViewMode}
                       filters={issueFilters}
                       onFiltersChange={setIssueFilters}
-                      teamMembers={organizationMembers}
+                      teamMembers={projectMembers}
+                      issueColumns={issueColumns}
                       activeFilterCount={activeIssueFilterCount}
                       onClearFilters={clearIssueFilters}
                     />
@@ -1644,7 +1646,7 @@ export default function ProjectDetail() {
               milestones={project.milestones || []}
               issues={project.issues || []}
               modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
-              assignableMembers={organizationMembers}
+              assignableMembers={projectMembers}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               filters={filters}
@@ -1662,7 +1664,7 @@ export default function ProjectDetail() {
               modules={modules}
               tasks={project.tasks || []}
               issues={project.issues || []}
-              teamMembers={organizationMembers}
+              teamMembers={projectMembers}
               viewMode={moduleViewMode}
               onViewModeChange={setModuleViewMode}
               searchQuery={moduleSearchQuery}
@@ -1697,7 +1699,7 @@ export default function ProjectDetail() {
               issues={project.issues || []}
               viewMode={issueViewMode}
               tasks={project.tasks || []}
-              teamMembers={organizationMembers}
+              teamMembers={projectMembers}
               searchQuery={issueSearchQuery}
               severityFilter={issueFilters.severity}
               statusFilter={issueFilters.status}
@@ -1754,7 +1756,7 @@ export default function ProjectDetail() {
         isOpen={isAddModuleDialogOpen}
         onClose={() => setIsAddModuleDialogOpen(false)}
         onAdd={handleModuleAdd}
-        teamMembers={organizationMembers}
+        teamMembers={projectMembers}
         existingModuleNames={existingModuleNames}
       />
 
@@ -1769,7 +1771,7 @@ export default function ProjectDetail() {
         modules={modules}
         projectId={id}
         onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
-        assignableMembers={organizationMembers}
+        assignableMembers={projectMembers}
         statusOptions={(boardColumns ?? []).map((c) => ({
           value: c.status,
           label: c.label,

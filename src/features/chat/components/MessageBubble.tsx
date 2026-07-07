@@ -116,63 +116,99 @@ function ExpandableText({ text, query, isOwn = false, memberNames }: { text: str
 }
 
 function MentionHighlightedText({ text, query, isOwn = false, memberNames }: { text: string; query?: string; isOwn?: boolean; memberNames?: string[] }) {
-  const parts: { text: string; isMention: boolean }[] = [];
+  // First pass: split out @everyone tokens (case-insensitive)
+  const everyoneRegex = /(@everyone)(?=\s|$|[.,!?])/gi;
+  const withEveryone: { text: string; isEveryone: boolean; isMention: boolean }[] = [];
+  let lastEv = 0;
+  let evMatch: RegExpExecArray | null;
+  while ((evMatch = everyoneRegex.exec(text)) !== null) {
+    if (evMatch.index > lastEv) {
+      withEveryone.push({ text: text.slice(lastEv, evMatch.index), isEveryone: false, isMention: false });
+    }
+    withEveryone.push({ text: evMatch[1], isEveryone: true, isMention: false });
+    lastEv = evMatch.index + evMatch[0].length;
+  }
+  if (lastEv < text.length) {
+    withEveryone.push({ text: text.slice(lastEv), isEveryone: false, isMention: false });
+  }
+  if (withEveryone.length === 0) withEveryone.push({ text, isEveryone: false, isMention: false });
 
-  if (memberNames && memberNames.length > 0) {
-    // Sort by length descending so longer names are matched first (e.g. "Jagan Tripuragiri" before "Jagan")
-    const sorted = [...memberNames].sort((a, b) => b.length - a.length);
-    const escaped = sorted.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-    const mentionRegex = new RegExp(`(@(?:${escaped.join('|')}))(?=\\s|$|[.,!?])`, 'g');
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = mentionRegex.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push({ text: text.slice(lastIndex, match.index), isMention: false });
+  // Second pass: within non-@everyone segments, detect individual @name mentions
+  const parts: { text: string; isEveryone: boolean; isMention: boolean }[] = [];
+  for (const seg of withEveryone) {
+    if (seg.isEveryone) { parts.push(seg); continue; }
+    const segText = seg.text;
+    if (memberNames && memberNames.length > 0) {
+      const sorted = [...memberNames].sort((a, b) => b.length - a.length);
+      const escaped = sorted.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const mentionRegex = new RegExp(`(@(?:${escaped.join('|')}))(?=\\s|$|[.,!?])`, 'g');
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = mentionRegex.exec(segText)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push({ text: segText.slice(lastIndex, match.index), isEveryone: false, isMention: false });
+        }
+        parts.push({ text: match[1], isEveryone: false, isMention: true });
+        lastIndex = match.index + match[0].length;
       }
-      parts.push({ text: match[1], isMention: true });
-      lastIndex = match.index + match[0].length;
-    }
-    if (lastIndex < text.length) {
-      parts.push({ text: text.slice(lastIndex), isMention: false });
-    }
-  } else {
-    // Fallback: match @Word or @Word Word (up to two words) when no member list available
-    const mentionRegex = /(@\w+(?:\s\w+)?)(?=\s|$|[.,!?])/g;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = mentionRegex.exec(text)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push({ text: text.slice(lastIndex, match.index), isMention: false });
+      if (lastIndex < segText.length) {
+        parts.push({ text: segText.slice(lastIndex), isEveryone: false, isMention: false });
       }
-      parts.push({ text: match[1], isMention: true });
-      lastIndex = match.index + match[0].length;
-    }
-    if (lastIndex < text.length) {
-      parts.push({ text: text.slice(lastIndex), isMention: false });
+    } else {
+      // Fallback: match @Word or @Word Word (up to two words)
+      const mentionRegex = /(@\w+(?:\s\w+)?)(?=\s|$|[.,!?])/g;
+      let lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = mentionRegex.exec(segText)) !== null) {
+        if (match.index > lastIndex) {
+          parts.push({ text: segText.slice(lastIndex, match.index), isEveryone: false, isMention: false });
+        }
+        parts.push({ text: match[1], isEveryone: false, isMention: true });
+        lastIndex = match.index + match[0].length;
+      }
+      if (lastIndex < segText.length) {
+        parts.push({ text: segText.slice(lastIndex), isEveryone: false, isMention: false });
+      }
     }
   }
 
-  if (parts.length === 0) parts.push({ text, isMention: false });
+  if (parts.length === 0) parts.push({ text, isEveryone: false, isMention: false });
 
   return (
     <>
-      {parts.map((part, i) =>
-        part.isMention ? (
-          <span
-            key={i}
-            className={cn(
-              'font-medium rounded px-0.5',
-              isOwn
-                ? 'bg-primary-foreground/20 text-primary-foreground'
-                : 'bg-primary/20 text-primary'
-            )}
-          >
-            <HighlightedText text={part.text} query={query} />
-          </span>
-        ) : (
-          <HighlightedText key={i} text={part.text} query={query} />
-        )
-      )}
+      {parts.map((part, i) => {
+        if (part.isEveryone) {
+          return (
+            <span
+              key={i}
+              className={cn(
+                'font-semibold rounded px-0.5',
+                isOwn
+                  ? 'bg-amber-300/30 text-amber-100'
+                  : 'bg-amber-400/25 text-amber-700 dark:text-amber-400'
+              )}
+            >
+              <HighlightedText text={part.text} query={query} />
+            </span>
+          );
+        }
+        if (part.isMention) {
+          return (
+            <span
+              key={i}
+              className={cn(
+                'font-medium rounded px-0.5',
+                isOwn
+                  ? 'bg-primary-foreground/20 text-primary-foreground'
+                  : 'bg-primary/20 text-primary'
+              )}
+            >
+              <HighlightedText text={part.text} query={query} />
+            </span>
+          );
+        }
+        return <HighlightedText key={i} text={part.text} query={query} />;
+      })}
     </>
   );
 }

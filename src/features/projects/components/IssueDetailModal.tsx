@@ -35,6 +35,8 @@ interface IssueDetailModalProps {
   userProjectRole?: string;
   mode?: 'view' | 'create';
   onCreate?: (issue: Issue, pendingFiles?: File[]) => void;
+  /** Shown as a read-only "Project" field when provided. Only pass this from contexts (like My Day) where the issue's project isn't already implied by the surrounding page. */
+  projectName?: string;
 }
 
 const severityOptions: { value: IssueSeverity; label: string; color: string }[] = [
@@ -55,6 +57,7 @@ export function IssueDetailModal({
   userProjectRole,
   mode = 'view',
   onCreate,
+  projectName,
 }: IssueDetailModalProps) {
   const navigate = useNavigate();
   const { user: profile } = useAuth();
@@ -97,7 +100,14 @@ export function IssueDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent hideClose className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden">
+      <DialogContent
+        hideClose
+        className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+
         {/* Header - create mode */}
         {mode === 'create' && (
           <DialogHeader className="px-6 py-4 border-b flex-row items-center justify-between">
@@ -148,6 +158,7 @@ export function IssueDetailModal({
               issue={editedIssue}
               tasks={tasks}
               teamMembers={teamMembers}
+              projectName={projectName}
               onUpdate={setEditedIssue}
               onDelete={undefined}
               isDraft={true} // Always pretend it's draft to enable auto-callbacks to onUpdate instead of parent

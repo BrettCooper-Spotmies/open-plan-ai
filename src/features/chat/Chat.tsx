@@ -204,6 +204,7 @@ export default function Chat() {
                   onMessageSent={refetch}
                   onTyping={broadcastTyping}
                   members={activeConv.members}
+                  isGroup={activeConv.type === 'group'}
                   sendMessage={sendMessage}
                   readOnly={readOnly}
                   readOnlyNotice={readOnlyNotice}

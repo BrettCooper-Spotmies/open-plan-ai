@@ -52,6 +52,21 @@ function fromApiIssue(raw: Record<string, unknown>): Issue {
     avatarUrl: a.avatarUrl ?? null,
   }));
 
+  const rawReportedBy = raw.reportedBy as any;
+  const reportedBy: TeamMember = rawReportedBy
+    ? {
+        id: rawReportedBy.id ?? '',
+        name: rawReportedBy.name ?? 'Unknown',
+        email: '',
+        role: 'Member' as const,
+        initials: rawReportedBy.name
+          ? (rawReportedBy.name as string).split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
+          : 'U',
+        avatar: rawReportedBy.avatar ?? rawReportedBy.avatarUrl ?? '',
+        avatarUrl: rawReportedBy.avatarUrl ?? null,
+      }
+    : { id: '', name: 'Unknown', email: '', role: 'Member', initials: 'U', avatar: '' };
+
   return {
     id: raw.id as string,
     title: raw.title as string,
@@ -65,7 +80,7 @@ function fromApiIssue(raw: Record<string, unknown>): Issue {
     resolvedAt: (raw.resolvedAt as string) || undefined,
     dueDate: (raw.dueDate as string) || undefined,
     resolution: (raw.resolution as string) || undefined,
-    reportedBy: (raw.reportedBy as TeamMember) ?? { id: '', name: 'Unknown', email: '', role: 'Member', initials: 'U', avatar: '' },
+    reportedBy,
     assignees,
     blocksTaskIds: ((raw.blockedTasks as any[]) || []).map((t: any) => t.id),
     blockedBy: ((raw.blockedByTasks as any[]) || []).map((t: any) => t.id),

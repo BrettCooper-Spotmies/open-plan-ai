@@ -3,9 +3,10 @@
  * Tabs: Details · Sourcing · Traceability · Documents
  * Edit mode shows version management inline.
  */
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
+import { clearDraft, readFreshDraft, useDraftAutosave } from '@/hooks/useDraftPersistence';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -89,6 +90,17 @@ interface Props {
   onClose: () => void;
   onSave: (payload: BOMPartPayload) => void | Promise<void>;
   resubmitMode?: boolean;   // true when editing a rejected node — save also resubmits for review
+}
+
+// ── Draft persistence (Add mode only — Edit mode already reflects saved server state) ──
+// File attachments (docPhoto/techSections) can't survive JSON serialization, so they're
+// intentionally excluded from the draft; everything else the user typed is restored.
+interface BOMPartDraft {
+  savedAt: number;
+  pn: string; name: string; desc: string; category: BOMCategory; status: BOMStatus; rev: string;
+  qty: string; uom: string; manufacturer: string; suppliers: SupplierEntry[];
+  leadTime: string; leadTimeUnit: LeadTimeUnit; mpn: string; ownerId: string | null;
+  req: string[]; customFields: CustomFieldEntry[]; activeTab: WizardTabId;
 }
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -424,6 +436,7 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
 // ── Main component ─────────────────────────────────────────────────
 export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSave, resubmitMode }: Props) {
   const isEdit = mode === 'edit';
+  const draftKey = `bom-part-draft:${projectId}`;
 
   const { user } = useAuth();
   const { data: projectMembers = [] } = useProjectMembers(projectId);
@@ -478,10 +491,47 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   // validation
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  // owner id pulled from a restored draft, resolved to a TeamMember once projectMembers loads
+  const [draftOwnerId, setDraftOwnerId] = useState<string | null>(null);
 
-  // Reset all form state when the dialog opens so stale data never shows
+  // Reset all form state when the dialog opens so stale data never shows.
+  // In Add mode, restore a previously saved draft (if any) instead of blank defaults —
+  // covers accidental closes / refreshes while filling out a new part.
   useEffect(() => {
     if (!open) return;
+    const draft = !isEdit ? readFreshDraft<BOMPartDraft>(draftKey) : null;
+    if (draft) {
+      setPn(draft.pn);
+      setName(draft.name);
+      setDesc(draft.desc);
+      setCategory(draft.category);
+      setStatus(draft.status);
+      setRev(draft.rev);
+      setQty(draft.qty);
+      setUom(draft.uom);
+      setManufacturer(draft.manufacturer);
+      setSuppliers(draft.suppliers);
+      setLeadTime(draft.leadTime);
+      setLeadTimeUnit(draft.leadTimeUnit);
+      setMpn(draft.mpn);
+      setSelectedOwner(null);
+      setDraftOwnerId(draft.ownerId);
+      setOwnerPopover(false);
+      setReq(draft.req);
+      setReqInput('');
+      setDocPhoto(null);
+      setTechSections(DEFAULT_TECH_SECTIONS.map(s => ({ ...s, value: [] })));
+      setDocsPopulated(false);
+      setIsAddingSection(false);
+      setNewSectionName('');
+      setCustomFields(draft.customFields);
+      setVersionMode('same');
+      setNewRevLabel('B');
+      setChangeNotes('');
+      setErrors({});
+      setActiveTab(draft.activeTab);
+      return;
+    }
     setPn(node?.pn ?? '');
     // In edit mode, fall back to the part number when name is empty so the form
     // shows the same identifier the detail view heading displays.
@@ -503,6 +553,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     setLeadTimeUnit(lt.unit);
     setMpn(node?.mpn ?? '');
     setSelectedOwner(null);
+    setDraftOwnerId(null);
     setOwnerPopover(false);
     setReq(node?.req ?? []);
     setReqInput('');
@@ -519,19 +570,33 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     setActiveTab('details');
   }, [open, node?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Map the node's owner to a project member once members are loaded
+  // Map the node's owner to a project member once members are loaded (edit mode from
+  // the node's stored owner, add mode from a restored draft's ownerId)
   useEffect(() => {
-    if (open && isEdit && node && !selectedOwner && projectMembers.length > 0) {
+    if (!open || selectedOwner || projectMembers.length === 0) return;
+    if (isEdit && node) {
       const match = node.ownerId
         ? projectMembers.find(m => m.id === node.ownerId)
         : node.owner
           ? projectMembers.find(m => m.name === node.owner)
           : null;
-      if (match) {
-        setSelectedOwner(match);
-      }
+      if (match) setSelectedOwner(match);
+    } else if (!isEdit && draftOwnerId) {
+      const match = projectMembers.find(m => m.id === draftOwnerId);
+      if (match) setSelectedOwner(match);
     }
-  }, [open, isEdit, node, projectMembers, selectedOwner]);
+  }, [open, isEdit, node, projectMembers, selectedOwner, draftOwnerId]);
+
+  // Autosave the in-progress Add form as a draft so it survives an accidental close/refresh.
+  const draftSnapshot = useMemo<BOMPartDraft>(() => ({
+    savedAt: Date.now(),
+    pn, name, desc, category, status, rev, qty, uom, manufacturer, suppliers,
+    leadTime, leadTimeUnit, mpn, ownerId: selectedOwner?.id ?? draftOwnerId,
+    req, customFields, activeTab: activeTab === 'history' ? 'details' : activeTab,
+  }), [pn, name, desc, category, status, rev, qty, uom, manufacturer, suppliers,
+    leadTime, leadTimeUnit, mpn, selectedOwner, draftOwnerId, req, customFields, activeTab]);
+  const hasDraftContent = !!(pn.trim() || name.trim() || desc.trim() || manufacturer.trim() || mpn.trim());
+  useDraftAutosave(draftKey, draftSnapshot, open && !isEdit && hasDraftContent);
 
   // Pre-populate Documents tab from existing server attachments (edit mode only)
   useEffect(() => {
@@ -690,6 +755,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
         newRevLabel: isEdit && versionMode === 'new' ? newRevLabel : undefined,
         changeNotes: isEdit ? changeNotes : undefined,
       });
+      if (!isEdit) clearDraft(draftKey);
       onClose();
     } catch {
       // onSave already surfaces a toast on failure; keep the dialog open so the user can retry

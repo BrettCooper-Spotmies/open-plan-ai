@@ -108,6 +108,29 @@ const activityLabels: Record<string, string> = {
   dependency_added: 'Dependency Added',
 };
 
+// Maps each activity type to the ProjectSection tab it should open (see PROJECT_SECTIONS in App.tsx).
+// Falls back to the project's default section ('bom') when there's no more specific tab.
+const activitySection: Record<string, string> = {
+  task_created: 'tasks',
+  task_completed: 'tasks',
+  task_updated: 'tasks',
+  task_assigned: 'tasks',
+  task_deleted: 'tasks',
+  comment_added: 'tasks',
+  dependency_added: 'tasks',
+  status_changed: 'tasks',
+  milestone_reached: 'milestones',
+  milestone_created: 'milestones',
+  milestone_updated: 'milestones',
+  milestone_deleted: 'milestones',
+  milestone_reopened: 'milestones',
+  issue_created: 'issues',
+  issue_resolved: 'issues',
+  issue_updated: 'issues',
+  issue_assigned: 'issues',
+  issue_linked_to_task: 'issues',
+};
+
 export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -162,12 +185,17 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
             const colorClass = activityColors[activity.type] || 'text-muted-foreground bg-muted';
             const label = activityLabels[activity.type] || 'Unknown Activity';
 
+            const isProjectDeleted = activity.type === 'project_deleted';
+            const isClickable = Boolean(activity.projectId) && !isProjectDeleted;
+            const section = activitySection[activity.type];
+
             return (
               <div
                 key={activity.id}
-                onClick={() => activity.projectId && navigate(`/projects/${activity.projectId}`)}
+                onClick={() => isClickable && navigate(`/projects/${activity.projectId}${section ? `/${section}` : ''}`)}
                 className={cn(
-                  'flex items-start gap-3 py-3 border-b border-border/50 last:border-0 hover:bg-muted/30 cursor-pointer transition-colors px-2 rounded-md',
+                  'flex items-start gap-3 py-3 border-b border-border/50 last:border-0 transition-colors px-2 rounded-md',
+                  isClickable && 'hover:bg-muted/30 cursor-pointer',
                   !isMobile && '-mx-2'
                 )}
               >
@@ -194,7 +222,7 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
                       {activity.projectName && (
                         <p className="text-xs text-muted-foreground truncate min-w-0 max-w-[150px] sm:max-w-full">
                           in{' '}
-                          <span className="text-primary hover:underline cursor-pointer font-medium">
+                          <span className={cn('font-medium', isClickable ? 'text-primary hover:underline cursor-pointer' : 'text-foreground/80')}>
                             {activity.projectName}
                           </span>
                         </p>
