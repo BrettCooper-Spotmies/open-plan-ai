@@ -5,8 +5,28 @@ import type {
   ConversationMemberRole,
   MessageContentType,
   ConversationType,
+  ChatEntityType,
+  EntityTagRef,
 } from './types';
 import { resolveFileUrl } from '@/utils/fileUrl';
+
+const ENTITY_TAG_TYPE_LABEL: Record<ChatEntityType, string> = {
+  task: 'Task',
+  issue: 'Issue',
+  milestone: 'Milestone',
+  hardware_module: 'Module',
+  bom_node: 'BOM',
+  eco: 'ECO',
+};
+
+/** Fallback preview text for a message whose content is empty (tag-only message). */
+export function entityTagsPreviewText(entityTags: EntityTagRef[] | undefined | null): string {
+  if (!entityTags?.length) return '';
+  if (entityTags.length === 1) {
+    return `${ENTITY_TAG_TYPE_LABEL[entityTags[0].entityType]}: ${entityTags[0].label}`;
+  }
+  return `${entityTags.length} items tagged`;
+}
 
 interface DbProfile {
   id: string;

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { chatService, CHAT_ACCESS_INVALIDATE_EVENT } from '@/services/chat.service';
 import { toast } from 'sonner';
 import { chatTransport } from '../transport';
-import { mapMessage } from '../chat.mappers';
+import { mapMessage, entityTagsPreviewText } from '../chat.mappers';
 import { useChatStore } from '../stores/useChatStore';
 import type { Conversation, ChatMessage, MessageReaction, EntityTagRef } from '../types';
 import type { Unsubscribe } from '../transport/IChatTransport';
@@ -304,7 +304,7 @@ export function useMessages(conversationId: string | null) {
         });
         storeAddMessage(conversationId, mapped);
         updatePreview(conversationId, {
-          content: mapped.content,
+          content: mapped.content?.trim() ? mapped.content : entityTagsPreviewText(mapped.entityTags),
           senderName: mapped.senderName,
           createdAt: mapped.createdAt,
         });
@@ -344,7 +344,7 @@ export function useMessages(conversationId: string | null) {
       storeUpdateMessage(conversationId, tempId, () => pendingMsg);
       addPendingMessage(pendingMsg);
       updatePreview(conversationId, {
-        content: pendingMsg.content,
+        content: pendingMsg.content?.trim() ? pendingMsg.content : entityTagsPreviewText(pendingMsg.entityTags),
         senderName: pendingMsg.senderName,
         createdAt: pendingMsg.createdAt,
         status: 'pending'
