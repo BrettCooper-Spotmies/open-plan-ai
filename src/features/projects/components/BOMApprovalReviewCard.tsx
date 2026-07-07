@@ -2,7 +2,7 @@
 // screen (above the Info row) when the current user can decide the part's
 // active review request.
 import { useState } from 'react';
-import { Check, XCircle, ShieldCheck, Boxes, Loader2, AlertCircle } from 'lucide-react';
+import { Check, XCircle, ShieldCheck, Boxes, Loader2, AlertCircle, Clock } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { BOMApprovalRequest } from './bomData';
@@ -60,6 +60,22 @@ export function BOMApprovalReviewCard({ request, partLabel, onApprove, onReject,
           Requested by <span className="font-medium text-foreground">{request.requestedByName}</span>
         </span>
       </div>
+
+      {request.approverDecisions.length > 1 && (
+        <div className="flex items-center gap-2 flex-wrap mb-2">
+          {request.approverDecisions.map(a => (
+            <span
+              key={a.id}
+              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted border border-border text-muted-foreground"
+            >
+              {a.decision === 'approved' && <Check className="w-2.5 h-2.5" style={{ color: '#16A34A' }} />}
+              {a.decision === 'rejected' && <XCircle className="w-2.5 h-2.5" style={{ color: '#DC2626' }} />}
+              {a.decision === 'pending' && <Clock className="w-2.5 h-2.5" />}
+              {a.name}
+            </span>
+          ))}
+        </div>
+      )}
 
       <Textarea
         value={note}
