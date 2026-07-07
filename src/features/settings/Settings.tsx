@@ -10,7 +10,6 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -30,12 +29,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import {
   Settings as SettingsIcon,
   User,
@@ -61,6 +54,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { profileService } from '@/services/profile.service';
+import { notificationPreferencesService, NotificationPreferences } from '@/services/notificationPreferences.service';
 import { organizationsService, OrganizationSettings } from '@/services/organizations.service';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -125,8 +119,43 @@ const Settings = () => {
     setTempPreferences(preferences);
   }, [theme, preferences]);
 
-  // User settings for notifications/appearance (still local - coming soon)
-  const [userSettings] = useState<UserSettings>(defaultUserSettings);
+  // Notification preferences (fetched from the backend)
+  const [notificationPrefs, setNotificationPrefs] = useState<NotificationPreferences>(
+    defaultUserSettings.notifications,
+  );
+  const [notificationPrefsLoading, setNotificationPrefsLoading] = useState(false);
+  const [notificationPrefsSaving, setNotificationPrefsSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setNotificationPrefsLoading(true);
+    notificationPreferencesService
+      .getPreferences()
+      .then((prefs) => {
+        if (!cancelled) setNotificationPrefs(prefs);
+      })
+      .catch((error) => {
+        logger.error('Error loading notification preferences:', error);
+      })
+      .finally(() => {
+        if (!cancelled) setNotificationPrefsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSaveNotificationPreferences = async () => {
+    setNotificationPrefsSaving(true);
+    try {
+      const saved = await notificationPreferencesService.updatePreferences(notificationPrefs);
+      setNotificationPrefs(saved);
+      toast.success('Notification preferences saved');
+    } catch (error) {
+      logger.error('Error saving notification preferences:', error);
+      toast.error('Failed to save notification preferences');
+    } finally {
+      setNotificationPrefsSaving(false);
+    }
+  };
 
 
   // Profile form state
@@ -510,22 +539,10 @@ const Settings = () => {
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Profile</span>
             </TabsTrigger>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <TabsTrigger value="notifications" className="gap-1 px-0 sm:px-3" title="Notifications (Coming Soon)">
-                    <Bell className="h-4 w-4" />
-                    <span className="hidden sm:inline">Notifications</span>
-                    <Badge variant="outline" className="ml-1 bg-amber-100 text-amber-800 border-amber-300 text-xs hidden sm:inline-flex">
-                      Soon
-                    </Badge>
-                  </TabsTrigger>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>This feature is coming soon</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <TabsTrigger value="notifications" className="gap-1 px-0 sm:px-3" title="Notifications">
+              <Bell className="h-4 w-4" />
+              <span className="hidden sm:inline">Notifications</span>
+            </TabsTrigger>
             <TabsTrigger value="appearance" className="gap-1 px-0 sm:px-3" title="Appearance">
               <Palette className="h-4 w-4" />
               <span className="hidden sm:inline">Appearance</span>
@@ -889,21 +906,16 @@ const Settings = () => {
             </div>
           </TabsContent>
 
-          {/* Notifications Tab - Coming Soon */}
+          {/* Notifications Tab */}
           <TabsContent value="notifications">
             <Card>
               <CardHeader>
-                <div className="flex items-center gap-2">
-                  <CardTitle>Notification Preferences</CardTitle>
-                  <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300">
-                    Coming Soon
-                  </Badge>
-                </div>
+                <CardTitle>Notification Preferences</CardTitle>
                 <CardDescription>
                   Choose what notifications you want to receive
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6 opacity-50 pointer-events-none">
+              <CardContent className="space-y-6">
                 <div className="space-y-4">
                   <h4 className="text-sm font-medium">Email Notifications</h4>
                   <div className="space-y-4">
@@ -914,7 +926,13 @@ const Settings = () => {
                           When you're assigned to a task
                         </p>
                       </div>
-                      <Switch checked={userSettings.notifications.taskAssignments} disabled />
+                      <Switch
+                        checked={notificationPrefs.taskAssignments}
+                        disabled={notificationPrefsLoading}
+                        onCheckedChange={(checked) =>
+                          setNotificationPrefs((prev) => ({ ...prev, taskAssignments: checked }))
+                        }
+                      />
                     </div>
                     <Separator />
                     <div className="flex items-center justify-between">
@@ -924,7 +942,13 @@ const Settings = () => {
                           When tasks you're following are completed
                         </p>
                       </div>
-                      <Switch checked={userSettings.notifications.taskCompletions} disabled />
+                      <Switch
+                        checked={notificationPrefs.taskCompletions}
+                        disabled={notificationPrefsLoading}
+                        onCheckedChange={(checked) =>
+                          setNotificationPrefs((prev) => ({ ...prev, taskCompletions: checked }))
+                        }
+                      />
                     </div>
                     <Separator />
                     <div className="flex items-center justify-between">
@@ -934,7 +958,13 @@ const Settings = () => {
                           When someone mentions you or comments on your tasks
                         </p>
                       </div>
-                      <Switch checked={userSettings.notifications.comments} disabled />
+                      <Switch
+                        checked={notificationPrefs.comments}
+                        disabled={notificationPrefsLoading}
+                        onCheckedChange={(checked) =>
+                          setNotificationPrefs((prev) => ({ ...prev, comments: checked }))
+                        }
+                      />
                     </div>
                     <Separator />
                     <div className="flex items-center justify-between">
@@ -944,7 +974,13 @@ const Settings = () => {
                           Important updates to projects you're part of
                         </p>
                       </div>
-                      <Switch checked={userSettings.notifications.projectUpdates} disabled />
+                      <Switch
+                        checked={notificationPrefs.projectUpdates}
+                        disabled={notificationPrefsLoading}
+                        onCheckedChange={(checked) =>
+                          setNotificationPrefs((prev) => ({ ...prev, projectUpdates: checked }))
+                        }
+                      />
                     </div>
                     <Separator />
                     <div className="flex items-center justify-between">
@@ -954,14 +990,29 @@ const Settings = () => {
                           Reminders for upcoming milestones
                         </p>
                       </div>
-                      <Switch checked={userSettings.notifications.milestoneReminders} disabled />
+                      <Switch
+                        checked={notificationPrefs.milestoneReminders}
+                        disabled={notificationPrefsLoading}
+                        onCheckedChange={(checked) =>
+                          setNotificationPrefs((prev) => ({ ...prev, milestoneReminders: checked }))
+                        }
+                      />
                     </div>
                   </div>
                 </div>
                 <Separator />
                 <div className="space-y-2">
                   <Label>Email Digest Frequency</Label>
-                  <Select value={userSettings.notifications.emailDigest} disabled>
+                  <Select
+                    value={notificationPrefs.emailDigest}
+                    disabled={notificationPrefsLoading}
+                    onValueChange={(value) =>
+                      setNotificationPrefs((prev) => ({
+                        ...prev,
+                        emailDigest: value as NotificationPreferences['emailDigest'],
+                      }))
+                    }
+                  >
                     <SelectTrigger className="w-48">
                       <SelectValue />
                     </SelectTrigger>
@@ -975,8 +1026,12 @@ const Settings = () => {
                     Receive a summary of activity in your workspace
                   </p>
                 </div>
-                <Button disabled>
-                  <Save className="h-4 w-4 mr-2" />
+                <Button onClick={handleSaveNotificationPreferences} disabled={notificationPrefsSaving || notificationPrefsLoading}>
+                  {notificationPrefsSaving ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4 mr-2" />
+                  )}
                   Save Preferences
                 </Button>
               </CardContent>
