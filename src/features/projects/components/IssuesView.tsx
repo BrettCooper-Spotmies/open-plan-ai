@@ -49,7 +49,7 @@ interface IssuesViewProps {
   teamMembers?: TeamMember[];
   searchQuery?: string;
   severityFilter?: IssueSeverity[];
-  statusFilter?: IssueStatus[];
+  statusFilter?: string[]; // status keys from the project's issue buckets (custom, not a fixed enum)
   assigneeFilter?: string[];
   assignedByFilter?: string[];
   dueDateFilter?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
@@ -151,7 +151,7 @@ export function IssuesView({
 
   const [internalSearchQuery, setInternalSearchQuery] = useState('');
   const [internalSeverityFilter, setInternalSeverityFilter] = useState<IssueSeverity[]>([]);
-  const [internalStatusFilter, setInternalStatusFilter] = useState<IssueStatus[]>([]);
+  const [internalStatusFilter, setInternalStatusFilter] = useState<string[]>([]);
   const [localIssues, setLocalIssues] = useState<Issue[]>(issues);
   const [columns, setColumns] = useState<IssuesKanbanColumn[]>(() =>
     apiColumnsToKanban(DEFAULT_ISSUE_COLUMNS),
