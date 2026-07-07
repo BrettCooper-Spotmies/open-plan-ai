@@ -596,6 +596,7 @@ export function IssueDetailContent({
                                                     </TooltipTrigger>
                                                     <TooltipContent side="top" className="text-xs">
                                                         {assignee.name}
+                                                        {assignee.assignedBy && ` · assigned by ${assignee.assignedBy.name}`}
                                                     </TooltipContent>
                                                 </Tooltip>
                                             ))}
@@ -634,7 +635,12 @@ export function IssueDetailContent({
                                                     <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
                                                     <AvatarFallback className="text-[10px]">{assignee.initials}</AvatarFallback>
                                                 </Avatar>
-                                                <span className="flex-1 text-sm">{assignee.name}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm truncate">{assignee.name}</p>
+                                                    {assignee.assignedBy && (
+                                                        <p className="text-[10px] text-muted-foreground truncate">Assigned by {assignee.assignedBy.name}</p>
+                                                    )}
+                                                </div>
                                                 <button
                                                     disabled={!canEditIssue}
                                                     title={canEditIssue ? undefined : editLockTitle}

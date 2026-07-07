@@ -47,6 +47,9 @@ export interface TeamMember {
   role: string;
   avatar?: string;
   initials: string;
+  // Only populated on Task/Issue assignees — who assigned this person.
+  // Comes straight off the API response, so it uses avatarUrl (not avatar) unlike the rest of this type.
+  assignedBy?: { id: string; name: string; avatarUrl?: string | null } | null;
 }
 
 export interface ChecklistItem {

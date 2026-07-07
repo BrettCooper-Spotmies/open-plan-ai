@@ -1197,6 +1197,7 @@ export const TaskDetailModal = ({
                             key={assignee.id}
                             className="rounded-full ring-2 ring-background"
                             style={{ zIndex: index, marginLeft: index === 0 ? 0 : '-8px' }}
+                            title={assignee.assignedBy ? `Assigned by ${assignee.assignedBy.name}` : undefined}
                           >
                             <Avatar className="h-8 w-8">
                               <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
@@ -1233,7 +1234,12 @@ export const TaskDetailModal = ({
                               <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
                               <AvatarFallback className="text-[10px]">{assignee.initials}</AvatarFallback>
                             </Avatar>
-                            <span className="flex-1 text-sm">{assignee.name}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm truncate">{assignee.name}</p>
+                              {assignee.assignedBy && (
+                                <p className="text-[10px] text-muted-foreground truncate">Assigned by {assignee.assignedBy.name}</p>
+                              )}
+                            </div>
                             <button
                               disabled={!canEditTask}
                               title={canEditTask ? undefined : editLockTitle}
