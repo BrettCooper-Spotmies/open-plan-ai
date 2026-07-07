@@ -11,6 +11,7 @@ import {
   PipelineStep, PIPELINE_STAGE_DEFS, rejectionsFromSteps,
 } from './ecoData';
 import { ECOAvatar } from './ECOShared';
+import { clearDraft, readFreshDraft, useDraftAutosave } from '@/hooks/useDraftPersistence';
 import { cn } from '@/lib/utils';
 import { useCreateECO, useUpdateECO, useSubmitECO, useECODetail } from '@/hooks/useECOs';
 import { useBomTree } from '@/hooks/useBom';
@@ -384,6 +385,21 @@ interface PipelineStepWizard extends PipelineStep {
   isCustom?: boolean;
 }
 
+// ── Draft persistence (create mode only — editing an existing ECO already reflects
+// saved server state). Attachments are excluded: actual File objects can't survive
+// JSON serialization, so restoring their metadata alone would be misleading.
+interface ECODraft {
+  savedAt: number;
+  basics: BasicsState;
+  items: ItemState[];
+  reqItems: ReqItemState[];
+  diffRows: DiffRowState[];
+  impact: ImpactState;
+  pipeline: PipelineStepWizard[];
+  step: number;
+  maxStepReached: number;
+}
+
 // ── ECOWizard ─────────────────────────────────────────────────────────────────
 
 export function ECOWizard({
@@ -398,6 +414,10 @@ export function ECOWizard({
   onClose: (result?: { saved: boolean; ecoId?: string }) => void;
 }) {
   const isEdit = !!ecoId;
+  const draftKey = `eco-draft:${projectId}`;
+  // Read once at mount — restores an in-progress "New ECO" that was interrupted by an
+  // accidental close/refresh. Not applicable in edit/rework mode (server data wins there).
+  const [initialDraft] = useState<ECODraft | null>(() => (isEdit ? null : readFreshDraft<ECODraft>(draftKey)));
   const createMutation = useCreateECO(projectId);
   const updateMutation = useUpdateECO(projectId, ecoId ?? '');
   const submitMutation = useSubmitECO(projectId, ecoId ?? '');
@@ -408,12 +428,12 @@ export function ECOWizard({
   );
 
   const [seeded, setSeeded] = useState(false);
-  const [step, setStep] = useState(0);
-  const [maxStepReached, setMaxStepReached] = useState(0);
+  const [step, setStep] = useState(() => initialDraft?.step ?? 0);
+  const [maxStepReached, setMaxStepReached] = useState(() => initialDraft?.maxStepReached ?? 0);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Step 1 — Basics
-  const [basics, setBasics] = useState<BasicsState>({
+  const [basics, setBasics] = useState<BasicsState>(() => initialDraft?.basics ?? {
     title: '', description: '',
     type: 'DESIGN_CHANGE', typeOther: '',
     priority: 'MEDIUM',
@@ -439,10 +459,10 @@ export function ECOWizard({
     [bomRootNodes],
   );
 
-  const [items, setItems] = useState<ItemState[]>([]);
+  const [items, setItems] = useState<ItemState[]>(() => initialDraft?.items ?? []);
   const [pickerOpen, setPickerOpen] = useState(true);
   const [partSearch, setPartSearch] = useState('');
-  const [reqItems, setReqItems] = useState<ReqItemState[]>([]);
+  const [reqItems, setReqItems] = useState<ReqItemState[]>(() => initialDraft?.reqItems ?? []);
   const [reqPickerOpen, setReqPickerOpen] = useState(false);
 
   // Selecting a part auto-populates Rev From from its current BOM revision;
@@ -470,7 +490,7 @@ export function ECOWizard({
   );
 
   // Step 3 — Diff rows + attachments
-  const [diffRows, setDiffRows] = useState<DiffRowState[]>([{ param: '', from: '', to: '', cls: 'MODIFIED' }]);
+  const [diffRows, setDiffRows] = useState<DiffRowState[]>(() => initialDraft?.diffRows ?? [{ param: '', from: '', to: '', cls: 'MODIFIED' }]);
   const [attachments, setAttachments] = useState<AttachmentState[]>([]);
   const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -563,7 +583,7 @@ export function ECOWizard({
   };
 
   // Step 4 — Impact
-  const [impact, setImpact] = useState<ImpactState>({
+  const [impact, setImpact] = useState<ImpactState>(() => initialDraft?.impact ?? {
     schedule: 'MEDIUM', recert: false, firmware: false,
     unitCostDelta: '', oneTimeCost: '', certNotes: '',
   });
@@ -579,7 +599,7 @@ export function ECOWizard({
   }, []);
 
   const [pipeline, setPipeline] = useState<PipelineStepWizard[]>(
-    PIPELINE_STAGE_DEFS.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
+    () => initialDraft?.pipeline ?? PIPELINE_STAGE_DEFS.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
   );
 
   // Auto-fill Originator slot with the current user once members load
@@ -612,6 +632,13 @@ export function ECOWizard({
   const pipelineMissingStageName = pipeline.some(p => p.isCustom && !p.stage.trim());
   const pipelineMissingJustification = pipeline.some((p, idx) => (p.optional || stageMoved(p, idx)) && !(p.justification ?? '').trim());
   const pipelineValid = pipeline.length >= 2 && !pipelineMissingApprover && !pipelineMissingStageName && !pipelineMissingJustification;
+
+  // Autosave the in-progress "New ECO" as a draft so it survives an accidental close/refresh.
+  const draftSnapshot = useMemo<ECODraft>(() => ({
+    savedAt: Date.now(), basics, items, reqItems, diffRows, impact, pipeline, step, maxStepReached,
+  }), [basics, items, reqItems, diffRows, impact, pipeline, step, maxStepReached]);
+  const hasDraftContent = !!(basics.title.trim() || basics.description.trim() || items.length || reqItems.length);
+  useDraftAutosave(draftKey, draftSnapshot, !isEdit && hasDraftContent);
 
   const activeMutation = isEdit ? updateMutation : createMutation;
   const savePending = activeMutation.isPending || (isRework && submitMutation.isPending);
@@ -1690,6 +1717,7 @@ export function ECOWizard({
                     } else {
                       toast.success(isEdit ? 'ECO updated' : 'ECO created');
                     }
+                    if (!isEdit) clearDraft(draftKey);
                     onClose({ saved: true, ecoId: isEdit ? undefined : saved?.id });
                   } catch (err) {
                     toast.error(isRework ? 'Failed to resubmit ECO' : isEdit ? 'Failed to update ECO' : 'Failed to create ECO', {
