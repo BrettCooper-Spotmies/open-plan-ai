@@ -142,6 +142,8 @@ export default function Projects() {
   const { data: projects, isLoading, error } = useProjects();
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PROJECTS_PER_PAGE = 9;
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [filesDialogOpen, setFilesDialogOpen] = useState(false);
@@ -173,6 +175,18 @@ export default function Projects() {
   const filteredProjects = projectList.filter(p =>
     p.name.toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalPages = Math.max(1, Math.ceil(filteredProjects.length / PROJECTS_PER_PAGE));
+  const paginatedProjects = filteredProjects.slice(
+    (currentPage - 1) * PROJECTS_PER_PAGE,
+    currentPage * PROJECTS_PER_PAGE
+  );
+
+  // Reset to page 1 whenever the search changes
+  const handleSearch = (value: string) => {
+    setSearch(value);
+    setCurrentPage(1);
+  };
 
   const handleViewDetails = (projectId: string, e: React.MouseEvent) => {
     e.preventDefault();
@@ -263,7 +277,7 @@ export default function Projects() {
                   autoFocus
                   placeholder="Search projects..."
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => handleSearch(e.target.value)}
                   className="pl-9 pr-9 h-10 rounded-xl bg-background/80"
                 />
               </div>
@@ -273,7 +287,7 @@ export default function Projects() {
                 <Input
                   placeholder="Search projects..."
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e) => handleSearch(e.target.value)}
                   className="pl-9 h-10 md:h-9 rounded-xl md:rounded-md bg-background/80"
                 />
               </div>
@@ -336,69 +350,108 @@ export default function Projects() {
             </p>
           </div>
         ) : (
-          <div className={cn(
-            view === 'grid'
-              ? 'grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3'
-              : 'space-y-3'
-          )}>
-            {filteredProjects.map((project) => (
-              <Link key={project.id} to={`/projects/${project.id}`} className="block h-full">
-                <Card className="p-4 md:p-5 rounded-2xl border-border/70 bg-gradient-to-b from-card to-card/80 card-hover cursor-pointer h-full flex flex-col shadow-[0_10px_30px_rgba(0,0,0,0.16)]">
-                  <div className="flex items-start justify-between gap-3 mb-4 flex-1">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold truncate flex items-center gap-2">
-                        {project.icon && <span className="text-lg">{project.icon}</span>}
-                        {project.name}
-                      </h3>
-                      <p className="text-sm text-muted-foreground/90 line-clamp-2 mt-1">
-                        {project.description || 'No description'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="secondary" className={cn(stageColors[project.stage as keyof typeof stageColors] || stageColors.concept)}>
-                        {stageLabels[project.stage as keyof typeof stageLabels] || project.stage}
-                      </Badge>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                            <span className="sr-only">Project menu</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={(e) => handleViewDetails(project.id, e)}>
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Details
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => handleViewFiles(project.id, e)}>
-                            <FolderOpen className="h-4 w-4 mr-2" />
-                            View Files
-                          </DropdownMenuItem>
-                          {canEditProject(project) && (
-                            <DropdownMenuItem onClick={(e) => handleEdit(project.id, e)}>
-                              <Pencil className="h-4 w-4 mr-2" />
-                              Edit
+          <div className="space-y-4">
+            <div className={cn(
+              view === 'grid'
+                ? 'grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3'
+                : 'space-y-3'
+            )}>
+              {paginatedProjects.map((project) => (
+                <Link key={project.id} to={`/projects/${project.id}`} className="block h-full">
+                  <Card className="p-4 md:p-5 rounded-2xl border-border/70 bg-gradient-to-b from-card to-card/80 card-hover cursor-pointer h-full flex flex-col shadow-[0_10px_30px_rgba(0,0,0,0.16)]">
+                    <div className="flex items-start justify-between gap-3 mb-4 flex-1">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold truncate flex items-center gap-2">
+                          {project.icon && <span className="text-lg">{project.icon}</span>}
+                          {project.name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground/90 line-clamp-2 mt-1">
+                          {project.description || 'No description'}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Badge variant="secondary" className={cn(stageColors[project.stage as keyof typeof stageColors] || stageColors.concept)}>
+                          {stageLabels[project.stage as keyof typeof stageLabels] || project.stage}
+                        </Badge>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild onClick={(e) => e.preventDefault()}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                              <span className="sr-only">Project menu</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={(e) => handleViewDetails(project.id, e)}>
+                              <Eye className="h-4 w-4 mr-2" />
+                              View Details
                             </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                            <DropdownMenuItem onClick={(e) => handleViewFiles(project.id, e)}>
+                              <FolderOpen className="h-4 w-4 mr-2" />
+                              View Files
+                            </DropdownMenuItem>
+                            {canEditProject(project) && (
+                              <DropdownMenuItem onClick={(e) => handleEdit(project.id, e)}>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
-                  </div>
 
-                  <ProjectListProgress projectId={project.id} progress={project.progress || 0} />
+                    <ProjectListProgress projectId={project.id} progress={project.progress || 0} />
 
-                  <div className="flex items-center justify-between pt-3 border-t border-border/60">
-                    <ProjectTeamHoverCard
-                      projectId={project.id}
-                      memberCount={project.memberCount ?? project.team?.length}
-                    />
-                    <span className="text-[11px] text-muted-foreground">
-                      Updated {formatDisplayDate(project.updatedAt)}
-                    </span>
-                  </div>
-                </Card>
-              </Link>
-            ))}
+                    <div className="flex items-center justify-between pt-3 border-t border-border/60">
+                      <ProjectTeamHoverCard
+                        projectId={project.id}
+                        memberCount={project.memberCount ?? project.team?.length}
+                      />
+                      <span className="text-[11px] text-muted-foreground">
+                        Updated {formatDisplayDate(project.updatedAt)}
+                      </span>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-center gap-1.5 pt-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-3 rounded-lg text-xs"
+                  disabled={currentPage === 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                >
+                  ← Prev
+                </Button>
+
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <Button
+                    key={page}
+                    variant={currentPage === page ? 'default' : 'outline'}
+                    size="sm"
+                    className="h-8 w-8 rounded-lg text-xs p-0"
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </Button>
+                ))}
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-3 rounded-lg text-xs"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                >
+                  Next →
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
