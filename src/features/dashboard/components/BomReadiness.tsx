@@ -32,7 +32,7 @@ function BomDonut({ pct }: { pct: number }) {
 }
 
 export function BomReadiness({ projectIds, projects }: BomReadinessProps) {
-  const { isLoading, total, approved, pending, pct } = useOrgBomAggregate(projectIds);
+  const { isLoading, total, approved, pending, rejected, pct } = useOrgBomAggregate(projectIds);
 
   return (
     <Card>
@@ -60,6 +60,13 @@ export function BomReadiness({ projectIds, projects }: BomReadinessProps) {
                 Pending review
               </span>
               <span className="font-semibold tabular-nums text-priority-medium">{isLoading ? '—' : pending}</span>
+            </div>
+            <div className="flex items-center justify-between text-[12.5px]">
+              <span className="flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 rounded-full bg-status-blocked" />
+                Rejected
+              </span>
+              <span className="font-semibold tabular-nums text-status-blocked">{isLoading ? '—' : rejected}</span>
             </div>
             <div className="flex items-center justify-between text-[12.5px] text-muted-foreground">
               <span>Total parts</span>

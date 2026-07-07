@@ -127,6 +127,8 @@ export interface ApiEcoStats {
   inReview: number;
   awaitingMyAction: number;
   releasedThisMonth: number;
+  avgCycleDays: number | null;
+  cycleSampleCount: number;
 }
 
 interface PaginatedResponse<T> {
@@ -145,6 +147,27 @@ export function useECOList(projectId: string | undefined, filters?: Record<strin
         .then((r) => ({ data: r.data.data, meta: r.data.meta })),
     enabled: !!projectId,
   });
+}
+
+// Fetches every ECO id matching the given filters (ignores UI pagination) — used for "export all".
+// Backend caps page size at 100; for larger result sets this walks subsequent pages.
+export async function fetchAllEcoIds(
+  projectId: string,
+  filters?: Record<string, string>,
+): Promise<string[]> {
+  const limit = 100;
+  let page = 1;
+  const ids: string[] = [];
+  for (;;) {
+    const r = await apiClient.raw.get(ENDPOINTS.ECOS.LIST(projectId), {
+      params: { ...filters, page: String(page), limit: String(limit) },
+    });
+    const batch = (r.data.data as ApiEcoListItem[]) ?? [];
+    ids.push(...batch.map((e) => e.id));
+    if (batch.length < limit || ids.length >= (r.data.meta?.total ?? ids.length)) break;
+    page += 1;
+  }
+  return ids;
 }
 
 export function useECOStats(projectId: string | undefined) {
