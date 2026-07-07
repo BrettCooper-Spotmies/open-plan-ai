@@ -1,6 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
-import type { Conversation, ChatMessage, ReachableUser, MessageReaction } from '@/features/chat/types';
+import type { Conversation, ChatMessage, ReachableUser, MessageReaction, EntityTagRef } from '@/features/chat/types';
 import { resolveFileUrl } from '@/utils/fileUrl';
 
 /** Map backend MessageResponse (camelCase) to frontend ChatMessage (flat senderId). */
@@ -25,6 +25,7 @@ function mapChatMessage(raw: any): ChatMessage {
       size: raw.fileSize ?? raw.file_size ?? 0,
       mimeType: raw.fileMimeType ?? raw.file_mime_type ?? '',
     }] : (raw.attachments ?? []),
+    entityTags: raw.entityTags ?? raw.entity_tags ?? [],
     createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString(),
     updatedAt: raw.updatedAt ?? raw.updated_at ?? raw.createdAt ?? new Date().toISOString(),
     isEdited: false,
@@ -135,12 +136,14 @@ export const chatService = {
     conversationId: string,
     content: string,
     _userId?: string,
-    replyToMessageId?: string
+    replyToMessageId?: string,
+    entityTags?: EntityTagRef[]
   ): Promise<ChatMessage> {
     const data = await apiClient.post<any>(ENDPOINTS.CONVERSATIONS.MESSAGES(conversationId), {
       content,
       type: 'text',
       replyToMessageId: replyToMessageId || null,
+      entityTags: entityTags?.length ? entityTags : undefined,
     });
     return mapChatMessage(data);
   },

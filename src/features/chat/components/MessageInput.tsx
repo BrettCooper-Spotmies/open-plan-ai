@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
-import { Send, Paperclip, Loader2, X, Smile, File as FileIcon } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Send, Paperclip, Loader2, X, Smile, File as FileIcon, CheckSquare, AlertCircle, Flag, Cpu, Layers, FileText, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useChatStore } from '../stores/useChatStore';
 import { chatService } from '@/services/chat.service';
@@ -7,7 +8,7 @@ import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { ConversationMember, ChatMessage } from '../types';
+import { ConversationMember, ChatMessage, ChatEntityType, EntityTagRef } from '../types';
 import { cn } from '@/lib/utils';
 import { useNotifications } from '@/hooks/useNotifications';
 import Picker from '@emoji-mart/react';
@@ -16,13 +17,22 @@ import { useOfflineQueue } from '@/hooks/useOfflineQueue';
 import { WifiOff, Clock } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { logger } from '@/services/monitoring/logger';
+import { useProjects } from '@/hooks/useProjects';
+import { useProjectTasks } from '@/hooks/useTasks';
+import { useProjectIssues } from '@/hooks/useIssues';
+import { useProjectMilestones } from '@/hooks/useMilestones';
+import { useProjectModules } from '@/hooks/useModules';
+import { useECOList } from '@/hooks/useECOs';
+import { useBomTree } from '@/hooks/useBom';
+import { fromApiNode, bomFlatAll } from '@/features/projects/components/bomData';
+import EntityTagChip from './EntityTagChip';
 
 interface MessageInputProps {
   conversationId: string;
   onMessageSent?: () => void;
   onTyping?: () => void;
   members?: ConversationMember[];
-  sendMessage?: (content: string, type?: 'text' | 'file', fileData?: any, replyToMessageId?: string) => Promise<void>;
+  sendMessage?: (content: string, type?: 'text' | 'file', fileData?: any, replyToMessageId?: string, entityTags?: EntityTagRef[]) => Promise<void>;
   readOnly?: boolean;
   readOnlyNotice?: string | null;
   replyingTo?: ChatMessage | null;
@@ -32,6 +42,22 @@ interface MessageInputProps {
 const MAX_CHARS = 4000;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
 const MAX_FILES = 10;
+const MAX_ENTITY_TAGS = 5;
+
+type SlashStage = 'type' | 'project' | 'item';
+
+const ENTITY_TYPE_OPTIONS: { type: ChatEntityType; label: string; Icon: typeof CheckSquare }[] = [
+  { type: 'task', label: 'Task', Icon: CheckSquare },
+  { type: 'issue', label: 'Issue', Icon: AlertCircle },
+  { type: 'milestone', label: 'Milestone', Icon: Flag },
+  { type: 'hardware_module', label: 'Hardware Module', Icon: Cpu },
+  { type: 'bom_node', label: 'BOM', Icon: Layers },
+  { type: 'eco', label: 'ECO', Icon: FileText },
+];
+
+const ENTITY_TYPE_LABEL: Record<ChatEntityType, string> = Object.fromEntries(
+  ENTITY_TYPE_OPTIONS.map((o) => [o.type, o.label])
+) as Record<ChatEntityType, string>;
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes}B`;
@@ -99,6 +125,179 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
       return m.name.toLowerCase().includes(q);
     });
   }, [mentionQuery, otherMembers, value]);
+
+  // ── Slash-command entity tag picker ──────────────────────────────────────
+  const [slashStage, setSlashStage] = useState<SlashStage | null>(null);
+  const [slashSearch, setSlashSearch] = useState('');
+  const [slashItemSearch, setSlashItemSearch] = useState('');
+  const [slashIndex, setSlashIndex] = useState(0);
+  const [slashEntityType, setSlashEntityType] = useState<ChatEntityType | null>(null);
+  const [slashProjectId, setSlashProjectId] = useState<string | null>(null);
+  const [pendingEntityTags, setPendingEntityTags] = useState<EntityTagRef[]>([]);
+  const slashStartRef = useRef<number>(-1);
+  const slashSearchInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: conversationProjectId } = useQuery({
+    queryKey: ['chat', 'conversationProjectId', conversationId],
+    queryFn: () => chatService.getProjectIdForConversation(conversationId),
+    enabled: !!conversationId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const projectsQuery = useProjects();
+  const { data: projectsList } = projectsQuery;
+
+  const itemStageActive = slashStage === 'item';
+  const taskItemsQ = useProjectTasks(itemStageActive && slashEntityType === 'task' ? slashProjectId ?? undefined : undefined);
+  const issueItemsQ = useProjectIssues(itemStageActive && slashEntityType === 'issue' ? slashProjectId ?? undefined : undefined);
+  const milestoneItemsQ = useProjectMilestones(itemStageActive && slashEntityType === 'milestone' ? (slashProjectId ?? '') : '');
+  const moduleItemsQ = useProjectModules(itemStageActive && slashEntityType === 'hardware_module' ? (slashProjectId ?? '') : '');
+  const ecoItemsQ = useECOList(itemStageActive && slashEntityType === 'eco' ? slashProjectId ?? undefined : undefined);
+  const bomTreeQ = useBomTree(itemStageActive && slashEntityType === 'bom_node' ? slashProjectId ?? undefined : undefined);
+
+  const filteredEntityTypes = useMemo(() => {
+    if (slashStage !== 'type') return [];
+    const q = slashSearch.toLowerCase();
+    return ENTITY_TYPE_OPTIONS.filter((o) => o.label.toLowerCase().includes(q));
+  }, [slashStage, slashSearch]);
+
+  const projectOptions = useMemo(() => {
+    if (slashStage !== 'project') return [];
+    const q = slashItemSearch.toLowerCase();
+    return (projectsList ?? []).filter((p) => p.name.toLowerCase().includes(q)).slice(0, 30);
+  }, [slashStage, slashItemSearch, projectsList]);
+
+  const isProjectOptionsLoading = slashStage === 'project' && projectsQuery.isLoading;
+
+  const isItemOptionsLoading = itemStageActive && !!slashEntityType && (
+    (slashEntityType === 'task' && taskItemsQ.isLoading) ||
+    (slashEntityType === 'issue' && issueItemsQ.isLoading) ||
+    (slashEntityType === 'milestone' && milestoneItemsQ.isLoading) ||
+    (slashEntityType === 'hardware_module' && moduleItemsQ.isLoading) ||
+    (slashEntityType === 'eco' && ecoItemsQ.isLoading) ||
+    (slashEntityType === 'bom_node' && bomTreeQ.isLoading)
+  );
+
+  const slashProjectName = useMemo(
+    () => (slashProjectId ? (projectsList ?? []).find((p) => p.id === slashProjectId)?.name ?? null : null),
+    [slashProjectId, projectsList]
+  );
+
+  const itemOptions = useMemo(() => {
+    if (!itemStageActive || !slashEntityType) return [];
+    let opts: { id: string; label: string }[] = [];
+    switch (slashEntityType) {
+      case 'task':
+        opts = (taskItemsQ.data ?? []).map((t: any) => ({ id: t.id, label: t.title }));
+        break;
+      case 'issue':
+        opts = (issueItemsQ.data ?? []).map((i: any) => ({ id: i.id, label: i.title }));
+        break;
+      case 'milestone':
+        opts = (milestoneItemsQ.data ?? []).map((m: any) => ({ id: m.id, label: m.title }));
+        break;
+      case 'hardware_module':
+        opts = (moduleItemsQ.data ?? []).map((m: any) => ({ id: m.id, label: m.name }));
+        break;
+      case 'eco':
+        opts = (ecoItemsQ.data?.data ?? []).map((e: any) => ({ id: e.id, label: `${e.num} — ${e.title}` }));
+        break;
+      case 'bom_node': {
+        const roots = (bomTreeQ.data?.roots ?? []).map((r: any) => fromApiNode(r));
+        opts = bomFlatAll(roots).map((n) => ({ id: n.id, label: `${n.pn} — ${n.name}` }));
+        break;
+      }
+    }
+    const q = slashItemSearch.toLowerCase();
+    return opts.filter((o) => o.label.toLowerCase().includes(q)).slice(0, 30);
+  }, [itemStageActive, slashEntityType, slashItemSearch, taskItemsQ.data, issueItemsQ.data, milestoneItemsQ.data, moduleItemsQ.data, ecoItemsQ.data, bomTreeQ.data]);
+
+  useEffect(() => {
+    if (slashStage === 'project' || slashStage === 'item') {
+      slashSearchInputRef.current?.focus();
+    }
+  }, [slashStage]);
+
+  const cancelSlash = useCallback(() => {
+    setSlashStage(null);
+    setSlashSearch('');
+    setSlashItemSearch('');
+    setSlashEntityType(null);
+    setSlashProjectId(null);
+    slashStartRef.current = -1;
+    setSlashIndex(0);
+  }, []);
+
+  const selectEntityType = (type: ChatEntityType) => {
+    const start = slashStartRef.current;
+    const el = textareaRef.current;
+    if (start >= 0 && el) {
+      const before = value.substring(0, start);
+      const after = value.substring(el.selectionStart ?? value.length);
+      setDraft(conversationId, before + after);
+      requestAnimationFrame(() => el.setSelectionRange(start, start));
+    }
+    slashStartRef.current = -1;
+    setSlashSearch('');
+    setSlashEntityType(type);
+    setSlashItemSearch('');
+    setSlashIndex(0);
+    if (conversationProjectId) {
+      setSlashProjectId(conversationProjectId);
+      setSlashStage('item');
+    } else {
+      setSlashStage('project');
+    }
+  };
+
+  const selectProject = (project: { id: string; name: string }) => {
+    setSlashProjectId(project.id);
+    setSlashStage('item');
+    setSlashItemSearch('');
+    setSlashIndex(0);
+  };
+
+  const selectItem = (item: { id: string; label: string }) => {
+    if (!slashEntityType || !slashProjectId) return;
+    if (pendingEntityTags.length >= MAX_ENTITY_TAGS) {
+      toast.warning(`Maximum ${MAX_ENTITY_TAGS} tagged items allowed.`);
+      cancelSlash();
+      return;
+    }
+    setPendingEntityTags((prev) => [...prev, { entityType: slashEntityType, entityId: item.id, projectId: slashProjectId, label: item.label }]);
+    cancelSlash();
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
+  const removeEntityTag = (index: number) => {
+    setPendingEntityTags((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const goBackSlashStage = () => {
+    if (slashStage === 'item' && !conversationProjectId) {
+      setSlashStage('project');
+      setSlashItemSearch('');
+      setSlashIndex(0);
+    } else {
+      cancelSlash();
+      requestAnimationFrame(() => textareaRef.current?.focus());
+    }
+  };
+
+  const handlePickerSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const list = slashStage === 'project' ? projectOptions : itemOptions;
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (list.length > 0) setSlashIndex((p) => (p + 1) % list.length); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); if (list.length > 0) setSlashIndex((p) => (p - 1 + list.length) % list.length); return; }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (list.length === 0) return;
+      if (slashStage === 'project') selectProject(projectOptions[slashIndex]);
+      else selectItem(itemOptions[slashIndex]);
+      return;
+    }
+    if (e.key === 'Escape') { e.preventDefault(); cancelSlash(); textareaRef.current?.focus(); return; }
+    if (e.key === 'Backspace' && slashItemSearch === '') { e.preventDefault(); goBackSlashStage(); }
+  };
 
   const resize = useCallback(() => {
     const el = textareaRef.current;
@@ -271,7 +470,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   const handleSend = async () => {
     if (readOnly) return;
     const trimmed = value.trim();
-    if ((!trimmed && pendingFiles.length === 0) || isSending) return;
+    if ((!trimmed && pendingFiles.length === 0 && pendingEntityTags.length === 0) || isSending) return;
     if (pendingFiles.length > MAX_FILES) {
       toast.warning(`Maximum ${MAX_FILES} files allowed. Remove some before sending.`);
       return;
@@ -279,6 +478,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
 
     setDraft(conversationId, '');
     setMentionQuery(null);
+    cancelSlash();
 
     // ── OFFLINE: enqueue everything locally ──────────────────────────────
     if (!isOnline) {
@@ -297,23 +497,24 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     }
 
     // ── ONLINE: send normally ─────────────────────────────────────────────
+    const tagsToSend = pendingEntityTags;
     setIsSending(true);
     try {
       if (pendingFiles.length > 0) {
-        if (trimmed) {
-          if (sendMessage) await sendMessage(trimmed, 'text', undefined, replyingTo?.id);
-          else await chatService.sendMessage(conversationId, trimmed, undefined, replyingTo?.id);
+        if (trimmed || tagsToSend.length > 0) {
+          if (sendMessage) await sendMessage(trimmed, 'text', undefined, replyingTo?.id, tagsToSend);
+          else await chatService.sendMessage(conversationId, trimmed, undefined, replyingTo?.id, tagsToSend);
         }
         for (const file of pendingFiles) {
           await sendFileMessage(file);
         }
         setPendingFiles([]);
       } else {
-        if (sendMessage) await sendMessage(trimmed, 'text', undefined, replyingTo?.id);
-        else await chatService.sendMessage(conversationId, trimmed, undefined, replyingTo?.id);
+        if (sendMessage) await sendMessage(trimmed, 'text', undefined, replyingTo?.id, tagsToSend);
+        else await chatService.sendMessage(conversationId, trimmed, undefined, replyingTo?.id, tagsToSend);
       }
 
-
+      setPendingEntityTags([]);
       onMessageSent?.();
       onCancelReply?.();
     } catch (err) {
@@ -326,6 +527,12 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (slashStage === 'type' && filteredEntityTypes.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashIndex(p => (p + 1) % filteredEntityTypes.length); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashIndex(p => (p - 1 + filteredEntityTypes.length) % filteredEntityTypes.length); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectEntityType(filteredEntityTypes[slashIndex].type); return; }
+      if (e.key === 'Escape') { e.preventDefault(); cancelSlash(); return; }
+    }
     if (mentionQuery !== null && filteredMentions.length > 0) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(p => (p + 1) % filteredMentions.length); return; }
       if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(p => (p - 1 + filteredMentions.length) % filteredMentions.length); return; }
@@ -345,6 +552,27 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
 
     const cursorPos = e.target.selectionStart;
     const textBeforeCursor = newValue.substring(0, cursorPos);
+
+    if (slashStage === null || slashStage === 'type') {
+      const lastSlashIndex = textBeforeCursor.lastIndexOf('/');
+      if (lastSlashIndex >= 0) {
+        const charBefore = lastSlashIndex > 0 ? textBeforeCursor[lastSlashIndex - 1] : ' ';
+        const queryText = textBeforeCursor.substring(lastSlashIndex + 1);
+        if ((charBefore === ' ' || charBefore === '\n' || lastSlashIndex === 0) && !queryText.includes(' ')) {
+          slashStartRef.current = lastSlashIndex;
+          setSlashStage('type');
+          setSlashSearch(queryText);
+          setSlashIndex(0);
+          setMentionQuery(null);
+          mentionStartRef.current = -1;
+          return;
+        }
+      }
+      if (slashStage === 'type') {
+        cancelSlash();
+      }
+    }
+
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
     if (lastAtIndex >= 0) {
       const charBefore = lastAtIndex > 0 ? textBeforeCursor[lastAtIndex - 1] : ' ';
@@ -432,6 +660,15 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
         </div>
       )}
 
+      {/* ── Pending entity tag chips ── */}
+      {pendingEntityTags.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {pendingEntityTags.map((tag, i) => (
+            <EntityTagChip key={`${tag.entityType}-${tag.entityId}-${i}`} tag={tag} variant="pending" onRemove={() => removeEntityTag(i)} />
+          ))}
+        </div>
+      )}
+
       {/* ── Pending files preview grid ── */}
       {pendingFiles.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-2">
@@ -516,6 +753,98 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
           </div>
         )}
 
+        {/* Slash-command entity tag picker */}
+        {slashStage !== null && (
+          <div className="absolute bottom-full mb-1 left-0 w-full max-w-[300px] bg-popover border border-border rounded-lg shadow-lg z-50 max-h-[260px] overflow-hidden flex flex-col">
+            {slashStage !== 'type' && (
+              <div className="flex items-center gap-1 px-2 py-1.5 border-b border-border text-xs text-muted-foreground shrink-0">
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); goBackSlashStage(); }}
+                  className="p-0.5 rounded hover:bg-muted"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <span className="font-medium text-foreground">{slashEntityType && ENTITY_TYPE_LABEL[slashEntityType]}</span>
+                {slashStage === 'item' && slashProjectName && <span>· {slashProjectName}</span>}
+              </div>
+            )}
+
+            {slashStage === 'type' && (
+              <div className="overflow-y-auto">
+                {filteredEntityTypes.length === 0 && (
+                  <div className="px-3 py-4 text-xs text-center text-muted-foreground">No match</div>
+                )}
+                {filteredEntityTypes.map((opt, i) => (
+                  <button
+                    key={opt.type}
+                    type="button"
+                    className={cn('flex items-center gap-2 w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors', i === slashIndex && 'bg-muted')}
+                    onMouseDown={(e) => { e.preventDefault(); selectEntityType(opt.type); }}
+                  >
+                    <opt.Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="font-medium">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {(slashStage === 'project' || slashStage === 'item') && (
+              <>
+                <div className="px-2 py-1.5 border-b border-border shrink-0">
+                  <input
+                    ref={slashSearchInputRef}
+                    value={slashItemSearch}
+                    onChange={(e) => { setSlashItemSearch(e.target.value); setSlashIndex(0); }}
+                    onKeyDown={handlePickerSearchKeyDown}
+                    placeholder={slashStage === 'project' ? 'Search projects…' : `Search ${slashEntityType ? ENTITY_TYPE_LABEL[slashEntityType].toLowerCase() : 'items'}…`}
+                    className="w-full bg-transparent text-sm px-1 py-0.5 outline-none placeholder:text-muted-foreground"
+                  />
+                </div>
+                <div className="overflow-y-auto">
+                  {slashStage === 'project' ? (
+                    isProjectOptionsLoading ? (
+                      <div className="flex items-center justify-center gap-2 px-3 py-4 text-xs text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading projects…
+                      </div>
+                    ) : projectOptions.length === 0 ? (
+                      <div className="px-3 py-4 text-xs text-center text-muted-foreground">No projects found</div>
+                    ) : (
+                      projectOptions.map((p, i) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className={cn('flex items-center w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors truncate', i === slashIndex && 'bg-muted')}
+                          onMouseDown={(e) => { e.preventDefault(); selectProject(p); }}
+                        >
+                          {p.name}
+                        </button>
+                      ))
+                    )
+                  ) : isItemOptionsLoading ? (
+                    <div className="flex items-center justify-center gap-2 px-3 py-4 text-xs text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading {slashEntityType ? ENTITY_TYPE_LABEL[slashEntityType].toLowerCase() : 'items'}…
+                    </div>
+                  ) : itemOptions.length === 0 ? (
+                    <div className="px-3 py-4 text-xs text-center text-muted-foreground">No results</div>
+                  ) : (
+                    itemOptions.map((opt, i) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        className={cn('flex items-center w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors truncate', i === slashIndex && 'bg-muted')}
+                        onMouseDown={(e) => { e.preventDefault(); selectItem(opt); }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Emoji picker */}
         {showEmojiPicker && (
           <div ref={emojiPickerRef} className="absolute bottom-full mb-2 left-0 z-50 shadow-2xl rounded-xl overflow-hidden">
@@ -587,7 +916,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
           <Button
             size="icon" type="button"
             className="h-8 w-8 shrink-0 rounded-full bg-primary text-primary-foreground shadow-[0_3px_10px_rgba(0,0,0,0.22)] hover:bg-primary/90"
-            disabled={readOnly || ((!value.trim() && pendingFiles.length === 0) || isSending)}
+            disabled={readOnly || ((!value.trim() && pendingFiles.length === 0 && pendingEntityTags.length === 0) || isSending)}
             onClick={handleSend}
           >
             {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}

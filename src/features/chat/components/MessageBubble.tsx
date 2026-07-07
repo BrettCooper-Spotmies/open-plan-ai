@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, ZoomIn, ExternalLink, FileImage, File as FileIcon2 } from 'lucide-react';
@@ -14,12 +15,22 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { differenceInHours } from 'date-fns';
-import { ChatMessage, ReadReceipt, MessageReaction } from '../types';
+import { ChatMessage, ReadReceipt, MessageReaction, ChatEntityType, EntityTagRef } from '../types';
 import { toast } from 'sonner';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { chatService } from '@/services/chat.service';
 import { useUserTimezone } from '@/hooks/useUserTimezone';
 import { formatMessageTimestamp } from '@/utils/dateTime';
+import EntityTagChip from './EntityTagChip';
+
+const ENTITY_TAG_ROUTE: Record<ChatEntityType, (tag: EntityTagRef) => string> = {
+  task: (tag) => `/projects/${tag.projectId}/tasks/${tag.entityId}`,
+  issue: (tag) => `/projects/${tag.projectId}/issues/${tag.entityId}`,
+  milestone: (tag) => `/projects/${tag.projectId}/milestones/${tag.entityId}`,
+  hardware_module: (tag) => `/projects/${tag.projectId}/modules/${tag.entityId}`,
+  bom_node: (tag) => `/projects/${tag.projectId}/bom/${tag.entityId}`,
+  eco: (tag) => `/projects/${tag.projectId}/eng-changes/${tag.entityId}`,
+};
 
 const EMOJI_SET = ['👍', '❤️', '😂', '😮', '🔥', '💯'];
 const EXTENDED_EMOJI_SET = [
@@ -320,6 +331,7 @@ export function MessageBubble({
   searchQuery, memberNames, readReceipts, reactions, onEdit, onDelete, onToggleReaction, onReply,
 }: MessageBubbleProps) {
   const timezone = useUserTimezone();
+  const navigate = useNavigate();
   const isOwn = message.senderId === currentUserId;
   const isFile = message.contentType === 'file' || message.contentType === 'image' || (message.attachments?.length ?? 0) > 0;
 
@@ -615,6 +627,19 @@ export function MessageBubble({
                 <FileAttachment file={fileData} isOwn={isOwn} />
               ) : (
                 <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} memberNames={memberNames} />
+              )}
+              {message.entityTags && message.entityTags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {message.entityTags.map((tag, i) => (
+                    <EntityTagChip
+                      key={`${tag.entityType}-${tag.entityId}-${i}`}
+                      tag={tag}
+                      variant="sent"
+                      isOwn={isOwn}
+                      onClick={() => navigate(ENTITY_TAG_ROUTE[tag.entityType](tag))}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           )}

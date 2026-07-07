@@ -41,6 +41,8 @@ import { ProjectDetailSkeleton } from './components/ProjectDetailSkeleton';
 import { ProjectProgressPopover } from './components/ProjectProgressPopover';
 import { AddModuleDialog } from './components/AddModuleDialog';
 import { TaskDetailModal } from './components/TaskDetailModal';
+import { ModuleDetailModal } from './components/ModuleDetailModal';
+import { MilestoneDetailModal } from './components/MilestoneDetailModal';
 import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
@@ -75,7 +77,7 @@ import { projectMembersService } from '@/services/projectMembers.service';
 import { attachmentsService } from '@/services/attachments.service';
 import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
-import { calculateProjectProgress } from './utils/projectUtils';
+import { calculateProjectProgress, getModuleTasks, getModuleProgress } from './utils/projectUtils';
 import { ProjectSection, Module, TaskViewMode, TaskFilter, ModuleViewMode, Issue, Milestone, Task, IssueStatus, IssueSeverity, TeamMember, ProjectRole } from '@/types';
 import { logger } from '@/services/monitoring/logger';
 import { format } from 'date-fns';
@@ -336,19 +338,26 @@ export default function ProjectDetail() {
   const { currentOrganization } = useOrganization();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { id, tab: tabParam, partId, ecoId } = useParams();
+  const { id, tab: tabParam, partId, ecoId, taskId, moduleId, milestoneId } = useParams();
   const { data: boardColumns } = useProjectTaskColumns(id);
 
-  // The /bom/:partId and /eng-changes/:ecoId routes encode the section as a literal
-  // path segment rather than the generic :tab param, so infer it from which item id is present.
+  // The /bom/:partId, /eng-changes/:ecoId, /tasks/:taskId, /modules/:moduleId, and
+  // /milestones/:milestoneId routes encode the section as a literal path segment
+  // rather than the generic :tab param, so infer it from which item id is present.
   const ALL_SECTIONS: ProjectSection[] = ['bom', 'eng-changes', 'tasks', 'modules', 'milestones', 'issues', 'gate-reviews', 'risk'];
   const section: ProjectSection = partId
     ? 'bom'
     : ecoId
       ? 'eng-changes'
-      : ALL_SECTIONS.includes(tabParam as ProjectSection)
-        ? (tabParam as ProjectSection)
-        : 'bom';
+      : taskId
+        ? 'tasks'
+        : moduleId
+          ? 'modules'
+          : milestoneId
+            ? 'milestones'
+            : ALL_SECTIONS.includes(tabParam as ProjectSection)
+              ? (tabParam as ProjectSection)
+              : 'bom';
 
   const isMobile = useIsMobile();
   const [viewModeStr, setViewModeStr] = useState<TaskViewMode | null>(null);
@@ -530,6 +539,26 @@ export default function ProjectDetail() {
   }, [projectModules, organizationMembers]);
 
   const existingModuleNames = useMemo(() => modules.map(m => m.name), [modules]);
+
+  // Deep-linked entities (e.g. opened via a chat entity tag) — looked up from
+  // already-loaded project data rather than fetched separately.
+  const deepLinkTask = useMemo(
+    () => (taskId ? (project?.tasks || []).find(t => t.id === taskId) ?? null : null),
+    [taskId, project?.tasks]
+  );
+  const deepLinkModule = useMemo(() => {
+    if (!moduleId) return null;
+    const mod = modules.find(m => m.id === moduleId);
+    if (!mod) return null;
+    const moduleTasks = getModuleTasks(mod.id, project?.tasks || []);
+    const progress = getModuleProgress(mod.id, project?.tasks || []);
+    const openIssues = (project?.issues || []).filter(i => i.moduleId === mod.id && i.status !== 'resolved').length;
+    return { ...mod, taskCount: moduleTasks.length, progress, openIssues, tasks: moduleTasks };
+  }, [moduleId, modules, project?.tasks, project?.issues]);
+  const deepLinkMilestone = useMemo(
+    () => (milestoneId ? (project?.milestones || []).find(m => m.id === milestoneId) ?? null : null),
+    [milestoneId, project?.milestones]
+  );
 
   // Calculate project progress breakdown
   const progressBreakdown = useMemo(() => {
@@ -1747,6 +1776,53 @@ export default function ProjectDetail() {
           color: c.color,   // hex kept as-is; TaskDetailModal dot uses inline style
         }))}
       />
+
+      {/* Deep-linked entity modals — opened via a route param (e.g. /tasks/:taskId),
+          such as when navigating from a chat entity tag. */}
+      {taskId && (
+        <TaskDetailModal
+          task={deepLinkTask}
+          allTasks={project.tasks || []}
+          isOpen={!!taskId}
+          onClose={() => navigate(`/projects/${id}/tasks`)}
+          onUpdate={handleTaskUpdate}
+          mode="view"
+          modules={modules}
+          projectId={id}
+          onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
+          assignableMembers={organizationMembers}
+          statusOptions={(boardColumns ?? []).map((c) => ({
+            value: c.status,
+            label: c.label,
+            color: c.color,
+          }))}
+        />
+      )}
+
+      {moduleId && (
+        <ModuleDetailModal
+          module={deepLinkModule}
+          allTasks={project.tasks || []}
+          allIssues={project.issues || []}
+          teamMembers={organizationMembers}
+          isOpen={!!moduleId}
+          onClose={() => navigate(`/projects/${id}/modules`)}
+          onUpdate={handleModuleUpdate}
+        />
+      )}
+
+      {milestoneId && (
+        <MilestoneDetailModal
+          milestone={deepLinkMilestone}
+          tasks={project.tasks || []}
+          issues={project.issues || []}
+          modules={modules}
+          isOpen={!!milestoneId}
+          onClose={() => navigate(`/projects/${id}/milestones`)}
+          onUpdate={handleMilestoneUpdate}
+          onIssueUpdate={handleIssueUpdate}
+        />
+      )}
 
       <Dialog
         open={memberRemovalPrompt.open}

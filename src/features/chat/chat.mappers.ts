@@ -106,6 +106,7 @@ export function mapMessage(
       size: m.fileSize ?? m.file_size ?? 0,
       mimeType: m.fileMimeType ?? m.file_mime_type ?? '',
     }] : (m.attachments ?? []),
+    entityTags: m.entityTags ?? m.entity_tags ?? [],
     createdAt,
     updatedAt,
     isEdited: updatedAt !== createdAt && !deletedAt,

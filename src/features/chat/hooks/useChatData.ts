@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { chatTransport } from '../transport';
 import { mapMessage } from '../chat.mappers';
 import { useChatStore } from '../stores/useChatStore';
-import type { Conversation, ChatMessage, MessageReaction } from '../types';
+import type { Conversation, ChatMessage, MessageReaction, EntityTagRef } from '../types';
 import type { Unsubscribe } from '../transport/IChatTransport';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/services/monitoring/logger';
@@ -313,7 +313,7 @@ export function useMessages(conversationId: string | null) {
     return () => { if (channelRef.current) chatTransport.unsubscribe(channelRef.current); };
   }, [conversationId, storeAddMessage, updatePreview, leftAt, joinedAt]);
 
-  const sendMessage = useCallback(async (content: string, type: 'text' | 'file' = 'text', fileData?: any, replyToMessageId?: string) => {
+  const sendMessage = useCallback(async (content: string, type: 'text' | 'file' = 'text', fileData?: any, replyToMessageId?: string, entityTags?: EntityTagRef[]) => {
     if (!conversationId || !user) return;
 
     const tempId = `temp-${generateId()}`;
@@ -326,6 +326,7 @@ export function useMessages(conversationId: string | null) {
       contentType: type,
       content: type === 'file' ? JSON.stringify(fileData) : content,
       attachments: [],
+      entityTags,
       createdAt: new Date().toISOString(),
       isEdited: false,
       isOptimistic: true,
@@ -358,7 +359,7 @@ export function useMessages(conversationId: string | null) {
 
     try {
       let realMsg: ChatMessage;
-      realMsg = await chatService.sendMessage(conversationId, content, undefined, replyToMessageId);
+      realMsg = await chatService.sendMessage(conversationId, content, undefined, replyToMessageId, entityTags);
       realMsg.status = 'sent';
       setMessages((prev) => {
         // If the real message was already added by realtime, just remove the temp one
