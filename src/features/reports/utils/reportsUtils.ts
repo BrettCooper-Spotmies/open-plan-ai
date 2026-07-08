@@ -239,7 +239,7 @@ export function calculateAvgCycleTime(tasks: Task[]): number {
   const totalDays = completedTasks.reduce((sum, task) => {
     const start = parseISO(task.startDate!);
     const end = parseISO(task.updatedAt);
-    return sum + differenceInDays(end, start);
+    return sum + Math.abs(differenceInDays(end, start));
   }, 0);
 
   return Math.round((totalDays / completedTasks.length) * 10) / 10;

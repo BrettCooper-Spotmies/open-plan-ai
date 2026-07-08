@@ -208,7 +208,6 @@ const NewProject = () => {
 
   // Team Members
   const [assignedMembers, setAssignedMembers] = useState<TeamMemberAssignment[]>([]);
-  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [isMemberDropdownOpen, setIsMemberDropdownOpen] = useState(false);
   const [memberSearch, setMemberSearch] = useState("");
 
@@ -373,24 +372,17 @@ const NewProject = () => {
     setDeleteConfirmation({ isOpen: true, type: 'milestone', id });
   };
 
-  const handleAddTeamMembers = () => {
-    if (selectedMembers.length === 0) return;
-    const newAssignments: TeamMemberAssignment[] = selectedMembers
-      .filter(id => !assignedMembers.find(am => am.memberId === id))
-      .map(id => ({ memberId: id, role: 'member' as ProjectRole }));
-    setAssignedMembers([...assignedMembers, ...newAssignments]);
-    setSelectedMembers([]);
-    setIsMemberDropdownOpen(false);
-  };
-
   const handleChangeAssignedMemberRole = (memberId: string, role: ProjectRole) => {
     setAssignedMembers(prev => prev.map(m => (m.memberId === memberId ? { ...m, role } : m)));
   };
 
   const handleToggleMemberSelection = (memberId: string) => {
-    setSelectedMembers(prev =>
-      prev.includes(memberId) ? prev.filter(id => id !== memberId) : [...prev, memberId]
-    );
+    const isAssigned = assignedMembers.some(am => am.memberId === memberId);
+    if (isAssigned) {
+      setAssignedMembers(prev => prev.filter(m => m.memberId !== memberId));
+    } else {
+      setAssignedMembers(prev => [...prev, { memberId, role: 'member' as ProjectRole }]);
+    }
   };
 
   const handleRemoveTeamMember = (memberId: string) => {
@@ -1031,8 +1023,8 @@ const NewProject = () => {
                   variant="outline"
                   className="w-full justify-between font-normal"
                 >
-                  {selectedMembers.length > 0
-                    ? `${selectedMembers.length} member${selectedMembers.length > 1 ? 's' : ''} selected`
+                  {assignedMembers.length > 0
+                    ? `${assignedMembers.length} member${assignedMembers.length > 1 ? 's' : ''} selected`
                     : "Select team member"}
                   <ChevronDown className="h-4 w-4 opacity-50" />
                 </Button>
@@ -1049,15 +1041,13 @@ const NewProject = () => {
                 </div>
                 <div className="max-h-52 overflow-y-auto">
                   {teamMembers
-                    .filter(m => !assignedMembers.find(am => am.memberId === m.id))
                     .filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase()))
                     .length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                      {memberSearch ? "No members match your search" : "All members already added"}
+                      {memberSearch ? "No members match your search" : "No members available"}
                     </p>
                   ) : (
                     teamMembers
-                      .filter(m => !assignedMembers.find(am => am.memberId === m.id))
                       .filter(m => m.name.toLowerCase().includes(memberSearch.toLowerCase()))
                       .map((member) => (
                         <div
@@ -1066,7 +1056,7 @@ const NewProject = () => {
                           onClick={() => handleToggleMemberSelection(member.id)}
                         >
                           <Checkbox
-                            checked={selectedMembers.includes(member.id)}
+                            checked={assignedMembers.some(am => am.memberId === member.id)}
                             onCheckedChange={() => handleToggleMemberSelection(member.id)}
                             onClick={(e) => e.stopPropagation()}
                           />
@@ -1079,18 +1069,6 @@ const NewProject = () => {
                       ))
                   )}
                 </div>
-                {selectedMembers.length > 0 && (
-                  <div className="border-t p-2">
-                    <Button
-                      className="w-full"
-                      size="sm"
-                      onClick={handleAddTeamMembers}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Add {selectedMembers.length} Member{selectedMembers.length > 1 ? 's' : ''}
-                    </Button>
-                  </div>
-                )}
               </PopoverContent>
             </Popover>
 
@@ -1147,7 +1125,7 @@ const NewProject = () => {
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="h-10 w-10 mx-auto mb-2 opacity-50" />
                 <p>No team members added yet</p>
-                <p className="text-sm">Select members above and click Add to assign them</p>
+                <p className="text-sm">Select members from the dropdown above to assign them</p>
               </div>
             )}
           </CardContent>

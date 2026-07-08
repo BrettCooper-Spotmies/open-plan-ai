@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
-import { LayoutGrid, List } from 'lucide-react';
+// import { LayoutGrid, List } from 'lucide-react'; // Kanban view hidden — re-enable if Kanban toggle is restored
 import { MyDayStats } from './components/MyDayStats';
-import { MyDayKanbanView } from './components/MyDayKanbanView';
+// import { MyDayKanbanView } from './components/MyDayKanbanView'; // Kanban view hidden
 import { MyDayListView } from './components/MyDayListView';
 import { MyDayGroupBySelector } from './components/MyDayGroupBySelector';
 import { MyTasksFiltersDropdown } from './components/MyTasksFiltersDropdown';
@@ -10,11 +10,12 @@ import { IssueDetailModal } from '@/features/projects/components/IssueDetailModa
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
-import { Task, Issue, TaskStatus, IssueStatus, MyDayView, MyDayGroupBy, MyDayFilter, MyTasksColumnFilters } from '@/types';
+import { Task, Issue, TaskStatus, IssueStatus, MyDayGroupBy, MyDayFilter, MyTasksColumnFilters } from '@/types';
 import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
 import { useUpdateTask, useBatchUpdateTasks } from '@/hooks/useTasks';
 import { useUpdateIssue } from '@/hooks/useIssues';
 import { useProjects } from '@/hooks/useProjects';
+import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
 
@@ -28,7 +29,6 @@ export default function MyDay() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
-  const [view, setView] = useState<MyDayView>('list');
   const [groupBy, setGroupBy] = useState<MyDayGroupBy>('progress');
   const [filter, setFilter] = useState<MyDayFilter>('today');
   const [columnFilters, setColumnFilters] = useState<MyTasksColumnFilters>({});
@@ -111,36 +111,37 @@ export default function MyDay() {
     }
   };
 
-  const handleChecklistToggle = async (taskId: string, itemId: string) => {
-    const item = userTasks.find(t => t.id === taskId);
-    if (!item) return;
-
-    try {
-      const checklist = item.itemType === 'task' ? item.originalTask?.checklist : item.originalIssue?.checklist;
-      if (!checklist) return;
-
-      const updatedChecklist = checklist.map(checklistItem =>
-        checklistItem.id === itemId ? { ...checklistItem, completed: !checklistItem.completed } : checklistItem
-      );
-
-      if (item.itemType === 'task') {
-        await updateTaskMutation.mutateAsync({
-          projectId: item.projectId,
-          taskId,
-          updates: { checklist: updatedChecklist },
-        });
-      } else {
-        await updateIssueMutation.mutateAsync({
-          projectId: item.projectId,
-          issueId: taskId,
-          updates: { checklist: updatedChecklist },
-        });
-      }
-    } catch (error) {
-      logger.error('Failed to toggle checklist item:', error);
-      toast.error('Failed to update checklist');
-    }
-  };
+  // Kanban view hidden — handleChecklistToggle was only used by MyDayKanbanView
+  // const handleChecklistToggle = async (taskId: string, itemId: string) => {
+  //   const item = userTasks.find(t => t.id === taskId);
+  //   if (!item) return;
+  //
+  //   try {
+  //     const checklist = item.itemType === 'task' ? item.originalTask?.checklist : item.originalIssue?.checklist;
+  //     if (!checklist) return;
+  //
+  //     const updatedChecklist = checklist.map(checklistItem =>
+  //       checklistItem.id === itemId ? { ...checklistItem, completed: !checklistItem.completed } : checklistItem
+  //     );
+  //
+  //     if (item.itemType === 'task') {
+  //       await updateTaskMutation.mutateAsync({
+  //         projectId: item.projectId,
+  //         taskId,
+  //         updates: { checklist: updatedChecklist },
+  //       });
+  //     } else {
+  //       await updateIssueMutation.mutateAsync({
+  //         projectId: item.projectId,
+  //         issueId: taskId,
+  //         updates: { checklist: updatedChecklist },
+  //       });
+  //     }
+  //   } catch (error) {
+  //     logger.error('Failed to toggle checklist item:', error);
+  //     toast.error('Failed to update checklist');
+  //   }
+  // };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
@@ -169,10 +170,16 @@ export default function MyDay() {
     }
   };
 
-  // derived data for issue modal
+  // derived data for the open task/issue modal
   const selectedIssueProject = selectedIssue ? projects.find(p => p.id === selectedIssue.projectId) : null;
-  const issueTeamMembers = selectedIssueProject?.team || [];
+  const selectedTaskProject = selectedTask ? projects.find(p => p.id === selectedTask.projectId) : null;
   const issueTasks = selectedIssueProject?.tasks || [];
+
+  // My Day aggregates items across projects, so `project.team` (unpopulated for
+  // API-backed projects) can't be used for the assignee picker — fetch the real
+  // membership list for whichever project the open task/issue belongs to.
+  const activeProjectId = selectedTask?.projectId ?? selectedIssue?.projectId;
+  const { data: activeProjectMembers = [] } = useProjectMembers(activeProjectId);
 
   // Early return: show identical skeleton to Suspense fallback while data loads
   if (tasksLoading) {
@@ -190,7 +197,7 @@ export default function MyDay() {
           completedTodayCount={completedTodayCount}
         />
 
-        {/* View controls - always visible once data is ready */}
+       {/* View controls - always visible once data is ready */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
           <Tabs value={filter} onValueChange={(v) => setFilter(v as MyDayFilter)}>
             <TabsList>
@@ -220,7 +227,7 @@ export default function MyDay() {
           </Tabs> */}
         </div>
 
-        {/* Kanban/List content */}
+        {/* List content */}
         {filteredTasks.length === 0 ? (
           <div className="text-center py-16">
             <h3 className="text-lg font-medium text-foreground mb-2">
@@ -241,6 +248,7 @@ export default function MyDay() {
         ) : (
           <div className="grid grid-cols-1 w-full min-w-0">
             <div className="min-h-[400px] w-full min-w-0">
+              {/* Kanban view hidden
               {view === 'kanban' ? (
                 <MyDayKanbanView
                   tasks={filteredTasks}
@@ -250,13 +258,14 @@ export default function MyDay() {
                   onChecklistToggle={handleChecklistToggle}
                 />
               ) : (
-                <MyDayListView
-                  tasks={filteredTasks}
-                  groupBy={groupBy}
-                  onTaskClick={handleTaskClick}
-                  onStatusUpdate={handleStatusUpdate}
-                />
-              )}
+              */}
+              <MyDayListView
+                tasks={filteredTasks}
+                groupBy={groupBy}
+                onTaskClick={handleTaskClick}
+                onStatusUpdate={handleStatusUpdate}
+              />
+              {/* )} */}
             </div>
           </div>
         )}
@@ -268,6 +277,8 @@ export default function MyDay() {
           allTasks={allTasks}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
+          assignableMembers={activeProjectMembers}
+          projectName={selectedTaskProject?.name}
           onUpdate={async (updatedTask) => {
             try {
               const item = userTasks.find(t => t.id === updatedTask.id);
@@ -310,7 +321,8 @@ export default function MyDay() {
         <IssueDetailModal
           issue={selectedIssue}
           tasks={issueTasks}
-          teamMembers={issueTeamMembers}
+          teamMembers={activeProjectMembers}
+          projectName={selectedIssueProject?.name}
           isOpen={isIssueModalOpen}
           onClose={handleCloseIssueModal}
           onUpdate={handleIssueUpdate}

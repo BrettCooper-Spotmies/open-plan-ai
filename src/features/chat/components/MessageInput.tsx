@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Send, Paperclip, Loader2, X, Smile, File as FileIcon, CheckSquare, AlertCircle, Flag, Cpu, Layers, FileText, ChevronLeft } from 'lucide-react';
+import { Send, Paperclip, Loader2, X, Smile, File as FileIcon, Users, CheckSquare, AlertCircle, Flag, Cpu, Layers, FileText, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useChatStore } from '../stores/useChatStore';
 import { chatService } from '@/services/chat.service';
@@ -32,6 +32,7 @@ interface MessageInputProps {
   onMessageSent?: () => void;
   onTyping?: () => void;
   members?: ConversationMember[];
+  isGroup?: boolean;
   sendMessage?: (content: string, type?: 'text' | 'file', fileData?: any, replyToMessageId?: string, entityTags?: EntityTagRef[]) => Promise<void>;
   readOnly?: boolean;
   readOnlyNotice?: string | null;
@@ -84,7 +85,7 @@ function buildFileContent(payload: {
   };
 }
 
-export function MessageInput({ conversationId, onMessageSent, onTyping, members, sendMessage, readOnly = false, readOnlyNotice = null, replyingTo = null, onCancelReply }: MessageInputProps) {
+export function MessageInput({ conversationId, onMessageSent, onTyping, members, isGroup = false, sendMessage, readOnly = false, readOnlyNotice = null, replyingTo = null, onCancelReply }: MessageInputProps) {
   const isMobile = useIsMobile();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -115,6 +116,15 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     [members, user?.id]
   );
 
+  // Show "Everyone" option in group chats with at least 2 other members
+  const showEveryoneOption = useMemo(() => {
+    if (!isGroup || otherMembers.length < 2) return false;
+    if (mentionQuery === null) return false;
+    const q = mentionQuery.toLowerCase();
+    const alreadyMentionedEveryone = value.toLowerCase().includes('@everyone');
+    return !alreadyMentionedEveryone && 'everyone'.includes(q);
+  }, [isGroup, otherMembers.length, mentionQuery, value]);
+
   const filteredMentions = useMemo(() => {
     if (mentionQuery === null) return [];
     const q = mentionQuery.toLowerCase();
@@ -125,6 +135,9 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
       return m.name.toLowerCase().includes(q);
     });
   }, [mentionQuery, otherMembers, value]);
+
+  // Total items in the mention dropdown (everyone slot + individual members)
+  const totalMentionItems = (showEveryoneOption ? 1 : 0) + filteredMentions.length;
 
   // ── Slash-command entity tag picker ──────────────────────────────────────
   const [slashStage, setSlashStage] = useState<SlashStage | null>(null);
@@ -372,6 +385,24 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     });
   };
 
+  const insertEveryoneMention = () => {
+    const start = mentionStartRef.current;
+    const el = textareaRef.current;
+    if (start < 0 || !el) return;
+    const before = value.substring(0, start);
+    const after = value.substring(el.selectionStart);
+    const newValue = `${before}@everyone ${after}`;
+    setDraft(conversationId, newValue);
+    setMentionQuery(null);
+    mentionStartRef.current = -1;
+    setMentionIndex(0);
+    requestAnimationFrame(() => {
+      const pos = start + '@everyone '.length;
+      el.setSelectionRange(pos, pos);
+      el.focus();
+    });
+  };
+
   const addFiles = (incoming: FileList | null) => {
     if (!incoming) return;
     const newFiles = Array.from(incoming);
@@ -533,10 +564,19 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
       if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectEntityType(filteredEntityTypes[slashIndex].type); return; }
       if (e.key === 'Escape') { e.preventDefault(); cancelSlash(); return; }
     }
-    if (mentionQuery !== null && filteredMentions.length > 0) {
-      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(p => (p + 1) % filteredMentions.length); return; }
-      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(p => (p - 1 + filteredMentions.length) % filteredMentions.length); return; }
-      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertMention(filteredMentions[mentionIndex]); return; }
+    if (mentionQuery !== null && totalMentionItems > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setMentionIndex(p => (p + 1) % totalMentionItems); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setMentionIndex(p => (p - 1 + totalMentionItems) % totalMentionItems); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        if (showEveryoneOption && mentionIndex === 0) {
+          insertEveryoneMention();
+        } else {
+          const memberIdx = showEveryoneOption ? mentionIndex - 1 : mentionIndex;
+          insertMention(filteredMentions[memberIdx]);
+        }
+        return;
+      }
       if (e.key === 'Escape') { e.preventDefault(); setMentionQuery(null); mentionStartRef.current = -1; return; }
     }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
@@ -738,18 +778,39 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
 
       <div className="relative">
         {/* Mention dropdown */}
-        {mentionQuery !== null && filteredMentions.length > 0 && (
-          <div className="absolute bottom-full mb-1 left-0 w-full max-w-[280px] bg-popover border border-border rounded-lg shadow-lg z-50 max-h-[200px] overflow-y-auto">
-            {filteredMentions.map((member, i) => (
+        {mentionQuery !== null && totalMentionItems > 0 && (
+          <div className="absolute bottom-full mb-1 left-0 w-full max-w-[300px] bg-popover border border-border rounded-lg shadow-lg z-50 max-h-[200px] overflow-y-auto">
+            {/* Everyone option — shown only in group chats */}
+            {showEveryoneOption && (
               <button
-                key={member.id}
-                className={cn('flex items-center gap-2 w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors', i === mentionIndex && 'bg-muted')}
-                onMouseDown={(e) => { e.preventDefault(); insertMention(member); }}
+                className={cn(
+                  'flex items-center gap-2.5 w-full px-3 py-2.5 text-left text-sm hover:bg-muted transition-colors border-b border-border/50',
+                  mentionIndex === 0 && 'bg-muted'
+                )}
+                onMouseDown={(e) => { e.preventDefault(); insertEveryoneMention(); }}
               >
-                <span className="font-medium">{member.name}</span>
-                <span className="text-xs text-muted-foreground truncate">{member.email}</span>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+                  <Users className="h-3.5 w-3.5" />
+                </span>
+                <div className="min-w-0">
+                  <span className="font-semibold text-foreground block">Everyone</span>
+                  <span className="text-xs text-muted-foreground">Notify all group members</span>
+                </div>
               </button>
-            ))}
+            )}
+            {filteredMentions.map((member, i) => {
+              const itemIndex = (showEveryoneOption ? 1 : 0) + i;
+              return (
+                <button
+                  key={member.id}
+                  className={cn('flex items-center gap-2 w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors', itemIndex === mentionIndex && 'bg-muted')}
+                  onMouseDown={(e) => { e.preventDefault(); insertMention(member); }}
+                >
+                  <span className="font-medium">{member.name}</span>
+                  <span className="text-xs text-muted-foreground truncate">{member.email}</span>
+                </button>
+              );
+            })}
           </div>
         )}
 

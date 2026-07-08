@@ -63,6 +63,7 @@ import {
   Send,
   Video,
   Play,
+  FolderKanban,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { commentsService } from '@/services/comments.service';
@@ -117,6 +118,8 @@ interface TaskDetailModalProps {
   onAddModule?: () => void;
   assignableMembers?: TeamMember[];
   statusOptions?: Array<{ value: string; label: string; color?: string }>;
+  /** Shown as a read-only "Project" field in the metadata grid when provided. Only pass this from contexts (like My Day) where the task's project isn't already implied by the surrounding page. */
+  projectName?: string;
 }
 
 /** Renders a status colour dot that works for both hex colours and Tailwind classes. */
@@ -207,6 +210,7 @@ export const TaskDetailModal = ({
   onAddModule,
   assignableMembers,
   statusOptions: providedStatusOptions,
+  projectName,
 }: TaskDetailModalProps) => {
   const { user: profile } = useAuth();
   const { currentOrganization } = useOrganization();
@@ -1197,6 +1201,7 @@ export const TaskDetailModal = ({
                             key={assignee.id}
                             className="rounded-full ring-2 ring-background"
                             style={{ zIndex: index, marginLeft: index === 0 ? 0 : '-8px' }}
+                            title={assignee.assignedBy ? `Assigned by ${assignee.assignedBy.name}` : undefined}
                           >
                             <Avatar className="h-8 w-8">
                               <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
@@ -1233,7 +1238,12 @@ export const TaskDetailModal = ({
                               <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
                               <AvatarFallback className="text-[10px]">{assignee.initials}</AvatarFallback>
                             </Avatar>
-                            <span className="flex-1 text-sm">{assignee.name}</span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm truncate">{assignee.name}</p>
+                              {assignee.assignedBy && (
+                                <p className="text-[10px] text-muted-foreground truncate">Assigned by {assignee.assignedBy.name}</p>
+                              )}
+                            </div>
                             <button
                               disabled={!canEditTask}
                               title={canEditTask ? undefined : editLockTitle}
@@ -1448,6 +1458,19 @@ export const TaskDetailModal = ({
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Project — only shown when explicitly provided (e.g. My Day, which aggregates tasks across projects) */}
+                {projectName && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <FolderKanban className="h-3 w-3" />
+                      Project
+                    </Label>
+                    <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/20">
+                      <span className="text-sm truncate">{projectName}</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Modules */}
                 <div className="space-y-1.5">

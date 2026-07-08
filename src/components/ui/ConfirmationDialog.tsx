@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -30,6 +31,21 @@ export function ConfirmationDialog({
     cancelText = "Cancel",
     variant = "default",
 }: ConfirmationDialogProps) {
+    // Enter-to-confirm and the action button's onClick can both fire for a
+    // single user activation (e.g. Enter while the action button has focus).
+    // Guard so onConfirm only ever runs once per time the dialog is opened.
+    const hasConfirmedRef = useRef(false);
+
+    useEffect(() => {
+        if (open) hasConfirmedRef.current = false;
+    }, [open]);
+
+    const confirmOnce = () => {
+        if (hasConfirmedRef.current) return;
+        hasConfirmedRef.current = true;
+        onConfirm();
+    };
+
     return (
         <AlertDialog open={open} onOpenChange={onOpenChange}>
             <AlertDialogContent
@@ -38,7 +54,7 @@ export function ConfirmationDialog({
                     if (e.key === "Enter") {
                         e.preventDefault();
                         e.stopPropagation();
-                        onConfirm();
+                        confirmOnce();
                         onOpenChange(false);
                     }
                 }}
@@ -54,7 +70,7 @@ export function ConfirmationDialog({
                     <AlertDialogAction
                         onClick={(e) => {
                             e.preventDefault();
-                            onConfirm();
+                            confirmOnce();
                             onOpenChange(false);
                         }}
                         className={variant === "destructive" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}

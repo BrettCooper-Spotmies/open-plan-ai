@@ -47,6 +47,9 @@ export interface TeamMember {
   role: string;
   avatar?: string;
   initials: string;
+  // Only populated on Task/Issue assignees — who assigned this person.
+  // Comes straight off the API response, so it uses avatarUrl (not avatar) unlike the rest of this type.
+  assignedBy?: { id: string; name: string; avatarUrl?: string | null } | null;
 }
 
 export interface ChecklistItem {
@@ -250,14 +253,25 @@ export interface Activity {
   | 'task_created'
   | 'task_completed'
   | 'task_updated'
+  | 'task_assigned'
+  | 'task_deleted'
   | 'comment_added'
   | 'milestone_reached'
+  | 'milestone_created'
+  | 'milestone_updated'
+  | 'milestone_deleted'
+  | 'milestone_reopened'
   | 'status_changed'
   | 'issue_created'
   | 'issue_resolved'
+  | 'issue_updated'
+  | 'issue_assigned'
+  | 'issue_linked_to_task'
   | 'project_created'
   | 'project_updated'
   | 'project_assigned'
+  | 'project_deleted'
+  | 'project_member_added'
   | 'dependency_added';
   title: string;
   description: string;

@@ -5,14 +5,12 @@ import { IssueDetailContent } from './components/IssueDetailContent';
 import { Issue } from '@/types';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useIssue, useUpdateIssue, useDeleteIssue } from '@/hooks/useIssues';
-import { useOrganizationMembers } from '@/hooks/useProjectTeam';
-import { useOrganization } from '@/contexts/OrganizationContext';
+import { useProjectMembers } from '@/hooks/useProjectTeam';
 import { logger } from '@/services/monitoring/logger';
 
 export default function IssuePage() {
   const { projectId, issueId } = useParams();
   const navigate = useNavigate();
-  const { currentOrganization } = useOrganization();
 
   const {
     data: project,
@@ -26,7 +24,7 @@ export default function IssuePage() {
     error: issueError
   } = useIssue(issueId);
 
-  const { data: teamMembers = [], isLoading: isTeamLoading } = useOrganizationMembers(currentOrganization?.id);
+  const { data: teamMembers = [], isLoading: isTeamLoading } = useProjectMembers(projectId);
   const updateIssueMutation = useUpdateIssue();
   const deleteIssueMutation = useDeleteIssue();
 
