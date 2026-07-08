@@ -445,7 +445,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
         </div>
 
         <div className="flex gap-2.5 px-4 py-3.5 border-t border-border">
-          <Button variant="outline" className="flex-1" onClick={() => setDraft({ ...EMPTY_FILTERS })}>Clear all</Button>
+          <Button variant="outline" className="flex-1" onClick={() => { setDraft({ ...EMPTY_FILTERS }); setFilters({ ...EMPTY_FILTERS }); onClose(); }}>Clear all</Button>
           <Button className="flex-1" onClick={() => { setFilters(draft); onClose(); }}>Show results</Button>
         </div>
       </div>
@@ -1071,7 +1071,7 @@ export function BOMView({
 
   const activeCount =
     (filters.bomType !== 'all' ? 1 : 0) + filters.statuses.length + filters.units.length +
-    filters.manufacturers.length + filters.suppliers.length +
+    filters.manufacturers.length + filters.suppliers.length + filters.owners.length +
     (filters.priceMin || filters.priceMax ? 1 : 0) +
     (filters.leadMin || filters.leadMax ? 1 : 0) +
     (filters.mpn ? 1 : 0);
