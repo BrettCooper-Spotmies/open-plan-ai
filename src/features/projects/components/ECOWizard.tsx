@@ -1573,7 +1573,6 @@ export function ECOWizard({
 
   return (
     <div
-      onClick={() => onClose()}
       className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6"
     >
       <div

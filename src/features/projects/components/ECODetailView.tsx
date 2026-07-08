@@ -852,7 +852,6 @@ function ECNReleaseModal({
 
   return (
     <div
-      onClick={onClose}
       className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-3 md:p-6"
     >
       <div
@@ -1065,7 +1064,7 @@ function VerifyModal({
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   return (
-    <div onClick={onClose} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-3 md:p-6">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-3 md:p-6">
       <div onClick={e => e.stopPropagation()} className="w-[480px] max-w-full bg-card border border-border rounded-xl shadow-2xl">
         <div className="px-5 py-4 border-b border-border flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#9333EA22' }}>

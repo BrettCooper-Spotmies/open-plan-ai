@@ -301,7 +301,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
 
   return (
     <>
-      <div onClick={onClose} className="fixed inset-0 bg-black/50 z-[60]" />
+      <div className="fixed inset-0 bg-black/50 z-[60]" />
       <div className="fixed top-0 right-0 bottom-0 w-[352px] bg-card border-l border-border z-[61] flex flex-col shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
