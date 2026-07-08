@@ -4,7 +4,6 @@ import {
   ListTodo,
   FolderKanban,
   BarChart3,
-  Calendar,
   MoreHorizontal,
   LayoutDashboard,
   MessageSquare,
@@ -25,13 +24,13 @@ const primaryNavItems: NavItem[] = [
   { title: 'My Tasks',   url: '/my-day',   icon: ListTodo       },
   { title: 'Projects',   url: '/projects', icon: FolderKanban   },
   { title: 'Dashboard',  url: '/',         icon: LayoutDashboard},
-  { title: 'Team',       url: '/team',     icon: Users          },
+  { title: 'Chat',       url: '/chat',     icon: MessageSquare  },
 ];
 
 // Secondary items shown under "More"
+// Calendar hidden on mobile for now — feature still in progress
 const moreNavItems: NavItem[] = [
-  { title: 'Chat',      url: '/chat',     icon: MessageSquare },
-  { title: 'Calendar',  url: '/calendar', icon: Calendar      },
+  { title: 'Team',      url: '/team',     icon: Users         },
   { title: 'Reports',   url: '/reports',  icon: BarChart3     },
   { title: 'Settings',  url: '/settings', icon: Settings      },
 ];
