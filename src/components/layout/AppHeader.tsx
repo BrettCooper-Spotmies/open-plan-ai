@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
-import { Sun, Moon, ChevronLeft, BarChart3 } from 'lucide-react';
+import { Sun, Moon, ChevronLeft, BarChart3, Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +29,7 @@ import { NotificationsPopover } from './NotificationsPopover';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
+import { useChatStore } from '@/features/chat/stores/useChatStore';
 import { cn } from '@/lib/utils';
 
 const stageColors: Record<string, string> = {
@@ -59,6 +60,12 @@ export function AppHeader() {
   const { theme, changeTheme } = useAppTheme();
   const isMobile = useIsMobile();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const setNewDMDialogOpen = useChatStore((s) => s.setNewDMDialogOpen);
+  const setNewGroupDialogOpen = useChatStore((s) => s.setNewGroupDialogOpen);
+
+  // Mobile chat list route: AppHeader is only rendered here (not on /chat/:id,
+  // see AppLayout's showAppHeader), so pathname alone is enough to detect it.
+  const isMobileChatList = isMobile && location.pathname.startsWith('/chat');
 
   // Detect project detail route to show project name in header
   const projectMatch = useMatch('/projects/:id/*');
@@ -106,6 +113,17 @@ export function AppHeader() {
           </div>
         ) : (
           <div className="flex items-center gap-2">
+            {isMobileChatList && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 -ml-2 shrink-0 text-muted-foreground hover:text-foreground"
+                onClick={() => navigate(-1)}
+                title="Back"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </Button>
+            )}
             {location.pathname.startsWith('/reports') && (
               <BarChart3 className="h-5 w-5 text-primary shrink-0" />
             )}
@@ -117,51 +135,76 @@ export function AppHeader() {
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Theme Toggle */}
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn('h-9 w-9', isMobile && 'border border-border rounded-xl')}
-          onClick={cycleTheme}
-          title={`Theme: ${theme} (click to cycle)`}
-        >
-          {theme === 'dark' ? (
-            <Moon className="h-4 w-4" />
-          ) : (
-            <Sun className="h-4 w-4" />
-          )}
-          <span className="sr-only">Toggle theme</span>
-        </Button>
-
-        {/* Notifications */}
-        <NotificationsPopover />
-
-        {/* User Menu */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <Avatar className="h-8 w-8">
-                {profile?.avatarUrl && <AvatarImage src={resolveFileUrl(profile.avatarUrl) ?? profile.avatarUrl} alt={profile?.name || 'User'} />}
-                <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                  {profile?.initials || profile?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || profile?.email?.[0]?.toUpperCase() || 'U'}
-                </AvatarFallback>
-              </Avatar>
+        {isMobileChatList ? (
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => setNewDMDialogOpen(true)}
+              title="New Message"
+            >
+              <Plus className="h-4 w-4" />
             </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">{profile?.name || profile?.email?.split('@')[0] || 'User'}</p>
-                <p className="text-xs text-muted-foreground">{profile?.email || ''}</p>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/settings?tab=profile')}>Profile</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => navigate('/settings?tab=general')}>Settings</DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setShowLogoutDialog(true)}>Log out</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => setNewGroupDialogOpen(true)}
+              title="New Group"
+            >
+              <Users className="h-4 w-4" />
+            </Button>
+          </>
+        ) : (
+          <>
+            {/* Theme Toggle */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn('h-9 w-9', isMobile && 'border border-border rounded-xl')}
+              onClick={cycleTheme}
+              title={`Theme: ${theme} (click to cycle)`}
+            >
+              {theme === 'dark' ? (
+                <Moon className="h-4 w-4" />
+              ) : (
+                <Sun className="h-4 w-4" />
+              )}
+              <span className="sr-only">Toggle theme</span>
+            </Button>
+
+            {/* Notifications */}
+            <NotificationsPopover />
+
+            {/* User Menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-full">
+                  <Avatar className="h-8 w-8">
+                    {profile?.avatarUrl && <AvatarImage src={resolveFileUrl(profile.avatarUrl) ?? profile.avatarUrl} alt={profile?.name || 'User'} />}
+                    <AvatarFallback className="bg-primary text-primary-foreground text-xs">
+                      {profile?.initials || profile?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) || profile?.email?.[0]?.toUpperCase() || 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>
+                  <div className="flex flex-col space-y-1">
+                    <p className="text-sm font-medium">{profile?.name || profile?.email?.split('@')[0] || 'User'}</p>
+                    <p className="text-xs text-muted-foreground">{profile?.email || ''}</p>
+                  </div>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/settings?tab=profile')}>Profile</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/settings?tab=general')}>Settings</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowLogoutDialog(true)}>Log out</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        )}
       </div>
 
       <AlertDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
