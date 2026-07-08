@@ -777,9 +777,7 @@ function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCu
             })}
           </div>
           <div className="px-6 pb-5 text-xs text-muted-foreground">
-            {filtersActive
-              ? `Showing ${displayRows.length} of ${totalCount} total parts`
-              : `Showing ${displayRows.length} component${displayRows.length !== 1 ? 's' : ''}${current ? ` under ${current.pn}` : ''}`}
+            {`Showing ${displayRows.length} of ${totalCount} total parts`}
           </div>
         </>
       )}
