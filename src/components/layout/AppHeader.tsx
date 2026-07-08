@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
 import { Sun, Moon, ChevronLeft, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -56,6 +57,7 @@ export function AppHeader() {
   const navigate = useNavigate();
   const { user: profile, signOut } = useAuth();
   const { theme, changeTheme } = useAppTheme();
+  const isMobile = useIsMobile();
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   // Detect project detail route to show project name in header
@@ -116,7 +118,13 @@ export function AppHeader() {
 
       <div className="flex items-center gap-2">
         {/* Theme Toggle */}
-        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={cycleTheme} title={`Theme: ${theme} (click to cycle)`}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn('h-9 w-9', isMobile && 'border border-border rounded-xl')}
+          onClick={cycleTheme}
+          title={`Theme: ${theme} (click to cycle)`}
+        >
           {theme === 'dark' ? (
             <Moon className="h-4 w-4" />
           ) : (
