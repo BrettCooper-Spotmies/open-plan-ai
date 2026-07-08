@@ -7,7 +7,7 @@ import { MyDayGroupBySelector } from './components/MyDayGroupBySelector';
 import { MyTasksFiltersDropdown } from './components/MyTasksFiltersDropdown';
 import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
 import { IssueDetailModal } from '@/features/projects/components/IssueDetailModal';
-// import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'; // Kanban view hidden
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
 import { Task, Issue, TaskStatus, IssueStatus, MyDayGroupBy, MyDayFilter, MyTasksColumnFilters } from '@/types';
@@ -197,7 +197,7 @@ export default function MyDay() {
           completedTodayCount={completedTodayCount}
         />
 
-        {/* Kanban view hidden — toggle disabled, list is now the only view
+       {/* View controls - always visible once data is ready */}
         <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
           <Tabs value={filter} onValueChange={(v) => setFilter(v as MyDayFilter)}>
             <TabsList>
@@ -213,7 +213,7 @@ export default function MyDay() {
             onFiltersChange={setColumnFilters}
           />
 
-          <Tabs value={view} onValueChange={(v) => setView(v as MyDayView)}>
+          {/* <Tabs value={view} onValueChange={(v) => setView(v as MyDayView)}>
             <TabsList>
               <TabsTrigger value="kanban" className="gap-2">
                 <LayoutGrid className="h-4 w-4" />
@@ -224,9 +224,8 @@ export default function MyDay() {
                 List
               </TabsTrigger>
             </TabsList>
-          </Tabs>
+          </Tabs> */}
         </div>
-        */}
 
         {/* List content */}
         {filteredTasks.length === 0 ? (

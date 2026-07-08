@@ -216,6 +216,7 @@ export interface ApiApprovalRequestResponse {
   nodeIds: string[];
   requestedBy: { id: string; name: string };
   approvers: Array<{ id: string; name: string }>;
+  approverDecisions: Array<{ id: string; name: string; decision: 'approved' | 'rejected' | 'pending' }>;
   status: BOMApprovalRequestStatus;
   decidedBy: { id: string; name: string } | null;
   decidedAt: string | null;
@@ -233,6 +234,7 @@ export interface BOMApprovalRequest {
   requestedByName: string;
   requestedById: string;
   approvers: Array<{ id: string; name: string }>;
+  approverDecisions: Array<{ id: string; name: string; decision: 'approved' | 'rejected' | 'pending' }>;
   status: BOMApprovalRequestStatus;
   decidedByName: string | null;
   decidedAt: string | null;
@@ -243,19 +245,20 @@ export interface BOMApprovalRequest {
 
 export function fromApiApprovalRequest(r: ApiApprovalRequestResponse): BOMApprovalRequest {
   return {
-    id:              r.id,
-    rootNodeId:      r.rootNodeId,
-    scope:           r.scope,
-    nodeIds:         r.nodeIds,
-    requestedByName: r.requestedBy.name,
-    requestedById:   r.requestedBy.id,
-    approvers:       r.approvers,
-    status:          r.status,
-    decidedByName:   r.decidedBy?.name ?? null,
-    decidedAt:       r.decidedAt,
-    reason:          r.reason,
-    comment:         r.comment,
-    createdAt:       r.createdAt,
+    id:                r.id,
+    rootNodeId:        r.rootNodeId,
+    scope:             r.scope,
+    nodeIds:           r.nodeIds,
+    requestedByName:   r.requestedBy.name,
+    requestedById:     r.requestedBy.id,
+    approvers:         r.approvers,
+    approverDecisions: r.approverDecisions,
+    status:            r.status,
+    decidedByName:     r.decidedBy?.name ?? null,
+    decidedAt:         r.decidedAt,
+    reason:            r.reason,
+    comment:           r.comment,
+    createdAt:         r.createdAt,
   };
 }
 
