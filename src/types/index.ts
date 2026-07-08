@@ -282,6 +282,8 @@ export interface Activity {
   taskTitle?: string;
   issueId?: string;
   issueTitle?: string;
+  entityType?: string | null;
+  entityId?: string | null;
   timestamp: string;
 }
 

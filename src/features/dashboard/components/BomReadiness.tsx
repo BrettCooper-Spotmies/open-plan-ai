@@ -26,7 +26,10 @@ function BomDonut({ pct }: { pct: number }) {
           </Pie>
         </PieChart>
       </ResponsiveContainer>
-      <span className="absolute inset-0 flex items-center justify-center text-base font-bold tabular-nums">{pct}%</span>
+      <span className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-base font-bold tabular-nums leading-tight">{pct}%</span>
+        <span className="text-[8.5px] font-semibold uppercase tracking-wide text-muted-foreground leading-tight">Approved</span>
+      </span>
     </div>
   );
 }
@@ -68,7 +71,7 @@ export function BomReadiness({ projectIds, projects }: BomReadinessProps) {
               </span>
               <span className="font-semibold tabular-nums text-status-blocked">{isLoading ? '—' : rejected}</span>
             </div>
-            <div className="flex items-center justify-between text-[12.5px] text-muted-foreground">
+            <div className="flex items-center justify-between text-[12.5px] text-muted-foreground pt-2 mt-0.5 border-t border-border/60">
               <span>Total parts</span>
               <span className="font-semibold tabular-nums">{isLoading ? '—' : total}</span>
             </div>
