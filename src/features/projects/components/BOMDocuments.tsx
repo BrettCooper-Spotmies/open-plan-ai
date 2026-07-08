@@ -84,6 +84,7 @@ function AttachmentRow({
                 onPreview({ url: viewUrl, fileName: displayName(doc), mimeType: doc.mimeType });
               }}
             />
+            {/*
             <ActionBtn
               icon={Download}
               label="Download"
@@ -95,6 +96,7 @@ function AttachmentRow({
                 a.click();
               }}
             />
+            */}
           </>
         )}
         <ActionBtn
