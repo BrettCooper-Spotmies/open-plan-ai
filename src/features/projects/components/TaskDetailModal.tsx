@@ -257,6 +257,7 @@ export const TaskDetailModal = ({
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [isAdvancedDescription, setIsAdvancedDescription] = useState(false);
   const [initialTaskSnapshot, setInitialTaskSnapshot] = useState('');
   const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
@@ -817,7 +818,7 @@ export const TaskDetailModal = ({
     (editedTask.linkedIssueIds?.length || 0) > 0;
   const isBlockedWithoutDependencies = editedTask.status === 'blocked' && !hasDependenciesForBlocked;
   const isTaskDirty = initialTaskSnapshot !== '' && normalizedEditedTaskSnapshot !== initialTaskSnapshot;
-  const isFormDirty = isTaskDirty || hasBlockingToChanges || hasBlockedByChanges;
+  const isFormDirty = isTaskDirty || hasBlockingToChanges || hasBlockedByChanges || pendingFiles.length > 0;
   const canSubmitTask = Boolean(
     editedTask.title &&
       editedTask.startDate &&
@@ -825,6 +826,14 @@ export const TaskDetailModal = ({
       !isBlockedWithoutDependencies &&
       (mode === 'create' || isFormDirty)
   );
+
+  const attemptClose = () => {
+    if (isFormDirty) {
+      setShowUnsavedConfirm(true);
+    } else {
+      handleCancel();
+    }
+  };
 
   // Comments handlers
   const comments = editedTask.comments || [];
@@ -1153,7 +1162,7 @@ export const TaskDetailModal = ({
 
   return (
     <>
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleCancel()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && attemptClose()}>
       <DialogContent className="max-w-3xl max-h-[90vh] w-[95vw] sm:w-full p-0 gap-0" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="px-4 sm:px-6 py-4 border-b">
           <DialogTitle>{mode === 'create' ? 'Add New Task' : 'Task Details'}</DialogTitle>
@@ -2355,7 +2364,7 @@ export const TaskDetailModal = ({
         </ScrollArea>
         {mode === 'create' && (
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-t flex justify-end gap-2 bg-background">
-            <Button variant="outline" onClick={onClose} disabled={isSaving}>
+            <Button variant="outline" onClick={attemptClose} disabled={isSaving}>
               Cancel
             </Button>
             <Button onClick={handleCreate} disabled={!canSubmitTask || isSaving}>
@@ -2386,7 +2395,7 @@ export const TaskDetailModal = ({
               <div />
             )}
             <div className="flex gap-2">
-              <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
+              <Button variant="outline" onClick={attemptClose} disabled={isSaving}>
                 Cancel
               </Button>
               <Button
@@ -2417,6 +2426,16 @@ export const TaskDetailModal = ({
         title="Delete Comment"
         description="Are you sure you want to delete this comment? This action cannot be undone."
         confirmText="Delete"
+        variant="destructive"
+      />
+      <ConfirmationDialog
+        open={showUnsavedConfirm}
+        onOpenChange={setShowUnsavedConfirm}
+        onConfirm={handleCancel}
+        title="Discard changes?"
+        description="You have unsaved changes. Are you sure you want to discard them?"
+        confirmText="Discard"
+        cancelText="Keep Editing"
         variant="destructive"
       />
     </Dialog>

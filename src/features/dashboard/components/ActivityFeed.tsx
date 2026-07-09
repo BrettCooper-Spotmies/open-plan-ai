@@ -1,4 +1,5 @@
 import { formatDistanceToNow } from 'date-fns';
+import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
   MessageSquare,
@@ -16,18 +17,21 @@ import {
   Trash2,
   Users,
   Milestone,
-  Link,
+  Link as LinkIcon,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Activity } from '@/types';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { PanelIcon } from './PanelIcon';
+import { useFitCount } from '../hooks/useFitCount';
 
 interface ActivityFeedProps {
   activities: Activity[];
   isLoading: boolean;
+  className?: string;
 }
 
 const activityIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -47,7 +51,7 @@ const activityIcons: Record<string, React.ComponentType<{ className?: string }>>
   issue_resolved: CheckCircle,
   issue_updated: ArrowRight,
   issue_assigned: UserPlus,
-  issue_linked_to_task: Link,
+  issue_linked_to_task: LinkIcon,
   project_created: FolderPlus,
   project_updated: AlertCircle,
   project_assigned: UserPlus,
@@ -178,17 +182,19 @@ const activitySection: Record<string, string> = {
   issue_linked_to_task: 'issues',
 };
 
-export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
+export function ActivityFeed({ activities, isLoading, className }: ActivityFeedProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { containerRef, fitCount } = useFitCount(activities.length);
+  const remaining = activities.length - fitCount;
 
   if (isLoading) {
     return (
-      <Card>
+      <Card className={cn('min-h-0 overflow-hidden', className)}>
         <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
-          <CardTitle className="text-base font-medium flex items-center gap-2">
+          <CardTitle className="min-w-0 text-base font-medium flex items-center gap-2">
             <PanelIcon icon={ActivityIcon} color="#2563EB" />
-            Recent Activity
+            <span className="truncate">Recent Activity</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-1">
@@ -208,14 +214,22 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-4">
-        <CardTitle className="text-base font-medium flex items-center gap-2">
+    <Card className={cn('flex flex-col min-h-0 overflow-hidden', className)}>
+      <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
+        <CardTitle className="min-w-0 text-base font-medium flex items-center gap-2">
           <PanelIcon icon={ActivityIcon} color="#2563EB" />
-          Recent Activity
+          <span className="truncate">Recent Activity</span>
         </CardTitle>
+        {remaining > 0 && (
+          <Button variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-foreground" asChild>
+            <Link to="/notifications">
+              View all
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Link>
+          </Button>
+        )}
       </CardHeader>
-      <CardContent className="space-y-1 px-3 md:px-6 overflow-x-hidden">
+      <CardContent className="flex-1 min-h-0 flex flex-col px-3 md:px-6 overflow-x-hidden">
         {activities.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center animate-fade-in">
             <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
@@ -227,99 +241,103 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
             </p>
           </div>
         ) : (
-          activities.slice(0, 4).map((activity) => {
-            const Icon = activityIcons[activity.type] || ActivityIcon;
-            const colorClass = activityColors[activity.type] || 'text-muted-foreground bg-muted';
-            const label = activityLabels[activity.type] || 'Unknown Activity';
+          <div ref={containerRef} className="flex-1 min-h-0 overflow-hidden space-y-1">
+            {activities.map((activity) => {
+              const Icon = activityIcons[activity.type] || ActivityIcon;
+              const colorClass = activityColors[activity.type] || 'text-muted-foreground bg-muted';
+              const label = activityLabels[activity.type] || 'Unknown Activity';
 
-            const isProjectDeleted = activity.type === 'project_deleted';
-            const isClickable = Boolean(activity.projectId) && !isProjectDeleted;
-            const section = activitySection[activity.type];
-            const actionText = activityActionText[activity.type] || label.toLowerCase();
-            const initials = activity.user.initials || activity.user.name.slice(0, 2).toUpperCase();
+              const isProjectDeleted = activity.type === 'project_deleted';
+              const isClickable = Boolean(activity.projectId) && !isProjectDeleted;
+              const section = activitySection[activity.type];
+              const actionText = activityActionText[activity.type] || label.toLowerCase();
+              const initials = activity.user.initials || activity.user.name.slice(0, 2).toUpperCase();
 
-            // Deleted entities have nothing left to deep-link to, so those activity
-            // types always fall back to the list section instead of a specific record.
-            const isDeletion = activity.type.endsWith('_deleted');
+              // Deleted entities have nothing left to deep-link to, so those activity
+              // types always fall back to the list section instead of a specific record.
+              const isDeletion = activity.type.endsWith('_deleted');
 
-            const targetUrl = () => {
-              const deepLink = !isDeletion && activity.entityType && activity.entityId
-                ? entityDeepLink[activity.entityType]
-                : undefined;
-              if (deepLink && activity.entityId) return deepLink(activity.projectId, activity.entityId);
-              return `/projects/${activity.projectId}${section ? `/${section}` : ''}`;
-            };
+              // Deep-link straight to the specific item (opens its detail modal/page)
+              // instead of just landing on the section's list view.
+              const targetPath = () => {
+                const deepLink = !isDeletion && activity.entityType && activity.entityId
+                  ? entityDeepLink[activity.entityType]
+                  : undefined;
+                if (deepLink && activity.entityId) return deepLink(activity.projectId, activity.entityId);
+                return `/projects/${activity.projectId}${section ? `/${section}` : ''}`;
+              };
 
-            return (
-              <div
-                key={activity.id}
-                onClick={() => isClickable && navigate(targetUrl())}
-                className={cn(
-                  'flex items-start gap-3 py-3 border-b border-border/50 last:border-0 transition-colors px-2 rounded-md',
-                  isClickable && 'hover:bg-muted/30 cursor-pointer',
-                  !isMobile && '-mx-2'
-                )}
-              >
-                {/* Left: avatar (mobile) or subtle status icon (desktop) */}
-                {isMobile ? (
-                  <div className={cn(
-                    'w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-semibold text-white',
-                    avatarColorFor(activity.user.id || activity.user.name)
-                  )}>
-                    {initials}
-                  </div>
-                ) : (
-                  <div className={cn(
-                    'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
-                    colorClass
-                  )}>
-                    <Icon className="h-4 w-4" />
-                  </div>
-                )}
-
-                {/* Center: Content */}
-                <div className="flex-1 min-w-0">
-                  {/* Primary: Actor name (bold) + action text */}
-                  <p className="text-sm leading-snug break-all line-clamp-2">
-                    <span className="font-semibold">{activity.user.name}</span>
-                    {' '}
-                    <span className="text-muted-foreground text-foreground/80">{isMobile ? actionText : activity.description}</span>
-                  </p>
-
-                  {/* Mobile: quoted description as a secondary line */}
-                  {isMobile && activity.description && (
-                    <p className="text-xs text-muted-foreground/90 italic mt-1 line-clamp-2">
-                      &ldquo;{activity.description}&rdquo;
-                    </p>
+              return (
+                <div
+                  key={activity.id}
+                  onClick={() => isClickable && navigate(targetPath())}
+                  className={cn(
+                    'flex items-start gap-3 py-2.5 border-b border-border/50 last:border-0 transition-colors px-2 rounded-md',
+                    isClickable && 'hover:bg-muted/30 cursor-pointer',
+                    !isMobile && '-mx-2'
+                  )}
+                >
+                  {/* Left: avatar (mobile) or subtle status icon (desktop) */}
+                  {isMobile ? (
+                    <div className={cn(
+                      'w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-semibold text-white',
+                      avatarColorFor(activity.user.id || activity.user.name)
+                    )}>
+                      {initials}
+                    </div>
+                  ) : (
+                    <div className={cn(
+                      'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
+                      colorClass
+                    )}>
+                      <Icon className="h-4 w-4" />
+                    </div>
                   )}
 
-                  {/* Secondary: Project name, Type badge & Timestamp row */}
-                  <div className={cn('mt-1.5 gap-2', isMobile ? 'flex flex-col items-start' : 'flex items-center justify-between')}>
-                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                      {activity.projectName && (
-                        <p className="text-xs text-muted-foreground truncate min-w-0 max-w-[150px] sm:max-w-full">
-                          in{' '}
-                          <span className={cn('font-medium', isClickable ? 'text-primary hover:underline cursor-pointer' : 'text-foreground/80')}>
-                            {activity.projectName}
-                          </span>
-                        </p>
-                      )}
-                      <span className={cn(
-                        'px-2 py-0.5 rounded-full text-xs font-medium shrink-0',
-                        colorClass
-                      )}>
-                        {label}
+                  {/* Center: Content */}
+                  <div className="flex-1 min-w-0">
+                    {/* Primary: Actor name (bold) + action text */}
+                    <p className="text-sm leading-snug break-all line-clamp-2">
+                      <span className="font-semibold">{activity.user.name}</span>
+                      {' '}
+                      <span className="text-muted-foreground text-foreground/80">{isMobile ? actionText : activity.description}</span>
+                    </p>
+
+                    {/* Mobile: quoted description as a secondary line */}
+                    {isMobile && activity.description && (
+                      <p className="text-xs text-muted-foreground/90 italic mt-1 line-clamp-2">
+                        &ldquo;{activity.description}&rdquo;
+                      </p>
+                    )}
+
+                    {/* Secondary: Project name, Type badge & Timestamp row */}
+                    <div className={cn('mt-1.5 gap-2', isMobile ? 'flex flex-col items-start' : 'flex items-center justify-between')}>
+                      <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                        {activity.projectName && (
+                          <p className="text-xs text-muted-foreground truncate min-w-0 max-w-[150px] sm:max-w-full">
+                            in{' '}
+                            <span className={cn('font-medium', isClickable ? 'text-primary hover:underline cursor-pointer' : 'text-foreground/80')}>
+                              {activity.projectName}
+                            </span>
+                          </p>
+                        )}
+                        <span className={cn(
+                          'px-2 py-0.5 rounded-full text-xs font-medium shrink-0',
+                          colorClass
+                        )}>
+                          {label}
+                        </span>
+                      </div>
+
+                      <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
+                        {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
                       </span>
                     </div>
-
-                    <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
-                      {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
-                    </span>
                   </div>
                 </div>
-              </div>
-            );
-          })
+              );
+            })}
+          </div>
         )}
       </CardContent>
     </Card>

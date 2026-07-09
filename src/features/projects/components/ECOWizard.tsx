@@ -686,8 +686,12 @@ export function ECOWizard({
   };
 
   const handleStepClick = (i: number) => {
+    for (let s = step; s < i; s++) {
+      if (!validateStep(s)) return;
+    }
     setErrors({});
     setStep(i);
+    setMaxStepReached(m => Math.max(m, i));
   };
 
   // ── Render helpers ────────────────────────────────────────────────────────
@@ -866,15 +870,15 @@ export function ECOWizard({
         <div className="text-[13px] text-muted-foreground">
           {items.length === 0 ? 'Select parts to be affected by this ECO' : '1 affected part · where-used auto-rolls up from BOM'}
         </div>
-        {/* {items.length === 0 && (
+        {items.length === 0 && !pickerOpen && (
           <button
-            onClick={() => setPickerOpen(p => !p)}
+            onClick={() => setPickerOpen(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors font-[inherit]"
           >
             <Plus className="w-3 h-3" />
             Add part
           </button>
-        )} */}
+        )}
       </div>
       {pickerOpen && (
         <div className="border border-border rounded-lg overflow-hidden">

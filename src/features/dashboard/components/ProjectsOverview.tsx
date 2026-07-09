@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { projectHealth, varianceLabel, RAG_DOT_CLASS, RAG_BAR_CLASS, RAG_LABEL } from '../utils/projectHealth';
 import { PanelIcon } from './PanelIcon';
+import { useFitCount } from '../hooks/useFitCount';
 
 interface ProjectsOverviewProps {
   projects: Project[];
@@ -32,8 +33,6 @@ const stageLabels = {
 };
 
 const RAG_RANK = { red: 0, amber: 1, green: 2 };
-const MAX_VISIBLE_PROJECTS_DESKTOP = 7;
-const MAX_VISIBLE_PROJECTS_MOBILE = 3;
 
 export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOverviewProps) {
   const isMobile = useIsMobile();
@@ -41,25 +40,24 @@ export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOvervie
     .map((p) => ({ project: p, health: projectHealth(p, atRiskProjectIds.has(p.id)) }))
     .sort((a, b) => RAG_RANK[a.health.rag] - RAG_RANK[b.health.rag]);
   const onTrack = ranked.filter((r) => r.health.rag === 'green').length;
-  const maxVisible = isMobile ? MAX_VISIBLE_PROJECTS_MOBILE : MAX_VISIBLE_PROJECTS_DESKTOP;
-  const visible = ranked.slice(0, maxVisible);
-  const remaining = ranked.length - visible.length;
+  const { containerRef, fitCount } = useFitCount(ranked.length);
+  const remaining = ranked.length - fitCount;
 
   return (
-    <Card className="h-full flex flex-col overflow-hidden">
+    <Card className="h-full min-h-0 flex flex-col overflow-hidden">
       <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
-        <CardTitle className="text-base font-medium flex items-center gap-2">
+        <CardTitle className="min-w-0 text-base font-medium flex items-center gap-2">
           <PanelIcon icon={FolderKanban} color="#2563EB" />
-          {isMobile ? 'Projects' : 'Project Management'}
+          <span className="truncate">{isMobile ? 'Projects' : 'Project Management'}</span>
         </CardTitle>
-        <Button variant="ghost" size="sm" asChild>
+        <Button variant="ghost" size="sm" className="shrink-0" asChild>
           <Link to="/projects" className="text-muted-foreground hover:text-foreground">
             {isMobile ? 'All' : 'All projects'}
             <ArrowRight className="h-4 w-4 ml-1" />
           </Link>
         </Button>
       </CardHeader>
-      <CardContent className="flex-1 px-3 md:px-6 overflow-x-hidden">
+      <CardContent className="flex-1 min-h-0 flex flex-col px-3 md:px-6 overflow-x-hidden">
         {ranked.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center animate-fade-in">
             <div className="w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center mb-3">
@@ -75,7 +73,7 @@ export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOvervie
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-1.5 mb-3 text-xs text-muted-foreground">
+            <div className="shrink-0 flex items-center gap-1.5 mb-3 text-xs text-muted-foreground">
               <span className="font-semibold text-foreground tabular-nums">{onTrack}/{ranked.length}</span> on track
               <span className="mx-0.5 text-border">·</span>
               <span className={cn('font-semibold tabular-nums', ranked.length - onTrack ? 'text-priority-medium' : 'text-foreground')}>
@@ -83,8 +81,8 @@ export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOvervie
               </span>{' '}
               need attention
             </div>
-            <div className="divide-y divide-border/50">
-              {visible.map(({ project, health }) => (
+            <div ref={containerRef} className="flex-1 min-h-0 overflow-hidden divide-y divide-border/50">
+              {ranked.map(({ project, health }) => (
                 isMobile ? (
                   <Link
                     key={project.id}
@@ -139,7 +137,7 @@ export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOvervie
               ))}
             </div>
             {remaining > 0 && (
-              <Button variant="ghost" size="sm" className="w-full mt-1 text-muted-foreground hover:text-foreground" asChild>
+              <Button variant="ghost" size="sm" className="shrink-0 w-full mt-1 text-muted-foreground hover:text-foreground" asChild>
                 <Link to="/projects">
                   View all {ranked.length} projects
                   <ArrowRight className="h-4 w-4 ml-1" />

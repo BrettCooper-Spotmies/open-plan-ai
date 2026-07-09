@@ -35,6 +35,7 @@ export default function MyDay() {
 
   // Fetch dynamic data
   const { data: userTasks = [], isLoading: tasksLoading } = useMyDayTasks(filter);
+  const { data: overdueTasks = [] } = useMyDayTasks('overdue');
   const { data: completedTodayCount = 0 } = useCompletedTodayCount();
   const { data: projects = [] } = useProjects();
   const updateTaskMutation = useUpdateTask();
@@ -202,7 +203,14 @@ export default function MyDay() {
           <Tabs value={filter} onValueChange={(v) => setFilter(v as MyDayFilter)}>
             <TabsList>
               <TabsTrigger value="today">My Day</TabsTrigger>
-              <TabsTrigger value="overdue">Overdue</TabsTrigger>
+              <TabsTrigger value="overdue" className="relative">
+                Overdue
+                {overdueTasks.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground leading-none">
+                    {overdueTasks.length}
+                  </span>
+                )}
+              </TabsTrigger>
               <TabsTrigger value="all">All</TabsTrigger>
             </TabsList>
           </Tabs>

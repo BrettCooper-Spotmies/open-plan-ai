@@ -40,11 +40,11 @@ export function BomReadiness({ projectIds, projects }: BomReadinessProps) {
   return (
     <Card>
       <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
-        <CardTitle className="text-base font-medium flex items-center gap-2">
+        <CardTitle className="min-w-0 text-base font-medium flex items-center gap-2">
           <PanelIcon icon={Layers} color="#EA580C" />
-          Bill of Materials
+          <span className="truncate">Bill of Materials</span>
         </CardTitle>
-        <ProjectPickerPopover projects={projects} tab="bom" label="View BOM" />
+        <ProjectPickerPopover projects={projects} tab="bom" label="View BOM" className="shrink-0" />
       </CardHeader>
       <CardContent>
         <div className="flex items-center gap-4">

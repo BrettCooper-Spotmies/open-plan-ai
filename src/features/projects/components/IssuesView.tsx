@@ -34,7 +34,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { IssueDetailModal } from './IssueDetailModal';
 import { ISSUE_SEVERITY_DISPLAY } from './issueSeverity';
-import { useIssueColumns, useCreateIssueColumn, useDeleteIssueColumn, useReorderIssueColumns } from '@/hooks/useIssueColumns';
+import { useIssueColumns, useCreateIssueColumn, useUpdateIssueColumn, useDeleteIssueColumn, useReorderIssueColumns } from '@/hooks/useIssueColumns';
 import { useUpdateIssueStatus } from '@/hooks/useProjectMutations';
 import { DEFAULT_ISSUE_COLUMNS } from '@/services/issueColumns.service';
 import { useAuth } from '@/modules/auth';
@@ -145,6 +145,7 @@ export function IssuesView({
   const isMobile = useIsMobile();
   const { data: apiIssueColumns } = useIssueColumns(routeProjectId);
   const createIssueColumn = useCreateIssueColumn(routeProjectId);
+  const updateIssueColumn = useUpdateIssueColumn(routeProjectId);
   const deleteIssueColumn = useDeleteIssueColumn(routeProjectId);
   const reorderIssueColumns = useReorderIssueColumns(routeProjectId);
   const updateIssueStatus = useUpdateIssueStatus(routeProjectId || '');
@@ -163,6 +164,8 @@ export function IssuesView({
   const [isAddColumnOpen, setIsAddColumnOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState('');
   const [newColumnColor, setNewColumnColor] = useState('#3b82f6');
+  const [renamingColumn, setRenamingColumn] = useState<IssuesKanbanColumn | null>(null);
+  const [renameColumnName, setRenameColumnName] = useState('');
   const [expandedChecklistPreview, setExpandedChecklistPreview] = useState<Record<string, boolean>>({});
 
   // Sync columns from API
@@ -203,6 +206,24 @@ export function IssuesView({
     const column = columns.find((c) => c.id === columnId);
     if (column?.isSpecial) return;
     deleteIssueColumn.mutate(columnId);
+  };
+
+  const handleStartRenameColumn = (column: IssuesKanbanColumn) => {
+    setRenamingColumn(column);
+    setRenameColumnName(column.label);
+  };
+
+  const handleConfirmRenameColumn = () => {
+    if (!renamingColumn || !renameColumnName.trim()) return;
+    updateIssueColumn.mutate(
+      { id: renamingColumn.id, input: { label: renameColumnName.trim() } },
+      {
+        onSuccess: () => {
+          setRenamingColumn(null);
+          setRenameColumnName('');
+        },
+      },
+    );
   };
 
 
@@ -744,6 +765,13 @@ export function IssuesView({
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end">
                                           <DropdownMenuItem
+                                            className="gap-2"
+                                            onClick={() => handleStartRenameColumn(column)}
+                                          >
+                                            <Pencil className="h-3.5 w-3.5" />
+                                            Rename Bucket
+                                          </DropdownMenuItem>
+                                          <DropdownMenuItem
                                             className="text-destructive focus:text-destructive gap-2"
                                             onClick={() => handleRemoveColumn(column.id)}
                                           >
@@ -941,6 +969,43 @@ export function IssuesView({
           </Table>
         </div>
       )}
+
+      {/* Rename Bucket Dialog */}
+      <Dialog
+        open={!!renamingColumn}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRenamingColumn(null);
+            setRenameColumnName('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Bucket</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label>Bucket Name</Label>
+              <Input
+                placeholder="e.g., In Review"
+                value={renameColumnName}
+                maxLength={30}
+                onChange={(e) => setRenameColumnName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleConfirmRenameColumn()}
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={handleConfirmRenameColumn}
+              disabled={!renameColumnName.trim() || updateIssueColumn.isPending}
+              className="w-full"
+            >
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Issue Detail Modal */}
       <IssueDetailModal
