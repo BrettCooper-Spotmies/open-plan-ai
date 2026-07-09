@@ -127,6 +127,8 @@ export default function Dashboard() {
       },
       projectId: activity.projectId,
       projectName: '',
+      taskId: activity.entityType === 'task' ? activity.entityId : undefined,
+      issueId: activity.entityType === 'issue' ? activity.entityId : undefined,
       timestamp: activity.createdAt || new Date().toISOString(),
     };
   });

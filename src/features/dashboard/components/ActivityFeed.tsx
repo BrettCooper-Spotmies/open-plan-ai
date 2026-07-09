@@ -205,10 +205,18 @@ export function ActivityFeed({ activities, isLoading, className }: ActivityFeedP
               const isClickable = Boolean(activity.projectId) && !isProjectDeleted;
               const section = activitySection[activity.type];
 
+              // Deep-link straight to the specific item (opens its detail modal/page)
+              // instead of just landing on the section's list view.
+              const targetPath = section === 'issues' && activity.issueId
+                ? `/projects/${activity.projectId}/issues/${activity.issueId}`
+                : section === 'tasks' && activity.taskId
+                  ? `/projects/${activity.projectId}/tasks/${activity.taskId}`
+                  : `/projects/${activity.projectId}${section ? `/${section}` : ''}`;
+
               return (
                 <div
                   key={activity.id}
-                  onClick={() => isClickable && navigate(`/projects/${activity.projectId}${section ? `/${section}` : ''}`)}
+                  onClick={() => isClickable && navigate(targetPath)}
                   className={cn(
                     'flex items-start gap-3 py-2.5 border-b border-border/50 last:border-0 transition-colors px-2 rounded-md',
                     isClickable && 'hover:bg-muted/30 cursor-pointer',
