@@ -17,7 +17,7 @@ import { IssueDetailContent } from './IssueDetailContent';
 import { Button } from '@/components/ui/button';
 import { DialogClose } from '@/components/ui/dialog';
 import { Trash2, Maximize2, X } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { logger } from '@/services/monitoring/logger';
 import { useAuth } from '@/contexts/AuthContext';
@@ -38,6 +38,30 @@ interface IssueDetailModalProps {
   /** Shown as a read-only "Project" field when provided. Only pass this from contexts (like My Day) where the issue's project isn't already implied by the surrounding page. */
   projectName?: string;
 }
+
+const serializeIssueForDirtyCheck = (issue: Issue): string => {
+  const attachmentSnapshot = (issue.attachments || [])
+    .map((a) => ({ id: a.id, filename: a.filename, fileType: a.fileType, fileSize: a.fileSize, url: a.url }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  return JSON.stringify({
+    title: issue.title || '',
+    description: issue.description || '',
+    category: issue.category,
+    severity: issue.severity,
+    status: issue.status,
+    moduleId: issue.moduleId || null,
+    dueDate: issue.dueDate || null,
+    resolution: issue.resolution || '',
+    assigneeIds: (issue.assignees || []).map((a) => a.id).sort(),
+    tags: [...(issue.tags || [])].sort(),
+    checklist: (issue.checklist || []).map((item) => ({ id: item.id, text: item.text, completed: item.completed })),
+    blocksTaskIds: [...(issue.blocksTaskIds || [])].sort(),
+    blocksMilestoneIds: [...(issue.blocksMilestoneIds || [])].sort(),
+    attachments: attachmentSnapshot,
+    videoLinks: (issue.videoLinks || []).map((v) => v.id).sort(),
+  });
+};
 
 const severityOptions: { value: IssueSeverity; label: string; color: string }[] = [
   { value: 'critical', label: 'Critical', color: 'bg-destructive text-destructive-foreground' },
@@ -63,7 +87,9 @@ export function IssueDetailModal({
   const { user: profile } = useAuth();
   const [editedIssue, setEditedIssue] = useState<Issue | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const initialSnapshotRef = useRef<string>('');
   const { canEditResource } = useProjectPermissions(editedIssue?.projectId);
   const canEditIssue = useMemo(
     () =>
@@ -78,10 +104,24 @@ export function IssueDetailModal({
   useEffect(() => {
     if (isOpen && issue) {
       setEditedIssue(issue);
+      setPendingFiles([]);
+      initialSnapshotRef.current = serializeIssueForDirtyCheck(issue);
     }
   }, [isOpen, issue?.id]);
 
   if (!editedIssue) return null;
+
+  const isDirty =
+    pendingFiles.length > 0 ||
+    (initialSnapshotRef.current !== '' && serializeIssueForDirtyCheck(editedIssue) !== initialSnapshotRef.current);
+
+  const attemptClose = () => {
+    if (isDirty) {
+      setShowUnsavedConfirm(true);
+    } else {
+      onClose();
+    }
+  };
 
   const handleDelete = () => {
     if (onDelete && editedIssue) {
@@ -99,7 +139,7 @@ export function IssueDetailModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && attemptClose()}>
       <DialogContent
         hideClose
         className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden"
@@ -171,7 +211,7 @@ export function IssueDetailModal({
 
         {mode === 'create' && (
           <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button variant="outline" onClick={attemptClose}>Cancel</Button>
             <Button
               onClick={() => onCreate?.(editedIssue!, pendingFiles)}
               disabled={!editedIssue.title.trim()}
@@ -202,7 +242,7 @@ export function IssueDetailModal({
                 </Button>
               )}
             </div>
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button variant="outline" onClick={attemptClose}>Cancel</Button>
             <Button
               onClick={handleUpdateIssue}
               disabled={!editedIssue.title.trim() || !canEditIssue}
@@ -220,6 +260,16 @@ export function IssueDetailModal({
         title="Delete Issue"
         description="Are you sure you want to delete this issue? This action cannot be undone."
         confirmText="Delete"
+        variant="destructive"
+      />
+      <ConfirmationDialog
+        open={showUnsavedConfirm}
+        onOpenChange={setShowUnsavedConfirm}
+        onConfirm={onClose}
+        title="Discard changes?"
+        description="You have unsaved changes. Are you sure you want to discard them?"
+        confirmText="Discard"
+        cancelText="Keep Editing"
         variant="destructive"
       />
     </Dialog>
