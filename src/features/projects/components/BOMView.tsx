@@ -534,7 +534,7 @@ function ListView({
                 <span
                   onClick={e => { e.stopPropagation(); if (hasChildren && !filtersActive) toggle(row.id); }}
                   className="inline-flex items-center p-0.5"
-                  style={{ marginLeft: row.level * 16, cursor: hasChildren ? 'pointer' : 'default', flexShrink: 0 }}
+                  style={{ marginLeft: filtersActive ? 0 : row.level * 16, cursor: hasChildren && !filtersActive ? 'pointer' : 'default', flexShrink: 0 }}
                 >
                   {hasChildren ? (
                     <span className="inline-flex transition-transform" style={{ transform: isExp ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
@@ -1099,7 +1099,8 @@ export function BOMView({
 
   const listRows = useMemo(() => {
     if (!filtersActive) return bomFlatten(rootNodes, expanded);
-    return bomFlattenInclude(rootNodes, bomFilterTree(rootNodes, pred));
+    const { matched, include } = bomFilterTree(rootNodes, pred);
+    return bomFlattenInclude(rootNodes, matched, include);
   }, [filtersActive, expanded, pred, rootNodes]);
 
   const gridRows = useMemo(() => allNodes.filter(pred), [allNodes, pred]);

@@ -403,21 +403,32 @@ export const bomPath = (id: string, nodes: BOMNode[] = BOM_NODES, trail: BOMNode
   return null;
 };
 
-export const bomFilterTree = (nodes: BOMNode[], pred: (n: BOMNode) => boolean): Set<string> => {
+export const bomFilterTree = (nodes: BOMNode[], pred: (n: BOMNode) => boolean): { matched: Set<string>; include: Set<string> } => {
+  const matched = new Set<string>();
   const include = new Set<string>();
   const visit = (n: BOMNode, anc: BOMNode[]): boolean => {
     let match = pred(n), childMatch = false;
     if (n.children) for (const c of n.children) childMatch = visit(c, [...anc, n]) || childMatch;
+    if (match) matched.add(n.id);
     if (match || childMatch) { include.add(n.id); anc.forEach(a => include.add(a.id)); return true; }
     return false;
   };
   nodes.forEach(n => visit(n, []));
-  return include;
+  return { matched, include };
 };
 
-export const bomFlattenInclude = (nodes: BOMNode[], include: Set<string>): BOMNode[] => {
+// `include` covers ancestors kept only so the walk can reach a matching descendant;
+// only nodes in `matched` are actually pushed to the result so e.g. a "Rejected" filter
+// doesn't surface a "Pending" parent row just because one of its children is rejected.
+export const bomFlattenInclude = (nodes: BOMNode[], matched: Set<string>, include: Set<string>): BOMNode[] => {
   const r: BOMNode[] = [];
-  const w = (list: BOMNode[]) => { for (const n of list) { if (include.has(n.id)) { r.push(n); if (n.children) w(n.children); } } };
+  const w = (list: BOMNode[]) => {
+    for (const n of list) {
+      if (!include.has(n.id)) continue;
+      if (matched.has(n.id)) r.push(n);
+      if (n.children) w(n.children);
+    }
+  };
   w(nodes);
   return r;
 };
