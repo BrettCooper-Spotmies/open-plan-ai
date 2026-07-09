@@ -5,6 +5,7 @@ import { ProjectsOverview } from './components/ProjectsOverview';
 import { EngineeringChangesSummary } from './components/EngineeringChangesSummary';
 import { BomReadiness } from './components/BomReadiness';
 import { useOrgEcoAggregate, useOrgBomAggregate } from './hooks/useOrgAggregates';
+import { useAvailableHeight } from './hooks/useAvailableHeight';
 import { useRecentActivity, useUpcomingDashboardMilestones } from '@/hooks/useDashboard';
 import { useProjects } from '@/hooks/useProjects';
 import { projectHealth } from './utils/projectHealth';
@@ -27,6 +28,7 @@ import { logger } from '@/services/monitoring/logger';
 
 export default function Dashboard() {
   const isMobile = useIsMobile();
+  const { ref: gridRef, height: gridHeight } = useAvailableHeight(320, 24);
   const { currentOrganization, isLoading: orgLoading, createOrganization, refreshOrganizations } = useOrganization();
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -173,7 +175,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="space-y-4 md:space-y-6 animate-fade-in overflow-x-hidden">
+      <div className="flex flex-col gap-3 md:gap-4 min-h-full animate-fade-in overflow-x-hidden">
 
         {/* Compact Create Organization Banner */}
         {showNoOrgState && (
@@ -239,16 +241,24 @@ export default function Dashboard() {
               nextGate={nextGate ? { days: nextGate.days, label: nextGate.name } : null}
             />
 
-            <div className="grid gap-3 md:gap-3 lg:grid-cols-3">
-              <div className="lg:col-span-1 h-full">
+            <div
+              ref={gridRef}
+              className="grid gap-3 md:gap-3 lg:grid-cols-3 overflow-hidden"
+              style={!isMobile && gridHeight ? { height: gridHeight } : undefined}
+            >
+              <div className="h-full overflow-hidden">
                 <ProjectsOverview projects={dashboardProjects} atRiskProjectIds={atRiskProjectIds} />
               </div>
-              <div className="lg:col-span-1 h-full">
+              <div className="h-full overflow-hidden">
                 <EngineeringChangesSummary projectIds={projectIds} projects={dashboardProjects} />
               </div>
-              <div className="space-y-4 md:space-y-3">
+              <div className="h-full flex flex-col space-y-4 md:space-y-3 overflow-hidden">
                 <BomReadiness projectIds={projectIds} projects={dashboardProjects} />
-                <ActivityFeed activities={dashboardActivities} isLoading={activitiesLoading || isLoading} />
+                <ActivityFeed
+                  activities={dashboardActivities}
+                  isLoading={activitiesLoading || isLoading}
+                  className="flex-1 min-h-0"
+                />
               </div>
             </div>
           </>

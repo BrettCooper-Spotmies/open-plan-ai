@@ -3,15 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import type { Project } from '@/types';
 
 interface ProjectPickerPopoverProps {
   projects: Project[];
   tab: 'eng-changes' | 'bom';
   label: string;
+  className?: string;
 }
 
-export function ProjectPickerPopover({ projects, tab, label }: ProjectPickerPopoverProps) {
+export function ProjectPickerPopover({ projects, tab, label, className }: ProjectPickerPopoverProps) {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
 
@@ -23,7 +25,7 @@ export function ProjectPickerPopover({ projects, tab, label }: ProjectPickerPopo
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
+        <Button variant="ghost" size="sm" className={cn('text-muted-foreground hover:text-foreground', className)}>
           {label}
           <ArrowRight className="h-4 w-4 ml-1" />
         </Button>

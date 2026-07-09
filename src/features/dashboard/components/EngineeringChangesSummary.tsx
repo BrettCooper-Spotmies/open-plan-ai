@@ -6,6 +6,7 @@ import { MAIN_STATUSES, STATUS_LABEL, statusMeta, type ECOStatus } from '@/featu
 import type { ApiEcoListItem } from '@/hooks/useECOs';
 import { PanelIcon } from './PanelIcon';
 import { ProjectPickerPopover } from './ProjectPickerPopover';
+import { useFitCount } from '../hooks/useFitCount';
 import type { Project } from '@/types';
 
 interface EngineeringChangesSummaryProps {
@@ -41,29 +42,31 @@ export function EngineeringChangesSummary({ projectIds, projects }: EngineeringC
   const max = Math.max(1, ...counts.map((c) => c.count));
 
   const isLoading = aggLoading || statusLoading;
+  const { containerRef, fitCount } = useFitCount(awaiting.length);
+  const remainingAwaiting = awaiting.length - fitCount;
 
   return (
-    <Card className="h-full flex flex-col">
+    <Card className="h-full min-h-0 flex flex-col overflow-hidden">
       <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
-        <CardTitle className="text-base font-medium flex items-center gap-2">
+        <CardTitle className="min-w-0 text-base font-medium flex items-center gap-2">
           <PanelIcon icon={GitMerge} color="#9333EA" />
-          Engineering Changes
+          <span className="truncate">Engineering Changes</span>
         </CardTitle>
-        <ProjectPickerPopover projects={projects} tab="eng-changes" label="Open ECOs" />
+        <ProjectPickerPopover projects={projects} tab="eng-changes" label="Open ECOs" className="shrink-0" />
       </CardHeader>
-      <CardContent className="flex-1 space-y-4">
-        <div className="grid grid-cols-3 gap-0 rounded-lg border border-border overflow-hidden">
-          <div className="flex flex-col gap-0.5 px-3 py-2.5">
+      <CardContent className="flex-1 min-h-0 flex flex-col space-y-3">
+        <div className="shrink-0 grid grid-cols-3 gap-0 rounded-lg border border-border overflow-hidden">
+          <div className="flex flex-col gap-0.5 px-3 py-2">
             <span className="text-[10.5px] font-medium text-muted-foreground">Open</span>
             <span className="text-lg font-bold tabular-nums">{isLoading ? '—' : open}</span>
           </div>
-          <div className="flex flex-col gap-0.5 px-3 py-2.5 border-l border-border">
+          <div className="flex flex-col gap-0.5 px-3 py-2 border-l border-border">
             <span className="text-[10.5px] font-medium text-muted-foreground">First-pass</span>
             <span className="text-lg font-bold tabular-nums text-status-done">
               {isLoading ? '—' : firstPassPct == null ? '—' : `${firstPassPct}%`}
             </span>
           </div>
-          <div className="flex flex-col gap-0.5 px-3 py-2.5 border-l border-border">
+          <div className="flex flex-col gap-0.5 px-3 py-2 border-l border-border">
             <span className="text-[10.5px] font-medium text-muted-foreground">Avg cycle</span>
             <span className="text-lg font-bold tabular-nums">
               {isLoading ? '—' : avgCycleDays == null ? '—' : `${avgCycleDays}d`}
@@ -71,11 +74,11 @@ export function EngineeringChangesSummary({ projectIds, projects }: EngineeringC
           </div>
         </div>
 
-        <div>
-          <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2.5">
+        <div className="shrink-0">
+          <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Pipeline by stage
           </span>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {counts.map((c) => (
               <StageBar key={c.status} status={c.status} count={c.count} max={max} />
             ))}
@@ -83,12 +86,12 @@ export function EngineeringChangesSummary({ projectIds, projects }: EngineeringC
         </div>
 
         {!awaitingLoading && awaiting.length > 0 && (
-          <div>
-            <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-status-blocked mb-2.5">
+          <div className="flex-1 min-h-0 flex flex-col">
+            <span className="shrink-0 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-status-blocked mb-2">
               <GitPullRequest className="h-3 w-3" />
               Awaiting your approval
             </span>
-            <div className="space-y-1.5">
+            <div ref={containerRef} className="flex-1 min-h-0 overflow-hidden space-y-1.5">
               {awaiting.map((eco) => (
                 <Link
                   key={eco.id}
@@ -101,6 +104,14 @@ export function EngineeringChangesSummary({ projectIds, projects }: EngineeringC
                 </Link>
               ))}
             </div>
+            {remainingAwaiting > 0 && (
+              <ProjectPickerPopover
+                projects={projects}
+                tab="eng-changes"
+                label={`+${remainingAwaiting} more awaiting approval`}
+                className="shrink-0 w-full mt-1 justify-center"
+              />
+            )}
           </div>
         )}
       </CardContent>
