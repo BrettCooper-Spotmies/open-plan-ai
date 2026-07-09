@@ -19,13 +19,13 @@ import { toast } from 'sonner';
 import { useChatStore } from '@/features/chat/stores/useChatStore';
 
 const mainNavItems = [{
-  title: 'My Tasks',
-  url: '/my-day',
-  icon: ListTodo
-}, {
   title: 'Dashboard',
   url: '/',
   icon: LayoutDashboard
+}, {
+  title: 'My Tasks',
+  url: '/my-day',
+  icon: ListTodo
 }, {
   title: 'Projects',
   url: '/projects',

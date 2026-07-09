@@ -56,7 +56,7 @@ export function NotificationsPopover() {
             <Button
                 variant="ghost"
                 size="icon"
-                className="relative"
+                className="relative h-9 w-9 border border-border rounded-xl"
                 onClick={() => navigate('/notifications')}
                 aria-label="Open notifications"
             >

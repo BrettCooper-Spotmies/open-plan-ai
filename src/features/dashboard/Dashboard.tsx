@@ -4,6 +4,8 @@ import { ActivityFeed } from './components/ActivityFeed';
 import { ProjectsOverview } from './components/ProjectsOverview';
 import { EngineeringChangesSummary } from './components/EngineeringChangesSummary';
 import { BomReadiness } from './components/BomReadiness';
+import { DashboardGreeting } from './components/DashboardGreeting';
+import { NeedsAttentionCard } from './components/NeedsAttentionCard';
 import { useOrgEcoAggregate, useOrgBomAggregate } from './hooks/useOrgAggregates';
 import { useAvailableHeight } from './hooks/useAvailableHeight';
 import { useRecentActivity, useUpcomingDashboardMilestones } from '@/hooks/useDashboard';
@@ -127,8 +129,8 @@ export default function Dashboard() {
       },
       projectId: activity.projectId,
       projectName: '',
-      taskId: activity.entityType === 'task' ? activity.entityId : undefined,
-      issueId: activity.entityType === 'issue' ? activity.entityId : undefined,
+      entityType: activity.entityType ?? null,
+      entityId: activity.entityId ?? null,
       timestamp: activity.createdAt || new Date().toISOString(),
     };
   });
@@ -165,7 +167,18 @@ export default function Dashboard() {
     () => dashboardProjects.filter((p) => projectHealth(p, atRiskProjectIds.has(p.id)).rag === 'green').length,
     [dashboardProjects, atRiskProjectIds],
   );
-  const dashboardActivities = isMobile ? activityItems.slice(0, 4) : activityItems;
+  const atRiskCount = dashboardProjects.length - onTrackCount;
+
+  // Most overdue red-RAG project, surfaced as the headline "Needs Attention" item on mobile.
+  const mostOverdueProject = useMemo(() => {
+    const overdue = dashboardProjects
+      .map((p) => ({ project: p, health: projectHealth(p, atRiskProjectIds.has(p.id)) }))
+      .filter((x) => x.health.rag === 'red' && x.health.days < 0)
+      .sort((a, b) => a.health.days - b.health.days);
+    return overdue[0] ?? null;
+  }, [dashboardProjects, atRiskProjectIds]);
+
+  const firstName = user?.name?.split(' ')[0] || user?.email?.split('@')[0] || 'there';
 
   // Show "Create Organization" card when no org exists
   const showNoOrgState = !orgLoading && !currentOrganization;
@@ -243,6 +256,23 @@ export default function Dashboard() {
               nextGate={nextGate ? { days: nextGate.days, label: nextGate.name } : null}
             />
 
+            {isMobile && (
+              <DashboardGreeting name={firstName} attentionCount={atRiskCount + bomAgg.rejected} />
+            )}
+
+            {isMobile && (
+              <NeedsAttentionCard
+                overdueProject={mostOverdueProject ? {
+                  id: mostOverdueProject.project.id,
+                  name: mostOverdueProject.project.name,
+                  days: mostOverdueProject.health.days,
+                  stageLabel: mostOverdueProject.project.stage,
+                } : null}
+                atRiskCount={atRiskCount}
+                bomRejected={bomAgg.rejected}
+              />
+            )}
+
             <div
               ref={gridRef}
               className="grid gap-3 md:gap-3 lg:grid-cols-3 overflow-hidden"
@@ -257,7 +287,7 @@ export default function Dashboard() {
               <div className="h-full flex flex-col space-y-4 md:space-y-3 overflow-hidden">
                 <BomReadiness projectIds={projectIds} projects={dashboardProjects} />
                 <ActivityFeed
-                  activities={dashboardActivities}
+                  activities={activityItems}
                   isLoading={activitiesLoading || isLoading}
                   className="flex-1 min-h-0"
                 />

@@ -826,8 +826,8 @@ export function ECOWizard({
       {/* Effectivity */}
       <div>
         <FieldLabel>Effectivity (Cut-in)</FieldLabel>
-        <div className="flex gap-2 items-center">
-          <div className="flex bg-muted/40 border border-border rounded-md p-0.5 shrink-0">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <div className="flex bg-muted/40 border border-border rounded-md p-0.5 shrink-0 self-start sm:self-auto">
             {(['DATE', 'SERIAL', 'LOT'] as EffectivityType[]).map(t => (
               <button
                 key={t}

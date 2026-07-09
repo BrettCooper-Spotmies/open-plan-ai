@@ -267,8 +267,12 @@ export default function Projects() {
 
   return (
     <>
-      <div className="space-y-4 md:space-y-6 animate-fade-in">
-        <div className="space-y-2.5 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-sm p-2.5 md:p-0 md:border-0 md:bg-transparent md:backdrop-blur-0">
+      <div className={cn('space-y-4 md:space-y-6 animate-fade-in')}>
+        <div className={cn(
+          isMobile
+            ? 'space-y-2.5'
+            : 'space-y-2.5 rounded-2xl border border-border/60 bg-card/70 backdrop-blur-sm p-2.5 md:p-0 md:border-0 md:bg-transparent md:backdrop-blur-0'
+        )}>
           <div className={cn('flex items-center gap-2 md:gap-4')}>
             {isMobile ? (
               <div className="relative flex-1 max-w-none">
@@ -278,7 +282,7 @@ export default function Projects() {
                   placeholder="Search projects..."
                   value={search}
                   onChange={(e) => handleSearch(e.target.value)}
-                  className="pl-9 pr-9 h-10 rounded-xl bg-background/80"
+                  className="pl-9 pr-9 h-12 rounded-2xl bg-background border border-border/60 shadow-sm focus-visible:ring-1 focus-visible:ring-border"
                 />
               </div>
             ) : (
@@ -297,12 +301,12 @@ export default function Projects() {
               canCreateProject ? (
                 <Button
                   size="icon"
-                  className="h-10 w-10 rounded-xl shrink-0 bg-primary text-primary-foreground shadow-[0_8px_24px_rgba(0,0,0,0.18)] hover:bg-primary/90"
+                  className="h-12 w-12 rounded-2xl shrink-0 bg-foreground text-background shadow-[0_8px_24px_rgba(0,0,0,0.22)] hover:bg-foreground/90"
                   onClick={() => navigate('/projects/new')}
                   aria-label="Create project"
                   title="New Project"
                 >
-                  <Plus className="h-4 w-4" />
+                  <Plus className="h-5 w-5" />
                 </Button>
               ) : null
             ) : (
@@ -358,14 +362,22 @@ export default function Projects() {
             )}>
               {paginatedProjects.map((project) => (
                 <Link key={project.id} to={`/projects/${project.id}`} className="block h-full">
-                  <Card className="p-4 md:p-5 rounded-2xl border-border/70 bg-gradient-to-b from-card to-card/80 card-hover cursor-pointer h-full flex flex-col shadow-[0_10px_30px_rgba(0,0,0,0.16)]">
-                    <div className="flex items-start justify-between gap-3 mb-4 flex-1">
+                  <Card className={cn(
+                    'rounded-2xl border-border/70 bg-gradient-to-b from-card to-card/80 card-hover cursor-pointer h-full flex flex-col',
+                    isMobile
+                      ? 'p-3 shadow-[0_4px_16px_rgba(0,0,0,0.10)]'
+                      : 'p-4 md:p-5 shadow-[0_10px_30px_rgba(0,0,0,0.16)]'
+                  )}>
+                    <div className={cn('flex items-start justify-between gap-3 flex-1', isMobile ? 'mb-2' : 'mb-4')}>
                       <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold truncate flex items-center gap-2">
-                          {project.icon && <span className="text-lg">{project.icon}</span>}
+                        <h3 className={cn('font-semibold truncate flex items-center gap-2', isMobile ? 'text-sm' : '')}>
+                          {isMobile
+                            ? <span className="text-base">📁</span>
+                            : project.icon && <span className="text-lg">{project.icon}</span>
+                          }
                           {project.name}
                         </h3>
-                        <p className="text-sm text-muted-foreground/90 line-clamp-2 mt-1">
+                        <p className={cn('text-muted-foreground/90 mt-0.5', isMobile ? 'text-xs line-clamp-1' : 'text-sm line-clamp-2')}>
                           {project.description || 'No description'}
                         </p>
                       </div>

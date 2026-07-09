@@ -36,7 +36,6 @@ const Projects      = lazy(() => import("./features/projects"));
 const ProjectDetail = lazy(() => import("./features/projects/ProjectDetail"));
 const NewProject    = lazy(() => import("./features/projects/NewProject"));
 const EditProject   = lazy(() => import("./features/projects/EditProject"));
-const IssuePage     = lazy(() => import("./features/projects/IssuePage"));
 const Team          = lazy(() => import("./features/team"));
 const Settings      = lazy(() => import("./features/settings"));
 const EditOrganizationSettings = lazy(() => import("./features/settings/EditOrganizationSettings"));
@@ -183,10 +182,10 @@ const App = () => {
                           }
                         />
                         <Route
-                          path="/projects/:projectId/issues/:issueId"
+                          path="/projects/:id/issues/:issueId"
                           element={
-                            <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
-                              <IssuePage />
+                            <Suspense fallback={<AppLayoutSkeleton variant="project-detail" />}>
+                              <ProjectDetail />
                             </Suspense>
                           }
                         />

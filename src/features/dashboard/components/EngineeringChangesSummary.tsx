@@ -8,6 +8,7 @@ import { PanelIcon } from './PanelIcon';
 import { ProjectPickerPopover } from './ProjectPickerPopover';
 import { useFitCount } from '../hooks/useFitCount';
 import type { Project } from '@/types';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface EngineeringChangesSummaryProps {
   projectIds: string[];
@@ -31,6 +32,7 @@ function StageBar({ status, count, max }: { status: ECOStatus; count: number; ma
 }
 
 export function EngineeringChangesSummary({ projectIds, projects }: EngineeringChangesSummaryProps) {
+  const isMobile = useIsMobile();
   const { isLoading: aggLoading, open, firstPassPct, avgCycleDays } = useOrgEcoAggregate(projectIds);
   const { isLoading: statusLoading, ecos } = useOrgEcoStatusCounts(projectIds);
   const { isLoading: awaitingLoading, awaiting } = useOrgAwaitingEcos(projectIds);
@@ -40,6 +42,8 @@ export function EngineeringChangesSummary({ projectIds, projects }: EngineeringC
     count: ecos.filter((e: ApiEcoListItem) => e.status.toUpperCase() === s).length,
   }));
   const max = Math.max(1, ...counts.map((c) => c.count));
+  const nonEmptyCounts = counts.filter((c) => c.count > 0);
+  const stageTotal = Math.max(1, nonEmptyCounts.reduce((sum, c) => sum + c.count, 0));
 
   const isLoading = aggLoading || statusLoading;
   const { containerRef, fitCount } = useFitCount(awaiting.length);
@@ -78,11 +82,36 @@ export function EngineeringChangesSummary({ projectIds, projects }: EngineeringC
           <span className="block text-[11px] font-semibold uppercase tracking-wide text-muted-foreground mb-2">
             Pipeline by stage
           </span>
-          <div className="space-y-1.5">
-            {counts.map((c) => (
-              <StageBar key={c.status} status={c.status} count={c.count} max={max} />
-            ))}
-          </div>
+          {isMobile ? (
+            <>
+              <div className="h-2 w-full rounded-full bg-secondary overflow-hidden flex">
+                {nonEmptyCounts.map((c) => (
+                  <div
+                    key={c.status}
+                    className="h-full first:rounded-l-full last:rounded-r-full"
+                    style={{ width: `${(c.count / stageTotal) * 100}%`, background: statusMeta(c.status).color }}
+                  />
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-3">
+                {nonEmptyCounts.map((c) => (
+                  <div key={c.status} className="flex items-center justify-between gap-2 text-[12.5px]">
+                    <span className="flex items-center gap-1.5 text-muted-foreground truncate">
+                      <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: statusMeta(c.status).color }} />
+                      {STATUS_LABEL[c.status]}
+                    </span>
+                    <span className="font-semibold tabular-nums shrink-0">{c.count}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="space-y-2">
+              {counts.map((c) => (
+                <StageBar key={c.status} status={c.status} count={c.count} max={max} />
+              ))}
+            </div>
+          )}
         </div>
 
         {!awaitingLoading && awaiting.length > 0 && (

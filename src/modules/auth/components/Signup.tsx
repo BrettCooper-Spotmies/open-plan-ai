@@ -5,13 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Mail, Lock, User, Building2, Factory, ArrowRight, Check, AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Mail, Lock, User, Building2, Factory, ArrowRight, Check, AlertCircle, Eye, EyeOff, Loader2, Sun, Moon } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { getPasswordRequirements, getUnmetRequirementLabels } from "@/lib/passwordValidation";
 import { apiClient } from "@/services/api/client";
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 const industries = [
   "Aerospace & Defense",
@@ -36,6 +37,7 @@ const Signup = () => {
   const [searchParams] = useSearchParams();
   const inviteToken = searchParams.get("invite");
   const { signUp, isLoading: authLoading } = useAuth();
+  const { theme, changeTheme } = useAppTheme();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
@@ -172,8 +174,26 @@ const Signup = () => {
   const passwordsMatch = formData.password === formData.confirmPassword && formData.confirmPassword.length > 0;
   const isInviteSignup = !!inviteToken;
 
+  const cycleTheme = () => {
+    changeTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex relative">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute top-4 right-4 z-10 h-9 w-9"
+        onClick={cycleTheme}
+        title={`Theme: ${theme} (click to toggle)`}
+      >
+        {theme === 'dark' ? (
+          <Moon className="h-4 w-4" />
+        ) : (
+          <Sun className="h-4 w-4" />
+        )}
+        <span className="sr-only">Toggle theme</span>
+      </Button>
       <style>{`
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

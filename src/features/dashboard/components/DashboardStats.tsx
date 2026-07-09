@@ -47,7 +47,7 @@ export function DashboardStats({ isLoading, portfolio, eco, bom, nextGate }: Das
   const atRisk = portfolio.total - portfolio.onTrack;
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:flex md:flex-nowrap">
+    <div className="hidden gap-3 md:flex md:flex-nowrap">
       <StatCard
         label="Portfolio"
         value={dash ?? portfolio.onTrack}
