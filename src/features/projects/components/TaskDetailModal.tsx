@@ -1426,15 +1426,20 @@ export const TaskDetailModal = ({
                       <User className="h-3 w-3" />
                       Reported By
                     </Label>
-                    <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/20">
-                      <Avatar className="h-5 w-5">
+                    <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/20 overflow-hidden">
+                      <Avatar className="h-5 w-5 shrink-0">
                         <AvatarFallback className="text-[9px]">
                           {mode === 'create'
                             ? (profile?.initials || (profile?.name || '').slice(0, 2).toUpperCase())
                             : editedTask.createdBy?.initials}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-sm">
+                      <span
+                        className="text-sm truncate min-w-0"
+                        title={mode === 'create'
+                          ? (profile?.name || profile?.email)
+                          : editedTask.createdBy?.name}
+                      >
                         {mode === 'create'
                           ? (profile?.name || profile?.email)
                           : editedTask.createdBy?.name}

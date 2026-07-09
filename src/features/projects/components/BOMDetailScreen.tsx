@@ -874,7 +874,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   {node.desc && (
                     <div className="mb-3.5">
                       <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-1">Description</p>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{node.desc}</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed break-words">{node.desc}</p>
                     </div>
                   )}
                   <div className="grid grid-cols-3 gap-x-4 gap-y-3.5">
