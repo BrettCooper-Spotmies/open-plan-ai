@@ -4,6 +4,7 @@ import { AppSidebar } from '@/components/layout/AppSidebar';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 import { useUserStore } from '@/stores/useUserStore';
+import { useUIChromeStore } from '@/stores/useUIChromeStore';
 import { useGlobalChatRealtime } from '@/features/chat/hooks/useGlobalChatRealtime';
 import { usePresence } from '@/features/chat/hooks/usePresence';
 import { useProjectMembershipRealtime, useConversationMembershipRealtime } from '@/hooks/useWorkspaceMembershipRealtime';
@@ -21,6 +22,7 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
   const isMobile = useIsMobile();
   const preferences = useUserStore((s) => s.preferences);
   const updatePreferences = useUserStore((s) => s.updatePreferences);
+  const hideAppHeaderFlag = useUIChromeStore((s) => s.hideAppHeader);
 
   const { user } = useAuth();
 
@@ -41,7 +43,7 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
   }, [preferences.compactMode]);
 
   const isConversationRoute = /^\/chat\/[^/]+/.test(location.pathname);
-  const showAppHeader = !(isMobile && isConversationRoute);
+  const showAppHeader = !(isMobile && (isConversationRoute || hideAppHeaderFlag));
   const showMobileBottomNav = isMobile && !isConversationRoute;
 
   return (
