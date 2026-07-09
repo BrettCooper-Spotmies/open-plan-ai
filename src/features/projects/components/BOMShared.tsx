@@ -15,8 +15,8 @@ const CAT_ICONS: Record<BOMCategory, React.ElementType> = {
 };
 
 export function PartThumb({
-  cat, size = 32, radius = 7, big = false, imageUrl, onImageClick,
-}: { cat: BOMCategory; size?: number; radius?: number; big?: boolean; imageUrl?: string | null; onImageClick?: () => void }) {
+  cat, size = 32, radius = 7, big = false, height, bordered = true, imageUrl, onImageClick,
+}: { cat: BOMCategory; size?: number; radius?: number; big?: boolean; height?: number; bordered?: boolean; imageUrl?: string | null; onImageClick?: () => void }) {
   const meta = getCategoryMeta(cat);
   const Icon = CAT_ICONS[cat] ?? Package;
   const iconSize = big ? 34 : Math.round(size * 0.46);
@@ -24,12 +24,12 @@ export function PartThumb({
   const patternSize = big ? 9 : 6;
   const containerStyle: React.CSSProperties = {
     width: big ? '100%' : size,
-    height: big ? 132 : size,
+    height: big ? (height ?? 132) : size,
     borderRadius: radius,
     position: 'relative',
     overflow: 'hidden',
     flexShrink: 0,
-    border: '1px solid hsl(var(--border))',
+    border: bordered ? '1px solid hsl(var(--border))' : undefined,
     background: `${meta.tint}0d`,
     backgroundImage: imageUrl ? undefined : `repeating-linear-gradient(135deg, ${meta.tint}1f 0, ${meta.tint}1f 1px, transparent 1px, transparent ${patternSize}px)`,
     display: 'flex',

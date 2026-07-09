@@ -13,9 +13,10 @@ interface Props {
   onApprove: (comment?: string) => Promise<void> | void;
   onReject: (reason: string, comment?: string) => Promise<void> | void;
   isPending: boolean;
+  className?: string;
 }
 
-export function BOMApprovalReviewCard({ request, partLabel, onApprove, onReject, isPending }: Props) {
+export function BOMApprovalReviewCard({ request, partLabel, onApprove, onReject, isPending, className }: Props) {
   const [note, setNote] = useState('');
   const [noteErr, setNoteErr] = useState(false);
   const [submitting, setSubmitting] = useState<'approve' | 'reject' | null>(null);
@@ -45,7 +46,7 @@ export function BOMApprovalReviewCard({ request, partLabel, onApprove, onReject,
 
   return (
     <div
-      className="mx-6 mb-5 rounded-xl px-4 py-3"
+      className={cn('mx-6 mb-5 rounded-xl px-4 py-3', className)}
       style={{ background: 'rgba(245,158,11,0.05)', borderWidth: 1, borderStyle: 'solid', borderColor: 'rgba(245,158,11,0.25)' }}
     >
       <div className="flex items-center gap-2 flex-wrap mb-2">
