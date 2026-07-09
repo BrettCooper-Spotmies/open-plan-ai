@@ -573,7 +573,7 @@ export function MessageBubble({
     return (
       <div className={cn('flex gap-2 px-4', isOwn ? 'flex-row-reverse' : 'flex-row')}>
         {isGroupChat && <div className="w-8 shrink-0" />}
-        <div className={cn('flex flex-col max-w-[70%]', isOwn ? 'items-end' : 'items-start')}>
+        <div className={cn('flex flex-col max-w-[70%] min-w-0', isOwn ? 'items-end' : 'items-start')}>
           <div className="rounded-2xl px-3 py-2 text-sm italic text-muted-foreground bg-muted/50 border border-dashed border-border">
             🚫 This message was deleted by {message.deletedByName || message.senderName}
           </div>
@@ -602,14 +602,14 @@ export function MessageBubble({
         </div>
       )}
 
-      <div className={cn('flex flex-col max-w-[70%]', isOwn ? 'items-end' : 'items-start')}>
+      <div className={cn('flex flex-col max-w-[70%] min-w-0', isOwn ? 'items-end' : 'items-start')}>
         {showSenderInfo && !isOwn && isGroupChat && (
           <span className="text-xs text-muted-foreground font-medium mb-0.5 px-1">{message.senderName}</span>
         )}
 
         {/* Hover toolbar: emojis + more + 3-dot menu */}
         <div
-          className="relative"
+          className="relative max-w-full min-w-0"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
@@ -729,7 +729,7 @@ export function MessageBubble({
           ) : (
             <div
               className={cn(
-                'rounded-2xl px-3 py-2 text-sm leading-relaxed max-w-full overflow-hidden break-words',
+                'rounded-2xl px-3 py-2 text-sm leading-relaxed max-w-full min-w-0 overflow-hidden break-words [overflow-wrap:anywhere]',
                 isOwn
                   ? 'bg-primary text-primary-foreground rounded-br-md border border-primary/20'
                   : 'bg-muted text-foreground rounded-bl-md border border-border'

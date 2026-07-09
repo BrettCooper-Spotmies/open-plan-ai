@@ -118,7 +118,7 @@ export function AppHeader() {
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 -ml-2 shrink-0 text-muted-foreground hover:text-foreground"
-                onClick={() => navigate(-1)}
+                onClick={() => navigate('/')}
                 title="Back"
               >
                 <ChevronLeft className="h-5 w-5" />
