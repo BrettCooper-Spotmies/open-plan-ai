@@ -4,18 +4,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Mail, Lock, ArrowRight, AlertCircle, CheckCircle, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, ArrowRight, AlertCircle, CheckCircle, Eye, EyeOff, Sun, Moon } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useAuth } from "@/contexts/AuthContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { teamService } from "@/services/team.service";
 import { authService } from "@/services/auth.service";
+import { useAppTheme } from "@/hooks/useAppTheme";
 
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { signIn, isLoading: authLoading, pendingVerificationEmail } = useAuth();
+  const { theme, changeTheme } = useAppTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -118,8 +120,26 @@ const Login = () => {
     }
   };
 
+  const cycleTheme = () => {
+    changeTheme(theme === 'light' ? 'dark' : 'light');
+  };
+
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex relative">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute top-4 right-4 z-10 h-9 w-9"
+        onClick={cycleTheme}
+        title={`Theme: ${theme} (click to toggle)`}
+      >
+        {theme === 'dark' ? (
+          <Moon className="h-4 w-4" />
+        ) : (
+          <Sun className="h-4 w-4" />
+        )}
+        <span className="sr-only">Toggle theme</span>
+      </Button>
       <style>{`
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }

@@ -1,6 +1,6 @@
 import { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Send, Paperclip, Loader2, X, Smile, File as FileIcon, Users, CheckSquare, AlertCircle, Flag, Cpu, Layers, FileText, ChevronLeft } from 'lucide-react';
+import { Send, Paperclip, Loader2, X, Smile, File as FileIcon, Users, CheckSquare, AlertCircle, Flag, Cpu, Layers, FileText, ChevronLeft, Plus, ArrowUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useChatStore } from '../stores/useChatStore';
 import { chatService } from '@/services/chat.service';
@@ -925,64 +925,123 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} />
 
         {/* Input bar */}
-        <div className="mx-auto w-full flex items-center gap-1 rounded-2xl border border-input/80 bg-background/85 backdrop-blur-md px-2 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] focus-within:ring-2 focus-within:ring-ring/70 focus-within:ring-offset-2 ring-offset-background transition-all">
+        {isMobile ? (
+          <div className="mx-auto w-full flex items-center gap-1.5">
+            {/* 😊 Emoji */}
+            <Button
+              ref={emojiButtonRef}
+              variant="ghost" size="icon" type="button"
+              className={cn(
+                'h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-yellow-500 hover:bg-accent/70 transition-colors',
+                showEmojiPicker && 'text-yellow-500 bg-yellow-500/10'
+              )}
+              title="Emoji"
+              onClick={() => setShowEmojiPicker(v => !v)}
+            >
+              <Smile className="h-5 w-5" />
+            </Button>
 
-          {/* 😊 Emoji */}
-          <Button
-            ref={emojiButtonRef}
-            variant="ghost" size="icon" type="button"
-            className={cn(
-              'h-7 w-7 md:h-8 md:w-8 shrink-0 text-muted-foreground hover:text-yellow-500 transition-colors',
-              'rounded-full hover:bg-accent/70',
-              showEmojiPicker && 'text-yellow-500 bg-yellow-500/10'
-            )}
-            title="Emoji"
-            onClick={() => setShowEmojiPicker(v => !v)}
-          >
-            <Smile className="h-4 w-4" />
-          </Button>
-
-          {/* 📎 File */}
-          <Button
-            variant="ghost" size="icon" type="button"
-            className="h-7 w-7 md:h-8 md:w-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-colors"
-            title="Attach files"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={readOnly}
-          >
-            <Paperclip className="h-4 w-4" />
-          </Button>
-
-          {/* Textarea */}
-          <div className="flex-1 min-w-0 relative px-0.5 flex items-center min-h-[28px] md:min-h-[32px]">
-            <textarea
-              ref={textareaRef}
-              value={value}
-              onChange={handleChange}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              placeholder={isMobile || otherMembers.length <= 1 ? 'Type a message...' : 'Type a message... Use @ to mention'}
-              rows={1}
-              className="w-full resize-none bg-transparent text-sm leading-5 max-h-[140px] placeholder:text-muted-foreground/90 focus-visible:outline-none"
+            {/* + Attach */}
+            <Button
+              variant="ghost" size="icon" type="button"
+              className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-colors"
+              title="Attach files"
+              onClick={() => fileInputRef.current?.click()}
               disabled={readOnly}
-            />
-            {showCharCount && (
-              <span className="absolute bottom-0.5 right-1 text-[10px] text-muted-foreground">
-                {value.length}/{MAX_CHARS}
-              </span>
-            )}
-          </div>
+            >
+              <Plus className="h-5 w-5" />
+            </Button>
 
-          {/* Send */}
-          <Button
-            size="icon" type="button"
-            className="h-8 w-8 shrink-0 rounded-full bg-primary text-primary-foreground shadow-[0_3px_10px_rgba(0,0,0,0.22)] hover:bg-primary/90"
-            disabled={readOnly || ((!value.trim() && pendingFiles.length === 0 && pendingEntityTags.length === 0) || isSending)}
-            onClick={handleSend}
-          >
-            {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </Button>
-        </div>
+            {/* Bordered message pill */}
+            <div className="flex-1 min-w-0 flex items-center gap-1 rounded-full border border-input bg-background px-4 min-h-[42px] focus-within:ring-2 focus-within:ring-ring/70 transition-all">
+              <textarea
+                ref={textareaRef}
+                value={value}
+                onChange={handleChange}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                placeholder="Type a message..."
+                rows={1}
+                className="w-full resize-none overflow-hidden bg-transparent text-sm leading-5 max-h-[140px] placeholder:text-muted-foreground/90 focus-visible:outline-none"
+                disabled={readOnly}
+              />
+              {showCharCount && (
+                <span className="shrink-0 text-[10px] text-muted-foreground">
+                  {value.length}/{MAX_CHARS}
+                </span>
+              )}
+            </div>
+
+            {/* Send */}
+            <Button
+              size="icon" type="button"
+              className="h-11 w-11 shrink-0 rounded-full bg-foreground text-background hover:bg-foreground/90"
+              disabled={readOnly || ((!value.trim() && pendingFiles.length === 0 && pendingEntityTags.length === 0) || isSending)}
+              onClick={handleSend}
+            >
+              {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
+            </Button>
+          </div>
+        ) : (
+          <div className="mx-auto w-full flex items-center gap-1 rounded-2xl border border-input/80 bg-background/85 backdrop-blur-md px-2 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] focus-within:ring-2 focus-within:ring-ring/70 focus-within:ring-offset-2 ring-offset-background transition-all">
+
+            {/* 😊 Emoji */}
+            <Button
+              ref={emojiButtonRef}
+              variant="ghost" size="icon" type="button"
+              className={cn(
+                'h-7 w-7 md:h-8 md:w-8 shrink-0 text-muted-foreground hover:text-yellow-500 transition-colors',
+                'rounded-full hover:bg-accent/70',
+                showEmojiPicker && 'text-yellow-500 bg-yellow-500/10'
+              )}
+              title="Emoji"
+              onClick={() => setShowEmojiPicker(v => !v)}
+            >
+              <Smile className="h-4 w-4" />
+            </Button>
+
+            {/* 📎 File */}
+            <Button
+              variant="ghost" size="icon" type="button"
+              className="h-7 w-7 md:h-8 md:w-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-colors"
+              title="Attach files"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={readOnly}
+            >
+              <Paperclip className="h-4 w-4" />
+            </Button>
+
+            {/* Textarea */}
+            <div className="flex-1 min-w-0 relative px-0.5 flex items-center min-h-[28px] md:min-h-[32px]">
+              <textarea
+                ref={textareaRef}
+                value={value}
+                onChange={handleChange}
+                onKeyDown={handleKeyDown}
+                onPaste={handlePaste}
+                placeholder={otherMembers.length <= 1 ? 'Type a message...' : 'Type a message... Use @ to mention'}
+                rows={1}
+                className="w-full resize-none bg-transparent text-sm leading-5 max-h-[140px] placeholder:text-muted-foreground/90 focus-visible:outline-none"
+                disabled={readOnly}
+              />
+              {showCharCount && (
+                <span className="absolute bottom-0.5 right-1 text-[10px] text-muted-foreground">
+                  {value.length}/{MAX_CHARS}
+                </span>
+              )}
+            </div>
+
+            {/* Send */}
+            <Button
+              size="icon" type="button"
+              className="h-8 w-8 shrink-0 rounded-full bg-primary text-primary-foreground shadow-[0_3px_10px_rgba(0,0,0,0.22)] hover:bg-primary/90"
+              disabled={readOnly || ((!value.trim() && pendingFiles.length === 0 && pendingEntityTags.length === 0) || isSending)}
+              onClick={handleSend}
+            >
+              {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );
