@@ -87,6 +87,11 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore, readR
     return new Map(messages.map((message) => [message.id, message]));
   }, [messages]);
 
+  const otherMembersCount = useMemo(
+    () => conversation.members.filter((m) => m.id !== user?.id).length,
+    [conversation.members, user?.id]
+  );
+
   if (messages.length === 0) {
     return <EmptyState type="no-messages" />;
   }
@@ -95,9 +100,9 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore, readR
     <div
       ref={scrollRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto"
+      className="flex-1 overflow-y-auto max-md:overflow-x-hidden"
     >
-      <div className="flex flex-col gap-0.5 pt-4 pb-2">
+      <div className="flex flex-col gap-0.5 pt-4 pb-2 max-md:max-w-full">
         {hasMore && onLoadMore && (
           <div className="flex justify-center py-2">
             <Button variant="ghost" size="sm" onClick={onLoadMore} className="text-xs text-muted-foreground">
@@ -147,6 +152,7 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore, readR
                   searchQuery={searchQuery}
                   memberNames={conversation.members.map((m) => m.name)}
                   readReceipts={readReceiptMap?.[msg.id]}
+                  otherMembersCount={otherMembersCount}
                   reactions={reactionMap?.[msg.id]}
                   onEdit={onEditMessage}
                   onDelete={onDeleteMessage}

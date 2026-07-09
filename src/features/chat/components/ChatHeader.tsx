@@ -6,6 +6,7 @@ import { OnlineStatus } from './OnlineStatus';
 import { Conversation } from '../types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChatStore } from '../stores/useChatStore';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNowStrict } from 'date-fns';
 import { useEffect, useRef } from 'react';
@@ -19,6 +20,7 @@ interface ChatHeaderProps {
 }
 
 export function ChatHeader({ conversation, onBack, onlineUserIds, typingText, onAddMember }: ChatHeaderProps) {
+  const isMobile = useIsMobile();
   const { user } = useAuth();
   const currentUserId = user?.id;
   const toggleDetailPanel = useChatStore((s) => s.toggleDetailPanel);
@@ -131,13 +133,17 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText, on
             <Search className="h-4 w-4" />
           </Button>
         )}
-        {conversation.type === 'group' && isOwner && onAddMember && (
+        {conversation.type === 'group' && (isMobile || isOwner) && onAddMember && (
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Add member" onClick={onAddMember}>
             <UserPlus className="h-4 w-4" />
           </Button>
         )}
-        <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Voice call"><Phone className="h-4 w-4" /></Button>
-        <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Video call"><Video className="h-4 w-4" /></Button>
+        {!isMobile && (
+          <>
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Voice call"><Phone className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Video call"><Video className="h-4 w-4" /></Button>
+          </>
+        )}
         <Button
           variant={isDetailOpen ? 'secondary' : 'ghost'}
           size="icon" className="h-8 w-8"

@@ -12,6 +12,8 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { getFallbackTagColor } from '@/lib/tagColors';
 import {
   Dialog,
   DialogContent,
@@ -19,8 +21,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +58,7 @@ import {
   Building,
   XCircle,
   MessageSquare,
+  ChevronRight,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -82,6 +85,7 @@ const Team = () => {
   const { data: teamMembers, isLoading: isTeamLoading, error } = useTeamMembers(currentOrganization?.id);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const inviteMutation = useInviteTeamMember();
   const removeMutation = useRemoveTeamMember();
   const cancelInviteMutation = useCancelInvitation();
@@ -135,6 +139,7 @@ const Team = () => {
   const [editMember, setEditMember] = useState<TeamMember | null>(null);
   const [editRole, setEditRole] = useState('');
   const [editDepartment, setEditDepartment] = useState('');
+  const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
 
   const members = teamMembers || [];
   const invitations = pendingInvitations || [];
@@ -285,6 +290,13 @@ const Team = () => {
     }
   };
 
+  const getRoleBadgeClass = (role: string) =>
+    role === 'admin' ? 'border-purple-500/50 text-purple-600 bg-purple-500/10' :
+    role === 'maintainer' ? 'border-blue-500/50 text-blue-600 bg-blue-500/10' :
+    '';
+
+  const getAvatarColor = (member: TeamMember) => getFallbackTagColor(member.userId || member.email || member.name);
+
   if (isOrgLoading || (currentOrganization?.id && isTeamLoading)) {
     return <AppLayoutSkeleton variant="team" />;
   }
@@ -312,8 +324,8 @@ const Team = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Users className="h-5 w-5 text-primary" />
+              <div className={`p-2 rounded-lg ${isMobile ? 'bg-orange-500/10' : 'bg-primary/10'}`}>
+                <Users className={`h-5 w-5 ${isMobile ? 'text-orange-600' : 'text-primary'}`} />
               </div>
               <div>
                 <p className="text-2xl font-bold">{stats.total}</p>
@@ -409,12 +421,21 @@ const Team = () => {
           </div>
           {isOrgAdminUser && (
             <Dialog open={isInviteDialogOpen} onOpenChange={(open) => { setIsInviteDialogOpen(open); if (!open) { setInviteEmail(''); setInviteEmailError(''); setInviteRole(''); setInviteDepartment(''); } }}>
-              <DialogTrigger asChild>
-                <Button>
+              {isMobile ? (
+                <Button
+                  size="icon"
+                  className="h-10 w-10 rounded-xl shrink-0"
+                  onClick={() => setIsInviteDialogOpen(true)}
+                  title="Invite Member"
+                >
+                  <UserPlus className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button onClick={() => setIsInviteDialogOpen(true)}>
                   <UserPlus className="h-4 w-4 mr-2" />
                   Invite Member
                 </Button>
-              </DialogTrigger>
+              )}
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Invite Team Member</DialogTitle>
@@ -481,6 +502,54 @@ const Team = () => {
         </div>
 
         {/* Team Members */}
+        {isMobile ? (
+          <div className="space-y-2">
+            <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Members
+            </h3>
+            <div className="rounded-lg border divide-y divide-border overflow-hidden">
+              {filteredMembers.map((member) => {
+                const avatarColor = getAvatarColor(member);
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => setSelectedMember(member)}
+                    className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-muted/50 active:bg-muted"
+                  >
+                    <Avatar className="h-10 w-10 shrink-0">
+                      {member.avatar_url && (
+                        <AvatarImage src={member.avatar_url} alt={member.name} className="object-cover" />
+                      )}
+                      <AvatarFallback
+                        className="font-medium text-xs"
+                        style={{ backgroundColor: avatarColor, color: '#fff' }}
+                      >
+                        {member.initials || member.name?.slice(0, 2).toUpperCase() || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium">{member.name || member.email}</p>
+                        <Badge variant="outline" className={`shrink-0 ${getRoleBadgeClass(member.role)}`}>
+                          {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+                        </Badge>
+                      </div>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {member.department || 'No department'}
+                      </p>
+                      <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
+                        <Mail className="h-3 w-3 shrink-0" />
+                        {member.email}
+                      </p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
         <div className="rounded-lg border overflow-hidden">
           <Table>
             <TableHeader>
@@ -513,11 +582,7 @@ const Team = () => {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={
-                      member.role === 'admin' ? 'border-purple-500/50 text-purple-600 bg-purple-500/10' :
-                      member.role === 'maintainer' ? 'border-blue-500/50 text-blue-600 bg-blue-500/10' :
-                      ''
-                    }>
+                    <Badge variant="outline" className={getRoleBadgeClass(member.role)}>
                       {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
                     </Badge>
                   </TableCell>
@@ -587,6 +652,7 @@ const Team = () => {
             </TableBody>
           </Table>
         </div>
+        )}
 
         {filteredMembers.length === 0 && (
           <div className="text-center py-12">
@@ -656,6 +722,131 @@ const Team = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog >
+
+      {/* Mobile: Member Detail Sheet */}
+      <Sheet open={!!selectedMember} onOpenChange={(open) => !open && setSelectedMember(null)}>
+        <SheetContent
+          side="bottom"
+          className="max-h-[85vh] overflow-y-auto rounded-t-2xl"
+          onPointerDownOutside={() => setSelectedMember(null)}
+          onInteractOutside={() => setSelectedMember(null)}
+        >
+          {selectedMember && (
+            <div className="space-y-6 pt-2">
+              <div className="flex flex-col items-center gap-3 text-center">
+                <Avatar className="h-16 w-16">
+                  {selectedMember.avatar_url && (
+                    <AvatarImage src={selectedMember.avatar_url} alt={selectedMember.name} className="object-cover" />
+                  )}
+                  <AvatarFallback
+                    className="text-lg font-medium"
+                    style={{ backgroundColor: getAvatarColor(selectedMember), color: '#fff' }}
+                  >
+                    {selectedMember.initials || selectedMember.name?.slice(0, 2).toUpperCase() || '?'}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="text-base font-semibold">{selectedMember.name || selectedMember.email}</p>
+                  <div className="mt-1 flex items-center justify-center gap-2">
+                    <Badge variant="outline" className={getRoleBadgeClass(selectedMember.role)}>
+                      {selectedMember.role.charAt(0).toUpperCase() + selectedMember.role.slice(1)}
+                    </Badge>
+                    <Badge variant="outline" className={getStatusColor(selectedMember.status)}>
+                      {selectedMember.status}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3 rounded-lg border p-3">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-md bg-blue-500/10 p-2">
+                    <Building className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Department</p>
+                    <p className="truncate text-sm font-medium">{selectedMember.department || 'Not set'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="rounded-md bg-primary/10 p-2">
+                    <Mail className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Email</p>
+                    <p className="truncate text-sm font-medium">{selectedMember.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="rounded-md bg-yellow-500/10 p-2">
+                    <Clock className="h-4 w-4 text-yellow-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-muted-foreground">Joined</p>
+                    <p className="truncate text-sm font-medium">{formatUiDate(selectedMember.joinedAt)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {(selectedMember.userId !== user?.id || canManageMember(selectedMember)) && (
+                <div className="flex flex-col gap-2">
+                  {selectedMember.userId !== user?.id && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedMember(null);
+                        handleMessageClick(selectedMember.userId);
+                      }}
+                      disabled={isStartingChat === selectedMember.userId}
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Message
+                    </Button>
+                  )}
+                  {canManageMember(selectedMember) && (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          const member = selectedMember;
+                          setSelectedMember(null);
+                          handleOpenEdit(member);
+                        }}
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          const member = selectedMember;
+                          setSelectedMember(null);
+                          setManageOrgMember(member);
+                        }}
+                      >
+                        <Building className="h-4 w-4 mr-2" />
+                        Manage Organizations
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => {
+                          const memberId = selectedMember.userId;
+                          setSelectedMember(null);
+                          handleRemove(memberId);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Remove
+                      </Button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <ManageOrgAccessDialog
         open={!!manageOrgMember}

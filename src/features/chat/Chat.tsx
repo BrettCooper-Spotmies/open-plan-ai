@@ -158,7 +158,7 @@ export default function Chat() {
 
   return (
     <>
-      <div className="flex h-full overflow-hidden">
+      <div className="flex h-full overflow-hidden relative">
         {showConversationList && (
           <div className="w-full md:w-[280px] shrink-0 overflow-hidden">
             <ConversationList
@@ -172,7 +172,7 @@ export default function Chat() {
         )}
 
         {showMessageArea && (
-          <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
             {activeConv ? (
               <>
                 <ChatHeader

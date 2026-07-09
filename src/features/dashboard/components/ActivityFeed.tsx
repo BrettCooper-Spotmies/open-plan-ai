@@ -82,6 +82,42 @@ const activityColors: Record<string, string> = {
   dependency_added: 'text-chart-5 bg-chart-5/10',
 };
 
+// Short verb phrase for the mobile "{name} {phrase}" line — the full description
+// moves to a quoted secondary line on mobile, matching the mobile activity design.
+const activityActionText: Record<string, string> = {
+  task_created: 'created a task',
+  task_completed: 'completed a task',
+  task_updated: 'updated a task',
+  task_assigned: 'was assigned a task',
+  task_deleted: 'deleted a task',
+  comment_added: 'added a comment',
+  milestone_reached: 'reached a milestone',
+  milestone_created: 'created a milestone',
+  milestone_updated: 'updated a milestone',
+  milestone_deleted: 'deleted a milestone',
+  milestone_reopened: 'reopened a milestone',
+  status_changed: 'changed a status',
+  issue_created: 'opened an issue',
+  issue_resolved: 'resolved an issue',
+  issue_updated: 'updated an issue',
+  issue_assigned: 'was assigned an issue',
+  issue_linked_to_task: 'linked an issue',
+  project_created: 'created a project',
+  project_updated: 'updated a project',
+  project_assigned: 'was assigned to a project',
+  project_deleted: 'deleted a project',
+  project_member_added: 'added a member',
+  dependency_added: 'added a dependency',
+};
+
+const avatarColors = ['bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500', 'bg-orange-500', 'bg-indigo-500'];
+
+function avatarColorFor(seed: string) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return avatarColors[h % avatarColors.length];
+}
+
 const activityLabels: Record<string, string> = {
   task_created: 'Task Created',
   task_completed: 'Task Completed',
@@ -106,6 +142,17 @@ const activityLabels: Record<string, string> = {
   project_deleted: 'Project Deleted',
   project_member_added: 'Member Added',
   dependency_added: 'Dependency Added',
+};
+
+// Maps an activity's entityType to the deep-link route for that specific record —
+// same route shapes used for chat entity tags (see ENTITY_TAG_ROUTE in MessageBubble.tsx).
+const entityDeepLink: Record<string, (projectId: string, entityId: string) => string> = {
+  task: (projectId, entityId) => `/projects/${projectId}/tasks/${entityId}`,
+  issue: (projectId, entityId) => `/projects/${projectId}/issues/${entityId}`,
+  milestone: (projectId, entityId) => `/projects/${projectId}/milestones/${entityId}`,
+  hardware_module: (projectId, entityId) => `/projects/${projectId}/modules/${entityId}`,
+  bom_node: (projectId, entityId) => `/projects/${projectId}/bom/${entityId}`,
+  eco: (projectId, entityId) => `/projects/${projectId}/eng-changes/${entityId}`,
 };
 
 // Maps each activity type to the ProjectSection tab it should open (see PROJECT_SECTIONS in App.tsx).
@@ -188,24 +235,47 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
             const isProjectDeleted = activity.type === 'project_deleted';
             const isClickable = Boolean(activity.projectId) && !isProjectDeleted;
             const section = activitySection[activity.type];
+            const actionText = activityActionText[activity.type] || label.toLowerCase();
+            const initials = activity.user.initials || activity.user.name.slice(0, 2).toUpperCase();
+
+            // Deleted entities have nothing left to deep-link to, so those activity
+            // types always fall back to the list section instead of a specific record.
+            const isDeletion = activity.type.endsWith('_deleted');
+
+            const targetUrl = () => {
+              const deepLink = !isDeletion && activity.entityType && activity.entityId
+                ? entityDeepLink[activity.entityType]
+                : undefined;
+              if (deepLink && activity.entityId) return deepLink(activity.projectId, activity.entityId);
+              return `/projects/${activity.projectId}${section ? `/${section}` : ''}`;
+            };
 
             return (
               <div
                 key={activity.id}
-                onClick={() => isClickable && navigate(`/projects/${activity.projectId}${section ? `/${section}` : ''}`)}
+                onClick={() => isClickable && navigate(targetUrl())}
                 className={cn(
                   'flex items-start gap-3 py-3 border-b border-border/50 last:border-0 transition-colors px-2 rounded-md',
                   isClickable && 'hover:bg-muted/30 cursor-pointer',
                   !isMobile && '-mx-2'
                 )}
               >
-                {/* Left: Subtle status icon */}
-                <div className={cn(
-                  'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
-                  colorClass
-                )}>
-                  <Icon className="h-4 w-4" />
-                </div>
+                {/* Left: avatar (mobile) or subtle status icon (desktop) */}
+                {isMobile ? (
+                  <div className={cn(
+                    'w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 text-[11px] font-semibold text-white',
+                    avatarColorFor(activity.user.id || activity.user.name)
+                  )}>
+                    {initials}
+                  </div>
+                ) : (
+                  <div className={cn(
+                    'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5',
+                    colorClass
+                  )}>
+                    <Icon className="h-4 w-4" />
+                  </div>
+                )}
 
                 {/* Center: Content */}
                 <div className="flex-1 min-w-0">
@@ -213,8 +283,15 @@ export function ActivityFeed({ activities, isLoading }: ActivityFeedProps) {
                   <p className="text-sm leading-snug break-all line-clamp-2">
                     <span className="font-semibold">{activity.user.name}</span>
                     {' '}
-                    <span className="text-muted-foreground text-foreground/80">{activity.description}</span>
+                    <span className="text-muted-foreground text-foreground/80">{isMobile ? actionText : activity.description}</span>
                   </p>
+
+                  {/* Mobile: quoted description as a secondary line */}
+                  {isMobile && activity.description && (
+                    <p className="text-xs text-muted-foreground/90 italic mt-1 line-clamp-2">
+                      &ldquo;{activity.description}&rdquo;
+                    </p>
+                  )}
 
                   {/* Secondary: Project name, Type badge & Timestamp row */}
                   <div className={cn('mt-1.5 gap-2', isMobile ? 'flex flex-col items-start' : 'flex items-center justify-between')}>

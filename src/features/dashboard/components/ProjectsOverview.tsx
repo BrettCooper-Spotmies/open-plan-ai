@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Project } from '@/types';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { projectHealth, varianceLabel, RAG_DOT_CLASS, RAG_BAR_CLASS, RAG_LABEL } from '../utils/projectHealth';
 import { PanelIcon } from './PanelIcon';
 
@@ -31,14 +32,17 @@ const stageLabels = {
 };
 
 const RAG_RANK = { red: 0, amber: 1, green: 2 };
-const MAX_VISIBLE_PROJECTS = 7;
+const MAX_VISIBLE_PROJECTS_DESKTOP = 7;
+const MAX_VISIBLE_PROJECTS_MOBILE = 3;
 
 export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOverviewProps) {
+  const isMobile = useIsMobile();
   const ranked = projects
     .map((p) => ({ project: p, health: projectHealth(p, atRiskProjectIds.has(p.id)) }))
     .sort((a, b) => RAG_RANK[a.health.rag] - RAG_RANK[b.health.rag]);
   const onTrack = ranked.filter((r) => r.health.rag === 'green').length;
-  const visible = ranked.slice(0, MAX_VISIBLE_PROJECTS);
+  const maxVisible = isMobile ? MAX_VISIBLE_PROJECTS_MOBILE : MAX_VISIBLE_PROJECTS_DESKTOP;
+  const visible = ranked.slice(0, maxVisible);
   const remaining = ranked.length - visible.length;
 
   return (
@@ -46,11 +50,11 @@ export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOvervie
       <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
         <CardTitle className="text-base font-medium flex items-center gap-2">
           <PanelIcon icon={FolderKanban} color="#2563EB" />
-          Project Management
+          {isMobile ? 'Projects' : 'Project Management'}
         </CardTitle>
         <Button variant="ghost" size="sm" asChild>
           <Link to="/projects" className="text-muted-foreground hover:text-foreground">
-            All projects
+            {isMobile ? 'All' : 'All projects'}
             <ArrowRight className="h-4 w-4 ml-1" />
           </Link>
         </Button>
@@ -81,30 +85,57 @@ export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOvervie
             </div>
             <div className="divide-y divide-border/50">
               {visible.map(({ project, health }) => (
-                <Link
-                  key={project.id}
-                  to={`/projects/${project.id}`}
-                  className="grid grid-cols-[9px_minmax(0,1fr)_108px_70px] items-center gap-3 py-2.5 px-2 rounded-md hover:bg-secondary/60 transition-colors"
-                >
-                  <span title={RAG_LABEL[health.rag]} className={cn('h-2.5 w-2.5 rounded-full', RAG_DOT_CLASS[health.rag])} />
-                  <div className="min-w-0 flex flex-col gap-1">
-                    <span className="text-sm font-medium truncate" title={project.name}>{project.name}</span>
-                    <Badge variant="secondary" className={cn('shrink-0 text-[10.5px] w-fit', stageColors[project.stage])}>
-                      {stageLabels[project.stage]}
-                    </Badge>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[11px] font-semibold text-muted-foreground text-right tabular-nums">{project.progress}%</span>
-                    <Progress value={project.progress} className="h-1.5" indicatorClassName={RAG_BAR_CLASS[health.rag]} />
-                  </div>
-                  <span className={cn(
-                    'flex items-center justify-end gap-1 text-[11.5px] whitespace-nowrap',
-                    health.days < 0 ? 'text-status-blocked' : 'text-muted-foreground',
-                  )}>
-                    {health.days < 0 && <AlertTriangle className="h-3 w-3" />}
-                    {varianceLabel(health.days)}
-                  </span>
-                </Link>
+                isMobile ? (
+                  <Link
+                    key={project.id}
+                    to={`/projects/${project.id}`}
+                    className="flex flex-col gap-2 py-3 px-2 rounded-md hover:bg-secondary/60 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span title={RAG_LABEL[health.rag]} className={cn('h-2.5 w-2.5 rounded-full shrink-0', RAG_DOT_CLASS[health.rag])} />
+                      <span className="text-sm font-medium truncate flex-1" title={project.name}>{project.name}</span>
+                      <Badge variant="secondary" className={cn('shrink-0 text-[10.5px]', stageColors[project.stage])}>
+                        {stageLabels[project.stage]}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Progress value={project.progress} className="h-1.5 flex-1" indicatorClassName={RAG_BAR_CLASS[health.rag]} />
+                      <span className="text-[11px] font-semibold tabular-nums shrink-0">{project.progress}%</span>
+                      <span className={cn(
+                        'flex items-center gap-1 text-[11px] whitespace-nowrap shrink-0',
+                        health.days < 0 ? 'text-status-blocked' : 'text-muted-foreground',
+                      )}>
+                        {health.days < 0 && <AlertTriangle className="h-3 w-3" />}
+                        {varianceLabel(health.days)}
+                      </span>
+                    </div>
+                  </Link>
+                ) : (
+                  <Link
+                    key={project.id}
+                    to={`/projects/${project.id}`}
+                    className="grid grid-cols-[9px_minmax(0,1fr)_108px_70px] items-center gap-3 py-2.5 px-2 rounded-md hover:bg-secondary/60 transition-colors"
+                  >
+                    <span title={RAG_LABEL[health.rag]} className={cn('h-2.5 w-2.5 rounded-full', RAG_DOT_CLASS[health.rag])} />
+                    <div className="min-w-0 flex flex-col gap-1">
+                      <span className="text-sm font-medium truncate" title={project.name}>{project.name}</span>
+                      <Badge variant="secondary" className={cn('shrink-0 text-[10.5px] w-fit', stageColors[project.stage])}>
+                        {stageLabels[project.stage]}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[11px] font-semibold text-muted-foreground text-right tabular-nums">{project.progress}%</span>
+                      <Progress value={project.progress} className="h-1.5" indicatorClassName={RAG_BAR_CLASS[health.rag]} />
+                    </div>
+                    <span className={cn(
+                      'flex items-center justify-end gap-1 text-[11.5px] whitespace-nowrap',
+                      health.days < 0 ? 'text-status-blocked' : 'text-muted-foreground',
+                    )}>
+                      {health.days < 0 && <AlertTriangle className="h-3 w-3" />}
+                      {varianceLabel(health.days)}
+                    </span>
+                  </Link>
+                )
               ))}
             </div>
             {remaining > 0 && (

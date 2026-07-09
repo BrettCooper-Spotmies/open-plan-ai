@@ -43,6 +43,7 @@ import { AddModuleDialog } from './components/AddModuleDialog';
 import { TaskDetailModal } from './components/TaskDetailModal';
 import { ModuleDetailModal } from './components/ModuleDetailModal';
 import { MilestoneDetailModal } from './components/MilestoneDetailModal';
+import { IssueDetailModal } from './components/IssueDetailModal';
 import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
@@ -337,14 +338,15 @@ export default function ProjectDetail() {
   const { currentOrganization } = useOrganization();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { id, tab: tabParam, partId, ecoId, taskId, moduleId, milestoneId } = useParams();
+  const { id, tab: tabParam, partId, ecoId, taskId, moduleId, milestoneId, issueId } = useParams();
   const { data: boardColumns } = useProjectTaskColumns(id);
   const { data: apiIssueColumns } = useIssueColumns(id);
   const issueColumns = apiIssueColumns && apiIssueColumns.length > 0 ? apiIssueColumns : DEFAULT_ISSUE_COLUMNS;
 
-  // The /bom/:partId, /eng-changes/:ecoId, /tasks/:taskId, /modules/:moduleId, and
-  // /milestones/:milestoneId routes encode the section as a literal path segment
-  // rather than the generic :tab param, so infer it from which item id is present.
+  // The /bom/:partId, /eng-changes/:ecoId, /tasks/:taskId, /modules/:moduleId,
+  // /milestones/:milestoneId, and /issues/:issueId routes encode the section as a
+  // literal path segment rather than the generic :tab param, so infer it from which
+  // item id is present.
   const ALL_SECTIONS: ProjectSection[] = ['bom', 'eng-changes', 'tasks', 'modules', 'milestones', 'issues', 'gate-reviews', 'risk'];
   const section: ProjectSection = partId
     ? 'bom'
@@ -356,9 +358,11 @@ export default function ProjectDetail() {
           ? 'modules'
           : milestoneId
             ? 'milestones'
-            : ALL_SECTIONS.includes(tabParam as ProjectSection)
-              ? (tabParam as ProjectSection)
-              : 'bom';
+            : issueId
+              ? 'issues'
+              : ALL_SECTIONS.includes(tabParam as ProjectSection)
+                ? (tabParam as ProjectSection)
+                : 'bom';
 
   const isMobile = useIsMobile();
   const [viewModeStr, setViewModeStr] = useState<TaskViewMode | null>(null);
@@ -559,6 +563,10 @@ export default function ProjectDetail() {
   const deepLinkMilestone = useMemo(
     () => (milestoneId ? (project?.milestones || []).find(m => m.id === milestoneId) ?? null : null),
     [milestoneId, project?.milestones]
+  );
+  const deepLinkIssue = useMemo(
+    () => (issueId ? (project?.issues || []).find(i => i.id === issueId) ?? null : null),
+    [issueId, project?.issues]
   );
 
   // Calculate project progress breakdown
@@ -1823,6 +1831,20 @@ export default function ProjectDetail() {
           onClose={() => navigate(`/projects/${id}/milestones`)}
           onUpdate={handleMilestoneUpdate}
           onIssueUpdate={handleIssueUpdate}
+        />
+      )}
+
+      {issueId && (
+        <IssueDetailModal
+          issue={deepLinkIssue}
+          tasks={project.tasks || []}
+          teamMembers={projectMembers}
+          isOpen={!!issueId}
+          onClose={() => navigate(`/projects/${id}/issues`)}
+          onUpdate={handleIssueUpdate}
+          onDelete={handleIssueDelete}
+          userProjectRole={project?.myRole}
+          mode="view"
         />
       )}
 

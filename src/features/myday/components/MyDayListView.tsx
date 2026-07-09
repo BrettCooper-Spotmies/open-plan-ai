@@ -6,6 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { CheckSquare, Bug, Check, ChevronUp, ChevronDown } from 'lucide-react';
 import {
   MyDayItem,
@@ -90,6 +91,7 @@ export function MyDayListView({
   onTaskClick,
   onStatusUpdate,
 }: MyDayListViewProps) {
+  const isMobile = useIsMobile();
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
@@ -203,6 +205,68 @@ export function MyDayListView({
     return (
       <div className="text-center py-12 text-muted-foreground">
         No tasks to display
+      </div>
+    );
+  }
+
+  if (isMobile) {
+    return (
+      <div className="rounded-lg border divide-y divide-border">
+        {allTasks.map((task) => {
+          const isComplete = task.status === 'done' || task.status === 'resolved';
+          return (
+            <div
+              key={task.id}
+              className="flex items-start gap-3 px-4 py-3.5 cursor-pointer active:bg-muted/50"
+              onClick={() => onTaskClick(task)}
+            >
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStatusUpdate(task.id, isComplete ? 'todo' : 'done');
+                }}
+                aria-label={isComplete ? 'Mark as incomplete' : 'Mark as complete'}
+                className={cn(
+                  'h-5 w-5 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-colors',
+                  isComplete ? 'bg-status-done border-status-done' : 'border-muted-foreground/40'
+                )}
+              >
+                {isComplete && <Check className="h-3 w-3 text-white" />}
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-[15px] leading-snug truncate">{task.title}</p>
+                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-[11px] px-2 py-0.5 flex items-center gap-1 w-fit font-medium',
+                      task.itemType === 'task' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-orange-50 text-orange-700 border-orange-200'
+                    )}
+                  >
+                    {task.itemType === 'task' ? (
+                      <>
+                        <CheckSquare className="h-3 w-3" />
+                        <span>Task</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bug className="h-3 w-3" />
+                        <span>Issue</span>
+                      </>
+                    )}
+                  </Badge>
+                  <Badge
+                    variant="secondary"
+                    className={cn('text-[11px] px-2 py-0.5 font-medium capitalize', statusColors[task.status])}
+                  >
+                    {statusLabels[task.status] || task.status}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   }

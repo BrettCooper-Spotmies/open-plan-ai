@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, ZoomIn, ExternalLink, FileImage, File as FileIcon2 } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, ZoomIn, FileImage, File as FileIcon2 } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -33,11 +34,19 @@ const ENTITY_TAG_ROUTE: Record<ChatEntityType, (tag: EntityTagRef) => string> = 
 };
 
 const EMOJI_SET = ['👍', '❤️', '😂', '😮', '🔥', '💯'];
+// Mobile gets a wider quick-react row up front since the "more emoji" popover
+// is a second tap away and hover-based discovery doesn't apply on touch.
+const MOBILE_EMOJI_SET = [
+  '👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '💯', '🎉', '🙏', '😍', '👎',
+];
 const EXTENDED_EMOJI_SET = [
   '👍', '❤️', '😂', '😮', '😢', '🔥', '👏', '💯',
   '🎉', '🤔', '👀', '🙏', '💪', '✨', '🫡', '😍',
   '🥳', '😎', '🤣', '😅', '😡', '💔', '👎', '🤝',
 ];
+
+// Detects http(s) URLs so message text can render them as clickable, blue links.
+const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -48,6 +57,7 @@ interface MessageBubbleProps {
   searchQuery?: string;
   memberNames?: string[];
   readReceipts?: ReadReceipt[];
+  otherMembersCount?: number;
   reactions?: MessageReaction[];
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string, senderName: string) => void;
@@ -99,13 +109,13 @@ function ExpandableText({ text, query, isOwn = false, memberNames }: { text: str
   };
 
   return (
-    <div className="flex flex-col">
-      <div className={cn('whitespace-pre-wrap', isLong && !isExpanded && 'line-clamp-6')}>
+    <div className="flex flex-col min-w-0">
+      <div className={cn('whitespace-pre-wrap break-words', isLong && !isExpanded && 'line-clamp-6')}>
         {renderText(displayText)}
       </div>
       {isLong && (
         <button
-          onClick={() => setIsExpanded(!isExpanded)}
+          onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
           className="text-xs opacity-80 hover:opacity-100 font-medium mt-1 self-start underline underline-offset-2"
         >
           {isExpanded ? 'Show less' : 'Read more'}
@@ -207,8 +217,39 @@ function MentionHighlightedText({ text, query, isOwn = false, memberNames }: { t
             </span>
           );
         }
-        return <HighlightedText key={i} text={part.text} query={query} />;
+        return <LinkifiedText key={i} text={part.text} query={query} isOwn={isOwn} />;
       })}
+    </>
+  );
+}
+
+function LinkifiedText({ text, query, isOwn = false }: { text: string; query?: string; isOwn?: boolean }) {
+  // split() with a single-capture-group regex interleaves [text, url, text, url, ...] —
+  // odd indices are always the captured URLs, so index parity (not re-testing the
+  // stateful global regex) is what tells them apart.
+  const segments = text.split(URL_REGEX);
+  if (segments.length === 1) return <HighlightedText text={text} query={query} />;
+  return (
+    <>
+      {segments.map((segment, i) =>
+        i % 2 === 1 ? (
+          <a
+            key={i}
+            href={segment}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              'underline break-all hover:opacity-80',
+              isOwn ? 'text-blue-100' : 'text-blue-500 dark:text-blue-400'
+            )}
+          >
+            {segment}
+          </a>
+        ) : (
+          <HighlightedText key={i} text={segment} query={query} />
+        )
+      )}
     </>
   );
 }
@@ -303,7 +344,7 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
     return (
       <>
         <div
-          className="group relative cursor-pointer rounded-xl overflow-hidden"
+          className="group relative cursor-pointer rounded-xl overflow-hidden max-w-full"
           style={{ maxWidth: 280 }}
           onClick={handleClick}
           title="Click to view"
@@ -318,7 +359,7 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
             <ZoomIn className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
           </div>
         </div>
-        {file.text && <p className="text-sm mt-1">{file.text}</p>}
+        {file.text && <p className="text-sm mt-1 break-words">{file.text}</p>}
         {lightboxOpen && url && (
           <ImageLightbox src={url} alt={file.fileName} onClose={() => setLightboxOpen(false)} />
         )}
@@ -326,48 +367,70 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
     );
   }
 
-  // PDF / DOC / other file card
+  // PDF / DOC / other file card — small preview thumbnail above the filename,
+  // with a dedicated download action beside the name (matches design spec).
   const isPreviewable = fileType === 'pdf' || fileType === 'doc';
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      disabled={!url}
+    <div
       className={cn(
-        'flex w-full items-center gap-3 p-3 rounded-xl border text-left transition-all',
-        'hover:bg-accent/60 active:scale-[0.98]',
-        'disabled:opacity-50 disabled:cursor-not-allowed',
+        'w-full max-w-full rounded-xl border overflow-hidden',
         isOwn ? 'border-primary-foreground/20 bg-primary-foreground/5' : 'border-border bg-muted/30'
       )}
-      title={isPreviewable ? `Open ${fileType.toUpperCase()} preview` : 'Open file'}
     >
-      <div className={cn(
-        'h-10 w-10 shrink-0 rounded-lg flex items-center justify-center',
-        fileType === 'pdf' ? 'bg-red-500/15 text-red-500' :
-        fileType === 'doc' ? 'bg-blue-500/15 text-blue-500' :
-        'bg-muted text-muted-foreground'
-      )}>
-        <Icon className="h-5 w-5" />
+      <button
+        type="button"
+        onClick={handleClick}
+        disabled={!url}
+        className={cn(
+          'flex w-full items-center justify-center h-16 transition-colors',
+          'hover:bg-accent/40 disabled:opacity-50 disabled:cursor-not-allowed',
+          fileType === 'pdf' ? 'bg-red-500/10 text-red-500' :
+          fileType === 'doc' ? 'bg-blue-500/10 text-blue-500' :
+          'bg-muted text-muted-foreground'
+        )}
+        title={isPreviewable ? `Open ${fileType.toUpperCase()} preview` : 'Open file'}
+      >
+        <Icon className="h-7 w-7" />
+      </button>
+      <div
+        className={cn(
+          'flex items-center gap-2 px-3 py-2 border-t',
+          isOwn ? 'border-primary-foreground/10' : 'border-border/60'
+        )}
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium truncate">{file.fileName}</p>
+          <p className="text-xs opacity-60 mt-0.5">
+            {file.fileSize ? formatFileSize(file.fileSize) : ''}
+            {file.fileSize && fileType !== 'other' ? ' · ' : ''}
+            {fileType === 'pdf' ? 'PDF' : fileType === 'doc' ? 'Document' : ''}
+          </p>
+        </div>
+        {url && (
+          <a
+            href={url}
+            download={file.fileName}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            title="Download"
+            className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center opacity-70 hover:opacity-100 hover:bg-accent/70 transition-colors"
+          >
+            <Download className="h-4 w-4" />
+          </a>
+        )}
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium truncate">{file.fileName}</p>
-        <p className="text-xs opacity-60 mt-0.5">
-          {file.fileSize ? formatFileSize(file.fileSize) : ''}
-          {file.fileSize && fileType !== 'other' ? ' · ' : ''}
-          {fileType === 'pdf' ? 'PDF' : fileType === 'doc' ? 'Document' : ''}
-        </p>
-      </div>
-      <ExternalLink className="h-4 w-4 shrink-0 opacity-50" />
-    </button>
+    </div>
   );
 }
 
 export function MessageBubble({
   message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
-  searchQuery, memberNames, readReceipts, reactions, onEdit, onDelete, onToggleReaction, onReply,
+  searchQuery, memberNames, readReceipts, otherMembersCount, reactions, onEdit, onDelete, onToggleReaction, onReply,
 }: MessageBubbleProps) {
   const timezone = useUserTimezone();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const isOwn = message.senderId === currentUserId;
   const isFile = message.contentType === 'file' || message.contentType === 'image' || (message.attachments?.length ?? 0) > 0;
 
@@ -407,11 +470,14 @@ export function MessageBubble({
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Touch devices don't fire hover reliably, so the toolbar is opened by tapping the bubble instead.
+  const [isMobileToolbarOpen, setIsMobileToolbarOpen] = useState(false);
 
-  // Toolbar stays visible while hovered OR any popover/dropdown is open
-  const showToolbar = isHovered || isMoreEmojiOpen || isMenuOpen;
+  // Toolbar stays visible while hovered/tapped OR any popover/dropdown is open
+  const showToolbar = (isMobile ? isMobileToolbarOpen : isHovered) || isMoreEmojiOpen || isMenuOpen;
 
   const handleMouseEnter = () => {
+    if (isMobile) return;
     if (hoverTimeoutRef.current) {
       clearTimeout(hoverTimeoutRef.current);
       hoverTimeoutRef.current = null;
@@ -420,9 +486,15 @@ export function MessageBubble({
   };
 
   const handleMouseLeave = () => {
+    if (isMobile) return;
     hoverTimeoutRef.current = setTimeout(() => {
       setIsHovered(false);
     }, 150);
+  };
+
+  const handleBubbleTap = () => {
+    if (!isMobile) return;
+    setIsMobileToolbarOpen((v) => !v);
   };
 
   useEffect(() => {
@@ -463,11 +535,13 @@ export function MessageBubble({
 
   const handleEmojiClick = (emoji: string) => {
     onToggleReaction?.(message.id, emoji);
+    setIsMobileToolbarOpen(false);
   };
 
   const handleMoreEmojiClick = (emoji: string) => {
     onToggleReaction?.(message.id, emoji);
     setIsMoreEmojiOpen(false);
+    setIsMobileToolbarOpen(false);
   };
 
   // When modifying a reaction via the pill picker, rely on backend replace logic
@@ -476,12 +550,30 @@ export function MessageBubble({
     setIsReactionPickerOpen(false);
   };
 
+  // Blue double-check only once every other member has read it; grey double-check
+  // covers "sent/delivered to all" (including partially-read) so partial reads don't
+  // falsely look fully-read. Falls back to "any read = blue" if the member count is unknown.
+  const renderStatusIcon = () => {
+    const otherReads = (readReceipts ?? []).filter((r) => r.userId !== currentUserId);
+    const allRead = otherReads.length > 0 && (otherMembersCount === undefined || otherReads.length >= otherMembersCount);
+    if (allRead) {
+      return <CheckCheck className="h-3 w-3 text-blue-500 dark:text-blue-400" aria-label="Read by everyone" />;
+    }
+    if (message.status === 'pending') {
+      return <Clock className="h-3 w-3 text-muted-foreground" aria-label="Pending" />;
+    }
+    if (message.isOptimistic || message.status === 'sending') {
+      return <Check className="h-3 w-3 text-muted-foreground" aria-label="Sending" />;
+    }
+    return <CheckCheck className="h-3 w-3 text-muted-foreground" aria-label="Sent" />;
+  };
+
   // Deleted message display
   if (isDeleted) {
     return (
       <div className={cn('flex gap-2 px-4', isOwn ? 'flex-row-reverse' : 'flex-row')}>
         {isGroupChat && <div className="w-8 shrink-0" />}
-        <div className={cn('flex flex-col max-w-[70%]', isOwn ? 'items-end' : 'items-start')}>
+        <div className={cn('flex flex-col max-w-[70%] min-w-0', isOwn ? 'items-end' : 'items-start')}>
           <div className="rounded-2xl px-3 py-2 text-sm italic text-muted-foreground bg-muted/50 border border-dashed border-border">
             🚫 This message was deleted by {message.deletedByName || message.senderName}
           </div>
@@ -510,28 +602,31 @@ export function MessageBubble({
         </div>
       )}
 
-      <div className={cn('flex flex-col max-w-[70%]', isOwn ? 'items-end' : 'items-start')}>
+      <div className={cn('flex flex-col max-w-[70%] min-w-0', isOwn ? 'items-end' : 'items-start')}>
         {showSenderInfo && !isOwn && isGroupChat && (
           <span className="text-xs text-muted-foreground font-medium mb-0.5 px-1">{message.senderName}</span>
         )}
 
         {/* Hover toolbar: emojis + more + 3-dot menu */}
         <div
-          className="relative"
+          className="relative max-w-full min-w-0"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
           <div
             className={cn(
-              'absolute z-10 top-0 rounded-lg border border-border bg-popover shadow-md px-1 py-0.5 flex items-center gap-0.5 transition-opacity',
-              isOwn ? 'right-full mr-2' : 'left-full ml-2',
+              'absolute z-10 rounded-lg border border-border bg-popover shadow-md px-1 py-0.5 flex items-center flex-wrap gap-0.5 transition-opacity',
+              isMobile
+                ? 'bottom-full mb-2 left-1/2 -translate-x-1/2 max-w-[88vw] justify-center'
+                : cn('top-0', isOwn ? 'right-full mr-2' : 'left-full ml-2'),
               showToolbar ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
             )}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
+            onClick={(e) => e.stopPropagation()}
           >
-            {/* Quick emoji reactions */}
-            {EMOJI_SET.map((emoji) => (
+            {/* Quick emoji reactions — mobile gets a wider set up front since there's no hover affordance */}
+            {(isMobile ? MOBILE_EMOJI_SET : EMOJI_SET).map((emoji) => (
               <button
                 key={emoji}
                 className="text-base hover:bg-muted rounded p-1 transition-colors cursor-pointer leading-none"
@@ -634,11 +729,12 @@ export function MessageBubble({
           ) : (
             <div
               className={cn(
-                'rounded-2xl px-3 py-2 text-sm leading-relaxed max-w-full overflow-hidden',
+                'rounded-2xl px-3 py-2 text-sm leading-relaxed max-w-full min-w-0 overflow-hidden break-words [overflow-wrap:anywhere]',
                 isOwn
                   ? 'bg-primary text-primary-foreground rounded-br-md border border-primary/20'
                   : 'bg-muted text-foreground rounded-bl-md border border-border'
               )}
+              onClick={handleBubbleTap}
             >
               {message.replyToMessage && (
                 <div
@@ -660,12 +756,14 @@ export function MessageBubble({
                 </div>
               )}
               {isFile && fileData ? (
-                <FileAttachment file={fileData} isOwn={isOwn} />
+                <div onClick={(e) => e.stopPropagation()}>
+                  <FileAttachment file={fileData} isOwn={isOwn} />
+                </div>
               ) : (
                 <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} memberNames={memberNames} />
               )}
               {message.entityTags && message.entityTags.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
+                <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
                   {message.entityTags.map((tag, i) => (
                     <EntityTagChip
                       key={`${tag.entityType}-${tag.entityId}-${i}`}
@@ -704,8 +802,8 @@ export function MessageBubble({
                 </div>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-2" side="top" align="center">
-                <div className="flex gap-1">
-                  {EMOJI_SET.map((emoji) => (
+                <div className="flex flex-wrap gap-1 max-w-[220px]">
+                  {(isMobile ? MOBILE_EMOJI_SET : EMOJI_SET).map((emoji) => (
                     <button
                       key={emoji}
                       className={cn(
@@ -729,56 +827,12 @@ export function MessageBubble({
           <span className="text-[10px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1">
             {formatMessageTimestamp(message.createdAt, timezone)}
             {message.isEdited && ' (edited)'}
-            {isOwn && (() => {
-              const otherReads = (readReceipts ?? []).filter(
-                (r) => r.userId !== currentUserId
-              );
-              if (otherReads.length > 0) {
-                return (
-                  <CheckCheck className="h-3 w-3 text-primary" aria-label="Read" />
-                );
-              }
-              if (message.status === 'pending') {
-                return (
-                  <Clock className="h-3 w-3 text-muted-foreground" aria-label="Pending" />
-                );
-              }
-              if (message.isOptimistic || message.status === 'sending') {
-                return (
-                  <Check className="h-3 w-3 text-muted-foreground" aria-label="Sending" />
-                );
-              }
-              return (
-                <CheckCheck className="h-3 w-3 text-muted-foreground" aria-label="Sent" />
-              );
-            })()}
+            {isOwn && renderStatusIcon()}
           </span>
         )}
         {!showTimestamp && isOwn && (
           <span className="text-[10px] mt-0.5 px-1 flex items-center justify-end">
-            {(() => {
-              const otherReads = (readReceipts ?? []).filter(
-                (r) => r.userId !== currentUserId
-              );
-              if (otherReads.length > 0) {
-                return (
-                  <CheckCheck className="h-3 w-3 text-primary" aria-label="Read" />
-                );
-              }
-              if (message.status === 'pending') {
-                return (
-                  <Clock className="h-3 w-3 text-muted-foreground" aria-label="Pending" />
-                );
-              }
-              if (message.isOptimistic || message.status === 'sending') {
-                return (
-                  <Check className="h-3 w-3 text-muted-foreground" aria-label="Sending" />
-                );
-              }
-              return (
-                <CheckCheck className="h-3 w-3 text-muted-foreground" aria-label="Sent" />
-              );
-            })()}
+            {renderStatusIcon()}
           </span>
         )}
       </div>
