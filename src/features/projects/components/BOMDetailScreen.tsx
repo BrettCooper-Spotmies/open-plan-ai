@@ -668,9 +668,20 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
       {/* Breadcrumb */}
-      <div className="px-6 pt-3 flex items-center m-2 gap-1.5 text-xs text-muted-foreground">
+      <div className="px-6 pt-3 flex items-center m-2 gap-1.5 text-xs text-muted-foreground flex-wrap">
         <span className="cursor-pointer hover:text-foreground transition-colors" onClick={onBack}>BOM</span>
         <ChevronRight className="w-3 h-3" />
+        {path.slice(0, -1).map((p) => (
+          <span key={p.id} className="flex items-center gap-1.5">
+            <span
+              className="cursor-pointer hover:text-foreground transition-colors font-mono"
+              onClick={() => onNavigate(p.id)}
+            >
+              {p.pn}
+            </span>
+            <ChevronRight className="w-3 h-3" />
+          </span>
+        ))}
         <span className="font-mono text-foreground font-medium">{node.pn}</span>
         {!isLatest && (
           <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-600 border border-amber-300/40">

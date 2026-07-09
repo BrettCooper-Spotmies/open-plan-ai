@@ -301,7 +301,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
 
   return (
     <>
-      <div onClick={onClose} className="fixed inset-0 bg-black/50 z-[60]" />
+      <div className="fixed inset-0 bg-black/50 z-[60]" />
       <div className="fixed top-0 right-0 bottom-0 w-[352px] bg-card border-l border-border z-[61] flex flex-col shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
@@ -445,7 +445,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
         </div>
 
         <div className="flex gap-2.5 px-4 py-3.5 border-t border-border">
-          <Button variant="outline" className="flex-1" onClick={() => setDraft({ ...EMPTY_FILTERS })}>Clear all</Button>
+          <Button variant="outline" className="flex-1" onClick={() => { setDraft({ ...EMPTY_FILTERS }); setFilters({ ...EMPTY_FILTERS }); onClose(); }}>Clear all</Button>
           <Button className="flex-1" onClick={() => { setFilters(draft); onClose(); }}>Show results</Button>
         </div>
       </div>
@@ -777,9 +777,7 @@ function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCu
             })}
           </div>
           <div className="px-6 pb-5 text-xs text-muted-foreground">
-            {filtersActive
-              ? `Showing ${displayRows.length} of ${totalCount} total parts`
-              : `Showing ${displayRows.length} component${displayRows.length !== 1 ? 's' : ''}${current ? ` under ${current.pn}` : ''}`}
+            {`Showing ${displayRows.length} of ${totalCount} total parts`}
           </div>
         </>
       )}
@@ -1071,7 +1069,7 @@ export function BOMView({
 
   const activeCount =
     (filters.bomType !== 'all' ? 1 : 0) + filters.statuses.length + filters.units.length +
-    filters.manufacturers.length + filters.suppliers.length +
+    filters.manufacturers.length + filters.suppliers.length + filters.owners.length +
     (filters.priceMin || filters.priceMax ? 1 : 0) +
     (filters.leadMin || filters.leadMax ? 1 : 0) +
     (filters.mpn ? 1 : 0);
