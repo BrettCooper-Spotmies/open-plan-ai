@@ -536,7 +536,7 @@ function ListView({
                   className="inline-flex items-center p-0.5"
                   style={{ marginLeft: filtersActive ? 0 : row.level * 16, cursor: hasChildren && !filtersActive ? 'pointer' : 'default', flexShrink: 0 }}
                 >
-                  {hasChildren ? (
+                  {hasChildren && !filtersActive ? (
                     <span className="inline-flex transition-transform" style={{ transform: isExp ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
                       <ChevronDown className="w-3 h-3" />
                     </span>
