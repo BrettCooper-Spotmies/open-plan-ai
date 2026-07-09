@@ -18,7 +18,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { cn } from '@/lib/utils';
 import { playCompleteSound } from '@/lib/playSound';
 import { BUCKET_COLOR_OPTIONS } from '@/lib/bucketColors';
-import { Plus, Check, GripVertical, X, Link2, Calendar as CalendarIcon, Maximize2 } from 'lucide-react';
+import { Plus, Check, GripVertical, Link2, Calendar as CalendarIcon, Maximize2, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   Command,
   CommandEmpty,
@@ -43,6 +44,7 @@ import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import {
   useProjectTaskColumns,
   useCreateTaskColumn,
+  useUpdateTaskColumn,
   useDeleteTaskColumn,
   useReorderTaskColumns,
 } from '@/hooks/useProjectTaskColumns';
@@ -177,6 +179,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   const { canEditResource } = useProjectPermissions(projectId);
   const { data: persistedColumns } = useProjectTaskColumns(projectId);
   const createTaskColumn = useCreateTaskColumn(projectId);
+  const updateTaskColumn = useUpdateTaskColumn(projectId);
   const deleteTaskColumn = useDeleteTaskColumn(projectId);
   const reorderTaskColumns = useReorderTaskColumns(projectId);
   const [tasks, setTasks] = useState<Task[]>(initialTasks);
@@ -219,6 +222,8 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   const [addTaskToColumn, setAddTaskToColumn] = useState<string | null>(null);
   const [newColumnName, setNewColumnName] = useState('');
   const [newColumnColor, setNewColumnColor] = useState(BUCKET_COLOR_OPTIONS[0].value);
+  const [renamingColumn, setRenamingColumn] = useState<KanbanColumn | null>(null);
+  const [renameColumnName, setRenameColumnName] = useState('');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [expandedChecklistPreview, setExpandedChecklistPreview] = useState<Record<string, boolean>>({});
@@ -518,6 +523,24 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       return;
     }
     deleteTaskColumn.mutate(columnId);
+  };
+
+  const handleStartRenameColumn = (column: KanbanColumn) => {
+    setRenamingColumn(column);
+    setRenameColumnName(column.label);
+  };
+
+  const handleConfirmRenameColumn = () => {
+    if (!renamingColumn || !renameColumnName.trim()) return;
+    updateTaskColumn.mutate(
+      { id: renamingColumn.id, input: { label: renameColumnName.trim() } },
+      {
+        onSuccess: () => {
+          setRenamingColumn(null);
+          setRenameColumnName('');
+        },
+      },
+    );
   };
 
   const handleAddTask = (taskOverride?: Partial<Task>) => {
@@ -952,15 +975,39 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                 <span className="text-xs text-muted-foreground">
                                   {columnTasks.length}
                                 </span>
-                                {!column.isSpecial && columnTasks.length === 0 && columns.length > 1 && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-5 w-5 ml-auto opacity-50 hover:opacity-100"
-                                    onClick={() => handleRemoveColumn(column.id)}
-                                  >
-                                    <X className="h-3 w-3" />
-                                  </Button>
+                                {!column.isSpecial && (
+                                  <div className="ml-auto">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          variant="ghost"
+                                          size="icon"
+                                          className="h-5 w-5 text-muted-foreground hover:text-foreground"
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          <MoreHorizontal className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem
+                                          className="gap-2"
+                                          onClick={() => handleStartRenameColumn(column)}
+                                        >
+                                          <Pencil className="h-3.5 w-3.5" />
+                                          Rename Bucket
+                                        </DropdownMenuItem>
+                                        {columnTasks.length === 0 && columns.length > 1 && (
+                                          <DropdownMenuItem
+                                            className="text-destructive focus:text-destructive gap-2"
+                                            onClick={() => handleRemoveColumn(column.id)}
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                            Delete Bucket
+                                          </DropdownMenuItem>
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
                                 )}
                               </div>
 
@@ -1036,7 +1083,42 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         </Droppable>
       </DragDropContext>
 
-
+      {/* Rename Bucket Dialog */}
+      <Dialog
+        open={!!renamingColumn}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRenamingColumn(null);
+            setRenameColumnName('');
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Rename Bucket</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label>Bucket Name</Label>
+              <Input
+                placeholder="e.g., QA Testing"
+                value={renameColumnName}
+                maxLength={30}
+                onChange={(e) => setRenameColumnName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleConfirmRenameColumn()}
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={handleConfirmRenameColumn}
+              disabled={!renameColumnName.trim() || updateTaskColumn.isPending}
+              className="w-full"
+            >
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Task Detail Modal (Viewing/Editing) */}
       <TaskDetailModal
