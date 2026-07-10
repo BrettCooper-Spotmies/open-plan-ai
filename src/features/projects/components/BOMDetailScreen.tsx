@@ -30,6 +30,8 @@ import { uploadBomDocumentFile, addBomDocumentLink, useBomDocuments, isImageAtta
 import { useCurrency } from '@/hooks/useCurrency';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { useBomNotes, useAddBomNote, useUpdateBomNote, useDeleteBomNote } from '@/hooks/useBomNotes';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { BOMDetailScreenMobile } from './BOMDetailScreenMobile';
 
 function getInitials(name: string | undefined | null): string {
   if (!name) return '?';
@@ -424,6 +426,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const { user } = useAuth();
   const { formatCurrency } = useCurrency();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
   // ── Uploaded documents — pull the product photo (first image attachment) ──
   const { data: nodeDocs } = useBomDocuments(originalNode.id);
@@ -666,7 +669,46 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const showApprovalActions = canDecide && isLatest && !!activeRequest;
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-background">
+    <div className={cn('flex flex-col h-full bg-background', !isMobile && 'overflow-hidden')}>
+      {isMobile ? (
+        <BOMDetailScreenMobile
+          node={node}
+          meta={meta}
+          path={path}
+          children={children}
+          extended={extended}
+          photoUrl={photoUrl}
+          formatCurrency={formatCurrency}
+          revHistory={revHistory}
+          revisionsLoading={revisionsLoading}
+          activeRevIdx={activeRevIdx}
+          onSelectRevision={setActiveRevIdx}
+          isLatest={isLatest}
+          approvals={approvals}
+          approvalsLoading={approvalsLoading}
+          activeRequest={activeRequest}
+          lastRequest={lastRequest}
+          showApprovalActions={showApprovalActions}
+          showRejectionBanner={showRejectionBanner}
+          canSendForReview={canSendForReview}
+          canReviseAndResubmit={canReviseAndResubmit}
+          canApprove={canApprove}
+          canDecide={canDecide}
+          decidePending={decideApprovalRequest.isPending}
+          onApprove={handleApprove}
+          onReject={handleRejectConfirm}
+          currentUserId={user?.id}
+          onBack={onBack}
+          onNavigate={onNavigate}
+          onEditPart={() => isLatest && setShowEdit(true)}
+          onNewEco={() => setEcoOpen(true)}
+          onDeletePart={() => setShowDeleteConfirm(true)}
+          onSendForReview={() => setShowSendForReview(true)}
+          onAddSubcomponent={() => setShowAddSub(true)}
+          onViewImage={() => setViewingImage(true)}
+        />
+      ) : (
+        <>
       {/* Breadcrumb */}
       <div className="px-6 pt-3 flex items-center m-2 gap-1.5 text-xs text-muted-foreground flex-wrap">
         <span className="cursor-pointer hover:text-foreground transition-colors" onClick={onBack}>BOM</span>
@@ -1208,6 +1250,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
           </div>
         </div>
       </div>
+        </>
+      )}
 
       {/* Add Sub-component dialog */}
       <AddSubcomponentDialog
