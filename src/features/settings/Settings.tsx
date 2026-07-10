@@ -828,9 +828,9 @@ const Settings = () => {
                         <AvatarFallback className="bg-primary/10">
                           <Loader2 className="h-6 w-6 animate-spin" />
                         </AvatarFallback>
-                      ) : localAvatarPreview || profile?.avatar_url || (profile as any)?.avatarUrl ? (
+                      ) : localAvatarPreview || profile?.avatarUrl ? (
                         <AvatarImage
-                          src={localAvatarPreview || resolveFileUrl(profile?.avatar_url || (profile as any)?.avatarUrl) || profile?.avatar_url || ''}
+                          src={localAvatarPreview || resolveFileUrl(profile?.avatarUrl) || ''}
                           alt={profile?.name || 'Avatar'}
                         />
                       ) : (
@@ -852,7 +852,7 @@ const Settings = () => {
                           <Upload className="h-4 w-4 mr-2" />
                           Change Avatar
                         </Button>
-                        {(profile?.avatar_url || (profile as any)?.avatarUrl) && (
+                        {profile?.avatarUrl && (
                           <Button variant="outline" size="sm" onClick={handleRemoveAvatar} disabled={avatarLoading}>
                             <Trash2 className="h-4 w-4 mr-2" />
                             Remove

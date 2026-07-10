@@ -20,8 +20,14 @@ import type { BOMApprovalRequest } from './bomData';
 async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
   const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? []), ...(payload.docCustom ?? [])].filter(Boolean) as DocValue[];
   await Promise.allSettled(
-    docs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName)),
+    docs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName ?? undefined)),
   );
+}
+
+// New parts can only be added as 'approved' or 'pending' (see BOMPartSheet's
+// add-mode status toggle); narrow to what useCreateBomNode's DTO accepts.
+function toNodeStatus(status: BOMStatus): 'approved' | 'pending' | 'draft' {
+  return status === 'rejected' ? 'pending' : status;
 }
 
 function softTint(hex: string, alpha: number): string {
@@ -57,7 +63,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
-  BOMNode, BOMFilters, EMPTY_FILTERS,
+  BOMNode, BOMFilters, BOMStatus, EMPTY_FILTERS,
   getCategoryMeta,
   bomFlatAll, bomFlatten, bomFind,
   bomFilterTree, bomFlattenInclude, bomTypeOf,
@@ -115,26 +121,19 @@ function ListRowSkeleton({ level = 0 }: { level?: number }) {
   );
 }
 
-function GridCardSkeleton() {
+function MobileListRowSkeleton() {
   return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
-      <div className="p-2.5">
-        <Skeleton className="w-full h-40 rounded-lg" />
-      </div>
-      <div className="px-3.5 pb-3.5 pt-0.5">
-        <Skeleton className="h-2.5 w-24 mb-1.5" />
-        <Skeleton className="h-4 w-full mb-1" />
-        <Skeleton className="h-4 w-3/4 mb-3" />
-        <div className="grid grid-cols-2 gap-x-2.5 gap-y-2 mb-3">
-          <Skeleton className="h-8 rounded" />
-          <Skeleton className="h-8 rounded" />
-          <Skeleton className="h-8 rounded" />
-          <Skeleton className="h-8 rounded" />
+    <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
+      <Skeleton className="w-[44px] h-[44px] rounded-[10px] shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <Skeleton className="h-3.5 w-32" />
+          <Skeleton className="h-3.5 w-12 shrink-0" />
         </div>
-        <Skeleton className="h-7 w-full rounded-md mb-3" />
-        <div className="flex items-center justify-between pt-2.5 border-t border-border">
-          <Skeleton className="h-5 w-24 rounded-full" />
-          <Skeleton className="h-5 w-8 rounded" />
+        <Skeleton className="h-2.5 w-24 mb-2" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-20 rounded" />
+          <Skeleton className="h-2.5 w-10" />
         </div>
       </div>
     </div>
@@ -150,7 +149,8 @@ function BOMViewSkeleton() {
         <div className="flex gap-2.5 md:gap-3 flex-wrap mb-4">
           {[0, 1, 2, 3].map(i => <StatCardSkeleton key={i} />)}
         </div>
-        <div className="flex items-center gap-2.5 pb-0">
+        {/* Toolbar skeleton — desktop/tablet */}
+        <div className="hidden md:flex items-center gap-2.5 pb-0">
           <Skeleton className="h-8 w-72 rounded-md" />
           <Skeleton className="h-7 w-20 rounded-md" />
           <Skeleton className="h-7 w-20 rounded-md" />
@@ -160,21 +160,37 @@ function BOMViewSkeleton() {
           <div className="w-px h-5 bg-border" />
           <Skeleton className="h-7 w-28 rounded-lg" />
         </div>
+        {/* Toolbar skeleton — mobile */}
+        <div className="flex md:hidden items-center gap-2 pb-0">
+          <Skeleton className="w-8 h-8 rounded-md shrink-0" />
+          <Skeleton className="h-7 w-16 rounded-md" />
+          <div className="flex-1" />
+          <Skeleton className="w-8 h-8 rounded-md shrink-0" />
+          <Skeleton className="w-8 h-8 rounded-md shrink-0" />
+          <Skeleton className="w-8 h-8 rounded-md shrink-0" />
+        </div>
       </div>
-      {/* Table header — real so column names are visible */}
-      <div className="flex items-center px-6 border-b border-t border-border bg-muted/40" style={{ minWidth: 1200 }}>
-        {HEADERS.map((c, i) => (
-          <div key={c.key}
-            style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
-            className={cn('py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none',
-              i === 0 ? 'pl-0 pr-2' : 'px-2'
-            )}>
-            {c.label}
-          </div>
-        ))}
+      {/* Table skeleton — desktop/tablet only */}
+      <div className="hidden md:flex md:flex-col md:flex-1 overflow-hidden">
+        {/* Table header — real so column names are visible */}
+        <div className="flex items-center px-6 border-b border-t border-border bg-muted/40" style={{ minWidth: 1200 }}>
+          {HEADERS.map((c, i) => (
+            <div key={c.key}
+              style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
+              className={cn('py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none',
+                i === 0 ? 'pl-0 pr-2' : 'px-2'
+              )}>
+              {c.label}
+            </div>
+          ))}
+        </div>
+        <div className="flex-1 overflow-hidden border-t-0" style={{ minWidth: 1200 }}>
+          {SKELETON_LEVELS.map((level, i) => <ListRowSkeleton key={i} level={level} />)}
+        </div>
       </div>
-      <div className="flex-1 overflow-hidden border-t-0" style={{ minWidth: 1200 }}>
-        {SKELETON_LEVELS.map((level, i) => <ListRowSkeleton key={i} level={level} />)}
+      {/* Card skeleton — mobile only */}
+      <div className="flex md:hidden flex-col flex-1 overflow-hidden border-t border-border">
+        {SKELETON_LEVELS.map((_, i) => <MobileListRowSkeleton key={i} />)}
       </div>
     </div>
   );
@@ -491,7 +507,7 @@ function ListView({
   const rowH = 46;
 
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-auto border-t border-border">
+    <div className="hidden md:block flex-1 overflow-y-auto overflow-x-auto border-t border-border">
       {/* Header */}
       <div className="flex items-center px-6 border-b border-border bg-background sticky top-0 z-10" style={{ minWidth: 1200 }}>
         {HEADERS.map((c, i) => (
@@ -634,6 +650,103 @@ function ListView({
         <div className="px-6 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground" style={{ minWidth: 1200 }}>
           <span>Showing {rows.length} of {totalCount} total parts</span>
           <span>Last updated 23-Apr-2026 · Rev C approved by Engineering</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Mobile-only status pill (short label, matches the mobile design spec) ──
+const MOBILE_STATUS_STYLE: Record<BOMStatus, { bg: string; color: string; label: string }> = {
+  approved: { bg: 'rgba(34,197,94,0.12)', color: '#16A34A', label: 'Approved' },
+  pending:  { bg: 'rgba(245,158,11,0.14)', color: '#D97706', label: 'Pending' },
+  rejected: { bg: 'rgba(220,38,38,0.12)', color: '#DC2626', label: 'Rejected' },
+  draft:    { bg: 'rgba(100,116,139,0.12)', color: '#64748B', label: 'Draft' },
+};
+function MobileStatusPill({ status }: { status: BOMStatus }) {
+  const s = MOBILE_STATUS_STYLE[status];
+  return (
+    <span
+      className="inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-semibold whitespace-nowrap shrink-0"
+      style={{ background: s.bg, color: s.color }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+// ── Mobile list view (stacked cards, no horizontal scroll) ─────────
+// Shows only what matters at a glance — icon, PN, name, qty/rev,
+// status. Everything else (mfr, lead, price, owner, supplier,
+// approve/reject/add/delete actions) lives one tap away in BOMDetailScreen.
+function MobileListView({
+  rows, expanded, toggle, filtersActive, onOpen, totalCount,
+}: {
+  rows: BOMNode[];
+  expanded: Record<string, boolean>;
+  toggle: (id: string) => void;
+  filtersActive: boolean;
+  onOpen: (id: string) => void;
+  totalCount: number;
+}) {
+  return (
+    <div className="flex md:hidden flex-1 flex-col overflow-y-auto border-t border-border">
+      {rows.length === 0 ? (
+        <div className="py-16 text-center text-muted-foreground">
+          <Search className="w-7 h-7 mx-auto mb-3 opacity-30" />
+          <div className="text-sm">No parts match your filters</div>
+        </div>
+      ) : (
+        <div className="divide-y divide-border">
+          {rows.map(row => {
+            const hasChildren = !!(row.children?.length);
+            const isExp = filtersActive ? true : !!expanded[row.id];
+            const indent = filtersActive ? 0 : Math.min(row.level, 4) * 16;
+
+            return (
+              <div
+                key={row.id}
+                onClick={() => onOpen(row.id)}
+                className="flex items-center gap-3 px-4 py-3 active:bg-muted/40 transition-colors cursor-pointer"
+              >
+                {/* Expand toggle (only for parents) / hierarchy indent */}
+                <span className="shrink-0 flex items-center justify-center" style={{ width: 16, marginLeft: indent }}>
+                  {hasChildren && !filtersActive ? (
+                    <button
+                      onClick={e => { e.stopPropagation(); toggle(row.id); }}
+                      className="inline-flex items-center justify-center w-6 h-6 -m-1 text-muted-foreground"
+                    >
+                      <span className="inline-flex transition-transform" style={{ transform: isExp ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </span>
+                    </button>
+                  ) : null}
+                </span>
+
+                <PartImageThumb nodeId={row.id} cat={row.cat} size={44} radius={12} />
+
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-bold text-primary truncate leading-tight">{row.pn}</div>
+                  <div className={cn('text-[14.5px] leading-snug truncate mt-0.5',
+                    row.level === 0 ? 'font-semibold text-foreground' : 'font-medium text-foreground'
+                  )}>
+                    {row.name || row.desc}
+                  </div>
+                  <div className="text-[12px] text-muted-foreground mt-1 truncate">
+                    Qty {row.qty} {row.uom} · Rev {row.rev}
+                  </div>
+                </div>
+
+                <MobileStatusPill status={row.status} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div className="px-4 py-3.5 text-center text-[11px] text-muted-foreground border-t border-border">
+          Showing {rows.length} of {totalCount} total parts
         </div>
       )}
     </div>
@@ -953,13 +1066,13 @@ export function BOMView({
         initialRev:          payload.rev,
         initialPrice:        payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
-        initialSuppliers:    payload.suppliers?.length ? payload.suppliers.map(s => ({ ...s, price: parseFloat(s.price) || 0 })) : undefined,
+        initialSuppliers:    payload.suppliers?.length ? payload.suppliers : undefined,
       });
       const node = await createNode.mutateAsync({
         partId:   part.id,
         quantity: payload.qty,
         unit:     payload.uom,
-        status:   payload.status,
+        status:   toNodeStatus(payload.status),
         ownerId:  payload.ownerId ?? null,
       });
       // Upload any documents attached in the form
@@ -993,13 +1106,13 @@ export function BOMView({
         initialRev:          payload.rev,
         initialPrice:        payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
-        initialSuppliers:    payload.suppliers?.length ? payload.suppliers.map(s => ({ ...s, price: parseFloat(s.price) || 0 })) : undefined,
+        initialSuppliers:    payload.suppliers?.length ? payload.suppliers : undefined,
       });
       const node = await createNode.mutateAsync({
         partId:   part.id,
         quantity: payload.qty,
         unit:     payload.uom,
-        status:   payload.status,
+        status:   toNodeStatus(payload.status),
         parentId: createSubNode.id,
         ownerId:  payload.ownerId ?? null,
       });
@@ -1347,21 +1460,31 @@ export function BOMView({
 
       {/* ── Scrollable content (fills remaining height) ────────────── */}
       {view === 'list' && (
-        <ListView
-          rows={listRows}
-          expanded={expanded}
-          toggle={toggle}
-          filtersActive={filtersActive}
-          onOpen={setSelected}
-          onAddSub={setAddSubNode}
-          onDeleteRequest={setDeleteTarget}
-          totalCount={totalCount}
-          formatCurrency={formatCurrency}
-          canDecideRow={canDecideRow}
-          onApprove={handleApprove}
-          onReject={setRejectTarget}
-          approvingId={decideApprovalRequest.isPending ? decideApprovalRequest.variables?.nodeId ?? null : null}
-        />
+        <>
+          <ListView
+            rows={listRows}
+            expanded={expanded}
+            toggle={toggle}
+            filtersActive={filtersActive}
+            onOpen={setSelected}
+            onAddSub={setAddSubNode}
+            onDeleteRequest={setDeleteTarget}
+            totalCount={totalCount}
+            formatCurrency={formatCurrency}
+            canDecideRow={canDecideRow}
+            onApprove={handleApprove}
+            onReject={setRejectTarget}
+            approvingId={decideApprovalRequest.isPending ? decideApprovalRequest.variables?.nodeId ?? null : null}
+          />
+          <MobileListView
+            rows={listRows}
+            expanded={expanded}
+            toggle={toggle}
+            filtersActive={filtersActive}
+            onOpen={setSelected}
+            totalCount={totalCount}
+          />
+        </>
       )}
       {view === 'grid' && (
         <GridView rows={gridRows} rootNodes={rootNodes} filtersActive={filtersActive} onOpen={setSelected} totalCount={totalCount} formatCurrency={formatCurrency} />

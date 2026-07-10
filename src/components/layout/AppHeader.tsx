@@ -72,6 +72,12 @@ export function AppHeader() {
   const projectId = projectMatch?.params?.id;
   const { data: project } = useProjectDetail(projectId, { enabled: !!projectId });
 
+  // Mobile project detail: hide theme/notifications/profile, keep only back + name
+  const isMobileProjectDetail = isMobile && !!project;
+
+  // Mobile settings page: hide theme/notifications/profile
+  const isMobileSettings = isMobile && location.pathname.startsWith('/settings');
+
   const pageTitle = useMemo(
     () => getPageTitle(location.pathname),
     [location.pathname],
@@ -104,12 +110,14 @@ export function AppHeader() {
             <h1 className="text-base sm:text-lg font-semibold tracking-tight truncate">
               {project.name}
             </h1>
-            <Badge
-              variant="secondary"
-              className={cn(stageColors[project.stage] ?? '', 'shrink-0')}
-            >
-              {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
-            </Badge>
+            {!isMobile && (
+              <Badge
+                variant="secondary"
+                className={cn(stageColors[project.stage] ?? '', 'shrink-0')}
+              >
+                {project.stage.charAt(0).toUpperCase() + project.stage.slice(1)}
+              </Badge>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-2">
@@ -156,7 +164,7 @@ export function AppHeader() {
               <Users className="h-4 w-4" />
             </Button>
           </>
-        ) : (
+        ) : isMobileProjectDetail || isMobileSettings ? null : (
           <>
             {/* Theme Toggle */}
             <Button

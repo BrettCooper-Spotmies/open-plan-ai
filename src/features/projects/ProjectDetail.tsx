@@ -1133,7 +1133,7 @@ export default function ProjectDetail() {
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               {/* Left Side: Tabs */}
               <div className="w-full py-1 md:mr-auto md:w-auto">
-                <TabsList className="bg-muted/50 grid grid-cols-8 w-full h-9 md:w-auto md:flex md:shrink-0">
+                <TabsList className="bg-muted/50 grid grid-cols-6 w-full h-11 md:w-auto md:flex md:shrink-0">
                   <TabsTrigger
                     value="bom"
                     className="relative gap-1 sm:gap-2 px-2 justify-center min-w-0"
@@ -1143,7 +1143,7 @@ export default function ProjectDetail() {
                     onTouchCancel={handleTabLongPressEnd}
                     onTouchMove={handleTabLongPressEnd}
                   >
-                    <Layers className="h-4 w-4 shrink-0" />
+                    <Layers className="h-5 w-5 md:h-4 md:w-4 shrink-0" />
                     {!isMobile && <span className="truncate">BOM</span>}
                     {isMobile && longPressedTab === 'bom' && (
                       <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-[10px] font-medium text-popover-foreground shadow-md">
@@ -1160,7 +1160,7 @@ export default function ProjectDetail() {
                     onTouchCancel={handleTabLongPressEnd}
                     onTouchMove={handleTabLongPressEnd}
                   >
-                    <GitMerge className="h-4 w-4 shrink-0" />
+                    <GitMerge className="h-5 w-5 md:h-4 md:w-4 shrink-0" />
                     {!isMobile && <span className="truncate">Eng. Changes</span>}
                     {isMobile && longPressedTab === 'eng-changes' && (
                       <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-[10px] font-medium text-popover-foreground shadow-md">
@@ -1177,7 +1177,7 @@ export default function ProjectDetail() {
                     onTouchCancel={handleTabLongPressEnd}
                     onTouchMove={handleTabLongPressEnd}
                   >
-                    <ListTodo className="h-4 w-4 shrink-0" />
+                    <ListTodo className="h-5 w-5 md:h-4 md:w-4 shrink-0" />
                     {!isMobile && <span className="truncate">Tasks</span>}
                     {!isMobile && (
                       <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
@@ -1199,7 +1199,7 @@ export default function ProjectDetail() {
                     onTouchCancel={handleTabLongPressEnd}
                     onTouchMove={handleTabLongPressEnd}
                   >
-                    <Boxes className="h-4 w-4 shrink-0" />
+                    <Boxes className="h-5 w-5 md:h-4 md:w-4 shrink-0" />
                     {!isMobile && <span className="truncate">Modules</span>}
                     {!isMobile && (
                       <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
@@ -1221,7 +1221,7 @@ export default function ProjectDetail() {
                     onTouchCancel={handleTabLongPressEnd}
                     onTouchMove={handleTabLongPressEnd}
                   >
-                    <Flag className="h-4 w-4 shrink-0" />
+                    <Flag className="h-5 w-5 md:h-4 md:w-4 shrink-0" />
                     {!isMobile && <span className="truncate">Milestones</span>}
                     {!isMobile && (
                       <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
@@ -1243,7 +1243,7 @@ export default function ProjectDetail() {
                     onTouchCancel={handleTabLongPressEnd}
                     onTouchMove={handleTabLongPressEnd}
                   >
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    <AlertTriangle className="h-5 w-5 md:h-4 md:w-4 shrink-0" />
                     {!isMobile && <span className="truncate">Issues</span>}
                     {!isMobile && openIssuesCount > 0 && (
                       <Badge variant={criticalIssuesCount > 0 ? "destructive" : "secondary"} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
@@ -1272,7 +1272,7 @@ export default function ProjectDetail() {
               </div>
 
               {/* Right Side: Team + Chat + Add Button */}
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 w-full justify-end md:w-auto">
                 {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
                 {/* Start Chat */}
                 <Button
@@ -1723,7 +1723,7 @@ export default function ProjectDetail() {
               userProjectRole={project?.myRole}
             />
           </TabsContent>
-          <TabsContent value="bom" className="mt-0 -mx-6 -mb-6 flex flex-col">
+          <TabsContent value="bom" className="mt-0 -mx-4 md:-mx-6 -mb-6 flex flex-col">
             <BOMView
               projectId={project.id}
               orgId={currentOrganization?.id ?? ''}
@@ -1736,10 +1736,10 @@ export default function ProjectDetail() {
               onEcoCreated={(ecoId) => navigate(`/projects/${id}/eng-changes/${ecoId}`)}
             />
           </TabsContent>
-          <TabsContent value="requirements" className="mt-6 -mx-6 -mb-6 flex flex-col">
+          <TabsContent value="requirements" className="mt-6 -mx-4 md:-mx-6 -mb-6 flex flex-col">
             <RequirementsView />
           </TabsContent>
-          <TabsContent value="eng-changes" className="mt-6 -mx-6 -mb-6 flex flex-col">
+          <TabsContent value="eng-changes" className="mt-6 -mx-4 md:-mx-6 -mb-6 flex flex-col">
             <ECOView
               projectId={id!}
               projectName={project?.name}
