@@ -656,12 +656,31 @@ function ListView({
   );
 }
 
+// ── Mobile-only status pill (short label, matches the mobile design spec) ──
+const MOBILE_STATUS_STYLE: Record<BOMStatus, { bg: string; color: string; label: string }> = {
+  approved: { bg: 'rgba(34,197,94,0.12)', color: '#16A34A', label: 'Approved' },
+  pending:  { bg: 'rgba(245,158,11,0.14)', color: '#D97706', label: 'Pending' },
+  rejected: { bg: 'rgba(220,38,38,0.12)', color: '#DC2626', label: 'Rejected' },
+  draft:    { bg: 'rgba(100,116,139,0.12)', color: '#64748B', label: 'Draft' },
+};
+function MobileStatusPill({ status }: { status: BOMStatus }) {
+  const s = MOBILE_STATUS_STYLE[status];
+  return (
+    <span
+      className="inline-flex items-center px-2.5 py-1 rounded-md text-[12px] font-semibold whitespace-nowrap shrink-0"
+      style={{ background: s.bg, color: s.color }}
+    >
+      {s.label}
+    </span>
+  );
+}
+
 // ── Mobile list view (stacked cards, no horizontal scroll) ─────────
-// Shows only what matters at a glance — thumbnail, name, PN, price,
-// status, qty. Everything else (mfr, lead, rev, owner, supplier,
+// Shows only what matters at a glance — icon, PN, name, qty/rev,
+// status. Everything else (mfr, lead, price, owner, supplier,
 // approve/reject/add/delete actions) lives one tap away in BOMDetailScreen.
 function MobileListView({
-  rows, expanded, toggle, filtersActive, onOpen, totalCount, formatCurrency,
+  rows, expanded, toggle, filtersActive, onOpen, totalCount,
 }: {
   rows: BOMNode[];
   expanded: Record<string, boolean>;
@@ -669,7 +688,6 @@ function MobileListView({
   filtersActive: boolean;
   onOpen: (id: string) => void;
   totalCount: number;
-  formatCurrency: (n: number) => string;
 }) {
   return (
     <div className="flex md:hidden flex-1 flex-col overflow-y-auto border-t border-border">
@@ -683,16 +701,16 @@ function MobileListView({
           {rows.map(row => {
             const hasChildren = !!(row.children?.length);
             const isExp = filtersActive ? true : !!expanded[row.id];
-            const indent = filtersActive ? 0 : Math.min(row.level, 4) * 14;
+            const indent = filtersActive ? 0 : Math.min(row.level, 4) * 16;
 
             return (
               <div
                 key={row.id}
                 onClick={() => onOpen(row.id)}
-                className="flex items-center gap-3 px-4 py-3.5 bg-background active:bg-muted/40 transition-colors cursor-pointer"
+                className="flex items-center gap-3 px-4 py-3 active:bg-muted/40 transition-colors cursor-pointer"
               >
                 {/* Expand toggle (only for parents) / hierarchy indent */}
-                <span className="shrink-0 flex items-center justify-center" style={{ width: 18, marginLeft: indent }}>
+                <span className="shrink-0 flex items-center justify-center" style={{ width: 16, marginLeft: indent }}>
                   {hasChildren && !filtersActive ? (
                     <button
                       onClick={e => { e.stopPropagation(); toggle(row.id); }}
@@ -705,27 +723,21 @@ function MobileListView({
                   ) : null}
                 </span>
 
-                <PartImageThumb nodeId={row.id} cat={row.cat} size={44} radius={10} />
+                <PartImageThumb nodeId={row.id} cat={row.cat} size={44} radius={12} />
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className={cn('text-[14px] leading-snug truncate min-w-0',
-                      row.level === 0 ? 'font-semibold text-foreground' : 'font-medium text-foreground'
-                    )}>
-                      {row.name || row.desc}
-                    </span>
-                    <span className="text-[13.5px] font-semibold text-foreground tabular-nums shrink-0">
-                      {formatCurrency(row.price)}
-                    </span>
+                  <div className="text-[11px] font-bold text-primary truncate leading-tight">{row.pn}</div>
+                  <div className={cn('text-[14.5px] leading-snug truncate mt-0.5',
+                    row.level === 0 ? 'font-semibold text-foreground' : 'font-medium text-foreground'
+                  )}>
+                    {row.name || row.desc}
                   </div>
-                  <div className="text-[11.5px] font-mono text-muted-foreground truncate mt-0.5">{row.pn}</div>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <BOMStatusPill status={row.status} />
-                    <span className="text-[11.5px] text-muted-foreground tabular-nums">{row.qty} {row.uom}</span>
+                  <div className="text-[12px] text-muted-foreground mt-1 truncate">
+                    Qty {row.qty} {row.uom} · Rev {row.rev}
                   </div>
                 </div>
 
-                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+                <MobileStatusPill status={row.status} />
               </div>
             );
           })}
@@ -1471,7 +1483,6 @@ export function BOMView({
             filtersActive={filtersActive}
             onOpen={setSelected}
             totalCount={totalCount}
-            formatCurrency={formatCurrency}
           />
         </>
       )}
