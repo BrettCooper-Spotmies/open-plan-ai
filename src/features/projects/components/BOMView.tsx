@@ -115,6 +115,25 @@ function ListRowSkeleton({ level = 0 }: { level?: number }) {
   );
 }
 
+function MobileListRowSkeleton() {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3.5 border-b border-border">
+      <Skeleton className="w-[44px] h-[44px] rounded-[10px] shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <Skeleton className="h-3.5 w-32" />
+          <Skeleton className="h-3.5 w-12 shrink-0" />
+        </div>
+        <Skeleton className="h-2.5 w-24 mb-2" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-20 rounded" />
+          <Skeleton className="h-2.5 w-10" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GridCardSkeleton() {
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -150,7 +169,8 @@ function BOMViewSkeleton() {
         <div className="flex gap-2.5 md:gap-3 flex-wrap mb-4">
           {[0, 1, 2, 3].map(i => <StatCardSkeleton key={i} />)}
         </div>
-        <div className="flex items-center gap-2.5 pb-0">
+        {/* Toolbar skeleton — desktop/tablet */}
+        <div className="hidden md:flex items-center gap-2.5 pb-0">
           <Skeleton className="h-8 w-72 rounded-md" />
           <Skeleton className="h-7 w-20 rounded-md" />
           <Skeleton className="h-7 w-20 rounded-md" />
@@ -160,21 +180,37 @@ function BOMViewSkeleton() {
           <div className="w-px h-5 bg-border" />
           <Skeleton className="h-7 w-28 rounded-lg" />
         </div>
+        {/* Toolbar skeleton — mobile */}
+        <div className="flex md:hidden items-center gap-2 pb-0">
+          <Skeleton className="w-8 h-8 rounded-md shrink-0" />
+          <Skeleton className="h-7 w-16 rounded-md" />
+          <div className="flex-1" />
+          <Skeleton className="w-8 h-8 rounded-md shrink-0" />
+          <Skeleton className="w-8 h-8 rounded-md shrink-0" />
+          <Skeleton className="w-8 h-8 rounded-md shrink-0" />
+        </div>
       </div>
-      {/* Table header — real so column names are visible */}
-      <div className="flex items-center px-6 border-b border-t border-border bg-muted/40" style={{ minWidth: 1200 }}>
-        {HEADERS.map((c, i) => (
-          <div key={c.key}
-            style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
-            className={cn('py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none',
-              i === 0 ? 'pl-0 pr-2' : 'px-2'
-            )}>
-            {c.label}
-          </div>
-        ))}
+      {/* Table skeleton — desktop/tablet only */}
+      <div className="hidden md:flex md:flex-col md:flex-1 overflow-hidden">
+        {/* Table header — real so column names are visible */}
+        <div className="flex items-center px-6 border-b border-t border-border bg-muted/40" style={{ minWidth: 1200 }}>
+          {HEADERS.map((c, i) => (
+            <div key={c.key}
+              style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
+              className={cn('py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none',
+                i === 0 ? 'pl-0 pr-2' : 'px-2'
+              )}>
+              {c.label}
+            </div>
+          ))}
+        </div>
+        <div className="flex-1 overflow-hidden border-t-0" style={{ minWidth: 1200 }}>
+          {SKELETON_LEVELS.map((level, i) => <ListRowSkeleton key={i} level={level} />)}
+        </div>
       </div>
-      <div className="flex-1 overflow-hidden border-t-0" style={{ minWidth: 1200 }}>
-        {SKELETON_LEVELS.map((level, i) => <ListRowSkeleton key={i} level={level} />)}
+      {/* Card skeleton — mobile only */}
+      <div className="flex md:hidden flex-col flex-1 overflow-hidden border-t border-border">
+        {SKELETON_LEVELS.map((_, i) => <MobileListRowSkeleton key={i} />)}
       </div>
     </div>
   );
@@ -491,7 +527,7 @@ function ListView({
   const rowH = 46;
 
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-auto border-t border-border">
+    <div className="hidden md:block flex-1 overflow-y-auto overflow-x-auto border-t border-border">
       {/* Header */}
       <div className="flex items-center px-6 border-b border-border bg-background sticky top-0 z-10" style={{ minWidth: 1200 }}>
         {HEADERS.map((c, i) => (
@@ -634,6 +670,91 @@ function ListView({
         <div className="px-6 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground" style={{ minWidth: 1200 }}>
           <span>Showing {rows.length} of {totalCount} total parts</span>
           <span>Last updated 23-Apr-2026 · Rev C approved by Engineering</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Mobile list view (stacked cards, no horizontal scroll) ─────────
+// Shows only what matters at a glance — thumbnail, name, PN, price,
+// status, qty. Everything else (mfr, lead, rev, owner, supplier,
+// approve/reject/add/delete actions) lives one tap away in BOMDetailScreen.
+function MobileListView({
+  rows, expanded, toggle, filtersActive, onOpen, totalCount, formatCurrency,
+}: {
+  rows: BOMNode[];
+  expanded: Record<string, boolean>;
+  toggle: (id: string) => void;
+  filtersActive: boolean;
+  onOpen: (id: string) => void;
+  totalCount: number;
+  formatCurrency: (n: number) => string;
+}) {
+  return (
+    <div className="flex md:hidden flex-1 flex-col overflow-y-auto border-t border-border">
+      {rows.length === 0 ? (
+        <div className="py-16 text-center text-muted-foreground">
+          <Search className="w-7 h-7 mx-auto mb-3 opacity-30" />
+          <div className="text-sm">No parts match your filters</div>
+        </div>
+      ) : (
+        <div className="divide-y divide-border">
+          {rows.map(row => {
+            const hasChildren = !!(row.children?.length);
+            const isExp = filtersActive ? true : !!expanded[row.id];
+            const indent = filtersActive ? 0 : Math.min(row.level, 4) * 14;
+
+            return (
+              <div
+                key={row.id}
+                onClick={() => onOpen(row.id)}
+                className="flex items-center gap-3 px-4 py-3.5 bg-background active:bg-muted/40 transition-colors cursor-pointer"
+              >
+                {/* Expand toggle (only for parents) / hierarchy indent */}
+                <span className="shrink-0 flex items-center justify-center" style={{ width: 18, marginLeft: indent }}>
+                  {hasChildren && !filtersActive ? (
+                    <button
+                      onClick={e => { e.stopPropagation(); toggle(row.id); }}
+                      className="inline-flex items-center justify-center w-6 h-6 -m-1 text-muted-foreground"
+                    >
+                      <span className="inline-flex transition-transform" style={{ transform: isExp ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </span>
+                    </button>
+                  ) : null}
+                </span>
+
+                <PartImageThumb nodeId={row.id} cat={row.cat} size={44} radius={10} />
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className={cn('text-[14px] leading-snug truncate min-w-0',
+                      row.level === 0 ? 'font-semibold text-foreground' : 'font-medium text-foreground'
+                    )}>
+                      {row.name || row.desc}
+                    </span>
+                    <span className="text-[13.5px] font-semibold text-foreground tabular-nums shrink-0">
+                      {formatCurrency(row.price)}
+                    </span>
+                  </div>
+                  <div className="text-[11.5px] font-mono text-muted-foreground truncate mt-0.5">{row.pn}</div>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <BOMStatusPill status={row.status} />
+                    <span className="text-[11.5px] text-muted-foreground tabular-nums">{row.qty} {row.uom}</span>
+                  </div>
+                </div>
+
+                <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {rows.length > 0 && (
+        <div className="px-4 py-3.5 text-center text-[11px] text-muted-foreground border-t border-border">
+          Showing {rows.length} of {totalCount} total parts
         </div>
       )}
     </div>
@@ -1347,21 +1468,32 @@ export function BOMView({
 
       {/* ── Scrollable content (fills remaining height) ────────────── */}
       {view === 'list' && (
-        <ListView
-          rows={listRows}
-          expanded={expanded}
-          toggle={toggle}
-          filtersActive={filtersActive}
-          onOpen={setSelected}
-          onAddSub={setAddSubNode}
-          onDeleteRequest={setDeleteTarget}
-          totalCount={totalCount}
-          formatCurrency={formatCurrency}
-          canDecideRow={canDecideRow}
-          onApprove={handleApprove}
-          onReject={setRejectTarget}
-          approvingId={decideApprovalRequest.isPending ? decideApprovalRequest.variables?.nodeId ?? null : null}
-        />
+        <>
+          <ListView
+            rows={listRows}
+            expanded={expanded}
+            toggle={toggle}
+            filtersActive={filtersActive}
+            onOpen={setSelected}
+            onAddSub={setAddSubNode}
+            onDeleteRequest={setDeleteTarget}
+            totalCount={totalCount}
+            formatCurrency={formatCurrency}
+            canDecideRow={canDecideRow}
+            onApprove={handleApprove}
+            onReject={setRejectTarget}
+            approvingId={decideApprovalRequest.isPending ? decideApprovalRequest.variables?.nodeId ?? null : null}
+          />
+          <MobileListView
+            rows={listRows}
+            expanded={expanded}
+            toggle={toggle}
+            filtersActive={filtersActive}
+            onOpen={setSelected}
+            totalCount={totalCount}
+            formatCurrency={formatCurrency}
+          />
+        </>
       )}
       {view === 'grid' && (
         <GridView rows={gridRows} rootNodes={rootNodes} filtersActive={filtersActive} onOpen={setSelected} totalCount={totalCount} formatCurrency={formatCurrency} />

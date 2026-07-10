@@ -1723,7 +1723,7 @@ export default function ProjectDetail() {
               userProjectRole={project?.myRole}
             />
           </TabsContent>
-          <TabsContent value="bom" className="mt-0 -mx-6 -mb-6 flex flex-col">
+          <TabsContent value="bom" className="mt-0 -mx-4 md:-mx-6 -mb-6 flex flex-col">
             <BOMView
               projectId={project.id}
               orgId={currentOrganization?.id ?? ''}
@@ -1736,10 +1736,10 @@ export default function ProjectDetail() {
               onEcoCreated={(ecoId) => navigate(`/projects/${id}/eng-changes/${ecoId}`)}
             />
           </TabsContent>
-          <TabsContent value="requirements" className="mt-6 -mx-6 -mb-6 flex flex-col">
+          <TabsContent value="requirements" className="mt-6 -mx-4 md:-mx-6 -mb-6 flex flex-col">
             <RequirementsView />
           </TabsContent>
-          <TabsContent value="eng-changes" className="mt-6 -mx-6 -mb-6 flex flex-col">
+          <TabsContent value="eng-changes" className="mt-6 -mx-4 md:-mx-6 -mb-6 flex flex-col">
             <ECOView
               projectId={id!}
               projectName={project?.name}
