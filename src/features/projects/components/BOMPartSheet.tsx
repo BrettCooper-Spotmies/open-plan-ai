@@ -4,7 +4,9 @@
  * Edit mode shows version management inline.
  */
 import { useState, useRef, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import {
@@ -108,6 +110,9 @@ type WizardTabId = typeof TABS[number];
 type TabId = WizardTabId | 'history';
 // 'history' isn't part of the linear wizard flow — treat it as index -1 so Next/Back math stays well-defined.
 const wizardIndex = (t: TabId) => (t === 'history' ? -1 : TABS.indexOf(t));
+const MOBILE_STEP_LABEL: Record<WizardTabId, string> = {
+  details: 'Details', sourcing: 'Sourcing', traceability: 'Traceability', documents: 'Documents',
+};
 
 const LETTERS = 'ABCDEFGHIJ';
 const CATEGORIES: BOMCategory[] = [...KNOWN_BOM_CATEGORIES];
@@ -435,6 +440,7 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
 // ── Main component ─────────────────────────────────────────────────
 export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSave, resubmitMode }: Props) {
   const isEdit = mode === 'edit';
+  const isMobile = useIsMobile();
 
   const { user } = useAuth();
   const { data: projectMembers = [] } = useProjectMembers(projectId);
@@ -583,6 +589,14 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
 
     setDocsPopulated(true);
   }, [open, isEdit, node?.id, docsLoading, existingDocs, docsPopulated]);
+
+  // Lock background scroll while the mobile full-page flow covers the viewport.
+  useEffect(() => {
+    if (!isMobile || !open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [isMobile, open]);
 
   const addReq = () => {
     const v = reqInput.trim().toUpperCase();
@@ -733,6 +747,612 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
       throw err;
     }
   };
+
+  // ── Mobile: full-page step flow instead of a centered dialog ──────
+  if (isMobile) {
+    const stepIdx = wizardIndex(activeTab);
+    const onHeaderBack = () => {
+      if (saving) return;
+      if (activeTab === 'history') { setActiveTab('documents'); return; }
+      if (stepIdx > 0) { setErrors({}); setActiveTab(TABS[stepIdx - 1]); return; }
+      onClose();
+    };
+
+    return (
+      <>
+        {open && createPortal(
+          <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-background flex flex-col">
+            {/* Header */}
+            <div className="shrink-0 border-b border-border px-4 pt-4 pb-3">
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <button type="button" onClick={onHeaderBack} disabled={saving}
+                  className="w-9 h-9 shrink-0 rounded-lg bg-muted flex items-center justify-center text-foreground disabled:opacity-50">
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <h2 className="text-base font-semibold text-foreground flex items-center gap-2 min-w-0 justify-center truncate">
+                  {isEdit ? 'Edit Part' : 'Add New Part'}
+                  {isEdit && node && (
+                    <span className="text-xs font-mono font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
+                      {node.pn}
+                    </span>
+                  )}
+                </h2>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {isEdit && node && activeTab !== 'history' && (
+                    <button type="button" onClick={() => setActiveTab('history')} disabled={saving} title="History"
+                      className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-foreground disabled:opacity-50">
+                      <History className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button type="button" onClick={onClose} disabled={saving}
+                    className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-foreground disabled:opacity-50">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {isEdit
+                  ? 'Update part details. Choose to overwrite the current revision or create a new one.'
+                  : 'Fill in all required fields to add a new part to the Bill of Materials.'}
+              </p>
+            </div>
+
+            {/* Progress */}
+            {activeTab !== 'history' && (
+              <div className="shrink-0 px-4 pt-3 pb-1">
+                <div className="flex gap-1.5">
+                  {TABS.map((t, i) => (
+                    <div key={t} className={cn('h-1 flex-1 rounded-full', i <= stepIdx ? 'bg-primary' : 'bg-muted')} />
+                  ))}
+                </div>
+                <div className="mt-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  Step {stepIdx + 1} of {TABS.length} — {MOBILE_STEP_LABEL[activeTab as WizardTabId]}
+                </div>
+              </div>
+            )}
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto px-4 py-4">
+              {activeTab === 'details' && (
+                <div className="space-y-5">
+                  <FL label="Part Number" required={!isEdit}>
+                    {isEdit ? (
+                      <div className="h-9 px-3 flex items-center bg-muted/50 border border-border rounded-md text-sm font-mono text-muted-foreground">
+                        {node?.pn}
+                      </div>
+                    ) : (
+                      <>
+                        <FInput value={pn} onChange={e => setPn(e.target.value)}
+                          placeholder="e.g. EV-PWR-020" className="h-9 font-mono uppercase" />
+                        {errors.pn && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.pn}</p>}
+                      </>
+                    )}
+                  </FL>
+
+                  <FL label="Part Name" required>
+                    <FInput value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Power Module" className="h-9" />
+                    {errors.name && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.name}</p>}
+                  </FL>
+
+                  <FL label="Description" required>
+                    <Textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="Brief technical description of the part"
+                      className="text-sm bg-muted border-border resize-none" rows={4} />
+                    {errors.desc && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.desc}</p>}
+                  </FL>
+
+                  <FL label="Category" required>
+                    <div className="grid grid-cols-4 gap-2">
+                      {CATEGORIES.map(cat => {
+                        const m = BOM_CAT_META[cat];
+                        const Icon = CAT_ICONS[cat];
+                        const active = category === cat;
+                        return (
+                          <button key={cat} type="button" onClick={() => setCategory(cat)}
+                            className={cn(
+                              'flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl border text-center transition-colors',
+                              active ? 'border-primary/60 bg-primary/5' : 'border-border hover:bg-muted/50'
+                            )}>
+                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${m.tint}20` }}>
+                              <Icon className="w-4 h-4" style={{ color: m.tint }} />
+                            </div>
+                            <span className={cn('text-[10px] font-medium leading-tight', active ? 'text-primary' : 'text-muted-foreground')}>
+                              {m.label.split(' ')[0]}
+                            </span>
+                          </button>
+                        );
+                      })}
+                      <button type="button" onClick={() => setCategory('')}
+                        className={cn(
+                          'flex flex-col items-center gap-1.5 py-2.5 px-1 rounded-xl border text-center transition-colors',
+                          !isKnownCategory(category) ? 'border-primary/60 bg-primary/5' : 'border-border hover:bg-muted/50'
+                        )}>
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-muted">
+                          <Tag className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                        <span className={cn('text-[10px] font-medium leading-tight', !isKnownCategory(category) ? 'text-primary' : 'text-muted-foreground')}>
+                          Other
+                        </span>
+                      </button>
+                    </div>
+                    {!isKnownCategory(category) && (
+                      <div className="mt-2">
+                        <label className="text-[11px] font-medium text-muted-foreground mb-1 flex items-center gap-0.5">
+                          Custom category name<span className="text-destructive ml-0.5">*</span>
+                        </label>
+                        <Input value={category} onChange={e => setCategory(e.target.value)} placeholder="Enter a custom category"
+                          className={`h-9 ${errors.category ? 'border-destructive focus-visible:ring-destructive' : ''}`} maxLength={50} />
+                      </div>
+                    )}
+                    {errors.category && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.category}</p>}
+                  </FL>
+
+                  <FL label="Status">
+                    {!isEdit ? (
+                      <>
+                        <div className="flex gap-2">
+                          {(['approved', 'pending'] as BOMStatus[]).map(s => (
+                            <button key={s} type="button" disabled={!canEditStatus}
+                              onClick={() => canEditStatus && setStatus(s)}
+                              title={canEditStatus ? undefined : 'Only project managers or admins can change part status'}
+                              className={cn(
+                                'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors',
+                                status === s ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground',
+                                canEditStatus ? '' : 'opacity-60'
+                              )}>
+                              {s === 'approved'
+                                ? <CheckCircle className="w-4 h-4" style={{ color: '#16A34A' }} />
+                                : <Clock className="w-4 h-4" style={{ color: '#D97706' }} />}
+                              {s === 'approved' ? 'Approved' : 'Pending'}
+                            </button>
+                          ))}
+                        </div>
+                        {!canEditStatus && (
+                          <p className="text-[11px] text-muted-foreground mt-1.5">Only project managers or admins can change part status.</p>
+                        )}
+                      </>
+                    ) : node?.status === 'pending' && activeRequest && (isAssignedApprover || isAdmin) ? (
+                      <div className="flex gap-2">
+                        <button type="button" disabled={decideApprovalRequest.isPending} onClick={handleApproveClick}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium disabled:opacity-50">
+                          {decideApprovalRequest.isPending
+                            ? <Loader2 className="w-4 h-4 animate-spin" />
+                            : <Check className="w-4 h-4" style={{ color: '#16A34A' }} />}
+                          Approve
+                        </button>
+                        <button type="button" disabled={decideApprovalRequest.isPending} onClick={() => setShowRejectDialog(true)}
+                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium disabled:opacity-50">
+                          <XCircle className="w-4 h-4" style={{ color: '#DC2626' }} />
+                          Reject
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 h-9">
+                        <BOMStatusPill status={node?.status ?? 'pending'} />
+                        {node?.status === 'pending' && !activeRequest && (
+                          <span className="text-[11px] text-muted-foreground">Not yet sent for review.</span>
+                        )}
+                      </div>
+                    )}
+                  </FL>
+
+                  <FL label="Owner / Handled By" required>
+                    <Popover open={ownerPopover} onOpenChange={setOwnerPopover}>
+                      <PopoverTrigger asChild>
+                        <button type="button" className={cn(
+                          'w-full h-9 flex items-center gap-2 px-3 rounded-md border text-sm transition-colors bg-muted border-border',
+                          errors.owner && 'border-destructive'
+                        )}>
+                          {selectedOwner ? (
+                            <>
+                              <Avatar className="h-5 w-5 shrink-0">
+                                <AvatarImage src={resolveFileUrl(selectedOwner.avatar) ?? selectedOwner.avatar} alt={selectedOwner.name} />
+                                <AvatarFallback className="text-[9px] bg-primary/20 text-primary">{selectedOwner.initials}</AvatarFallback>
+                              </Avatar>
+                              <span className="flex-1 text-left truncate">{selectedOwner.name}</span>
+                            </>
+                          ) : isEdit && node?.owner ? (
+                            <>
+                              <Avatar className="h-5 w-5 shrink-0">
+                                <AvatarFallback className="text-[9px] bg-primary/20 text-primary">
+                                  {node.owner.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="flex-1 text-left truncate">{node.owner}</span>
+                            </>
+                          ) : (
+                            <span className="flex-1 text-left text-muted-foreground">Select project member…</span>
+                          )}
+                          <ChevronsUpDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="p-0 w-[260px]" align="start">
+                        <Command>
+                          <CommandInput placeholder="Search members…" />
+                          <CommandList>
+                            <CommandEmpty>No members found.</CommandEmpty>
+                            <CommandGroup heading="Project Members">
+                              {projectMembers.map(member => (
+                                <CommandItem key={member.id} value={`${member.id} ${member.name}`}
+                                  onSelect={() => { setSelectedOwner(member); setOwnerPopover(false); }} className="cursor-pointer">
+                                  <div className="flex items-center gap-2">
+                                    <Avatar className="h-5 w-5">
+                                      <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
+                                      <AvatarFallback className="text-[9px]">{member.initials}</AvatarFallback>
+                                    </Avatar>
+                                    {member.name}
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {errors.owner && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.owner}</p>}
+                  </FL>
+
+                  {!isEdit && (
+                    <FL label="Initial Revision">
+                      <div className="flex items-center gap-3">
+                        <FInput value={rev} onChange={e => setRev(e.target.value.toUpperCase().slice(0, 3))} placeholder="A" className="h-9 w-24 font-mono" />
+                        <span className="text-xs text-muted-foreground">Starting revision (typically "A")</span>
+                      </div>
+                    </FL>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'sourcing' && (
+                <div className="space-y-5">
+                  <FL label="Manufacturer" required>
+                    <FInput value={manufacturer} onChange={e => setManufacturer(e.target.value)} placeholder="e.g. Texas Instruments" className="h-9" />
+                    {errors.mfr && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.mfr}</p>}
+                  </FL>
+                  <FL label="Manufacturer PN (MPN)" required>
+                    <FInput value={mpn} onChange={e => setMpn(e.target.value)} placeholder="e.g. TI-A4B2C" className="h-9 font-mono" />
+                    {errors.mpn && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.mpn}</p>}
+                  </FL>
+
+                  <FL label="Quantity" required>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setQty(q => String(Math.max(0, (parseFloat(q) || 0) - 1)))}
+                        className="w-9 h-9 shrink-0 rounded-md border border-border bg-muted flex items-center justify-center text-foreground text-lg leading-none">
+                        −
+                      </button>
+                      <FInput value={qty} onChange={e => {
+                        let val = e.target.value;
+                        if (['EA', 'SET', 'PCS', 'LOT', 'LIC'].includes(uom)) {
+                          val = val.replace(/[^0-9]/g, '').slice(0, 10);
+                        } else {
+                          val = val.replace(/[^0-9.]/g, '');
+                          const parts = val.split('.');
+                          if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                          if (parts[0].length > 10) val = parts.length > 1 ? parts[0].slice(0, 10) + '.' + parts[1] : parts[0].slice(0, 10);
+                        }
+                        setQty(val);
+                      }} type="text" placeholder="1" className="h-9 flex-1 text-center" maxLength={15} />
+                      <button type="button" onClick={() => setQty(q => String((parseFloat(q) || 0) + 1))}
+                        className="w-9 h-9 shrink-0 rounded-md border border-border bg-muted flex items-center justify-center text-foreground text-lg leading-none">
+                        +
+                      </button>
+                    </div>
+                    {errors.qty && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.qty}</p>}
+                  </FL>
+
+                  <FL label="Unit of Measure (UOM)" required>
+                    <div className="flex flex-wrap gap-1.5">
+                      {UOM_OPTIONS.map(u => (
+                        <button key={u} type="button" onClick={() => setUom(u)}
+                          className={cn('px-3 py-1.5 rounded-md text-xs font-medium border transition-colors',
+                            uom === u ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border')}>
+                          {u}
+                        </button>
+                      ))}
+                    </div>
+                  </FL>
+
+                  <FL label="Lead Time" required>
+                    <div className="flex items-center gap-1.5">
+                      <FInput value={leadTime} onChange={e => setLeadTime(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                        type="text" placeholder="8" className="h-9 w-16 shrink-0" maxLength={6} />
+                      <div className="flex gap-1 flex-1">
+                        {LEAD_TIME_UNITS.map(u => (
+                          <button key={u.id} type="button" onClick={() => setLeadTimeUnit(u.id)}
+                            className={cn('flex-1 h-9 rounded-md text-xs font-medium border transition-colors',
+                              leadTimeUnit === u.id ? 'bg-primary/10 text-primary border-primary/30' : 'bg-card text-muted-foreground border-border')}>
+                            {u.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {errors.leadTime && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.leadTime}</p>}
+                  </FL>
+
+                  <div className="space-y-3">
+                    {suppliers.map((sup, i) => (
+                      <div key={i} className="rounded-lg border border-border bg-muted/30 p-3.5 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Supplier {i + 1}</span>
+                          {suppliers.length > 1 && (
+                            <button type="button" onClick={() => setSuppliers(s => s.filter((_, idx) => idx !== i))}
+                              className="text-muted-foreground hover:text-destructive" title="Remove supplier">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                        <FL label="Supplier / Distributor" required>
+                          <FInput value={sup.distributor}
+                            onChange={e => setSuppliers(s => s.map((x, idx) => idx === i ? { ...x, distributor: e.target.value } : x))}
+                            placeholder="e.g. Digi-Key" className="h-9" />
+                          {errors[`sup_dist_${i}`] && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors[`sup_dist_${i}`]}</p>}
+                        </FL>
+                        <FL label="Unit Price" required>
+                          <FInput value={sup.calcFromSubparts ? '0.00' : sup.price}
+                            onChange={e => {
+                              let val = e.target.value.replace(/[^0-9.]/g, '');
+                              const parts = val.split('.');
+                              if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('');
+                              if (parts[0].length > 10) val = parts.length > 1 ? parts[0].slice(0, 10) + '.' + parts[1] : parts[0].slice(0, 10);
+                              setSuppliers(s => s.map((x, idx) => idx === i ? { ...x, price: val } : x));
+                            }}
+                            disabled={sup.calcFromSubparts} type="text" placeholder="0.00" className="h-9" maxLength={15} />
+                          {errors[`sup_price_${i}`] && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors[`sup_price_${i}`]}</p>}
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <Checkbox id={`m_calcFromSubparts_${i}`} checked={sup.calcFromSubparts}
+                              onCheckedChange={c => setSuppliers(s => s.map((x, idx) => idx === i ? { ...x, calcFromSubparts: !!c } : x))} />
+                            <label htmlFor={`m_calcFromSubparts_${i}`} className="text-[11px] font-medium leading-none text-muted-foreground cursor-pointer select-none">
+                              Calculate from sub-parts
+                            </label>
+                          </div>
+                        </FL>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setSuppliers(s => [...s, { distributor: '', price: '', calcFromSubparts: false }])}
+                      className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors">
+                      <Plus className="w-3.5 h-3.5" /> Add Supplier
+                    </button>
+                  </div>
+
+                  <div className="rounded-lg border border-border bg-muted/30 p-3.5 space-y-3">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Additional Fields</span>
+                    {customFields.map((field, i) => (
+                      <div key={i} className="space-y-2">
+                        <FL label="Field Label">
+                          <FInput value={field.label}
+                            onChange={e => setCustomFields(f => f.map((x, idx) => idx === i ? { ...x, label: e.target.value } : x))}
+                            placeholder="e.g. RoHS" className="h-9" />
+                        </FL>
+                        <FL label="Value">
+                          <div className="flex items-center gap-1.5">
+                            <FInput value={field.value}
+                              onChange={e => setCustomFields(f => f.map((x, idx) => idx === i ? { ...x, value: e.target.value } : x))}
+                              placeholder="e.g. Compliant" className="h-9 flex-1" />
+                            <button type="button" onClick={() => setCustomFields(f => f.filter((_, idx) => idx !== i))}
+                              className="w-7 h-7 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </FL>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => setCustomFields(f => [...f, { label: '', value: '' }])}
+                      className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors">
+                      <Plus className="w-3.5 h-3.5" /> Add Field
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'traceability' && (
+                <div className="space-y-4">
+                  <div>
+                    <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Requirements Links</Label>
+                    <p className="text-xs text-muted-foreground mt-1 mb-4">
+                      Link this part to system requirements it satisfies (e.g. SYS-001, PWR-003).
+                    </p>
+                    <div className="flex gap-2 mb-4">
+                      <Input value={reqInput} onChange={e => setReqInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addReq(); } }}
+                        placeholder="e.g. SYS-001" className="h-9 text-sm bg-muted border-border font-mono flex-1 uppercase" />
+                      <Button size="sm" variant="outline" className="h-9 gap-1.5 px-4 shrink-0" onClick={addReq} disabled={!reqInput.trim()}>
+                        <Plus className="w-3.5 h-3.5" /> Add
+                      </Button>
+                    </div>
+                    {req.length === 0 ? (
+                      <div className="flex items-center justify-center h-28 rounded-xl border-2 border-dashed border-border bg-muted/20">
+                        <p className="text-sm text-muted-foreground text-center px-4">No requirements linked yet — type above to add</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {req.map(r => (
+                          <span key={r} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-muted text-foreground border-border">
+                            {r}
+                            <button onClick={() => removeReq(r)} className="opacity-60 hover:opacity-100 transition-opacity">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'documents' && (
+                <div className="space-y-6">
+                  <PhotoUpload value={docPhoto} onChange={setDocPhoto} />
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block">Technical Files</Label>
+                      {!isAddingSection && (
+                        <button type="button" onClick={() => setIsAddingSection(true)}
+                          className="text-xs font-medium text-primary hover:text-primary/80 flex items-center gap-1">
+                          <Plus className="w-3 h-3" /> Add Section
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      {techSections.map((section) => (
+                        <div key={section.id} className="relative group">
+                          <FileRow icon={section.icon} label={section.label} hint={section.hint} accept={section.accept}
+                            value={section.value} onChange={(v) => setTechSections(ts => ts.map(s => s.id === section.id ? { ...s, value: v } : s))} />
+                          <button type="button" onClick={() => setTechSections(ts => ts.filter(s => s.id !== section.id))}
+                            className="absolute -right-2 -top-2 bg-destructive/10 text-destructive rounded-full p-1" title="Remove Section">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {isAddingSection && (
+                        <div className="flex items-center gap-2 p-3 rounded-xl border-2 border-dashed border-border bg-card">
+                          <FInput value={newSectionName} onChange={e => setNewSectionName(e.target.value)}
+                            placeholder="Section Name (e.g. Test Report)" className="h-8 flex-1" autoFocus
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                if (newSectionName.trim()) {
+                                  setTechSections(ts => [...ts, { id: Date.now().toString(), label: newSectionName.trim(), hint: 'Custom file', accept: '*/*', icon: Paperclip, value: [] }]);
+                                  setIsAddingSection(false);
+                                  setNewSectionName('');
+                                }
+                              } else if (e.key === 'Escape') {
+                                setIsAddingSection(false);
+                                setNewSectionName('');
+                              }
+                            }} />
+                          <button type="button" onClick={() => {
+                            if (newSectionName.trim()) {
+                              setTechSections(ts => [...ts, { id: Date.now().toString(), label: newSectionName.trim(), hint: 'Custom file', accept: '*/*', icon: Paperclip, value: [] }]);
+                              setIsAddingSection(false);
+                              setNewSectionName('');
+                            }
+                          }} className="px-3 h-8 text-xs font-medium bg-primary text-primary-foreground rounded-md">Add</button>
+                          <button type="button" onClick={() => { setIsAddingSection(false); setNewSectionName(''); }}
+                            className="p-1.5 text-muted-foreground hover:text-foreground">
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {isEdit && node && (
+                    <div className="pt-2 border-t border-border">
+                      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3 mt-4">
+                        Save as Version
+                      </div>
+                      <div className="flex items-center gap-1 p-1 rounded-lg border border-border bg-background mb-2">
+                        <button type="button" onClick={() => setVersionMode('same')}
+                          className={cn('flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                            versionMode === 'same' ? 'bg-card border border-border shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                          Update Rev {node.rev}
+                        </button>
+                        <button type="button" onClick={() => setVersionMode('new')}
+                          className={cn('flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors',
+                            versionMode === 'new' ? 'bg-card border border-border shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                          <GitBranch className="w-3.5 h-3.5" /> New revision
+                        </button>
+                      </div>
+                      {versionMode === 'new' ? (
+                        <div className="flex items-center gap-2 mb-4 flex-wrap">
+                          <span className="text-xs text-muted-foreground shrink-0">Label:</span>
+                          <Input value={newRevLabel} onChange={e => setNewRevLabel(e.target.value.toUpperCase().slice(0, 3))}
+                            className="h-7 text-xs font-mono w-16 bg-background" placeholder="B" />
+                          <span className="text-xs text-muted-foreground">Rev {node.rev} is preserved in history.</span>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground mb-4">Overwrites Rev {node.rev} in place. No history entry is created.</div>
+                      )}
+                      <div className="space-y-1.5">
+                        <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Change notes{versionMode === 'new' && <span className="text-destructive ml-0.5">*</span>}
+                        </Label>
+                        <Textarea value={changeNotes} onChange={e => setChangeNotes(e.target.value)}
+                          placeholder={versionMode === 'new' ? 'Describe what changed in this revision…' : 'Optional: describe the correction made…'}
+                          className="text-sm bg-background border-border resize-none min-h-[60px]" rows={2} />
+                        {errors.notes && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.notes}</p>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'history' && isEdit && node && (
+                <div>
+                  <Label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground block mb-1">Approval History</Label>
+                  <p className="text-xs text-muted-foreground mb-4">Full record of approve/reject actions taken on this part.</p>
+                  {approvalsLoading ? (
+                    <div className="flex flex-col gap-3">
+                      {[0, 1].map(i => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
+                    </div>
+                  ) : approvals.length === 0 ? (
+                    <div className="flex items-center justify-center h-28 rounded-xl border-2 border-dashed border-border bg-muted/20">
+                      <p className="text-sm text-muted-foreground">No approval activity yet</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-0">
+                      {approvals.map((a, i) => {
+                        const color = a.action === 'approved' ? '#16A34A' : '#DC2626';
+                        return (
+                          <div key={a.id} className="flex items-start gap-3 py-2.5 px-2 -mx-2">
+                            <div className="flex flex-col items-center shrink-0 mt-1.5">
+                              <div className="w-2 h-2 rounded-full border-2 shrink-0" style={{ borderColor: color, background: color }} />
+                              {i < approvals.length - 1 && <div className="w-px bg-border flex-1 min-h-[18px] mt-1" />}
+                            </div>
+                            <div className="flex-1 min-w-0 pb-1">
+                              <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                <span className="text-xs font-semibold" style={{ color }}>{a.action === 'approved' ? 'Approved' : 'Rejected'}</span>
+                                <span className="text-[11px] text-muted-foreground">by {a.performedByName}</span>
+                              </div>
+                              {a.reason && <div className="text-[11.5px] text-foreground leading-snug">Reason: {a.reason}</div>}
+                              {a.comment && <div className="text-[11.5px] text-muted-foreground leading-snug">{a.comment}</div>}
+                              <div className="text-[10.5px] text-muted-foreground/60 mt-0.5">{new Date(a.date).toLocaleString()}</div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="shrink-0 border-t border-border px-4 py-3 flex items-center gap-3 bg-card">
+              <Button variant="outline" className="flex-1" onClick={onClose} disabled={saving}>Cancel</Button>
+              {activeTab === 'history' ? (
+                <Button className="flex-1 gap-1.5" onClick={() => setActiveTab('documents')}>Done</Button>
+              ) : activeTab !== 'documents' ? (
+                <Button className="flex-1 gap-1.5" onClick={handleNext} disabled={checkingPn}>
+                  {checkingPn ? <><Loader2 className="w-4 h-4 animate-spin" /> Checking…</> : <>Next <ChevronRight className="w-4 h-4" /></>}
+                </Button>
+              ) : (
+                <Button className="flex-1 gap-2" disabled={saving || (isEdit && versionMode === 'new' && !changeNotes.trim())} onClick={handleSave}>
+                  <Save className="w-4 h-4" />
+                  {saving
+                    ? 'Saving…'
+                    : isEdit
+                      ? resubmitMode
+                        ? 'Save & Resubmit'
+                        : versionMode === 'new' ? `Save as Rev ${newRevLabel || '?'}` : 'Save Changes'
+                      : 'Add Part'}
+                </Button>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {/* Reject confirmation (mandatory reason) */}
+        <BOMRejectDialog
+          open={showRejectDialog}
+          partLabel={node?.pn}
+          onClose={() => setShowRejectDialog(false)}
+          onConfirm={handleRejectConfirm}
+        />
+      </>
+    );
+  }
 
   return (
     <>
