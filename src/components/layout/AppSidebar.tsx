@@ -252,17 +252,24 @@ export function AppSidebar() {
                   const showChatBadge = item.title === 'Chat' && chatUnreadCount > 0;
                   return (
                     <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild isActive={isActive(item.url)} tooltip={collapsed ? item.title : undefined}>
+                      <SidebarMenuButton className="overflow-visible" asChild isActive={isActive(item.url)} tooltip={collapsed ? item.title : undefined}>
                         <NavLink id={item.url} to={item.url} end={item.url === '/'} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
                           <span className="relative shrink-0">
                             <item.icon className="h-4 w-4" />
-                            {showChatBadge && (
-                              <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-in-progress px-1 text-[10px] font-medium text-white">
-                                {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
-                              </span>
+                            {showChatBadge && collapsed && (
+                              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-status-in-progress ring-2 ring-sidebar" />
                             )}
                           </span>
-                          {!collapsed && <span>{item.title}</span>}
+                          {!collapsed && (
+                            <span className="flex flex-1 items-center justify-between min-w-0">
+                              <span>{item.title}</span>
+                              {showChatBadge && (
+                                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-status-in-progress px-1 text-[10px] font-medium leading-none text-white">
+                                  {chatUnreadCount > 99 ? '99+' : chatUnreadCount}
+                                </span>
+                              )}
+                            </span>
+                          )}
                         </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
