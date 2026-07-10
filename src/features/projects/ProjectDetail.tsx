@@ -1547,13 +1547,13 @@ export default function ProjectDetail() {
               {section === 'modules' && (
                 <>
                   {/* Left: Search */}
-                  <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
+                  <div className="relative flex items-center flex-1 min-w-0 max-w-none md:max-w-xs">
                     <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
                     <Input
                       placeholder="Search modules..."
                       value={moduleSearchQuery}
                       onChange={(e) => setModuleSearchQuery(e.target.value)}
-                      className="pl-9 h-9 w-full bg-background rounded-lg"
+                      className="pl-9 h-9 w-full bg-background rounded-full md:rounded-lg"
                     />
                     {moduleSearchQuery && (
                       <Button
@@ -1566,8 +1566,8 @@ export default function ProjectDetail() {
                       </Button>
                     )}
                   </div>
-                  {/* Right: View toggle */}
-                  <div className="flex items-center gap-2 shrink-0">
+                  {/* Right: View toggle (desktop/tablet only — mobile always uses the card view) */}
+                  <div className="hidden md:flex items-center gap-2 shrink-0">
                     <ModuleViewControls
                       viewMode={moduleViewMode}
                       onViewModeChange={setModuleViewMode}
