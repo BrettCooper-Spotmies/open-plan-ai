@@ -75,6 +75,9 @@ export function AppHeader() {
   // Mobile project detail: hide theme/notifications/profile, keep only back + name
   const isMobileProjectDetail = isMobile && !!project;
 
+  // Mobile settings page: hide theme/notifications/profile
+  const isMobileSettings = isMobile && location.pathname.startsWith('/settings');
+
   const pageTitle = useMemo(
     () => getPageTitle(location.pathname),
     [location.pathname],
@@ -161,7 +164,7 @@ export function AppHeader() {
               <Users className="h-4 w-4" />
             </Button>
           </>
-        ) : isMobileProjectDetail ? null : (
+        ) : isMobileProjectDetail || isMobileSettings ? null : (
           <>
             {/* Theme Toggle */}
             <Button
