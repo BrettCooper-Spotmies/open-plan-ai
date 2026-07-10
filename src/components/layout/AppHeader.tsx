@@ -30,6 +30,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useChatStore } from '@/features/chat/stores/useChatStore';
+import { ProjectTeamButton } from '@/features/projects/components/ProjectTeamButton';
 import { cn } from '@/lib/utils';
 
 const stageColors: Record<string, string> = {
@@ -164,7 +165,9 @@ export function AppHeader() {
               <Users className="h-4 w-4" />
             </Button>
           </>
-        ) : isMobileProjectDetail || isMobileSettings ? null : (
+        ) : isMobileProjectDetail || isMobileSettings ? (
+          isMobileProjectDetail ? <ProjectTeamButton projectId={projectId!} /> : null
+        ) : (
           <>
             {/* Theme Toggle */}
             <Button

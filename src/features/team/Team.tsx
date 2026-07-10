@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getFallbackTagColor } from '@/lib/tagColors';
+import { softTint } from '@/features/dashboard/utils/colors';
 import {
   Dialog,
   DialogContent,
@@ -321,51 +322,58 @@ const Team = () => {
     <>
       <div className="space-y-6">
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${isMobile ? 'bg-orange-500/10' : 'bg-primary/10'}`}>
-                <Users className={`h-5 w-5 ${isMobile ? 'text-orange-600' : 'text-primary'}`} />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.total}</p>
-                <p className="text-xs text-muted-foreground">Total Members</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-green-500/10">
-                <UserCheck className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.active}</p>
-                <p className="text-xs text-muted-foreground">Active</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-yellow-500/10">
-                <Clock className="h-5 w-5 text-yellow-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.pending}</p>
-                <p className="text-xs text-muted-foreground">Pending</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-blue-500/10">
-                <Building className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.departments}</p>
-                <p className="text-xs text-muted-foreground">Departments</p>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="flex flex-wrap gap-3">
+          <div className="bg-card rounded-lg px-3.5 py-2.5 flex-1 min-w-[140px] border border-border flex items-center gap-2.5">
+            <span
+              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+              style={{ backgroundColor: softTint(isMobile ? '#EA580C' : '#0F172A', 0.12) }}
+            >
+              <Users className="w-4 h-4" style={{ color: isMobile ? '#EA580C' : '#0F172A' }} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-lg font-bold leading-tight truncate">{stats.total}</span>
+              <span className="block text-[11px] text-muted-foreground truncate">Total Members</span>
+            </span>
+          </div>
+          
+          <div className="bg-card rounded-lg px-3.5 py-2.5 flex-1 min-w-[140px] border border-border flex items-center gap-2.5">
+            <span
+              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+              style={{ backgroundColor: softTint('#16A34A', 0.12) }}
+            >
+              <UserCheck className="w-4 h-4" style={{ color: '#16A34A' }} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-lg font-bold leading-tight truncate">{stats.active}</span>
+              <span className="block text-[11px] text-muted-foreground truncate">Active</span>
+            </span>
+          </div>
+
+          <div className="bg-card rounded-lg px-3.5 py-2.5 flex-1 min-w-[140px] border border-border flex items-center gap-2.5">
+            <span
+              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+              style={{ backgroundColor: softTint('#D97706', 0.12) }}
+            >
+              <Clock className="w-4 h-4" style={{ color: '#D97706' }} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-lg font-bold leading-tight truncate">{stats.pending}</span>
+              <span className="block text-[11px] text-muted-foreground truncate">Pending</span>
+            </span>
+          </div>
+
+          <div className="bg-card rounded-lg px-3.5 py-2.5 flex-1 min-w-[140px] border border-border flex items-center gap-2.5">
+            <span
+              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+              style={{ backgroundColor: softTint('#2563EB', 0.12) }}
+            >
+              <Building className="w-4 h-4" style={{ color: '#2563EB' }} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-lg font-bold leading-tight truncate">{stats.departments}</span>
+              <span className="block text-[11px] text-muted-foreground truncate">Departments</span>
+            </span>
+          </div>
         </div>
 
         {/* Pending Invitations */}

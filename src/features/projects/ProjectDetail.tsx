@@ -45,6 +45,7 @@ import { ModuleDetailModal } from './components/ModuleDetailModal';
 import { MilestoneDetailModal } from './components/MilestoneDetailModal';
 import { IssueDetailModal } from './components/IssueDetailModal';
 import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
+import { ProjectTeamButton } from './components/ProjectTeamButton';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
 import { useOrganizationMembers, useProjectMembers } from '@/hooks/useProjectTeam';
@@ -1130,10 +1131,10 @@ export default function ProjectDetail() {
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => navigate(`/projects/${id}/${v}`)} className="w-full">
           {!partId && !ecoId && (
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex flex-row md:items-center justify-between gap-2 w-full">
               {/* Left Side: Tabs */}
-              <div className="w-full py-1 md:mr-auto md:w-auto">
-                <TabsList className="bg-muted/50 grid grid-cols-6 w-full h-11 md:w-auto md:flex md:shrink-0">
+              <div className="flex-1 md:flex-none w-full md:w-auto py-1 min-w-0 md:mr-auto overflow-x-auto hide-scrollbar">
+                <TabsList className="bg-muted/50 grid grid-cols-6 min-w-[300px] md:min-w-0 w-full h-11 md:w-auto md:flex md:shrink-0">
                   <TabsTrigger
                     value="bom"
                     className="relative gap-1 sm:gap-2 px-2 justify-center min-w-0"
@@ -1272,7 +1273,7 @@ export default function ProjectDetail() {
               </div>
 
               {/* Right Side: Team + Chat + Add Button */}
-              <div className="flex items-center gap-2 shrink-0 w-full justify-end md:w-auto">
+              <div className="flex items-center gap-2 shrink-0 justify-end md:w-auto">
                 {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
                 {/* Start Chat */}
                 <Button
@@ -1287,144 +1288,9 @@ export default function ProjectDetail() {
                   <span className="hidden md:inline">Chat</span>
                 </Button>
                 {/* Team Popover */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 whitespace-nowrap cursor-pointer rounded-md border border-border px-2 py-1.5 text-foreground hover:bg-muted transition-colors h-9"
-                    >
-                      <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="text-xs font-medium">Team</span>
-                      <span className="text-xs text-muted-foreground">{projectMembers.length}</span>
-                      {/* <div className="hidden md:flex -space-x-2">
-                      {projectMembers.slice(0, 4).map((member) => (
-                        <Avatar key={member.id} className="h-5 w-5 border-2 border-background">
-                          <AvatarFallback className="text-[10px] bg-muted">
-                            {member.initials}
-                          </AvatarFallback>
-                        </Avatar>
-                      ))}
-                    </div> */}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80" align="end">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Project Team</p>
-                      {projectMembers.length > 0 ? (
-                        <div className="space-y-2 max-h-52 overflow-y-auto">
-                          {projectMembers.map((member) => (
-                            <div key={member.id} className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <Avatar className="h-7 w-7">
-                                  <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
-                                  <AvatarFallback className="text-[11px]">
-                                    {member.initials}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span className="text-sm truncate">{member.name}</span>
-                              </div>
-                              <div className="flex items-center gap-1 shrink-0">
-                                {canManageProjectMembers ? (
-                                  <Select
-                                    value={toProjectRole(member.role)}
-                                    onValueChange={(v) => handleUpdateProjectMemberRole(member.id, v as ProjectRole)}
-                                    disabled={memberRoleUpdatingId === member.id}
-                                  >
-                                    <SelectTrigger className="h-7 w-[100px] text-[10px]">
-                                      <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="admin">Admin</SelectItem>
-                                      <SelectItem value="maintainer">Maintainer</SelectItem>
-                                      <SelectItem value="member">Member</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                ) : (
-                                  <Badge variant="outline" className="text-[10px] max-w-[120px] truncate">
-                                    {member.role || 'Member'}
-                                  </Badge>
-                                )}
-                                {canManageProjectMembers && member.role?.toLowerCase() !== 'admin' && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                    onClick={() => {
-                                      const memberId = member.id;
-                                      const memberName = typeof member.name === 'string' ? member.name : '';
-                                      if (!memberId) return;
-                                      setMemberRemovalPrompt({ open: true, memberId, memberName });
-                                    }}
-                                    title="Remove member"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground">No team members assigned yet.</p>
-                      )}
-                      {canManageProjectMembers ? (
-                        <div className="pt-3 mt-2 border-t space-y-2">
-                          <p className="text-xs font-medium text-muted-foreground">Add Member</p>
-                          <div className="space-y-2">
-                            <Select value={selectedMemberToAdd} onValueChange={setSelectedMemberToAdd}>
-                              <SelectTrigger className="h-8">
-                                <SelectValue placeholder="Select organization member" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {availableOrganizationMembers.length > 0 ? (
-                                  availableOrganizationMembers.map((member) => (
-                                    <SelectItem key={member.id} value={member.id}>
-                                      {member.name}
-                                    </SelectItem>
-                                  ))
-                                ) : (
-                                  <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                    No members available to add.
-                                  </div>
-                                )}
-                              </SelectContent>
-                            </Select>
-                            <Select value={selectedMemberRoleToAdd} onValueChange={(v) => setSelectedMemberRoleToAdd(v as ProjectRole)}>
-                              <SelectTrigger className="h-8">
-                                <SelectValue placeholder="Select project role" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="maintainer">Maintainer</SelectItem>
-                                <SelectItem value="member">Member</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <Button
-                              size="sm"
-                              className="w-full"
-                              onClick={handleAddProjectMember}
-                              disabled={isAddingProjectMember || !selectedMemberToAdd || availableOrganizationMembers.length === 0}
-                            >
-                              {isAddingProjectMember && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                              Add Member
-                            </Button>
-                            {availableOrganizationMembers.length === 0 && (
-                              <p className="text-[11px] text-muted-foreground">
-                                All organization members are already in this project.
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="pt-3 mt-2 border-t">
-                          <p className="text-[11px] text-muted-foreground">
-                            Only a project Admin can add or remove project members.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                <div className="hidden md:block">
+                  <ProjectTeamButton projectId={id!} />
+                </div>
                 {/* Critical Issues Badge */}
                 {/* {criticalIssuesCount > 0 && (
                 <Badge variant="destructive" className="gap-1 shrink-0 hidden sm:inline-flex">
