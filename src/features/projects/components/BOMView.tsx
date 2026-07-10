@@ -20,8 +20,14 @@ import type { BOMApprovalRequest } from './bomData';
 async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
   const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? []), ...(payload.docCustom ?? [])].filter(Boolean) as DocValue[];
   await Promise.allSettled(
-    docs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName)),
+    docs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName ?? undefined)),
   );
+}
+
+// New parts can only be added as 'approved' or 'pending' (see BOMPartSheet's
+// add-mode status toggle); narrow to what useCreateBomNode's DTO accepts.
+function toNodeStatus(status: BOMStatus): 'approved' | 'pending' | 'draft' {
+  return status === 'rejected' ? 'pending' : status;
 }
 
 function softTint(hex: string, alpha: number): string {
@@ -57,7 +63,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
-  BOMNode, BOMFilters, EMPTY_FILTERS,
+  BOMNode, BOMFilters, BOMStatus, EMPTY_FILTERS,
   getCategoryMeta,
   bomFlatAll, bomFlatten, bomFind,
   bomFilterTree, bomFlattenInclude, bomTypeOf,
@@ -128,32 +134,6 @@ function MobileListRowSkeleton() {
         <div className="flex items-center gap-2">
           <Skeleton className="h-4 w-20 rounded" />
           <Skeleton className="h-2.5 w-10" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function GridCardSkeleton() {
-  return (
-    <div className="bg-card border border-border rounded-xl overflow-hidden">
-      <div className="p-2.5">
-        <Skeleton className="w-full h-40 rounded-lg" />
-      </div>
-      <div className="px-3.5 pb-3.5 pt-0.5">
-        <Skeleton className="h-2.5 w-24 mb-1.5" />
-        <Skeleton className="h-4 w-full mb-1" />
-        <Skeleton className="h-4 w-3/4 mb-3" />
-        <div className="grid grid-cols-2 gap-x-2.5 gap-y-2 mb-3">
-          <Skeleton className="h-8 rounded" />
-          <Skeleton className="h-8 rounded" />
-          <Skeleton className="h-8 rounded" />
-          <Skeleton className="h-8 rounded" />
-        </div>
-        <Skeleton className="h-7 w-full rounded-md mb-3" />
-        <div className="flex items-center justify-between pt-2.5 border-t border-border">
-          <Skeleton className="h-5 w-24 rounded-full" />
-          <Skeleton className="h-5 w-8 rounded" />
         </div>
       </div>
     </div>
@@ -1074,13 +1054,13 @@ export function BOMView({
         initialRev:          payload.rev,
         initialPrice:        payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
-        initialSuppliers:    payload.suppliers?.length ? payload.suppliers.map(s => ({ ...s, price: parseFloat(s.price) || 0 })) : undefined,
+        initialSuppliers:    payload.suppliers?.length ? payload.suppliers : undefined,
       });
       const node = await createNode.mutateAsync({
         partId:   part.id,
         quantity: payload.qty,
         unit:     payload.uom,
-        status:   payload.status,
+        status:   toNodeStatus(payload.status),
         ownerId:  payload.ownerId ?? null,
       });
       // Upload any documents attached in the form
@@ -1114,13 +1094,13 @@ export function BOMView({
         initialRev:          payload.rev,
         initialPrice:        payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
-        initialSuppliers:    payload.suppliers?.length ? payload.suppliers.map(s => ({ ...s, price: parseFloat(s.price) || 0 })) : undefined,
+        initialSuppliers:    payload.suppliers?.length ? payload.suppliers : undefined,
       });
       const node = await createNode.mutateAsync({
         partId:   part.id,
         quantity: payload.qty,
         unit:     payload.uom,
-        status:   payload.status,
+        status:   toNodeStatus(payload.status),
         parentId: createSubNode.id,
         ownerId:  payload.ownerId ?? null,
       });
