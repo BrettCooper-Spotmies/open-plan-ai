@@ -44,6 +44,7 @@ import { TaskDetailModal } from './components/TaskDetailModal';
 import { ModuleDetailModal } from './components/ModuleDetailModal';
 import { MilestoneDetailModal } from './components/MilestoneDetailModal';
 import { IssueDetailModal } from './components/IssueDetailModal';
+import { TaskFiltersDropdown } from './components/TaskFiltersDropdown';
 import { ProjectTeamButton } from './components/ProjectTeamButton';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
@@ -1130,10 +1131,10 @@ export default function ProjectDetail() {
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => navigate(`/projects/${id}/${v}`)} className="w-full">
           {!partId && !ecoId && (
-            <div className="flex flex-row items-center justify-between gap-2 w-full">
+            <div className="flex flex-row md:items-center justify-between gap-2 w-full">
               {/* Left Side: Tabs */}
-              <div className="flex-1 py-1 min-w-0 overflow-x-auto hide-scrollbar">
-                <TabsList className="bg-muted/50 grid grid-cols-6 min-w-[300px] w-full h-11 md:w-auto md:flex md:shrink-0">
+              <div className="flex-1 md:flex-none w-full md:w-auto py-1 min-w-0 md:mr-auto overflow-x-auto hide-scrollbar">
+                <TabsList className="bg-muted/50 grid grid-cols-6 min-w-[300px] md:min-w-0 w-full h-11 md:w-auto md:flex md:shrink-0">
                   <TabsTrigger
                     value="bom"
                     className="relative gap-1 sm:gap-2 px-2 justify-center min-w-0"
