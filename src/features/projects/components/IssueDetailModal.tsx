@@ -22,7 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Trash2, Maximize2, MoreVertical, Check, ChevronLeft, X } from 'lucide-react';
+import { Trash2, Maximize2, MoreVertical, Check, ChevronLeft, X, Pencil } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { toast } from 'sonner';
@@ -99,6 +99,7 @@ export function IssueDetailModal({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isMobileEditMode, setIsMobileEditMode] = useState(false);
   const initialSnapshotRef = useRef<string>('');
   const { canEditResource } = useProjectPermissions(editedIssue?.projectId);
   const canEditIssue = useMemo(
@@ -116,6 +117,9 @@ export function IssueDetailModal({
       setEditedIssue(issue);
       setPendingFiles([]);
       initialSnapshotRef.current = serializeIssueForDirtyCheck(issue);
+    }
+    if (!isOpen) {
+      setIsMobileEditMode(false);
     }
   }, [isOpen, issue?.id]);
 
@@ -201,13 +205,24 @@ export function IssueDetailModal({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={handleUpdateIssue}
-                  disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
-                >
-                  <Check className="h-4 w-4 mr-2" />
-                  Update Issue
-                </DropdownMenuItem>
+                {!isMobileEditMode ? (
+                  <DropdownMenuItem
+                    onClick={() => setIsMobileEditMode(true)}
+                    disabled={!canEditIssue}
+                    title={canEditIssue ? undefined : editLockTitle}
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit Issue
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={handleUpdateIssue}
+                    disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    Update Issue
+                  </DropdownMenuItem>
+                )}
                 {onDelete && (
                   <DropdownMenuItem
                     onClick={() => setShowDeleteConfirm(true)}
@@ -256,7 +271,10 @@ export function IssueDetailModal({
         <DialogDescription className="sr-only">
           View and edit details for issue {editedIssue?.title || 'New Issue'}
         </DialogDescription>
-        <ScrollArea className="flex-1 overflow-y-auto w-full">
+        <ScrollArea className={cn(
+          'flex-1 overflow-y-auto w-full',
+          isMobile && mode !== 'create' && isMobileEditMode && 'max-h-[calc(100dvh-129px)]'
+        )}>
           <div className="p-6">
             <IssueDetailContent
               issue={editedIssue}
@@ -269,9 +287,22 @@ export function IssueDetailModal({
               mode={mode}
               onPendingFilesChange={setPendingFiles}
               onExpand={undefined}
+              isMobileEditMode={mode !== 'create' ? isMobileEditMode : undefined}
             />
           </div>
         </ScrollArea>
+
+        {mode !== 'create' && isMobile && isMobileEditMode && (
+          <div className="px-4 py-3 border-t bg-background z-10 w-full shrink-0">
+            <Button
+              className="w-full"
+              onClick={handleUpdateIssue}
+              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
+            >
+              Update Issue
+            </Button>
+          </div>
+        )}
 
         {mode === 'create' && (
           <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full">

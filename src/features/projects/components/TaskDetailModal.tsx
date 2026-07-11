@@ -275,6 +275,7 @@ export const TaskDetailModal = ({
   const [initialBlockedByIds, setInitialBlockedByIds] = useState<string[]>([]);
   const [initialBlockingToIds, setInitialBlockingToIds] = useState<string[]>([]);
   const [initializedForKey, setInitializedForKey] = useState<string | null>(null);
+  const [isMobileEditMode, setIsMobileEditMode] = useState(false);
   const formSessionKey = `${mode}:${task?.id || 'create'}`;
   const statusOptions = useMemo(() => {
     if (!providedStatusOptions || providedStatusOptions.length === 0) {
@@ -473,6 +474,7 @@ export const TaskDetailModal = ({
     if (!isOpen) {
       setInitializedForKey(null);
       setPreviewingFile(null);
+      setIsMobileEditMode(false);
       return;
     }
 
@@ -1173,6 +1175,10 @@ export const TaskDetailModal = ({
   // On mobile, the task overview opens as a full-screen page (not a centered dialog)
   // with edit/delete tucked behind a header "..." menu instead of a persistent footer bar.
   const showMobileHeader = isMobile && mode === 'view';
+  // On mobile, fields stay read-only until "Edit Task" is tapped in the "..." menu.
+  // Desktop is unaffected (showMobileHeader is false there, so this collapses to canEditTask).
+  const canEditTaskFields = canEditTask && (!showMobileHeader || isMobileEditMode);
+  const isMobileFieldsLocked = showMobileHeader && !isMobileEditMode;
 
   return (
     <>
@@ -1211,13 +1217,24 @@ export const TaskDetailModal = ({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={handleUpdateTask}
-                  disabled={isSaving || !editedTask.title || !editedTask.dueDate || !isFormDirty || isBlockedWithoutDependencies || !canEditTask}
-                >
-                  <Check className="h-4 w-4 mr-2" />
-                  Update Task
-                </DropdownMenuItem>
+                {!isMobileEditMode ? (
+                  <DropdownMenuItem
+                    onClick={() => setIsMobileEditMode(true)}
+                    disabled={!canEditTask}
+                    title={canEditTask ? undefined : editLockTitle}
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit Task
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={handleUpdateTask}
+                    disabled={isSaving || !editedTask.title || !editedTask.dueDate || !isFormDirty || isBlockedWithoutDependencies || !canEditTask}
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    Update Task
+                  </DropdownMenuItem>
+                )}
                 {onDelete && (
                   <DropdownMenuItem
                     onClick={() => setShowDeleteConfirm(true)}
@@ -1240,18 +1257,35 @@ export const TaskDetailModal = ({
           View and edit details for task {task?.title || 'New Task'}
         </DialogDescription>
 
-        <ScrollArea className={cn('flex-1', isMobile ? 'max-h-[calc(100dvh-57px)]' : 'max-h-[calc(90vh-80px)]')}>
-          <div className="p-4 sm:p-6 space-y-6">
+        <ScrollArea className={cn(
+          'flex-1',
+          isMobile
+            ? (showMobileHeader && isMobileEditMode ? 'max-h-[calc(100dvh-129px)]' : 'max-h-[calc(100dvh-57px)]')
+            : 'max-h-[calc(90vh-80px)]'
+        )}>
+          <div className={cn('p-4 sm:p-6 space-y-6', showMobileHeader && 'space-y-5')}>
+            {showMobileHeader && projectName && (
+              <p className="text-xs text-muted-foreground -mb-2">
+                {projectName} <span className="mx-1">›</span> Board
+              </p>
+            )}
             <div className="space-y-2">
-              <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Task Title <span className="text-destructive" aria-hidden="true">*</span></Label>
+              {!showMobileHeader && (
+                <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Task Title <span className="text-destructive" aria-hidden="true">*</span></Label>
+              )}
               <Input
                 value={editedTask.title}
                 onChange={(e) => handleFieldChange('title', e.target.value)}
-                className="text-base font-medium h-10"
+                className={cn(
+                  showMobileHeader
+                    ? 'text-xl font-bold h-auto py-1 px-0 border-0 shadow-none focus-visible:ring-0 rounded-none disabled:opacity-100 disabled:cursor-default'
+                    : 'text-base font-medium h-10',
+                  showMobileHeader && !canEditTask && 'opacity-60'
+                )}
                 placeholder="Task title..."
                 aria-required="true"
-                disabled={!canEditTask}
-                title={canEditTask ? undefined : editLockTitle}
+                disabled={!canEditTaskFields}
+                title={canEditTaskFields ? undefined : editLockTitle}
               />
             </div>
 
@@ -1259,15 +1293,18 @@ export const TaskDetailModal = ({
             <div className="flex flex-col gap-6">
               {/* Assigned To — full-width row */}
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  <User className="h-3 w-3" />
+                <Label className={cn(
+                  'text-xs text-muted-foreground flex items-center gap-1.5',
+                  showMobileHeader && 'uppercase tracking-wider font-medium'
+                )}>
+                  {!showMobileHeader && <User className="h-3 w-3" />}
                   Assigned To
                 </Label>
-                <Popover open={isAssigneePopoverOpen} onOpenChange={(open) => canEditTask && setIsAssigneePopoverOpen(open)}>
+                <Popover open={isAssigneePopoverOpen} onOpenChange={(open) => canEditTaskFields && setIsAssigneePopoverOpen(open)}>
                   <PopoverTrigger asChild>
                     <button
-                      disabled={!canEditTask}
-                      title={canEditTask ? undefined : editLockTitle}
+                      disabled={!canEditTaskFields}
+                      title={canEditTaskFields ? undefined : editLockTitle}
                       className={cn(
                         'flex items-center gap-2 h-10 px-2 w-full text-left rounded-md hover:bg-muted/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         !canEditTask && 'cursor-not-allowed opacity-60 hover:bg-transparent'
@@ -1323,15 +1360,15 @@ export const TaskDetailModal = ({
                               )}
                             </div>
                             <button
-                              disabled={!canEditTask}
-                              title={canEditTask ? undefined : editLockTitle}
+                              disabled={!canEditTaskFields}
+                              title={canEditTaskFields ? undefined : editLockTitle}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleFieldChange('assignees', (editedTask.assignees || []).filter(a => a.id !== assignee.id));
                               }}
                               className={cn(
                                 'text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100',
-                                !canEditTask && 'cursor-not-allowed group-hover:opacity-60'
+                                !canEditTaskFields && 'cursor-not-allowed group-hover:opacity-60'
                               )}
                             >
                               <X className="h-3 w-3" />
@@ -1372,22 +1409,80 @@ export const TaskDetailModal = ({
                 </Popover>
               </div>
 
+              {/* Status pill — mobile only, mirrors the Bucket value as a prominent chip */}
+              {showMobileHeader && (
+                <div className="space-y-1.5">
+                  <Label className="block text-xs text-muted-foreground uppercase tracking-wider font-medium">Status</Label>
+                  <Select
+                    value={editedTask.status}
+                    onValueChange={(value) => handleStatusChange(value as TaskStatus)}
+                    disabled={!canEditTaskFields}
+                  >
+                    <SelectTrigger
+                      className={cn(
+                        'h-auto w-auto border-0 p-0 focus:ring-0 focus-visible:ring-0 shadow-none bg-transparent [&>svg]:hidden disabled:opacity-100 disabled:cursor-default',
+                        !canEditTask && 'opacity-60'
+                      )}
+                      title={canEditTaskFields ? undefined : editLockTitle}
+                    >
+                      <SelectValue>
+                        <span
+                          className={cn(
+                            'inline-flex items-center rounded-full px-3 py-1 text-xs font-medium text-white',
+                            currentStatusColor
+                          )}
+                        >
+                          {currentStatusLabel}
+                        </span>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statusOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          <div className="flex items-center gap-2">
+                            <StatusDot color={option.color} />
+                            {option.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Details card — mobile only wraps the metadata grid to match the card-based mobile layout */}
+              {showMobileHeader && (
+                <Label className="text-xs text-muted-foreground uppercase tracking-wider font-medium -mb-2">Details</Label>
+              )}
+              <div className={cn(showMobileHeader && 'border rounded-xl p-4')}>
               {/* 4-column metadata grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-start">
                 {/* Bucket */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <AlertCircle className="h-3 w-3" />
-                    Bucket <span className="text-destructive" aria-hidden="true">*</span>
+                  <Label className={cn(
+                    'text-xs text-muted-foreground flex items-center gap-1.5',
+                    showMobileHeader && 'uppercase tracking-wider font-medium'
+                  )}>
+                    {!showMobileHeader && <AlertCircle className="h-3 w-3" />}
+                    Bucket {!showMobileHeader && <span className="text-destructive" aria-hidden="true">*</span>}
                   </Label>
                   <Select
                     value={editedTask.status}
                     onValueChange={(value) => handleStatusChange(value as TaskStatus)}
-                    disabled={!canEditTask}
+                    disabled={!canEditTaskFields}
                   >
-                    <SelectTrigger className="h-9" aria-required="true" title={canEditTask ? undefined : editLockTitle}>
+                    <SelectTrigger
+                      className={cn(
+                        showMobileHeader
+                          ? 'h-auto w-auto border-0 p-0 shadow-none bg-transparent focus:ring-0 focus-visible:ring-0 [&>svg]:hidden disabled:opacity-100 disabled:cursor-default'
+                          : 'h-9',
+                        showMobileHeader && !canEditTask && 'opacity-60'
+                      )}
+                      aria-required="true"
+                      title={canEditTaskFields ? undefined : editLockTitle}
+                    >
                       <SelectValue>
-                        <div className="flex items-center gap-2">
+                        <div className={cn('flex items-center gap-2', showMobileHeader && 'font-bold text-sm text-foreground')}>
                           <StatusDot color={currentStatusColor} />
                           {currentStatusLabel}
                         </div>
@@ -1408,24 +1503,30 @@ export const TaskDetailModal = ({
 
                 {/* Start Date */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <CalendarIcon className="h-3 w-3" />
+                  <Label className={cn(
+                    'text-xs text-muted-foreground flex items-center gap-1.5',
+                    showMobileHeader && 'uppercase tracking-wider font-medium'
+                  )}>
+                    {!showMobileHeader && <CalendarIcon className="h-3 w-3" />}
                     Start Date
-                    <span className="text-destructive">*</span>
+                    {!showMobileHeader && <span className="text-destructive">*</span>}
                   </Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
-                        variant="outline"
-                        disabled={!canEditTask}
-                        title={canEditTask ? undefined : editLockTitle}
+                        variant={showMobileHeader ? 'ghost' : 'outline'}
+                        disabled={!canEditTaskFields}
+                        title={canEditTaskFields ? undefined : editLockTitle}
                         className={cn(
-                          'w-full justify-start text-left font-normal h-9 px-3',
-                          !editedTask.startDate && 'text-muted-foreground'
+                          showMobileHeader
+                            ? 'h-auto w-auto p-0 justify-start text-left font-bold text-sm text-foreground hover:bg-transparent disabled:opacity-100 disabled:pointer-events-none'
+                            : 'w-full justify-start text-left font-normal h-9 px-3',
+                          !editedTask.startDate && 'text-muted-foreground',
+                          showMobileHeader && !canEditTask && 'opacity-60'
                         )}
                       >
                         {editedTask.startDate
-                          ? format(new Date(editedTask.startDate), 'PPP')
+                          ? format(new Date(editedTask.startDate), showMobileHeader ? 'MMM d' : 'PPP')
                           : 'Pick a date'}
                       </Button>
                     </PopoverTrigger>
@@ -1449,24 +1550,30 @@ export const TaskDetailModal = ({
 
                 {/* Due Date */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <CalendarIcon className="h-3 w-3" />
-                    Due Date <span className="text-destructive" aria-hidden="true">*</span>
+                  <Label className={cn(
+                    'text-xs text-muted-foreground flex items-center gap-1.5',
+                    showMobileHeader && 'uppercase tracking-wider font-medium'
+                  )}>
+                    {!showMobileHeader && <CalendarIcon className="h-3 w-3" />}
+                    Due Date {!showMobileHeader && <span className="text-destructive" aria-hidden="true">*</span>}
                   </Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
-                        variant="outline"
+                        variant={showMobileHeader ? 'ghost' : 'outline'}
                         aria-required="true"
-                        disabled={!canEditTask}
-                        title={canEditTask ? undefined : editLockTitle}
+                        disabled={!canEditTaskFields}
+                        title={canEditTaskFields ? undefined : editLockTitle}
                         className={cn(
-                          'w-full justify-start text-left font-normal h-9 px-3',
-                          !editedTask.dueDate && 'text-muted-foreground'
+                          showMobileHeader
+                            ? 'h-auto w-auto p-0 justify-start text-left font-bold text-sm text-foreground hover:bg-transparent disabled:opacity-100 disabled:pointer-events-none'
+                            : 'w-full justify-start text-left font-normal h-9 px-3',
+                          !editedTask.dueDate && 'text-muted-foreground',
+                          showMobileHeader && !canEditTask && 'opacity-60'
                         )}
                       >
                         {editedTask.dueDate
-                          ? format(new Date(editedTask.dueDate), 'PPP')
+                          ? format(new Date(editedTask.dueDate), showMobileHeader ? 'MMM d' : 'PPP')
                           : 'Set date'}
                       </Button>
                     </PopoverTrigger>
@@ -1491,11 +1598,17 @@ export const TaskDetailModal = ({
                 {/* Reported By */}
                 {(mode === 'create' ? profile : editedTask.createdBy) && (
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <User className="h-3 w-3" />
+                    <Label className={cn(
+                      'text-xs text-muted-foreground flex items-center gap-1.5',
+                      showMobileHeader && 'uppercase tracking-wider font-medium'
+                    )}>
+                      {!showMobileHeader && <User className="h-3 w-3" />}
                       Reported By
                     </Label>
-                    <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/20 overflow-hidden">
+                    <div className={cn(
+                      'flex items-center gap-2 overflow-hidden',
+                      showMobileHeader ? '' : 'h-9 px-3 rounded-md border border-input bg-muted/20'
+                    )}>
                       <Avatar className="h-5 w-5 shrink-0">
                         <AvatarFallback className="text-[9px]">
                           {mode === 'create'
@@ -1504,7 +1617,7 @@ export const TaskDetailModal = ({
                         </AvatarFallback>
                       </Avatar>
                       <span
-                        className="text-sm truncate min-w-0"
+                        className={cn('text-sm truncate min-w-0', showMobileHeader && 'font-bold text-foreground')}
                         title={mode === 'create'
                           ? (profile?.name || profile?.email)
                           : editedTask.createdBy?.name}
@@ -1519,13 +1632,24 @@ export const TaskDetailModal = ({
 
                 {/* Priority */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Priority <span className="text-destructive" aria-hidden="true">*</span></Label>
+                  <Label className={cn('text-xs text-muted-foreground', showMobileHeader && 'uppercase tracking-wider font-medium')}>
+                    Priority {!showMobileHeader && <span className="text-destructive" aria-hidden="true">*</span>}
+                  </Label>
                   <Select
                     value={editedTask.priority}
                     onValueChange={(value) => handleFieldChange('priority', value as Priority)}
-                    disabled={!canEditTask}
+                    disabled={!canEditTaskFields}
                   >
-                    <SelectTrigger className="h-9" aria-required="true" title={canEditTask ? undefined : editLockTitle}>
+                    <SelectTrigger
+                      className={cn(
+                        showMobileHeader
+                          ? 'h-auto w-auto border-0 p-0 shadow-none bg-transparent focus:ring-0 focus-visible:ring-0 [&>svg]:hidden disabled:opacity-100 disabled:cursor-default'
+                          : 'h-9',
+                        showMobileHeader && !canEditTask && 'opacity-60'
+                      )}
+                      aria-required="true"
+                      title={canEditTaskFields ? undefined : editLockTitle}
+                    >
                       <SelectValue>
                         <Badge className={cn('text-xs', priorityOptions.find(p => p.value === editedTask.priority)?.color)}>
                           {priorityOptions.find(p => p.value === editedTask.priority)?.label}
@@ -1545,29 +1669,42 @@ export const TaskDetailModal = ({
                 {/* Project — only shown when explicitly provided (e.g. My Day, which aggregates tasks across projects) */}
                 {projectName && (
                   <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                      <FolderKanban className="h-3 w-3" />
+                    <Label className={cn(
+                      'text-xs text-muted-foreground flex items-center gap-1.5',
+                      showMobileHeader && 'uppercase tracking-wider font-medium'
+                    )}>
+                      {!showMobileHeader && <FolderKanban className="h-3 w-3" />}
                       Project
                     </Label>
-                    <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/20">
-                      <span className="text-sm truncate">{projectName}</span>
+                    <div className={cn(
+                      'flex items-center gap-2',
+                      showMobileHeader ? '' : 'h-9 px-3 rounded-md border border-input bg-muted/20'
+                    )}>
+                      <span className={cn('text-sm truncate', showMobileHeader && 'font-bold text-foreground')}>{projectName}</span>
                     </div>
                   </div>
                 )}
 
                 {/* Modules */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Tag className="h-3 w-3" />
+                  <Label className={cn(
+                    'text-xs text-muted-foreground flex items-center gap-1.5',
+                    showMobileHeader && 'uppercase tracking-wider font-medium'
+                  )}>
+                    {!showMobileHeader && <Tag className="h-3 w-3" />}
                     Modules
                   </Label>
                   <div
                     className={cn(
-                      'min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 transition-colors',
-                      canEditTask ? 'cursor-pointer hover:border-primary/50' : 'cursor-not-allowed opacity-60'
+                      'min-h-9 flex w-full flex-wrap items-center gap-2 text-sm transition-colors',
+                      showMobileHeader
+                        ? ''
+                        : 'rounded-md border border-input bg-transparent px-3 py-1.5 ring-offset-background focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+                      canEditTaskFields ? 'cursor-pointer hover:border-primary/50' : 'cursor-not-allowed',
+                      !canEditTask && 'opacity-60'
                     )}
-                    title={canEditTask ? undefined : editLockTitle}
-                    onClick={() => canEditTask && setIsModulePopoverOpen(true)}
+                    title={canEditTaskFields ? undefined : editLockTitle}
+                    onClick={() => canEditTaskFields && setIsModulePopoverOpen(true)}
                   >
                     {(editedTask.moduleIds || []).length === 0 && (
                       <span className="text-muted-foreground text-xs">Select modules...</span>
@@ -1579,8 +1716,8 @@ export const TaskDetailModal = ({
                         <Badge key={module.id} variant="secondary" className="max-w-full px-2 py-0.5 gap-1.5 h-6 hover:bg-secondary/80 transition-colors cursor-default">
                           <span className="text-xs font-normal truncate max-w-[120px]">{module.name}</span>
                           <button
-                            disabled={!canEditTask}
-                            title={canEditTask ? undefined : editLockTitle}
+                            disabled={!canEditTaskFields}
+                            title={canEditTaskFields ? undefined : editLockTitle}
                             onClick={(e) => {
                               e.stopPropagation();
                               const updatedIds = (editedTask.moduleIds || []).filter(id => id !== module.id);
@@ -1596,7 +1733,7 @@ export const TaskDetailModal = ({
                             }}
                             className={cn(
                               'ml-auto text-muted-foreground hover:text-foreground transition-colors outline-none',
-                              !canEditTask && 'cursor-not-allowed opacity-60'
+                              !canEditTaskFields && 'cursor-not-allowed opacity-60'
                             )}
                           >
                             <X className="h-3 w-3" />
@@ -1604,15 +1741,15 @@ export const TaskDetailModal = ({
                         </Badge>
                       );
                     })}
-                    <Popover open={isModulePopoverOpen} onOpenChange={(open) => canEditTask && setIsModulePopoverOpen(open)}>
+                    <Popover open={isModulePopoverOpen} onOpenChange={(open) => canEditTaskFields && setIsModulePopoverOpen(open)}>
                       <PopoverTrigger asChild>
                         <button
-                          disabled={!canEditTask}
-                          title={canEditTask ? undefined : editLockTitle}
+                          disabled={!canEditTaskFields}
+                          title={canEditTaskFields ? undefined : editLockTitle}
                           onClick={(e) => e.stopPropagation()}
                           className={cn(
                             'h-6 w-6 rounded-full p-0 border border-dashed border-muted-foreground/50 hover:border-solid hover:border-primary hover:text-primary transition-all bg-transparent shadow-none focus:ring-0 [&>svg]:hidden flex items-center justify-center',
-                            !canEditTask && 'cursor-not-allowed opacity-60'
+                            !canEditTaskFields && 'cursor-not-allowed opacity-60'
                           )}
                         >
                           <span>
@@ -1700,11 +1837,17 @@ export const TaskDetailModal = ({
 
                 {/* Tags — spans 2 cols */}
                 <div className="space-y-1.5 md:col-span-2">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                    <Tag className="h-3 w-3" />
+                  <Label className={cn(
+                    'text-xs text-muted-foreground flex items-center gap-1.5',
+                    showMobileHeader && 'uppercase tracking-wider font-medium'
+                  )}>
+                    {!showMobileHeader && <Tag className="h-3 w-3" />}
                     Tags
                   </Label>
-                  <div className="min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm">
+                  <div className={cn(
+                    'min-h-9 flex w-full flex-wrap items-center gap-2 text-sm',
+                    showMobileHeader ? '' : 'rounded-md border border-input bg-transparent px-3 py-1.5'
+                  )}>
                     {editedTask.tags.map((tag, index) => (
                       <Badge
                         key={`${tag}-${index}`}
@@ -1732,35 +1875,40 @@ export const TaskDetailModal = ({
                         ) : (
                           <>
                             <span>{tag}</span>
-                            <button
-                              type="button"
-                              className="rounded p-0.5 hover:bg-black/10"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingTagIndex(index);
-                                setEditingTagValue(tag);
-                                setEditingTagOriginal(tag);
-                              }}
-                              aria-label={`Edit tag ${tag}`}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </button>
-                            <button
-                              type="button"
-                              className="rounded p-0.5 hover:bg-black/10"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleFieldChange('tags', editedTask.tags.filter((_, tagIndex) => tagIndex !== index));
-                              }}
-                              aria-label={`Remove tag ${tag}`}
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+                            {!isMobileFieldsLocked && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="rounded p-0.5 hover:bg-black/10"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingTagIndex(index);
+                                    setEditingTagValue(tag);
+                                    setEditingTagOriginal(tag);
+                                  }}
+                                  aria-label={`Edit tag ${tag}`}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded p-0.5 hover:bg-black/10"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleFieldChange('tags', editedTask.tags.filter((_, tagIndex) => tagIndex !== index));
+                                  }}
+                                  aria-label={`Remove tag ${tag}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </>
+                            )}
                           </>
                         )}
                       </Badge>
                     ))}
 
+                    {!isMobileFieldsLocked && (
                     <Popover
                       open={isTagPopoverOpen}
                       onOpenChange={(open) => {
@@ -1835,8 +1983,10 @@ export const TaskDetailModal = ({
                         </div>
                       </PopoverContent>
                     </Popover>
+                    )}
                   </div>
                 </div>
+              </div>
               </div>
             </div>
 
@@ -1845,25 +1995,29 @@ export const TaskDetailModal = ({
             {/* Description Section */}
             <section className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">Description</Label>
+                <Label className={cn('text-sm font-medium', showMobileHeader && 'text-xs uppercase tracking-wider text-muted-foreground')}>Description</Label>
                 <div className="flex items-center gap-2">
                   <Label htmlFor="task-advanced-mode" className="text-xs text-muted-foreground cursor-pointer">Advanced Editor</Label>
                   <Switch
                     id="task-advanced-mode"
                     checked={isAdvancedDescription}
                     onCheckedChange={setIsAdvancedDescription}
-                    disabled={!canEditTask}
+                    disabled={!canEditTaskFields}
+                    className={cn(showMobileHeader && 'disabled:opacity-100 disabled:cursor-pointer', showMobileHeader && !canEditTask && 'opacity-60')}
                   />
                 </div>
               </div>
               {isAdvancedDescription ? (
                 <div
-                  className={cn('min-h-[200px] border rounded-md p-4 bg-background', !canEditTask && 'opacity-60 cursor-not-allowed')}
-                  title={canEditTask ? undefined : editLockTitle}
+                  className={cn(
+                    'min-h-[200px] border rounded-md p-4 bg-background',
+                    !canEditTask && 'opacity-60 cursor-not-allowed'
+                  )}
+                  title={canEditTaskFields ? undefined : editLockTitle}
                 >
                   <SlashBlockEditor
                     key={editedTask.id || 'create'}
-                    readOnly={!canEditTask}
+                    readOnly={!canEditTaskFields}
                     initialBlocks={editedTask.descriptionBlocks}
                     onChange={(blocks) => handleFieldChange('descriptionBlocks', blocks as any)}
                   />
@@ -1873,9 +2027,13 @@ export const TaskDetailModal = ({
                   value={editedTask.description || ''}
                   onChange={(e) => handleFieldChange('description', e.target.value)}
                   placeholder="Describe the task in detail..."
-                  className="min-h-[150px] resize-none"
-                  disabled={!canEditTask}
-                  title={canEditTask ? undefined : editLockTitle}
+                  className={cn(
+                    'min-h-[150px] resize-none',
+                    showMobileHeader && 'disabled:opacity-100 disabled:cursor-default',
+                    showMobileHeader && !canEditTask && 'opacity-60'
+                  )}
+                  disabled={!canEditTaskFields}
+                  title={canEditTaskFields ? undefined : editLockTitle}
                 />
               )}
             </section>
@@ -1885,11 +2043,14 @@ export const TaskDetailModal = ({
             {/* Checklist Section */}
             <section className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <CheckSquare className="h-4 w-4" />
+                <h3 className={cn(
+                  'text-sm font-medium text-muted-foreground flex items-center gap-2',
+                  showMobileHeader && 'text-xs uppercase tracking-wider'
+                )}>
+                  {!showMobileHeader && <CheckSquare className="h-4 w-4" />}
                   Checklist
                   {checklist.length > 0 && (
-                    <span className="text-xs">({completedItems}/{checklist.length})</span>
+                    <span className="text-xs normal-case">({completedItems}/{checklist.length})</span>
                   )}
                 </h3>
                 <div className="flex items-center gap-2">
@@ -1916,24 +2077,31 @@ export const TaskDetailModal = ({
               )}
 
               <div className="space-y-2">
-                <div className="flex items-center gap-2 mb-4">
-                  <Input
-                    placeholder="Add checklist item..."
-                    value={newChecklistItem}
-                    onChange={(e) => setNewChecklistItem(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddChecklistItem()}
-                    className="flex-1"
-                  />
-                  <Button size="sm" onClick={handleAddChecklistItem}>
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
+                {!isMobileFieldsLocked && (
+                  <div className="flex items-center gap-2 mb-4">
+                    <Input
+                      placeholder="Add checklist item..."
+                      value={newChecklistItem}
+                      onChange={(e) => setNewChecklistItem(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddChecklistItem()}
+                      className="flex-1"
+                    />
+                    <Button size="sm" onClick={handleAddChecklistItem}>
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
 
+                <div className={cn(showMobileHeader && checklist.length > 0 && 'border rounded-xl divide-y')}>
                 {checklist.map((item) => (
-                  <div key={item.id} className="flex items-center gap-3 group">
+                  <div key={item.id} className={cn('flex items-center gap-3 group', showMobileHeader && 'px-3 py-2.5')}>
                     <Checkbox
                       checked={item.completed}
                       onCheckedChange={() => handleToggleChecklistItem(item.id)}
+                      disabled={isMobileFieldsLocked}
+                      className={cn(
+                        showMobileHeader && 'h-5 w-5 rounded-md data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 disabled:opacity-100 disabled:cursor-default'
+                      )}
                     />
                     {editingChecklistId === item.id ? (
                       <div className="flex-1 flex items-center gap-2">
@@ -1959,7 +2127,8 @@ export const TaskDetailModal = ({
                         <span className={cn('flex-1 text-sm', item.completed && 'line-through text-muted-foreground')}>
                           {item.text}
                         </span>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                        {!isMobileFieldsLocked && (
+                        <div className={cn('flex items-center gap-1', showMobileHeader ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -1977,10 +2146,12 @@ export const TaskDetailModal = ({
                             <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
                           </Button>
                         </div>
+                        )}
                       </>
                     )}
                   </div>
                 ))}
+                </div>
               </div>
             </section>
 
@@ -1988,9 +2159,15 @@ export const TaskDetailModal = ({
 
             {/* Attachments Section */}
             <section className="space-y-3">
-              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Paperclip className="h-4 w-4" />
-                Attachments
+              <h3 className={cn(
+                'text-sm font-medium text-muted-foreground flex items-center gap-2',
+                showMobileHeader && 'text-xs uppercase tracking-wider justify-between'
+              )}>
+                <span className="flex items-center gap-2">
+                  {!showMobileHeader && <Paperclip className="h-4 w-4" />}
+                  Attachments
+                </span>
+                {showMobileHeader && attachments.length > 0 && <span>{attachments.length}</span>}
               </h3>
 
               <div className="space-y-2">
@@ -2010,7 +2187,7 @@ export const TaskDetailModal = ({
                           {formatFileSize(attachment.fileSize)} • Uploaded by {attachment.uploadedBy.name}
                         </p>
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                      <div className={cn('flex items-center gap-1', showMobileHeader ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -2025,6 +2202,7 @@ export const TaskDetailModal = ({
                         >
                           <Download className="h-4 w-4" />
                         </Button>
+                        {!isMobileFieldsLocked && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -2036,6 +2214,7 @@ export const TaskDetailModal = ({
                         >
                           <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                         </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -2064,7 +2243,8 @@ export const TaskDetailModal = ({
                   </div>
                 )}
 
-                <label 
+                {!isMobileFieldsLocked && (
+                <label
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
@@ -2083,6 +2263,7 @@ export const TaskDetailModal = ({
                   </span>
                   <input type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,video/*" className="hidden" onChange={handleFileUpload} disabled={isUploading} />
                 </label>
+                )}
               </div>
             </section>
 
@@ -2090,9 +2271,15 @@ export const TaskDetailModal = ({
 
             {/* Video Links Section */}
             <section className="space-y-3">
-              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Video className="h-4 w-4" />
-                Videos
+              <h3 className={cn(
+                'text-sm font-medium text-muted-foreground flex items-center gap-2',
+                showMobileHeader && 'text-xs uppercase tracking-wider justify-between'
+              )}>
+                <span className="flex items-center gap-2">
+                  {!showMobileHeader && <Video className="h-4 w-4" />}
+                  Videos
+                </span>
+                {showMobileHeader && videoLinks.length > 0 && <span>{videoLinks.length}</span>}
               </h3>
 
               <div className="space-y-2">
@@ -2120,7 +2307,8 @@ export const TaskDetailModal = ({
                         <p className="text-sm font-medium truncate">{vl.title || vl.url}</p>
                         <p className="text-xs text-muted-foreground truncate">{vl.url}</p>
                       </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                      {!isMobileFieldsLocked && (
+                      <div className={cn('flex items-center gap-1', showMobileHeader ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -2133,6 +2321,7 @@ export const TaskDetailModal = ({
                           <Trash2 className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                         </Button>
                       </div>
+                      )}
                     </div>
                   );
                 })}
@@ -2152,6 +2341,7 @@ export const TaskDetailModal = ({
                   </div>
                 )}
 
+                {!isMobileFieldsLocked && (
                 <div className="flex gap-2">
                   <Input
                     placeholder="Paste YouTube, Vimeo, or direct video URL…"
@@ -2172,6 +2362,7 @@ export const TaskDetailModal = ({
                     Add
                   </Button>
                 </div>
+                )}
               </div>
             </section>
 
@@ -2179,14 +2370,17 @@ export const TaskDetailModal = ({
 
             {/* Dependencies Section */}
             <section className="space-y-4">
-              <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Link2 className="h-4 w-4" />
+              <h3 className={cn(
+                'text-sm font-medium text-muted-foreground flex items-center gap-2',
+                showMobileHeader && 'text-xs uppercase tracking-wider'
+              )}>
+                {!showMobileHeader && <Link2 className="h-4 w-4" />}
                 Dependencies
               </h3>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 {/* Blocking To */}
-                <div className="space-y-3">
+                <div className={cn('space-y-3', showMobileHeader && 'border rounded-xl p-3')}>
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-priority-high" />
                     <Label className="text-xs font-medium">Blocking To</Label>
@@ -2194,6 +2388,7 @@ export const TaskDetailModal = ({
                   <p className="text-xs text-muted-foreground">Tasks that depend on this task</p>
 
                   <div className="space-y-2">
+                    {!isMobileFieldsLocked && (
                     <div className="flex gap-2">
                       <Popover open={isBlockingTaskPopoverOpen} onOpenChange={setIsBlockingTaskPopoverOpen}>
                         <PopoverTrigger asChild>
@@ -2236,7 +2431,13 @@ export const TaskDetailModal = ({
                         </PopoverContent>
                       </Popover>
                     </div>
+                    )}
 
+                    {showMobileHeader && blockingToTaskIds.length === 0 && (
+                      <p className="text-sm text-muted-foreground rounded-md border border-dashed px-3 py-2">
+                        This task isn't blocking anything.
+                      </p>
+                    )}
                     {blockingToTaskIds.map((taskId) => {
                       const depTask = getTaskById(taskId);
                       if (!depTask) return null;
@@ -2252,6 +2453,7 @@ export const TaskDetailModal = ({
                             )} />
                             <span className="text-sm truncate">{depTask.title}</span>
                           </div>
+                          {!isMobileFieldsLocked && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -2260,6 +2462,7 @@ export const TaskDetailModal = ({
                           >
                             <X className="h-3 w-3" />
                           </Button>
+                          )}
                         </div>
                       );
                     })}
@@ -2267,7 +2470,7 @@ export const TaskDetailModal = ({
                 </div>
 
                 {/* Blocked By */}
-                <div className="space-y-3">
+                <div className={cn('space-y-3', showMobileHeader && 'border rounded-xl p-3')}>
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-status-blocked" />
                     <Label className="text-xs font-medium">Blocked By</Label>
@@ -2275,6 +2478,7 @@ export const TaskDetailModal = ({
                   <p className="text-xs text-muted-foreground">Tasks that must complete first</p>
 
                   <div className="space-y-2">
+                    {!isMobileFieldsLocked && (
                     <div className="flex gap-2">
                       <Popover open={isBlockedByTaskPopoverOpen} onOpenChange={setIsBlockedByTaskPopoverOpen}>
                         <PopoverTrigger asChild>
@@ -2317,7 +2521,13 @@ export const TaskDetailModal = ({
                         </PopoverContent>
                       </Popover>
                     </div>
+                    )}
 
+                    {showMobileHeader && editedTask.blockedBy.length === 0 && (
+                      <p className="text-sm text-muted-foreground rounded-md border border-dashed px-3 py-2">
+                        This task has no blockers.
+                      </p>
+                    )}
                     {editedTask.blockedBy.map((taskId) => {
                       const depTask = getTaskById(taskId);
                       if (!depTask) return null;
@@ -2333,6 +2543,7 @@ export const TaskDetailModal = ({
                             )} />
                             <span className="text-sm truncate">{depTask.title}</span>
                           </div>
+                          {!isMobileFieldsLocked && (
                           <Button
                             variant="ghost"
                             size="icon"
@@ -2341,6 +2552,7 @@ export const TaskDetailModal = ({
                           >
                             <X className="h-3 w-3" />
                           </Button>
+                          )}
                         </div>
                       );
                     })}
@@ -2353,9 +2565,15 @@ export const TaskDetailModal = ({
 
             {/* Comments Section */}
             <section className="space-y-4">
-              <h3 className="text-sm font-medium flex items-center gap-2">
-                <MessageSquare className="h-4 w-4" />
-                Comments ({comments.length})
+              <h3 className={cn(
+                'text-sm font-medium flex items-center gap-2',
+                showMobileHeader && 'text-xs uppercase tracking-wider text-muted-foreground justify-between'
+              )}>
+                <span className="flex items-center gap-2">
+                  {!showMobileHeader && <MessageSquare className="h-4 w-4" />}
+                  Comments
+                </span>
+                {showMobileHeader ? <span>{comments.length}</span> : `(${comments.length})`}
               </h3>
 
               <div className="space-y-3 max-h-[300px] overflow-y-auto">
@@ -2450,6 +2668,18 @@ export const TaskDetailModal = ({
             <Button onClick={handleCreate} disabled={!canSubmitTask || isSaving}>
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Task
+            </Button>
+          </div>
+        )}
+        {mode === 'view' && showMobileHeader && isMobileEditMode && (
+          <div className="px-4 py-3 border-t bg-background shrink-0">
+            <Button
+              className="w-full"
+              onClick={handleUpdateTask}
+              disabled={isSaving || !editedTask.title || !editedTask.dueDate || !isFormDirty || isBlockedWithoutDependencies || !canEditTask}
+            >
+              {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Update Task
             </Button>
           </div>
         )}
