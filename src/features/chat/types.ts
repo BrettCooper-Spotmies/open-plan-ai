@@ -1,5 +1,5 @@
 export type ConversationType = 'dm' | 'group';
-export type MessageContentType = 'text' | 'system' | 'file';
+export type MessageContentType = 'text' | 'system' | 'file' | 'image';
 export type ConversationMemberRole = 'owner' | 'admin' | 'member';
 
 export type ChatEntityType = 'task' | 'issue' | 'milestone' | 'hardware_module' | 'bom_node' | 'eco';

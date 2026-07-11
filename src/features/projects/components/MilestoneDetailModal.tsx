@@ -428,13 +428,18 @@ export function MilestoneDetailModal({
                   <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
                     <div>
                       <Label className="block text-xs text-muted-foreground uppercase tracking-wider font-medium">Description</Label>
-                      <Textarea
-                        value={editedMilestone.description || ''}
-                        onChange={(e) => handleFieldChange('description', e.target.value)}
-                        placeholder="Add a description for this milestone..."
-                        className="mt-1 min-h-[60px] resize-none disabled:opacity-100 disabled:cursor-default"
-                        disabled={isMobileFieldsLocked}
-                      />
+                      {isMobileFieldsLocked ? (
+                        <p className="text-sm mt-1.5 text-foreground">
+                          {editedMilestone.description || <span className="text-muted-foreground">No description</span>}
+                        </p>
+                      ) : (
+                        <Textarea
+                          value={editedMilestone.description || ''}
+                          onChange={(e) => handleFieldChange('description', e.target.value)}
+                          placeholder="Add a description for this milestone..."
+                          className="mt-1 min-h-[60px] resize-none"
+                        />
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

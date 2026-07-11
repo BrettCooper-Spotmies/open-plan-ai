@@ -254,10 +254,12 @@ export function AppSidebar() {
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton className="overflow-visible" asChild isActive={isActive(item.url)} tooltip={collapsed ? item.title : undefined}>
                         <NavLink id={item.url} to={item.url} end={item.url === '/'} className="flex items-center gap-3 px-3 py-2 rounded-md transition-colors" activeClassName="bg-sidebar-accent text-sidebar-accent-foreground font-medium">
-                          <span className="relative shrink-0">
+                          <span className="relative shrink-0 overflow-visible">
                             <item.icon className="h-4 w-4" />
                             {showChatBadge && collapsed && (
-                              <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-status-in-progress ring-2 ring-sidebar" />
+                              <span className="absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-status-in-progress px-0.5 text-[9px] font-medium leading-none text-white ring-2 ring-sidebar">
+                                {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                              </span>
                             )}
                           </span>
                           {!collapsed && (

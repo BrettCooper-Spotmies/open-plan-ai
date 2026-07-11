@@ -44,5 +44,7 @@ export interface IChatTransport {
 
   unsubscribe(channel: Unsubscribe): void;
 
+  connect(): void;
+
   disconnect(): void;
 }
