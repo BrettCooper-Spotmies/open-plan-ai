@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { LayoutGrid, List, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -7,6 +7,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { ModulesKanbanView } from './ModulesKanbanView';
 import { ModulesListView } from './ModulesListView';
 import { ModulesMobileView } from './ModulesMobileView';
+import { ModuleDetailMobileView } from './ModuleDetailMobileView';
 import { ModuleDetailModal } from './ModuleDetailModal';
 import { TaskDetailModal } from './TaskDetailModal';
 import { IssueDetailModal } from './IssueDetailModal';
@@ -26,6 +27,7 @@ interface ModulesSectionProps {
   tasks: Task[];
   issues: Issue[];
   teamMembers: TeamMember[];
+  projectId?: string;
   viewMode?: ModuleViewMode;
   onViewModeChange?: (mode: ModuleViewMode) => void;
   searchQuery?: string;
@@ -38,6 +40,9 @@ interface ModulesSectionProps {
   onIssueClick?: (issue: Issue) => void;
   onTaskUpdate?: (task: Task) => void;
   onIssueUpdate?: (issue: Issue) => void;
+  /** Notifies the parent when the mobile full-page module detail view opens/closes,
+   *  so it can hide its own tab strip and search bar (which live outside this component). */
+  onMobileDetailOpenChange?: (isOpen: boolean) => void;
 }
 
 export function ModuleViewControls({
@@ -80,6 +85,7 @@ export function ModulesSection({
   tasks,
   issues,
   teamMembers,
+  projectId,
   viewMode: externalViewMode,
   onViewModeChange: externalOnViewModeChange,
   searchQuery = '',
@@ -92,12 +98,20 @@ export function ModulesSection({
   onIssueClick,
   onTaskUpdate,
   onIssueUpdate,
+  onMobileDetailOpenChange,
 }: ModulesSectionProps) {
   const isMobile = useIsMobile();
   const [selectedModule, setSelectedModule] = useState<ModuleWithStats | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+
+  useEffect(() => {
+    onMobileDetailOpenChange?.(isMobile && !!selectedModule);
+    // Restore the parent's tab strip/search bar if this component unmounts
+    // (e.g. navigating away) while the mobile detail view is open.
+    return () => onMobileDetailOpenChange?.(false);
+  }, [isMobile, selectedModule, onMobileDetailOpenChange]);
 
   const handleInternalTaskClick = (task: Task) => setSelectedTask(task);
   const effectiveOnTaskClick = onTaskClick ?? handleInternalTaskClick;
@@ -136,7 +150,7 @@ export function ModulesSection({
 
   const handleModuleClick = (module: ModuleWithStats) => {
     setSelectedModule(module);
-    setIsDetailModalOpen(true);
+    if (!isMobile) setIsDetailModalOpen(true);
   };
 
   const handleCloseDetailModal = () => {
@@ -230,10 +244,27 @@ export function ModulesSection({
         {/* View Content */}
         <div className="min-h-[400px] w-full min-w-0">
           {isMobile ? (
-            <ModulesMobileView
-              modules={modulesWithStats}
-              onModuleClick={handleModuleClick}
-            />
+            selectedModule ? (
+              <ModuleDetailMobileView
+                module={selectedModule}
+                allTasks={tasks}
+                allIssues={issues}
+                teamMembers={teamMembers}
+                projectId={projectId}
+                onBack={handleCloseDetailModal}
+                onUpdate={handleModuleUpdateFromModal}
+                onDelete={onModuleDelete}
+                onTaskClick={effectiveOnTaskClick}
+                onIssueClick={effectiveOnIssueClick}
+                onLinkTask={handleLinkTask}
+                onLinkIssue={handleLinkIssue}
+              />
+            ) : (
+              <ModulesMobileView
+                modules={modulesWithStats}
+                onModuleClick={handleModuleClick}
+              />
+            )
           ) : viewMode === 'kanban' ? (
             <ModulesKanbanView
               modules={modulesWithStats}
@@ -248,13 +279,13 @@ export function ModulesSection({
         </div>
       </div>
 
-      {/* Module Detail Modal */}
+      {/* Module Detail Modal (desktop only — mobile uses ModuleDetailMobileView above) */}
       <ModuleDetailModal
         module={selectedModule}
         allTasks={tasks}
         allIssues={issues}
         teamMembers={teamMembers}
-        isOpen={isDetailModalOpen}
+        isOpen={isDetailModalOpen && !isMobile}
         onClose={handleCloseDetailModal}
         onUpdate={handleModuleUpdateFromModal}
         onDelete={onModuleDelete}

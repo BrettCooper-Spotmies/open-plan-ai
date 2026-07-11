@@ -143,9 +143,9 @@ export function useUpdateTask() {
 
       return { previousTask, projectId };
     },
-    onError: (_err, { projectId, taskId }, context) => {
-      logger.error('Task update failed, rolling back', _err);
-      toast.error('Failed to update task');
+    onError: (err, { projectId, taskId }, context) => {
+      logger.error('Task update failed, rolling back', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to update task');
     },
     onSuccess: (updatedTask, { projectId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });

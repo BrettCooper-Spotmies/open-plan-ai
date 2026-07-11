@@ -93,6 +93,11 @@ const categoryConfig: Record<IssueCategory, { icon: typeof Bug; label: string }>
   other: { icon: Info, label: 'Other' },
 };
 
+const getCategoryLabel = (issue: Issue): string =>
+  issue.category === 'other' && issue.categoryOther?.trim()
+    ? issue.categoryOther
+    : categoryConfig[issue.category].label;
+
 const DEPENDENCIES_COLUMN: IssuesKanbanColumn = {
   id: 'col-dependencies',
   status: 'dependencies',
@@ -907,7 +912,7 @@ export function IssuesView({
                       <span className="text-xs text-muted-foreground truncate min-w-0">{primaryAssignee.name}</span>
                       <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
                         <CategoryIcon className="h-3.5 w-3.5" />
-                        {categoryConfig[issue.category].label}
+                        {getCategoryLabel(issue)}
                       </span>
                     </div>
                     <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
@@ -984,7 +989,7 @@ export function IssuesView({
                       <TableCell>
                         <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                           <CategoryIcon className="h-4 w-4" />
-                          {categoryConfig[issue.category].label}
+                          {getCategoryLabel(issue)}
                         </div>
                       </TableCell>
                       <TableCell>

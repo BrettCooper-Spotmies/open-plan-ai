@@ -1,9 +1,11 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import {
-  GitMerge, Check, X, Plus, ChevronDown, Lock, AlertCircle,
+  GitMerge, Check, X, Plus, ChevronDown, ChevronLeft, Lock, AlertCircle,
   Upload, FileText, Image, Box, Boxes, Package, Scissors, Search,
 } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   ECOType, ECOReason, ECOPriority, ChangeClass, EffectivityType, ImpactLevel, ECODisposition,
   ECO_TYPE_LABEL, REASON_LABEL, PRIORITY_LABEL, CHANGE_CLASS_LABEL,
@@ -417,6 +419,7 @@ export function ECOWizard({
   onClose: (result?: { saved: boolean; ecoId?: string }) => void;
 }) {
   const isEdit = !!ecoId;
+  const isMobile = useIsMobile();
   const createMutation = useCreateECO(projectId);
   const updateMutation = useUpdateECO(projectId, ecoId ?? '');
   const submitMutation = useSubmitECO(projectId, ecoId ?? '');
@@ -573,6 +576,14 @@ export function ECOWizard({
     setSeeded(true);
   }, [editDetail, seeded]);
 
+  // Lock background scroll while the mobile full-page flow covers the viewport.
+  useEffect(() => {
+    if (!isMobile) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [isMobile]);
+
   const addFiles = (fileList: FileList | null) => {
     if (!fileList) return;
     const next = Array.from(fileList).map(f => ({ name: f.name, size: f.size, file: f }));
@@ -705,6 +716,78 @@ export function ECOWizard({
     setErrors({});
     setStep(i);
     setMaxStepReached(m => Math.max(m, i));
+  };
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    const basePayload = {
+      title: basics.title,
+      description: basics.description || null,
+      type: basics.type.toLowerCase(),
+      typeOther: basics.type === 'OTHER' ? basics.typeOther.trim() : null,
+      reason: basics.reason.toLowerCase(),
+      reasonOther: basics.reason === 'OTHER' ? basics.reasonOther.trim() : null,
+      priority: basics.priority.toLowerCase(),
+      changeClass: basics.changeClass,
+      effectivityType: basics.effType.toLowerCase(),
+      effectivityValue: basics.effValue || null,
+      originatingEcr: basics.ecr || null,
+      revFrom: items[0]?.revFrom || null,
+      revTo: items[0]?.revTo || null,
+      scheduleImpact: impact.schedule.toLowerCase(),
+      requiresRecertification: impact.recert,
+      firmwareCoupling: impact.firmware,
+      certNotes: (impact.recert || impact.firmware) ? impact.certNotes.trim() : null,
+      unitCostDelta: impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
+      oneTimeCost: impact.oneTimeCost ? parseFloat(impact.oneTimeCost) : null,
+      parts: items.map(it => ({
+        partId: it.partId,
+        bomNodeId: it.nodeId || null,
+        revFrom: it.revFrom || null,
+        revTo: it.revTo || null,
+        impactLevel: it.impact.toLowerCase(),
+        disposition: it.disp.toLowerCase(),
+      })),
+      diffRows: diffRows
+        .filter(r => r.param.trim() !== '')
+        .map((r, i) => ({
+          order: i,
+          parameter: r.param,
+          fromValue: r.from || null,
+          toValue: r.to || null,
+          changeLabel: r.cls.toLowerCase(),
+        })),
+    };
+    // Pipeline steps are locked during rework — resubmit() reactivates the
+    // rejected step server-side, so the field must be omitted, not just unchanged.
+    const payload = isRework ? basePayload : {
+      ...basePayload,
+      pipelineSteps: pipeline.map((p, i) => ({
+        order: i + 1,
+        stage: p.stage,
+        stageLabel: p.stage,
+        approverUserId: p.approverId || null,
+        approverName: p.name || null,
+        approverRole: p.role || null,
+        isOptional: p.optional ?? false,
+        optionalReason: p.optionalReason || null,
+        justification: p.justification || null,
+      })),
+    };
+    try {
+      const saved = await activeMutation.mutateAsync(payload);
+      if (isRework) {
+        await submitMutation.mutateAsync();
+        toast.success('ECO revised and resubmitted');
+      } else {
+        toast.success(isEdit ? 'ECO updated' : 'ECO created');
+      }
+      onClose({ saved: true, ecoId: isEdit ? undefined : saved?.id });
+    } catch (err) {
+      toast.error(isRework ? 'Failed to resubmit ECO' : isEdit ? 'Failed to update ECO' : 'Failed to create ECO', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+    }
   };
 
   // ── Render helpers ────────────────────────────────────────────────────────
@@ -1581,6 +1664,102 @@ export function ECOWizard({
     );
   }
 
+  // ── Mobile: full-page step flow instead of a centered dialog ──────
+  if (isMobile) {
+    const onHeaderBack = () => {
+      if (savePending) return;
+      if (step > 0) { setErrors({}); setStep(step - 1); return; }
+      onClose();
+    };
+
+    return createPortal(
+      <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 bg-background flex flex-col">
+        {/* Header */}
+        <div className="shrink-0 border-b border-border px-4 pt-4 pb-3">
+          <div className="flex items-center justify-between gap-2 mb-3">
+            <button type="button" onClick={onHeaderBack} disabled={savePending}
+              className="w-9 h-9 shrink-0 rounded-lg bg-muted flex items-center justify-center text-foreground disabled:opacity-50">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <h2 className="text-base font-semibold text-foreground min-w-0 truncate text-center">
+              {isRework ? 'Revise & Resubmit' : isEdit ? 'Edit Engineering Change Order' : 'New Engineering Change Order'}
+            </h2>
+            <button type="button" onClick={() => onClose()} disabled={savePending}
+              className="w-9 h-9 shrink-0 rounded-lg bg-muted flex items-center justify-center text-foreground disabled:opacity-50">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {isRework ? 'Rework · resubmitting reactivates the rejected approval step' : 'Draft · eco_number assigned on save'}
+          </p>
+        </div>
+
+        {/* Progress */}
+        <div className="shrink-0 px-4 pt-3 pb-1">
+          <div className="flex gap-1.5">
+            {STEPS.map((s, i) => (
+              <div key={s} className={cn('h-1 flex-1 rounded-full', i <= step ? 'bg-primary' : 'bg-muted')} />
+            ))}
+          </div>
+          <div className="mt-2 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+            Step {step + 1} of {STEPS.length} — {STEPS[step]}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {isRework && reworkRejection && (
+            <div
+              className="flex items-start gap-3 p-3 rounded-lg mb-4"
+              style={{ background: 'rgba(249,115,22,0.07)', border: '1px solid rgba(249,115,22,0.22)' }}
+            >
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: '#f97316' }} />
+              <div>
+                <div className="text-[12px] font-semibold text-foreground">
+                  Rejected at {reworkRejection.stage} · {reworkRejection.when}
+                </div>
+                <div className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                  {reworkRejection.by}: "{reworkRejection.reason}"
+                </div>
+              </div>
+            </div>
+          )}
+          {stepContent}
+        </div>
+
+        {/* Footer */}
+        <div className="shrink-0 border-t border-border px-4 py-3 flex items-center gap-3 bg-card">
+          <button type="button" onClick={() => onClose()} disabled={savePending}
+            className="flex-1 px-4 py-2.5 rounded-md text-[13px] font-medium bg-muted/50 text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit] disabled:opacity-50">
+            Cancel
+          </button>
+          {step < STEPS.length - 1 ? (
+            <button type="button" onClick={handleNext}
+              className="flex-1 px-4 py-2.5 rounded-md text-[13px] font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors font-[inherit]">
+              Next
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={!canSubmit}
+              className={cn(
+                'flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-md text-[13px] font-semibold transition-colors font-[inherit]',
+                canSubmit
+                  ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
+                  : 'bg-muted/50 text-muted-foreground cursor-default',
+              )}
+            >
+              <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+              {savePending ? 'Saving…' : isRework ? 'Revise & Resubmit' : isEdit ? 'Save Changes' : 'Save Draft'}
+            </button>
+          )}
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-6"
@@ -1662,77 +1841,7 @@ export function ECOWizard({
               </button>
             ) : (
               <button
-                onClick={async () => {
-                  if (!canSubmit) return;
-                  const basePayload = {
-                    title: basics.title,
-                    description: basics.description || null,
-                    type: basics.type.toLowerCase(),
-                    typeOther: basics.type === 'OTHER' ? basics.typeOther.trim() : null,
-                    reason: basics.reason.toLowerCase(),
-                    reasonOther: basics.reason === 'OTHER' ? basics.reasonOther.trim() : null,
-                    priority: basics.priority.toLowerCase(),
-                    changeClass: basics.changeClass,
-                    effectivityType: basics.effType.toLowerCase(),
-                    effectivityValue: basics.effValue || null,
-                    originatingEcr: basics.ecr || null,
-                    revFrom: items[0]?.revFrom || null,
-                    revTo: items[0]?.revTo || null,
-                    scheduleImpact: impact.schedule.toLowerCase(),
-                    requiresRecertification: impact.recert,
-                    firmwareCoupling: impact.firmware,
-                    certNotes: (impact.recert || impact.firmware) ? impact.certNotes.trim() : null,
-                    unitCostDelta: impact.unitCostDelta ? parseFloat(impact.unitCostDelta) : null,
-                    oneTimeCost: impact.oneTimeCost ? parseFloat(impact.oneTimeCost) : null,
-                    parts: items.map(it => ({
-                      partId: it.partId,
-                      bomNodeId: it.nodeId || null,
-                      revFrom: it.revFrom || null,
-                      revTo: it.revTo || null,
-                      impactLevel: it.impact.toLowerCase(),
-                      disposition: it.disp.toLowerCase(),
-                    })),
-                    diffRows: diffRows
-                      .filter(r => r.param.trim() !== '')
-                      .map((r, i) => ({
-                        order: i,
-                        parameter: r.param,
-                        fromValue: r.from || null,
-                        toValue: r.to || null,
-                        changeLabel: r.cls.toLowerCase(),
-                      })),
-                  };
-                  // Pipeline steps are locked during rework — resubmit() reactivates the
-                  // rejected step server-side, so the field must be omitted, not just unchanged.
-                  const payload = isRework ? basePayload : {
-                    ...basePayload,
-                    pipelineSteps: pipeline.map((p, i) => ({
-                      order: i + 1,
-                      stage: p.stage,
-                      stageLabel: p.stage,
-                      approverUserId: p.approverId || null,
-                      approverName: p.name || null,
-                      approverRole: p.role || null,
-                      isOptional: p.optional ?? false,
-                      optionalReason: p.optionalReason || null,
-                      justification: p.justification || null,
-                    })),
-                  };
-                  try {
-                    const saved = await activeMutation.mutateAsync(payload);
-                    if (isRework) {
-                      await submitMutation.mutateAsync();
-                      toast.success('ECO revised and resubmitted');
-                    } else {
-                      toast.success(isEdit ? 'ECO updated' : 'ECO created');
-                    }
-                    onClose({ saved: true, ecoId: isEdit ? undefined : saved?.id });
-                  } catch (err) {
-                    toast.error(isRework ? 'Failed to resubmit ECO' : isEdit ? 'Failed to update ECO' : 'Failed to create ECO', {
-                      description: err instanceof Error ? err.message : undefined,
-                    });
-                  }
-                }}
+                onClick={handleSubmit}
                 disabled={!canSubmit}
                 className={cn(
                   'flex items-center gap-1.5 px-4 py-2 rounded-md text-[13px] font-semibold transition-colors font-[inherit]',

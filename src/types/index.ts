@@ -154,6 +154,7 @@ export interface Issue {
   description: string;
   descriptionBlocks?: any[]; // For advanced editor state
   category: IssueCategory;
+  categoryOther?: string;         // Free-text description when category === 'other'
   severity: IssueSeverity;
   status: string;  // IssueStatus or any custom bucket key
 

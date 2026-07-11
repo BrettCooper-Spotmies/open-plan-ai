@@ -417,8 +417,8 @@ const Team = () => {
         )}
 
         {/* Filters & Search */}
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="relative w-full sm:w-80">
+        <div className="flex flex-row gap-4 items-center justify-between">
+          <div className="relative flex-1 sm:w-80 sm:flex-none">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by Name or Email"
@@ -537,7 +537,7 @@ const Team = () => {
                       </AvatarFallback>
                     </Avatar>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-between gap-2">
                         <p className="truncate text-sm font-medium">{member.name || member.email}</p>
                         <Badge variant="outline" className={`shrink-0 ${getRoleBadgeClass(member.role)}`}>
                           {member.role.charAt(0).toUpperCase() + member.role.slice(1)}

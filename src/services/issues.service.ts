@@ -38,6 +38,7 @@ export const issuesService = {
       title: issue.title,
       category: issue.category,
     };
+    if (issue.category === 'other' && issue.categoryOther) payload.categoryOther = issue.categoryOther;
     if (issue.description) payload.description = issue.description;
     if (issue.severity) payload.severity = issue.severity;
     if (issue.status) payload.status = issue.status;
@@ -71,6 +72,7 @@ export const issuesService = {
     if (u.title !== undefined) payload.title = u.title;
     if (u.description !== undefined) payload.description = u.description;
     if (u.category !== undefined) payload.category = u.category;
+    if (u.categoryOther !== undefined) payload.categoryOther = u.categoryOther;
     if (u.severity !== undefined) payload.severity = u.severity;
     if (u.status !== undefined) payload.status = u.status;
     if ('moduleId' in updates) payload.moduleId = u.moduleId ?? null;

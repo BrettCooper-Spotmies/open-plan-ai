@@ -97,6 +97,7 @@ import { getFallbackTagColor } from '@/lib/tagColors';
 import { useIssueColumns } from '@/hooks/useIssueColumns';
 import { DEFAULT_ISSUE_COLUMNS } from '@/services/issueColumns.service';
 import { useProjectPermissions } from '@/hooks/useProjectPermissions';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface IssueDetailContentProps {
     issue: Issue | null;
@@ -112,6 +113,12 @@ interface IssueDetailContentProps {
     onPendingFilesChange?: (files: File[]) => void;
     /** Shown as a read-only "Project" field when provided. Only pass this from contexts (like My Day) where the issue's project isn't already implied by the surrounding page. */
     projectName?: string;
+    /**
+     * Controls the mobile read-only/edit-mode gate. Omit to leave fields always editable
+     * (e.g. the full-page IssuePage route, which has no "Edit" affordance of its own).
+     * When provided (from IssueDetailModal's mobile "..." menu), fields stay locked until true.
+     */
+    isMobileEditMode?: boolean;
 }
 
 
@@ -151,8 +158,14 @@ export function IssueDetailContent({
     mode = 'view',
     onPendingFilesChange,
     projectName,
+    isMobileEditMode,
 }: IssueDetailContentProps) {
     const { user: profile } = useAuth();
+    const isMobile = useIsMobile();
+    const isMobileLayout = isMobile && mode !== 'create';
+    // Locked only when a parent explicitly controls edit mode (the mobile modal's "..." menu)
+    // and hasn't switched it on yet. Uncontrolled callers (e.g. IssuePage) stay always-editable.
+    const isMobileFieldsLocked = isMobileLayout && isMobileEditMode === false;
     const [editedIssue, setEditedIssue] = useState<Issue | null>(issue);
     const [newComment, setNewComment] = useState('');
     const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
@@ -187,6 +200,7 @@ export function IssueDetailContent({
             }),
         [canEditResource, editedIssue?.reportedBy?.id, editedIssue?.assignees]
     );
+    const canEditIssueFields = canEditIssue && !isMobileFieldsLocked;
     const editLockTitle = 'You can only edit items you created or are assigned to';
     const { data: apiIssueColumns } = useIssueColumns(projectId);
     const statusOptions = (apiIssueColumns && apiIssueColumns.length > 0 ? apiIssueColumns : DEFAULT_ISSUE_COLUMNS)
@@ -535,18 +549,30 @@ export function IssueDetailContent({
     return (
         <div className="flex flex-col h-full bg-background">
             {/* Header with Title and Metadata */}
-            <div className="flex flex-col gap-4">
+            <div className={cn('flex flex-col gap-4', isMobileLayout && 'gap-3')}>
+                {isMobileLayout && projectName && (
+                    <p className="text-xs text-muted-foreground">
+                        {projectName} <span className="mx-1">›</span> Board
+                    </p>
+                )}
                 <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-2">
-                        <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Issue Title <span className="text-destructive" aria-hidden="true">*</span></Label>
+                        {!isMobileLayout && (
+                            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Issue Title <span className="text-destructive" aria-hidden="true">*</span></Label>
+                        )}
                         <Input
                             value={editedIssue.title}
                             onChange={(e) => handleFieldChange('title', e.target.value)}
-                            className="text-base font-semibold w-full"
+                            className={cn(
+                                isMobileLayout
+                                    ? 'text-xl font-bold h-auto py-1 px-0 border-0 shadow-none focus-visible:ring-0 rounded-none w-full disabled:opacity-100 disabled:cursor-default'
+                                    : 'text-base font-semibold w-full',
+                                isMobileLayout && !canEditIssue && 'opacity-60'
+                            )}
                             placeholder="Issue title..."
                             aria-required="true"
-                            disabled={!canEditIssue}
-                            title={canEditIssue ? undefined : editLockTitle}
+                            disabled={!canEditIssueFields}
+                            title={canEditIssueFields ? undefined : editLockTitle}
                         />
                     </div>
                 </div>
@@ -567,15 +593,18 @@ export function IssueDetailContent({
                 <div className="flex flex-col gap-6">
                     {/* Assigned To — dedicated full-width row, avatar-only display */}
                     <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                            <User className="h-3 w-3" />
+                        <Label className={cn(
+                            'text-xs text-muted-foreground flex items-center gap-1.5',
+                            isMobileLayout && 'uppercase tracking-wider font-medium'
+                        )}>
+                            {!isMobileLayout && <User className="h-3 w-3" />}
                             Assigned To
                         </Label>
-                        <Popover open={isAssigneePopoverOpen} onOpenChange={(open) => canEditIssue && setIsAssigneePopoverOpen(open)}>
+                        <Popover open={isAssigneePopoverOpen} onOpenChange={(open) => canEditIssueFields && setIsAssigneePopoverOpen(open)}>
                             <PopoverTrigger asChild>
                                 <button
-                                    disabled={!canEditIssue}
-                                    title={canEditIssue ? undefined : editLockTitle}
+                                    disabled={!canEditIssueFields}
+                                    title={canEditIssueFields ? undefined : editLockTitle}
                                     className={cn(
                                         'flex items-center gap-2 h-10 px-2 w-full text-left rounded-md hover:bg-muted/50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                                         !canEditIssue && 'cursor-not-allowed opacity-60 hover:bg-transparent'
@@ -646,15 +675,15 @@ export function IssueDetailContent({
                                                     )}
                                                 </div>
                                                 <button
-                                                    disabled={!canEditIssue}
-                                                    title={canEditIssue ? undefined : editLockTitle}
+                                                    disabled={!canEditIssueFields}
+                                                    title={canEditIssueFields ? undefined : editLockTitle}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleFieldChange('assignees', (editedIssue.assignees || []).filter(a => a.id !== assignee.id));
                                                     }}
                                                     className={cn(
                                                         'text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100',
-                                                        !canEditIssue && 'cursor-not-allowed group-hover:opacity-60'
+                                                        !canEditIssueFields && 'cursor-not-allowed group-hover:opacity-60'
                                                     )}
                                                 >
                                                     <X className="h-3 w-3" />
@@ -693,22 +722,72 @@ export function IssueDetailContent({
                         </Popover>
                     </div>
 
+                    {/* Status pill — mobile only, mirrors the Bucket value as a prominent chip */}
+                    {isMobileLayout && (
+                        <div className="space-y-1.5">
+                            <Label className="block text-xs text-muted-foreground uppercase tracking-wider font-medium">Status</Label>
+                            <Select
+                                value={editedIssue.status}
+                                onValueChange={(value) => handleFieldChange('status', value as IssueStatus)}
+                                disabled={!canEditIssueFields}
+                            >
+                                <SelectTrigger
+                                    className={cn(
+                                        'h-auto w-auto border-0 p-0 shadow-none bg-transparent focus:ring-0 focus-visible:ring-0 [&>svg]:hidden disabled:opacity-100 disabled:cursor-default',
+                                        !canEditIssue && 'opacity-60'
+                                    )}
+                                    title={canEditIssueFields ? undefined : editLockTitle}
+                                >
+                                    <SelectValue>
+                                        <span
+                                            className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium text-white"
+                                            style={{ backgroundColor: statusOptions.find(s => s.value === editedIssue.status)?.color ?? '#6b7280' }}
+                                        >
+                                            {statusOptions.find(s => s.value === editedIssue.status)?.label ?? editedIssue.status}
+                                        </span>
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {statusOptions.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: option.color }} />
+                                                {option.label}
+                                            </div>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
+                    {isMobileLayout && (
+                        <Label className="text-xs text-muted-foreground uppercase tracking-wider font-medium -mb-2">Details</Label>
+                    )}
+                    <div className={cn(isMobileLayout && 'border rounded-xl p-4')}>
                     {/* Metadata Grid */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 items-start">
                         {/* Status */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                <AlertCircle className="h-3 w-3" />
-                                Bucket <span className="text-destructive" aria-hidden="true">*</span>
+                            <Label className={cn(
+                                'text-xs text-muted-foreground flex items-center gap-1.5',
+                                isMobileLayout && 'uppercase tracking-wider font-medium'
+                            )}>
+                                {!isMobileLayout && <AlertCircle className="h-3 w-3" />}
+                                Bucket {!isMobileLayout && <span className="text-destructive" aria-hidden="true">*</span>}
                             </Label>
                             <Select
                                 value={editedIssue.status}
                                 onValueChange={(value) => handleFieldChange('status', value as IssueStatus)}
-                                disabled={!canEditIssue}
+                                disabled={!canEditIssueFields}
                             >
-                                <SelectTrigger className="h-9" aria-required="true" title={canEditIssue ? undefined : editLockTitle}>
+                                <SelectTrigger
+                                    className={cn(isMobileLayout ? 'h-auto w-auto border-0 p-0 shadow-none bg-transparent focus:ring-0 focus-visible:ring-0 [&>svg]:hidden disabled:opacity-100 disabled:cursor-default' : 'h-9', isMobileLayout && !canEditIssue && 'opacity-60')}
+                                    aria-required="true"
+                                    title={canEditIssueFields ? undefined : editLockTitle}
+                                >
                                     <SelectValue>
-                                        <div className="flex items-center gap-2">
+                                        <div className={cn('flex items-center gap-2', isMobileLayout && 'font-bold text-sm text-foreground')}>
                                             <div
                                                 className="w-2 h-2 rounded-full"
                                                 style={{ backgroundColor: statusOptions.find(s => s.value === editedIssue.status)?.color ?? '#6b7280' }}
@@ -732,34 +811,46 @@ export function IssueDetailContent({
 
                         {/* Reported Date */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                <CalendarIcon className="h-3 w-3" />
+                            <Label className={cn(
+                                'text-xs text-muted-foreground flex items-center gap-1.5',
+                                isMobileLayout && 'uppercase tracking-wider font-medium'
+                            )}>
+                                {!isMobileLayout && <CalendarIcon className="h-3 w-3" />}
                                 Reported
                             </Label>
-                            <div className="text-sm py-2 px-3 h-9 flex items-center border rounded-md bg-muted/20 text-muted-foreground">
-                                {format(new Date(editedIssue.reportedAt || (editedIssue as any).createdAt || new Date()), 'PPP')}
+                            <div className={cn(
+                                'text-sm flex items-center',
+                                isMobileLayout ? 'font-bold text-foreground' : 'py-2 px-3 h-9 border rounded-md bg-muted/20 text-muted-foreground'
+                            )}>
+                                {format(new Date(editedIssue.reportedAt || (editedIssue as any).createdAt || new Date()), isMobileLayout ? 'MMM d' : 'PPP')}
                             </div>
                         </div>
 
                         {/* Due Date */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                <CalendarIcon className="h-3 w-3" />
+                            <Label className={cn(
+                                'text-xs text-muted-foreground flex items-center gap-1.5',
+                                isMobileLayout && 'uppercase tracking-wider font-medium'
+                            )}>
+                                {!isMobileLayout && <CalendarIcon className="h-3 w-3" />}
                                 Due Date
                             </Label>
                             <Popover>
                                 <PopoverTrigger asChild>
                                     <Button
-                                        variant="outline"
-                                        disabled={!canEditIssue}
-                                        title={canEditIssue ? undefined : editLockTitle}
+                                        variant={isMobileLayout ? 'ghost' : 'outline'}
+                                        disabled={!canEditIssueFields}
+                                        title={canEditIssueFields ? undefined : editLockTitle}
                                         className={cn(
-                                            'w-full justify-start text-left font-normal h-9 px-3',
-                                            !editedIssue.dueDate && 'text-muted-foreground'
+                                            isMobileLayout
+                                                ? 'h-auto w-auto p-0 justify-start text-left font-bold text-sm text-foreground hover:bg-transparent disabled:opacity-100 disabled:pointer-events-none'
+                                                : 'w-full justify-start text-left font-normal h-9 px-3',
+                                            !editedIssue.dueDate && 'text-muted-foreground',
+                                            isMobileLayout && !canEditIssue && 'opacity-60'
                                         )}
                                     >
                                         {editedIssue.dueDate
-                                            ? format(new Date(editedIssue.dueDate), 'PPP')
+                                            ? format(new Date(editedIssue.dueDate), isMobileLayout ? 'MMM d' : 'PPP')
                                             : 'Set date'}
                                     </Button>
                                 </PopoverTrigger>
@@ -787,11 +878,17 @@ export function IssueDetailContent({
 
                         {/* Reported By */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                <User className="h-3 w-3" />
+                            <Label className={cn(
+                                'text-xs text-muted-foreground flex items-center gap-1.5',
+                                isMobileLayout && 'uppercase tracking-wider font-medium'
+                            )}>
+                                {!isMobileLayout && <User className="h-3 w-3" />}
                                 Reported By
                             </Label>
-                            <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/20">
+                            <div className={cn(
+                                'flex items-center gap-2',
+                                isMobileLayout ? '' : 'h-9 px-3 rounded-md border border-input bg-muted/20'
+                            )}>
                                 <Avatar className="h-5 w-5 shrink-0">
                                     <AvatarFallback className="text-[9px]">
                                         {editedIssue.reportedBy.initials}
@@ -800,7 +897,7 @@ export function IssueDetailContent({
                                 <TooltipProvider delayDuration={150}>
                                     <Tooltip>
                                         <TooltipTrigger asChild>
-                                            <span className="text-sm truncate min-w-0 flex-1">{editedIssue.reportedBy.name}</span>
+                                            <span className={cn('text-sm truncate min-w-0 flex-1', isMobileLayout && 'font-bold text-foreground')}>{editedIssue.reportedBy.name}</span>
                                         </TooltipTrigger>
                                         <TooltipContent side="top" className="text-xs">
                                             {editedIssue.reportedBy.name}
@@ -813,28 +910,41 @@ export function IssueDetailContent({
                         {/* Project — only shown when explicitly provided (e.g. My Day, which aggregates issues across projects) */}
                         {projectName && (
                             <div className="space-y-1.5">
-                                <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                    <FolderKanban className="h-3 w-3" />
+                                <Label className={cn(
+                                    'text-xs text-muted-foreground flex items-center gap-1.5',
+                                    isMobileLayout && 'uppercase tracking-wider font-medium'
+                                )}>
+                                    {!isMobileLayout && <FolderKanban className="h-3 w-3" />}
                                     Project
                                 </Label>
-                                <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-input bg-muted/20">
-                                    <span className="text-sm truncate">{projectName}</span>
+                                <div className={cn(
+                                    'flex items-center gap-2',
+                                    isMobileLayout ? '' : 'h-9 px-3 rounded-md border border-input bg-muted/20'
+                                )}>
+                                    <span className={cn('text-sm truncate', isMobileLayout && 'font-bold text-foreground')}>{projectName}</span>
                                 </div>
                             </div>
                         )}
 
                         {/* Priority */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                <AlertTriangle className="h-3 w-3" />
-                                Priority <span className="text-destructive" aria-hidden="true">*</span>
+                            <Label className={cn(
+                                'text-xs text-muted-foreground flex items-center gap-1.5',
+                                isMobileLayout && 'uppercase tracking-wider font-medium'
+                            )}>
+                                {!isMobileLayout && <AlertTriangle className="h-3 w-3" />}
+                                Priority {!isMobileLayout && <span className="text-destructive" aria-hidden="true">*</span>}
                             </Label>
                             <Select
                                 value={editedIssue.severity}
                                 onValueChange={(value) => handleFieldChange('severity', value as IssueSeverity)}
-                                disabled={!canEditIssue}
+                                disabled={!canEditIssueFields}
                             >
-                                <SelectTrigger className="h-9" aria-required="true" title={canEditIssue ? undefined : editLockTitle}>
+                                <SelectTrigger
+                                    className={cn(isMobileLayout ? 'h-auto w-auto border-0 p-0 shadow-none bg-transparent focus:ring-0 focus-visible:ring-0 [&>svg]:hidden disabled:opacity-100 disabled:cursor-default' : 'h-9', isMobileLayout && !canEditIssue && 'opacity-60')}
+                                    aria-required="true"
+                                    title={canEditIssueFields ? undefined : editLockTitle}
+                                >
                                     <SelectValue>
                                         <Badge className={cn('text-xs gap-1', ISSUE_SEVERITY_DISPLAY[editedIssue.severity].color)}>
                                             {(() => {
@@ -860,23 +970,33 @@ export function IssueDetailContent({
 
                         {/* Category */}
                         <div className="space-y-1.5">
-                            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                <Tag className="h-3 w-3" />
-                                Category <span className="text-destructive" aria-hidden="true">*</span>
+                            <Label className={cn(
+                                'text-xs text-muted-foreground flex items-center gap-1.5',
+                                isMobileLayout && 'uppercase tracking-wider font-medium'
+                            )}>
+                                {!isMobileLayout && <Tag className="h-3 w-3" />}
+                                Category {!isMobileLayout && <span className="text-destructive" aria-hidden="true">*</span>}
                             </Label>
                             <Select
                                 value={editedIssue.category}
-                                onValueChange={(value) => handleFieldChange('category', value as IssueCategory)}
-                                disabled={!canEditIssue}
+                                onValueChange={(value) => {
+                                    handleFieldChange('category', value as IssueCategory);
+                                    if (value !== 'other') handleFieldChange('categoryOther', undefined);
+                                }}
+                                disabled={!canEditIssueFields}
                             >
-                                <SelectTrigger className="h-9" aria-required="true" title={canEditIssue ? undefined : editLockTitle}>
+                                <SelectTrigger
+                                    className={cn(isMobileLayout ? 'h-auto w-auto border-0 p-0 shadow-none bg-transparent focus:ring-0 focus-visible:ring-0 [&>svg]:hidden disabled:opacity-100 disabled:cursor-default' : 'h-9', isMobileLayout && !canEditIssue && 'opacity-60')}
+                                    aria-required="true"
+                                    title={canEditIssueFields ? undefined : editLockTitle}
+                                >
                                     <SelectValue>
                                         {(() => {
                                             const cat = categoryOptions.find(c => c.value === editedIssue.category);
                                             const Icon = cat?.icon || Info;
                                             return (
-                                                <div className="flex items-center gap-2">
-                                                    <Icon className="h-4 w-4" />
+                                                <div className={cn('flex items-center gap-2', isMobileLayout && 'font-bold text-sm text-foreground')}>
+                                                    {!isMobileLayout && <Icon className="h-4 w-4" />}
                                                     {cat?.label}
                                                 </div>
                                             );
@@ -894,17 +1014,38 @@ export function IssueDetailContent({
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {editedIssue.category === 'other' && (
+                                <Input
+                                    value={editedIssue.categoryOther || ''}
+                                    onChange={(e) => handleFieldChange('categoryOther', e.target.value)}
+                                    placeholder="Describe the category…"
+                                    disabled={!canEditIssueFields}
+                                    className={cn(
+                                        'h-9',
+                                        !editedIssue.categoryOther?.trim() && 'border-destructive',
+                                        isMobileLayout && 'disabled:opacity-100 disabled:cursor-default',
+                                        isMobileLayout && !canEditIssue && 'opacity-60'
+                                    )}
+                                    aria-required="true"
+                                />
+                            )}
                         </div>
 
                         {/* Tags (Span 2 columns) */}
                         <div className="space-y-1.5 md:col-span-2">
-                            <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                <Tag className="h-3 w-3" />
+                            <Label className={cn(
+                                'text-xs text-muted-foreground flex items-center gap-1.5',
+                                isMobileLayout && 'uppercase tracking-wider font-medium'
+                            )}>
+                                {!isMobileLayout && <Tag className="h-3 w-3" />}
                                 Tags
                             </Label>
                             <div
-                                className="min-h-9 flex w-full flex-wrap items-center gap-2 rounded-md border border-input bg-transparent px-3 py-1.5 text-sm cursor-pointer hover:border-primary/50 transition-colors"
-                                onClick={() => setIsTagPopoverOpen(true)}
+                                className={cn(
+                                    'min-h-9 flex w-full flex-wrap items-center gap-2 text-sm cursor-pointer transition-colors',
+                                    isMobileLayout ? '' : 'rounded-md border border-input bg-transparent px-3 py-1.5 hover:border-primary/50'
+                                )}
+                                onClick={() => !isMobileFieldsLocked && setIsTagPopoverOpen(true)}
                             >
                                 {(editedIssue.tags || []).map((tag) => (
                                     <Badge
@@ -913,18 +1054,21 @@ export function IssueDetailContent({
                                         style={{ backgroundColor: getTagColor(tag) }}
                                     >
                                         {tag}
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleFieldChange('tags', (editedIssue.tags || []).filter(t => t !== tag));
-                                            }}
-                                            className="hover:bg-black/10 rounded-full p-0.5 transition-colors"
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </button>
+                                        {!isMobileFieldsLocked && (
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleFieldChange('tags', (editedIssue.tags || []).filter(t => t !== tag));
+                                                }}
+                                                className="hover:bg-black/10 rounded-full p-0.5 transition-colors"
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        )}
                                     </Badge>
                                 ))}
 
+                                {!isMobileFieldsLocked && (
                                 <Popover
                                     open={isTagPopoverOpen}
                                     onOpenChange={(open) => {
@@ -1005,21 +1149,24 @@ export function IssueDetailContent({
                                         </div>
                                     </PopoverContent>
                                 </Popover>
+                                )}
                             </div>
                         </div>
+                    </div>
                     </div>
 
                     {/* Description Editor (Full Width) */}
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <Label className="text-sm font-medium">Description</Label>
+                            <Label className={cn('text-sm font-medium', isMobileLayout && 'text-xs uppercase tracking-wider text-muted-foreground')}>Description</Label>
                             <div className="flex items-center gap-2">
                                 <Label htmlFor="advanced-mode" className="text-xs text-muted-foreground cursor-pointer">Advanced Editor</Label>
                                 <Switch
                                     id="advanced-mode"
                                     checked={isAdvancedDescription}
                                     onCheckedChange={setIsAdvancedDescription}
-                                    disabled={!canEditIssue}
+                                    disabled={!canEditIssueFields}
+                                    className={cn(isMobileLayout && 'disabled:opacity-100 disabled:cursor-pointer', isMobileLayout && !canEditIssue && 'opacity-60')}
                                 />
                             </div>
                         </div>
@@ -1027,11 +1174,11 @@ export function IssueDetailContent({
                         {isAdvancedDescription ? (
                             <div
                                 className={cn('min-h-[200px] border rounded-md p-4 bg-background', !canEditIssue && 'opacity-60 cursor-not-allowed')}
-                                title={canEditIssue ? undefined : editLockTitle}
+                                title={canEditIssueFields ? undefined : editLockTitle}
                             >
                                 <SlashBlockEditor
                                     key={editedIssue.id}
-                                    readOnly={!canEditIssue}
+                                    readOnly={!canEditIssueFields}
                                     initialBlocks={editedIssue.descriptionBlocks}
                                     onChange={(blocks) => handleFieldChange('descriptionBlocks', blocks)}
                                 />
@@ -1041,9 +1188,13 @@ export function IssueDetailContent({
                                 value={editedIssue.description}
                                 onChange={(e) => handleFieldChange('description', e.target.value)}
                                 placeholder="Describe the issue in detail..."
-                                className="min-h-[150px] resize-none"
-                                disabled={!canEditIssue}
-                                title={canEditIssue ? undefined : editLockTitle}
+                                className={cn(
+                                    'min-h-[150px] resize-none',
+                                    isMobileLayout && 'disabled:opacity-100 disabled:cursor-default',
+                                    isMobileLayout && !canEditIssue && 'opacity-60'
+                                )}
+                                disabled={!canEditIssueFields}
+                                title={canEditIssueFields ? undefined : editLockTitle}
                             />
                         )}
                     </div>
@@ -1051,11 +1202,14 @@ export function IssueDetailContent({
                     {/* Checklist (Full Width) */}
                     <section className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                                <CheckSquare className="h-4 w-4" />
+                            <h3 className={cn(
+                                'text-sm font-medium text-muted-foreground flex items-center gap-2',
+                                isMobileLayout && 'text-xs uppercase tracking-wider'
+                            )}>
+                                {!isMobileLayout && <CheckSquare className="h-4 w-4" />}
                                 Checklist
                                 {checklist.length > 0 && (
-                                    <span className="text-xs">({completedItems}/{checklist.length})</span>
+                                    <span className="text-xs normal-case">({completedItems}/{checklist.length})</span>
                                 )}
                             </h3>
                             <div className="flex items-center gap-2">
@@ -1082,6 +1236,7 @@ export function IssueDetailContent({
                         )}
 
                         <div className="space-y-2">
+                            {!isMobileFieldsLocked && (
                             <div className="flex items-center gap-2 mb-4">
                                 <Input
                                     placeholder="Add checklist item..."
@@ -1094,34 +1249,47 @@ export function IssueDetailContent({
                                     <Plus className="h-4 w-4" />
                                 </Button>
                             </div>
+                            )}
 
+                            <div className={cn(isMobileLayout && checklist.length > 0 && 'border rounded-xl divide-y')}>
                             {checklist.map((item) => (
-                                <div key={item.id} className="flex items-center gap-3 group">
+                                <div key={item.id} className={cn('flex items-center gap-3 group', isMobileLayout && 'px-3 py-2.5')}>
                                     <Checkbox
                                         checked={item.completed}
                                         onCheckedChange={() => handleToggleChecklistItem(item.id)}
+                                        disabled={isMobileFieldsLocked}
+                                        className={cn(isMobileLayout && 'h-5 w-5 rounded-md data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 disabled:opacity-100 disabled:cursor-default')}
                                     />
                                     <span className={cn('flex-1 text-sm', item.completed && 'line-through text-muted-foreground')}>
                                         {item.text}
                                     </span>
+                                    {!isMobileFieldsLocked && (
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                                        className={cn('h-6 w-6', isMobileLayout ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}
                                         onClick={() => handleRemoveChecklistItem(item.id)}
                                     >
                                         <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
                                     </Button>
+                                    )}
                                 </div>
                             ))}
+                            </div>
                         </div>
                     </section>
 
                     {/* Attachments (Full Width) */}
                     <section className="space-y-3">
-                        <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Paperclip className="h-4 w-4" />
-                            Attachments
+                        <h3 className={cn(
+                            'text-sm font-medium text-muted-foreground flex items-center gap-2',
+                            isMobileLayout && 'text-xs uppercase tracking-wider justify-between'
+                        )}>
+                            <span className="flex items-center gap-2">
+                                {!isMobileLayout && <Paperclip className="h-4 w-4" />}
+                                Attachments
+                            </span>
+                            {isMobileLayout && attachments.length > 0 && <span>{attachments.length}</span>}
                         </h3>
 
                         <div className="space-y-2">
@@ -1141,7 +1309,7 @@ export function IssueDetailContent({
                                                 {formatFileSize(attachment.fileSize)} • Uploaded by {attachment.uploadedBy.name}
                                             </p>
                                         </div>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                                        <div className={cn('flex items-center gap-1', isMobileLayout ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -1197,6 +1365,7 @@ export function IssueDetailContent({
                                             >
                                                 <Copy className="h-4 w-4" />
                                             </Button>
+                                            {!isMobileFieldsLocked && (
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -1208,6 +1377,7 @@ export function IssueDetailContent({
                                             >
                                                 <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
                                             </Button>
+                                            )}
                                         </div>
                                     </div>
                                 );
@@ -1259,8 +1429,9 @@ export function IssueDetailContent({
                                 </div>
                             )}
 
+                            {!isMobileFieldsLocked && (
                             <div className="flex items-center justify-center w-full">
-                                <label 
+                                <label
                                     onDragOver={handleDragOver}
                                     onDragLeave={handleDragLeave}
                                     onDrop={handleDrop}
@@ -1285,6 +1456,7 @@ export function IssueDetailContent({
                                     <input type="file" className="hidden" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,video/*" onChange={handleFileUpload} disabled={isUploading} />
                                 </label>
                             </div>
+                            )}
                         </div>
                     </section>
 
@@ -1292,9 +1464,15 @@ export function IssueDetailContent({
 
                     {/* Video Links Section */}
                     <section className="space-y-3">
-                        <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Video className="h-4 w-4" />
-                            Videos
+                        <h3 className={cn(
+                            'text-sm font-medium text-muted-foreground flex items-center gap-2',
+                            isMobileLayout && 'text-xs uppercase tracking-wider justify-between'
+                        )}>
+                            <span className="flex items-center gap-2">
+                                {!isMobileLayout && <Video className="h-4 w-4" />}
+                                Videos
+                            </span>
+                            {isMobileLayout && videoLinks.length > 0 && <span>{videoLinks.length}</span>}
                         </h3>
 
                         <div className="space-y-2">
@@ -1322,7 +1500,8 @@ export function IssueDetailContent({
                                             <p className="text-sm font-medium truncate">{vl.title || vl.url}</p>
                                             <p className="text-xs text-muted-foreground truncate">{vl.url}</p>
                                         </div>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                                        {!isMobileFieldsLocked && (
+                                        <div className={cn('flex items-center gap-1', isMobileLayout ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
@@ -1335,6 +1514,7 @@ export function IssueDetailContent({
                                                 <Trash2 className="h-3 w-3 text-muted-foreground hover:text-destructive" />
                                             </Button>
                                         </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -1381,14 +1561,17 @@ export function IssueDetailContent({
 
                     {/* Dependencies (2 Columns) */}
                     <section className="space-y-4">
-                        <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Link2 className="h-4 w-4" />
+                        <h3 className={cn(
+                            'text-sm font-medium text-muted-foreground flex items-center gap-2',
+                            isMobileLayout && 'text-xs uppercase tracking-wider'
+                        )}>
+                            {!isMobileLayout && <Link2 className="h-4 w-4" />}
                             Dependencies
                         </h3>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {/* Blocking To */}
-                            <div className="space-y-3">
+                            <div className={cn('space-y-3', isMobileLayout && 'border rounded-xl p-3')}>
                                 <div className="flex items-center gap-2">
                                     <div className="w-2 h-2 rounded-full bg-priority-high" />
                                     <Label className="text-xs font-medium">Blocking To</Label>
@@ -1408,10 +1591,13 @@ export function IssueDetailContent({
                                                     Select task...
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                                            <PopoverContent className="p-0 w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] overflow-hidden" align="start">
                                                 <Command>
                                                     <CommandInput placeholder="Search tasks..." />
-                                                    <CommandList>
+                                                    <CommandList
+                                                        className="max-h-[calc(var(--radix-popover-content-available-height)_-_45px)] overflow-y-auto"
+                                                        onWheel={(e) => { e.currentTarget.scrollTop += e.deltaY; }}
+                                                    >
                                                         <CommandEmpty>
                                                             {availableTasksForBlocking.length === 0 ? "No available tasks" : "No results found."}
                                                         </CommandEmpty>
@@ -1436,6 +1622,11 @@ export function IssueDetailContent({
                                         </Popover>
                                     </div>
 
+                                    {isMobileLayout && (editedIssue.blocksTaskIds || []).length === 0 && (
+                                        <p className="text-sm text-muted-foreground rounded-md border border-dashed px-3 py-2">
+                                            This issue isn't blocking anything.
+                                        </p>
+                                    )}
                                     {(editedIssue.blocksTaskIds || []).map((taskId) => {
                                         const depTask = getTaskById(taskId);
                                         const title = depTask ? depTask.title : `Task ${taskId}`;
@@ -1456,7 +1647,7 @@ export function IssueDetailContent({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                                                    className={cn('h-6 w-6', isMobileLayout ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}
                                                     onClick={() => handleRemoveBlockingTask(taskId)}
                                                 >
                                                     <X className="h-3 w-3" />
@@ -1468,7 +1659,7 @@ export function IssueDetailContent({
                             </div>
 
                             {/* Blocked By */}
-                            <div className="space-y-3">
+                            <div className={cn('space-y-3', isMobileLayout && 'border rounded-xl p-3')}>
                                 <div className="flex items-center gap-2">
                                     <div className="w-2 h-2 rounded-full bg-status-blocked" />
                                     <Label className="text-xs font-medium">Blocked By</Label>
@@ -1488,10 +1679,13 @@ export function IssueDetailContent({
                                                     Select task...
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                                            <PopoverContent className="p-0 w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] overflow-hidden" align="start">
                                                 <Command>
                                                     <CommandInput placeholder="Search tasks..." />
-                                                    <CommandList>
+                                                    <CommandList
+                                                        className="max-h-[calc(var(--radix-popover-content-available-height)_-_45px)] overflow-y-auto"
+                                                        onWheel={(e) => { e.currentTarget.scrollTop += e.deltaY; }}
+                                                    >
                                                         <CommandEmpty>
                                                             {availableTasksForBlockedBy.length === 0 ? "No available tasks" : "No results found."}
                                                         </CommandEmpty>
@@ -1516,6 +1710,11 @@ export function IssueDetailContent({
                                         </Popover>
                                     </div>
 
+                                    {isMobileLayout && (editedIssue.blockedBy || []).length === 0 && (
+                                        <p className="text-sm text-muted-foreground rounded-md border border-dashed px-3 py-2">
+                                            This issue has no blockers.
+                                        </p>
+                                    )}
                                     {(editedIssue.blockedBy || []).map((taskId) => {
                                         const depTask = getTaskById(taskId);
                                         const title = depTask ? depTask.title : `Task ${taskId}`;
@@ -1536,7 +1735,7 @@ export function IssueDetailContent({
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                                                    className={cn('h-6 w-6', isMobileLayout ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}
                                                     onClick={() => handleRemoveBlockedByTask(taskId)}
                                                 >
                                                     <X className="h-3 w-3" />
@@ -1551,9 +1750,15 @@ export function IssueDetailContent({
 
                     {/* Comments (Full Width) */}
                     <section className="space-y-4">
-                        <h3 className="text-sm font-medium flex items-center gap-2">
-                            <MessageSquare className="h-4 w-4" />
-                            Comments ({comments.length})
+                        <h3 className={cn(
+                            'text-sm font-medium flex items-center gap-2',
+                            isMobileLayout && 'text-xs uppercase tracking-wider text-muted-foreground justify-between'
+                        )}>
+                            <span className="flex items-center gap-2">
+                                {!isMobileLayout && <MessageSquare className="h-4 w-4" />}
+                                Comments
+                            </span>
+                            {isMobileLayout ? <span>{comments.length}</span> : `(${comments.length})`}
                         </h3>
 
                         <div className="space-y-3 max-h-[300px] overflow-y-auto">

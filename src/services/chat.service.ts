@@ -236,7 +236,7 @@ export const chatService = {
   async getSharedFiles(
     conversationId: string
   ): Promise<
-    { fileName: string; fileSize: number; mimeType: string; url?: string; storagePath?: string; createdAt: string }[]
+    { fileName: string; fileSize: number; mimeType: string; url?: string; storagePath?: string; createdAt: string; senderName?: string }[]
   > {
     const data = await apiClient.get<any[]>(ENDPOINTS.CONVERSATIONS.FILES(conversationId));
     return (data || []).map((f: any) => ({
@@ -246,6 +246,7 @@ export const chatService = {
       url: f.fileUrl ? (resolveFileUrl(f.fileUrl) ?? f.fileUrl) : undefined,
       storagePath: f.fileUrl ?? undefined,
       createdAt: f.createdAt ?? '',
+      senderName: f.senderName || undefined,
     }));
   },
 
@@ -266,18 +267,34 @@ export const chatService = {
     url?: string;
   }): Promise<void> {
     const downloadUrl = await this.getChatAttachmentDownloadUrl(file);
-    const response = await fetch(downloadUrl);
-    if (!response.ok) throw new Error('Failed to download attachment');
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = objectUrl;
-    anchor.download = file.fileName;
-    anchor.style.display = 'none';
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+
+    try {
+      const response = await fetch(downloadUrl);
+      if (!response.ok) throw new Error('Failed to download attachment');
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = file.fileName;
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch {
+      // fetch()+blob() can be blocked by CORS on the file host even though the
+      // file itself is reachable — fall back to a direct navigation, which
+      // isn't subject to CORS, so the browser can still open/save the file.
+      const anchor = document.createElement('a');
+      anchor.href = downloadUrl;
+      anchor.download = file.fileName;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener';
+      anchor.style.display = 'none';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    }
   },
 
   /** Uploads to storage and returns the raw "serve:" reference — store this as-is; resolve for display with resolveFileUrl(). */
