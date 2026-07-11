@@ -376,7 +376,7 @@ interface DiffRowState {
   paramIsCustom?: boolean;
 }
 
-interface AttachmentState { name: string; size: number }
+interface AttachmentState { name: string; size: number; file: File }
 
 interface ImpactState {
   schedule: ImpactLevel; recert: boolean; firmware: boolean;
@@ -575,7 +575,7 @@ export function ECOWizard({
 
   const addFiles = (fileList: FileList | null) => {
     if (!fileList) return;
-    const next = Array.from(fileList).map(f => ({ name: f.name, size: f.size }));
+    const next = Array.from(fileList).map(f => ({ name: f.name, size: f.size, file: f }));
     setAttachments(prev => {
       const names = new Set(prev.map(a => a.name));
       return [...prev, ...next.filter(f => !names.has(f.name))];
@@ -1215,7 +1215,11 @@ export function ECOWizard({
             {attachments.map((a, idx) => {
               const k = fileKind(a.name);
               return (
-                <div key={a.name} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-muted/40 border border-border">
+                <div
+                  key={a.name}
+                  onClick={() => { const url = URL.createObjectURL(a.file); window.open(url, '_blank', 'noopener,noreferrer'); setTimeout(() => URL.revokeObjectURL(url), 60000); }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-muted/40 border border-border cursor-pointer hover:bg-muted/60 transition-colors"
+                >
                   <div
                     className="w-8 h-8 rounded-md flex items-center justify-center shrink-0"
                     style={{ background: k.color + '22', border: `1px solid ${k.color}44` }}
