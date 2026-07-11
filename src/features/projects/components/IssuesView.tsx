@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +30,7 @@ import {
   Check,
   MoreHorizontal,
   Trash2,
+  Calendar,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -858,6 +860,66 @@ export function IssuesView({
             )}
           </Droppable>
         </DragDropContext>
+      ) : isMobile ? (
+        sortedIssues.length === 0 ? (
+          <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+            No issues found
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sortedIssues.map((issue) => {
+              const severityDisplay = ISSUE_SEVERITY_DISPLAY[issue.severity];
+              const SeverityIcon = severityDisplay.icon;
+              const CategoryIcon = categoryConfig[issue.category].icon;
+              const statusBadge = getStatusBadge(issue.status);
+              const primaryAssignee = issue.assignees?.[0] ?? issue.reportedBy;
+
+              return (
+                <Card
+                  key={issue.id}
+                  onClick={() => handleIssueClick(issue)}
+                  className="p-4 rounded-2xl cursor-pointer active:bg-muted/40 transition-colors"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge className={cn('gap-1 shrink-0', severityDisplay.color)}>
+                      <SeverityIcon className="h-3 w-3" />
+                      {severityDisplay.label}
+                    </Badge>
+                    <Badge variant="outline" className={cn('shrink-0', statusBadge.color)}>
+                      {statusBadge.label}
+                    </Badge>
+                  </div>
+
+                  <h4 className="font-semibold text-[15px] leading-snug mt-2.5">{issue.title}</h4>
+
+                  {issue.description && (
+                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{issue.description}</p>
+                  )}
+
+                  <Separator className="my-3" />
+
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Avatar className="h-6 w-6 shrink-0">
+                        <AvatarImage src={resolveFileUrl(primaryAssignee.avatar) ?? primaryAssignee.avatar} alt={primaryAssignee.name} />
+                        <AvatarFallback className="text-[10px] bg-muted">{primaryAssignee.initials}</AvatarFallback>
+                      </Avatar>
+                      <span className="text-xs text-muted-foreground truncate min-w-0">{primaryAssignee.name}</span>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                        <CategoryIcon className="h-3.5 w-3.5" />
+                        {categoryConfig[issue.category].label}
+                      </span>
+                    </div>
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {new Date(issue.reportedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </span>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )
       ) : (
         <div className="rounded-lg border">
           <Table>

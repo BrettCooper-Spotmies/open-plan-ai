@@ -57,7 +57,7 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
           {showAppHeader && <AppHeader />}
           <main
             className={[
-              noPadding ? 'flex-1 min-h-0 overflow-hidden' : `flex-1 min-h-0 overflow-y-auto ${isMobile ? 'p-4' : 'p-6'}`,
+              noPadding ? 'flex-1 min-h-0 overflow-hidden' : `flex-1 min-h-0 overflow-y-auto ${isMobile ? 'overflow-x-hidden p-4' : 'p-6'}`,
               showMobileBottomNav ? 'pb-24' : '',
             ].join(' ')}
           >

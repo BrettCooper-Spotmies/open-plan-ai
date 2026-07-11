@@ -7,9 +7,11 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Task, TaskViewMode, TaskFilter, Milestone, Issue, ModuleType, TeamMember } from '@/types';
 import { KanbanView } from './KanbanView';
 import { ListView } from './ListView';
+import { MobileTaskListView } from './MobileTaskListView';
 import { TaskFilters } from './TaskFilters';
 import { TaskFiltersDropdown } from './TaskFiltersDropdown';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface TasksSectionProps {
   projectId: string;
@@ -70,8 +72,8 @@ export function ViewControls({
         )}
       </div> */}
 
-      {/* View Toggle */}
-      <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
+      {/* View Toggle (Kanban/List has no distinct mobile layout — hidden below md) */}
+      <div className="hidden md:flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
         <Button
           variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
           size="sm"
@@ -121,6 +123,7 @@ export function TasksSection({
   onAddModule,
 }: TasksSectionProps) {
   const dependencyTasks = allTasks ?? tasks;
+  const isMobile = useIsMobile();
 
   const [internalViewMode, setInternalViewMode] = useState<TaskViewMode>('kanban');
   const [internalFilters, setInternalFilters] = useState<TaskFilter>({});
@@ -319,7 +322,20 @@ export function TasksSection({
 
       {/* View Content */}
       <div className="min-h-[400px] w-full min-w-0">
-        {viewMode === 'kanban' ? (
+        {isMobile ? (
+          <MobileTaskListView
+            projectId={projectId}
+            tasks={filteredTasks}
+            allTasks={dependencyTasks}
+            modules={modules}
+            assignableMembers={assignableMembers}
+            onTaskUpdate={onTaskUpdate}
+            onBatchTaskUpdate={onBatchTaskUpdate}
+            onTaskDelete={onTaskDelete}
+            userProjectRole={userProjectRole}
+            onAddModule={onAddModule}
+          />
+        ) : viewMode === 'kanban' ? (
           <KanbanView
             projectId={projectId}
             tasks={filteredTasks}

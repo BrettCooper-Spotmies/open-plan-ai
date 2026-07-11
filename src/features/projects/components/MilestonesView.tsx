@@ -60,10 +60,19 @@ interface MilestonesViewProps {
 }
 
 const statusConfig = {
-  completed: { color: 'bg-status-done', textColor: 'text-status-done', label: 'Completed', icon: CheckCircle2 },
-  blocked: { color: 'bg-destructive', textColor: 'text-destructive', label: 'Blocked', icon: AlertTriangle },
-  'at-risk': { color: 'bg-orange-500', textColor: 'text-orange-500', label: 'At Risk', icon: Clock },
-  'on-track': { color: 'bg-chart-2', textColor: 'text-chart-2', label: 'On Track', icon: Flag },
+  completed: { color: 'bg-status-done', textColor: 'text-status-done', bgColor: 'bg-status-done/10', label: 'Completed', icon: CheckCircle2 },
+  blocked: { color: 'bg-destructive', textColor: 'text-destructive', bgColor: 'bg-destructive/10', label: 'Blocked', icon: AlertTriangle },
+  'at-risk': { color: 'bg-orange-500', textColor: 'text-orange-500', bgColor: 'bg-orange-500/10', label: 'At Risk', icon: Clock },
+  'on-track': { color: 'bg-chart-2', textColor: 'text-chart-2', bgColor: 'bg-chart-2/10', label: 'On Track', icon: Flag },
+};
+
+// Mobile milestone cards use green for on-track (matching the mobile design spec)
+// instead of the desktop timeline's purple `chart-2` token.
+const mobileStatusColors: Record<keyof typeof statusConfig, { textColor: string; bgColor: string; barColor: string }> = {
+  completed: { textColor: 'text-status-done', bgColor: 'bg-status-done/10', barColor: 'bg-status-done' },
+  blocked: { textColor: 'text-destructive', bgColor: 'bg-destructive/10', barColor: 'bg-destructive' },
+  'at-risk': { textColor: 'text-orange-500', bgColor: 'bg-orange-500/10', barColor: 'bg-orange-500' },
+  'on-track': { textColor: 'text-status-done', bgColor: 'bg-status-done/10', barColor: 'bg-status-done' },
 };
 
 export function MilestonesView({
@@ -314,6 +323,61 @@ export function MilestonesView({
             </div>
           );
         })()
+      ) : isMobile ? (
+        /* Mobile Milestone Cards */
+        <div className="space-y-3">
+          {sortedMilestones.map((milestone) => {
+            const progress = getMilestoneProgress(milestone, tasks);
+            const milestoneTasks = getMilestoneTasks(milestone, tasks);
+            const status = getMilestoneStatus(milestone, tasks, issues);
+            const label = statusConfig[status].label;
+            const colors = mobileStatusColors[status];
+
+            return (
+              <Card
+                key={milestone.id}
+                className={cn(
+                  'p-4 rounded-2xl cursor-pointer transition-shadow hover:shadow-md',
+                  milestone.completed && 'opacity-75'
+                )}
+                onClick={() => handleMilestoneClick(milestone)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className={cn(
+                    'font-semibold text-base leading-tight',
+                    milestone.completed && 'line-through text-muted-foreground'
+                  )}>
+                    {milestone.title}
+                  </h3>
+                  <Badge
+                    variant="outline"
+                    className={cn('shrink-0 border-transparent px-3 py-1 text-xs font-medium', colors.textColor, colors.bgColor)}
+                  >
+                    {label}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-1.5">
+                  <Flag className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    {milestone.date
+                      ? `Target ${new Date(milestone.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                      : 'No target date'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 mt-3">
+                  <span className="text-sm text-muted-foreground truncate">
+                    {milestone.description || `${milestoneTasks.filter(t => t.status === 'done').length}/${milestoneTasks.length} tasks`}
+                  </span>
+                  <span className="text-base font-semibold shrink-0">{progress}%</span>
+                </div>
+
+                <Progress value={progress} className="h-2 mt-2" indicatorClassName={colors.barColor} />
+              </Card>
+            );
+          })}
+        </div>
       ) : (
         /* Timeline View */
         <Card className="p-3 sm:p-6">

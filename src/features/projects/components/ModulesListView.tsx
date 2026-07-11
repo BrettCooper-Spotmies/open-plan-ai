@@ -59,10 +59,10 @@ export function ModulesListView({ modules, onModuleClick }: ModulesListViewProps
                       className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: moduleColor }}
                     />
-                    <div>
-                      <p className="font-medium">{module.name}</p>
+                    <div className="min-w-0 max-w-[160px] sm:max-w-[220px] md:max-w-xs">
+                      <p className="font-medium truncate">{module.name}</p>
                       {module.description && (
-                        <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">
                           {module.description}
                         </p>
                       )}

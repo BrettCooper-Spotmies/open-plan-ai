@@ -85,7 +85,7 @@ function ParamCombobox({
 }) {
   const [open, setOpen] = useState(false);
 
-  const selectedLabel = value || '— select parameter —';
+  const selectedLabel = value || 'Select parameter';
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

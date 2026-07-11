@@ -3,8 +3,10 @@ import { LayoutGrid, List, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Module, ModuleViewMode, Task, Issue, TeamMember, ModuleType } from '@/types';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { ModulesKanbanView } from './ModulesKanbanView';
 import { ModulesListView } from './ModulesListView';
+import { ModulesMobileView } from './ModulesMobileView';
 import { ModuleDetailModal } from './ModuleDetailModal';
 import { TaskDetailModal } from './TaskDetailModal';
 import { IssueDetailModal } from './IssueDetailModal';
@@ -91,6 +93,7 @@ export function ModulesSection({
   onTaskUpdate,
   onIssueUpdate,
 }: ModulesSectionProps) {
+  const isMobile = useIsMobile();
   const [selectedModule, setSelectedModule] = useState<ModuleWithStats | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -226,7 +229,12 @@ export function ModulesSection({
       <div className="space-y-4 grid grid-cols-1 w-full min-w-0">
         {/* View Content */}
         <div className="min-h-[400px] w-full min-w-0">
-          {viewMode === 'kanban' ? (
+          {isMobile ? (
+            <ModulesMobileView
+              modules={modulesWithStats}
+              onModuleClick={handleModuleClick}
+            />
+          ) : viewMode === 'kanban' ? (
             <ModulesKanbanView
               modules={modulesWithStats}
               onModuleClick={handleModuleClick}
