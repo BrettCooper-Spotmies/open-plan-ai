@@ -59,11 +59,11 @@ export function useUpdateTask(projectId: string) {
 
       return { previousProject, previousTask };
     },
-    onError: (_err, _vars, context) => {
+    onError: (err, _vars, context) => {
       if (context?.previousProject) {
         queryClient.setQueryData(queryKeys.projects.detail(projectId), context.previousProject);
       }
-      toast.error('Failed to update task');
+      toast.error(err instanceof Error ? err.message : 'Failed to update task');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
@@ -108,8 +108,8 @@ export function useBatchUpdateTasks(projectId: string) {
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
     },
-    onError: () => {
-      toast.error('Failed to update tasks');
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to update tasks');
     },
   });
 }
