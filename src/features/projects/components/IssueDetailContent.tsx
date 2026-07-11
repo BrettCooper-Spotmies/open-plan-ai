@@ -1408,10 +1408,13 @@ export function IssueDetailContent({
                                                     Select task...
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                                            <PopoverContent className="p-0 w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] overflow-hidden" align="start">
                                                 <Command>
                                                     <CommandInput placeholder="Search tasks..." />
-                                                    <CommandList>
+                                                    <CommandList
+                                                        className="max-h-[calc(var(--radix-popover-content-available-height)_-_45px)] overflow-y-auto"
+                                                        onWheel={(e) => { e.currentTarget.scrollTop += e.deltaY; }}
+                                                    >
                                                         <CommandEmpty>
                                                             {availableTasksForBlocking.length === 0 ? "No available tasks" : "No results found."}
                                                         </CommandEmpty>
@@ -1488,10 +1491,13 @@ export function IssueDetailContent({
                                                     Select task...
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start">
+                                            <PopoverContent className="p-0 w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] overflow-hidden" align="start">
                                                 <Command>
                                                     <CommandInput placeholder="Search tasks..." />
-                                                    <CommandList>
+                                                    <CommandList
+                                                        className="max-h-[calc(var(--radix-popover-content-available-height)_-_45px)] overflow-y-auto"
+                                                        onWheel={(e) => { e.currentTarget.scrollTop += e.deltaY; }}
+                                                    >
                                                         <CommandEmpty>
                                                             {availableTasksForBlockedBy.length === 0 ? "No available tasks" : "No results found."}
                                                         </CommandEmpty>
