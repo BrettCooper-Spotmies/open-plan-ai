@@ -822,8 +822,8 @@ const Settings = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="flex items-center gap-6">
-                    <Avatar className="h-20 w-20">
+                  <div className="flex flex-col sm:flex-row items-center sm:items-center gap-4 sm:gap-6">
+                    <Avatar className="h-20 w-20 shrink-0">
                       {avatarLoading && !localAvatarPreview ? (
                         <AvatarFallback className="bg-primary/10">
                           <Loader2 className="h-6 w-6 animate-spin" />
@@ -847,7 +847,7 @@ const Settings = () => {
                       accept="image/png, image/jpeg, image/webp"
                         onChange={handleAvatarChange}
                       />
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap justify-center sm:justify-start gap-2">
                         <Button variant="outline" size="sm" onClick={handleAvatarClick} disabled={avatarLoading}>
                           <Upload className="h-4 w-4 mr-2" />
                           Change Avatar

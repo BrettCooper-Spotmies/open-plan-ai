@@ -28,6 +28,18 @@ export function ChatNotificationsProvider() {
   const navigate = useNavigate();
   const conversations = useChatStore((s) => s.conversations);
 
+  // The chat socket only connects once we know the auth cookie is set —
+  // connecting eagerly at module-load time races AuthProvider's bootstrap
+  // and can leave presence permanently wrong until a full page reload.
+  // Reconnect (fresh handshake) whenever the logged-in user changes.
+  useEffect(() => {
+    if (!user) {
+      chatTransport.disconnect();
+      return;
+    }
+    chatTransport.connect();
+  }, [user?.id]);
+
   // Initial hydration — runs once per login, independent of the Chat page ever mounting.
   useEffect(() => {
     if (!user) return;

@@ -73,6 +73,7 @@ export function ECOView({
         <ECOListView
           projectId={projectId}
           onOpen={eco => setOpenEco(eco)}
+          onNewEco={() => setWizard({ ecoId: null })}
         />
       )}
       {wizard !== null && (

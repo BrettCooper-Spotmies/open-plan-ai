@@ -5,13 +5,15 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { CheckSquare } from 'lucide-react';
+import { Check, CheckSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { getFallbackTagColor } from '@/lib/tagColors';
 import { formatModuleType } from '../utils/projectUtils';
 import { TaskDetailModal } from './TaskDetailModal';
 import { useProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
+import { useProjectPermissions } from '@/hooks/useProjectPermissions';
+import { playCompleteSound } from '@/lib/playSound';
 import { DEFAULT_COLUMNS, type ProjectTaskColumn } from '@/services/projectTaskColumns.service';
 
 interface MobileTaskListViewProps {
@@ -90,6 +92,7 @@ export function MobileTaskListView({
   onAddModule,
 }: MobileTaskListViewProps) {
   const allTasksForDependencies = allTasks && allTasks.length > 0 ? allTasks : tasks;
+  const { canEditResource } = useProjectPermissions(projectId);
 
   // Buckets are project-specific and dynamic (renamed/added/removed per project),
   // so mirror KanbanView: pull the same persisted columns rather than assuming a
@@ -143,6 +146,12 @@ export function MobileTaskListView({
       setSelectedTask(updatedTask);
     }
     onTaskUpdate?.(updatedTask);
+  };
+
+  const handleCompleteTask = (task: Task) => {
+    if (!canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) })) return;
+    playCompleteSound();
+    onTaskUpdate?.({ ...task, status: 'done' });
   };
 
   return (
@@ -213,9 +222,24 @@ export function MobileTaskListView({
                       className="p-4 rounded-2xl cursor-pointer active:bg-muted/40 transition-colors"
                     >
                       <div className="flex items-start gap-2.5">
-                        <span className="mt-1.5 shrink-0">
-                          <ColumnDot color={column.color} />
-                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCompleteTask(task);
+                          }}
+                          disabled={task.status === 'done' || !canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) })}
+                          title={canEditResource({ createdBy: task.createdBy?.id, assigneeIds: task.assignees?.map((a) => a.id) }) ? undefined : 'You can only complete tasks you created or are assigned to'}
+                          aria-label={task.status === 'done' ? 'Task complete' : 'Mark task complete'}
+                          className={cn(
+                            'mt-1 shrink-0 h-5 w-5 rounded-full border flex items-center justify-center transition-all',
+                            task.status === 'done'
+                              ? 'bg-status-done/20 border-status-done'
+                              : 'border-foreground/30 bg-background hover:border-foreground hover:bg-muted disabled:opacity-40 disabled:hover:border-foreground/30 disabled:hover:bg-background'
+                          )}
+                        >
+                          {task.status === 'done' && <Check className="h-3 w-3 text-status-done" />}
+                        </button>
                         <div className="min-w-0 flex-1 space-y-2">
                           <h4 className="font-semibold text-[15px] leading-snug">{task.title}</h4>
 

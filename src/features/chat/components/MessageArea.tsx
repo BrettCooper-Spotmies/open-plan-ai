@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { MessageBubble } from './MessageBubble';
+import { MediaGroupBubble } from './MediaGroupBubble';
 import { MessageDateDivider } from './MessageDateDivider';
 import { SystemMessage } from './SystemMessage';
 import { EmptyState } from './EmptyState';
@@ -110,59 +111,119 @@ export function MessageArea({ messages, conversation, hasMore, onLoadMore, readR
             </Button>
           </div>
         )}
-        {filteredMessages.map((msg, i) => {
-          const prev = i > 0 ? filteredMessages[i - 1] : null;
-          const next = i < filteredMessages.length - 1 ? filteredMessages[i + 1] : null;
-          const msgDate = new Date(msg.createdAt);
+        {(() => {
+          const nodes: JSX.Element[] = [];
+          const isImageMsg = (m: ChatMessage) => m.contentType === 'image';
+          let i = 0;
 
-          const showDateDivider = !prev || !isSameDay(new Date(prev.createdAt), msgDate);
+          while (i < filteredMessages.length) {
+            const msg = filteredMessages[i];
+            const prev = i > 0 ? filteredMessages[i - 1] : null;
+            const msgDate = new Date(msg.createdAt);
+            const showDateDivider = !prev || !isSameDay(new Date(prev.createdAt), msgDate);
 
-          if (msg.contentType === 'system') {
-            return (
+            if (msg.contentType === 'system') {
+              nodes.push(
+                <div key={msg.id}>
+                  {showDateDivider && <MessageDateDivider date={msgDate} />}
+                  <SystemMessage content={msg.content} />
+                </div>
+              );
+              i += 1;
+              continue;
+            }
+
+            const isSameSenderAsPrev = prev && prev.senderId === msg.senderId && prev.contentType !== 'system' &&
+              differenceInMinutes(msgDate, new Date(prev.createdAt)) < 2 && !showDateDivider;
+            const showSenderInfo = !isSameSenderAsPrev;
+
+            // Batch consecutive image-only messages from the same sender (tight
+            // time gap, same day) into a single WhatsApp/Telegram-style grid
+            // instead of stacking each as its own full-width bubble.
+            if (isImageMsg(msg)) {
+              const run: ChatMessage[] = [msg];
+              let j = i + 1;
+              while (
+                j < filteredMessages.length &&
+                isImageMsg(filteredMessages[j]) &&
+                filteredMessages[j].senderId === msg.senderId &&
+                isSameDay(new Date(filteredMessages[j].createdAt), msgDate) &&
+                differenceInMinutes(new Date(filteredMessages[j].createdAt), new Date(filteredMessages[j - 1].createdAt)) < 2
+              ) {
+                run.push(filteredMessages[j]);
+                j += 1;
+              }
+
+              if (run.length > 1) {
+                const last = run[run.length - 1];
+                const afterRun = j < filteredMessages.length ? filteredMessages[j] : null;
+                const isSameSenderAsNext = afterRun && afterRun.senderId === last.senderId && afterRun.contentType !== 'system' &&
+                  isSameDay(new Date(afterRun.createdAt), new Date(last.createdAt)) &&
+                  differenceInMinutes(new Date(afterRun.createdAt), new Date(last.createdAt)) < 2;
+                const showTimestamp = !isSameSenderAsNext;
+
+                nodes.push(
+                  <div key={msg.id}>
+                    {showDateDivider && <MessageDateDivider date={msgDate} />}
+                    <div className={showSenderInfo && i > 0 ? 'mt-3' : 'mt-0.5'}>
+                      <MediaGroupBubble
+                        messages={run}
+                        showSenderInfo={showSenderInfo}
+                        showTimestamp={showTimestamp}
+                        isGroupChat={isGroup}
+                        currentUserId={user?.id}
+                        readReceipts={readReceiptMap?.[last.id]}
+                        otherMembersCount={otherMembersCount}
+                        reactions={reactionMap?.[last.id]}
+                        onDelete={onDeleteMessage}
+                        onToggleReaction={onToggleReaction}
+                        onReply={onReplyMessage}
+                      />
+                    </div>
+                  </div>
+                );
+                i = j;
+                continue;
+              }
+            }
+
+            const next = i < filteredMessages.length - 1 ? filteredMessages[i + 1] : null;
+            const isSameSenderAsNext = next && next.senderId === msg.senderId && next.contentType !== 'system' &&
+              differenceInMinutes(new Date(next.createdAt), msgDate) < 2 &&
+              (next ? isSameDay(new Date(next.createdAt), msgDate) : false);
+            const showTimestamp = !isSameSenderAsNext;
+
+            nodes.push(
               <div key={msg.id}>
                 {showDateDivider && <MessageDateDivider date={msgDate} />}
-                <SystemMessage content={msg.content} />
+                <div className={showSenderInfo && i > 0 ? 'mt-3' : 'mt-0.5'}>
+                  <MessageBubble
+                    message={{
+                      ...msg,
+                      replyToMessage: msg.replyToMessageId ? messageById.get(msg.replyToMessageId) : undefined,
+                    }}
+                    showSenderInfo={showSenderInfo}
+                    showTimestamp={showTimestamp}
+                    isGroupChat={isGroup}
+                    currentUserId={user?.id}
+                    searchQuery={searchQuery}
+                    memberNames={conversation.members.map((m) => m.name)}
+                    readReceipts={readReceiptMap?.[msg.id]}
+                    otherMembersCount={otherMembersCount}
+                    reactions={reactionMap?.[msg.id]}
+                    onEdit={onEditMessage}
+                    onDelete={onDeleteMessage}
+                    onToggleReaction={onToggleReaction}
+                    onReply={onReplyMessage}
+                  />
+                </div>
               </div>
             );
+            i += 1;
           }
 
-          const isSameSenderAsPrev = prev && prev.senderId === msg.senderId && prev.contentType !== 'system' &&
-            differenceInMinutes(msgDate, new Date(prev.createdAt)) < 2 && !showDateDivider;
-
-          const isSameSenderAsNext = next && next.senderId === msg.senderId && next.contentType !== 'system' &&
-            differenceInMinutes(new Date(next.createdAt), msgDate) < 2 &&
-            (next ? isSameDay(new Date(next.createdAt), msgDate) : false);
-
-          const showSenderInfo = !isSameSenderAsPrev;
-          const showTimestamp = !isSameSenderAsNext;
-
-          return (
-            <div key={msg.id}>
-              {showDateDivider && <MessageDateDivider date={msgDate} />}
-              <div className={showSenderInfo && i > 0 ? 'mt-3' : 'mt-0.5'}>
-                <MessageBubble
-                  message={{
-                    ...msg,
-                    replyToMessage: msg.replyToMessageId ? messageById.get(msg.replyToMessageId) : undefined,
-                  }}
-                  showSenderInfo={showSenderInfo}
-                  showTimestamp={showTimestamp}
-                  isGroupChat={isGroup}
-                  currentUserId={user?.id}
-                  searchQuery={searchQuery}
-                  memberNames={conversation.members.map((m) => m.name)}
-                  readReceipts={readReceiptMap?.[msg.id]}
-                  otherMembersCount={otherMembersCount}
-                  reactions={reactionMap?.[msg.id]}
-                  onEdit={onEditMessage}
-                  onDelete={onDeleteMessage}
-                  onToggleReaction={onToggleReaction}
-                  onReply={onReplyMessage}
-                />
-              </div>
-            </div>
-          );
-        })}
+          return nodes;
+        })()}
         {searchQuery.trim() && filteredMessages.length === 0 && (
           <div className="text-center text-sm text-muted-foreground py-8">No messages match your search</div>
         )}

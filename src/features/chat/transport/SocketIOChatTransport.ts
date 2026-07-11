@@ -14,7 +14,14 @@ export class SocketIOChatTransport implements IChatTransport {
       // browser send it on the WS handshake, where the server reads it.
       withCredentials: true,
       transports: ['websocket', 'polling'],
-      autoConnect: true,
+      // Connection is deferred until we know the auth cookie is actually set
+      // (see connect()). Connecting eagerly at module-load time races the
+      // AuthProvider bootstrap: on a fresh login the socket would handshake
+      // before the cookie exists, register with the server as unauthenticated,
+      // and never re-register — leaving this user's presence permanently
+      // wrong for everyone else until a full page reload re-created the
+      // singleton after the cookie was already present.
+      autoConnect: false,
     });
 
     this.socket.on('connect_error', (err) => {
@@ -157,6 +164,14 @@ export class SocketIOChatTransport implements IChatTransport {
 
   unsubscribe(unsub: Unsubscribe): void {
     unsub();
+  }
+
+  // Idempotent — safe to call whenever the caller learns the user is
+  // authenticated, even if already connected/connecting.
+  connect(): void {
+    if (!this.socket.connected) {
+      this.socket.connect();
+    }
   }
 
   disconnect(): void {

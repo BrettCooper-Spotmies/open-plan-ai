@@ -1,17 +1,16 @@
 import { useState, useEffect } from 'react';
-import { X, Bell, LogOut, FileText, UserPlus, Download, Image, Pencil, Check, Loader2, Camera, Trash2, Shield, ShieldOff } from 'lucide-react';
+import { X, Bell, LogOut, FileText, UserPlus, Download, Image, Pencil, Check, Loader2, Camera, Trash2, Shield, ShieldOff, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { OnlineStatus } from './OnlineStatus';
-import { Conversation, ReachableUser } from '../types';
+import { Conversation, ConversationMember, ReachableUser } from '../types';
 import { useAuth } from '@/contexts/AuthContext';
 import { useChatStore } from '../stores/useChatStore';
 import { chatService } from '@/services/chat.service';
@@ -29,6 +28,7 @@ interface SharedFile {
   storagePath?: string;
   url?: string;
   createdAt: string;
+  senderName?: string;
 }
 
 interface DetailPanelProps {
@@ -37,10 +37,20 @@ interface DetailPanelProps {
   className?: string;
 }
 
+const MEMBER_PREVIEW_COUNT = 5;
+const FILE_PREVIEW_COUNT = 4;
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function formatShortDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString(undefined, { day: '2-digit', month: 'short' });
 }
 
 export function DetailPanel({ conversation, onRefetch, className }: DetailPanelProps) {
@@ -50,6 +60,11 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
   const setDetailPanelOpen = useChatStore((s) => s.setDetailPanelOpen);
   const onlineUserIds = useChatStore((s) => s.onlineUserIds);
   const isGroup = conversation.type === 'group';
+  const [view, setView] = useState<'details' | 'people' | 'files'>('details');
+
+  useEffect(() => {
+    setView('details');
+  }, [conversation.id]);
 
   const currentMember = conversation.members.find((m) => m.id === currentUserId);
   const isOwner = currentMember?.role === 'owner';
@@ -386,15 +401,149 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
     }
   };
 
+  const renderMemberRow = (member: ConversationMember) => (
+    <div key={member.id} className="flex items-center gap-2.5 group">
+      <div className="relative shrink-0">
+        <Avatar className="h-8 w-8">
+          {member.avatarUrl && (
+            <AvatarImage src={member.avatarUrl} alt={member.name} className="object-cover" />
+          )}
+          <AvatarFallback className="text-[10px]">{member.initials}</AvatarFallback>
+        </Avatar>
+        <OnlineStatus isOnline={onlineUserIds.has(member.id)} className="absolute -bottom-0.5 -right-0.5" size="sm" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <span className="text-sm truncate block">
+          {member.id === currentUserId ? 'You' : member.name}
+        </span>
+      </div>
+      {isGroup && member.role?.toLowerCase() === 'owner' && (
+        <span className="text-[11px] text-muted-foreground shrink-0">owner</span>
+      )}
+      {isGroup && member.role?.toLowerCase() === 'admin' && (
+        <span className="text-[11px] text-muted-foreground shrink-0">admin</span>
+      )}
+      {isGroup && canManageMembers && member.id !== currentUserId && member.role !== 'owner' && (
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+          {isOwner && member.role !== 'admin' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10"
+              onClick={() => handleMakeAdmin(member.id)}
+              title="Make Admin"
+            >
+              <Shield className="h-4 w-4" />
+            </Button>
+          )}
+          {isOwner && member.role === 'admin' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted"
+              onClick={() => handleDismissAdmin(member.id)}
+              title="Dismiss Admin"
+            >
+              <ShieldOff className="h-4 w-4" />
+            </Button>
+          )}
+          {!(isAdmin && member.role === 'admin') && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => setConfirmRemoveId(member.id)}
+              title="Remove member"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderSharedFileRow = (file: SharedFile, key: string) => {
+    const isImage = file.mimeType?.startsWith('image/');
+    const fileKey = `${file.fileName}-${file.createdAt}`;
+    const isDownloading = downloadingFile === fileKey;
+    return (
+      <button
+        key={key}
+        type="button"
+        onClick={() => handleDownloadSharedFile(file)}
+        disabled={isDownloading}
+        className="w-full flex items-center gap-2 p-2 rounded-md hover:bg-muted transition-colors text-left disabled:opacity-70"
+      >
+        {isImage ? (
+          <Image className="h-4 w-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium truncate">{file.fileName}</p>
+          <p className="text-[10px] text-muted-foreground truncate">
+            {[file.senderName, formatShortDate(file.createdAt), formatFileSize(file.fileSize)]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        </div>
+        {isDownloading ? (
+          <Loader2 className="h-3 w-3 text-muted-foreground shrink-0 animate-spin" />
+        ) : (
+          <Download className="h-3 w-3 text-muted-foreground shrink-0" />
+        )}
+      </button>
+    );
+  };
+
   return (
     <div className={cn("flex flex-col h-full border-l border-border w-[280px] shrink-0", className)}>
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <h3 className="text-sm font-semibold">Details</h3>
+        {view === 'people' || view === 'files' ? (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-7 w-7 -ml-1.5" onClick={() => setView('details')}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <h3 className="text-sm font-semibold">
+              {view === 'people' ? `People (${conversation.members.length})` : `Shared Files (${sharedFiles.length})`}
+            </h3>
+          </div>
+        ) : (
+          <h3 className="text-sm font-semibold">Details</h3>
+        )}
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDetailPanelOpen(false)}>
           <X className="h-4 w-4" />
         </Button>
       </div>
 
+      {view === 'people' ? (
+        <ScrollArea className="flex-1">
+          <div className="p-4">
+            {isGroup && canManageMembers && (
+              <button
+                type="button"
+                onClick={openAddDialog}
+                className="w-full flex items-center gap-2.5 p-2 -mx-2 mb-3 rounded-md hover:bg-muted transition-colors text-left"
+              >
+                <div className="h-8 w-8 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center shrink-0">
+                  <UserPlus className="h-4 w-4 text-muted-foreground" />
+                </div>
+                <span className="text-sm font-medium">Add people</span>
+              </button>
+            )}
+            <div className="space-y-3">
+              {conversation.members.map(renderMemberRow)}
+            </div>
+          </div>
+        </ScrollArea>
+      ) : view === 'files' ? (
+        <ScrollArea className="flex-1">
+          <div className="p-4 space-y-1.5">
+            {sharedFiles.map((file, i) => renderSharedFileRow(file, `${file.fileName}-${file.createdAt}-${i}`))}
+          </div>
+        </ScrollArea>
+      ) : (
       <ScrollArea className="flex-1">
         <div className="p-4 space-y-4">
           {/* Info */}
@@ -529,85 +678,51 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
           {/* Members */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <h5 className="text-xs font-medium text-muted-foreground">
+              <button
+                type="button"
+                className="flex items-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                onClick={() => setView('people')}
+              >
                 Members ({conversation.members.length})
-              </h5>
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
               {isGroup && canManageMembers && (
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={openAddDialog} title="Add member">
                   <UserPlus className="h-3.5 w-3.5" />
                 </Button>
               )}
             </div>
-            <div className="space-y-2">
-              {conversation.members.map((member) => (
-                <div key={member.id} className="flex items-center gap-2 group">
-                  <div className="relative">
-                    <Avatar className="h-7 w-7">
-                      {member.avatarUrl && (
-                        <AvatarImage src={member.avatarUrl} alt={member.name} className="object-cover" />
-                      )}
-                      <AvatarFallback className="text-[10px]">{member.initials}</AvatarFallback>
-                    </Avatar>
-                    <OnlineStatus isOnline={onlineUserIds.has(member.id)} className="absolute -bottom-0.5 -right-0.5" size="sm" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm truncate block">
-                      {member.id === currentUserId ? 'You' : member.name}
-                    </span>
-                  </div>
-                  {isGroup && member.role?.toLowerCase() === 'owner' && (
-                    <Badge variant="secondary" className="text-[10px] h-5 bg-primary/10 text-primary border-none">owner</Badge>
-                  )}
-                  {isGroup && member.role?.toLowerCase() === 'admin' && (
-                    <Badge variant="secondary" className="text-[10px] h-5 bg-blue-500/10 text-blue-600 border-none">admin</Badge>
-                  )}
-                  {isGroup && canManageMembers && member.id !== currentUserId && member.role !== 'owner' && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {isOwner && member.role !== 'admin' && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10"
-                          onClick={() => handleMakeAdmin(member.id)}
-                          title="Make Admin"
-                        >
-                          <Shield className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {isOwner && member.role === 'admin' && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted"
-                          onClick={() => handleDismissAdmin(member.id)}
-                          title="Dismiss Admin"
-                        >
-                          <ShieldOff className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {!(isAdmin && member.role === 'admin') && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => setConfirmRemoveId(member.id)}
-                          title="Remove member"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  )}
+            <button
+              type="button"
+              onClick={() => setView('people')}
+              className="flex items-center flex-wrap gap-2"
+            >
+              {conversation.members.slice(0, MEMBER_PREVIEW_COUNT).map((member) => (
+                <div key={member.id} className="relative">
+                  <Avatar className="h-9 w-9">
+                    {member.avatarUrl && (
+                      <AvatarImage src={member.avatarUrl} alt={member.name} className="object-cover" />
+                    )}
+                    <AvatarFallback className="text-[11px]">{member.initials}</AvatarFallback>
+                  </Avatar>
+                  <OnlineStatus isOnline={onlineUserIds.has(member.id)} className="absolute -bottom-0.5 -right-0.5" size="sm" />
                 </div>
               ))}
-            </div>
+              {conversation.members.length > MEMBER_PREVIEW_COUNT && (
+                <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-[11px] font-medium text-muted-foreground shrink-0">
+                  +{conversation.members.length - MEMBER_PREVIEW_COUNT}
+                </div>
+              )}
+            </button>
           </div>
 
           <Separator />
 
           {/* Shared Files */}
           <div>
-            <h5 className="text-xs font-medium text-muted-foreground mb-2">Shared Files</h5>
+            <div className="flex items-center justify-between mb-2">
+              <h5 className="text-xs font-medium text-muted-foreground">Shared Files</h5>
+            </div>
             {filesLoading ? (
               <p className="text-xs text-muted-foreground text-center py-4">Loading...</p>
             ) : sharedFiles.length === 0 ? (
@@ -616,37 +731,22 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
                 <p className="text-xs text-muted-foreground">No shared files yet</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {sharedFiles.map((file, i) => {
-                  const isImage = file.mimeType?.startsWith('image/');
-                  const fileKey = `${file.fileName}-${file.createdAt}`;
-                  const isDownloading = downloadingFile === fileKey;
-                  return (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => handleDownloadSharedFile(file)}
-                      disabled={isDownloading}
-                      className="w-full flex items-center gap-2 p-2 rounded-md hover:bg-muted transition-colors text-left disabled:opacity-70"
-                    >
-                      {isImage ? (
-                        <Image className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      ) : (
-                        <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium break-all whitespace-normal">{file.fileName}</p>
-                        <p className="text-[10px] text-muted-foreground">{formatFileSize(file.fileSize)}</p>
-                      </div>
-                      {isDownloading ? (
-                        <Loader2 className="h-3 w-3 text-muted-foreground shrink-0 animate-spin" />
-                      ) : (
-                        <Download className="h-3 w-3 text-muted-foreground shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
+              <>
+                <div className="space-y-1.5">
+                  {sharedFiles
+                    .slice(0, FILE_PREVIEW_COUNT)
+                    .map((file, i) => renderSharedFileRow(file, `${file.fileName}-${file.createdAt}-${i}`))}
+                </div>
+                {sharedFiles.length > FILE_PREVIEW_COUNT && (
+                  <button
+                    type="button"
+                    className="text-xs text-primary font-medium mt-2 pl-2 hover:underline"
+                    onClick={() => setView('files')}
+                  >
+                    Show more ({sharedFiles.length - FILE_PREVIEW_COUNT} more)
+                  </button>
+                )}
+              </>
             )}
           </div>
 
@@ -690,6 +790,7 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
           )}
         </div>
       </ScrollArea>
+      )}
 
       {/* Add Member Dialog */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>

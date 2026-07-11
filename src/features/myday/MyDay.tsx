@@ -300,7 +300,7 @@ export default function MyDay() {
               }
             } catch (error) {
               logger.error('Failed to update task:', error);
-              toast.error('Failed to update task');
+              toast.error(error instanceof Error ? error.message : 'Failed to update task');
             }
           }}
           onBatchUpdate={async (updates) => {

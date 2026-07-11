@@ -16,12 +16,20 @@ import {
 import { IssueDetailContent } from './IssueDetailContent';
 import { Button } from '@/components/ui/button';
 import { DialogClose } from '@/components/ui/dialog';
-import { Trash2, Maximize2, X } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Trash2, Maximize2, MoreVertical, Check, ChevronLeft, X, Pencil } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectPermissions } from '@/hooks/useProjectPermissions';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
 interface IssueDetailModalProps {
@@ -48,6 +56,7 @@ const serializeIssueForDirtyCheck = (issue: Issue): string => {
     title: issue.title || '',
     description: issue.description || '',
     category: issue.category,
+    categoryOther: issue.categoryOther || '',
     severity: issue.severity,
     status: issue.status,
     moduleId: issue.moduleId || null,
@@ -85,10 +94,12 @@ export function IssueDetailModal({
 }: IssueDetailModalProps) {
   const navigate = useNavigate();
   const { user: profile } = useAuth();
+  const isMobile = useIsMobile();
   const [editedIssue, setEditedIssue] = useState<Issue | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isMobileEditMode, setIsMobileEditMode] = useState(false);
   const initialSnapshotRef = useRef<string>('');
   const { canEditResource } = useProjectPermissions(editedIssue?.projectId);
   const canEditIssue = useMemo(
@@ -107,9 +118,14 @@ export function IssueDetailModal({
       setPendingFiles([]);
       initialSnapshotRef.current = serializeIssueForDirtyCheck(issue);
     }
+    if (!isOpen) {
+      setIsMobileEditMode(false);
+    }
   }, [isOpen, issue?.id]);
 
   if (!editedIssue) return null;
+
+  const hasValidCategory = editedIssue.category !== 'other' || !!editedIssue.categoryOther?.trim();
 
   const isDirty =
     pendingFiles.length > 0 ||
@@ -142,7 +158,12 @@ export function IssueDetailModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && attemptClose()}>
       <DialogContent
         hideClose
-        className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden"
+        className={cn(
+          'p-0 flex flex-col gap-0 overflow-hidden',
+          isMobile
+            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0'
+            : 'max-w-4xl max-h-[90vh]'
+        )}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
@@ -159,8 +180,65 @@ export function IssueDetailModal({
             </DialogClose>
           </DialogHeader>
         )}
-        {/* Header - view mode with expand + close */}
-        {mode !== 'create' && (
+        {/* Header - view mode, mobile: full-screen page with back + "..." actions menu */}
+        {mode !== 'create' && isMobile && (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b shrink-0 bg-background">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={attemptClose}
+                className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0 text-foreground active:bg-muted/70 transition-colors"
+                aria-label="Back"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <DialogTitle className="text-[15px] font-bold truncate">Issue Details</DialogTitle>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0 text-foreground active:bg-muted/70 transition-colors"
+                  aria-label="Issue actions"
+                >
+                  <MoreVertical className="w-5 h-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {!isMobileEditMode ? (
+                  <DropdownMenuItem
+                    onClick={() => setIsMobileEditMode(true)}
+                    disabled={!canEditIssue}
+                    title={canEditIssue ? undefined : editLockTitle}
+                  >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit Issue
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={handleUpdateIssue}
+                    disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
+                  >
+                    <Check className="h-4 w-4 mr-2" />
+                    Update Issue
+                  </DropdownMenuItem>
+                )}
+                {onDelete && (
+                  <DropdownMenuItem
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={!canEditIssue}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Issue
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+        {/* Header - view mode, desktop: label + expand + close */}
+        {mode !== 'create' && !isMobile && (
           <div className="flex items-center justify-between px-6 py-3 border-b shrink-0">
             <DialogTitle className="text-sm font-medium text-muted-foreground">Issue</DialogTitle>
             <div className="flex items-center gap-1">
@@ -168,6 +246,7 @@ export function IssueDetailModal({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                title="Expand"
                 onClick={() => {
                   const pathParts = window.location.pathname.split('/');
                   const projectIndex = pathParts.indexOf('projects');
@@ -192,7 +271,10 @@ export function IssueDetailModal({
         <DialogDescription className="sr-only">
           View and edit details for issue {editedIssue?.title || 'New Issue'}
         </DialogDescription>
-        <ScrollArea className="flex-1 overflow-y-auto w-full">
+        <ScrollArea className={cn(
+          'flex-1 overflow-y-auto w-full',
+          isMobile && mode !== 'create' && isMobileEditMode && 'max-h-[calc(100dvh-129px)]'
+        )}>
           <div className="p-6">
             <IssueDetailContent
               issue={editedIssue}
@@ -205,23 +287,36 @@ export function IssueDetailModal({
               mode={mode}
               onPendingFilesChange={setPendingFiles}
               onExpand={undefined}
+              isMobileEditMode={mode !== 'create' ? isMobileEditMode : undefined}
             />
           </div>
         </ScrollArea>
+
+        {mode !== 'create' && isMobile && isMobileEditMode && (
+          <div className="px-4 py-3 border-t bg-background z-10 w-full shrink-0">
+            <Button
+              className="w-full"
+              onClick={handleUpdateIssue}
+              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
+            >
+              Update Issue
+            </Button>
+          </div>
+        )}
 
         {mode === 'create' && (
           <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full">
             <Button variant="outline" onClick={attemptClose}>Cancel</Button>
             <Button
               onClick={() => onCreate?.(editedIssue!, pendingFiles)}
-              disabled={!editedIssue.title.trim()}
+              disabled={!editedIssue.title.trim() || !hasValidCategory}
             >
               Create Issue
             </Button>
           </div>
         )}
 
-        {mode === 'view' && (
+        {mode === 'view' && !isMobile && (
           <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full">
             <div className="flex-1">
               {/* Delete button — enabled for Maintainer+, the issue reporter, or an assignee */}
@@ -245,7 +340,7 @@ export function IssueDetailModal({
             <Button variant="outline" onClick={attemptClose}>Cancel</Button>
             <Button
               onClick={handleUpdateIssue}
-              disabled={!editedIssue.title.trim() || !canEditIssue}
+              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
               title={canEditIssue ? undefined : editLockTitle}
             >
               Update Issue
@@ -271,6 +366,14 @@ export function IssueDetailModal({
         confirmText="Discard"
         cancelText="Keep Editing"
         variant="destructive"
+        extraActionText={isMobile ? "Update Issue" : undefined}
+        onExtraAction={isMobile ? () => {
+          if (!editedIssue.title.trim() || !canEditIssue || !hasValidCategory) {
+            toast.error('Please fix required fields before updating.');
+            return;
+          }
+          handleUpdateIssue();
+        } : undefined}
       />
     </Dialog>
   );
