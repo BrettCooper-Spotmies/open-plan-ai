@@ -30,6 +30,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
   Calendar as CalendarIcon,
@@ -40,11 +46,15 @@ import {
   X,
   User,
   Trash2,
+  ChevronLeft,
+  MoreVertical,
+  Check,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { Milestone, MilestoneStatus, Task, Issue, Module } from '@/types';
 import { getMilestoneTasks, getMilestoneModules, getMilestoneIssues, getMilestoneStatus, getModuleProgress } from '../utils/projectUtils';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface MilestoneDetailModalProps {
   milestone: Milestone | null;
@@ -76,6 +86,7 @@ export function MilestoneDetailModal({
   onDelete,
   onIssueUpdate,
 }: MilestoneDetailModalProps) {
+  const isMobile = useIsMobile();
   const [editedMilestone, setEditedMilestone] = useState<Milestone | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isMilestoneDateOpen, setIsMilestoneDateOpen] = useState(false);
@@ -227,44 +238,101 @@ export function MilestoneDetailModal({
     }
   };
 
+  const canUpdate = !!editedMilestone.title.trim() && !!editedMilestone.date;
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden [&>button]:hidden">
-        <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between">
-          <div>
-            <DialogTitle>Milestone Details</DialogTitle>
-            <DialogDescription className="sr-only">
-              View and edit milestone information, linked tasks, modules, and issues.
-            </DialogDescription>
+      <DialogContent
+        hideClose={isMobile}
+        className={cn(
+          'p-0 flex flex-col gap-0 overflow-hidden',
+          isMobile
+            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0'
+            : 'max-w-2xl max-h-[90vh] [&>button]:hidden'
+        )}
+      >
+        {isMobile ? (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b shrink-0 bg-background">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0 text-foreground active:bg-muted/70 transition-colors"
+                aria-label="Back"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <DialogTitle className="text-[15px] font-bold truncate">Milestone Details</DialogTitle>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0 text-foreground active:bg-muted/70 transition-colors"
+                  aria-label="Milestone actions"
+                >
+                  <MoreVertical className="w-5 h-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleUpdateMilestone} disabled={!canUpdate}>
+                  <Check className="h-4 w-4 mr-2" />
+                  Update Milestone
+                </DropdownMenuItem>
+                {onDelete && (
+                  <DropdownMenuItem
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Milestone
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
-          <div className="flex items-center gap-2">
-            {onDelete && (
+        ) : (
+          <DialogHeader className="px-6 py-4 border-b flex flex-row items-center justify-between">
+            <div>
+              <DialogTitle>Milestone Details</DialogTitle>
+              <DialogDescription className="sr-only">
+                View and edit milestone information, linked tasks, modules, and issues.
+              </DialogDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  aria-label="Delete milestone"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setShowDeleteConfirm(true)}
-                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                aria-label="Delete milestone"
+                onClick={onClose}
+                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                aria-label="Close milestone details"
               >
-                <Trash2 className="h-4 w-4" />
+                <X className="h-4 w-4" />
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              aria-label="Close milestone details"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </DialogHeader>
+            </div>
+          </DialogHeader>
+        )}
+        {isMobile && (
+          <DialogDescription className="sr-only">
+            View and edit milestone information, linked tasks, modules, and issues.
+          </DialogDescription>
+        )}
 
-        <ScrollArea className="flex-1 overflow-y-auto w-full">
-          <div className="p-6 space-y-6">
+        <ScrollArea className={cn('flex-1 overflow-y-auto w-full', isMobile && 'max-h-[calc(100dvh-57px)]')}>
+          <div className="p-3 sm:p-6 space-y-3 sm:space-y-6">
             {/* Title Row */}
-            <div className="space-y-4">
+            <div className="space-y-2 sm:space-y-4">
               <Input
                 value={editedMilestone.title}
                 onChange={(e) => handleFieldChange('title', e.target.value)}
@@ -290,21 +358,21 @@ export function MilestoneDetailModal({
             </div>
 
             {/* Stats Grid - Equal width/height */}
-            <div className="grid grid-cols-4 gap-4">
-              <div className="flex flex-col items-center justify-center p-4 bg-muted/50 rounded-lg min-h-[80px]">
-                <div className="text-2xl font-bold">{milestoneTasks.length}</div>
+            <div className="grid grid-cols-4 gap-2 sm:gap-4">
+              <div className="flex flex-col items-center justify-center p-2 sm:p-4 bg-muted/50 rounded-lg min-h-[60px] sm:min-h-[80px]">
+                <div className="text-xl sm:text-2xl font-bold">{milestoneTasks.length}</div>
                 <div className="text-xs text-muted-foreground text-center">Total Tasks</div>
               </div>
-              <div className="flex flex-col items-center justify-center p-4 bg-status-done/10 rounded-lg min-h-[80px]">
-                <div className="text-2xl font-bold text-status-done">{completedTasks}</div>
+              <div className="flex flex-col items-center justify-center p-2 sm:p-4 bg-status-done/10 rounded-lg min-h-[60px] sm:min-h-[80px]">
+                <div className="text-xl sm:text-2xl font-bold text-status-done">{completedTasks}</div>
                 <div className="text-xs text-muted-foreground text-center">Completed</div>
               </div>
-              <div className="flex flex-col items-center justify-center p-4 bg-status-in-progress/10 rounded-lg min-h-[80px]">
-                <div className="text-2xl font-bold text-status-in-progress">{inProgressTasks}</div>
+              <div className="flex flex-col items-center justify-center p-2 sm:p-4 bg-status-in-progress/10 rounded-lg min-h-[60px] sm:min-h-[80px]">
+                <div className="text-xl sm:text-2xl font-bold text-status-in-progress">{inProgressTasks}</div>
                 <div className="text-xs text-muted-foreground text-center">In Progress</div>
               </div>
-              <div className="flex flex-col items-center justify-center p-4 bg-status-blocked/10 rounded-lg min-h-[80px]">
-                <div className="text-2xl font-bold text-status-blocked">{blockedTasks}</div>
+              <div className="flex flex-col items-center justify-center p-2 sm:p-4 bg-status-blocked/10 rounded-lg min-h-[60px] sm:min-h-[80px]">
+                <div className="text-xl sm:text-2xl font-bold text-status-blocked">{blockedTasks}</div>
                 <div className="text-xs text-muted-foreground text-center">Blocked</div>
               </div>
             </div>
@@ -312,8 +380,8 @@ export function MilestoneDetailModal({
             <Separator />
 
             {/* Date and Time Remaining */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2 sm:gap-4 items-start">
+              <div className="space-y-1 sm:space-y-2">
                 <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                   <CalendarIcon className="h-3 w-3" />
                   Target Date <span className="text-destructive">*</span>
@@ -346,10 +414,10 @@ export function MilestoneDetailModal({
                 </Popover>
               </div>
 
-              <div className="space-y-2">
+              <div className="space-y-1 sm:space-y-2">
                 <Label className="text-xs text-muted-foreground">Time Remaining</Label>
                 <div className={cn(
-                  'p-2 rounded-md text-sm font-medium h-10 flex items-center',
+                  'px-3 py-2 rounded-md text-sm font-medium',
                   editedMilestone.completed
                     ? 'bg-status-done/10 text-status-done'
                     : daysUntil < 0
@@ -373,8 +441,8 @@ export function MilestoneDetailModal({
             </div>
 
             {/* Status + Created By */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2 sm:gap-4 items-start">
+              <div className="space-y-1 sm:space-y-2">
                 <Label className="text-xs text-muted-foreground">Status</Label>
                 <Select value={status} onValueChange={(value) => handleStatusChange(value as MilestoneStatus)}>
                   <SelectTrigger className="w-full h-10 px-3 text-sm font-normal bg-muted/30">
@@ -394,39 +462,39 @@ export function MilestoneDetailModal({
               </div>
 
               {editedMilestone.createdBy && (
-                <div className="space-y-2">
+                <div className="space-y-1 sm:space-y-2">
                   <Label className="text-xs text-muted-foreground flex items-center gap-1.5">
                     <User className="h-3 w-3" />
                     Created By
                   </Label>
-                  <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-input bg-muted/30">
-                    <Avatar className="h-5 w-5">
+                  <div className="flex items-center gap-2 h-10 px-3 rounded-md border border-input bg-muted/30 min-w-0">
+                    <Avatar className="h-5 w-5 shrink-0">
                       <AvatarImage src={resolveFileUrl(editedMilestone.createdBy.avatar) ?? editedMilestone.createdBy.avatar} alt={editedMilestone.createdBy.name} />
                       <AvatarFallback className="text-[9px]">
                         {editedMilestone.createdBy.initials}
                       </AvatarFallback>
                     </Avatar>
-                    <span className="text-sm">{editedMilestone.createdBy.name}</span>
+                    <span className="text-sm truncate">{editedMilestone.createdBy.name}</span>
                   </div>
                 </div>
               )}
             </div>
 
             {/* Description */}
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               <Label className="text-sm font-medium">Description</Label>
               <Textarea
                 value={editedMilestone.description || ''}
                 onChange={(e) => handleFieldChange('description', e.target.value)}
                 placeholder="Add a description for this milestone..."
-                className="min-h-[80px] resize-none"
+                className="min-h-[60px] sm:min-h-[80px] resize-none"
               />
             </div>
 
             <Separator />
 
             {/* Linked Tasks */}
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               <h3 className="text-sm font-medium flex items-center gap-2">
                 <ListTodo className="h-4 w-4" />
                 Linked Tasks ({milestoneTasks.length})
@@ -532,7 +600,7 @@ export function MilestoneDetailModal({
             <Separator />
 
             {/* Linked Modules */}
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               <h3 className="text-sm font-medium flex items-center gap-2">
                 <Box className="h-4 w-4" />
                 Linked Modules ({linkedModules.length})
@@ -615,7 +683,7 @@ export function MilestoneDetailModal({
             <Separator />
 
             {/* Linked Issues */}
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               <h3 className="text-sm font-medium text-destructive flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
                 Linked Issues ({milestoneIssues.length})
@@ -711,15 +779,17 @@ export function MilestoneDetailModal({
             </div>
           </div>
         </ScrollArea>
-        {/* Footer actions */}
-        <div className="p-4 border-t flex justify-end gap-2 bg-background z-10">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleUpdateMilestone} disabled={!editedMilestone.title.trim() || !editedMilestone.date}>
-            Update Milestone
-          </Button>
-        </div>
+        {/* Footer actions — mobile moves these into the header "..." menu instead */}
+        {!isMobile && (
+          <div className="p-4 border-t flex justify-end gap-2 bg-background z-10">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpdateMilestone} disabled={!canUpdate}>
+              Update Milestone
+            </Button>
+          </div>
+        )}
       </DialogContent>
       <ConfirmationDialog
         open={showDeleteConfirm}
