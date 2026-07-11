@@ -39,6 +39,12 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import {
   X,
@@ -64,8 +70,11 @@ import {
   Video,
   Play,
   FolderKanban,
+  ChevronLeft,
+  MoreVertical,
 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { commentsService } from '@/services/comments.service';
 import { useNotifications } from '@/hooks/useNotifications';
 import {
@@ -213,6 +222,7 @@ export const TaskDetailModal = ({
   projectName,
 }: TaskDetailModalProps) => {
   const { user: profile } = useAuth();
+  const isMobile = useIsMobile();
   const { currentOrganization } = useOrganization();
   const { data: organizationMembers = [] } = useOrganizationMembers(currentOrganization?.id);
   const availableAssignees = assignableMembers ?? organizationMembers;
@@ -1160,18 +1170,77 @@ export const TaskDetailModal = ({
     }
   };
 
+  // On mobile, the task overview opens as a full-screen page (not a centered dialog)
+  // with edit/delete tucked behind a header "..." menu instead of a persistent footer bar.
+  const showMobileHeader = isMobile && mode === 'view';
+
   return (
     <>
     <Dialog open={isOpen} onOpenChange={(open) => !open && attemptClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] w-[95vw] sm:w-full p-0 gap-0" onOpenAutoFocus={(e) => e.preventDefault()}>
-        <DialogHeader className="px-4 sm:px-6 py-4 border-b">
-          <DialogTitle>{mode === 'create' ? 'Add New Task' : 'Task Details'}</DialogTitle>
-        </DialogHeader>
+      <DialogContent
+        className={cn(
+          'p-0 gap-0',
+          isMobile
+            ? 'inset-0 left-0 top-0 h-[100dvh] w-screen max-w-none max-h-none translate-x-0 translate-y-0 rounded-none border-0'
+            : 'max-w-3xl max-h-[90vh] w-[95vw] sm:w-full'
+        )}
+        hideClose={showMobileHeader}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        {showMobileHeader ? (
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b shrink-0 bg-background">
+            <div className="flex items-center gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={attemptClose}
+                className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0 text-foreground active:bg-muted/70 transition-colors"
+                aria-label="Back"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <DialogTitle className="text-[15px] font-bold truncate">Task Details</DialogTitle>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0 text-foreground active:bg-muted/70 transition-colors"
+                  aria-label="Task actions"
+                >
+                  <MoreVertical className="w-5 h-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={handleUpdateTask}
+                  disabled={isSaving || !editedTask.title || !editedTask.dueDate || !isFormDirty || isBlockedWithoutDependencies || !canEditTask}
+                >
+                  <Check className="h-4 w-4 mr-2" />
+                  Update Task
+                </DropdownMenuItem>
+                {onDelete && (
+                  <DropdownMenuItem
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={!canEditTask}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Task
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        ) : (
+          <DialogHeader className="px-4 sm:px-6 py-4 border-b">
+            <DialogTitle>{mode === 'create' ? 'Add New Task' : 'Task Details'}</DialogTitle>
+          </DialogHeader>
+        )}
         <DialogDescription className="sr-only">
           View and edit details for task {task?.title || 'New Task'}
         </DialogDescription>
 
-        <ScrollArea className="flex-1 max-h-[calc(90vh-80px)]">
+        <ScrollArea className={cn('flex-1', isMobile ? 'max-h-[calc(100dvh-57px)]' : 'max-h-[calc(90vh-80px)]')}>
           <div className="p-4 sm:p-6 space-y-6">
             <div className="space-y-2">
               <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Task Title <span className="text-destructive" aria-hidden="true">*</span></Label>
@@ -2384,7 +2453,7 @@ export const TaskDetailModal = ({
             </Button>
           </div>
         )}
-        {mode === 'view' && (
+        {mode === 'view' && !showMobileHeader && (
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-t flex items-center justify-between gap-2 bg-background">
             {/* Delete button on the bottom left — enabled for Maintainer+, the task creator, or an assignee */}
             {onDelete ? (
@@ -2448,6 +2517,14 @@ export const TaskDetailModal = ({
         confirmText="Discard"
         cancelText="Keep Editing"
         variant="destructive"
+        extraActionText={isMobile ? "Update Task" : undefined}
+        onExtraAction={isMobile ? () => {
+          if (!editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask) {
+            toast.error('Please fix required fields before updating.');
+            return;
+          }
+          handleUpdateTask();
+        } : undefined}
       />
     </Dialog>
     <FilePreviewDialog

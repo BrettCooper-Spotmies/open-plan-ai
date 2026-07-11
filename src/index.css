@@ -251,3 +251,14 @@
     display: none;
   }
 }
+
+@layer utilities {
+  /* Scrollable row that stays visually clean (no scrollbar track) */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}

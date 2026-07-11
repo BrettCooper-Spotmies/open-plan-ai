@@ -398,7 +398,7 @@ export function ECOListView({
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="h-7 bg-card border border-border rounded-md text-foreground text-[12px] px-2.5 outline-none cursor-pointer font-[inherit] appearance-none"
+      className="h-7 shrink-0 bg-card border border-border rounded-md text-foreground text-[12px] px-2.5 outline-none cursor-pointer font-[inherit] appearance-none"
     >
       <option value="ALL">{allLabel}</option>
       {opts.map(o => (
@@ -441,20 +441,22 @@ export function ECOListView({
                   · {listLoading ? '…' : total}
                 </span>
               </span>
-              <div className="flex flex-wrap gap-2 items-center justify-end">
-                <Sel value={fStatus}   onChange={changeFilter(setFStatus)}   opts={MAIN_STATUSES}                          allLabel="All statuses" />
-                <Sel value={fPriority} onChange={changeFilter(setFPriority)} opts={['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']} allLabel="All priorities" />
-                <button
-                  onClick={handleExport}
-                  disabled={total === 0 || exporting}
-                  title="Export complete ECO list"
-                  className="h-7 shrink-0 flex items-center gap-1.5 px-2.5 rounded-md text-[12px] font-medium bg-card text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit] disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {exporting
-                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    : <Download className="w-3.5 h-3.5" />}
-                  Export
-                </button>
+              <div className="flex items-center justify-end gap-2">
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar min-w-0">
+                  <Sel value={fStatus}   onChange={changeFilter(setFStatus)}   opts={MAIN_STATUSES}                          allLabel="All statuses" />
+                  <Sel value={fPriority} onChange={changeFilter(setFPriority)} opts={['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']} allLabel="All priorities" />
+                  <button
+                    onClick={handleExport}
+                    disabled={total === 0 || exporting}
+                    title="Export complete ECO list"
+                    className="h-7 shrink-0 flex items-center gap-1.5 px-2.5 rounded-md text-[12px] font-medium bg-card text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit] disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {exporting
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Download className="w-3.5 h-3.5" />}
+                    Export
+                  </button>
+                </div>
                 {isMobile && onNewEco && (
                   <button
                     onClick={onNewEco}
