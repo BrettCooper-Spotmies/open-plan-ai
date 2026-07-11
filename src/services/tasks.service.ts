@@ -60,6 +60,7 @@ function toCreatePayload(task: Partial<Task>): Record<string, unknown> {
   return {
     title: task.title?.trim() || '',
     description: task.description || undefined,
+    descriptionBlocks: task.descriptionBlocks ?? undefined,
     status: normalizeStatus(task.status),
     priority: task.priority ?? 'medium',
     milestoneId: task.milestoneId ?? task.milestone?.id ?? undefined,
