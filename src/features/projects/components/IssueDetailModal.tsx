@@ -16,12 +16,13 @@ import {
 import { IssueDetailContent } from './IssueDetailContent';
 import { Button } from '@/components/ui/button';
 import { DialogClose } from '@/components/ui/dialog';
-import { Trash2, Maximize2, X } from 'lucide-react';
+import { Trash2, Maximize2, Minimize2, X } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { logger } from '@/services/monitoring/logger';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectPermissions } from '@/hooks/useProjectPermissions';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
 interface IssueDetailModalProps {
@@ -48,6 +49,7 @@ const serializeIssueForDirtyCheck = (issue: Issue): string => {
     title: issue.title || '',
     description: issue.description || '',
     category: issue.category,
+    categoryOther: issue.categoryOther || '',
     severity: issue.severity,
     status: issue.status,
     moduleId: issue.moduleId || null,
@@ -85,10 +87,12 @@ export function IssueDetailModal({
 }: IssueDetailModalProps) {
   const navigate = useNavigate();
   const { user: profile } = useAuth();
+  const isMobile = useIsMobile();
   const [editedIssue, setEditedIssue] = useState<Issue | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isMaximized, setIsMaximized] = useState(false);
   const initialSnapshotRef = useRef<string>('');
   const { canEditResource } = useProjectPermissions(editedIssue?.projectId);
   const canEditIssue = useMemo(
@@ -106,10 +110,13 @@ export function IssueDetailModal({
       setEditedIssue(issue);
       setPendingFiles([]);
       initialSnapshotRef.current = serializeIssueForDirtyCheck(issue);
+      setIsMaximized(false);
     }
   }, [isOpen, issue?.id]);
 
   if (!editedIssue) return null;
+
+  const hasValidCategory = editedIssue.category !== 'other' || !!editedIssue.categoryOther?.trim();
 
   const isDirty =
     pendingFiles.length > 0 ||
@@ -142,7 +149,12 @@ export function IssueDetailModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && attemptClose()}>
       <DialogContent
         hideClose
-        className="max-w-4xl max-h-[90vh] p-0 flex flex-col gap-0 overflow-hidden"
+        className={cn(
+          'p-0 flex flex-col gap-0 overflow-hidden',
+          isMobile && isMaximized
+            ? 'top-0 left-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none sm:rounded-none'
+            : 'max-w-4xl max-h-[90vh]'
+        )}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
@@ -168,7 +180,15 @@ export function IssueDetailModal({
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                title={isMaximized ? 'Collapse' : 'Expand'}
                 onClick={() => {
+                  // On mobile, the deep-link navigation below re-renders the exact same
+                  // fixed-size dialog, so tapping "maximize" looked like a no-op. Instead,
+                  // toggle this dialog to fill the viewport in place.
+                  if (isMobile) {
+                    setIsMaximized((prev) => !prev);
+                    return;
+                  }
                   const pathParts = window.location.pathname.split('/');
                   const projectIndex = pathParts.indexOf('projects');
                   if (projectIndex !== -1 && pathParts[projectIndex + 1]) {
@@ -179,7 +199,11 @@ export function IssueDetailModal({
                   onClose();
                 }}
               >
-                <Maximize2 className="h-4 w-4" />
+                {isMobile && isMaximized ? (
+                  <Minimize2 className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
               </Button>
               <DialogClose asChild>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
@@ -214,7 +238,7 @@ export function IssueDetailModal({
             <Button variant="outline" onClick={attemptClose}>Cancel</Button>
             <Button
               onClick={() => onCreate?.(editedIssue!, pendingFiles)}
-              disabled={!editedIssue.title.trim()}
+              disabled={!editedIssue.title.trim() || !hasValidCategory}
             >
               Create Issue
             </Button>
@@ -245,7 +269,7 @@ export function IssueDetailModal({
             <Button variant="outline" onClick={attemptClose}>Cancel</Button>
             <Button
               onClick={handleUpdateIssue}
-              disabled={!editedIssue.title.trim() || !canEditIssue}
+              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
               title={canEditIssue ? undefined : editLockTitle}
             >
               Update Issue

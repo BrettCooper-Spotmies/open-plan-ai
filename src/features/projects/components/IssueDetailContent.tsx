@@ -866,7 +866,10 @@ export function IssueDetailContent({
                             </Label>
                             <Select
                                 value={editedIssue.category}
-                                onValueChange={(value) => handleFieldChange('category', value as IssueCategory)}
+                                onValueChange={(value) => {
+                                    handleFieldChange('category', value as IssueCategory);
+                                    if (value !== 'other') handleFieldChange('categoryOther', undefined);
+                                }}
                                 disabled={!canEditIssue}
                             >
                                 <SelectTrigger className="h-9" aria-required="true" title={canEditIssue ? undefined : editLockTitle}>
@@ -894,6 +897,16 @@ export function IssueDetailContent({
                                     ))}
                                 </SelectContent>
                             </Select>
+                            {editedIssue.category === 'other' && (
+                                <Input
+                                    value={editedIssue.categoryOther || ''}
+                                    onChange={(e) => handleFieldChange('categoryOther', e.target.value)}
+                                    placeholder="Describe the category…"
+                                    disabled={!canEditIssue}
+                                    className={cn('h-9', !editedIssue.categoryOther?.trim() && 'border-destructive')}
+                                    aria-required="true"
+                                />
+                            )}
                         </div>
 
                         {/* Tags (Span 2 columns) */}
