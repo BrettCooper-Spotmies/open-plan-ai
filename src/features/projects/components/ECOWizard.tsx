@@ -22,6 +22,10 @@ import { fromApiNode, bomFlatAll, bomPath, KNOWN_BOM_CATEGORIES, BOM_CAT_META, U
 import { REQS } from './requirementsData';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // ── BOM parameter options for Details diff rows ───────────────────────────────
 
@@ -374,7 +378,7 @@ interface DiffRowState {
   paramIsCustom?: boolean;
 }
 
-interface AttachmentState { name: string; size: number }
+interface AttachmentState { name: string; size: number; file: File }
 
 interface ImpactState {
   schedule: ImpactLevel; recert: boolean; firmware: boolean;
@@ -429,6 +433,7 @@ export function ECOWizard({
   const [step, setStep] = useState(0);
   const [maxStepReached, setMaxStepReached] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [confirmClose, setConfirmClose] = useState(false);
 
   // Step 1 — Basics
   const [basics, setBasics] = useState<BasicsState>({
@@ -581,7 +586,7 @@ export function ECOWizard({
 
   const addFiles = (fileList: FileList | null) => {
     if (!fileList) return;
-    const next = Array.from(fileList).map(f => ({ name: f.name, size: f.size }));
+    const next = Array.from(fileList).map(f => ({ name: f.name, size: f.size, file: f }));
     setAttachments(prev => {
       const names = new Set(prev.map(a => a.name));
       return [...prev, ...next.filter(f => !names.has(f.name))];
@@ -605,6 +610,14 @@ export function ECOWizard({
 
   const [pipeline, setPipeline] = useState<PipelineStepWizard[]>(
     PIPELINE_STAGE_DEFS.map(s => ({ ...s, justification: s.optionalReason ?? '' })),
+  );
+
+  // Whether the user has entered anything worth confirming before a discard-on-close.
+  const isDirty = !!(
+    basics.title.trim() || basics.description.trim() || basics.ecr.trim() || basics.effValue.trim() ||
+    items.length > 0 || reqItems.length > 0 || attachments.length > 0 ||
+    diffRows.some(r => r.param || r.from || r.to) ||
+    impact.certNotes.trim() || impact.unitCostDelta.trim() || impact.oneTimeCost.trim()
   );
 
   // Auto-fill Originator slot with the current user once members load
@@ -1285,7 +1298,11 @@ export function ECOWizard({
             {attachments.map((a, idx) => {
               const k = fileKind(a.name);
               return (
-                <div key={a.name} className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-muted/40 border border-border">
+                <div
+                  key={a.name}
+                  onClick={() => { const url = URL.createObjectURL(a.file); window.open(url, '_blank', 'noopener,noreferrer'); setTimeout(() => URL.revokeObjectURL(url), 60000); }}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-muted/40 border border-border cursor-pointer hover:bg-muted/60 transition-colors"
+                >
                   <div
                     className="w-8 h-8 rounded-md flex items-center justify-center shrink-0"
                     style={{ background: k.color + '22', border: `1px solid ${k.color}44` }}
@@ -1769,7 +1786,7 @@ export function ECOWizard({
               </div>
             </div>
             <button
-              onClick={() => onClose()}
+              onClick={() => (isDirty ? setConfirmClose(true) : onClose())}
               className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-accent transition-colors"
             >
               <X className="w-4 h-4 text-muted-foreground" />
@@ -1840,6 +1857,21 @@ export function ECOWizard({
           </div>
         </div>
       </div>
+
+      <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
+        <AlertDialogContent className="z-[300]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard this ECO?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Closing now will discard them. This can't be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={() => onClose()}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
