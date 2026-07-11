@@ -391,12 +391,14 @@ export function MilestoneDetailModal({
                     <Button
                       variant="outline"
                       className={cn(
-                        'w-full justify-start text-left font-normal',
+                        'w-full justify-start text-left font-normal text-xs sm:text-sm px-2 sm:px-4',
                         !editedMilestone.date && 'text-muted-foreground'
                       )}
                     >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {editedMilestone.date ? format(parseISO(editedMilestone.date), 'PPP') : 'Select target date'}
+                      <CalendarIcon className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                      {editedMilestone.date
+                        ? <><span className="sm:hidden">{format(parseISO(editedMilestone.date), 'MMM d, yy')}</span><span className="hidden sm:inline">{format(parseISO(editedMilestone.date), 'PPP')}</span></>
+                        : 'Select date'}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -417,7 +419,7 @@ export function MilestoneDetailModal({
               <div className="space-y-1 sm:space-y-2">
                 <Label className="text-xs text-muted-foreground">Time Remaining</Label>
                 <div className={cn(
-                  'px-3 py-2 rounded-md text-sm font-medium',
+                  'px-2 sm:px-3 py-1.5 sm:py-2 rounded-md text-xs sm:text-sm font-medium leading-tight',
                   editedMilestone.completed
                     ? 'bg-status-done/10 text-status-done'
                     : daysUntil < 0
@@ -427,14 +429,14 @@ export function MilestoneDetailModal({
                         : 'bg-muted text-foreground'
                 )}>
                   {editedMilestone.completed
-                    ? `Completed ${editedMilestone.completedAt ? format(new Date(editedMilestone.completedAt), 'MMM d, yyyy') : ''}`
+                    ? <><span className="sm:hidden">{editedMilestone.completedAt ? `Done ${format(new Date(editedMilestone.completedAt), 'MMM d')}` : 'Completed'}</span><span className="hidden sm:inline">{`Completed ${editedMilestone.completedAt ? format(new Date(editedMilestone.completedAt), 'MMM d, yyyy') : ''}`}</span></>
                     : isNaN(daysUntil)
-                      ? 'No target date set'
+                      ? 'No date set'
                       : daysUntil < 0
-                        ? `${Math.abs(daysUntil)} days overdue`
+                        ? `${Math.abs(daysUntil)}d overdue`
                         : daysUntil === 0
                           ? 'Due today'
-                          : `${daysUntil} days remaining`
+                          : <><span className="sm:hidden">{`${daysUntil}d left`}</span><span className="hidden sm:inline">{`${daysUntil} days remaining`}</span></>
                   }
                 </div>
               </div>
