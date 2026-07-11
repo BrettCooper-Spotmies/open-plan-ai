@@ -180,6 +180,10 @@ export const chatService = {
     await apiClient.delete(ENDPOINTS.CONVERSATIONS.MEMBER(conversationId, userId));
   },
 
+  async deleteConversation(conversationId: string): Promise<void> {
+    await apiClient.delete(ENDPOINTS.CONVERSATIONS.BY_ID(conversationId));
+  },
+
   async updateMemberRole(
     conversationId: string,
     userId: string,

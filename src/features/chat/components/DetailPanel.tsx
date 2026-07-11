@@ -84,6 +84,8 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
   // Confirmation state
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [isDeletingGroup, setIsDeletingGroup] = useState(false);
 
   // Per-conversation notifications toggle
   const [notificationsEnabled, setNotificationsEnabled] = useState(currentMember?.notificationsEnabled ?? true);
@@ -351,6 +353,21 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
     } catch (err) {
       logger.error(err);
       toast.error('Failed to leave group');
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    setIsDeletingGroup(true);
+    try {
+      await chatService.deleteConversation(conversation.id);
+      toast.success('Group deleted');
+      onRefetch?.();
+      navigate('/chat');
+    } catch (err) {
+      logger.error(err);
+      toast.error('Failed to delete group');
+    } finally {
+      setIsDeletingGroup(false);
     }
   };
 
@@ -659,6 +676,16 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
                 <LogOut className="h-4 w-4 mr-2" />
                 Leave Group
               </Button>
+              {isOwner && (
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-destructive hover:text-destructive"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Group
+                </Button>
+              )}
             </>
           )}
         </div>
@@ -778,6 +805,15 @@ export function DetailPanel({ conversation, onRefetch, className }: DetailPanelP
         variant="destructive"
       />
 
+      <ConfirmationDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        onConfirm={handleDeleteGroup}
+        title="Delete Group"
+        description={`Are you sure you want to delete "${conversation.name}"? This will permanently remove the group and all its messages for every member. This cannot be undone.`}
+        confirmText={isDeletingGroup ? 'Deleting...' : 'Delete'}
+        variant="destructive"
+      />
 
     </div>
   );
