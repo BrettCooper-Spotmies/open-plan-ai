@@ -709,7 +709,7 @@ export function IssuesView({
                                   dot={isDependenciesColumn ? (
                                     <Link2 className="h-4 w-4 text-status-blocked shrink-0" />
                                   ) : (
-                                    <div className={cn('w-2 h-2 rounded-full shrink-0', column.color)} />
+                                    <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: column.color }} />
                                   )}
                                   labelClassName={isDependenciesColumn ? 'text-status-blocked' : undefined}
                                   dragHandleProps={
@@ -746,7 +746,7 @@ export function IssuesView({
                                   {isDependenciesColumn ? (
                                     <Link2 className="h-4 w-4 text-status-blocked" />
                                   ) : (
-                                    <div className={cn('w-2 h-2 rounded-full', column.color)} />
+                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: column.color }} />
                                   )}
                                   <h3 className={cn('font-medium text-sm', isDependenciesColumn && 'text-status-blocked')}>
                                     {column.label}
