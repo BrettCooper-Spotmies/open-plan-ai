@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import {
   GitMerge, GitBranch, Clock, ClipboardCheck,
-  Boxes, Calendar, ChevronLeft, ChevronRight, CheckCircle, Download, Loader2,
+  Boxes, Calendar, ChevronLeft, ChevronRight, CheckCircle, Download, Loader2, Plus,
 } from 'lucide-react';
 import {
   ECOListItem, MAIN_STATUSES, ECO_TYPE_LABEL, REASON_LABEL,
@@ -330,9 +330,11 @@ function PreviewPanel({ projectId, eco, onOpen }: { projectId: string; eco: ECOL
 export function ECOListView({
   projectId,
   onOpen,
+  onNewEco,
 }: {
   projectId: string;
   onOpen: (eco: ECOListItem) => void;
+  onNewEco?: () => void;
 }) {
   const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -396,7 +398,7 @@ export function ECOListView({
     <select
       value={value}
       onChange={e => onChange(e.target.value)}
-      className="bg-card border border-border rounded-md text-foreground text-[12px] px-2.5 py-1.5 outline-none cursor-pointer font-[inherit] appearance-none"
+      className="h-7 bg-card border border-border rounded-md text-foreground text-[12px] px-2.5 outline-none cursor-pointer font-[inherit] appearance-none"
     >
       <option value="ALL">{allLabel}</option>
       {opts.map(o => (
@@ -432,27 +434,37 @@ export function ECOListView({
         <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] gap-4 items-start">
           {/* Left: list */}
           <div className="bg-card border border-border rounded-lg overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-border gap-3 flex-wrap">
+            <div className="flex flex-col gap-2.5 px-4 py-3 border-b border-border">
               <span className="text-[13px] font-semibold">
                 Change Orders{' '}
                 <span className="font-normal text-muted-foreground">
                   · {listLoading ? '…' : total}
                 </span>
               </span>
-              <div className="flex gap-2 items-center">
+              <div className="flex flex-wrap gap-2 items-center justify-end">
                 <Sel value={fStatus}   onChange={changeFilter(setFStatus)}   opts={MAIN_STATUSES}                          allLabel="All statuses" />
                 <Sel value={fPriority} onChange={changeFilter(setFPriority)} opts={['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']} allLabel="All priorities" />
                 <button
                   onClick={handleExport}
                   disabled={total === 0 || exporting}
                   title="Export complete ECO list"
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] font-medium bg-card text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="h-7 shrink-0 flex items-center gap-1.5 px-2.5 rounded-md text-[12px] font-medium bg-card text-foreground border border-border hover:bg-accent/50 transition-colors font-[inherit] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {exporting
                     ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     : <Download className="w-3.5 h-3.5" />}
                   Export
                 </button>
+                {isMobile && onNewEco && (
+                  <button
+                    onClick={onNewEco}
+                    title="New ECO"
+                    aria-label="New ECO"
+                    className="h-7 w-7 flex items-center justify-center rounded-md bg-foreground text-background hover:opacity-90 transition-opacity shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
             <div className="p-2.5 flex flex-col gap-2">

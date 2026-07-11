@@ -415,6 +415,9 @@ export default function ProjectDetail() {
   const [filters, setFilters] = useState<TaskFilter>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [moduleSearchQuery, setModuleSearchQuery] = useState('');
+  // Mobile-only: the module detail full-page view supplies its own header/back
+  // button, so the tab strip + search bar above it must hide while it's open.
+  const [isMobileModuleDetailOpen, setIsMobileModuleDetailOpen] = useState(false);
   const [milestoneSearchQuery, setMilestoneSearchQuery] = useState('');
   const [issueSearchQuery, setIssueSearchQuery] = useState('');
   const [issueFilters, setIssueFilters] = useState<IssueFilter>({});
@@ -1130,7 +1133,7 @@ export default function ProjectDetail() {
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => navigate(`/projects/${id}/${v}`)} className="w-full">
-          {!partId && !ecoId && (
+          {!partId && !ecoId && !isMobileModuleDetailOpen && (
             <div className="flex flex-row md:items-center justify-between gap-2 w-full">
               {/* Left Side: Tabs */}
               <div className="flex-1 md:flex-none w-full md:w-auto py-1 min-w-0 md:mr-auto overflow-x-auto hide-scrollbar">
@@ -1298,8 +1301,10 @@ export default function ProjectDetail() {
                   {criticalIssuesCount} Critical
                 </Badge>
               )} */}
-                {/* Section Add/Action Buttons */}
-                {section === 'tasks' && (
+                {/* Section Add/Action Buttons — on mobile these move down next to each
+                    section's search bar instead (see the "Second Row" block below),
+                    so the tab strip doesn't end in a floating "+" square. */}
+                {section === 'tasks' && !isMobile && (
                   <Button
                     size="sm"
                     onClick={() => setIsAddTaskDialogOpen(true)}
@@ -1309,31 +1314,31 @@ export default function ProjectDetail() {
                     <span className="hidden sm:inline">Create Task</span>
                   </Button>
                 )}
-                {section === 'modules' && canAddModulesAndMilestones && (
+                {section === 'modules' && canAddModulesAndMilestones && !isMobile && (
                   <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={handleAddModule}>
                     <Plus className="h-4 w-4" />
                     <span className="hidden md:inline">Add Module</span>
                   </Button>
                 )}
-                {section === 'milestones' && canAddModulesAndMilestones && (
+                {section === 'milestones' && canAddModulesAndMilestones && !isMobile && (
                   <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddMilestoneDialogOpen(true)}>
                     <Plus className="h-4 w-4" />
                     <span className="hidden md:inline">Add Milestone</span>
                   </Button>
                 )}
-                {section === 'issues' && (
+                {section === 'issues' && !isMobile && (
                   <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddIssueDialogOpen(true)}>
                     <Plus className="h-4 w-4" />
                     <span className="hidden md:inline">Report Issue</span>
                   </Button>
                 )}
-                {section === 'bom' && (
+                {section === 'bom' && !isMobile && (
                   <Button size="sm" onClick={() => setBomAddOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
                     <Plus className="h-4 w-4" />
                     <span className="hidden sm:inline">Add Part</span>
                   </Button>
                 )}
-                {section === 'eng-changes' && (
+                {section === 'eng-changes' && !isMobile && (
                   <Button size="sm" onClick={() => setEcoNewOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
                     <Plus className="h-4 w-4" />
                     <span className="hidden sm:inline">New ECO</span>
@@ -1368,7 +1373,7 @@ export default function ProjectDetail() {
           )}
 
           {/* Second Row: Search + View Toggle + Filter toolbar (below tabs, like BOM UI) */}
-          {(section === 'tasks' || section === 'modules' || section === 'milestones' || section === 'issues') && (
+          {(section === 'tasks' || section === 'modules' || section === 'milestones' || section === 'issues') && !isMobileModuleDetailOpen && (
             <div className="flex items-center justify-between gap-3 mt-3 pb-3 border-b w-full">
               {section === 'tasks' && (
                 <>
@@ -1407,6 +1412,16 @@ export default function ProjectDetail() {
                       onFiltersChange={setFilters}
                       activeFilterCount={activeFilterCount}
                     />
+                    {isMobile && (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddTaskDialogOpen(true)}
+                        aria-label="Create Task"
+                        className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 active:opacity-90 transition-opacity"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -1439,6 +1454,16 @@ export default function ProjectDetail() {
                       onViewModeChange={setModuleViewMode}
                     />
                   </div>
+                  {isMobile && canAddModulesAndMilestones && (
+                    <button
+                      type="button"
+                      onClick={handleAddModule}
+                      aria-label="Add Module"
+                      className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 active:opacity-90 transition-opacity"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  )}
                 </>
               )}
               {section === 'milestones' && (
@@ -1469,6 +1494,16 @@ export default function ProjectDetail() {
                       viewMode={milestoneViewMode}
                       onViewModeChange={setMilestoneViewMode}
                     />
+                    {isMobile && canAddModulesAndMilestones && (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddMilestoneDialogOpen(true)}
+                        aria-label="Add Milestone"
+                        className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 active:opacity-90 transition-opacity"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -1506,6 +1541,16 @@ export default function ProjectDetail() {
                       activeFilterCount={activeIssueFilterCount}
                       onClearFilters={clearIssueFilters}
                     />
+                    {isMobile && (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddIssueDialogOpen(true)}
+                        aria-label="Report Issue"
+                        className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 active:opacity-90 transition-opacity"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -1533,12 +1578,13 @@ export default function ProjectDetail() {
               onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
             />
           </TabsContent>
-          <TabsContent value="modules" className="mt-6">
+          <TabsContent value="modules" className={isMobileModuleDetailOpen ? '-mx-4' : 'mt-6'}>
             <ModulesSection
               modules={modules}
               tasks={project.tasks || []}
               issues={project.issues || []}
               teamMembers={projectMembers}
+              projectId={project.id}
               viewMode={moduleViewMode}
               onViewModeChange={setModuleViewMode}
               searchQuery={moduleSearchQuery}
@@ -1549,6 +1595,7 @@ export default function ProjectDetail() {
               onModuleDelete={handleModuleDelete}
               onTaskUpdate={handleTaskUpdate}
               onIssueUpdate={handleIssueUpdate}
+              onMobileDetailOpenChange={setIsMobileModuleDetailOpen}
             />
           </TabsContent>
           <TabsContent value="milestones" className="mt-6">

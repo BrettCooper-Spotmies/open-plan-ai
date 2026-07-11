@@ -1453,6 +1453,17 @@ export function BOMView({
                   <DropdownMenuItem onClick={() => handleView('map')}>Map</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* Add Part — lives next to the search/toolbar row on mobile
+                  instead of the tab strip above, to match the other sections. */}
+              <button
+                onClick={() => setAddChoiceOpen(true)}
+                title="Add Part"
+                aria-label="Add Part"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-foreground text-background hover:opacity-90 cursor-pointer transition-opacity shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+              </button>
             </>
           )}
         </div>{/* end mobile toolbar */}
