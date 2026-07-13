@@ -53,6 +53,9 @@ const getNotificationIcon = (type: AppNotification['type']) => {
             return <Activity className="h-4 w-4 text-blue-500" />;
         case 'chat_message':
             return <MessageSquare className="h-4 w-4 text-primary" />;
+        case 'task_deleted':
+        case 'issue_deleted':
+            return <Trash2 className="h-4 w-4 text-red-500" />;
         default:
             return <Bell className="h-4 w-4 text-muted-foreground" />;
     }
@@ -62,11 +65,13 @@ const getNotificationTypeLabel = (type: AppNotification['type']) => {
     switch (type) {
         case 'task_assigned':
         case 'task_completed':
+        case 'task_deleted':
             return 'Task';
         case 'issue_assigned':
         case 'issue_resolved':
         case 'issue_linked_to_task':
         case 'issue_completed':
+        case 'issue_deleted':
             return 'Issue';
         case 'bom_approval_requested':
         case 'bom_approval_decided':
