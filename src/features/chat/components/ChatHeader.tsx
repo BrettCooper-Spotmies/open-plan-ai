@@ -1,4 +1,4 @@
-import { ArrowLeft, Info, Phone, Search, UserPlus, Video, X } from 'lucide-react';
+import { ArrowLeft, Phone, Search, UserPlus, Video, X } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,10 +23,8 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText, on
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const currentUserId = user?.id;
-  const toggleDetailPanel = useChatStore((s) => s.toggleDetailPanel);
   const setDetailPanelOpen = useChatStore((s) => s.setDetailPanelOpen);
-  const isDetailOpen = useChatStore((s) => s.isDetailPanelOpen);
-  
+
   const isMessageSearchOpen = useChatStore((s) => s.isMessageSearchOpen);
   const messageSearchQuery = useChatStore((s) => s.messageSearchQuery);
   const setMessageSearchQuery = useChatStore((s) => s.setMessageSearchQuery);
@@ -144,14 +142,6 @@ export function ChatHeader({ conversation, onBack, onlineUserIds, typingText, on
             <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Video call"><Video className="h-4 w-4" /></Button>
           </>
         )}
-        <Button
-          variant={isDetailOpen ? 'secondary' : 'ghost'}
-          size="icon" className="h-8 w-8"
-          onClick={toggleDetailPanel}
-          title="Conversation details"
-        >
-          <Info className="h-4 w-4" />
-        </Button>
       </div>
     </div>
   );
