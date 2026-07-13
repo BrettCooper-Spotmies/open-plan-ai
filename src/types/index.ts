@@ -69,6 +69,12 @@ export interface Attachment {
   url: string;
 }
 
+export interface AttachmentCounts {
+  images: number;
+  videos: number;
+  other: number;
+}
+
 export interface Comment {
   id: string;
   content: string;
@@ -135,6 +141,7 @@ export interface Task {
   attachments?: Attachment[];
   comments?: Comment[];
   videoLinks?: VideoLink[];
+  attachmentCounts?: AttachmentCounts;
   createdAt: string;
   updatedAt: string;
   createdBy?: TeamMember;  // Who created this task
@@ -178,6 +185,7 @@ export interface Issue {
   attachments?: Attachment[];
   comments?: Comment[];
   videoLinks?: VideoLink[];
+  attachmentCounts?: AttachmentCounts;
   tags?: string[];
   checklist?: ChecklistItem[];
   blockedBy?: string[];

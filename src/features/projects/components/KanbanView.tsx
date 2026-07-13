@@ -40,6 +40,7 @@ import { TaskDetailModal } from './TaskDetailModal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useKanbanEdgeAutoScroll, resolveKanbanColumnIdAtPoint } from '@/hooks/useKanbanEdgeAutoScroll';
 import { MobileKanbanColumn } from '@/components/shared/MobileKanbanColumn';
+import { AttachmentBadges } from '@/components/shared/AttachmentBadges';
 import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import {
   useProjectTaskColumns,
@@ -865,11 +866,18 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                         </div>
                                                       )}
                                                     </div>
-                                                    {task.dueDate && (
-                                                      <span className="text-[10px] text-muted-foreground">
-                                                        {formatTaskDateRange(task.startDate, task.dueDate)}
-                                                      </span>
-                                                    )}
+                                                    <div className="flex items-center gap-2">
+                                                      <AttachmentBadges
+                                                        attachmentCounts={task.attachmentCounts}
+                                                        videoLinksCount={task.videoLinks?.length ?? 0}
+                                                        className="text-[10px]"
+                                                      />
+                                                      {task.dueDate && (
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                          {formatTaskDateRange(task.startDate, task.dueDate)}
+                                                        </span>
+                                                      )}
+                                                    </div>
                                                   </div>
                                                 </div>
                                               </Card>

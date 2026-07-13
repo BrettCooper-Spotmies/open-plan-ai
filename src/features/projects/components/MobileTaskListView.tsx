@@ -7,6 +7,7 @@ import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Check, CheckSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { AttachmentBadges } from '@/components/shared/AttachmentBadges';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { getFallbackTagColor } from '@/lib/tagColors';
 import { formatModuleType } from '../utils/projectUtils';
@@ -277,6 +278,10 @@ export function MobileTaskListView({
                               )}
                               {checklist.length > 0 && dateRange && <span>&middot;</span>}
                               {dateRange && <span>{dateRange}</span>}
+                              <AttachmentBadges
+                                attachmentCounts={task.attachmentCounts}
+                                videoLinksCount={task.videoLinks?.length ?? 0}
+                              />
                             </div>
                             {primaryAssignee && (
                               <Avatar className="h-6 w-6 shrink-0">

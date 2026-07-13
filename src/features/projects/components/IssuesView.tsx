@@ -43,6 +43,7 @@ import { useAuth } from '@/modules/auth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useKanbanEdgeAutoScroll, resolveKanbanColumnIdAtPoint } from '@/hooks/useKanbanEdgeAutoScroll';
 import { MobileKanbanColumn } from '@/components/shared/MobileKanbanColumn';
+import { AttachmentBadges } from '@/components/shared/AttachmentBadges';
 
 interface IssuesViewProps {
   issues: Issue[];
@@ -685,11 +686,18 @@ export function IssuesView({
                                                         </div>
                                                       )}
                                                     </div>
-                                                    {issue.dueDate && (
-                                                      <span className="text-[10px] text-muted-foreground">
-                                                        {new Date(issue.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                                      </span>
-                                                    )}
+                                                    <div className="flex items-center gap-2">
+                                                      <AttachmentBadges
+                                                        attachmentCounts={issue.attachmentCounts}
+                                                        videoLinksCount={issue.videoLinks?.length ?? 0}
+                                                        className="text-[10px]"
+                                                      />
+                                                      {issue.dueDate && (
+                                                        <span className="text-[10px] text-muted-foreground">
+                                                          {new Date(issue.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                        </span>
+                                                      )}
+                                                    </div>
                                                   </div>
                                                 </div>
                                               </Card>
@@ -915,10 +923,18 @@ export function IssuesView({
                         {getCategoryLabel(issue)}
                       </span>
                     </div>
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {new Date(issue.reportedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <AttachmentBadges
+                        attachmentCounts={issue.attachmentCounts}
+                        videoLinksCount={issue.videoLinks?.length ?? 0}
+                        className="text-xs"
+                        iconClassName="h-3.5 w-3.5"
+                      />
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                        <Calendar className="h-3.5 w-3.5" />
+                        {new Date(issue.reportedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    </div>
                   </div>
                 </Card>
               );
