@@ -190,6 +190,7 @@ export const ENDPOINTS = {
     MEMBERS: (id: string) => `/conversations/${id}/members`,
     MEMBER: (conversationId: string, userId: string) => `/conversations/${conversationId}/members/${userId}`,
     FILES: (id: string) => `/conversations/${id}/files`,
+    MUTUAL_PROJECTS: (id: string) => `/conversations/${id}/mutual-projects`,
   },
   // Engineering Changes (ECO)
   ECOS: {
