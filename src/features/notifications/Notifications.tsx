@@ -1,10 +1,17 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+    Pagination,
+    PaginationContent,
+    PaginationItem,
+    PaginationNext,
+    PaginationPrevious,
+} from '@/components/ui/pagination';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -73,25 +80,35 @@ const getNotificationTypeLabel = (type: AppNotification['type']) => {
     }
 };
 
+const PAGE_SIZE = 10;
+
 const Notifications = () => {
     const navigate = useNavigate();
+    const [activeTab, setActiveTab] = useState('all');
+    const [page, setPage] = useState(1);
+
+    const filters = useMemo(() => {
+        if (activeTab === 'unread') return { unreadOnly: true };
+        if (activeTab === 'all') return {};
+        return { type: activeTab };
+    }, [activeTab]);
+
     const {
         notifications,
+        meta,
         isLoading,
         markAsRead,
         markAllAsRead,
         deleteNotification,
         clearReadNotifications,
-        unreadCount
-    } = useNotifications();
-    const [activeTab, setActiveTab] = useState('all');
+        unreadCount,
+        stats,
+    } = useNotifications({ page, limit: PAGE_SIZE, ...filters });
 
-    const filteredNotifications = notifications.filter((n) => {
-        if (activeTab === 'all') return true;
-        if (activeTab === 'unread') return !n.read;
-        if (activeTab === 'issue') return n.type.startsWith('issue');
-        return n.type === activeTab;
-    });
+    const handleTabChange = (tab: string) => {
+        setActiveTab(tab);
+        setPage(1);
+    };
 
     const handleMarkAsRead = (id: string) => {
         markAsRead.mutate(id);
@@ -126,7 +143,7 @@ const Notifications = () => {
                                 <Bell className="h-5 w-5 text-primary" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold">{notifications.length}</p>
+                                <p className="text-2xl font-bold">{stats?.total ?? 0}</p>
                                 <p className="text-xs text-muted-foreground">Total</p>
                             </div>
                         </CardContent>
@@ -148,9 +165,7 @@ const Notifications = () => {
                                 <AlertCircle className="h-5 w-5 text-red-500" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold">
-                                    {notifications.filter((n) => n.type.startsWith('issue')).length}
-                                </p>
+                                <p className="text-2xl font-bold">{stats?.issues ?? 0}</p>
                                 <p className="text-xs text-muted-foreground">Issues</p>
                             </div>
                         </CardContent>
@@ -161,9 +176,7 @@ const Notifications = () => {
                                 <FolderKanban className="h-5 w-5 text-purple-500" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold">
-                                    {notifications.filter((n) => n.type === 'task_assigned').length}
-                                </p>
+                                <p className="text-2xl font-bold">{stats?.tasks ?? 0}</p>
                                 <p className="text-xs text-muted-foreground">Tasks</p>
                             </div>
                         </CardContent>
@@ -171,14 +184,14 @@ const Notifications = () => {
                 </div>
 
                 {/* Tabs */}
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <Tabs value={activeTab} onValueChange={handleTabChange}>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                         <TabsList>
                             <TabsTrigger value="all">
                                 All
-                                {notifications.length > 0 && (
+                                {(stats?.total ?? 0) > 0 && (
                                     <Badge variant="secondary" className="ml-2 h-5 px-1.5">
-                                        {notifications.length}
+                                        {stats?.total}
                                     </Badge>
                                 )}
                             </TabsTrigger>
@@ -223,7 +236,7 @@ const Notifications = () => {
                     </div>
 
                     <TabsContent value={activeTab} className="mt-4">
-                        {filteredNotifications.length === 0 ? (
+                        {notifications.length === 0 ? (
                             <Card>
                                 <CardContent className="flex flex-col items-center justify-center py-16">
                                     <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -240,7 +253,7 @@ const Notifications = () => {
                         ) : (
                             <Card>
                                 <div className="divide-y divide-border">
-                                    {filteredNotifications.map((notification) => (
+                                    {notifications.map((notification) => (
                                         <div
                                             key={notification.id}
                                             className={cn(
@@ -336,6 +349,37 @@ const Notifications = () => {
                                         </div>
                                     ))}
                                 </div>
+                                {meta && meta.totalPages > 1 && (
+                                    <div className="flex items-center justify-between px-4 py-3 border-t border-border">
+                                        <p className="text-sm text-muted-foreground">
+                                            Page {meta.page} of {meta.totalPages} ({meta.total} total)
+                                        </p>
+                                        <Pagination className="mx-0 w-auto">
+                                            <PaginationContent>
+                                                <PaginationItem>
+                                                    <PaginationPrevious
+                                                        href="#"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (meta.hasPrevPage) setPage((p) => p - 1);
+                                                        }}
+                                                        className={cn(!meta.hasPrevPage && 'pointer-events-none opacity-50')}
+                                                    />
+                                                </PaginationItem>
+                                                <PaginationItem>
+                                                    <PaginationNext
+                                                        href="#"
+                                                        onClick={(e) => {
+                                                            e.preventDefault();
+                                                            if (meta.hasNextPage) setPage((p) => p + 1);
+                                                        }}
+                                                        className={cn(!meta.hasNextPage && 'pointer-events-none opacity-50')}
+                                                    />
+                                                </PaginationItem>
+                                            </PaginationContent>
+                                        </Pagination>
+                                    </div>
+                                )}
                             </Card>
                         )}
                     </TabsContent>

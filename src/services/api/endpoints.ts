@@ -161,6 +161,7 @@ export const ENDPOINTS = {
   NOTIFICATIONS: {
     LIST: '/notifications',
     COUNT: '/notifications/count',
+    STATS: '/notifications/stats',
     READ_ALL: '/notifications/read-all',
     READ: (id: string) => `/notifications/${id}/read`,
     DELETE: (id: string) => `/notifications/${id}`,
