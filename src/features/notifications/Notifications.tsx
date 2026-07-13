@@ -116,40 +116,7 @@ const Notifications = () => {
     return (
         <div className="space-y-6">
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-foreground">Notifications</h1>
-                        <p className="text-muted-foreground">
-                            Stay updated with your team's activity
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {unreadCount > 0 && (
-                            <Button variant="outline" size="sm" onClick={handleMarkAllAsRead}>
-                                <CheckCheck className="h-4 w-4 mr-2" />
-                                Mark all as read
-                            </Button>
-                        )}
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                    <MoreHorizontal className="h-4 w-4 mr-2" />
-                                    Actions
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={handleClearReadNotifications}>
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Clear read notifications
-                                </DropdownMenuItem>
-                                <DropdownMenuItem>
-                                    <BellOff className="h-4 w-4 mr-2" />
-                                    Notification settings
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
-                </div>
+                
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -205,27 +172,55 @@ const Notifications = () => {
 
                 {/* Tabs */}
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <TabsList>
-                        <TabsTrigger value="all">
-                            All
-                            {notifications.length > 0 && (
-                                <Badge variant="secondary" className="ml-2 h-5 px-1.5">
-                                    {notifications.length}
-                                </Badge>
-                            )}
-                        </TabsTrigger>
-                        <TabsTrigger value="unread">
-                            Unread
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                        <TabsList>
+                            <TabsTrigger value="all">
+                                All
+                                {notifications.length > 0 && (
+                                    <Badge variant="secondary" className="ml-2 h-5 px-1.5">
+                                        {notifications.length}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
+                            <TabsTrigger value="unread">
+                                Unread
+                                {unreadCount > 0 && (
+                                    <Badge className="ml-2 h-5 px-1.5 bg-status-in-progress">
+                                        {unreadCount}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
+                            <TabsTrigger value="task_assigned">Tasks</TabsTrigger>
+                            <TabsTrigger value="issue">Issues</TabsTrigger>
+                            <TabsTrigger value="eco_decision_requested">ECO</TabsTrigger>
+                        </TabsList>
+                        <div className="flex items-center gap-2">
                             {unreadCount > 0 && (
-                                <Badge className="ml-2 h-5 px-1.5 bg-status-in-progress">
-                                    {unreadCount}
-                                </Badge>
+                                <Button variant="outline" size="sm" onClick={handleMarkAllAsRead}>
+                                    <CheckCheck className="h-4 w-4 mr-2" />
+                                    Mark all as read
+                                </Button>
                             )}
-                        </TabsTrigger>
-                        <TabsTrigger value="task_assigned">Tasks</TabsTrigger>
-                        <TabsTrigger value="issue">Issues</TabsTrigger>
-                        <TabsTrigger value="eco_decision_requested">ECO</TabsTrigger>
-                    </TabsList>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        <MoreHorizontal className="h-4 w-4 mr-2" />
+                                        Actions
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={handleClearReadNotifications}>
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Clear read notifications
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem>
+                                        <BellOff className="h-4 w-4 mr-2" />
+                                        Notification settings
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </div>
+                    </div>
 
                     <TabsContent value={activeTab} className="mt-4">
                         {filteredNotifications.length === 0 ? (
