@@ -250,6 +250,15 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     setSlashIndex(0);
   }, []);
 
+  // Close any open "@" mention / "/" entity picker when switching conversations —
+  // their trigger position and match list refer to the previous conversation.
+  useEffect(() => {
+    setMentionQuery(null);
+    mentionStartRef.current = -1;
+    setMentionIndex(0);
+    cancelSlash();
+  }, [conversationId, cancelSlash]);
+
   const selectEntityType = (type: ChatEntityType) => {
     const start = slashStartRef.current;
     const el = textareaRef.current;
