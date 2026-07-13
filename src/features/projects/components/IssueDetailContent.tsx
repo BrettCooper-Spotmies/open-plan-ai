@@ -990,14 +990,15 @@ export function IssueDetailContent({
                                     aria-required="true"
                                     title={canEditIssueFields ? undefined : editLockTitle}
                                 >
-                                    <SelectValue>
+                                    <SelectValue placeholder="All Categories">
                                         {(() => {
                                             const cat = categoryOptions.find(c => c.value === editedIssue.category);
-                                            const Icon = cat?.icon || Info;
+                                            if (!cat) return undefined;
+                                            const Icon = cat.icon;
                                             return (
                                                 <div className={cn('flex items-center gap-2', isMobileLayout && 'font-bold text-sm text-foreground')}>
                                                     {!isMobileLayout && <Icon className="h-4 w-4" />}
-                                                    {cat?.label}
+                                                    {cat.label}
                                                 </div>
                                             );
                                         })()}
