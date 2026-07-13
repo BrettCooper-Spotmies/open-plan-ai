@@ -32,4 +32,8 @@ export const notificationsService = {
   async delete(id: string): Promise<void> {
     await apiClient.delete(ENDPOINTS.NOTIFICATIONS.DELETE(id));
   },
+
+  async clearRead(): Promise<void> {
+    await apiClient.delete(ENDPOINTS.NOTIFICATIONS.CLEAR_READ);
+  },
 };

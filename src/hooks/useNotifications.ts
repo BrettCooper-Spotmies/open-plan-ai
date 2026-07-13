@@ -76,6 +76,11 @@ export function useNotifications() {
     onSuccess: invalidate,
   });
 
+  const clearReadNotifications = useMutation({
+    mutationFn: () => notificationsService.clearRead(),
+    onSuccess: invalidate,
+  });
+
   return {
     notifications,
     unreadCount,
@@ -84,5 +89,6 @@ export function useNotifications() {
     markAsRead,
     markAllAsRead,
     deleteNotification,
+    clearReadNotifications,
   };
 }

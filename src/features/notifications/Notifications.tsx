@@ -81,6 +81,7 @@ const Notifications = () => {
         markAsRead,
         markAllAsRead,
         deleteNotification,
+        clearReadNotifications,
         unreadCount
     } = useNotifications();
     const [activeTab, setActiveTab] = useState('all');
@@ -102,6 +103,10 @@ const Notifications = () => {
 
     const handleDeleteNotification = (id: string) => {
         deleteNotification.mutate(id);
+    };
+
+    const handleClearReadNotifications = () => {
+        clearReadNotifications.mutate();
     };
 
     if (isLoading) {
@@ -133,7 +138,7 @@ const Notifications = () => {
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleClearReadNotifications}>
                                     <Trash2 className="h-4 w-4 mr-2" />
                                     Clear read notifications
                                 </DropdownMenuItem>

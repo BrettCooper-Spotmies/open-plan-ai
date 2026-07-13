@@ -257,7 +257,7 @@ export function AppSidebar() {
                           <span className="relative shrink-0 overflow-visible">
                             <item.icon className="h-4 w-4" />
                             {showChatBadge && collapsed && (
-                              <span className="absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-status-in-progress px-0.5 text-[9px] font-medium leading-none text-white ring-2 ring-sidebar">
+                              <span className="absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-status-in-progress px-0.5 text-[9px] font-medium leading-none text-white ring-1 ring-sidebar">
                                 {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
                               </span>
                             )}

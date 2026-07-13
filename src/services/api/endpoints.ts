@@ -164,6 +164,7 @@ export const ENDPOINTS = {
     READ_ALL: '/notifications/read-all',
     READ: (id: string) => `/notifications/${id}/read`,
     DELETE: (id: string) => `/notifications/${id}`,
+    CLEAR_READ: '/notifications/read',
     PREFERENCES: '/notification-preferences',
   },
   // Comments
