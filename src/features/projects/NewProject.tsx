@@ -728,8 +728,8 @@ const NewProject = () => {
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "critical": return "bg-priority-critical/10 text-priority-critical border-priority-critical/20";
-      case "high": return "bg-priority-high/10 text-priority-high border-priority-high/20";
-      case "medium": return "bg-priority-medium/10 text-priority-medium border-priority-medium/20";
+      case "major": return "bg-priority-high/10 text-priority-high border-priority-high/20";
+      case "minor": return "bg-priority-medium/10 text-priority-medium border-priority-medium/20";
       default: return "bg-priority-low/10 text-priority-low border-priority-low/20";
     }
   };

@@ -9,7 +9,7 @@ export type ProjectRole = 'admin' | 'maintainer' | 'member';
 // task's status is any project-defined column key, not a fixed set of values.
 export type TaskStatus = string;
 export const DEFAULT_TASK_STATUSES: TaskStatus[] = ['todo', 'in-progress', 'review', 'done', 'blocked'];
-export type Priority = 'critical' | 'high' | 'medium' | 'low';
+export type Priority = 'critical' | 'major' | 'minor' | 'trivial';
 
 // Expanded ModuleType for hardware workflows
 export type ModuleType =

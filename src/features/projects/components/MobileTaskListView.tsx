@@ -32,9 +32,9 @@ interface MobileTaskListViewProps {
 
 const priorityColors: Record<string, string> = {
   critical: 'bg-priority-critical/20 text-priority-critical',
-  high: 'bg-priority-high/20 text-priority-high',
-  medium: 'bg-priority-medium/20 text-priority-medium',
-  low: 'bg-priority-low/20 text-priority-low',
+  major: 'bg-priority-high/20 text-priority-high',
+  minor: 'bg-priority-medium/20 text-priority-medium',
+  trivial: 'bg-priority-low/20 text-priority-low',
 };
 
 const moduleTextColors: Record<string, string> = {

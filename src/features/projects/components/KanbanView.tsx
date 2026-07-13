@@ -63,7 +63,7 @@ const toDateOnly = (date: Date | undefined | null): string | undefined => {
 const createEmptyTaskDraft = (status: TaskStatus = 'todo'): Partial<Task> => ({
   title: '',
   description: '',
-  priority: 'medium' as Priority,
+  priority: 'minor' as Priority,
   module: 'software' as ModuleType,
   assignees: [],
   startDate: toDateOnly(new Date()),
@@ -145,9 +145,9 @@ const defaultColumns: KanbanColumn[] = SERVICE_DEFAULT_COLUMNS.map((c) => ({
 
 const priorityColors = {
   critical: 'bg-priority-critical text-white',
-  high: 'bg-priority-high text-white',
-  medium: 'bg-priority-medium text-white',
-  low: 'bg-priority-low text-white',
+  major: 'bg-priority-high text-white',
+  minor: 'bg-priority-medium text-white',
+  trivial: 'bg-priority-low text-white',
 };
 const BOARD_CHECKLIST_PREVIEW_COUNT = 2;
 
@@ -562,7 +562,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
       title: taskData.title || '',
       description: taskData.description || '',
       status: status || 'todo',
-      priority: taskData.priority || 'medium',
+      priority: taskData.priority || 'minor',
       module: taskData.module || 'software',
       moduleId: taskData.moduleId,
       moduleIds: taskData.moduleIds || [],
