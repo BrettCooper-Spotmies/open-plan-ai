@@ -16,9 +16,12 @@ interface TaskFiltersDropdownProps {
   teamMembers: { id: string; name: string; initials: string }[];
   allTags: string[];
   activeFilterCount: number;
+  statusOptions?: { value: string; label: string; color?: string }[];
 }
 
-const statusOptions = [
+// Fallback used only when the caller hasn't loaded the project's dynamic
+// task buckets yet (e.g. no projectId). See TaskFilters for the same pattern.
+const DEFAULT_STATUS_OPTIONS = [
   { value: 'todo', label: 'To Do' },
   { value: 'in-progress', label: 'In Progress' },
   { value: 'review', label: 'Review' },
@@ -49,8 +52,10 @@ export function TaskFiltersDropdown({
   teamMembers,
   allTags,
   activeFilterCount,
+  statusOptions,
 }: TaskFiltersDropdownProps) {
   const clearAll = () => onFiltersChange({});
+  const effectiveStatusOptions = statusOptions?.length ? statusOptions : DEFAULT_STATUS_OPTIONS;
 
   return (
     <Popover>
@@ -82,7 +87,7 @@ export function TaskFiltersDropdown({
               Status
             </Label>
             <MultiSelect
-              options={statusOptions}
+              options={effectiveStatusOptions}
               selected={filters.status || []}
               onChange={(values) => onFiltersChange({ ...filters, status: values.length ? (values as TaskStatus[]) : undefined })}
               placeholder="All Status"

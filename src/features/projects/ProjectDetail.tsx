@@ -51,6 +51,7 @@ import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
 import { useOrganizationMembers, useProjectMembers } from '@/hooks/useProjectTeam';
 import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import { useProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
+import { buildTaskStatusOptions } from './utils/taskStatusOptions';
 import { useIssueColumns } from '@/hooks/useIssueColumns';
 import { DEFAULT_ISSUE_COLUMNS, type ProjectIssueColumn } from '@/services/issueColumns.service';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -341,6 +342,7 @@ export default function ProjectDetail() {
   const navigate = useNavigate();
   const { id, tab: tabParam, partId, ecoId, taskId, moduleId, milestoneId, issueId } = useParams();
   const { data: boardColumns } = useProjectTaskColumns(id);
+  const filterStatusOptions = useMemo(() => buildTaskStatusOptions(boardColumns), [boardColumns]);
   const { data: apiIssueColumns } = useIssueColumns(id);
   const issueColumns = apiIssueColumns && apiIssueColumns.length > 0 ? apiIssueColumns : DEFAULT_ISSUE_COLUMNS;
 
@@ -1411,6 +1413,7 @@ export default function ProjectDetail() {
                       filters={filters}
                       onFiltersChange={setFilters}
                       activeFilterCount={activeFilterCount}
+                      statusOptions={filterStatusOptions}
                     />
                     {isMobile && (
                       <button

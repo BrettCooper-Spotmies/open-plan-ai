@@ -12,6 +12,8 @@ import { TaskFilters } from './TaskFilters';
 import { TaskFiltersDropdown } from './TaskFiltersDropdown';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
+import { buildTaskStatusOptions } from '../utils/taskStatusOptions';
 
 interface TasksSectionProps {
   projectId: string;
@@ -124,6 +126,8 @@ export function TasksSection({
 }: TasksSectionProps) {
   const dependencyTasks = allTasks ?? tasks;
   const isMobile = useIsMobile();
+  const { data: boardColumns } = useProjectTaskColumns(projectId);
+  const statusOptions = useMemo(() => buildTaskStatusOptions(boardColumns), [boardColumns]);
 
   const [internalViewMode, setInternalViewMode] = useState<TaskViewMode>('kanban');
   const [internalFilters, setInternalFilters] = useState<TaskFilter>({});
@@ -317,6 +321,7 @@ export function TasksSection({
           modules={modules}
           teamMembers={teamMembers}
           allTags={allTags}
+          statusOptions={statusOptions}
         />
       )}
 
