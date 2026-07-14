@@ -8,6 +8,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +57,7 @@ interface MessageBubbleProps {
   currentUserId?: string;
   searchQuery?: string;
   memberNames?: string[];
+  reactionUsers?: Record<string, string>;
   readReceipts?: ReadReceipt[];
   otherMembersCount?: number;
   reactions?: MessageReaction[];
@@ -426,7 +428,7 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
 
 export function MessageBubble({
   message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
-  searchQuery, memberNames, readReceipts, otherMembersCount, reactions, onEdit, onDelete, onToggleReaction, onReply,
+  searchQuery, memberNames, reactionUsers, readReceipts, otherMembersCount, reactions, onEdit, onDelete, onToggleReaction, onReply,
 }: MessageBubbleProps) {
   const timezone = useUserTimezone();
   const navigate = useNavigate();
@@ -472,6 +474,13 @@ export function MessageBubble({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Touch devices don't fire hover reliably, so the toolbar is opened by tapping the bubble instead.
   const [isMobileToolbarOpen, setIsMobileToolbarOpen] = useState(false);
+
+  const getReactorNames = useCallback((r: MessageReaction) => {
+    return r.userIds.map((id) => {
+      if (id === currentUserId) return 'You';
+      return reactionUsers?.[id] ?? 'Unknown';
+    });
+  }, [currentUserId, reactionUsers]);
 
   // Toolbar stays visible while hovered/tapped OR any popover/dropdown is open
   const showToolbar = (isMobile ? isMobileToolbarOpen : isHovered) || isMoreEmojiOpen || isMenuOpen;
@@ -785,20 +794,27 @@ export function MessageBubble({
             <Popover open={isReactionPickerOpen} onOpenChange={setIsReactionPickerOpen}>
               <PopoverTrigger asChild>
                 <div className="flex flex-wrap gap-1 cursor-pointer">
-                  {reactions.map((r) => (
-                    <span
-                      key={r.emoji}
-                      className={cn(
-                        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border transition-colors',
-                        r.reactedByMe
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted'
-                      )}
-                    >
-                      <span>{r.emoji}</span>
-                      <span>{r.count}</span>
-                    </span>
-                  ))}
+                  {reactions.map((r) => {
+                    const names = getReactorNames(r);
+                    return (
+                      <Tooltip key={r.emoji} delayDuration={200}>
+                        <TooltipTrigger asChild>
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border transition-colors',
+                              r.reactedByMe
+                                ? 'border-primary bg-primary/10 text-primary'
+                                : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted'
+                            )}
+                          >
+                            <span>{r.emoji}</span>
+                            <span>{r.count}</span>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">{names.join(', ')}</TooltipContent>
+                      </Tooltip>
+                    );
+                  })}
                 </div>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-2" side="top" align="center">
