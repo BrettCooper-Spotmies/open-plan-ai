@@ -220,6 +220,9 @@ export default function Integrations() {
             try {
               const profile = await googleMeetService.fetchUserProfile(tokenResponse.access_token);
               setConnected(tokenResponse.access_token, profile.email, tokenResponse.expires_in);
+              // Persist the connection flag (no token) server-side so other
+              // users can see this account is reachable for a call.
+              await googleMeetService.reportConnected(profile.email);
               toast.dismiss(loadingToast);
               toast.success(`Successfully connected Google Meet as ${profile.email}`);
             } catch (err) {
@@ -238,6 +241,10 @@ export default function Integrations() {
 
   const handleDisconnectGoogleMeet = () => {
     disconnect();
+    googleMeetService.reportDisconnected().catch(() => {
+      // Local disconnect already happened; a failed backend call here just
+      // means other users may briefly still see this account as reachable.
+    });
     toast.success('Disconnected from Google Meet integration');
   };
 

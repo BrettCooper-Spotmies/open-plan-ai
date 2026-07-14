@@ -1,6 +1,13 @@
 import { io, Socket } from 'socket.io-client';
 import { config } from '@/config';
-import type { IChatTransport, Unsubscribe } from './IChatTransport';
+import type {
+  IChatTransport,
+  Unsubscribe,
+  CallInvitePayload,
+  CallActionPayload,
+  IncomingCallEvent,
+  CallStatusEvent,
+} from './IChatTransport';
 import { logger } from '@/services/monitoring/logger';
 
 export class SocketIOChatTransport implements IChatTransport {
@@ -176,5 +183,47 @@ export class SocketIOChatTransport implements IChatTransport {
 
   disconnect(): void {
     this.socket.disconnect();
+  }
+
+  // ─── Call signaling ───────────────────────────────────────────────────────
+
+  emitCallInvite(payload: CallInvitePayload): void {
+    this.socket.emit('call:invite', payload);
+  }
+
+  emitCallAccept(payload: CallActionPayload): void {
+    this.socket.emit('call:accept', payload);
+  }
+
+  emitCallDecline(payload: CallActionPayload): void {
+    this.socket.emit('call:decline', payload);
+  }
+
+  emitCallEnd(payload: CallActionPayload): void {
+    this.socket.emit('call:end', payload);
+  }
+
+  subscribeToIncomingCalls(onIncoming: (event: IncomingCallEvent) => void): Unsubscribe {
+    const handler = (event: IncomingCallEvent) => onIncoming(event);
+    this.socket.on('call:incoming', handler);
+    return () => this.socket.off('call:incoming', handler);
+  }
+
+  subscribeToCallAccepted(onAccepted: (event: CallStatusEvent) => void): Unsubscribe {
+    const handler = (event: CallStatusEvent) => onAccepted(event);
+    this.socket.on('call:accepted', handler);
+    return () => this.socket.off('call:accepted', handler);
+  }
+
+  subscribeToCallDeclined(onDeclined: (event: CallStatusEvent) => void): Unsubscribe {
+    const handler = (event: CallStatusEvent) => onDeclined(event);
+    this.socket.on('call:declined', handler);
+    return () => this.socket.off('call:declined', handler);
+  }
+
+  subscribeToCallEnded(onEnded: (event: CallStatusEvent) => void): Unsubscribe {
+    const handler = (event: CallStatusEvent) => onEnded(event);
+    this.socket.on('call:ended', handler);
+    return () => this.socket.off('call:ended', handler);
   }
 }

@@ -1,3 +1,5 @@
+import { apiClient } from './api/client';
+import { ENDPOINTS } from './api/endpoints';
 import { logger } from './monitoring/logger';
 
 export interface ScheduleEventParams {
@@ -7,7 +9,33 @@ export interface ScheduleEventParams {
   attendees: string[]; // List of emails
 }
 
+export interface GoogleMeetStatus {
+  connected: boolean;
+  email: string | null;
+  connectedAt: string | null;
+}
+
 export const googleMeetService = {
+  /**
+   * Records on the backend that the current user has connected Google Meet.
+   * No OAuth token is ever sent — this is only a reachability flag so other
+   * users can see whether this person can be called, independent of whose
+   * browser/localStorage the token itself lives in.
+   */
+  async reportConnected(email: string): Promise<void> {
+    await apiClient.post(ENDPOINTS.GOOGLE_MEET.CONNECT, { email });
+  },
+
+  async reportDisconnected(): Promise<void> {
+    await apiClient.post(ENDPOINTS.GOOGLE_MEET.DISCONNECT);
+  },
+
+  /** Batch-fetch Google Meet connection status for a set of user IDs. */
+  async getStatus(userIds: string[]): Promise<Record<string, GoogleMeetStatus>> {
+    if (userIds.length === 0) return {};
+    return apiClient.get<Record<string, GoogleMeetStatus>>(ENDPOINTS.GOOGLE_MEET.STATUS(userIds));
+  },
+
   /**
    * Creates an instant Google Meet room using the Google Meet REST API v2.
    * POST https://meet.googleapis.com/v2/spaces

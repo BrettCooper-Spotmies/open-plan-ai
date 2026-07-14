@@ -9,11 +9,14 @@ import { useChatStore } from '../stores/useChatStore';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNowStrict } from 'date-fns';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 // New Imports for Google Meet Integration & Call state
 import { useGoogleMeetStore } from '@/features/integrations/stores/useGoogleMeetStore';
+import { useGoogleMeetStatus } from '@/features/integrations/hooks/useGoogleMeetStatus';
+import { useEnsureGoogleMeetToken } from '@/features/integrations/hooks/useEnsureGoogleMeetToken';
 import { useCallStore } from '../stores/useCallStore';
+import { chatTransport } from '../transport';
 import { googleMeetService } from '@/services/googleMeet.service';
 import { ScheduleMeetingDialog } from './ScheduleMeetingDialog';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -55,10 +58,13 @@ export function ChatHeader({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Google Meet & Call states
-  const { isConnected, accessToken } = useGoogleMeetStore();
-  const { startCall, simulateIncomingCall } = useCallStore();
+  const { isConnected } = useGoogleMeetStore();
+  const { ensureFreshToken } = useEnsureGoogleMeetToken();
+  const startOutgoingCall = useCallStore((s) => s.startOutgoingCall);
+  const receiveIncomingCall = useCallStore((s) => s.receiveIncomingCall);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [startingCall, setStartingCall] = useState(false);
 
   useEffect(() => {
     if (isMessageSearchOpen) {
@@ -87,26 +93,82 @@ export function ChatHeader({
 
   const avatarUrl = conversation.type === 'dm' ? otherMember?.avatarUrl : conversation.avatarUrl;
 
-  // Direct mock signaling trigger
-  const handleInitiateCall = (type: 'audio' | 'video') => {
-    if (!otherMember) {
-      toast.error('Direct calls are only available in 1-on-1 direct messages.');
+  // Other conversation members — the real (backend-persisted) Google Meet
+  // connection status for each is looked up below, replacing what used to
+  // be a hardcoded "everyone except Bob Martinez is connected" test rule.
+  const otherMemberIds = useMemo(
+    () => conversation.members.filter((m) => m.id !== currentUserId).map((m) => m.id),
+    [conversation.members, currentUserId],
+  );
+  const { data: meetStatusMap } = useGoogleMeetStatus(otherMemberIds);
+
+  const handleInitiateCall = async (type: 'audio' | 'video') => {
+    const otherMembers = conversation.members.filter((m) => m.id !== currentUserId);
+    if (otherMembers.length === 0 || startingCall) return;
+
+    const participants = otherMembers.map((m) => ({
+      id: m.id,
+      name: m.name,
+      connected: meetStatusMap?.[m.id]?.connected ?? false,
+    }));
+    const reachable = participants.filter((p) => p.connected);
+    const callId = crypto.randomUUID();
+
+    if (reachable.length === 0) {
+      // Nobody can actually be rung — show the "not connected" panel
+      // immediately, no Meet space needed until "Send Link" is clicked.
+      startOutgoingCall({
+        callId,
+        conversationId: conversation.id,
+        callType: type,
+        meetingUri: '',
+        participants,
+        isGroup: conversation.type === 'group',
+      });
       return;
     }
-    
-    // Test rule: Bob Martinez simulates a user who hasn't connected Google Meet.
-    // Everyone else (e.g. Alice Chen) is simulated as connected.
-    const isRecipientConnected = otherMember.name !== 'Bob Martinez';
-    startCall(otherMember.id, otherMember.name, type, isRecipientConnected);
+
+    setStartingCall(true);
+    try {
+      const token = await ensureFreshToken();
+      if (!token) {
+        toast.error('Your Google Meet session expired. Please reconnect in Integrations.');
+        return;
+      }
+      const meetData = await googleMeetService.createInstantMeeting(token);
+      startOutgoingCall({
+        callId,
+        conversationId: conversation.id,
+        callType: type,
+        meetingUri: meetData.meetingUri,
+        participants,
+        isGroup: conversation.type === 'group',
+      });
+      chatTransport.emitCallInvite({
+        callId,
+        conversationId: conversation.id,
+        callType: type,
+        meetingUri: meetData.meetingUri,
+      });
+    } catch (err) {
+      toast.error('Failed to start the call. Please try again.');
+    } finally {
+      setStartingCall(false);
+    }
   };
 
   // Generate an instant meeting link and send to chat
   const handleGenerateInstantLink = async () => {
-    if (!accessToken) return;
     setGeneratingLink(true);
     const loadingToast = toast.loading('Generating Google Meet space...');
     try {
-      const meetData = await googleMeetService.createInstantMeeting(accessToken);
+      const token = await ensureFreshToken();
+      if (!token) {
+        toast.dismiss(loadingToast);
+        toast.error('Your Google Meet session expired. Please reconnect in Integrations.');
+        return;
+      }
+      const meetData = await googleMeetService.createInstantMeeting(token);
       if (onSendMessage && meetData.meetingUri) {
         await onSendMessage(`I created an instant Google Meet call. Let's connect here: ${meetData.meetingUri}`);
         toast.dismiss(loadingToast);
@@ -142,12 +204,13 @@ export function ChatHeader({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem 
+            <DropdownMenuItem
               onClick={() => handleInitiateCall(type)}
+              disabled={startingCall}
               className="gap-2 cursor-pointer font-medium"
             >
-              <Icon className="h-4 w-4 text-primary" />
-              Start {title} (In-App)
+              {startingCall ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4 text-primary" />}
+              Start {title}
             </DropdownMenuItem>
             
             <DropdownMenuSeparator />
@@ -173,12 +236,23 @@ export function ChatHeader({
               Schedule Meeting
             </DropdownMenuItem>
 
-            {/* Simulated Incoming Call - Dev utility for testing/evaluating */}
+            {/* Simulated incoming call — dev-only UI preview, does not touch the real signaling path */}
             {import.meta.env.DEV && otherMember && (
               <>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem 
-                  onClick={() => simulateIncomingCall(otherMember.id, otherMember.name, type)}
+                <DropdownMenuItem
+                  onClick={() =>
+                    receiveIncomingCall({
+                      callId: crypto.randomUUID(),
+                      conversationId: conversation.id,
+                      callType: type,
+                      meetingUri: 'https://meet.google.com/dev-preview',
+                      callerId: otherMember.id,
+                      callerName: otherMember.name,
+                      participants: [],
+                      isGroup: false,
+                    })
+                  }
                   className="gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground"
                 >
                   <Sparkles className="h-3.5 w-3.5 text-amber-500" />
@@ -311,7 +385,7 @@ export function ChatHeader({
         )}
         
         {/* Render voice/video call button triggers */}
-        {conversation.type === 'dm' && renderCallButtons()}
+        {renderCallButtons()}
       </div>
 
       {/* Schedule Dialog rendered here */}

@@ -214,6 +214,12 @@ export const ENDPOINTS = {
   LINKS: {
     DELETE: (id: string) => `/links/${id}`,
   },
+  // Google Meet integration
+  GOOGLE_MEET: {
+    CONNECT: '/integrations/google-meet/connect',
+    DISCONNECT: '/integrations/google-meet/disconnect',
+    STATUS: (userIds: string[]) => `/integrations/google-meet/status?userIds=${userIds.join(',')}`,
+  },
   // Uploads
   UPLOADS: {
     AVATAR: '/uploads/avatar',

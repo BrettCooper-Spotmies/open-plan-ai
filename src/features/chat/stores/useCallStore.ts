@@ -3,98 +3,105 @@ import { create } from 'zustand';
 export type CallState = 'idle' | 'outgoing' | 'incoming' | 'active';
 export type CallType = 'audio' | 'video';
 
+export interface CallParticipant {
+  id: string;
+  name: string;
+  /** Real, backend-derived Google Meet connection status — never guessed. */
+  connected: boolean;
+}
+
 interface CallStoreState {
   callState: CallState;
   callType: CallType | null;
-  remoteUserId: string | null;
-  remoteUserName: string | null;
-  remoteUserConnected: boolean;
+  callId: string | null;
+  conversationId: string | null;
+  /** Real Google Meet join link — the actual call happens here (opened in a new tab). */
+  meetingUri: string | null;
+  isGroup: boolean;
+  /** Everyone besides me involved in this call. */
+  participants: CallParticipant[];
+  callerId: string | null;
+  callerName: string | null;
   isMuted: boolean;
   isCameraOff: boolean;
-  callDuration: number; // in seconds
+  callDuration: number; // seconds
 
-  startCall: (userId: string, userName: string, type: CallType, recipientConnected: boolean) => void;
-  receiveCall: (userId: string, userName: string, type: CallType) => void;
-  acceptCall: () => void;
-  declineCall: () => void;
-  endCall: () => void;
+  startOutgoingCall: (params: {
+    callId: string;
+    conversationId: string;
+    callType: CallType;
+    meetingUri: string;
+    participants: CallParticipant[];
+    isGroup: boolean;
+  }) => void;
+
+  receiveIncomingCall: (params: {
+    callId: string;
+    conversationId: string;
+    callType: CallType;
+    meetingUri: string;
+    callerId: string;
+    callerName: string;
+    participants: CallParticipant[];
+    isGroup: boolean;
+  }) => void;
+
+  markActive: () => void;
+  reset: () => void;
   toggleMute: () => void;
   toggleCamera: () => void;
   incrementDuration: () => void;
-  simulateIncomingCall: (userId: string, userName: string, type: CallType) => void;
 }
 
-export const useCallStore = create<CallStoreState>((set) => ({
-  callState: 'idle',
-  callType: null,
-  remoteUserId: null,
-  remoteUserName: null,
-  remoteUserConnected: true,
+const idleState = {
+  callState: 'idle' as CallState,
+  callType: null as CallType | null,
+  callId: null as string | null,
+  conversationId: null as string | null,
+  meetingUri: null as string | null,
+  isGroup: false,
+  participants: [] as CallParticipant[],
+  callerId: null as string | null,
+  callerName: null as string | null,
   isMuted: false,
   isCameraOff: false,
   callDuration: 0,
+};
 
-  startCall: (userId, userName, type, recipientConnected) =>
+export const useCallStore = create<CallStoreState>((set) => ({
+  ...idleState,
+
+  startOutgoingCall: ({ callId, conversationId, callType, meetingUri, participants, isGroup }) =>
     set({
+      ...idleState,
       callState: 'outgoing',
-      callType: type,
-      remoteUserId: userId,
-      remoteUserName: userName,
-      remoteUserConnected: recipientConnected,
-      isMuted: false,
-      isCameraOff: false,
-      callDuration: 0,
+      callId,
+      conversationId,
+      callType,
+      meetingUri,
+      participants,
+      isGroup,
     }),
 
-  receiveCall: (userId, userName, type) =>
+  receiveIncomingCall: ({ callId, conversationId, callType, meetingUri, callerId, callerName, participants, isGroup }) =>
     set({
+      ...idleState,
       callState: 'incoming',
-      callType: type,
-      remoteUserId: userId,
-      remoteUserName: userName,
-      remoteUserConnected: true,
-      isMuted: false,
-      isCameraOff: false,
-      callDuration: 0,
+      callId,
+      conversationId,
+      callType,
+      meetingUri,
+      callerId,
+      callerName,
+      participants,
+      isGroup,
     }),
 
-  acceptCall: () =>
-    set({
-      callState: 'active',
-      callDuration: 0,
-    }),
+  markActive: () => set({ callState: 'active', callDuration: 0 }),
 
-  declineCall: () =>
-    set({
-      callState: 'idle',
-      callType: null,
-      remoteUserId: null,
-      remoteUserName: null,
-      callDuration: 0,
-    }),
-
-  endCall: () =>
-    set({
-      callState: 'idle',
-      callType: null,
-      remoteUserId: null,
-      remoteUserName: null,
-      callDuration: 0,
-    }),
+  reset: () => set({ ...idleState }),
 
   toggleMute: () => set((state) => ({ isMuted: !state.isMuted })),
   toggleCamera: () => set((state) => ({ isCameraOff: !state.isCameraOff })),
   incrementDuration: () => set((state) => ({ callDuration: state.callDuration + 1 })),
-
-  simulateIncomingCall: (userId, userName, type) =>
-    set({
-      callState: 'incoming',
-      callType: type,
-      remoteUserId: userId,
-      remoteUserName: userName,
-      remoteUserConnected: true,
-      isMuted: false,
-      isCameraOff: false,
-      callDuration: 0,
-    }),
 }));

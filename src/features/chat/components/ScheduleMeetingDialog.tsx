@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useGoogleMeetStore } from '@/features/integrations/stores/useGoogleMeetStore';
+import { useEnsureGoogleMeetToken } from '@/features/integrations/hooks/useEnsureGoogleMeetToken';
 import { googleMeetService } from '@/services/googleMeet.service';
 import { Conversation } from '../types';
 import { Calendar, Clock, Loader2, Users } from 'lucide-react';
@@ -32,7 +33,8 @@ export function ScheduleMeetingDialog({
   onOpenChange, 
   onMeetingScheduled 
 }: ScheduleMeetingDialogProps) {
-  const { accessToken, isConnected } = useGoogleMeetStore();
+  const { isConnected } = useGoogleMeetStore();
+  const { ensureFreshToken } = useEnsureGoogleMeetToken();
   const [loading, setLoading] = useState(false);
   
   // Form states
@@ -71,7 +73,7 @@ export function ScheduleMeetingDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isConnected || !accessToken) {
+    if (!isConnected) {
       toast.error('Please connect Google Meet in integrations first.');
       return;
     }
@@ -92,12 +94,18 @@ export function ScheduleMeetingDialog({
 
     setLoading(true);
     try {
+      const token = await ensureFreshToken();
+      if (!token) {
+        toast.error('Your Google Meet session expired. Please reconnect in Integrations.');
+        return;
+      }
+
       // Gather attendee emails
       const attendees = conversation.members
         .filter((m) => selectedMembers[m.id])
         .map((m) => m.email);
 
-      const result = await googleMeetService.scheduleCalendarMeeting(accessToken, {
+      const result = await googleMeetService.scheduleCalendarMeeting(token, {
         title,
         startTime: startDateTime.toISOString(),
         endTime: endDateTime.toISOString(),

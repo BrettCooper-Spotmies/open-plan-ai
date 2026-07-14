@@ -20,8 +20,6 @@ import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
 import { ChatMessage } from './types';
 import { logger } from '@/services/monitoring/logger';
-import { useCallStore } from './stores/useCallStore';
-import { CallOverlay } from './components/CallOverlay';
 
 
 export default function Chat() {
@@ -253,9 +251,6 @@ export default function Chat() {
             <DetailPanel conversation={activeConv} onRefetch={refetch} />
           )
         )}
-
-        {/* In-app Audio/Video calling overlay */}
-        <CallOverlay onSendMessage={sendMessage} />
       </div>
     </>
   );
