@@ -240,8 +240,8 @@ function LinkifiedText({ text, query, isOwn = false }: { text: string; query?: s
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              'underline break-all hover:opacity-80',
-              isOwn ? 'text-blue-100' : 'text-blue-500 dark:text-blue-400'
+              'underline break-all hover:opacity-80 font-medium',
+              isOwn ? 'text-blue-100 dark:text-blue-800' : 'text-blue-500 dark:text-blue-400'
             )}
           >
             {segment}
