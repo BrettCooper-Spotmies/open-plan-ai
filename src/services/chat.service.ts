@@ -51,6 +51,7 @@ function mapConversation(raw: any): Conversation {
       id: m.userId ?? m.id,
       userId: m.userId ?? m.id,
       name: m.name ?? '',
+      email: m.email ?? '',
       avatarUrl: resolveFileUrl(rawAvatarUrl) ?? rawAvatarUrl ?? undefined,
       initials: m.initials ?? computeInitials(m.name ?? ''),
       role: m.role ?? 'member',

@@ -19,6 +19,12 @@ import { toast } from 'sonner';
 
 const RING_TIMEOUT_MS = 45_000;
 
+function getInitials(name: string) {
+  const words = name.trim().split(/\s+/);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+  return words[0]?.charAt(0).toUpperCase() || '??';
+}
+
 export function CallOverlay() {
   const {
     callState,
@@ -147,6 +153,70 @@ export function CallOverlay() {
 
   if (callState === 'idle') return null;
 
+  // Incoming calls get a compact, resizable notification card in the
+  // corner instead of covering the screen — the user shouldn't lose
+  // whatever they were doing just because a call came in. Accepting
+  // hands off to the full-screen branch below via markActive().
+  if (callState === 'incoming') {
+    const groupLabel = isGroupRing
+      ? `${primaryName} + ${reachable.length - 1} other${reachable.length > 2 ? 's' : ''}`
+      : primaryName;
+
+    return (
+      <div
+        className="fixed bottom-6 right-6 z-50 flex w-[380px] h-[260px] min-w-[300px] min-h-[220px] max-w-[520px] max-h-[80vh] resize flex-col gap-3 overflow-auto rounded-2xl border border-border bg-background p-4 shadow-2xl select-none animate-in slide-in-from-bottom-4 fade-in duration-300"
+      >
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+          <span>Google Meet Calling</span>
+        </div>
+
+        <div className="flex flex-1 items-center gap-3">
+          <div className="relative h-14 w-14 shrink-0 rounded-full overflow-hidden border-2 border-primary/20 bg-muted shadow-md flex items-center justify-center">
+            <Avatar className="h-full w-full rounded-none">
+              <AvatarFallback className="text-lg font-semibold bg-gradient-to-br from-primary/10 to-primary/20 text-primary">
+                {getInitials(primaryName)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="absolute inset-0 rounded-full border-2 border-primary/60 animate-ping opacity-25 pointer-events-none" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-sm font-semibold text-foreground">{groupLabel}</h3>
+            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+              {callType === 'video' ? (
+                <Video className="h-3 w-3 shrink-0 text-primary" />
+              ) : (
+                <Phone className="h-3 w-3 shrink-0 text-primary" />
+              )}
+              <span className="truncate">'{primaryName}' is trying to connect with you</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            size="icon"
+            variant="destructive"
+            className="h-10 w-10 rounded-full shadow hover:scale-105 transition-all"
+            onClick={handleDecline}
+            title="Decline"
+          >
+            <PhoneOff className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            className="h-10 w-10 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white shadow hover:scale-105 transition-all"
+            onClick={handleAccept}
+            title="Accept"
+          >
+            <Phone className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   const showUnreachablePanel = callState === 'outgoing' && reachable.length === 0;
 
   return (
@@ -193,14 +263,10 @@ export function CallOverlay() {
             <div className="relative h-48 w-48 md:h-56 md:w-56 rounded-full overflow-hidden border-2 border-primary/20 bg-muted shadow-2xl flex items-center justify-center">
               <Avatar className="h-full w-full rounded-none">
                 <AvatarFallback className="text-4xl font-semibold bg-gradient-to-br from-primary/10 to-primary/20 text-primary">
-                  {(() => {
-                    const words = primaryName.trim().split(/\s+/);
-                    if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-                    return words[0]?.charAt(0).toUpperCase() || '??';
-                  })()}
+                  {getInitials(primaryName)}
                 </AvatarFallback>
               </Avatar>
-              {(callState === 'outgoing' || callState === 'incoming') && (
+              {callState === 'outgoing' && (
                 <div className="absolute inset-0 rounded-full border-2 border-primary/60 animate-ping opacity-25 pointer-events-none" />
               )}
             </div>
@@ -216,7 +282,6 @@ export function CallOverlay() {
                   <Phone className="h-3.5 w-3.5 text-primary" />
                 )}
                 {callState === 'outgoing' && `Trying to connect to '${primaryName}'`}
-                {callState === 'incoming' && `'${primaryName}' is trying to connect with you`}
                 {callState === 'active' && `${primaryName} connected — call in progress via Google Meet`}
               </p>
               {callState === 'active' && (
@@ -235,26 +300,6 @@ export function CallOverlay() {
       </div>
 
       <div className="w-full max-w-lg flex flex-col items-center gap-4">
-        {callState === 'incoming' && (
-          <div className="flex gap-4 w-full justify-center">
-            <Button
-              size="lg"
-              variant="destructive"
-              className="h-14 w-14 rounded-full p-0 flex items-center justify-center shadow-lg hover:shadow-destructive/20 hover:scale-105 transition-all"
-              onClick={handleDecline}
-            >
-              <PhoneOff className="h-6 w-6" />
-            </Button>
-            <Button
-              size="lg"
-              className="h-14 w-14 rounded-full p-0 flex items-center justify-center bg-emerald-600 hover:bg-emerald-500 shadow-lg hover:shadow-emerald-600/20 hover:scale-105 transition-all text-white"
-              onClick={handleAccept}
-            >
-              <Phone className="h-6 w-6" />
-            </Button>
-          </div>
-        )}
-
         {callState === 'outgoing' && reachable.length > 0 && (
           <Button
             size="lg"

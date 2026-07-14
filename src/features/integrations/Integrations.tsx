@@ -10,6 +10,7 @@ import altiumLogo from '@/assets/logos/altium.svg';
 import fusion360Logo from '@/assets/logos/fusion360.svg';
 import orcadLogo from '@/assets/logos/orcad.svg';
 import arenaLogo from '@/assets/logos/arena-plm.svg';
+import googleMeetLogo from '@/assets/logos/google-meet.svg';
 import {
   Search,
   Clock,
@@ -25,6 +26,7 @@ import { useGoogleMeetStore } from './stores/useGoogleMeetStore';
 import { useGoogleIdentityServices } from './hooks/useGoogleIdentityServices';
 import { googleMeetService } from '@/services/googleMeet.service';
 import { toast } from 'sonner';
+import type { GoogleTokenResponse } from './types/google-identity';
 
 interface Integration {
   id: string;
@@ -120,7 +122,7 @@ const SECTIONS: Section[] = [
         id: 'google-meet',
         name: 'Google Meet',
         description: 'Have the power to access scheduled and instant audio or video calls at your fingertips.',
-        logo: { kind: 'svg', path: LOGO_PATHS.googleMeet },
+        logo: { kind: 'image', src: googleMeetLogo, alt: 'Google Meet' },
         color: '#00897B',
       },
       {
@@ -209,7 +211,7 @@ export default function Integrations() {
       const client = window.google.accounts.oauth2.initTokenClient({
         client_id: clientId,
         scope: 'https://www.googleapis.com/auth/meetings.space.created https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email',
-        callback: async (tokenResponse: any) => {
+        callback: async (tokenResponse: GoogleTokenResponse) => {
           if (tokenResponse.error) {
             toast.error(`Authentication failed: ${tokenResponse.error_description || tokenResponse.error}`);
             return;
@@ -219,13 +221,13 @@ export default function Integrations() {
             const loadingToast = toast.loading('Connecting and retrieving profile...');
             try {
               const profile = await googleMeetService.fetchUserProfile(tokenResponse.access_token);
-              setConnected(tokenResponse.access_token, profile.email, tokenResponse.expires_in);
+              setConnected(tokenResponse.access_token, profile.email, tokenResponse.expires_in ?? 3600);
               // Persist the connection flag (no token) server-side so other
               // users can see this account is reachable for a call.
               await googleMeetService.reportConnected(profile.email);
               toast.dismiss(loadingToast);
               toast.success(`Successfully connected Google Meet as ${profile.email}`);
-            } catch (err) {
+            } catch {
               toast.dismiss(loadingToast);
               toast.error('Failed to retrieve user profile after Google authorization.');
             }
@@ -234,7 +236,7 @@ export default function Integrations() {
       });
 
       client.requestAccessToken({ prompt: 'consent' });
-    } catch (err) {
+    } catch {
       toast.error('Error starting Google Authentication flow');
     }
   };

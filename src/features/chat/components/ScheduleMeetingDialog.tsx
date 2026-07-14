@@ -64,7 +64,7 @@ export function ScheduleMeetingDialog({
       const membersMap: Record<string, boolean> = {};
       conversation.members.forEach((m) => {
         // Simple heuristic: email contains you@ or name is You or is current member id
-        const isSelf = m.name.toLowerCase() === 'you' || m.email.includes('you@');
+        const isSelf = m.name.toLowerCase() === 'you' || (m.email ?? '').includes('you@');
         membersMap[m.id] = !isSelf;
       });
       setSelectedMembers(membersMap);
@@ -102,7 +102,7 @@ export function ScheduleMeetingDialog({
 
       // Gather attendee emails
       const attendees = conversation.members
-        .filter((m) => selectedMembers[m.id])
+        .filter((m) => selectedMembers[m.id] && m.email)
         .map((m) => m.email);
 
       const result = await googleMeetService.scheduleCalendarMeeting(token, {
