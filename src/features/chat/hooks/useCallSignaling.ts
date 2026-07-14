@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { chatTransport } from '../transport';
 import { useCallStore } from '../stores/useCallStore';
 import { useChatStore } from '../stores/useChatStore';
+import { meetWindow } from '../utils/meetWindow';
 
 /** Best-effort name lookup from whatever conversation data is already cached. */
 function resolveMemberName(conversationId: string, userId: string): string {
@@ -19,7 +20,6 @@ function resolveMemberName(conversationId: string, userId: string): string {
  */
 export function useCallSignaling() {
   const { user } = useAuth();
-  const meetWindowRef = useRef<Window | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -50,7 +50,7 @@ export function useCallSignaling() {
       if (store.callState !== 'active') {
         store.markActive();
         if (store.meetingUri) {
-          meetWindowRef.current = window.open(store.meetingUri, '_blank', 'noopener,noreferrer');
+          meetWindow.navigateOrOpen(store.meetingUri);
         }
       }
       toast.success(`${byUserName || 'They'} joined the call`);
@@ -66,6 +66,7 @@ export function useCallSignaling() {
         return;
       }
       toast.info(`${byUserName || 'They'} declined the call`);
+      meetWindow.close();
       store.reset();
     });
 
@@ -73,8 +74,7 @@ export function useCallSignaling() {
       const store = useCallStore.getState();
       if (store.callId !== callId) return;
 
-      meetWindowRef.current?.close();
-      meetWindowRef.current = null;
+      meetWindow.close();
       store.reset();
     });
 
@@ -83,8 +83,7 @@ export function useCallSignaling() {
       chatTransport.unsubscribe(unsubAccepted);
       chatTransport.unsubscribe(unsubDeclined);
       chatTransport.unsubscribe(unsubEnded);
-      meetWindowRef.current?.close();
-      meetWindowRef.current = null;
+      meetWindow.close();
     };
   }, [user?.id]);
 }

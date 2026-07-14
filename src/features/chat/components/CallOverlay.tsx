@@ -4,6 +4,7 @@ import { chatTransport } from '../transport';
 import { chatService } from '@/services/chat.service';
 import { googleMeetService } from '@/services/googleMeet.service';
 import { useEnsureGoogleMeetToken } from '@/features/integrations/hooks/useEnsureGoogleMeetToken';
+import { meetWindow } from '../utils/meetWindow';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -35,7 +36,6 @@ export function CallOverlay() {
 
   const { ensureFreshToken } = useEnsureGoogleMeetToken();
   const [generatingLink, setGeneratingLink] = useState(false);
-  const meetWindowRef = useRef<Window | null>(null);
   const timerRef = useRef<number | null>(null);
   const ringTimeoutRef = useRef<number | null>(null);
 
@@ -44,10 +44,18 @@ export function CallOverlay() {
   const primaryName = callerName || reachable[0]?.name || participants[0]?.name || 'them';
   const isGroupRing = reachable.length > 1;
 
-  // Call duration timer, active state only.
+  // Call duration timer, active state only. Also polls whether the user
+  // closed the actual Meet tab — that's the only signal we can read
+  // cross-origin — and ends the call in-app (and for the other party, via
+  // the socket relay) when it happens, so this overlay doesn't run forever.
   useEffect(() => {
     if (callState === 'active') {
-      timerRef.current = window.setInterval(() => incrementDuration(), 1000) as unknown as number;
+      timerRef.current = window.setInterval(() => {
+        incrementDuration();
+        if (meetWindow.isClosed()) {
+          handleEnd();
+        }
+      }, 1000) as unknown as number;
     }
     return () => {
       if (timerRef.current) {
@@ -64,6 +72,7 @@ export function CallOverlay() {
       ringTimeoutRef.current = window.setTimeout(() => {
         if (callState === 'outgoing' && callId && conversationId) {
           chatTransport.emitCallEnd({ callId, conversationId });
+          meetWindow.close();
         }
         toast.info(callState === 'outgoing' ? 'No answer' : 'Missed call');
         reset();
@@ -88,7 +97,7 @@ export function CallOverlay() {
     chatTransport.emitCallAccept({ callId, conversationId });
     markActive();
     if (meetingUri) {
-      meetWindowRef.current = window.open(meetingUri, '_blank', 'noopener,noreferrer');
+      meetWindow.navigateOrOpen(meetingUri);
     }
   };
 
@@ -103,14 +112,13 @@ export function CallOverlay() {
     if (callId && conversationId) {
       chatTransport.emitCallEnd({ callId, conversationId });
     }
-    meetWindowRef.current?.close();
-    meetWindowRef.current = null;
+    meetWindow.close();
     reset();
   };
 
   const handleReopenMeet = () => {
     if (!meetingUri) return;
-    meetWindowRef.current = window.open(meetingUri, '_blank', 'noopener,noreferrer');
+    meetWindow.navigateOrOpen(meetingUri);
   };
 
   const handleSendLink = async () => {
@@ -185,7 +193,11 @@ export function CallOverlay() {
             <div className="relative h-48 w-48 md:h-56 md:w-56 rounded-full overflow-hidden border-2 border-primary/20 bg-muted shadow-2xl flex items-center justify-center">
               <Avatar className="h-full w-full rounded-none">
                 <AvatarFallback className="text-4xl font-semibold bg-gradient-to-br from-primary/10 to-primary/20 text-primary">
-                  {primaryName.slice(0, 2).toUpperCase() || '??'}
+                  {(() => {
+                    const words = primaryName.trim().split(/\s+/);
+                    if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+                    return words[0]?.charAt(0).toUpperCase() || '??';
+                  })()}
                 </AvatarFallback>
               </Avatar>
               {(callState === 'outgoing' || callState === 'incoming') && (
@@ -205,7 +217,7 @@ export function CallOverlay() {
                 )}
                 {callState === 'outgoing' && `Trying to connect to '${primaryName}'`}
                 {callState === 'incoming' && `'${primaryName}' is trying to connect with you`}
-                {callState === 'active' && 'Call in progress via Google Meet'}
+                {callState === 'active' && `${primaryName} connected — call in progress via Google Meet`}
               </p>
               {callState === 'active' && (
                 <p className="text-xs text-muted-foreground">

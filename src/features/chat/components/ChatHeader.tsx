@@ -17,6 +17,7 @@ import { useGoogleMeetStatus } from '@/features/integrations/hooks/useGoogleMeet
 import { useEnsureGoogleMeetToken } from '@/features/integrations/hooks/useEnsureGoogleMeetToken';
 import { useCallStore } from '../stores/useCallStore';
 import { chatTransport } from '../transport';
+import { meetWindow } from '../utils/meetWindow';
 import { googleMeetService } from '@/services/googleMeet.service';
 import { ScheduleMeetingDialog } from './ScheduleMeetingDialog';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -87,9 +88,15 @@ export function ChatHeader({
     return emojiRegex.test(str) && str.length <= 8;
   };
 
+  const computeInitials = (name: string) => {
+    const words = name.trim().split(/\s+/);
+    if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+    return words[0]?.charAt(0).toUpperCase() || '??';
+  };
+
   const initials = conversation.type === 'dm'
-    ? otherMember?.initials || otherMember?.name?.slice(0, 2).toUpperCase() || '??'
-    : (conversation.name || conversation.title || 'GC').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+    ? otherMember?.initials || (otherMember?.name ? computeInitials(otherMember.name) : '??')
+    : computeInitials(conversation.name || conversation.title || 'GC');
 
   const avatarUrl = conversation.type === 'dm' ? otherMember?.avatarUrl : conversation.avatarUrl;
 
@@ -128,11 +135,18 @@ export function ChatHeader({
       return;
     }
 
+    // Open the Meet tab now, synchronously, inside this click handler — a
+    // window opened later from the async call:accepted socket event would
+    // be blocked by the browser's popup blocker. We navigate this same
+    // placeholder to the real URL once the callee accepts.
+    meetWindow.openPlaceholder();
+
     setStartingCall(true);
     try {
       const token = await ensureFreshToken();
       if (!token) {
         toast.error('Your Google Meet session expired. Please reconnect in Integrations.');
+        meetWindow.close();
         return;
       }
       const meetData = await googleMeetService.createInstantMeeting(token);
@@ -152,6 +166,7 @@ export function ChatHeader({
       });
     } catch (err) {
       toast.error('Failed to start the call. Please try again.');
+      meetWindow.close();
     } finally {
       setStartingCall(false);
     }

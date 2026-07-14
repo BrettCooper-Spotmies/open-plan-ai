@@ -48,7 +48,7 @@ export const googleMeetService = {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ config: { accessType: 'OPEN' } }),
       });
 
       if (!response.ok) {
@@ -58,6 +58,8 @@ export const googleMeetService = {
 
       const data = await response.json();
       // The API returns meetingUri (e.g. https://meet.google.com/abc-defg-hij) and name (space identifier)
+      // accessType: OPEN means anyone with the link joins immediately —
+      // no host has to be present to let guests in.
       return {
         meetingUri: data.meetingUri,
         name: data.name,
