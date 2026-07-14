@@ -1,4 +1,4 @@
-import { ArrowLeft, Phone, Search, UserPlus, Video, X, CalendarDays, Link, Loader2, Sparkles, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Phone, Search, UserPlus, Video, X, CalendarDays, Link, Loader2, AlertCircle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,7 +62,6 @@ export function ChatHeader({
   const { isConnected } = useGoogleMeetStore();
   const { ensureFreshToken } = useEnsureGoogleMeetToken();
   const startOutgoingCall = useCallStore((s) => s.startOutgoingCall);
-  const receiveIncomingCall = useCallStore((s) => s.receiveIncomingCall);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
   const [startingCall, setStartingCall] = useState(false);
@@ -203,120 +202,76 @@ export function ChatHeader({
   const renderCallButtons = () => {
     const isDisabled = !isConnected;
     const buttonClass = cn(
-      "h-8 w-8 transition-opacity duration-200", 
+      "h-8 w-auto px-1.5 gap-1 transition-opacity duration-200",
       isDisabled && "opacity-40 cursor-not-allowed"
     );
 
-    const callDropdown = (type: 'audio' | 'video') => {
-      const Icon = type === 'audio' ? Phone : Video;
-      const title = type === 'audio' ? 'Voice Call' : 'Video Call';
-      
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className={buttonClass} disabled={isDisabled}>
-              <Icon className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuItem
-              onClick={() => handleInitiateCall(type)}
-              disabled={startingCall}
-              className="gap-2 cursor-pointer font-medium"
-            >
-              {startingCall ? <Loader2 className="h-4 w-4 animate-spin" /> : <Icon className="h-4 w-4 text-primary" />}
-              Start {title}
-            </DropdownMenuItem>
-            
-            <DropdownMenuSeparator />
-            
-            <DropdownMenuItem 
-              onClick={handleGenerateInstantLink}
-              disabled={generatingLink}
-              className="gap-2 cursor-pointer"
-            >
-              {generatingLink ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Link className="h-4 w-4 text-emerald-500" />
-              )}
-              Generate Meeting Link
-            </DropdownMenuItem>
-            
-            <DropdownMenuItem 
-              onClick={() => setScheduleOpen(true)}
-              className="gap-2 cursor-pointer"
-            >
-              <CalendarDays className="h-4 w-4 text-indigo-500" />
-              Schedule Meeting
-            </DropdownMenuItem>
-
-            {/* Simulated incoming call — dev-only UI preview, does not touch the real signaling path */}
-            {import.meta.env.DEV && otherMember && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() =>
-                    receiveIncomingCall({
-                      callId: crypto.randomUUID(),
-                      conversationId: conversation.id,
-                      callType: type,
-                      meetingUri: 'https://meet.google.com/dev-preview',
-                      callerId: otherMember.id,
-                      callerName: otherMember.name,
-                      participants: [],
-                      isGroup: false,
-                    })
-                  }
-                  className="gap-2 cursor-pointer text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                  [Dev] Simulate Incoming {type === 'audio' ? 'Voice' : 'Video'} Call
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      );
-    };
+    const callIcon = (
+      <span className="flex items-center gap-0.5">
+        <Phone className="h-3.5 w-3.5" />
+        <span className="text-muted-foreground text-xs leading-none">/</span>
+        <Video className="h-3.5 w-3.5" />
+      </span>
+    );
 
     if (isDisabled) {
       return (
-        <>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-block">
-                <Button variant="ghost" size="icon" className={buttonClass} disabled>
-                  <Phone className="h-4 w-4" />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent align="end" className="max-w-[220px] text-xs">
-              First connect to Google Meet in the integrations and then you can call.
-            </TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-block">
-                <Button variant="ghost" size="icon" className={buttonClass} disabled>
-                  <Video className="h-4 w-4" />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent align="end" className="max-w-[220px] text-xs">
-              First connect to Google Meet in the integrations and then you can call.
-            </TooltipContent>
-          </Tooltip>
-        </>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="inline-block">
+              <Button variant="ghost" size="icon" className={buttonClass} disabled>
+                {callIcon}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent align="end" className="max-w-[220px] text-xs">
+            First connect to Google Meet in the integrations and then you can call.
+          </TooltipContent>
+        </Tooltip>
       );
     }
 
     return (
-      <>
-        {callDropdown('audio')}
-        {callDropdown('video')}
-      </>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className={buttonClass} disabled={isDisabled}>
+            {callIcon}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem
+            onClick={() => handleInitiateCall('video')}
+            disabled={startingCall}
+            className="gap-2 cursor-pointer font-medium whitespace-nowrap"
+          >
+            {startingCall ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4 text-primary" />}
+            Start a meet: Audio/Video
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            onClick={handleGenerateInstantLink}
+            disabled={generatingLink}
+            className="gap-2 cursor-pointer"
+          >
+            {generatingLink ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Link className="h-4 w-4 text-emerald-500" />
+            )}
+            Generate Meeting Link
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={() => setScheduleOpen(true)}
+            className="gap-2 cursor-pointer"
+          >
+            <CalendarDays className="h-4 w-4 text-indigo-500" />
+            Schedule Meeting
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
   };
 
