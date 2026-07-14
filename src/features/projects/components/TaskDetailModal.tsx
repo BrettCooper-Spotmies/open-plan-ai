@@ -2413,7 +2413,6 @@ export const TaskDetailModal = ({
                             <CommandInput placeholder="Search tasks..." />
                             <CommandList
                               className="max-h-[calc(var(--radix-popover-content-available-height)_-_45px)] overflow-y-auto"
-                              onWheel={(e) => { e.currentTarget.scrollTop += e.deltaY; }}
                             >
                               <CommandEmpty>
                                 {availableTasksForBlocking.length === 0 ? "No available tasks" : "No results found."}
@@ -2503,7 +2502,6 @@ export const TaskDetailModal = ({
                             <CommandInput placeholder="Search tasks..." />
                             <CommandList
                               className="max-h-[calc(var(--radix-popover-content-available-height)_-_45px)] overflow-y-auto"
-                              onWheel={(e) => { e.currentTarget.scrollTop += e.deltaY; }}
                             >
                               <CommandEmpty>
                                 {availableTasksForBlockedBy.length === 0 ? "No available tasks" : "No results found."}
