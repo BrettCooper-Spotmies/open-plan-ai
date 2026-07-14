@@ -167,6 +167,7 @@ function IssueViewControls({
   activeFilterCount: number;
   onClearFilters: () => void;
 }) {
+  const [filterOpen, setFilterOpen] = useState(false);
   return (
     <div className="flex items-center gap-2">
       {/* View Toggle */}
@@ -190,7 +191,7 @@ function IssueViewControls({
       </div>
 
       {/* Filter Dropdown */}
-      <Popover>
+      <Popover open={filterOpen} onOpenChange={setFilterOpen}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="gap-2 h-9 rounded-lg">
             <Filter className="h-4 w-4" />
@@ -207,7 +208,15 @@ function IssueViewControls({
             <div className="flex items-center justify-between">
               <h4 className="font-medium text-sm">Filter Issues</h4>
               {activeFilterCount > 0 && (
-                <Button variant="ghost" size="sm" onClick={onClearFilters} className="h-6 px-2 text-xs">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    onClearFilters();
+                    setFilterOpen(false);
+                  }}
+                  className="h-6 px-2 text-xs"
+                >
                   Clear all
                 </Button>
               )}

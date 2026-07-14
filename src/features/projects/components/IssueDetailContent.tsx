@@ -935,6 +935,39 @@ export function IssueDetailContent({
                             </div>
                         </div>
 
+                        {/* Modified By */}
+                        {editedIssue.updatedBy && (
+                            <div className="space-y-1.5">
+                                <Label className={cn(
+                                    'text-xs text-muted-foreground flex items-center gap-1.5',
+                                    isMobileLayout && 'uppercase tracking-wider font-medium'
+                                )}>
+                                    {!isMobileLayout && <Pencil className="h-3 w-3" />}
+                                    Modified By
+                                </Label>
+                                <div className={cn(
+                                    'flex items-center gap-2',
+                                    isMobileLayout ? '' : 'h-9 px-3 rounded-md border border-input bg-muted/20'
+                                )}>
+                                    <Avatar className="h-5 w-5 shrink-0">
+                                        <AvatarFallback className="text-[9px]">
+                                            {editedIssue.updatedBy.initials}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <TooltipProvider delayDuration={150}>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span className={cn('text-sm truncate min-w-0 flex-1', isMobileLayout && 'font-bold text-foreground')}>{editedIssue.updatedBy.name}</span>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top" className="text-xs">
+                                                {editedIssue.updatedBy.name}
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Project — only shown when explicitly provided (e.g. My Day, which aggregates issues across projects) */}
                         {projectName && (
                             <div className="space-y-1.5">

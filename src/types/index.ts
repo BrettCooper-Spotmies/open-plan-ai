@@ -145,6 +145,7 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   createdBy?: TeamMember;  // Who created this task
+  updatedBy?: TeamMember | null;  // Who last modified this task
 
   // NEW optional fields (backward compatible)
   milestoneId?: string | null;      // Link to parent milestone
@@ -173,6 +174,7 @@ export interface Issue {
 
   // Ownership
   reportedBy: TeamMember;
+  updatedBy?: TeamMember | null;  // Who last modified this issue
   assignees?: TeamMember[];
 
   // Dates

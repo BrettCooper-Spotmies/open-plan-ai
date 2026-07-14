@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { TaskFilter, Milestone, ModuleType, TaskStatus, Priority } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,11 +55,15 @@ export function TaskFiltersDropdown({
   activeFilterCount,
   statusOptions,
 }: TaskFiltersDropdownProps) {
-  const clearAll = () => onFiltersChange({});
+  const [open, setOpen] = useState(false);
+  const clearAll = () => {
+    onFiltersChange({});
+    setOpen(false);
+  };
   const effectiveStatusOptions = statusOptions?.length ? statusOptions : DEFAULT_STATUS_OPTIONS;
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" size="sm" className="gap-2 h-9 rounded-lg">
           <Filter className="h-4 w-4" />

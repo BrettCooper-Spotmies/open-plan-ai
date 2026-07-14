@@ -1631,6 +1631,35 @@ export const TaskDetailModal = ({
                   </div>
                 )}
 
+                {/* Modified By */}
+                {mode !== 'create' && editedTask.updatedBy && (
+                  <div className="space-y-1.5">
+                    <Label className={cn(
+                      'text-xs text-muted-foreground flex items-center gap-1.5',
+                      showMobileHeader && 'uppercase tracking-wider font-medium'
+                    )}>
+                      {!showMobileHeader && <Pencil className="h-3 w-3" />}
+                      Modified By
+                    </Label>
+                    <div className={cn(
+                      'flex items-center gap-2 overflow-hidden',
+                      showMobileHeader ? '' : 'h-9 px-3 rounded-md border border-input bg-muted/20'
+                    )}>
+                      <Avatar className="h-5 w-5 shrink-0">
+                        <AvatarFallback className="text-[9px]">
+                          {editedTask.updatedBy.initials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span
+                        className={cn('text-sm truncate min-w-0', showMobileHeader && 'font-bold text-foreground')}
+                        title={editedTask.updatedBy.name}
+                      >
+                        {editedTask.updatedBy.name}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Priority */}
                 <div className="space-y-1.5">
                   <Label className={cn(
