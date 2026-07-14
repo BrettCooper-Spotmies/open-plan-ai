@@ -224,8 +224,12 @@ export function TasksSection({
       }
 
       // Milestone filter
-      if (filters.milestoneId && task.milestoneId !== filters.milestoneId) {
-        return false;
+      if (filters.milestoneId) {
+        if (filters.milestoneId === 'none') {
+          if (task.milestoneId) return false;
+        } else if (task.milestoneId !== filters.milestoneId) {
+          return false;
+        }
       }
 
       // Due date filter
@@ -333,6 +337,7 @@ export function TasksSection({
             tasks={filteredTasks}
             allTasks={dependencyTasks}
             modules={modules}
+            milestones={milestones}
             assignableMembers={assignableMembers}
             onTaskUpdate={onTaskUpdate}
             onBatchTaskUpdate={onBatchTaskUpdate}
@@ -353,6 +358,7 @@ export function TasksSection({
             onTaskDelete={onTaskDelete}
             userProjectRole={userProjectRole}
             modules={modules}
+            milestones={milestones}
             onAddModule={onAddModule}
           />
         ) : (

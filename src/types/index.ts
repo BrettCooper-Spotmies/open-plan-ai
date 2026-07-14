@@ -147,7 +147,7 @@ export interface Task {
   createdBy?: TeamMember;  // Who created this task
 
   // NEW optional fields (backward compatible)
-  milestoneId?: string;      // Link to parent milestone
+  milestoneId?: string | null;      // Link to parent milestone
   moduleId?: string;         // Link to Module entity (in addition to module type)
   moduleIds?: string[];      // Multiple module links
   linkedIssueIds?: string[]; // Issues affecting this task

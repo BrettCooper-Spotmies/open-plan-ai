@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { Task, TaskStatus, Priority, ModuleType, Issue, TeamMember } from '@/types';
+import { Task, TaskStatus, Priority, ModuleType, Issue, TeamMember, Milestone } from '@/types';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -122,6 +122,7 @@ interface KanbanViewProps {
   onTaskDelete?: (taskId: string) => void;
   userProjectRole?: string;
   modules?: { id: string; name: string; type: ModuleType }[];
+  milestones?: Milestone[];
   projectId?: string;
   onAddModule?: () => void;
 }
@@ -173,6 +174,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   onTaskDelete,
   userProjectRole,
   modules = [],
+  milestones = [],
   projectId,
   onAddModule,
 }: KanbanViewProps) {
@@ -1122,6 +1124,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         onDelete={onTaskDelete}
         userProjectRole={userProjectRole}
         modules={modules}
+        milestones={milestones}
         projectId={projectId}
         onAddModule={onAddModule}
         assignableMembers={assignableMembers}
@@ -1149,6 +1152,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
           setAddTaskToColumn(null);
         }}
         modules={modules}
+        milestones={milestones}
         projectId={projectId}
         onAddModule={onAddModule}
         assignableMembers={assignableMembers}
