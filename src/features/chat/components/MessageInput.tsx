@@ -337,7 +337,10 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     el.style.height = Math.min(el.scrollHeight, 144) + 'px';
   }, []);
 
-  useEffect(() => { resize(); }, [value, resize]);
+  // Re-measure on layout swaps too: the mobile/desktop branches render structurally
+  // different textarea containers, so crossing the breakpoint remounts the textarea
+  // DOM node and this effect must rerun to size the fresh node correctly.
+  useEffect(() => { resize(); }, [value, resize, isMobile]);
 
   // Mobile-only: when this screen is entered via a deep link (e.g. tapping a
   // chat notification), the mobile header/bottom-nav chrome collapses away
