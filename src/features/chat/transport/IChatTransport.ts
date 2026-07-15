@@ -70,6 +70,12 @@ export interface IChatTransport {
     }) => void
   ): Unsubscribe;
 
+  subscribeToPinUpdates(
+    conversationId: string,
+    onPinned: (payload: { conversationId: string; message: unknown }) => void,
+    onUnpinned: (payload: { conversationId: string; messageId: string }) => void
+  ): Unsubscribe;
+
   unsubscribe(channel: Unsubscribe): void;
 
   connect(): void;

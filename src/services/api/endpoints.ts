@@ -178,6 +178,15 @@ export const ENDPOINTS = {
     TOGGLE: (messageId: string) => `/messages/${messageId}/reactions`,
     BULK: '/messages/reactions',
   },
+  // Pinned / favourite messages
+  PINS: {
+    TOGGLE: (conversationId: string, messageId: string) => `/conversations/${conversationId}/messages/${messageId}/pin`,
+    LIST: (conversationId: string) => `/conversations/${conversationId}/pins`,
+  },
+  FAVOURITES: {
+    TOGGLE: (messageId: string) => `/messages/${messageId}/favourite`,
+    LIST: (conversationId: string) => `/conversations/${conversationId}/favourites`,
+  },
   // Chat / Conversations
   CONVERSATIONS: {
     LIST: '/conversations',

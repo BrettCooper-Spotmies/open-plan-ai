@@ -5,6 +5,7 @@ import { chatTransport } from '../transport';
 import { useCallStore } from '../stores/useCallStore';
 import { useChatStore } from '../stores/useChatStore';
 import { meetWindow } from '../utils/meetWindow';
+import { callWindow } from '../utils/callWindow';
 
 /** Best-effort name lookup from whatever conversation data is already cached. */
 function resolveMemberName(conversationId: string, userId: string): string {
@@ -67,6 +68,7 @@ export function useCallSignaling() {
       }
       toast.info(`${byUserName || 'They'} declined the call`);
       meetWindow.close();
+      callWindow.close();
       store.reset();
     });
 
@@ -75,6 +77,7 @@ export function useCallSignaling() {
       if (store.callId !== callId) return;
 
       meetWindow.close();
+      callWindow.close();
       store.reset();
     });
 
@@ -84,6 +87,7 @@ export function useCallSignaling() {
       chatTransport.unsubscribe(unsubDeclined);
       chatTransport.unsubscribe(unsubEnded);
       meetWindow.close();
+      callWindow.close();
     };
   }, [user?.id]);
 }

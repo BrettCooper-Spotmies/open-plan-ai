@@ -32,7 +32,7 @@ export class SocketIOChatTransport implements IChatTransport {
     });
 
     this.socket.on('connect_error', (err) => {
-      logger.warn('[SocketIOChatTransport] connect error', err.message);
+      logger.warn('[SocketIOChatTransport] connect error', { message: err.message });
     });
 
     // Re-join all tracked rooms after every (re)connect
@@ -167,6 +167,29 @@ export class SocketIOChatTransport implements IChatTransport {
     };
     this.socket.on('reaction-updated', handler);
     return () => { this.socket.off('reaction-updated', handler); };
+  }
+
+  subscribeToPinUpdates(
+    conversationId: string,
+    onPinned: (payload: { conversationId: string; message: unknown }) => void,
+    onUnpinned: (payload: { conversationId: string; messageId: string }) => void
+  ): Unsubscribe {
+    const pinnedHandler = (payload: unknown) => {
+      const p = payload as { conversationId: string; message: unknown };
+      if (p?.conversationId !== conversationId) return;
+      onPinned(p);
+    };
+    const unpinnedHandler = (payload: unknown) => {
+      const p = payload as { conversationId: string; messageId: string };
+      if (p?.conversationId !== conversationId) return;
+      onUnpinned(p);
+    };
+    this.socket.on('message-pinned', pinnedHandler);
+    this.socket.on('message-unpinned', unpinnedHandler);
+    return () => {
+      this.socket.off('message-pinned', pinnedHandler);
+      this.socket.off('message-unpinned', unpinnedHandler);
+    };
   }
 
   unsubscribe(unsub: Unsubscribe): void {

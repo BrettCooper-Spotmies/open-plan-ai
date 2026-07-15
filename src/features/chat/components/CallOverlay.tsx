@@ -1,20 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCallStore } from '../stores/useCallStore';
 import { chatTransport } from '../transport';
 import { chatService } from '@/services/chat.service';
 import { googleMeetService } from '@/services/googleMeet.service';
 import { useEnsureGoogleMeetToken } from '@/features/integrations/hooks/useEnsureGoogleMeetToken';
 import { meetWindow } from '../utils/meetWindow';
+import { callWindow } from '../utils/callWindow';
+import { onCallStatusMessage, postCallStatusState, type CallStatusSnapshot } from '../utils/callStatusChannel';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import {
-  Phone,
-  PhoneOff,
-  Video,
-  ExternalLink,
-  Send,
-  Loader2,
-} from 'lucide-react';
+import { Phone, PhoneOff, Video } from 'lucide-react';
 import { toast } from 'sonner';
 
 const RING_TIMEOUT_MS = 45_000;
@@ -49,16 +44,42 @@ export function CallOverlay() {
   const unreachable = participants.filter((p) => !p.connected);
   const primaryName = callerName || reachable[0]?.name || participants[0]?.name || 'them';
   const isGroupRing = reachable.length > 1;
+  const showUnreachablePanel = callState === 'outgoing' && reachable.length === 0;
 
-  // Call duration timer, active state only. Also polls whether the user
-  // closed the actual Meet tab — that's the only signal we can read
-  // cross-origin — and ends the call in-app (and for the other party, via
-  // the socket relay) when it happens, so this overlay doesn't run forever.
+  const statusSnapshot: CallStatusSnapshot = useMemo(
+    () => ({
+      callState,
+      callType,
+      primaryName,
+      isGroupRing,
+      reachableCount: reachable.length,
+      unreachableNames: unreachable.map((p) => p.name || 'Someone'),
+      meetingUri,
+      callDuration,
+      showUnreachablePanel,
+      generatingLink,
+    }),
+    [callState, callType, primaryName, isGroupRing, participants, meetingUri, callDuration, showUnreachablePanel, generatingLink],
+  );
+  const statusSnapshotRef = useRef(statusSnapshot);
+  statusSnapshotRef.current = statusSnapshot;
+  const handlersRef = useRef<{
+    handleEnd: () => void;
+    handleReopenMeet: () => void;
+    handleSendLink: () => void;
+    reset: () => void;
+  } | null>(null);
+
+  // Call duration timer (active) and a manual-close watchdog (outgoing +
+  // active). Also polls whether the user closed the actual Meet tab or the
+  // status tab — the only signal we can read cross-window — and ends the
+  // call in-app (and for the other party, via the socket relay) when it
+  // happens, so nothing runs forever with no way to hang up.
   useEffect(() => {
-    if (callState === 'active') {
+    if (callState === 'active' || callState === 'outgoing') {
       timerRef.current = window.setInterval(() => {
-        incrementDuration();
-        if (meetWindow.isClosed()) {
+        if (callState === 'active') incrementDuration();
+        if ((callState === 'active' && meetWindow.isClosed()) || callWindow.isClosed()) {
           handleEnd();
         }
       }, 1000) as unknown as number;
@@ -80,6 +101,7 @@ export function CallOverlay() {
           chatTransport.emitCallEnd({ callId, conversationId });
           meetWindow.close();
         }
+        callWindow.close();
         toast.info(callState === 'outgoing' ? 'No answer' : 'Missed call');
         reset();
       }, RING_TIMEOUT_MS) as unknown as number;
@@ -92,14 +114,39 @@ export function CallOverlay() {
     };
   }, [callState, callId, conversationId, reset]);
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60).toString().padStart(2, '0');
-    const s = (secs % 60).toString().padStart(2, '0');
-    return `${m}:${s}`;
-  };
+  // Broadcasts the current call status to the standalone status tab
+  // (CallStatusWindow) every time anything it renders changes.
+  useEffect(() => {
+    postCallStatusState(statusSnapshot);
+  }, [statusSnapshot]);
+
+  // The status tab has no socket connection or store of its own — it just
+  // displays whatever we last broadcast and forwards button clicks back as
+  // commands. Subscribed once; reads the latest handlers/snapshot via refs
+  // so it isn't torn down and recreated on every render (e.g. every second
+  // while the duration timer ticks).
+  useEffect(() => {
+    return onCallStatusMessage((message) => {
+      if (message.type === 'request-state') {
+        postCallStatusState(statusSnapshotRef.current);
+        return;
+      }
+      if (message.type !== 'command') return;
+      const handlers = handlersRef.current;
+      if (!handlers) return;
+      if (message.action === 'end') handlers.handleEnd();
+      else if (message.action === 'reopen-meet') handlers.handleReopenMeet();
+      else if (message.action === 'send-link') handlers.handleSendLink();
+      else if (message.action === 'close') handlers.reset();
+    });
+  }, []);
 
   const handleAccept = () => {
     if (!callId || !conversationId) return;
+    // Opened synchronously inside this click handler — same reasoning as
+    // meetWindow.openPlaceholder(): a window opened later from an async
+    // callback would be blocked by the browser's popup blocker.
+    callWindow.open();
     chatTransport.emitCallAccept({ callId, conversationId });
     markActive();
     if (meetingUri) {
@@ -119,6 +166,7 @@ export function CallOverlay() {
       chatTransport.emitCallEnd({ callId, conversationId });
     }
     meetWindow.close();
+    callWindow.close();
     reset();
   };
 
@@ -143,6 +191,7 @@ export function CallOverlay() {
       }
       await chatService.sendMessage(conversationId, `I created a Google Meet call. Let's connect here: ${uri}`);
       toast.success('Google Meet link sent to chat!');
+      callWindow.close();
       reset();
     } catch {
       toast.error('Failed to create or send the Google Meet link.');
@@ -150,6 +199,8 @@ export function CallOverlay() {
       setGeneratingLink(false);
     }
   };
+
+  handlersRef.current = { handleEnd, handleReopenMeet, handleSendLink, reset };
 
   if (callState === 'idle') return null;
 
@@ -217,119 +268,8 @@ export function CallOverlay() {
     );
   }
 
-  const showUnreachablePanel = callState === 'outgoing' && reachable.length === 0;
-
-  return (
-    <div className="fixed inset-0 bg-background/95 backdrop-blur-md z-50 flex flex-col items-center justify-between p-6 select-none animate-in fade-in duration-200">
-      <div className="w-full flex items-center justify-between text-muted-foreground text-sm max-w-lg">
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
-          <span>Google Meet Calling</span>
-        </div>
-        {callState === 'active' && (
-          <span className="font-mono text-foreground font-semibold bg-primary/10 px-2 py-0.5 rounded-full">
-            {formatTime(callDuration)}
-          </span>
-        )}
-      </div>
-
-      <div className="flex-1 flex flex-col items-center justify-center gap-6 w-full max-w-lg">
-        {showUnreachablePanel ? (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-2xl p-6 text-center max-w-sm flex flex-col items-center gap-4 animate-in zoom-in-95">
-            <div className="h-12 w-12 rounded-full bg-destructive/20 flex items-center justify-center text-destructive">
-              <PhoneOff className="h-6 w-6" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-foreground mb-1 text-base">
-                {participants.length > 1 ? 'No one is reachable' : 'Recipient Not Connected'}
-              </h4>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Invalid call as {participants.map((p) => p.name).join(', ') || 'they'} hasn't connected to the
-                Google Meet integration. Please send them a link instead.
-              </p>
-            </div>
-            <div className="flex gap-2 w-full mt-2">
-              <Button variant="outline" className="flex-1 border-border" onClick={reset} disabled={generatingLink}>
-                Close
-              </Button>
-              <Button variant="default" className="flex-1 gap-2" onClick={handleSendLink} disabled={generatingLink}>
-                {generatingLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                Send Link
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <div className="relative w-full flex flex-col items-center gap-6">
-            <div className="relative h-48 w-48 md:h-56 md:w-56 rounded-full overflow-hidden border-2 border-primary/20 bg-muted shadow-2xl flex items-center justify-center">
-              <Avatar className="h-full w-full rounded-none">
-                <AvatarFallback className="text-4xl font-semibold bg-gradient-to-br from-primary/10 to-primary/20 text-primary">
-                  {getInitials(primaryName)}
-                </AvatarFallback>
-              </Avatar>
-              {callState === 'outgoing' && (
-                <div className="absolute inset-0 rounded-full border-2 border-primary/60 animate-ping opacity-25 pointer-events-none" />
-              )}
-            </div>
-
-            <div className="text-center space-y-2">
-              <h2 className="text-xl font-bold tracking-tight text-foreground">
-                {isGroupRing ? `${primaryName} + ${reachable.length - 1} other${reachable.length > 2 ? 's' : ''}` : primaryName}
-              </h2>
-              <p className="text-sm font-medium text-muted-foreground uppercase tracking-widest text-xs flex items-center justify-center gap-1.5">
-                {callType === 'video' ? (
-                  <Video className="h-3.5 w-3.5 text-primary" />
-                ) : (
-                  <Phone className="h-3.5 w-3.5 text-primary" />
-                )}
-                {callState === 'outgoing' && `Trying to connect to '${primaryName}'`}
-                {callState === 'active' && `${primaryName} connected — call in progress via Google Meet`}
-              </p>
-              {callState === 'active' && (
-                <p className="text-xs text-muted-foreground">
-                  The audio/video happens in the Google Meet tab — reopen it if you closed it.
-                </p>
-              )}
-              {unreachable.length > 0 && callState !== 'active' && (
-                <p className="text-xs text-muted-foreground max-w-xs">
-                  {unreachable.map((p) => p.name || 'Someone').join(', ')} hasn't connected Google Meet and won't be notified.
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="w-full max-w-lg flex flex-col items-center gap-4">
-        {callState === 'outgoing' && reachable.length > 0 && (
-          <Button
-            size="lg"
-            variant="destructive"
-            className="h-14 w-14 rounded-full p-0 flex items-center justify-center shadow-lg hover:shadow-destructive/25 hover:scale-105 transition-all"
-            onClick={handleEnd}
-            title="Cancel call"
-          >
-            <PhoneOff className="h-6 w-6" />
-          </Button>
-        )}
-
-        {callState === 'active' && (
-          <div className="flex items-center gap-3">
-            <Button variant="outline" className="gap-2 rounded-full" onClick={handleReopenMeet}>
-              <ExternalLink className="h-4 w-4" />
-              Reopen Meet
-            </Button>
-            <Button
-              size="lg"
-              variant="destructive"
-              className="h-14 w-14 rounded-full p-0 flex items-center justify-center shadow-lg hover:shadow-destructive/25 hover:scale-105 transition-all"
-              onClick={handleEnd}
-              title="Hang up"
-            >
-              <PhoneOff className="h-6 w-6" />
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+  // Outgoing/active status now lives in a standalone tab (CallStatusWindow),
+  // opened via callWindow.open() and kept in sync over BroadcastChannel —
+  // see the effects above. This tab no longer blocks the whole page.
+  return null;
 }

@@ -1,6 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
-import type { Conversation, ChatMessage, ReachableUser, MessageReaction, EntityTagRef } from '@/features/chat/types';
+import type { Conversation, ChatMessage, ReachableUser, MessageReaction, EntityTagRef, PinnedMessage, FavouriteMessage } from '@/features/chat/types';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import type { Project } from '@/types';
 
@@ -40,6 +40,21 @@ function mapChatMessage(raw: any): ChatMessage {
     isEdited: false,
     deletedAt: raw.deletedAt ?? raw.deleted_at ?? undefined,
     replyToMessageId: raw.replyToMessageId ?? raw.reply_to_message_id ?? undefined,
+  };
+}
+
+function mapPinnedMessage(raw: any): PinnedMessage {
+  return {
+    ...mapChatMessage(raw),
+    pinnedAt: raw.pinnedAt ?? raw.pinned_at ?? new Date().toISOString(),
+    pinnedBy: raw.pinnedBy ?? raw.pinned_by ?? null,
+  };
+}
+
+function mapFavouriteMessage(raw: any): FavouriteMessage {
+  return {
+    ...mapChatMessage(raw),
+    favouritedAt: raw.favouritedAt ?? raw.favourited_at ?? new Date().toISOString(),
   };
 }
 
@@ -246,6 +261,29 @@ export const chatService = {
 
   async toggleReaction(messageId: string, emoji: string): Promise<void> {
     await apiClient.post(ENDPOINTS.REACTIONS.TOGGLE(messageId), { emoji });
+  },
+
+  async pinMessage(conversationId: string, messageId: string): Promise<PinnedMessage> {
+    const data = await apiClient.post<any>(ENDPOINTS.PINS.TOGGLE(conversationId, messageId), {});
+    return mapPinnedMessage(data);
+  },
+
+  async unpinMessage(conversationId: string, messageId: string): Promise<void> {
+    await apiClient.delete(ENDPOINTS.PINS.TOGGLE(conversationId, messageId));
+  },
+
+  async getPinnedMessages(conversationId: string): Promise<PinnedMessage[]> {
+    const data = await apiClient.get<any[]>(ENDPOINTS.PINS.LIST(conversationId));
+    return (data || []).map(mapPinnedMessage);
+  },
+
+  async toggleFavourite(messageId: string): Promise<{ action: 'added' | 'removed' }> {
+    return apiClient.post(ENDPOINTS.FAVOURITES.TOGGLE(messageId), {});
+  },
+
+  async getFavouriteMessages(conversationId: string): Promise<FavouriteMessage[]> {
+    const data = await apiClient.get<any[]>(ENDPOINTS.FAVOURITES.LIST(conversationId));
+    return (data || []).map(mapFavouriteMessage);
   },
 
   async getSharedFiles(

@@ -1,4 +1,4 @@
-import { ArrowLeft, Phone, Search, UserPlus, Video, X, CalendarDays, Link, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Phone, Search, UserPlus, Video, X, CalendarDays, Link, Loader2, AlertCircle, Info, Pin, Star } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,7 @@ import { useEnsureGoogleMeetToken } from '@/features/integrations/hooks/useEnsur
 import { useCallStore } from '../stores/useCallStore';
 import { chatTransport } from '../transport';
 import { meetWindow } from '../utils/meetWindow';
+import { callWindow } from '../utils/callWindow';
 import { googleMeetService } from '@/services/googleMeet.service';
 import { ScheduleMeetingDialog } from './ScheduleMeetingDialog';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
@@ -37,15 +38,27 @@ interface ChatHeaderProps {
   typingText?: string;
   onAddMember?: () => void;
   onSendMessage?: (content: string) => Promise<void>;
+  pinnedCount?: number;
+  favouriteCount?: number;
+  filterMode?: 'pinned' | 'favourites' | null;
+  onShowPinned?: () => void;
+  onShowFavourites?: () => void;
+  onCloseFilter?: () => void;
 }
 
-export function ChatHeader({ 
-  conversation, 
-  onBack, 
-  onlineUserIds, 
-  typingText, 
+export function ChatHeader({
+  conversation,
+  onBack,
+  onlineUserIds,
+  typingText,
   onAddMember,
-  onSendMessage 
+  onSendMessage,
+  pinnedCount = 0,
+  favouriteCount = 0,
+  filterMode,
+  onShowPinned,
+  onShowFavourites,
+  onCloseFilter,
 }: ChatHeaderProps) {
   const isMobile = useIsMobile();
   const { user } = useAuth();
@@ -112,6 +125,13 @@ export function ChatHeader({
     const otherMembers = conversation.members.filter((m) => m.id !== currentUserId);
     if (otherMembers.length === 0 || startingCall) return;
 
+    // Opened synchronously inside this click handler, before any await —
+    // same reasoning as meetWindow.openPlaceholder() below: a window opened
+    // later from an async callback would be blocked by the popup blocker.
+    // Covers both the normal outgoing-call path and the "nobody reachable"
+    // panel path, since both render inside the call-status tab now.
+    callWindow.open();
+
     const participants = otherMembers.map((m) => ({
       id: m.id,
       name: m.name,
@@ -146,6 +166,7 @@ export function ChatHeader({
       if (!token) {
         toast.error('Your Google Meet session expired. Please reconnect in Integrations.');
         meetWindow.close();
+        callWindow.close();
         return;
       }
       const meetData = await googleMeetService.createInstantMeeting(token);
@@ -166,6 +187,7 @@ export function ChatHeader({
     } catch (err) {
       toast.error('Failed to start the call. Please try again.');
       meetWindow.close();
+      callWindow.close();
     } finally {
       setStartingCall(false);
     }
@@ -275,6 +297,26 @@ export function ChatHeader({
     );
   };
 
+  if (filterMode) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 border-b border-border min-h-[61px]">
+        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onCloseFilter} title="Back">
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          {filterMode === 'pinned' ? (
+            <Pin className="h-4 w-4 text-primary shrink-0" />
+          ) : (
+            <Star className="h-4 w-4 text-amber-500 shrink-0 fill-amber-500" />
+          )}
+          <h3 className="text-sm font-semibold truncate">
+            {filterMode === 'pinned' ? `Pinned Messages (${pinnedCount})` : `Favourite Messages (${favouriteCount})`}
+          </h3>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex items-center gap-3 px-4 py-3 border-b border-border min-h-[61px]">
       {onBack && (
@@ -353,7 +395,29 @@ export function ChatHeader({
             <UserPlus className="h-4 w-4" />
           </Button>
         )}
-        
+
+        {!isMessageSearchOpen && (onShowPinned || onShowFavourites) && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" title="Info">
+                <Info className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem onClick={onShowPinned} className="gap-2 cursor-pointer">
+                <Pin className="h-4 w-4 text-primary" />
+                Pinned Messages
+                {pinnedCount > 0 && <span className="ml-auto text-xs text-muted-foreground">{pinnedCount}</span>}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onShowFavourites} className="gap-2 cursor-pointer">
+                <Star className="h-4 w-4 text-amber-500" />
+                Favourite Messages
+                {favouriteCount > 0 && <span className="ml-auto text-xs text-muted-foreground">{favouriteCount}</span>}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         {/* Render voice/video call button triggers */}
         {renderCallButtons()}
       </div>
