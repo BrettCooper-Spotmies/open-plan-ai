@@ -15,6 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useGoogleMeetStore } from '@/features/integrations/stores/useGoogleMeetStore';
 import { useEnsureGoogleMeetToken } from '@/features/integrations/hooks/useEnsureGoogleMeetToken';
 import { googleMeetService } from '@/services/googleMeet.service';
+import { logger } from '@/services/monitoring/logger';
 import { Conversation } from '../types';
 import { Calendar, Clock, Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
@@ -125,7 +126,9 @@ export function ScheduleMeetingDialog({
       toast.success('Meeting scheduled and event created in Google Calendar!');
       onOpenChange(false);
     } catch (err) {
-      toast.error('Failed to schedule meeting. Make sure your integration connection is valid.');
+      const message = err instanceof Error ? err.message : 'Failed to schedule meeting.';
+      logger.error('Failed to schedule Google Meet meeting', { error: message });
+      toast.error(message);
     } finally {
       setLoading(false);
     }

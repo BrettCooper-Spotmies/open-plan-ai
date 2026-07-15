@@ -15,6 +15,39 @@ export interface GoogleMeetStatus {
   connectedAt: string | null;
 }
 
+/**
+ * Turns a failed Google API Response into an Error with a message that's
+ * actually useful to show the user, instead of a generic string that hides
+ * whether this was an expired token, a disabled API, or a bad request.
+ */
+async function toGoogleApiError(response: Response): Promise<Error> {
+  const rawBody = await response.text();
+  let reason = rawBody;
+  try {
+    const parsed = JSON.parse(rawBody);
+    reason = parsed?.error?.message || rawBody;
+  } catch {
+    // Body wasn't JSON — fall back to the raw text.
+  }
+
+  // error.message is often a generic summary ("Bad Request") with the real
+  // field-level cause only in error.errors[]/error.details — log the full
+  // body so it's never lost even when the toast text is a summary.
+  logger.error('Google API request failed', { status: response.status, url: response.url, body: rawBody });
+
+  if (response.status === 401) {
+    return new Error(
+      'Your Google session expired or was revoked. Please reconnect Google Meet in Integrations.'
+    );
+  }
+  if (response.status === 403) {
+    return new Error(
+      `Google denied this request (403): ${reason}. This usually means the Google Calendar API isn't enabled for this OAuth client's Google Cloud project, or the connected account isn't approved on the OAuth consent screen.`
+    );
+  }
+  return new Error(`Google API error (${response.status}): ${reason}`);
+}
+
 export const googleMeetService = {
   /**
    * Records on the backend that the current user has connected Google Meet.
@@ -52,8 +85,7 @@ export const googleMeetService = {
       });
 
       if (!response.ok) {
-        const errBody = await response.text();
-        throw new Error(`Google Meet API error: ${response.statusText} - ${errBody}`);
+        throw await toGoogleApiError(response);
       }
 
       const data = await response.json();
@@ -84,20 +116,27 @@ export const googleMeetService = {
       const body = {
         summary: params.title,
         description: 'Scheduled via Open Plan AI Google Meet Integration',
+        // startTime/endTime are already full UTC ISO strings (trailing "Z"),
+        // which fully and unambiguously specify the instant on their own.
+        // We deliberately omit `timeZone` here: Intl.DateTimeFormat().resolvedOptions().timeZone
+        // can resolve to a legacy IANA alias on some OS/ICU combinations
+        // (e.g. Windows reporting "Asia/Calcutta" instead of "Asia/Kolkata"),
+        // which Google's Calendar API rejects outright with a generic,
+        // field-less 400 "Bad Request". timeZone only matters for
+        // interpreting ambiguous local times or recurring-event DST rules —
+        // neither applies to a single one-off meeting with an explicit Z offset.
         start: {
           dateTime: params.startTime,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
         end: {
           dateTime: params.endTime,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         },
         attendees: params.attendees.map((email) => ({ email })),
         conferenceData: {
           createRequest: {
             requestId,
             conferenceSolutionKey: {
-              type: 'hangoutsMeeting', // Automatically creates a Google Meet link
+              type: 'hangoutsMeet', // Automatically creates a Google Meet link
             },
           },
         },
@@ -116,8 +155,7 @@ export const googleMeetService = {
       );
 
       if (!response.ok) {
-        const errBody = await response.text();
-        throw new Error(`Google Calendar API error: ${response.statusText} - ${errBody}`);
+        throw await toGoogleApiError(response);
       }
 
       const data = await response.json();
