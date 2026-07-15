@@ -117,7 +117,7 @@ export function ScheduleMeetingDialog({
       const dateStr = format(startDateTime, 'EEEE, MMMM d, yyyy');
       const timeStr = `${format(startDateTime, 'h:mm a')} - ${format(endDateTime, 'h:mm a')}`;
       
-      const messageContent = `📅 **Scheduled Google Meet:** ${title}\n🕒 **Time:** ${dateStr} at ${timeStr}\n🔗 **Join Meet:** ${result.meetingUri}\n📅 **Calendar Event:** ${result.htmlLink}`;
+      const messageContent = `📅 Scheduled Google Meet: ${title}\n🕒 Time: ${dateStr} at ${timeStr}\n🔗 Join Meet: ${result.meetingUri}\n📅 Calendar Event: ${result.htmlLink}`;
 
       if (onMeetingScheduled) {
         await onMeetingScheduled(messageContent);
