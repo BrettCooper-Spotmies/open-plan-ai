@@ -428,12 +428,12 @@ const CalendarPage: React.FC = () => {
     <>
       <div className="h-full flex flex-col gap-4 animate-fade-in">
         {/* Page Header */}
-        <div className="shrink-0">
+        {/* <div className="shrink-0">
           <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
           <p className="text-muted-foreground text-sm mt-1">
             View and manage project timelines, milestones, and tasks.
           </p>
-        </div>
+        </div> */}
 
         {/* Controls Layout */}
         <div className="flex flex-col shrink-0">
