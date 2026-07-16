@@ -50,6 +50,8 @@ interface CallStoreState {
 
   markActive: () => void;
   reset: () => void;
+  /** Drops one participant from a still-active group call — does not end the call. */
+  removeParticipant: (userId: string) => void;
   toggleMute: () => void;
   toggleCamera: () => void;
   syncDuration: () => void;
@@ -103,6 +105,9 @@ export const useCallStore = create<CallStoreState>((set) => ({
   markActive: () => set({ callState: 'active', callDuration: 0, callStartedAt: Date.now() }),
 
   reset: () => set({ ...idleState }),
+
+  removeParticipant: (userId) =>
+    set((state) => ({ participants: state.participants.filter((p) => p.id !== userId) })),
 
   toggleMute: () => set((state) => ({ isMuted: !state.isMuted })),
   toggleCamera: () => set((state) => ({ isCameraOff: !state.isCameraOff })),

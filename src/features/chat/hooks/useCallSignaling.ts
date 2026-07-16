@@ -64,7 +64,7 @@ export function useCallSignaling() {
       toast.success(`${byUserName || 'They'} joined the call`);
     });
 
-    const unsubDeclined = chatTransport.subscribeToCallDeclined(({ callId, byUserName }) => {
+    const unsubDeclined = chatTransport.subscribeToCallDeclined(({ callId, byUserId, byUserName }) => {
       const store = useCallStore.getState();
       if (store.callId !== callId) return;
 
@@ -73,11 +73,26 @@ export function useCallSignaling() {
       // being rung and hasn't made their own decision yet.
       if (store.callState === 'incoming') return;
 
+      // Drop the decliner from the invite list — for whoever's watching
+      // (the caller, or another already-active member) they're no longer
+      // part of this call.
+      const stillPending = store.participants.filter((p) => p.id !== byUserId);
+      store.removeParticipant(byUserId);
+
       // In a group call that's already active, one more decline doesn't end it.
       if (store.callState === 'active') {
         toast.info(`${byUserName || 'Someone'} declined`);
         return;
       }
+
+      // Still ringing (outgoing) — only give up once EVERY invitee has
+      // declined. If someone else is still being rung, keep the call alive
+      // for them instead of cancelling it out from under them.
+      if (stillPending.length > 0) {
+        toast.info(`${byUserName || 'Someone'} declined`);
+        return;
+      }
+
       toast.info(`${byUserName || 'They'} declined the call`);
       meetWindow.close();
       store.reset();
@@ -91,11 +106,23 @@ export function useCallSignaling() {
       store.reset();
     });
 
+    // Only fires for a 3+ person group call that's still active for everyone
+    // else — the server has already determined the call itself keeps going,
+    // so just drop the one participant instead of tearing down the call.
+    const unsubParticipantLeft = chatTransport.subscribeToCallParticipantLeft(({ callId, byUserId, byUserName }) => {
+      const store = useCallStore.getState();
+      if (store.callId !== callId) return;
+
+      store.removeParticipant(byUserId);
+      toast.info(`${byUserName || 'Someone'} left the call`);
+    });
+
     return () => {
       chatTransport.unsubscribe(unsubIncoming);
       chatTransport.unsubscribe(unsubAccepted);
       chatTransport.unsubscribe(unsubDeclined);
       chatTransport.unsubscribe(unsubEnded);
+      chatTransport.unsubscribe(unsubParticipantLeft);
       meetWindow.close();
     };
   }, [user?.id]);
