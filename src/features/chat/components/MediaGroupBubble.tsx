@@ -251,7 +251,7 @@ export function MediaGroupBubble({
         >
           <div
             className={cn(
-              'absolute z-10 rounded-lg border border-border bg-popover shadow-md px-1 py-0.5 flex items-center flex-wrap gap-0.5 transition-opacity',
+              'absolute z-10 w-max rounded-lg border border-border bg-popover shadow-md px-1 py-0.5 flex items-center flex-nowrap gap-0.5 transition-opacity',
               isMobile
                 ? 'bottom-full mb-2 left-1/2 -translate-x-1/2 max-w-[88vw] justify-center'
                 : cn('top-0', isOwn ? 'right-full mr-2' : 'left-full ml-2'),
