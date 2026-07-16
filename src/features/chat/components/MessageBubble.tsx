@@ -299,32 +299,53 @@ function getFileIcon(type: 'image' | 'pdf' | 'doc' | 'other') {
 
 // ─── Image Lightbox ──────────────────────────────────────────────────────────
 
-function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+function ImageLightbox({
+  src,
+  alt,
+  onClose,
+  onForward,
+}: {
+  src: string;
+  alt: string;
+  onClose: () => void;
+  onForward?: () => void;
+}) {
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-[95vw] max-h-[95vh] p-0 bg-black/90 border-none flex items-center justify-center overflow-hidden">
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 z-50 rounded-full bg-black/50 p-1.5 text-white hover:bg-black/80 transition-colors"
-        >
-          <X className="h-5 w-5" />
-        </button>
+      <DialogContent hideClose className="w-[95vw] h-[95vh] max-w-[95vw] max-h-[95vh] p-0 bg-black/90 border-none flex items-center justify-center overflow-hidden">
         <img
           src={src}
           alt={alt}
-          className="max-w-full max-h-[90vh] object-contain rounded"
+          className="max-w-full max-h-full object-contain rounded"
           onClick={(e) => e.stopPropagation()}
         />
-        <a
-          href={src}
-          download={alt}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="absolute bottom-3 right-3 z-50 rounded-full bg-black/50 p-1.5 text-white hover:bg-black/80 transition-colors"
-          title="Download"
-        >
-          <Download className="h-4 w-4" />
-        </a>
+        <div className="absolute top-3 right-3 z-50 flex items-center gap-2">
+          {onForward && (
+            <button
+              onClick={onForward}
+              className="rounded-full bg-black/50 p-1.5 text-white hover:bg-black/80 transition-colors"
+              title="Forward this photo"
+            >
+              <Forward className="h-4 w-4" />
+            </button>
+          )}
+          <a
+            href={src}
+            download={alt}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-full bg-black/50 p-1.5 text-white hover:bg-black/80 transition-colors"
+            title="Download"
+          >
+            <Download className="h-4 w-4" />
+          </a>
+          <button
+            onClick={onClose}
+            className="rounded-full bg-black/50 p-1.5 text-white hover:bg-black/80 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -332,7 +353,17 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
 
 // ─── Main FileAttachment component ──────────────────────────────────────────
 
-function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) {
+function FileAttachment({
+  file,
+  isOwn,
+  message,
+  onForward,
+}: {
+  file: FileContent;
+  isOwn: boolean;
+  message?: ChatMessage;
+  onForward?: (message: ChatMessage) => void;
+}) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const url = file.url ?? '';
   const fileType = getFileType(file.mimeType ?? '', file.fileName ?? '');
@@ -343,9 +374,9 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
     if (fileType === 'image') {
       setLightboxOpen(true);
     } else {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      chatService.openChatAttachment({ fileName: file.fileName ?? '', url });
     }
-  }, [url, fileType]);
+  }, [url, fileType, file.fileName]);
 
   if (fileType === 'image') {
     return (
@@ -368,7 +399,12 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
         </div>
         {file.text && <p className="text-sm mt-1 break-words">{file.text}</p>}
         {lightboxOpen && url && (
-          <ImageLightbox src={url} alt={file.fileName} onClose={() => setLightboxOpen(false)} />
+          <ImageLightbox
+            src={url}
+            alt={file.fileName}
+            onClose={() => setLightboxOpen(false)}
+            onForward={message && onForward ? () => { onForward(message); setLightboxOpen(false); } : undefined}
+          />
         )}
       </>
     );
@@ -883,7 +919,7 @@ export function MessageBubble({
               )}
               {isFile && fileData ? (
                 <div onClick={(e) => e.stopPropagation()}>
-                  <FileAttachment file={fileData} isOwn={isOwn} />
+                  <FileAttachment file={fileData} isOwn={isOwn} message={message} onForward={onForward} />
                 </div>
               ) : (
                 <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} memberNames={memberNames} />

@@ -4,6 +4,9 @@ import type { Conversation, ChatMessage, ReachableUser, MessageReaction, EntityT
 import { resolveFileUrl } from '@/utils/fileUrl';
 import type { Project } from '@/types';
 
+/** Caches blob URLs for already-fetched chat attachments, keyed by their source URL, so repeat opens reuse the local copy instead of re-fetching. */
+const attachmentBlobUrlCache = new Map<string, string>();
+
 /** Computes initials from a display name: first letter of the first 2 words, or the single letter for a one-word name. */
 function computeInitials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -357,6 +360,32 @@ export const chatService = {
   }): Promise<string> {
     if (file.url) return file.url;
     throw new Error('Attachment URL is not available');
+  },
+
+  /**
+   * Opens a chat attachment for viewing, reusing a cached blob URL on repeat clicks so
+   * re-opening a file doesn't re-trigger the browser's save-to-disk download every time.
+   */
+  async openChatAttachment(file: { fileName: string; url?: string }): Promise<void> {
+    if (!file.url) return;
+
+    const cached = attachmentBlobUrlCache.get(file.url);
+    if (cached) {
+      window.open(cached, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    try {
+      const response = await fetch(file.url);
+      if (!response.ok) throw new Error('Failed to fetch attachment');
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      attachmentBlobUrlCache.set(file.url, objectUrl);
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+    } catch {
+      // CORS or network failure — fall back to opening the original URL directly.
+      window.open(file.url, '_blank', 'noopener,noreferrer');
+    }
   },
 
   async downloadChatAttachment(file: {
