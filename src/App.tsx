@@ -34,6 +34,7 @@ const MyDay         = lazy(() => import("./features/myday"));
 const Calendar      = lazy(() => import("./features/calendar"));
 const Projects      = lazy(() => import("./features/projects"));
 const ProjectDetail = lazy(() => import("./features/projects/ProjectDetail"));
+const IssuePage     = lazy(() => import("./features/projects/IssuePage"));
 const NewProject    = lazy(() => import("./features/projects/NewProject"));
 const EditProject   = lazy(() => import("./features/projects/EditProject"));
 const Team          = lazy(() => import("./features/team"));
@@ -184,6 +185,14 @@ function AppShell() {
               element={
                 <Suspense fallback={<AppLayoutSkeleton variant="project-detail" />}>
                   <ProjectDetail />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/projects/:projectId/issues/:issueId/full"
+              element={
+                <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                  <IssuePage />
                 </Suspense>
               }
             />
