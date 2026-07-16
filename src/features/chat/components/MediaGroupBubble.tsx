@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Reply, ChevronLeft, ChevronRight, Trash2, Pin, PinOff, Star } from 'lucide-react';
+import { Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Reply, Forward, ChevronLeft, ChevronRight, Trash2, Pin, PinOff, Star } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -43,6 +43,7 @@ interface MediaGroupBubbleProps {
   onDelete?: (messageId: string, senderName: string) => void;
   onToggleReaction?: (messageId: string, emoji: string) => void | Promise<void>;
   onReply?: (message: ChatMessage) => void;
+  onForward?: (messages: ChatMessage[]) => void;
   onTogglePin?: (messageId: string) => void;
   onToggleFavourite?: (messageId: string) => void;
 }
@@ -152,7 +153,7 @@ function tileClass(index: number, count: number): string {
 export function MediaGroupBubble({
   messages, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
   readReceipts, otherMembersCount, reactions, reactionUsers, isPinned, isFavourited,
-  onDelete, onToggleReaction, onReply, onTogglePin, onToggleFavourite,
+  onDelete, onToggleReaction, onReply, onForward, onTogglePin, onToggleFavourite,
 }: MediaGroupBubbleProps) {
   const timezone = useUserTimezone();
   const isMobile = useIsMobile();
@@ -305,6 +306,12 @@ export function MediaGroupBubble({
                   <Reply className="h-4 w-4 mr-2" />
                   Reply
                 </DropdownMenuItem>
+                {onForward && (
+                  <DropdownMenuItem onClick={() => onForward(messages)} className="cursor-pointer">
+                    <Forward className="h-4 w-4 mr-2" />
+                    Forward{messages.length > 1 ? ` ${messages.length} Photos` : ''}
+                  </DropdownMenuItem>
+                )}
                 {onTogglePin && (
                   <DropdownMenuItem onClick={() => onTogglePin(last.id)} className="cursor-pointer">
                     {isPinned ? <PinOff className="h-4 w-4 mr-2" /> : <Pin className="h-4 w-4 mr-2" />}

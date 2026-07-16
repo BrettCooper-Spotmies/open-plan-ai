@@ -43,6 +43,25 @@ function mapChatMessage(raw: any): ChatMessage {
   };
 }
 
+/** Pulls {fileName, url, mimeType} out of a file/image message, handling both the new attachments[] shape and legacy JSON-encoded content. */
+function extractForwardableFile(message: ChatMessage): { fileName: string; url: string; mimeType?: string } | null {
+  if (message.attachments?.length) {
+    const a = message.attachments[0] as any;
+    const url = a.url;
+    if (!url) return null;
+    return { fileName: a.name ?? a.fileName ?? 'file', url, mimeType: a.mimeType ?? a.type };
+  }
+  try {
+    const parsed = JSON.parse(message.content);
+    if (parsed.fileName && parsed.url) {
+      return { fileName: parsed.fileName, url: parsed.url, mimeType: parsed.mimeType };
+    }
+  } catch {
+    // legacy content wasn't JSON — no file info available
+  }
+  return null;
+}
+
 function mapPinnedMessage(raw: any): PinnedMessage {
   return {
     ...mapChatMessage(raw),
@@ -171,6 +190,34 @@ export const chatService = {
       entityTags: entityTags?.length ? entityTags : undefined,
     });
     return mapChatMessage(data);
+  },
+
+  /**
+   * Forwards a message to another conversation. Text messages are re-sent as-is;
+   * file/image messages are re-fetched from their stored URL and re-uploaded, since
+   * there's no "clone by reference" endpoint on the backend — only direct file upload.
+   */
+  async forwardMessage(targetConversationId: string, message: ChatMessage): Promise<ChatMessage> {
+    const isFileMessage = message.contentType === 'file' || message.contentType === 'image';
+    const fileInfo = isFileMessage ? extractForwardableFile(message) : null;
+
+    if (!fileInfo) {
+      return this.sendMessage(targetConversationId, message.content);
+    }
+
+    const response = await fetch(fileInfo.url);
+    if (!response.ok) throw new Error('Failed to fetch attachment for forwarding');
+    const blob = await response.blob();
+    const file = new File([blob], fileInfo.fileName, { type: fileInfo.mimeType || blob.type });
+
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await apiClient.raw.post<{ success: boolean; data: any }>(
+      ENDPOINTS.CONVERSATIONS.FILE_MESSAGE(targetConversationId),
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return mapChatMessage(res.data.data);
   },
 
   async editMessage(messageId: string, newContent: string): Promise<void> {

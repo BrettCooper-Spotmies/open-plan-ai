@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, ZoomIn, FileImage, File as FileIcon2, Pin, PinOff, Star } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, Forward, ZoomIn, FileImage, File as FileIcon2, Pin, PinOff, Star } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -67,6 +67,7 @@ interface MessageBubbleProps {
   onDelete?: (messageId: string, senderName: string) => void;
   onToggleReaction?: (messageId: string, emoji: string) => void | Promise<void>;
   onReply?: (message: ChatMessage) => void;
+  onForward?: (message: ChatMessage) => void;
   onTogglePin?: (messageId: string) => void;
   onToggleFavourite?: (messageId: string) => void;
 }
@@ -433,7 +434,7 @@ function FileAttachment({ file, isOwn }: { file: FileContent; isOwn: boolean }) 
 export function MessageBubble({
   message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
   searchQuery, memberNames, reactionUsers, readReceipts, otherMembersCount, reactions,
-  isPinned, isFavourited, onEdit, onDelete, onToggleReaction, onReply, onTogglePin, onToggleFavourite,
+  isPinned, isFavourited, onEdit, onDelete, onToggleReaction, onReply, onForward, onTogglePin, onToggleFavourite,
 }: MessageBubbleProps) {
   const timezone = useUserTimezone();
   const navigate = useNavigate();
@@ -761,6 +762,12 @@ export function MessageBubble({
                   <DropdownMenuItem onClick={() => onReply?.(message)} className="cursor-pointer">
                     <Reply className="h-4 w-4 mr-2" />
                     Reply
+                  </DropdownMenuItem>
+                )}
+                {!isDeleted && onForward && (
+                  <DropdownMenuItem onClick={() => onForward(message)} className="cursor-pointer">
+                    <Forward className="h-4 w-4 mr-2" />
+                    Forward
                   </DropdownMenuItem>
                 )}
                 {!isDeleted && onTogglePin && (
