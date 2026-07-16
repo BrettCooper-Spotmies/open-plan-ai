@@ -7,6 +7,35 @@ import type { Project } from '@/types';
 /** Caches blob URLs for already-fetched chat attachments, keyed by their source URL, so repeat opens reuse the local copy instead of re-fetching. */
 const attachmentBlobUrlCache = new Map<string, string>();
 
+const OPENED_ATTACHMENTS_STORAGE_KEY = 'chat:openedAttachments';
+
+/** Persists which attachment URLs have already been opened/downloaded, so the UI can stop showing a "download" affordance for them across page reloads. */
+function loadOpenedAttachments(): Set<string> {
+  try {
+    const raw = localStorage.getItem(OPENED_ATTACHMENTS_STORAGE_KEY);
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+const openedAttachments = loadOpenedAttachments();
+
+function persistOpenedAttachments(): void {
+  try {
+    localStorage.setItem(OPENED_ATTACHMENTS_STORAGE_KEY, JSON.stringify([...openedAttachments]));
+  } catch {
+    // localStorage unavailable (private mode, quota) — in-memory tracking still works for this session.
+  }
+}
+
+function markAttachmentOpened(url: string): void {
+  if (!openedAttachments.has(url)) {
+    openedAttachments.add(url);
+    persistOpenedAttachments();
+  }
+}
+
 /** Computes initials from a display name: first letter of the first 2 words, or the single letter for a one-word name. */
 function computeInitials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -362,6 +391,16 @@ export const chatService = {
     throw new Error('Attachment URL is not available');
   },
 
+  /** Whether this attachment URL has already been opened/downloaded — used to hide the download affordance for it. */
+  isAttachmentOpened(url: string): boolean {
+    return openedAttachments.has(url);
+  },
+
+  /** Marks an attachment URL as opened/downloaded, e.g. after a plain `<a download>` click. */
+  markAttachmentOpened(url: string): void {
+    markAttachmentOpened(url);
+  },
+
   /**
    * Opens a chat attachment for viewing, reusing a cached blob URL on repeat clicks so
    * re-opening a file doesn't re-trigger the browser's save-to-disk download every time.
@@ -372,6 +411,7 @@ export const chatService = {
     const cached = attachmentBlobUrlCache.get(file.url);
     if (cached) {
       window.open(cached, '_blank', 'noopener,noreferrer');
+      markAttachmentOpened(file.url);
       return;
     }
 
@@ -386,6 +426,7 @@ export const chatService = {
       // CORS or network failure — fall back to opening the original URL directly.
       window.open(file.url, '_blank', 'noopener,noreferrer');
     }
+    markAttachmentOpened(file.url);
   },
 
   async downloadChatAttachment(file: {

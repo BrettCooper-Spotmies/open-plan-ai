@@ -368,6 +368,7 @@ function FileAttachment({
   const url = file.url ?? '';
   const fileType = getFileType(file.mimeType ?? '', file.fileName ?? '');
   const Icon = getFileIcon(fileType);
+  const [alreadyOpened, setAlreadyOpened] = useState(() => (url ? chatService.isAttachmentOpened(url) : false));
 
   const handleClick = useCallback(() => {
     if (!url) return;
@@ -375,6 +376,7 @@ function FileAttachment({
       setLightboxOpen(true);
     } else {
       chatService.openChatAttachment({ fileName: file.fileName ?? '', url });
+      setAlreadyOpened(true);
     }
   }, [url, fileType, file.fileName]);
 
@@ -449,13 +451,13 @@ function FileAttachment({
             {fileType === 'pdf' ? 'PDF' : fileType === 'doc' ? 'Document' : ''}
           </p>
         </div>
-        {url && (
+        {url && !alreadyOpened && (
           <a
             href={url}
             download={file.fileName}
             target="_blank"
             rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); chatService.markAttachmentOpened(url); setAlreadyOpened(true); }}
             title="Download"
             className="h-8 w-8 shrink-0 rounded-full flex items-center justify-center opacity-70 hover:opacity-100 hover:bg-accent/70 transition-colors"
           >
