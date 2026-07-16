@@ -5,7 +5,6 @@ import { chatTransport } from '../transport';
 import { useCallStore } from '../stores/useCallStore';
 import { useChatStore } from '../stores/useChatStore';
 import { meetWindow } from '../utils/meetWindow';
-import { callWindow } from '../utils/callWindow';
 
 /** Best-effort name lookup from whatever conversation data is already cached. */
 function resolveMemberName(conversationId: string, userId: string): string {
@@ -48,6 +47,14 @@ export function useCallSignaling() {
       const store = useCallStore.getState();
       if (store.callId !== callId || store.callState === 'idle') return;
 
+      // The server fans this out to every other conversation member, not just
+      // the caller — in a group ring, a fellow invitee who's still being rung
+      // must keep ringing independently. Someone else accepting doesn't
+      // answer the call on their behalf; only their own accept/decline/
+      // timeout should. Only the original caller ('outgoing') or a party
+      // that's already 'active' reacts here.
+      if (store.callState === 'incoming') return;
+
       if (store.callState !== 'active') {
         store.markActive();
         if (store.meetingUri) {
@@ -61,6 +68,11 @@ export function useCallSignaling() {
       const store = useCallStore.getState();
       if (store.callId !== callId) return;
 
+      // Same reasoning as call:accepted above — one recipient declining a
+      // group call must not cancel the ring for a fellow invitee who's still
+      // being rung and hasn't made their own decision yet.
+      if (store.callState === 'incoming') return;
+
       // In a group call that's already active, one more decline doesn't end it.
       if (store.callState === 'active') {
         toast.info(`${byUserName || 'Someone'} declined`);
@@ -68,7 +80,6 @@ export function useCallSignaling() {
       }
       toast.info(`${byUserName || 'They'} declined the call`);
       meetWindow.close();
-      callWindow.close();
       store.reset();
     });
 
@@ -77,7 +88,6 @@ export function useCallSignaling() {
       if (store.callId !== callId) return;
 
       meetWindow.close();
-      callWindow.close();
       store.reset();
     });
 
@@ -87,7 +97,6 @@ export function useCallSignaling() {
       chatTransport.unsubscribe(unsubDeclined);
       chatTransport.unsubscribe(unsubEnded);
       meetWindow.close();
-      callWindow.close();
     };
   }, [user?.id]);
 }
