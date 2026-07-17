@@ -12,6 +12,7 @@ import fusion360Logo from '@/assets/logos/fusion360.svg';
 import orcadLogo from '@/assets/logos/orcad.svg';
 import arenaLogo from '@/assets/logos/arena-plm.svg';
 import googleMeetLogo from '@/assets/logos/google-meet.svg';
+import googleDriveLogo from '@/assets/logos/google-drive.svg';
 import {
   Search,
   Clock,
@@ -21,7 +22,6 @@ import {
   Boxes,
   ShieldCheck,
   FileSpreadsheet,
-  HardDrive,
   CheckCircle2,
   Loader2,
 } from 'lucide-react';
@@ -135,7 +135,7 @@ const SECTIONS: Section[] = [
         id: 'google-drive',
         name: 'Google Drive',
         description: "Store project files in your organization's own Google Drive instead of our servers.",
-        logo: { kind: 'icon', icon: HardDrive },
+        logo: { kind: 'image', src: googleDriveLogo, alt: 'Google Drive' },
         color: '#0F9D58',
       },
       {
