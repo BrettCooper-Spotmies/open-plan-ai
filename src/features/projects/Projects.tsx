@@ -588,30 +588,38 @@ export default function Projects() {
                       Attachments ({projectAttachments.length})
                     </h4>
                     <div className="space-y-2">
-                      {projectAttachments.map((attachment: any) => (
-                        <a
-                          key={attachment.id}
-                          href={attachment.url || '#'}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className={cn(
-                            "flex items-center gap-2 p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors",
-                            attachment.url ? "cursor-pointer" : "cursor-default"
-                          )}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!attachment.url) {
-                              e.preventDefault();
-                            }
-                          }}
-                        >
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm flex-1 truncate">{attachment.name || attachment.file_name}</span>
-                          {attachment.url && (
-                            <span className="text-xs text-primary">Open ↗</span>
-                          )}
-                        </a>
-                      ))}
+                      {projectAttachments.map((attachment: any) => {
+                        const attachmentName = attachment.file_name || attachment.fileName || attachment.name || 'Untitled file';
+                        const rawUrl = attachment.url || attachment.fileUrl;
+                        const previewUrl = resolveFileUrl(rawUrl) ?? rawUrl;
+                        return (
+                          <div
+                            key={attachment.id}
+                            className={cn(
+                              "flex items-center gap-2 p-2 rounded-md bg-muted/50 hover:bg-muted transition-colors",
+                              previewUrl ? "cursor-pointer" : "cursor-default"
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (previewUrl) setPreviewFile(attachment);
+                            }}
+                          >
+                            {previewUrl && isImageAttachment(attachment) ? (
+                              <img
+                                src={previewUrl}
+                                alt={attachmentName}
+                                className="h-8 w-8 rounded object-cover shrink-0"
+                              />
+                            ) : (
+                              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                            )}
+                            <span className="text-sm flex-1 truncate">{attachmentName}</span>
+                            {previewUrl && (
+                              <Eye className="h-4 w-4 text-primary shrink-0" />
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
