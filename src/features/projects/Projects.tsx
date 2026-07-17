@@ -36,6 +36,7 @@ import { useOrgPermissions } from '@/hooks/useProjectPermissions';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -71,6 +72,26 @@ const formatDisplayDate = (value?: string | number | Date | null) => {
 
   return `${day}-${month}-${year}`;
 };
+
+const formatFileSize = (bytes?: number | null): string => {
+  if (!bytes) return '';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+};
+
+const getAttachmentMimeType = (attachment: any): string => {
+  const mime = attachment?.mimeType || attachment?.mime_type;
+  if (mime) return mime;
+  const name: string = attachment?.file_name || attachment?.fileName || attachment?.name || '';
+  const ext = name.split('.').pop()?.toLowerCase();
+  if (ext === 'pdf') return 'application/pdf';
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext || '')) return `image/${ext}`;
+  return '';
+};
+const isImageAttachment = (attachment: any) => getAttachmentMimeType(attachment).startsWith('image/');
+const isPdfAttachment = (attachment: any) => getAttachmentMimeType(attachment) === 'application/pdf';
 
 function ProjectTeamHoverCard({ projectId, memberCount }: { projectId: string; memberCount?: number }) {
   const [open, setOpen] = useState(false);
@@ -148,6 +169,7 @@ export default function Projects() {
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [filesDialogOpen, setFilesDialogOpen] = useState(false);
   const [selectedFilesProjectId, setSelectedFilesProjectId] = useState<string | null>(null);
+  const [previewFile, setPreviewFile] = useState<any>(null);
 
   // Fetch full project details when a project is selected for viewing details
   const { data: selectedProjectDetails, isLoading: isLoadingDetails } = useProjectDetail(selectedProjectId || undefined);
@@ -803,35 +825,42 @@ export default function Projects() {
             </div>
           ) : projectFiles.length > 0 ? (
             <div className="space-y-2 py-4">
-              {projectFiles.map((file: any) => (
-                <a
-                  key={file.id}
-                  href={file.url || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={cn(
-                    "flex items-center gap-3 p-3 rounded-md bg-muted/50 hover:bg-muted transition-colors border",
-                    file.url ? "cursor-pointer" : "cursor-default opacity-70"
-                  )}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!file.url) e.preventDefault();
-                  }}
-                >
-                  <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate text-foreground">
-                      {file.name || file.file_name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Click to view • {formatDisplayDate(file.uploaded_at || Date.now())}
-                    </p>
+              {projectFiles.map((file: any) => {
+                const rawUrl = file.url || file.fileUrl;
+                const previewUrl = resolveFileUrl(rawUrl) ?? rawUrl;
+                const fileName = file.file_name || file.fileName || file.name || 'Untitled file';
+                return (
+                  <div
+                    key={file.id}
+                    className={cn(
+                      "flex items-center gap-3 p-3 rounded-md bg-muted/50 hover:bg-muted transition-colors border",
+                      previewUrl ? "cursor-pointer" : "cursor-default opacity-70"
+                    )}
+                    onClick={() => previewUrl && setPreviewFile(file)}
+                  >
+                    {previewUrl && isImageAttachment(file) ? (
+                      <img
+                        src={previewUrl}
+                        alt={fileName}
+                        className="h-9 w-9 rounded object-cover shrink-0"
+                      />
+                    ) : (
+                      <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate text-foreground">
+                        {fileName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {previewUrl ? "Click to preview" : "No preview available"} • {formatDisplayDate(file.uploaded_at || file.createdAt || Date.now())}
+                      </p>
+                    </div>
+                    {previewUrl && (
+                      <Eye className="h-4 w-4 text-primary shrink-0" />
+                    )}
                   </div>
-                  {file.url && (
-                    <span className="text-xs text-primary font-medium shrink-0">Open ↗</span>
-                  )}
-                </a>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-8">
@@ -848,6 +877,58 @@ export default function Projects() {
               Close
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* File Preview Dialog */}
+      <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
+        <DialogContent className={cn(isPdfAttachment(previewFile) ? "max-w-4xl" : "max-w-2xl")}>
+          <DialogHeader>
+            <DialogTitle className="truncate pr-6">
+              {previewFile?.file_name || previewFile?.fileName || previewFile?.name}
+            </DialogTitle>
+            <DialogDescription>
+              {formatFileSize(previewFile?.file_size ?? previewFile?.fileSize)}
+            </DialogDescription>
+          </DialogHeader>
+          {(() => {
+            const rawUrl = previewFile?.url || previewFile?.fileUrl;
+            const url = rawUrl ? (resolveFileUrl(rawUrl) ?? rawUrl) : null;
+            if (previewFile && url && isImageAttachment(previewFile)) {
+              return (
+                <img
+                  src={url}
+                  alt={previewFile.file_name || previewFile.fileName || previewFile.name}
+                  className="max-h-[70vh] w-full object-contain rounded-lg bg-muted/30"
+                />
+              );
+            }
+            if (previewFile && url && isPdfAttachment(previewFile)) {
+              return (
+                <iframe
+                  src={url}
+                  title={previewFile.file_name || previewFile.fileName || previewFile.name}
+                  className="h-[75vh] w-full rounded-lg border"
+                />
+              );
+            }
+            return (
+              <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
+                <FileText className="h-16 w-16" />
+                <p className="text-sm">Preview not available for this file type</p>
+                {url && (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-primary hover:underline"
+                  >
+                    Open in new tab
+                  </a>
+                )}
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

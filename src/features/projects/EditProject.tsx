@@ -52,7 +52,8 @@ import {
     Globe,
     ChevronDown,
     ChevronUp,
-    Palette
+    Palette,
+    Eye
 } from "lucide-react";
 import { format, isBefore, startOfMonth } from "date-fns";
 import { cn, isValidPhoneNumber } from "@/lib/utils";
@@ -68,6 +69,7 @@ import { useProjectPermissions } from "@/hooks/useProjectPermissions";
 import { useProjectAttachments, useDeleteAttachment } from "@/hooks/useProjectAttachments";
 import { useProjectLinks, useCreateProjectLink, useDeleteProjectLink } from "@/hooks/useProjectLinks";
 import { projectStorageService } from "@/services/projectStorage.service";
+import { resolveFileUrl } from "@/utils/fileUrl";
 import { modulesService } from "@/services/modules.service";
 import { milestonesService } from "@/services/milestones.service";
 import { projectMembersService } from "@/services/projectMembers.service";
@@ -386,6 +388,7 @@ const EditProject = () => {
     const [isUploading, setIsUploading] = useState(false);
     const [isDragOver, setIsDragOver] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [previewFile, setPreviewFile] = useState<any>(null);
 
     // Member management (add/remove/change role) is Admin-only.
     const canManageProjectMembers = canManageMembers;
@@ -640,6 +643,18 @@ const EditProject = () => {
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
     };
+
+    const getAttachmentMimeType = (attachment: any): string => {
+        const mime = attachment?.mimeType || attachment?.mime_type;
+        if (mime) return mime;
+        const name: string = attachment?.file_name || attachment?.fileName || '';
+        const ext = name.split('.').pop()?.toLowerCase();
+        if (ext === 'pdf') return 'application/pdf';
+        if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext || '')) return `image/${ext}`;
+        return '';
+    };
+    const isImageAttachment = (attachment: any) => getAttachmentMimeType(attachment).startsWith('image/');
+    const isPdfAttachment = (attachment: any) => getAttachmentMimeType(attachment) === 'application/pdf';
 
     const handleFileUpload = useCallback(async (files: FileList | null) => {
         if (!files || files.length === 0 || !id) return;
@@ -1915,40 +1930,56 @@ const EditProject = () => {
                             <div className="space-y-2">
                                 <Label>Current Attachments</Label>
                                 <div className="space-y-2">
-                                    {visibleProjectAttachments.map((attachment: any) => (
+                                    {visibleProjectAttachments.map((attachment: any) => {
+                                        const previewUrl = resolveFileUrl(attachment.url || attachment.fileUrl) ?? (attachment.url || attachment.fileUrl);
+                                        return (
                                         <div
                                             key={attachment.id}
                                             className="flex items-center justify-between p-3 rounded-md bg-muted/50"
                                         >
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                                                {(attachment.url || attachment.fileUrl) ? (
-                                                    <a
-                                                        href={attachment.url || attachment.fileUrl}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-sm truncate hover:underline text-foreground"
-                                                        title="Click to view file"
-                                                    >
-                                                        {attachment.file_name || attachment.fileName}
-                                                    </a>
+                                            <div
+                                                className="flex items-center gap-2 min-w-0 cursor-pointer"
+                                                onClick={() => previewUrl && setPreviewFile(attachment)}
+                                            >
+                                                {previewUrl && isImageAttachment(attachment) ? (
+                                                    <img
+                                                        src={previewUrl}
+                                                        alt={attachment.file_name || attachment.fileName}
+                                                        className="h-8 w-8 rounded object-cover shrink-0"
+                                                    />
                                                 ) : (
-                                                    <span className="text-sm truncate">{attachment.file_name || attachment.fileName}</span>
+                                                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                                                 )}
-                                                <span className="text-xs text-muted-foreground">
+                                                <span className="text-sm truncate hover:underline text-foreground" title={previewUrl ? "Click to preview" : undefined}>
+                                                    {attachment.file_name || attachment.fileName}
+                                                </span>
+                                                <span className="text-xs text-muted-foreground shrink-0">
                                                     ({formatFileSize(attachment.file_size ?? attachment.fileSize ?? 0)})
                                                 </span>
                                             </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 shrink-0"
-                                                onClick={() => handleDeleteAttachment(attachment.id)}
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </Button>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                {previewUrl && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8"
+                                                        onClick={() => setPreviewFile(attachment)}
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8"
+                                                    onClick={() => handleDeleteAttachment(attachment.id)}
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
@@ -2018,6 +2049,57 @@ const EditProject = () => {
                         )}
                     </CardContent>
                 </Card>
+
+                {/* File Preview Dialog */}
+                <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
+                    <DialogContent className={cn(isPdfAttachment(previewFile) ? "max-w-4xl" : "max-w-2xl")}>
+                        <DialogHeader>
+                            <DialogTitle className="truncate pr-6">
+                                {previewFile?.file_name || previewFile?.fileName}
+                            </DialogTitle>
+                            <DialogDescription>
+                                {formatFileSize(previewFile?.file_size ?? previewFile?.fileSize ?? 0)}
+                            </DialogDescription>
+                        </DialogHeader>
+                        {(() => {
+                            const url = previewFile ? (resolveFileUrl(previewFile.url || previewFile.fileUrl) ?? (previewFile.url || previewFile.fileUrl)) : null;
+                            if (previewFile && url && isImageAttachment(previewFile)) {
+                                return (
+                                    <img
+                                        src={url}
+                                        alt={previewFile.file_name || previewFile.fileName}
+                                        className="max-h-[70vh] w-full object-contain rounded-lg bg-muted/30"
+                                    />
+                                );
+                            }
+                            if (previewFile && url && isPdfAttachment(previewFile)) {
+                                return (
+                                    <iframe
+                                        src={url}
+                                        title={previewFile.file_name || previewFile.fileName}
+                                        className="h-[75vh] w-full rounded-lg border"
+                                    />
+                                );
+                            }
+                            return (
+                                <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
+                                    <FileText className="h-16 w-16" />
+                                    <p className="text-sm">Preview not available for this file type</p>
+                                    {url && (
+                                        <a
+                                            href={url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-sm text-primary hover:underline"
+                                        >
+                                            Open in new tab
+                                        </a>
+                                    )}
+                                </div>
+                            );
+                        })()}
+                    </DialogContent>
+                </Dialog>
 
                 {/* Delete Confirmation Dialog */}
                 <Dialog open={deleteConfirmation.isOpen} onOpenChange={(open) => {
