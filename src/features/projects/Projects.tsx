@@ -37,6 +37,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { FilePreviewDialog } from '@/components/FilePreviewDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -73,14 +74,6 @@ const formatDisplayDate = (value?: string | number | Date | null) => {
   return `${day}-${month}-${year}`;
 };
 
-const formatFileSize = (bytes?: number | null): string => {
-  if (!bytes) return '';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-};
-
 const getAttachmentMimeType = (attachment: any): string => {
   const mime = attachment?.mimeType || attachment?.mime_type;
   if (mime) return mime;
@@ -91,7 +84,6 @@ const getAttachmentMimeType = (attachment: any): string => {
   return '';
 };
 const isImageAttachment = (attachment: any) => getAttachmentMimeType(attachment).startsWith('image/');
-const isPdfAttachment = (attachment: any) => getAttachmentMimeType(attachment) === 'application/pdf';
 
 function ProjectTeamHoverCard({ projectId, memberCount }: { projectId: string; memberCount?: number }) {
   const [open, setOpen] = useState(false);
@@ -881,56 +873,20 @@ export default function Projects() {
       </Dialog>
 
       {/* File Preview Dialog */}
-      <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
-        <DialogContent className={cn(isPdfAttachment(previewFile) ? "max-w-4xl" : "max-w-2xl")}>
-          <DialogHeader>
-            <DialogTitle className="truncate pr-6">
-              {previewFile?.file_name || previewFile?.fileName || previewFile?.name}
-            </DialogTitle>
-            <DialogDescription>
-              {formatFileSize(previewFile?.file_size ?? previewFile?.fileSize)}
-            </DialogDescription>
-          </DialogHeader>
-          {(() => {
-            const rawUrl = previewFile?.url || previewFile?.fileUrl;
-            const url = rawUrl ? (resolveFileUrl(rawUrl) ?? rawUrl) : null;
-            if (previewFile && url && isImageAttachment(previewFile)) {
-              return (
-                <img
-                  src={url}
-                  alt={previewFile.file_name || previewFile.fileName || previewFile.name}
-                  className="max-h-[70vh] w-full object-contain rounded-lg bg-muted/30"
-                />
-              );
-            }
-            if (previewFile && url && isPdfAttachment(previewFile)) {
-              return (
-                <iframe
-                  src={url}
-                  title={previewFile.file_name || previewFile.fileName || previewFile.name}
-                  className="h-[75vh] w-full rounded-lg border"
-                />
-              );
-            }
-            return (
-              <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
-                <FileText className="h-16 w-16" />
-                <p className="text-sm">Preview not available for this file type</p>
-                {url && (
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-sm text-primary hover:underline"
-                  >
-                    Open in new tab
-                  </a>
-                )}
-              </div>
-            );
-          })()}
-        </DialogContent>
-      </Dialog>
+      {previewFile && (() => {
+        const rawUrl = previewFile.url || previewFile.fileUrl;
+        const url = resolveFileUrl(rawUrl) ?? rawUrl;
+        return (
+          <FilePreviewDialog
+            file={{
+              url,
+              fileName: previewFile.file_name || previewFile.fileName || previewFile.name || 'Untitled file',
+              mimeType: getAttachmentMimeType(previewFile) || undefined,
+            }}
+            onClose={() => setPreviewFile(null)}
+          />
+        );
+      })()}
 
     </>
   );

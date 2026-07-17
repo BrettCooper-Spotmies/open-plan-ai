@@ -70,6 +70,7 @@ import { useProjectAttachments, useDeleteAttachment } from "@/hooks/useProjectAt
 import { useProjectLinks, useCreateProjectLink, useDeleteProjectLink } from "@/hooks/useProjectLinks";
 import { projectStorageService } from "@/services/projectStorage.service";
 import { resolveFileUrl } from "@/utils/fileUrl";
+import { FilePreviewDialog } from "@/components/FilePreviewDialog";
 import { modulesService } from "@/services/modules.service";
 import { milestonesService } from "@/services/milestones.service";
 import { projectMembersService } from "@/services/projectMembers.service";
@@ -654,7 +655,6 @@ const EditProject = () => {
         return '';
     };
     const isImageAttachment = (attachment: any) => getAttachmentMimeType(attachment).startsWith('image/');
-    const isPdfAttachment = (attachment: any) => getAttachmentMimeType(attachment) === 'application/pdf';
 
     const handleFileUpload = useCallback(async (files: FileList | null) => {
         if (!files || files.length === 0 || !id) return;
@@ -2051,55 +2051,20 @@ const EditProject = () => {
                 </Card>
 
                 {/* File Preview Dialog */}
-                <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
-                    <DialogContent className={cn(isPdfAttachment(previewFile) ? "max-w-4xl" : "max-w-2xl")}>
-                        <DialogHeader>
-                            <DialogTitle className="truncate pr-6">
-                                {previewFile?.file_name || previewFile?.fileName}
-                            </DialogTitle>
-                            <DialogDescription>
-                                {formatFileSize(previewFile?.file_size ?? previewFile?.fileSize ?? 0)}
-                            </DialogDescription>
-                        </DialogHeader>
-                        {(() => {
-                            const url = previewFile ? (resolveFileUrl(previewFile.url || previewFile.fileUrl) ?? (previewFile.url || previewFile.fileUrl)) : null;
-                            if (previewFile && url && isImageAttachment(previewFile)) {
-                                return (
-                                    <img
-                                        src={url}
-                                        alt={previewFile.file_name || previewFile.fileName}
-                                        className="max-h-[70vh] w-full object-contain rounded-lg bg-muted/30"
-                                    />
-                                );
-                            }
-                            if (previewFile && url && isPdfAttachment(previewFile)) {
-                                return (
-                                    <iframe
-                                        src={url}
-                                        title={previewFile.file_name || previewFile.fileName}
-                                        className="h-[75vh] w-full rounded-lg border"
-                                    />
-                                );
-                            }
-                            return (
-                                <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground">
-                                    <FileText className="h-16 w-16" />
-                                    <p className="text-sm">Preview not available for this file type</p>
-                                    {url && (
-                                        <a
-                                            href={url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-sm text-primary hover:underline"
-                                        >
-                                            Open in new tab
-                                        </a>
-                                    )}
-                                </div>
-                            );
-                        })()}
-                    </DialogContent>
-                </Dialog>
+                {previewFile && (() => {
+                    const rawUrl = previewFile.url || previewFile.fileUrl;
+                    const url = resolveFileUrl(rawUrl) ?? rawUrl;
+                    return (
+                        <FilePreviewDialog
+                            file={{
+                                url,
+                                fileName: previewFile.file_name || previewFile.fileName || 'Untitled file',
+                                mimeType: getAttachmentMimeType(previewFile) || undefined,
+                            }}
+                            onClose={() => setPreviewFile(null)}
+                        />
+                    );
+                })()}
 
                 {/* Delete Confirmation Dialog */}
                 <Dialog open={deleteConfirmation.isOpen} onOpenChange={(open) => {
