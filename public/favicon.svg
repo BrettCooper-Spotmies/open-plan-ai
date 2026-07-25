@@ -1,8 +1,8 @@
 <svg width="259" height="258" viewBox="0 0 259 258" fill="none" xmlns="http://www.w3.org/2000/svg">
-<style>
-  .logo-path { fill: black; }
+<style type="text/css">
+  .logo-path { fill: #000000; }
   @media (prefers-color-scheme: dark) {
-    .logo-path { fill: white; }
+    .logo-path { fill: #FFFFFF; }
   }
 </style>
 <g clip-path="url(#clip0_1_73)">
