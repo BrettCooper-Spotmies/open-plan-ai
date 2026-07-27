@@ -1216,7 +1216,7 @@ export const TaskDetailModal = ({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {mode === 'create' && (
-          <DialogHeader className="px-6 py-4 border-b flex-row items-center justify-between">
+          <DialogHeader className="px-6 py-4 border-b flex-row items-center justify-between shrink-0">
             <DialogTitle>Add New Task</DialogTitle>
             <DialogClose asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
@@ -1298,10 +1298,8 @@ export const TaskDetailModal = ({
         </DialogDescription>
 
         <ScrollArea className={cn(
-          'flex-1',
-          isMobile
-            ? (showMobileHeader && isMobileEditMode ? 'max-h-[calc(100dvh-129px)]' : 'max-h-[calc(100dvh-57px)]')
-            : 'max-h-[calc(90vh-80px)]'
+          'flex-1 overflow-y-auto w-full min-h-0',
+          isMobile && (showMobileHeader && isMobileEditMode ? 'max-h-[calc(100dvh-129px)]' : 'max-h-[calc(100dvh-57px)]')
         )}>
           <div className={cn('p-4 sm:p-6 space-y-6', showMobileHeader && 'space-y-5')}>
             {showMobileHeader && projectName && (
@@ -2824,7 +2822,7 @@ export const TaskDetailModal = ({
           </div>
         </ScrollArea>
         {mode === 'create' && (
-          <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full">
+          <div className="p-4 border-t flex justify-end gap-2 bg-background z-10 w-full shrink-0">
             <Button variant="outline" onClick={attemptClose} disabled={isSaving}>
               Cancel
             </Button>
