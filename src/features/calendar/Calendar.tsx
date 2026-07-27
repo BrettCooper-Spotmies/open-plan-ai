@@ -20,10 +20,9 @@ import {
 } from './utils/calendarUtils';
 import { CalendarFilter, CalendarViewMode, Task, Milestone, Issue } from '@/types';
 import { useProjects } from '@/hooks/useProjects';
-import { useAllTasks, useUpdateTask } from '@/hooks/useTasks';
+import { useAllTasks, useUpdateTask, useBatchUpdateTasks } from '@/hooks/useTasks';
 import { useAllIssues, useUpdateIssue } from '@/hooks/useIssues';
 import { useAllMilestones, useUpdateMilestone } from '@/hooks/useMilestones';
-import { useBatchUpdateTasks } from '@/hooks/useProjectMutations';
 import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -133,7 +132,7 @@ const CalendarPage: React.FC = () => {
   // Mutations
   const updateTaskMutation = useUpdateTask();
   const updateMilestoneMutation = useUpdateMilestone();
-  const batchUpdateTasksMutation = useBatchUpdateTasks(''); // projectId will be overridden if needed by service
+  const batchUpdateTasksMutation = useBatchUpdateTasks();
   const updateIssueMutation = useUpdateIssue();
 
   const isLoading = tasksLoading || milestonesLoading || issuesLoading;
@@ -348,7 +347,14 @@ const CalendarPage: React.FC = () => {
           }}
           onBatchUpdate={async (updates) => {
             try {
-              await batchUpdateTasksMutation.mutateAsync(updates);
+              if (!selectedTask.projectId) {
+                toast.error('Missing project ID');
+                return;
+              }
+              await batchUpdateTasksMutation.mutateAsync({
+                projectId: selectedTask.projectId,
+                updates,
+              });
             } catch (error) {
               logger.error('Failed to batch update tasks:', error);
               toast.error('Failed to update dependent tasks');
