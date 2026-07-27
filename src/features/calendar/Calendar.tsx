@@ -26,6 +26,7 @@ import { useAllMilestones, useUpdateMilestone } from '@/hooks/useMilestones';
 import { useBatchUpdateTasks } from '@/hooks/useProjectMutations';
 import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { parse, format as formatDate, isValid } from 'date-fns';
 import { toast } from 'sonner';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
@@ -119,6 +120,7 @@ function dbMilestoneToFrontend(m: any): Milestone {
 const CalendarPage: React.FC = () => {
   const isMobile = useIsMobile();
   const { currentOrganization } = useOrganization();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Real data hooks
@@ -188,29 +190,33 @@ const CalendarPage: React.FC = () => {
   const allEvents = useMemo(() => {
     const events: CalendarEvent[] = [];
 
-    // Tasks
-    allTasks.forEach(task => {
-      const projectName = projectMap.get(task.projectId || '') || 'Unknown Project';
-      const event = taskToCalendarEvent(task, projectName);
-      if (event) events.push(event);
-    });
+    // Tasks assigned to the current user only
+    allTasks
+      .filter(task => task.assignees?.some(a => a.id === user?.id))
+      .forEach(task => {
+        const projectName = projectMap.get(task.projectId || '') || 'Unknown Project';
+        const event = taskToCalendarEvent(task, projectName);
+        if (event) events.push(event);
+      });
 
-    // Milestones (DB shape)
+    // Milestones (DB shape) — project-level, not assigned to individuals
     allMilestones.forEach((m: any) => {
       const projectName = projectMap.get(m.project_id) || 'Unknown Project';
       const event = dbMilestoneToCalendarEvent(m, projectName);
       if (event) events.push(event);
     });
 
-    // Issues
-    allIssues.forEach(issue => {
-      const projectName = projectMap.get(issue.projectId) || 'Unknown Project';
-      const event = issueToCalendarEvent(issue, projectName);
-      if (event) events.push(event);
-    });
+    // Issues assigned to the current user only
+    allIssues
+      .filter(issue => issue.assignees?.some(a => a.id === user?.id))
+      .forEach(issue => {
+        const projectName = projectMap.get(issue.projectId) || 'Unknown Project';
+        const event = issueToCalendarEvent(issue, projectName);
+        if (event) events.push(event);
+      });
 
     return events;
-  }, [allTasks, allMilestones, allIssues, projectMap]);
+  }, [allTasks, allMilestones, allIssues, projectMap, user?.id]);
 
   // Apply filters
   const filteredEvents = useMemo(() => {
