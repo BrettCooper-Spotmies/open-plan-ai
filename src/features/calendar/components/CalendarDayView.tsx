@@ -43,7 +43,7 @@ export const CalendarDayView: React.FC<CalendarDayViewProps> = ({
         </div>
         <div className="grid gap-2">
           {items.map((event) => (
-            <CalendarEventPreview key={event.id} event={event}>
+            <CalendarEventPreview key={event.id} event={event} side="bottom">
               <div className="min-w-0" onClick={() => onEventClick(event)}>
                 <CalendarEventCard event={event} variant="full" />
               </div>
