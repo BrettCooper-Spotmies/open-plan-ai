@@ -242,7 +242,7 @@ export function useCreateMilestone(projectId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.milestones.list(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.milestones.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       toast.success('Milestone created successfully');
     },
@@ -284,7 +284,7 @@ export function useUpdateMilestone(projectId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.milestones.list(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.milestones.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
     },
   });
@@ -299,7 +299,7 @@ export function useToggleMilestoneComplete(projectId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.milestones.list(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.milestones.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
     },
     onError: () => {
@@ -316,7 +316,7 @@ export function useDeleteMilestone(projectId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.milestones.list(projectId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.milestones.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       toast.success('Milestone deleted');
     },
