@@ -1,25 +1,24 @@
 let current: Window | null = null;
 
 /**
- * Shared handle to the Google Meet tab for the active call. Opening a blank
- * window synchronously inside a click handler and navigating it later
- * (rather than calling window.open() with the real URL from an async
- * callback) avoids browser popup blockers, since only *opening new* windows
- * outside a user gesture is blocked — navigating an existing reference isn't.
+ * Shared handle to the Google Meet tab for the active call. No tab is opened
+ * for the caller until the callee actually accepts (see useCallSignaling.ts)
+ * — that accept arrives as an async socket event, not a click, so
+ * window.open() there is a genuine "no user gesture" call and browsers are
+ * free to block it. navigateOrOpen() returns the window it got (or null) so
+ * callers can detect a block and offer a manual fallback — a click on that
+ * fallback is a real gesture, so the same call always succeeds from there.
  */
 export const meetWindow = {
-  openPlaceholder(): void {
-    current = window.open('about:blank', '_blank');
-  },
-
-  navigateOrOpen(uri: string): void {
-    if (!uri) return;
+  navigateOrOpen(uri: string): Window | null {
+    if (!uri) return null;
     if (current && !current.closed) {
       current.location.href = uri;
       current.focus();
     } else {
       current = window.open(uri, '_blank');
     }
+    return current;
   },
 
   close(): void {
