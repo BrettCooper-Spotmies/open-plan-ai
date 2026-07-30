@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
-import { Sun, Moon, ChevronLeft, BarChart3, Plus, Users, Bug } from 'lucide-react';
+import { Sun, Moon, ChevronLeft, BarChart3, Plus, Users, Bug, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +31,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useChatStore } from '@/features/chat/stores/useChatStore';
+import { useAssistantStore } from '@/features/assistant/stores/useAssistantStore';
 import { ProjectTeamButton } from '@/features/projects/components/ProjectTeamButton';
 import { cn } from '@/lib/utils';
 
@@ -65,6 +66,7 @@ export function AppHeader() {
   const [showReportBugDialog, setShowReportBugDialog] = useState(false);
   const setNewDMDialogOpen = useChatStore((s) => s.setNewDMDialogOpen);
   const setNewGroupDialogOpen = useChatStore((s) => s.setNewGroupDialogOpen);
+  const toggleAssistant = useAssistantStore((s) => s.toggle);
 
   // Mobile chat list route: AppHeader is only rendered here (not on /chat/:id,
   // see AppLayout's showAppHeader), so pathname alone is enough to detect it.
@@ -171,6 +173,28 @@ export function AppHeader() {
           isMobileProjectDetail ? <ProjectTeamButton projectId={projectId!} /> : null
         ) : (
           <>
+            {/* Ask Assistant */}
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn(
+                'h-9 gap-1.5 text-muted-foreground hover:text-foreground',
+                isMobile ? 'w-9 px-0 border border-border rounded-xl' : 'px-3',
+              )}
+              onClick={toggleAssistant}
+              title="Ask the Assistant (⌘K)"
+            >
+              <Sparkles className="h-4 w-4" />
+              {!isMobile && (
+                <>
+                  Ask
+                  <kbd className="ml-1 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                    ⌘K
+                  </kbd>
+                </>
+              )}
+            </Button>
+
             {/* Report a Bug */}
             <Button
               variant="ghost"
