@@ -1,7 +1,9 @@
 import {
   Activity,
+  AlertTriangle,
   ClipboardCheck,
   Flag,
+  GitPullRequest,
   LayoutGrid,
   Layers,
   ListChecks,
@@ -21,6 +23,8 @@ export interface AssistantCategoryMeta {
   title: string;
   icon: LucideIcon;
   description: string;
+  /** Not yet wired to a real backend — kept in the data model but not rendered until then. */
+  hidden?: boolean;
 }
 
 export const ASSISTANT_CATEGORIES: AssistantCategoryMeta[] = [
@@ -37,6 +41,7 @@ export const ASSISTANT_CATEGORIES: AssistantCategoryMeta[] = [
     title: 'Act',
     icon: Wand2,
     description: 'Create tasks, raise issues, shift gates, import a BOM revision.',
+    hidden: true,
   },
   {
     id: 'build',
@@ -44,6 +49,7 @@ export const ASSISTANT_CATEGORIES: AssistantCategoryMeta[] = [
     title: 'Build',
     icon: LayoutGrid,
     description: 'Stand up a whole project — or just a requirements set — from a PRD, a BOM, and a schedule.',
+    hidden: true,
   },
 ];
 
@@ -72,54 +78,139 @@ export const ASSISTANT_SUGGESTIONS: AssistantSuggestion[] = [
   { id: 'build-requirements', category: 'build', icon: LayoutGrid, text: 'Create requirements for this project from these notes' },
 ];
 
-export interface AssistantConversation {
-  id: string;
-  title: string;
-  subtitle: string;
-  scope: string;
-  timeAgo: string;
-  icon?: LucideIcon;
+// ─── Real conversation/message types (Phase 1 — Ask, read-only) ───────────────
+// Replaces the earlier mock array below — the assistant now talks to a real
+// backend (src/services/assistant.service.ts).
+
+/** Matches the backend's ai_conversations.scope enum exactly (lowercase). */
+export type BackendAiScope = 'project' | 'all_projects' | 'bom';
+
+export const ASSISTANT_SCOPE_OPTIONS = ['This project', 'All projects', 'This BOM'] as const;
+export type AssistantScope = (typeof ASSISTANT_SCOPE_OPTIONS)[number];
+
+export function scopeLabelToBackend(label: AssistantScope): BackendAiScope {
+  if (label === 'All projects') return 'all_projects';
+  if (label === 'This BOM') return 'bom';
+  return 'project';
 }
 
-export const ASSISTANT_RECENT_CONVERSATIONS: AssistantConversation[] = [
-  {
-    id: 'conv-status-vital-monitor',
-    title: 'Status — Smart Patient Vital Monitor',
-    subtitle: 'EVT gate 3d overdue · 2 open blockers',
-    scope: 'This project',
-    timeAgo: 'Just now',
-    icon: Activity,
-  },
-  {
-    id: 'conv-new-project-prd',
-    title: 'New project from PRD + BOM',
-    subtitle: 'Draft: 214 lines · 6 modules · 118 tasks',
-    scope: 'All projects',
-    timeAgo: '2h ago',
-    icon: LayoutGrid,
-  },
-  {
-    id: 'conv-single-sourced-bom',
-    title: 'Single-sourced BOM lines',
-    subtitle: '8 lines flagged single-sourced',
-    scope: 'This BOM',
-    timeAgo: 'Yesterday',
-  },
-  {
-    id: 'conv-reassign-firmware',
-    title: 'Reassign firmware backlog',
-    subtitle: 'Assigned 14 tasks · 1 failed',
-    scope: 'This project',
-    timeAgo: 'Mon',
-  },
-  {
-    id: 'conv-compare-vital-ecg',
-    title: 'Compare Vital Monitor vs ECG Patch',
-    subtitle: 'Progress, blockers, gate variance',
-    scope: 'All projects',
-    timeAgo: 'Jul 8',
-  },
-];
+export function backendScopeToLabel(scope: BackendAiScope): AssistantScope {
+  if (scope === 'all_projects') return 'All projects';
+  if (scope === 'bom') return 'This BOM';
+  return 'This project';
+}
 
-export const ASSISTANT_SCOPE_OPTIONS = ['This project', 'This BOM'] as const;
-export type AssistantScope = (typeof ASSISTANT_SCOPE_OPTIONS)[number];
+// ─── Focus entities: multi-select bias layered on top of scope ────────────────
+// 'bom' used to be the only entity with its own scope toggle even though the
+// backend already supported querying all of these regardless of scope — see
+// [[assistant-scope-multiselect-paused]]. New conversations always send
+// scope 'project'/'all_projects' plus an optional focusEntities array;
+// `AiConversationFocusEntity` on the backend is the source of truth this list
+// must match (ai-conversations.types.ts).
+export const ASSISTANT_FOCUS_ENTITIES = [
+  { id: 'tasks', label: 'Tasks', icon: ListChecks },
+  { id: 'issues', label: 'Issues', icon: AlertTriangle },
+  { id: 'milestones', label: 'Milestones', icon: Flag },
+  { id: 'hardware_modules', label: 'Modules', icon: LayoutGrid },
+  { id: 'bom_nodes', label: 'BOM', icon: Layers },
+  { id: 'ecos', label: 'ECO', icon: GitPullRequest },
+] as const;
+export type AssistantFocusEntity = (typeof ASSISTANT_FOCUS_ENTITIES)[number]['id'];
+
+/** Same scope labels, but resolves 'project'/'bom' to the actual project name when known — matches AssistantScopePopover's label. */
+export function resolveConversationScopeLabel(scope: BackendAiScope, projectName?: string): string {
+  if (scope === 'all_projects') return 'All projects';
+  if (!projectName) return backendScopeToLabel(scope);
+  return scope === 'bom' ? `${projectName} · BOM` : projectName;
+}
+
+export type AssistantMessageRole = 'user' | 'assistant' | 'tool';
+
+export interface AssistantMessage {
+  id: string;
+  role: AssistantMessageRole;
+  content: string | null;
+  createdAt: string;
+}
+
+// ─── present_card (see backend presentCard.tool.ts, the authoritative shape) ──
+
+export type CardSeverity = 'critical' | 'major' | 'minor' | 'trivial';
+
+export interface CardItem {
+  id: string;
+  title: string;
+  severity?: CardSeverity;
+  contextLabel?: string;
+  dueDate?: string;
+  assignees?: string[];
+}
+
+interface AssistantCardBase {
+  title: string;
+  badge?: string;
+  items: CardItem[];
+  itemsLabel?: string;
+  emptyText?: string;
+  followUps?: string[];
+  /** Computed server-side from the turn's actual tool calls — never model-supplied. */
+  sources: string[];
+}
+
+export interface AssistantStatusCard extends AssistantCardBase {
+  type: 'status';
+  metricValue: number;
+  metricLabel?: string;
+  taskCount?: { completed: number; total: number };
+}
+
+export interface AssistantListCard extends AssistantCardBase {
+  type: 'list';
+}
+
+export type AssistantCard = AssistantStatusCard | AssistantListCard;
+
+/**
+ * A present_card result is persisted like any other tool message (role='tool',
+ * content = JSON.stringify(card)) — this is what tells the transcript to
+ * render it as a card instead of hiding it as tool-call plumbing.
+ */
+export function isPresentCardMessage(message: AssistantMessage): boolean {
+  if (message.role !== 'tool' || !message.content) return false;
+  try {
+    const parsed = JSON.parse(message.content) as { type?: unknown };
+    return parsed?.type === 'status' || parsed?.type === 'list';
+  } catch {
+    return false;
+  }
+}
+
+export interface AskUserOption {
+  label: string;
+  description: string;
+}
+
+export interface AskUserQuestion {
+  header: string;
+  question: string;
+  options: AskUserOption[];
+  multiSelect: boolean;
+}
+
+export type AssistantConversationStatus = 'active' | 'awaiting_input';
+
+export interface AssistantConversationSummary {
+  id: string;
+  title: string | null;
+  scope: BackendAiScope;
+  projectId: string | null;
+  status: AssistantConversationStatus;
+  focusEntities: AssistantFocusEntity[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssistantConversationDetail extends AssistantConversationSummary {
+  pendingQuestions: AskUserQuestion[] | null;
+  messages: AssistantMessage[];
+}

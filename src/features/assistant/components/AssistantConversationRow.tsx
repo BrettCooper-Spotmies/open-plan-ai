@@ -1,15 +1,16 @@
+import { formatDistanceToNow } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import type { AssistantConversation } from '../assistantData';
+import { resolveConversationScopeLabel, type AssistantConversationSummary } from '../assistantData';
 
 interface AssistantConversationRowProps {
-  conversation: AssistantConversation;
+  conversation: AssistantConversationSummary;
+  projectName?: string;
   isActive: boolean;
   onSelect: (id: string) => void;
 }
 
-export function AssistantConversationRow({ conversation, isActive, onSelect }: AssistantConversationRowProps) {
-  const Icon = conversation.icon;
+export function AssistantConversationRow({ conversation, projectName, isActive, onSelect }: AssistantConversationRowProps) {
   return (
     <button
       type="button"
@@ -19,18 +20,17 @@ export function AssistantConversationRow({ conversation, isActive, onSelect }: A
         isActive ? 'bg-accent' : 'hover:bg-accent/50',
       )}
     >
-      <div className="flex items-start gap-2">
-        {Icon && <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">{conversation.title}</p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">{conversation.subtitle}</p>
-          <div className="mt-1.5 flex items-center gap-1.5">
-            <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">
-              {conversation.scope}
-            </Badge>
-            <span className="text-[10px] text-muted-foreground">{conversation.timeAgo}</span>
-          </div>
-        </div>
+      <p className="truncate text-sm font-semibold text-foreground">{conversation.title || 'New conversation'}</p>
+      <div className="mt-1.5 flex items-center gap-1.5">
+        <Badge variant="secondary" className="h-4 px-1.5 text-[10px] font-normal">
+          {resolveConversationScopeLabel(conversation.scope, projectName)}
+        </Badge>
+        {conversation.status === 'awaiting_input' && (
+          <Badge className="h-4 px-1.5 text-[10px] font-normal">Needs input</Badge>
+        )}
+        <span className="text-[10px] text-muted-foreground">
+          {formatDistanceToNow(new Date(conversation.updatedAt), { addSuffix: true })}
+        </span>
       </div>
     </button>
   );

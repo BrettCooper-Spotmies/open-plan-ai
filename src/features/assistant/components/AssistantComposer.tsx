@@ -3,7 +3,8 @@ import { ArrowUp, FileSpreadsheet, FileText, Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AssistantScopePopover } from './AssistantScopePopover';
-import type { AssistantScope } from '../assistantData';
+import type { AssistantScope, AssistantFocusEntity } from '../assistantData';
+import type { Project } from '@/types';
 
 const SPREADSHEET_EXTENSIONS = ['xlsx', 'xls', 'csv'];
 
@@ -20,8 +21,14 @@ interface AssistantComposerProps {
   onFileRemove: (index: number) => void;
   scope: AssistantScope;
   onScopeChange: (scope: AssistantScope) => void;
+  projects: Project[];
+  selectedProjectId: string | null;
+  onProjectChange: (projectId: string) => void;
+  focusEntities: AssistantFocusEntity[];
+  onFocusEntitiesChange: (entities: AssistantFocusEntity[]) => void;
   onSend: () => void;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 export function AssistantComposer({
@@ -32,8 +39,14 @@ export function AssistantComposer({
   onFileRemove,
   scope,
   onScopeChange,
+  projects,
+  selectedProjectId,
+  onProjectChange,
+  focusEntities,
+  onFocusEntitiesChange,
   onSend,
-  placeholder = "Ask, act, or describe what to build... Try /new task or /new project",
+  placeholder = "Ask, and you shall receive...",
+  disabled,
 }: AssistantComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -93,7 +106,8 @@ export function AssistantComposer({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         rows={1}
-        className="max-h-40 w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+        disabled={disabled}
+        className="max-h-40 w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
       />
 
       <div className="mt-2 flex items-center justify-between">
@@ -113,14 +127,22 @@ export function AssistantComposer({
             </TooltipTrigger>
             <TooltipContent side="top">Attach docs, xlsx, images</TooltipContent>
           </Tooltip>
-          <AssistantScopePopover scope={scope} onScopeChange={onScopeChange} />
+          <AssistantScopePopover
+            scope={scope}
+            onScopeChange={onScopeChange}
+            projects={projects}
+            selectedProjectId={selectedProjectId}
+            onProjectChange={onProjectChange}
+            focusEntities={focusEntities}
+            onFocusEntitiesChange={onFocusEntitiesChange}
+          />
         </div>
 
         <Button
           type="button"
           size="icon"
           onClick={onSend}
-          disabled={!value.trim() && files.length === 0}
+          disabled={disabled || (!value.trim() && files.length === 0)}
           className="h-9 w-9 rounded-full bg-foreground text-background hover:bg-foreground/90 disabled:opacity-40"
         >
           <ArrowUp className="h-4 w-4" />

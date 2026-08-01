@@ -11,7 +11,7 @@ export function AssistantWidget() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [resetKey, setResetKey] = useState(0);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   // Global Cmd/Ctrl+K — mirrors the Ctrl/Cmd+B sidebar shortcut in
   // components/ui/sidebar.tsx. This component is mounted once at the app
@@ -46,7 +46,7 @@ export function AssistantWidget() {
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-foreground">Assistant</p>
-            <p className="truncate text-xs text-muted-foreground">Ask · act · build</p>
+            <p className="truncate text-xs text-muted-foreground">Simply ask...</p>
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -54,7 +54,7 @@ export function AssistantWidget() {
             variant="ghost"
             size="icon"
             className="h-7 w-7 text-muted-foreground hover:text-foreground"
-            onClick={() => setResetKey((k) => k + 1)}
+            onClick={() => setActiveId(null)}
             title="New conversation"
           >
             <Plus className="h-4 w-4" />
@@ -80,7 +80,12 @@ export function AssistantWidget() {
         </div>
       </div>
 
-      <AssistantPanel key={resetKey} variant="widget" className="flex-1 min-h-0" />
+      <AssistantPanel
+        variant="widget"
+        className="flex-1 min-h-0"
+        conversationId={activeId}
+        onConversationCreated={setActiveId}
+      />
     </div>
   );
 }
