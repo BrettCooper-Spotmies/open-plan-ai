@@ -185,14 +185,7 @@ export function AppHeader() {
               title="Ask the Assistant (⌘K)"
             >
               <Sparkles className="h-4 w-4" />
-              {!isMobile && (
-                <>
-                  Ask
-                  <kbd className="ml-1 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-                    ⌘K
-                  </kbd>
-                </>
-              )}
+              {!isMobile && 'Ask'}
             </Button>
 
             {/* Report a Bug */}

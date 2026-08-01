@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { ArrowUp, FileSpreadsheet, FileText, Paperclip, X } from 'lucide-react';
+import { ArrowUp, FileSpreadsheet, FileText, Paperclip, Square, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AssistantScopePopover } from './AssistantScopePopover';
@@ -8,7 +8,7 @@ import type { Project } from '@/types';
 
 const SPREADSHEET_EXTENSIONS = ['xlsx', 'xls', 'csv'];
 
-function fileIconFor(name: string) {
+export function fileIconFor(name: string) {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
   return SPREADSHEET_EXTENSIONS.includes(ext) ? FileSpreadsheet : FileText;
 }
@@ -29,6 +29,9 @@ interface AssistantComposerProps {
   onSend: () => void;
   placeholder?: string;
   disabled?: boolean;
+  /** True while a turn is actively streaming/running — swaps the send button for a stop button. */
+  isGenerating?: boolean;
+  onStop?: () => void;
 }
 
 export function AssistantComposer({
@@ -47,6 +50,8 @@ export function AssistantComposer({
   onSend,
   placeholder = "Ask, and you shall receive...",
   disabled,
+  isGenerating,
+  onStop,
 }: AssistantComposerProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -138,15 +143,31 @@ export function AssistantComposer({
           />
         </div>
 
-        <Button
-          type="button"
-          size="icon"
-          onClick={onSend}
-          disabled={disabled || (!value.trim() && files.length === 0)}
-          className="h-9 w-9 rounded-full bg-foreground text-background hover:bg-foreground/90 disabled:opacity-40"
-        >
-          <ArrowUp className="h-4 w-4" />
-        </Button>
+        {isGenerating && onStop ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="icon"
+                onClick={onStop}
+                className="h-9 w-9 rounded-full bg-foreground text-background hover:bg-foreground/90"
+              >
+                <Square className="h-3.5 w-3.5 fill-current" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Stop generating</TooltipContent>
+          </Tooltip>
+        ) : (
+          <Button
+            type="button"
+            size="icon"
+            onClick={onSend}
+            disabled={disabled || (!value.trim() && files.length === 0)}
+            className="h-9 w-9 rounded-full bg-foreground text-background hover:bg-foreground/90 disabled:opacity-40"
+          >
+            <ArrowUp className="h-4 w-4" />
+          </Button>
+        )}
       </div>
     </div>
   );

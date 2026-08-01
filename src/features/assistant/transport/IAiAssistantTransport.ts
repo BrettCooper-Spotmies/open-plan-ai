@@ -20,5 +20,6 @@ export interface IAiAssistantTransport {
   onQuestion(handler: (questions: AskUserQuestion[]) => void): Unsubscribe;
   onCard(handler: (card: AssistantCard) => void): Unsubscribe;
   onDone(handler: (messageId: string) => void): Unsubscribe;
+  onStopped(handler: (messageId: string | null) => void): Unsubscribe;
   onError(handler: (code: string, message: string) => void): Unsubscribe;
 }

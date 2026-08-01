@@ -126,10 +126,28 @@ export function resolveConversationScopeLabel(scope: BackendAiScope, projectName
 
 export type AssistantMessageRole = 'user' | 'assistant' | 'tool';
 
+// Ad-hoc file/image attached to the Ask composer — matches the backend's
+// AiMessageAttachment (ai-conversations.types.ts). No relation to project
+// "Files" attachments; these are ephemeral turn inputs only.
+export interface AiMessageAttachment {
+  id: string;
+  fileName: string;
+  fileKey: string;
+  fileUrl: string;
+  mimeType: string;
+  fileSize: number;
+}
+
 export interface AssistantMessage {
   id: string;
+  // Null only for the very first message of a conversation. Editing a user
+  // message inserts a new sibling with the same parentId rather than
+  // mutating in place — see lib/messageBranches.ts for how the default
+  // branch (and version nav) is reconstructed from this.
+  parentId: string | null;
   role: AssistantMessageRole;
   content: string | null;
+  attachments?: AiMessageAttachment[] | null;
   createdAt: string;
 }
 
@@ -206,6 +224,8 @@ export interface AssistantConversationSummary {
   projectId: string | null;
   status: AssistantConversationStatus;
   focusEntities: AssistantFocusEntity[] | null;
+  pinned: boolean;
+  pinnedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

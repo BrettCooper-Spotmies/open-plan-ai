@@ -84,6 +84,12 @@ export class SocketIOAiAssistantTransport implements IAiAssistantTransport {
     return () => this.socket.off('ai:done', wrapped);
   }
 
+  onStopped(handler: (messageId: string | null) => void): Unsubscribe {
+    const wrapped = (payload: { messageId: string | null }) => handler(payload.messageId);
+    this.socket.on('ai:stopped', wrapped);
+    return () => this.socket.off('ai:stopped', wrapped);
+  }
+
   onError(handler: (code: string, message: string) => void): Unsubscribe {
     const wrapped = (payload: { code: string; message: string }) => handler(payload.code, payload.message);
     this.socket.on('ai:error', wrapped);

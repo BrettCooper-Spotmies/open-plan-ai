@@ -6,21 +6,28 @@ import { AssistantQuestionCard } from './AssistantQuestionCard';
 import { AssistantCardMessage } from './AssistantCardMessage';
 import { isPresentCardMessage, type AssistantCard, type AssistantMessage, type AskUserQuestion } from '../assistantData';
 import type { ToolStatusEntry } from '../hooks/useAssistantConversation';
+import type { MessageVersionInfo } from '../lib/messageBranches';
 
 interface AssistantTranscriptProps {
   messages: AssistantMessage[];
+  messageVersions?: Record<string, MessageVersionInfo>;
+  onEditMessage?: (messageId: string, content: string) => void;
+  onSelectVersion?: (parentId: string | null, messageId: string) => void;
   streamingText: string;
   isStreaming: boolean;
   toolStatus: ToolStatusEntry[];
   pendingQuestions: AskUserQuestion[] | null;
   onAnswer: (answers: Array<{ header: string; selected: string[] }>) => void;
   isAnswering: boolean;
-  liveCard: AssistantCard | null;
-  onSendMessage: (text: string) => void;
+  liveCard?: AssistantCard | null;
+  onSendMessage?: (text: string) => void;
 }
 
 export function AssistantTranscript({
   messages,
+  messageVersions,
+  onEditMessage,
+  onSelectVersion,
   streamingText,
   isStreaming,
   toolStatus,
@@ -76,8 +83,15 @@ export function AssistantTranscript({
           return (
             <AssistantMessageBubble
               key={message.id}
+              id={message.id}
+              parentId={message.parentId}
               role={message.role as 'user' | 'assistant'}
               content={message.content ?? ''}
+              attachments={message.attachments}
+              versionInfo={messageVersions?.[message.id]}
+              onEdit={onEditMessage}
+              onSelectVersion={onSelectVersion}
+              disabled={isStreaming}
             />
           );
         })}

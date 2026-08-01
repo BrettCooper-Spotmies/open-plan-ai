@@ -16,6 +16,7 @@ export default function Assistant() {
         activeId={activeId}
         onSelect={setActiveId}
         onNewConversation={() => setActiveId(null)}
+        onActiveDeleted={() => setActiveId(null)}
       />
       <AssistantPanel
         variant="page"
