@@ -44,6 +44,7 @@ const Reports       = lazy(() => import("./features/reports"));
 const Notifications = lazy(() => import("./features/notifications"));
 const Chat          = lazy(() => import("./features/chat"));
 const Integrations  = lazy(() => import("./features/integrations"));
+const Inventory     = lazy(() => import("./features/inventory"));
 
 // ── ReactQueryDevtools — dev only, lazy so it is never in the production bundle
 const ReactQueryDevtools = import.meta.env.DEV
@@ -233,6 +234,14 @@ function AppShell() {
               element={
                 <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
                   <Integrations />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/inventory"
+              element={
+                <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                  <Inventory />
                 </Suspense>
               }
             />
