@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -46,6 +46,7 @@ import {
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Minus, Pencil, Plus } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { REASON_CODES, STOCK_LOCATIONS, type StockLocation, type StockRecord } from './inventoryData';
 
 const adjustSchema = z.object({
@@ -73,9 +74,12 @@ interface AdjustQuantityDialogProps {
   onClose: () => void;
   stock: StockRecord[];
   onAdjust: (input: AdjustQuantityInput) => void;
+  /** Preselect a part (e.g. opened from that part's detail sheet) instead of starting on the picker. */
+  initialPartId?: string;
 }
 
-export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust }: AdjustQuantityDialogProps) {
+export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initialPartId }: AdjustQuantityDialogProps) {
+  const isMobile = useIsMobile();
   const [selectedRecord, setSelectedRecord] = useState<StockRecord | null>(null);
   const [partPickerOpen, setPartPickerOpen] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
@@ -91,6 +95,18 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust }: Adjus
       note: '',
     },
   });
+
+  useEffect(() => {
+    if (isOpen && initialPartId) {
+      const match = stock.find(r => r.partId === initialPartId);
+      if (match) {
+        setSelectedRecord(match);
+        form.setValue('partId', match.partId, { shouldValidate: true });
+        form.setValue('location', match.location, { shouldValidate: true });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialPartId]);
 
   const isFormDirty = form.formState.isDirty;
 
@@ -126,12 +142,19 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust }: Adjus
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && attemptClose()}>
-      <DialogContent className="max-w-lg p-0 flex flex-col gap-0">
-        <DialogHeader className="px-6 py-4 border-b shrink-0 flex-row items-start gap-3 space-y-0">
+      <DialogContent
+        className={cn(
+          'p-0 flex flex-col gap-0',
+          isMobile
+            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0'
+            : 'max-w-lg'
+        )}
+      >
+        <DialogHeader className="px-4 sm:px-6 py-4 pr-10 border-b shrink-0 flex-row items-start gap-3 space-y-0">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Pencil className="h-4 w-4" />
           </div>
-          <div className="text-left">
+          <div className="text-left flex-1 min-w-0">
             <DialogTitle>Adjust quantity</DialogTitle>
             <DialogDescription>Writes one immutable ledger entry</DialogDescription>
           </div>
@@ -140,7 +163,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust }: Adjus
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 min-h-0">
             <div className="overflow-y-auto flex-1">
-              <div className="p-6 space-y-5">
+              <div className="p-4 sm:p-6 space-y-5">
                 <FormField
                   control={form.control}
                   name="partId"
@@ -164,7 +187,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust }: Adjus
                             </Button>
                           </FormControl>
                         </PopoverTrigger>
-                        <PopoverContent className="w-[420px] p-0" align="start">
+                        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[420px] p-0" align="start">
                           <Command>
                             <CommandInput placeholder="Search stocked parts..." />
                             <CommandList>
@@ -228,7 +251,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust }: Adjus
                   )}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="direction"
@@ -310,7 +333,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust }: Adjus
               </div>
             </div>
 
-            <DialogFooter className="px-6 py-4 border-t shrink-0">
+            <DialogFooter className="px-4 sm:px-6 py-4 border-t shrink-0">
               <Button type="button" variant="outline" onClick={attemptClose}>Cancel</Button>
               <Button type="submit" disabled={!selectedRecord}>Post adjustment</Button>
             </DialogFooter>

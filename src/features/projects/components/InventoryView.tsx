@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Search, Table as TableIcon, LayoutGrid, Download, Pencil, PackageSearch,
-  AlertTriangle, Truck, Hash, Lock, Boxes as BoxesIcon,
+  AlertTriangle, Truck, CheckCircle, Lock, Boxes as BoxesIcon,
+  Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useBomTree } from '@/hooks/useBom';
 import { useOrgParts } from '@/hooks/useParts';
 import {
@@ -18,11 +20,45 @@ import {
   KNOWN_BOM_CATEGORIES, getCategoryMeta,
 } from './bomData';
 import {
-  generateMockStock, computeCoverage, availableOf, CoveragePill, COVERAGE_META,
+  generateMockStock, generateMockBuilds, computeCoverage, availableOf, CoveragePill, CoverageBar,
   type StockRecord, type StockTransaction, type CoverageStatus,
 } from './inventoryData';
+import { HoverZoomImage } from './BOMShared';
 import { ReceiveStockDialog, type ReceiveStockInput } from './ReceiveStockDialog';
 import { AdjustQuantityDialog, type AdjustQuantityInput } from './AdjustQuantityDialog';
+import { PartDetailSheet, type WhereUsedRow } from './PartDetailSheet';
+import { BuildsPanel } from './BuildsPanel';
+import { AlertsPanel } from './AlertsPanel';
+
+// Maps bomData's BOM_CAT_META.iconName strings to the actual icon component.
+const CATEGORY_ICON_MAP: Record<string, React.ElementType> = { Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag };
+
+function softTint(hex: string, alpha: number): string {
+  const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function StatCard({ label, value, icon: Icon, iconColor, accent }: {
+  label: string; value: string; icon: React.ElementType;
+  iconColor: string; accent?: boolean;
+}) {
+  return (
+    <div className={cn('bg-card rounded-lg px-3.5 py-2.5 flex-1 min-w-[140px] border flex items-center gap-2.5', accent ? 'border-primary/25' : 'border-border')}>
+      <span
+        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+        style={{ backgroundColor: softTint(iconColor, 0.12) }}
+      >
+        <Icon className="w-4 h-4" style={{ color: iconColor }} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-lg font-bold leading-tight truncate" style={{ color: accent ? iconColor : undefined }}>
+          {value}
+        </span>
+        <span className="block text-[11px] text-muted-foreground truncate">{label}</span>
+      </span>
+    </div>
+  );
+}
 
 interface InventoryViewProps {
   projectId: string;
@@ -40,6 +76,7 @@ const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
 ];
 
 export function InventoryView({ projectId, orgId }: InventoryViewProps) {
+  const isMobile = useIsMobile();
   const { data: bomTree } = useBomTree(projectId);
   const { data: partsResult } = useOrgParts(orgId);
   const parts = useMemo(() => partsResult?.data ?? [], [partsResult]);
@@ -73,7 +110,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
   const [search, setSearch] = useState('');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>(isMobile ? 'cards' : 'table');
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
 
@@ -167,9 +204,29 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
   const totalParts = stock.length;
   const belowCoverage = coverageCounts.short + coverageCounts.conflict;
   const incomingCount = stock.filter(r => r.onOrder > 0).length;
-  const lotSerialCount = stock.filter(r => r.lotSerial).length;
-  const quarantineCount = stock.filter(r => (r.quarantineQty ?? 0) > 0).length;
-  const totalForBar = Math.max(totalParts, 1);
+
+  const builds = useMemo(() => generateMockBuilds(stock, demandByPartId), [stock, demandByPartId]);
+  const [activeTab, setActiveTab] = useState('stock');
+
+  const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [dialogPartId, setDialogPartId] = useState<string | undefined>(undefined);
+
+  const openDetail = (partId: string) => { setSelectedPartId(partId); setDetailOpen(true); };
+  const selectedRecord = useMemo(
+    () => stock.find(r => r.partId === selectedPartId) ?? null,
+    [stock, selectedPartId]
+  );
+  const selectedPart = parts.find(p => p.id === selectedPartId);
+  const whereUsed: WhereUsedRow[] = useMemo(() => {
+    if (!selectedPartId) return [];
+    return bomFlatAll(rootNodes)
+      .filter(n => n._partId === selectedPartId)
+      .map(n => ({ levelLabel: n.levelLabel, name: n.name, qty: n.qty, uom: n.uom, designators: n.designators || undefined }));
+  }, [rootNodes, selectedPartId]);
+
+  const openReceiveFor = (partId?: string) => { setDialogPartId(partId); setReceiveOpen(true); };
+  const openAdjustFor = (partId?: string) => { setDialogPartId(partId); setAdjustOpen(true); };
 
   return (
     <div className="space-y-4 md:space-y-6 px-4 md:px-6 pb-6">
@@ -180,24 +237,31 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
           </div>
           <div>
             <h2 className="text-lg font-semibold">Inventory</h2>
-            <p className="text-sm text-muted-foreground">
+            {/* <p className="text-sm text-muted-foreground">
               Component availability for engineering builds — can we build it, what's short, does it move the date.
-            </p>
+            </p> */}
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" onClick={() => setReceiveOpen(true)}>
+        <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 shrink-0">
+          <Button variant="outline" onClick={() => openReceiveFor()}>
             <Download className="h-4 w-4 mr-2" />
             Receive
           </Button>
-          <Button onClick={() => setAdjustOpen(true)}>
+          <Button onClick={() => openAdjustFor()}>
             <Pencil className="h-4 w-4 mr-2" />
-            New transaction
+            <span className="truncate">New transaction</span>
           </Button>
         </div>
       </div>
 
-      <Tabs defaultValue="stock">
+      <div className="flex gap-2.5 md:gap-3 flex-wrap">
+        <StatCard label="Total Parts" value={String(totalParts)} icon={BoxesIcon} iconColor="#2563EB" accent />
+        <StatCard label="Ready to Build" value={String(coverageCounts.ready)} icon={CheckCircle} iconColor="#16A34A" />
+        <StatCard label="Below Coverage" value={String(belowCoverage)} icon={AlertTriangle} iconColor="#DC2626" />
+        <StatCard label="Incoming This Week" value={String(incomingCount)} icon={Truck} iconColor="#D97706" />
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="stock">Stock</TabsTrigger>
           <TabsTrigger value="builds">Builds</TabsTrigger>
@@ -210,10 +274,9 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
         </TabsList>
 
         <TabsContent value="stock" className="mt-4">
-          <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] gap-6 items-start">
-            <div className="space-y-4 min-w-0">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
+          <div className="space-y-4">
+              <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+                <div className="relative w-full lg:max-w-xs lg:flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Search parts, MPN, manufacturer..."
@@ -222,7 +285,25 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                     className="pl-9"
                   />
                 </div>
-                <div className="flex items-center gap-1 border rounded-md p-1 shrink-0">
+
+                <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4 lg:mx-0 lg:px-0 lg:flex-wrap lg:flex-1 pb-0.5">
+                  {QUICK_FILTERS.map((f) => (
+                    <button
+                      key={f.value}
+                      onClick={() => setQuickFilter(f.value)}
+                      className={cn(
+                        'shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors',
+                        quickFilter === f.value
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
+                      )}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-1 border rounded-md p-1 shrink-0 self-start lg:self-auto">
                   <Button
                     variant={viewMode === 'table' ? 'secondary' : 'ghost'}
                     size="sm"
@@ -242,28 +323,11 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-1.5">
-                {QUICK_FILTERS.map((f) => (
-                  <button
-                    key={f.value}
-                    onClick={() => setQuickFilter(f.value)}
-                    className={cn(
-                      'px-3 py-1 rounded-full text-xs font-medium border transition-colors',
-                      quickFilter === f.value
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
-                    )}
-                  >
-                    {f.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap pb-0.5">
                 <button
                   onClick={() => setCategoryFilter('all')}
                   className={cn(
-                    'px-3 py-1 rounded-full text-xs font-medium border transition-colors',
+                    'shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors',
                     categoryFilter === 'all'
                       ? 'bg-foreground text-background border-foreground'
                       : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
@@ -278,7 +342,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                     <button
                       key={cat}
                       onClick={() => setCategoryFilter(cat)}
-                      className="px-3 py-1 rounded-full text-xs font-medium border transition-colors"
+                      className="shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors"
                       style={active
                         ? { background: meta.tint, color: '#fff', borderColor: meta.tint }
                         : { background: 'transparent', color: meta.tint, borderColor: `${meta.tint}40` }}
@@ -294,14 +358,14 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Coverage</TableHead>
-                        <TableHead>Part</TableHead>
-                        <TableHead className="text-right">On Hand</TableHead>
-                        <TableHead className="text-right">Allocated</TableHead>
-                        <TableHead className="text-right">Available</TableHead>
-                        <TableHead className="text-right">On Order</TableHead>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Lead</TableHead>
+                        <TableHead className="h-9 px-3 py-2 w-[120px]">Coverage</TableHead>
+                        <TableHead className="h-9 px-3 py-2 w-[260px]">Part</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-right">On Hand</TableHead>
+                        <TableHead className="hidden sm:table-cell h-9 px-3 py-2 text-right">Allocated</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-right">Available</TableHead>
+                        <TableHead className="hidden md:table-cell h-9 px-3 py-2 text-right">On Order</TableHead>
+                        <TableHead className="h-9 px-3 py-2">Location</TableHead>
+                        <TableHead className="hidden lg:table-cell h-9 px-3 py-2">Lead</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -315,36 +379,51 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                       ) : filteredStock.map((r) => {
                         const available = availableOf(r);
                         const meta = getCategoryMeta(r.cat);
+                        const status = coverageOf(r);
+                        const CategoryIcon = CATEGORY_ICON_MAP[meta.iconName] ?? Tag;
                         return (
-                          <TableRow key={r.id}>
-                            <TableCell><CoveragePill status={coverageOf(r)} /></TableCell>
-                            <TableCell>
+                          <TableRow key={r.id} className="cursor-pointer" onClick={() => openDetail(r.partId)}>
+                            <TableCell className="px-3 py-2 align-top">
+                              <CoveragePill status={status} />
+                              <CoverageBar status={status} record={r} />
+                            </TableCell>
+                            <TableCell className="px-3 py-2">
                               <div className="flex items-center gap-2 min-w-0">
-                                <div
-                                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[10px] font-semibold"
-                                  style={{ background: `${meta.tint}1a`, color: meta.tint }}
-                                >
-                                  {meta.label.slice(0, 2).toUpperCase()}
-                                </div>
+                                {r.imageUrl ? (
+                                  <HoverZoomImage imageUrl={r.imageUrl}>
+                                    <img
+                                      src={r.imageUrl}
+                                      alt=""
+                                      className="h-7 w-7 shrink-0 rounded-md object-cover"
+                                    />
+                                  </HoverZoomImage>
+                                ) : (
+                                  <div
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
+                                    style={{ background: `${meta.tint}1a`, color: meta.tint }}
+                                  >
+                                    <CategoryIcon className="h-3.5 w-3.5" />
+                                  </div>
+                                )}
                                 <div className="min-w-0">
                                   <div className="text-sm font-medium text-primary truncate">{r.pn}</div>
                                   <div className="text-xs text-muted-foreground truncate">{r.name}</div>
                                 </div>
                               </div>
                             </TableCell>
-                            <TableCell className="text-right">{r.onHand}</TableCell>
-                            <TableCell className="text-right">{r.allocated}</TableCell>
-                            <TableCell className={cn('text-right font-semibold', available < 0 && 'text-destructive')}>
+                            <TableCell className="px-3 py-2 text-right">{r.onHand}</TableCell>
+                            <TableCell className="hidden sm:table-cell px-3 py-2 text-right">{r.allocated}</TableCell>
+                            <TableCell className={cn('px-3 py-2 text-right font-semibold', available < 0 && 'text-destructive')}>
                               {available}
                             </TableCell>
-                            <TableCell className="text-right">{r.onOrder || '—'}</TableCell>
-                            <TableCell>
+                            <TableCell className="hidden md:table-cell px-3 py-2 text-right">{r.onOrder || '—'}</TableCell>
+                            <TableCell className="px-3 py-2">
                               <div className="flex flex-wrap gap-1">
                                 <Badge variant="outline" className="text-[10px] font-normal">{r.location}</Badge>
                                 {r.quarantineQty ? <Badge variant="outline" className="text-[10px] font-normal"><Lock className="h-2.5 w-2.5 mr-1" />QA</Badge> : null}
                               </div>
                             </TableCell>
-                            <TableCell className="text-xs text-muted-foreground">{formatLeadTime(r.leadTimeDays)}</TableCell>
+                            <TableCell className="hidden lg:table-cell px-3 py-2 text-xs text-muted-foreground">{formatLeadTime(r.leadTimeDays)}</TableCell>
                           </TableRow>
                         );
                       })}
@@ -357,7 +436,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                     const available = availableOf(r);
                     const meta = getCategoryMeta(r.cat);
                     return (
-                      <Card key={r.id}>
+                      <Card key={r.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => openDetail(r.partId)}>
                         <CardContent className="p-4 space-y-2">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
@@ -390,93 +469,21 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                   })}
                 </div>
               )}
-            </div>
-
-            <div className="space-y-4">
-              <Card>
-                <CardContent className="p-4 space-y-3">
-                  <h3 className="text-xs font-semibold tracking-wide text-muted-foreground">BUILD READINESS</h3>
-                  <div className="flex h-2 rounded-full overflow-hidden bg-muted">
-                    {(Object.keys(COVERAGE_META) as CoverageStatus[]).map((status) => {
-                      const count = coverageCounts[status];
-                      if (!count) return null;
-                      return (
-                        <div
-                          key={status}
-                          style={{ width: `${(count / totalForBar) * 100}%`, background: COVERAGE_META[status].fg }}
-                        />
-                      );
-                    })}
-                  </div>
-                  <div className="space-y-1.5 pt-1">
-                    {(Object.keys(COVERAGE_META) as CoverageStatus[]).map((status) => (
-                      <div key={status} className="flex items-center justify-between text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full" style={{ background: COVERAGE_META[status].fg }} />
-                          <span className="text-muted-foreground">{COVERAGE_META[status].label}</span>
-                        </div>
-                        <span className="font-medium">{coverageCounts[status]}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-4 space-y-3">
-                  <h3 className="text-xs font-semibold tracking-wide text-muted-foreground">AT A GLANCE</h3>
-                  <div className="space-y-2.5 text-sm">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-muted-foreground"><BoxesIcon className="h-3.5 w-3.5" /> Total parts</span>
-                      <span className="font-medium">{totalParts}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-muted-foreground"><AlertTriangle className="h-3.5 w-3.5" /> Below coverage</span>
-                      <span className="font-medium">{belowCoverage}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-muted-foreground"><Truck className="h-3.5 w-3.5" /> Incoming this week</span>
-                      <span className="font-medium">{incomingCount}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-muted-foreground"><Hash className="h-3.5 w-3.5" /> Lot / serial tracked</span>
-                      <span className="font-medium">{lotSerialCount}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2 text-muted-foreground"><Lock className="h-3.5 w-3.5" /> In quarantine</span>
-                      <span className="font-medium">{quarantineCount}</span>
-                    </div>
-                    {transactions.length > 0 && (
-                      <div className="flex items-center justify-between pt-2 border-t text-xs text-muted-foreground">
-                        <span>Ledger entries this session</span>
-                        <span className="font-medium">{transactions.length}</span>
-                      </div>
-                    )}
-                  </div>
-                  <Button variant="outline" className="w-full" onClick={() => setReceiveOpen(true)}>
-                    <Download className="h-4 w-4 mr-2" />
-                    Receive stock
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </TabsContent>
 
         <TabsContent value="builds" className="mt-4">
-          <Card>
-            <CardContent className="py-12 text-center text-sm text-muted-foreground">
-              Build-order readiness is coming soon.
-            </CardContent>
-          </Card>
+          <BuildsPanel builds={builds} onSelectPart={openDetail} />
         </TabsContent>
 
         <TabsContent value="alerts" className="mt-4">
-          <Card>
-            <CardContent className="py-12 text-center text-sm text-muted-foreground">
-              Shortage and reorder alerts are coming soon.
-            </CardContent>
-          </Card>
+          <AlertsPanel
+            builds={builds}
+            stock={stock}
+            coverageOf={coverageOf}
+            onSelectPart={openDetail}
+            onViewBuilds={() => setActiveTab('builds')}
+          />
         </TabsContent>
       </Tabs>
 
@@ -486,12 +493,25 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
         orgId={orgId}
         parts={parts}
         onReceive={handleReceive}
+        initialPartId={dialogPartId}
       />
       <AdjustQuantityDialog
         isOpen={adjustOpen}
         onClose={() => setAdjustOpen(false)}
         stock={stock}
         onAdjust={handleAdjust}
+        initialPartId={dialogPartId}
+      />
+      <PartDetailSheet
+        isOpen={detailOpen}
+        record={selectedRecord}
+        status={selectedRecord ? coverageOf(selectedRecord) : 'ready'}
+        part={selectedPart}
+        transactions={transactions}
+        whereUsed={whereUsed}
+        onClose={() => setDetailOpen(false)}
+        onReceive={() => openReceiveFor(selectedPartId ?? undefined)}
+        onAdjust={() => openAdjustFor(selectedPartId ?? undefined)}
       />
     </div>
   );

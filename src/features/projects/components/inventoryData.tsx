@@ -26,6 +26,7 @@ export interface StockRecord {
   leadTimeDays: number;
   lotSerial?: string;
   quarantineQty?: number;
+  imageUrl?: string;   // part photo, when the catalog entry has one — falls back to a category icon
 }
 
 export interface StockTransaction {
@@ -87,6 +88,26 @@ export function CoveragePill({ status }: { status: CoverageStatus }) {
   );
 }
 
+/** Thin bar under the coverage pill — fill = remaining unallocated share of on-hand stock. */
+export function CoverageBar({ status, record }: { status: CoverageStatus; record: StockRecord }) {
+  const available = availableOf(record);
+  if (available < 0) {
+    const overRatio = Math.min(1, Math.abs(available) / Math.max(record.allocated, 1));
+    return (
+      <div className="flex h-1 w-full rounded-full overflow-hidden bg-muted mt-1.5">
+        <div style={{ width: `${(1 - overRatio) * 100}%`, background: COVERAGE_META.conflict.fg }} />
+        <div style={{ width: `${overRatio * 100}%`, background: COVERAGE_META['covered-by-order'].fg }} />
+      </div>
+    );
+  }
+  const pct = record.onHand > 0 ? Math.round((available / record.onHand) * 100) : 0;
+  return (
+    <div className="h-1 w-full rounded-full bg-muted overflow-hidden mt-1.5">
+      <div style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: COVERAGE_META[status].fg }} />
+    </div>
+  );
+}
+
 // Deterministic pseudo-random spread seeded by part number, so seeded numbers stay stable
 // across re-renders without needing a backend.
 function seededRandom(seed: string): number {
@@ -128,6 +149,97 @@ export function generateMockStock(bomNodes: BOMNode[]): StockRecord[] {
       leadTimeDays: n.leadTime || 14,
       quarantineQty: r > 0.9 ? Math.max(1, Math.round(onHand * 0.1)) : undefined,
       lotSerial: r > 0.8 && r <= 0.9 ? `LOT-${n.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
+      imageUrl: r > 0.75 && r <= 0.9 ? `https://picsum.photos/seed/${encodeURIComponent(n.pn)}/400` : undefined,
+    };
+  });
+}
+
+export interface BuildLine {
+  partId: string;
+  pn: string;
+  name: string;
+  cat: BOMCategory;
+  qtyPerUnit: number;
+  uom: string;
+  required: number;
+  available: number;
+  allocated: number;
+  onOrder: number;
+  leadTimeDays: number;
+  status: CoverageStatus;
+}
+
+export interface Build {
+  id: string;
+  name: string;
+  type: string;
+  units: number;
+  bomRev: string;
+  scrapPct: number;
+  linkedMilestone: string;
+  targetDate: string;      // ISO
+  projectedDate: string;   // ISO — target + longest-lead short line's lead time
+  daysLate: number;        // 0 when clear to build
+  lines: BuildLine[];
+  readyCount: number;
+  onOrderCount: number;
+  shortLines: BuildLine[];
+  longestLead: BuildLine | null;
+}
+
+const BUILD_DEFS = [
+  { id: 'evt', name: 'EVT Build', type: 'EVT', units: 5, bomRev: 'Rev B', scrapPct: 5, milestone: 'EVT Complete' },
+  { id: 'dvt', name: 'DVT Build', type: 'DVT', units: 25, bomRev: 'Rev C', scrapPct: 3, milestone: 'DVT Build Complete' },
+  { id: 'pvt', name: 'PVT Build', type: 'PVT', units: 100, bomRev: 'Rev C', scrapPct: 2, milestone: 'PVT Kickoff' },
+] as const;
+
+function addDays(date: Date, days: number): string {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d.toISOString();
+}
+
+export function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+}
+
+/**
+ * Builds one "Build" per fixed EVT/DVT/PVT phase, scaling each stocked part's real BOM
+ * demand (qty-per-unit from demandByPartId) by that phase's unit count, then reusing
+ * computeCoverage against the scaled requirement — so larger builds naturally show more
+ * shortages against the same on-hand/on-order stock, same as a real MRP netting would.
+ */
+export function generateMockBuilds(stock: StockRecord[], demandByPartId: Map<string, number>): Build[] {
+  const now = new Date();
+  return BUILD_DEFS.map((def) => {
+    const lines: BuildLine[] = stock.map((r) => {
+      const qtyPerUnit = demandByPartId.get(r.partId) ?? 1;
+      const required = qtyPerUnit * def.units;
+      const status = computeCoverage(r, required);
+      return {
+        partId: r.partId, pn: r.pn, name: r.name, cat: r.cat,
+        qtyPerUnit, uom: 'EA',
+        required, available: availableOf(r), allocated: r.allocated, onOrder: r.onOrder,
+        leadTimeDays: r.leadTimeDays, status,
+      };
+    });
+
+    const readyCount = lines.filter(l => l.status === 'ready').length;
+    const onOrderCount = lines.filter(l => l.status === 'covered-by-order').length;
+    const shortLines = lines.filter(l => l.status === 'short' || l.status === 'conflict');
+    const longestLead = shortLines.length
+      ? shortLines.reduce((max, l) => (l.leadTimeDays > (max?.leadTimeDays ?? 0) ? l : max), null as BuildLine | null)
+      : null;
+
+    const daysLate = shortLines.length ? Math.round(30 + seededRandom(def.id) * 150) : 0;
+    const projectedDate = addDays(now, longestLead?.leadTimeDays ?? 0);
+    const targetDate = addDays(new Date(projectedDate), -daysLate);
+
+    return {
+      id: def.id, name: def.name, type: def.type, units: def.units,
+      bomRev: def.bomRev, scrapPct: def.scrapPct, linkedMilestone: def.milestone,
+      targetDate, projectedDate, daysLate,
+      lines, readyCount, onOrderCount, shortLines, longestLead,
     };
   });
 }

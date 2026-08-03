@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -47,6 +47,7 @@ import {
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Download, Plus, X } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart } from '@/hooks/useParts';
 import { KNOWN_BOM_CATEGORIES, type ApiPartResponse, type BOMCategory } from './bomData';
 import { STOCK_LOCATIONS, type StockLocation } from './inventoryData';
@@ -80,11 +81,14 @@ interface ReceiveStockDialogProps {
   orgId: string;
   parts: ApiPartResponse[];
   onReceive: (input: ReceiveStockInput) => void;
+  /** Preselect a part (e.g. opened from that part's detail sheet) instead of starting on the picker. */
+  initialPartId?: string;
 }
 
 const emptyNewPart = { partNumber: '', name: '', description: '', category: '' as BOMCategory | '', manufacturer: '', mpn: '', unit: 'EA' };
 
-export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive }: ReceiveStockDialogProps) {
+export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, initialPartId }: ReceiveStockDialogProps) {
+  const isMobile = useIsMobile();
   const [selectedPart, setSelectedPart] = useState<ApiPartResponse | null>(null);
   const [partPickerOpen, setPartPickerOpen] = useState(false);
   const [showAddPart, setShowAddPart] = useState(false);
@@ -104,6 +108,17 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive }:
       note: '',
     },
   });
+
+  useEffect(() => {
+    if (isOpen && initialPartId) {
+      const match = parts.find(p => p.id === initialPartId);
+      if (match) {
+        setSelectedPart(match);
+        form.setValue('partId', match.id, { shouldValidate: true });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialPartId]);
 
   const isFormDirty = form.formState.isDirty || showAddPart;
 
@@ -169,12 +184,19 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive }:
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && attemptClose()}>
-      <DialogContent className="max-w-lg p-0 flex flex-col gap-0">
-        <DialogHeader className="px-6 py-4 border-b shrink-0 flex-row items-start gap-3 space-y-0">
+      <DialogContent
+        className={cn(
+          'p-0 flex flex-col gap-0',
+          isMobile
+            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0'
+            : 'max-w-lg'
+        )}
+      >
+        <DialogHeader className="px-4 sm:px-6 py-4 pr-10 border-b shrink-0 flex-row items-start gap-3 space-y-0">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
             <Download className="h-4 w-4" />
           </div>
-          <div className="text-left">
+          <div className="text-left flex-1 min-w-0">
             <DialogTitle>Receive stock</DialogTitle>
             <DialogDescription>Writes one immutable ledger entry</DialogDescription>
           </div>
@@ -183,7 +205,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive }:
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 min-h-0">
             <div className="overflow-y-auto flex-1">
-              <div className="p-6 space-y-5">
+              <div className="p-4 sm:p-6 space-y-5">
                 <FormField
                   control={form.control}
                   name="partId"
@@ -223,7 +245,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive }:
                               </Button>
                             </FormControl>
                           </PopoverTrigger>
-                          <PopoverContent className="w-[420px] p-0" align="start">
+                          <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[420px] p-0" align="start">
                             <Command>
                               <CommandInput placeholder="Search parts, MPN, manufacturer..." />
                               <CommandList>
@@ -272,7 +294,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive }:
                               <X className="h-3.5 w-3.5" />
                             </Button>
                           </div>
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                               <Label className="text-xs">Part Number *</Label>
                               <Input
@@ -427,7 +449,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive }:
               </div>
             </div>
 
-            <DialogFooter className="px-6 py-4 border-t shrink-0">
+            <DialogFooter className="px-4 sm:px-6 py-4 border-t shrink-0">
               <Button type="button" variant="outline" onClick={attemptClose}>Cancel</Button>
               <Button type="submit" disabled={!selectedPart}>Receive</Button>
             </DialogFooter>
