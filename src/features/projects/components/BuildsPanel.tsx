@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  CheckCircle, Truck, Flag, ArrowRight, ClipboardCheck,
+  CheckCircle, Truck, Flag, ArrowRight, ClipboardCheck, Plus,
   Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,9 @@ import { CoveragePill, formatShortDate, type Build } from './inventoryData';
 
 // Maps bomData's BOM_CAT_META.iconName strings to the actual icon component.
 const CATEGORY_ICON_MAP: Record<string, React.ElementType> = { Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag };
+
+// Fixed accent per build phase — purely visual grouping, matches the design system's build type chips.
+const BUILD_TYPE_TINT: Record<string, string> = { EVT: '#7C3AED', DVT: '#2563EB', PVT: '#16A34A' };
 
 interface BuildsPanelProps {
   builds: Build[];
@@ -34,34 +37,60 @@ export function BuildsPanel({ builds, onSelectPart }: BuildsPanelProps) {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
-        {builds.map((b) => {
-          const isShort = b.shortLines.length > 0;
-          const active = b.id === selectedBuild.id;
-          return (
-            <button
-              key={b.id}
-              onClick={() => setSelectedBuildId(b.id)}
-              className={cn(
-                'shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors',
-                active
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
-              )}
-            >
-              <span
-                className="h-1.5 w-1.5 rounded-full shrink-0"
-                style={{ background: active ? 'currentColor' : (isShort ? '#DC2626' : '#16A34A') }}
-              />
-              {b.name}
-              {isShort && <span className={active ? 'opacity-80' : 'text-destructive'}>· {b.daysLate}d</span>}
-            </button>
-          );
-        })}
+    <div className="flex flex-col lg:flex-row gap-4 items-start">
+      {/* Builds list panel */}
+      <div className="w-full lg:w-72 shrink-0 rounded-xl border border-border bg-card p-3">
+        <div className="flex items-center justify-between mb-3 px-1">
+          <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Builds</h3>
+          <Button size="icon" variant="outline" className="h-7 w-7" disabled title="Coming soon">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+        <div className="space-y-2">
+          {builds.map((b) => {
+            const isShort = b.shortLines.length > 0;
+            const active = b.id === selectedBuild.id;
+            return (
+              <button
+                key={b.id}
+                onClick={() => setSelectedBuildId(b.id)}
+                className={cn(
+                  'w-full text-left rounded-lg border p-3 transition-colors',
+                  active ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50'
+                )}
+              >
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ background: isShort ? '#DC2626' : '#16A34A' }} />
+                    <span className="text-sm font-bold text-foreground truncate">{b.name}</span>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] font-semibold shrink-0"
+                    style={{ color: BUILD_TYPE_TINT[b.type] ?? undefined, borderColor: `${BUILD_TYPE_TINT[b.type] ?? '#64748B'}40`, background: `${BUILD_TYPE_TINT[b.type] ?? '#64748B'}14` }}
+                  >
+                    {b.type}
+                  </Badge>
+                </div>
+                <div className="text-xs text-muted-foreground mb-1.5">
+                  {b.units} units · {b.bomRev} · {formatShortDate(b.targetDate)}
+                </div>
+                {isShort ? (
+                  <div className="flex items-center gap-1 text-xs font-medium text-destructive">
+                    <Flag className="h-3 w-3" /> {b.daysLate}d past target
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1 text-xs font-medium" style={{ color: '#16A34A' }}>
+                    <CheckCircle className="h-3 w-3" /> Complete
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <div className="space-y-4 min-w-0">
+      <div className="flex-1 space-y-4 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-xl font-bold">{selectedBuild.name}</h2>
           <Badge variant="outline">{selectedBuild.type}</Badge>

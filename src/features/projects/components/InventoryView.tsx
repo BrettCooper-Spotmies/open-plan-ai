@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import {
   Search, Table as TableIcon, LayoutGrid, Download, Pencil, PackageSearch,
-  AlertTriangle, Truck, CheckCircle, Lock, Boxes as BoxesIcon,
-  Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag,
+  AlertTriangle, Truck, CheckCircle, Lock, Boxes as BoxesIcon, Layers,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,21 +16,18 @@ import { useBomTree } from '@/hooks/useBom';
 import { useOrgParts } from '@/hooks/useParts';
 import {
   fromApiNode, applyPriceRollup, assignLevelLabels, bomFlatAll, formatLeadTime,
-  KNOWN_BOM_CATEGORIES, getCategoryMeta,
+  KNOWN_BOM_CATEGORIES, getCategoryMeta, type BOMCategory,
 } from './bomData';
 import {
   generateMockStock, generateMockBuilds, computeCoverage, availableOf, CoveragePill, CoverageBar,
   type StockRecord, type StockTransaction, type CoverageStatus,
 } from './inventoryData';
-import { HoverZoomImage } from './BOMShared';
+import { HoverZoomImage, PartThumb } from './BOMShared';
 import { ReceiveStockDialog, type ReceiveStockInput } from './ReceiveStockDialog';
 import { AdjustQuantityDialog, type AdjustQuantityInput } from './AdjustQuantityDialog';
 import { PartDetailSheet, type WhereUsedRow } from './PartDetailSheet';
 import { BuildsPanel } from './BuildsPanel';
 import { AlertsPanel } from './AlertsPanel';
-
-// Maps bomData's BOM_CAT_META.iconName strings to the actual icon component.
-const CATEGORY_ICON_MAP: Record<string, React.ElementType> = { Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag };
 
 function softTint(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
@@ -194,6 +190,19 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stock, categoryFilter, search, quickFilter, demandByPartId]);
 
+  // Cards view groups by category (unless a single category is already filtered), each
+  // group preceded by a small "CATEGORY NAME · count" header — mirrors the design system's
+  // card grouping for Inventory.
+  const cardGroups = useMemo(() => {
+    if (categoryFilter !== 'all') return [{ cat: categoryFilter as BOMCategory, items: filteredStock }];
+    const byCat = new Map<BOMCategory, StockRecord[]>();
+    for (const r of filteredStock) {
+      if (!byCat.has(r.cat)) byCat.set(r.cat, []);
+      byCat.get(r.cat)!.push(r);
+    }
+    return KNOWN_BOM_CATEGORIES.filter(cat => byCat.has(cat)).map(cat => ({ cat, items: byCat.get(cat)! }));
+  }, [filteredStock, categoryFilter]);
+
   const coverageCounts = useMemo(() => {
     const counts: Record<CoverageStatus, number> = { ready: 0, 'covered-by-order': 0, short: 0, conflict: 0 };
     for (const r of stock) counts[coverageOf(r)]++;
@@ -303,23 +312,23 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                   ))}
                 </div>
 
-                <div className="flex items-center gap-1 border rounded-md p-1 shrink-0 self-start lg:self-auto">
-                  <Button
-                    variant={viewMode === 'table' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-8 px-2.5"
+                <div className="flex bg-muted border border-border rounded-lg p-0.5 gap-0.5 shrink-0 self-start lg:self-auto">
+                  <button
                     onClick={() => setViewMode('table')}
+                    title="Table view"
+                    className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium border-none cursor-pointer transition-colors',
+                      viewMode === 'table' ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground hover:text-foreground')}
                   >
-                    <TableIcon className="h-4 w-4 mr-1.5" /> Table
-                  </Button>
-                  <Button
-                    variant={viewMode === 'cards' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-8 px-2.5"
+                    <TableIcon className="w-3.5 h-3.5" /> Table
+                  </button>
+                  <button
                     onClick={() => setViewMode('cards')}
+                    title="Cards view"
+                    className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium border-none cursor-pointer transition-colors',
+                      viewMode === 'cards' ? 'bg-card text-foreground shadow-sm' : 'bg-transparent text-muted-foreground hover:text-foreground')}
                   >
-                    <LayoutGrid className="h-4 w-4 mr-1.5" /> Cards
-                  </Button>
+                    <LayoutGrid className="w-3.5 h-3.5" /> Cards
+                  </button>
                 </div>
               </div>
 
@@ -358,14 +367,14 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="h-9 px-3 py-2 w-[120px]">Coverage</TableHead>
-                        <TableHead className="h-9 px-3 py-2 w-[260px]">Part</TableHead>
-                        <TableHead className="h-9 px-3 py-2 text-right">On Hand</TableHead>
-                        <TableHead className="hidden sm:table-cell h-9 px-3 py-2 text-right">Allocated</TableHead>
-                        <TableHead className="h-9 px-3 py-2 text-right">Available</TableHead>
-                        <TableHead className="hidden md:table-cell h-9 px-3 py-2 text-right">On Order</TableHead>
-                        <TableHead className="h-9 px-3 py-2">Location</TableHead>
-                        <TableHead className="hidden lg:table-cell h-9 px-3 py-2">Lead</TableHead>
+                        <TableHead className="h-9 px-3 py-2 w-[120px] text-[11px] font-medium uppercase tracking-wider">Coverage</TableHead>
+                        <TableHead className="h-9 px-3 py-2 w-[260px] text-[11px] font-medium uppercase tracking-wider">Part</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider">On Hand</TableHead>
+                        <TableHead className="hidden sm:table-cell h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider">Allocated</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider">Available</TableHead>
+                        <TableHead className="hidden md:table-cell h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider">On Order</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-[11px] font-medium uppercase tracking-wider">Location</TableHead>
+                        <TableHead className="hidden lg:table-cell h-9 px-3 py-2 text-[11px] font-medium uppercase tracking-wider">Lead</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -378,9 +387,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                         </TableRow>
                       ) : filteredStock.map((r) => {
                         const available = availableOf(r);
-                        const meta = getCategoryMeta(r.cat);
                         const status = coverageOf(r);
-                        const CategoryIcon = CATEGORY_ICON_MAP[meta.iconName] ?? Tag;
                         return (
                           <TableRow key={r.id} className="cursor-pointer" onClick={() => openDetail(r.partId)}>
                             <TableCell className="px-3 py-2 align-top">
@@ -388,26 +395,13 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                               <CoverageBar status={status} record={r} />
                             </TableCell>
                             <TableCell className="px-3 py-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                {r.imageUrl ? (
-                                  <HoverZoomImage imageUrl={r.imageUrl}>
-                                    <img
-                                      src={r.imageUrl}
-                                      alt=""
-                                      className="h-7 w-7 shrink-0 rounded-md object-cover"
-                                    />
-                                  </HoverZoomImage>
-                                ) : (
-                                  <div
-                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-                                    style={{ background: `${meta.tint}1a`, color: meta.tint }}
-                                  >
-                                    <CategoryIcon className="h-3.5 w-3.5" />
-                                  </div>
-                                )}
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <HoverZoomImage imageUrl={r.imageUrl} enabled={!!r.imageUrl}>
+                                  <PartThumb cat={r.cat} size={32} radius={7} imageUrl={r.imageUrl} />
+                                </HoverZoomImage>
                                 <div className="min-w-0">
-                                  <div className="text-sm font-medium text-primary truncate">{r.pn}</div>
-                                  <div className="text-xs text-muted-foreground truncate">{r.name}</div>
+                                  <div className="text-sm font-medium text-foreground truncate">{r.name}</div>
+                                  <div className="text-xs font-mono text-muted-foreground truncate">{r.pn}</div>
                                 </div>
                               </div>
                             </TableCell>
@@ -429,42 +423,92 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                       })}
                     </TableBody>
                   </Table>
+                  {filteredStock.length > 0 && (
+                    <div className="px-3 py-2.5 border-t border-border text-xs text-muted-foreground">
+                      Showing {filteredStock.length} of {totalParts} total parts
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {filteredStock.map((r) => {
-                    const available = availableOf(r);
-                    const meta = getCategoryMeta(r.cat);
+                <div className="space-y-5">
+                  {cardGroups.length === 0 ? (
+                    <div className="py-12 text-center text-muted-foreground">
+                      <PackageSearch className="h-6 w-6 mx-auto mb-2 opacity-50" />
+                      <div className="text-sm">No parts match your filters</div>
+                    </div>
+                  ) : cardGroups.map(({ cat, items }) => {
+                    const groupMeta = getCategoryMeta(cat);
                     return (
-                      <Card key={r.id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => openDetail(r.partId)}>
-                        <CardContent className="p-4 space-y-2">
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="text-sm font-medium text-primary truncate">{r.pn}</div>
-                              <div className="text-xs text-muted-foreground truncate">{r.name}</div>
-                            </div>
-                            <CoveragePill status={coverageOf(r)} />
+                      <div key={cat}>
+                        {categoryFilter === 'all' && (
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: groupMeta.tint }} />
+                            <span className="text-xs font-bold uppercase tracking-wide text-foreground">{groupMeta.label}</span>
+                            <span className="text-xs text-muted-foreground">{items.length}</span>
                           </div>
-                          <div className="grid grid-cols-3 gap-2 text-center pt-1">
-                            <div>
-                              <div className="text-sm font-semibold">{r.onHand}</div>
-                              <div className="text-[10px] text-muted-foreground">On Hand</div>
-                            </div>
-                            <div>
-                              <div className="text-sm font-semibold">{r.allocated}</div>
-                              <div className="text-[10px] text-muted-foreground">Allocated</div>
-                            </div>
-                            <div>
-                              <div className={cn('text-sm font-semibold', available < 0 && 'text-destructive')}>{available}</div>
-                              <div className="text-[10px] text-muted-foreground">Available</div>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
-                            <Badge variant="outline" className="text-[10px] font-normal" style={{ borderColor: `${meta.tint}40`, color: meta.tint }}>{meta.label}</Badge>
-                            <span>{r.location}</span>
-                          </div>
-                        </CardContent>
-                      </Card>
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {items.map((r) => {
+                            const available = availableOf(r);
+                            const status = coverageOf(r);
+                            return (
+                              <Card
+                                key={r.id}
+                                className="cursor-pointer hover:shadow-sm transition-shadow rounded-xl"
+                                onClick={() => openDetail(r.partId)}
+                              >
+                                <CardContent className="p-4 space-y-3">
+                                  <div className="flex items-start gap-2.5">
+                                    <PartThumb cat={r.cat} size={40} radius={8} imageUrl={r.imageUrl} />
+                                    <div className="min-w-0 flex-1">
+                                      <div className="text-xs font-semibold truncate" style={{ color: groupMeta.tint }}>{r.pn}</div>
+                                      <div className="text-sm font-semibold text-foreground truncate">{r.name}</div>
+                                    </div>
+                                    {r.lotSerial && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-[10px] font-medium gap-1 shrink-0"
+                                        style={{ color: '#7C3AED', borderColor: 'rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.08)' }}
+                                      >
+                                        <Layers className="h-2.5 w-2.5" /> Lot
+                                      </Badge>
+                                    )}
+                                  </div>
+
+                                  <div className="flex items-center justify-between gap-2">
+                                    <CoveragePill status={status} />
+                                    <div className="flex items-center gap-1 flex-wrap justify-end">
+                                      <Badge variant="outline" className="text-[10px] font-normal">{r.location}</Badge>
+                                      {r.quarantineQty ? <Badge variant="outline" className="text-[10px] font-normal"><Lock className="h-2.5 w-2.5 mr-1" />QA</Badge> : null}
+                                    </div>
+                                  </div>
+
+                                  <CoverageBar status={status} record={r} />
+
+                                  <div className="grid grid-cols-4 gap-2 pt-2.5 border-t border-border">
+                                    <div>
+                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">On Hand</div>
+                                      <div className="text-sm font-semibold">{r.onHand}</div>
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Alloc</div>
+                                      <div className="text-sm font-semibold">{r.allocated}</div>
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Avail</div>
+                                      <div className={cn('text-sm font-semibold', available < 0 && 'text-destructive')}>{available}</div>
+                                    </div>
+                                    <div>
+                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Order</div>
+                                      <div className="text-sm font-semibold">{r.onOrder || '—'}</div>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
