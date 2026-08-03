@@ -38,8 +38,8 @@ export function BuildsPanel({ builds, onSelectPart }: BuildsPanelProps) {
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 items-start">
-      {/* Builds list panel */}
-      <div className="w-full lg:w-72 shrink-0 rounded-xl border border-border bg-card p-3">
+      {/* Builds list panel — stays put while the detail column scrolls past it */}
+      <div className="w-full lg:w-72 shrink-0 rounded-xl border border-border bg-card p-3 lg:sticky lg:top-6">
         <div className="flex items-center justify-between mb-3 px-1">
           <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Builds</h3>
           <Button size="icon" variant="outline" className="h-7 w-7" disabled title="Coming soon">
@@ -146,17 +146,17 @@ export function BuildsPanel({ builds, onSelectPart }: BuildsPanelProps) {
         </div>
 
         <div className="border rounded-lg overflow-hidden overflow-x-auto">
-          <Table>
+          <Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="px-3 py-2">BOM Line</TableHead>
-                <TableHead className="px-3 py-2 text-right">Qty/Unit</TableHead>
-                <TableHead className="px-3 py-2 text-right">Required</TableHead>
-                <TableHead className="px-3 py-2 text-right">Available</TableHead>
-                <TableHead className="px-3 py-2 text-right">Allocated</TableHead>
-                <TableHead className="px-3 py-2 text-right">On Order</TableHead>
-                <TableHead className="px-3 py-2 text-right">Shortfall</TableHead>
-                <TableHead className="px-3 py-2">Status</TableHead>
+                <TableHead className="px-3 py-2 w-[220px]">BOM Line</TableHead>
+                <TableHead className="px-3 py-2 w-[90px] text-right whitespace-nowrap">Qty/Unit</TableHead>
+                <TableHead className="px-3 py-2 w-[90px] text-right whitespace-nowrap">Required</TableHead>
+                <TableHead className="px-3 py-2 w-[90px] text-right whitespace-nowrap">Available</TableHead>
+                <TableHead className="px-3 py-2 w-[90px] text-right whitespace-nowrap">Allocated</TableHead>
+                <TableHead className="px-3 py-2 w-[90px] text-right whitespace-nowrap">On Order</TableHead>
+                <TableHead className="px-3 py-2 w-[90px] text-right whitespace-nowrap">Shortfall</TableHead>
+                <TableHead className="px-3 py-2 w-[110px]">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
