@@ -53,6 +53,7 @@ export function AssistantPanel({
     isStreaming,
     toolStatus,
     pendingQuestions,
+    liveCard,
     sendMessage,
     editMessage,
     selectMessageVersion,
@@ -212,6 +213,8 @@ export function AssistantPanel({
           pendingQuestions={pendingQuestions}
           onAnswer={answerQuestion}
           isAnswering={isAnswering}
+          liveCard={liveCard}
+          onSendMessage={sendMessage}
         />
       ) : (
         <ScrollArea className="flex-1 min-h-0">

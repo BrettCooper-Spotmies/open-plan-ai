@@ -154,6 +154,10 @@ export interface AssistantMessage {
 // ─── present_card (see backend presentCard.tool.ts, the authoritative shape) ──
 
 export type CardSeverity = 'critical' | 'major' | 'minor' | 'trivial';
+/** 'danger' for blockers/risks/overdue-heavy cards — purely cosmetic, set server-side from the model's present_card call. */
+export type CardTone = 'default' | 'danger';
+/** Matches the backend's real projects.stage enum exactly — never the design mock's fabricated EVT/DVT/PVT/MP gate names. */
+export type ProjectStage = 'concept' | 'design' | 'development' | 'testing' | 'production';
 
 export interface CardItem {
   id: string;
@@ -164,10 +168,22 @@ export interface CardItem {
   assignees?: string[];
 }
 
+export type BomCardFlag = 'single_sourced' | 'long_lead' | 'missing_mfr_pn' | 'missing_approval';
+
+export interface BomCardItem {
+  id: string;
+  partNumber: string;
+  name: string;
+  manufacturer?: string;
+  flag: BomCardFlag;
+  /** Short precomputed display detail, e.g. "16w" for a long-lead part. */
+  flagDetail?: string;
+}
+
 interface AssistantCardBase {
   title: string;
   badge?: string;
-  items: CardItem[];
+  tone?: CardTone;
   itemsLabel?: string;
   emptyText?: string;
   followUps?: string[];
@@ -177,16 +193,32 @@ interface AssistantCardBase {
 
 export interface AssistantStatusCard extends AssistantCardBase {
   type: 'status';
+  items: CardItem[];
   metricValue: number;
   metricLabel?: string;
   taskCount?: { completed: number; total: number };
+  /** Only set when the model actually fetched the real projects row this turn. */
+  stage?: ProjectStage;
 }
 
 export interface AssistantListCard extends AssistantCardBase {
   type: 'list';
+  items: CardItem[];
 }
 
-export type AssistantCard = AssistantStatusCard | AssistantListCard;
+export interface AssistantBomCard extends AssistantCardBase {
+  type: 'bom';
+  items: BomCardItem[];
+  totalLines: number;
+  clearToBuildPct: number;
+  rolledUpCost?: number;
+  singleSourcedCount: number;
+  longLeadCount: number;
+  missingMfrPnCount: number;
+  missingApprovalCount: number;
+}
+
+export type AssistantCard = AssistantStatusCard | AssistantListCard | AssistantBomCard;
 
 /**
  * A present_card result is persisted like any other tool message (role='tool',
@@ -197,7 +229,7 @@ export function isPresentCardMessage(message: AssistantMessage): boolean {
   if (message.role !== 'tool' || !message.content) return false;
   try {
     const parsed = JSON.parse(message.content) as { type?: unknown };
-    return parsed?.type === 'status' || parsed?.type === 'list';
+    return parsed?.type === 'status' || parsed?.type === 'list' || parsed?.type === 'bom';
   } catch {
     return false;
   }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Copy, Pencil, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { fileIconFor } from './AssistantComposer';
 import type { AiMessageAttachment } from '../assistantData';
 import type { MessageVersionInfo } from '../lib/messageBranches';
@@ -15,6 +16,14 @@ interface AssistantMessageBubbleProps {
   onEdit?: (messageId: string, content: string) => void;
   onSelectVersion?: (parentId: string | null, messageId: string) => void;
   disabled?: boolean;
+  /**
+   * 'compact' renders assistant prose in a bounded card-like box instead of
+   * an open chat bubble — used when this turn made tool calls (so the
+   * answer is data-grounded) but didn't produce a full present_card, e.g.
+   * because there wasn't enough structured data for one. Never applies to
+   * user messages.
+   */
+  variant?: 'bubble' | 'compact';
 }
 
 function VersionNav({
@@ -66,6 +75,7 @@ export function AssistantMessageBubble({
   onEdit,
   onSelectVersion,
   disabled,
+  variant = 'bubble',
 }: AssistantMessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(content);
@@ -208,13 +218,22 @@ export function AssistantMessageBubble({
     );
   }
 
+  const isCompact = variant === 'compact';
+
   return (
     <div className="group flex items-start gap-2.5">
       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
         <Sparkles className="h-3.5 w-3.5" />
       </div>
-      <div className="flex min-w-0 max-w-[80%] flex-col items-start gap-1">
-        <div className="min-w-0 whitespace-pre-wrap rounded-2xl rounded-tl-sm bg-muted px-4 py-2.5 text-sm text-foreground">
+      <div className={cn('flex min-w-0 flex-col items-start gap-1', isCompact ? 'flex-1' : 'max-w-[80%]')}>
+        <div
+          className={cn(
+            'min-w-0 whitespace-pre-wrap text-sm text-foreground',
+            isCompact
+              ? 'w-full rounded-lg border border-border bg-card px-3.5 py-3'
+              : 'rounded-2xl rounded-tl-sm bg-muted px-4 py-2.5',
+          )}
+        >
           {content}
         </div>
         {!isOptimistic && (

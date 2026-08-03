@@ -59,6 +59,21 @@ export function AssistantTranscript({
 
   const showTypingDots = isStreaming && !streamingText && toolStatus.length === 0;
 
+  // Did this message's turn (walking back to the preceding user message in
+  // the FULL, unfiltered chain — tool-result rows included) make any tool
+  // calls? Used to render a plain-prose answer as a compact bounded box
+  // instead of an open chat bubble when it's grounded in real tool output
+  // but didn't produce a full present_card — e.g. because there wasn't
+  // enough structured data for one. `messages` (not `visibleMessages`) is
+  // required here since tool-result rows are filtered out of the latter.
+  function turnHadToolCalls(index: number): boolean {
+    for (let i = index - 1; i >= 0; i -= 1) {
+      if (messages[i].role === 'user') return false;
+      if (messages[i].role === 'tool') return true;
+    }
+    return false;
+  }
+
   return (
     <ScrollArea className="flex-1 min-h-0">
       <div className="mx-auto max-w-3xl space-y-4 p-6">
@@ -80,6 +95,8 @@ export function AssistantTranscript({
               />
             );
           }
+          const isCompactAnswer =
+            message.role === 'assistant' && turnHadToolCalls(messages.findIndex((m) => m.id === message.id));
           return (
             <AssistantMessageBubble
               key={message.id}
@@ -92,6 +109,7 @@ export function AssistantTranscript({
               onEdit={onEditMessage}
               onSelectVersion={onSelectVersion}
               disabled={isStreaming}
+              variant={isCompactAnswer ? 'compact' : 'bubble'}
             />
           );
         })}
@@ -104,7 +122,13 @@ export function AssistantTranscript({
           </div>
         )}
 
-        {isStreaming && streamingText && <AssistantMessageBubble role="assistant" content={streamingText} />}
+        {isStreaming && streamingText && (
+          <AssistantMessageBubble
+            role="assistant"
+            content={streamingText}
+            variant={toolStatus.length > 0 ? 'compact' : 'bubble'}
+          />
+        )}
 
         {liveCard && !lastVisibleIsCard && (
           <AssistantCardMessage card={liveCard} createdAt={null} onFollowUp={onSendMessage} />
