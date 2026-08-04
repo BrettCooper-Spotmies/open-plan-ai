@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AssistantMessageBubble } from './AssistantMessageBubble';
-import { AssistantToolStatusChip } from './AssistantToolStatusChip';
+import { AssistantStatusLine } from './AssistantStatusLine';
 import { AssistantQuestionCard } from './AssistantQuestionCard';
 import { AssistantCardMessage } from './AssistantCardMessage';
 import { isPresentCardMessage, type AssistantCard, type AssistantMessage, type AskUserQuestion } from '../assistantData';
@@ -38,6 +38,9 @@ export function AssistantTranscript({
   onSendMessage,
 }: AssistantTranscriptProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messageElRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const mountedRef = useRef(false);
+  const lastUserMessageIdRef = useRef<string | null>(null);
   // tool-role messages are internal plumbing (the audit trail), not conversation content —
   // except a present_card result, which IS the content, just persisted on a tool-role row
   // (see the plan's "reuse ai_messages.content" persistence approach). assistant messages
@@ -53,11 +56,27 @@ export function AssistantTranscript({
   const lastVisibleIsCard =
     visibleMessages.length > 0 && isPresentCardMessage(visibleMessages[visibleMessages.length - 1]);
 
+  // On first content for this conversation (mount, or a fresh conversation
+  // switch — AssistantPanel remounts this component per conversationId),
+  // jump to the very bottom so the latest exchange is in view. After that,
+  // a newly *sent* message scrolls itself to the top of the viewport instead
+  // of following the container to the bottom on every token — otherwise a
+  // long streamed answer keeps yanking the view down past the message that
+  // just started it, forcing a scroll back up to actually read it.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ block: 'end' });
-  }, [visibleMessages.length, streamingText, toolStatus.length, pendingQuestions]);
-
-  const showTypingDots = isStreaming && !streamingText && toolStatus.length === 0;
+    if (visibleMessages.length === 0) return;
+    const lastUserMessage = [...visibleMessages].reverse().find((m) => m.role === 'user');
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      lastUserMessageIdRef.current = lastUserMessage?.id ?? null;
+      bottomRef.current?.scrollIntoView({ block: 'end' });
+      return;
+    }
+    if (lastUserMessage && lastUserMessage.id !== lastUserMessageIdRef.current) {
+      lastUserMessageIdRef.current = lastUserMessage.id;
+      messageElRefs.current.get(lastUserMessage.id)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  }, [visibleMessages, streamingText, toolStatus.length, pendingQuestions]);
 
   // Did this message's turn (walking back to the preceding user message in
   // the FULL, unfiltered chain — tool-result rows included) make any tool
@@ -78,6 +97,11 @@ export function AssistantTranscript({
     <ScrollArea className="flex-1 min-h-0">
       <div className="mx-auto max-w-3xl space-y-4 p-6">
         {visibleMessages.map((message) => {
+          const setMessageRef = (el: HTMLDivElement | null) => {
+            if (el) messageElRefs.current.set(message.id, el);
+            else messageElRefs.current.delete(message.id);
+          };
+
           if (isPresentCardMessage(message)) {
             let parsedCard: AssistantCard | null = null;
             try {
@@ -87,40 +111,32 @@ export function AssistantTranscript({
             }
             if (!parsedCard) return null;
             return (
-              <AssistantCardMessage
-                key={message.id}
-                card={parsedCard}
-                createdAt={message.createdAt}
-                onFollowUp={onSendMessage}
-              />
+              <div key={message.id} ref={setMessageRef}>
+                <AssistantCardMessage card={parsedCard} createdAt={message.createdAt} onFollowUp={onSendMessage} />
+              </div>
             );
           }
           const isCompactAnswer =
             message.role === 'assistant' && turnHadToolCalls(messages.findIndex((m) => m.id === message.id));
           return (
-            <AssistantMessageBubble
-              key={message.id}
-              id={message.id}
-              parentId={message.parentId}
-              role={message.role as 'user' | 'assistant'}
-              content={message.content ?? ''}
-              attachments={message.attachments}
-              versionInfo={messageVersions?.[message.id]}
-              onEdit={onEditMessage}
-              onSelectVersion={onSelectVersion}
-              disabled={isStreaming}
-              variant={isCompactAnswer ? 'compact' : 'bubble'}
-            />
+            <div key={message.id} ref={setMessageRef}>
+              <AssistantMessageBubble
+                id={message.id}
+                parentId={message.parentId}
+                role={message.role as 'user' | 'assistant'}
+                content={message.content ?? ''}
+                attachments={message.attachments}
+                versionInfo={messageVersions?.[message.id]}
+                onEdit={onEditMessage}
+                onSelectVersion={onSelectVersion}
+                disabled={isStreaming}
+                variant={isCompactAnswer ? 'compact' : 'bubble'}
+              />
+            </div>
           );
         })}
 
-        {toolStatus.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pl-9">
-            {toolStatus.map((entry) => (
-              <AssistantToolStatusChip key={entry.id} entry={entry} />
-            ))}
-          </div>
-        )}
+        {isStreaming && !streamingText && <AssistantStatusLine toolStatus={toolStatus} />}
 
         {isStreaming && streamingText && (
           <AssistantMessageBubble
@@ -132,14 +148,6 @@ export function AssistantTranscript({
 
         {liveCard && !lastVisibleIsCard && (
           <AssistantCardMessage card={liveCard} createdAt={null} onFollowUp={onSendMessage} />
-        )}
-
-        {showTypingDots && (
-          <div className="flex items-center gap-1 pl-9">
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.3s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:-0.15s]" />
-            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground" />
-          </div>
         )}
 
         {pendingQuestions && (

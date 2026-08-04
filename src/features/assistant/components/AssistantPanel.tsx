@@ -203,6 +203,7 @@ export function AssistantPanel({
     <div className={cn('flex h-full min-h-0 flex-col', className)}>
       {hasActiveConversation ? (
         <AssistantTranscript
+          key={conversationId ?? 'new'}
           messages={transcriptMessages}
           messageVersions={messageVersions}
           onEditMessage={editMessage}

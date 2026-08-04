@@ -53,6 +53,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith('/team')) return 'Team';
   if (pathname.startsWith('/settings')) return 'Settings';
   if (pathname.startsWith('/notifications')) return 'Notifications';
+  if (pathname.startsWith('/assistant')) return 'Assistant';
   return 'Open Plan AI';
 }
 
@@ -142,6 +143,11 @@ export function AppHeader() {
             )}
             <h1 className="text-2xl font-semibold text-foreground leading-none">
               {pageTitle}
+              {location.pathname.startsWith('/assistant') && (
+                <span className="ml-1.5 text-xs font-medium text-muted-foreground align-middle">
+                  (BETA)
+                </span>
+              )}
             </h1>
           </div>
         )}
@@ -182,10 +188,17 @@ export function AppHeader() {
                 isMobile ? 'w-9 px-0 border border-border rounded-xl' : 'px-3',
               )}
               onClick={toggleAssistant}
-              title="Ask the Assistant (⌘K)"
+              title="Ask the Assistant"
             >
               <Sparkles className="h-4 w-4" />
-              {!isMobile && 'Ask'}
+              {!isMobile && (
+                <>
+                  Ask
+                  <span className="text-[10px] font-medium text-muted-foreground">
+                    (BETA)
+                  </span>
+                </>
+              )}
             </Button>
 
             {/* Report a Bug */}
