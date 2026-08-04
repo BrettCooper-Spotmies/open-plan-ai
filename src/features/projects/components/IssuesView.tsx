@@ -13,6 +13,7 @@ import { ColorSwatchPicker } from '@/components/shared/ColorSwatchPicker';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { playCompleteSound } from '@/lib/playSound';
 import { resolveFileUrl } from '@/utils/fileUrl';
@@ -380,8 +381,17 @@ export function IssuesView({
     onAddDialogClose?.();
   };
 
+  const hasIncompleteChecklistItems = (issue: Issue) =>
+    (issue.checklist ?? []).some((item) => !item.completed);
+
   const handleStatusChange = (issue: Issue, status: IssueStatus) => {
     if (issue.status === status) return;
+
+    if (status === 'resolved' && hasIncompleteChecklistItems(issue)) {
+      toast.error('Complete all checklist items before resolving this issue');
+      return;
+    }
+
     const updatedIssue = {
       ...issue,
       status,
@@ -463,6 +473,11 @@ export function IssuesView({
 
     const newStatus = destinationColumn.status;
     if (movedIssue.status === newStatus) return;
+
+    if (newStatus === 'resolved' && hasIncompleteChecklistItems(movedIssue)) {
+      toast.error('Complete all checklist items before resolving this issue');
+      return;
+    }
 
     setLocalIssues(prev => prev.map(i => i.id === movedIssue.id ? { ...i, status: newStatus as IssueStatus } : i));
     updateIssueStatus.mutate({ issueId: movedIssue.id, status: newStatus });
