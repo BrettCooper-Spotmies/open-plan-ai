@@ -108,7 +108,7 @@ export function AssistantConversationList({
   );
 
   return (
-    <div className="flex h-full w-[280px] shrink-0 flex-col border-r border-border">
+    <div className="flex h-full w-full md:w-[280px] shrink-0 flex-col border-r border-border">
       <div className="flex items-center gap-1.5 p-3">
         <Button variant="outline" className="w-full justify-start gap-2" onClick={onNewConversation}>
           <Plus className="h-4 w-4" />

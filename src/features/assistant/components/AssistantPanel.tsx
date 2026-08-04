@@ -219,7 +219,7 @@ export function AssistantPanel({
         />
       ) : (
         <ScrollArea className="flex-1 min-h-0">
-          <div className={cn('mx-auto flex flex-col gap-6', isWidget ? 'max-w-full p-4' : 'max-w-3xl p-6')}>
+          <div className={cn('mx-auto flex flex-col gap-6', isWidget ? 'max-w-full p-4' : 'max-w-3xl p-4 md:p-6')}>
             <div className="flex items-start gap-3">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
                 <Sparkles className="h-5 w-5" />
@@ -265,7 +265,12 @@ export function AssistantPanel({
         </ScrollArea>
       )}
 
-      <div className={cn('shrink-0 border-t border-border', isWidget ? 'p-3' : 'px-6 py-4')}>
+      <div
+        className={cn(
+          'shrink-0 border-t border-border',
+          isWidget ? 'p-3' : 'px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-6 md:py-4',
+        )}
+      >
         <div className={cn('mx-auto', isWidget ? 'max-w-full' : 'max-w-3xl')}>
           <AssistantComposer
             value={value}

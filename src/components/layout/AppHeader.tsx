@@ -180,26 +180,21 @@ export function AppHeader() {
         ) : (
           <>
             {/* Ask Assistant */}
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn(
-                'h-9 gap-1.5 text-muted-foreground hover:text-foreground',
-                isMobile ? 'w-9 px-0 border border-border rounded-xl' : 'px-3',
-              )}
-              onClick={toggleAssistant}
-              title="Ask the Assistant"
-            >
-              <Sparkles className="h-4 w-4" />
-              {!isMobile && (
-                <>
-                  Ask
-                  <span className="text-[10px] font-medium text-muted-foreground">
-                    (BETA)
-                  </span>
-                </>
-              )}
-            </Button>
+            {!isMobile && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 px-3 text-muted-foreground hover:text-foreground"
+                onClick={toggleAssistant}
+                title="Ask the Assistant"
+              >
+                <Sparkles className="h-4 w-4" />
+                Ask
+                <span className="text-[10px] font-medium text-muted-foreground">
+                  (BETA)
+                </span>
+              </Button>
+            )}
 
             {/* Report a Bug */}
             <Button

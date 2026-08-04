@@ -95,7 +95,7 @@ export function AssistantTranscript({
 
   return (
     <ScrollArea className="flex-1 min-h-0">
-      <div className="mx-auto max-w-3xl space-y-4 p-6">
+      <div className="mx-auto max-w-3xl space-y-4 p-4 md:p-6">
         {visibleMessages.map((message) => {
           const setMessageRef = (el: HTMLDivElement | null) => {
             if (el) messageElRefs.current.set(message.id, el);
