@@ -159,7 +159,11 @@ export function ChatHeader({
     // window.open() per click). A window opened later from the async
     // call:accepted socket event would be blocked outright, so we navigate
     // this same placeholder to the real URL once the callee accepts.
-    meetWindow.openPlaceholder();
+    const primaryName = reachable[0]?.name || 'them';
+    const callLabel = reachable.length > 1
+      ? `${primaryName} + ${reachable.length - 1} other${reachable.length > 2 ? 's' : ''}`
+      : primaryName;
+    meetWindow.openPlaceholder(callLabel, type);
 
     setStartingCall(true);
     try {
