@@ -279,7 +279,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
         </div>
       )}
 
-      <div className={cn('gap-2.5 md:gap-3', isMobile ? 'grid grid-cols-2' : 'flex flex-wrap')}>
+      <div className={cn('gap-2.5', isMobile ? 'grid grid-cols-2' : 'flex flex-wrap md:gap-3')}>
         <StatCard label="Total Parts" value={String(totalParts)} icon={BoxesIcon} iconColor="#2563EB" accent />
         <StatCard label="Ready to Build" value={String(coverageCounts.ready)} icon={CheckCircle} iconColor="#16A34A" />
         <StatCard label="Below Coverage" value={String(belowCoverage)} icon={AlertTriangle} iconColor="#DC2626" />
@@ -287,7 +287,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className={cn(isMobile && 'w-full grid grid-cols-3')}>
+        <TabsList className={cn(isMobile && 'w-full grid grid-cols-3 sticky top-0 z-10 bg-background')}>
           <TabsTrigger value="stock">Stock</TabsTrigger>
           <TabsTrigger value="builds">Builds</TabsTrigger>
           <TabsTrigger value="alerts">
@@ -300,7 +300,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
 
         <TabsContent value="stock" className="mt-4">
           <div className="space-y-4">
-              <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+              <div className={cn('flex gap-3', isMobile ? 'flex-row items-center' : 'flex-col lg:flex-row lg:items-center')}>
                 <div className="relative w-full lg:max-w-xs lg:flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -315,7 +315,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                   <Button
                     variant="outline"
                     size="icon"
-                    className={cn('h-10 w-10 shrink-0 self-start', (quickFilter !== 'all' || categoryFilter !== 'all') && 'border-primary text-primary')}
+                    className={cn('h-10 w-10 shrink-0', (quickFilter !== 'all' || categoryFilter !== 'all') && 'border-primary text-primary')}
                     onClick={() => setFiltersOpen(true)}
                     title="Filters"
                   >
