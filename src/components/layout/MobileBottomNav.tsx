@@ -10,6 +10,7 @@ import {
   Users,
   Settings,
   Calendar,
+  Warehouse,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -30,10 +31,11 @@ const primaryNavItems: NavItem[] = [
 
 // Secondary items shown under "More"
 const moreNavItems: NavItem[] = [
-  { title: 'Team',      url: '/team',     icon: Users         },
-  { title: 'Calendar',  url: '/calendar', icon: Calendar      },
-  { title: 'Reports',   url: '/reports',  icon: BarChart3     },
-  { title: 'Settings',  url: '/settings', icon: Settings      },
+  { title: 'Team',      url: '/team',      icon: Users         },
+  { title: 'Calendar',  url: '/calendar',  icon: Calendar      },
+  { title: 'Reports',   url: '/reports',   icon: BarChart3     },
+  { title: 'Inventory', url: '/inventory', icon: Warehouse     },
+  { title: 'Settings',  url: '/settings',  icon: Settings      },
 ];
 
 export function MobileBottomNav() {
@@ -115,7 +117,7 @@ export function MobileBottomNav() {
         </div>
 
         {/* Sheet items */}
-        <div className="grid grid-cols-4 gap-1 px-3 py-4">
+        <div className="grid grid-cols-3 gap-1 px-3 py-4">
           {visibleMoreNavItems.map((item) => {
             const active = isActive(item.url);
             return (

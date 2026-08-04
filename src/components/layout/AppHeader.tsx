@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
-import { Sun, Moon, ChevronLeft, BarChart3, Plus, Users, Bug } from 'lucide-react';
+import { Sun, Moon, ChevronLeft, BarChart3, Plus, Users, Bug, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';
@@ -71,6 +71,11 @@ export function AppHeader() {
   // see AppLayout's showAppHeader), so pathname alone is enough to detect it.
   const isMobileChatList = isMobile && location.pathname.startsWith('/chat');
 
+  // Mobile inventory: back + title, with Receive/New transaction shortcuts that hand off
+  // to InventoryView via ?action= query param (same pattern as the Settings ?tab= links
+  // below) since the dialogs' state lives locally in InventoryView, not in a shared store.
+  const isMobileInventory = isMobile && location.pathname.startsWith('/inventory');
+
   // Detect project detail route to show project name in header
   const projectMatch = useMatch('/projects/:id/*');
   const projectId = projectMatch?.params?.id;
@@ -125,11 +130,11 @@ export function AppHeader() {
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            {isMobileChatList && (
+            {(isMobileChatList || isMobileInventory) && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 -ml-2 shrink-0 text-muted-foreground hover:text-foreground"
+                className={cn('h-8 w-8 -ml-2 shrink-0 text-muted-foreground hover:text-foreground', isMobileInventory && 'border border-border rounded-lg bg-muted')}
                 onClick={() => navigate('/')}
                 title="Back"
               >
@@ -139,7 +144,7 @@ export function AppHeader() {
             {location.pathname.startsWith('/reports') && (
               <BarChart3 className="h-5 w-5 text-primary shrink-0" />
             )}
-            <h1 className="text-2xl font-semibold text-foreground leading-none">
+            <h1 className={cn('font-semibold text-foreground leading-none', isMobileInventory ? 'text-lg' : 'text-2xl')}>
               {pageTitle}
             </h1>
           </div>
@@ -147,7 +152,27 @@ export function AppHeader() {
       </div>
 
       <div className="flex items-center gap-2">
-        {isMobileChatList ? (
+        {isMobileInventory ? (
+          <>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 rounded-lg"
+              onClick={() => navigate('/inventory?action=receive')}
+              title="Receive stock"
+            >
+              <Download className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              className="h-9 w-9 rounded-lg"
+              onClick={() => navigate('/inventory?action=adjust')}
+              title="New transaction"
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </>
+        ) : isMobileChatList ? (
           <>
             <Button
               variant="ghost"

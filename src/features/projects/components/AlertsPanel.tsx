@@ -1,7 +1,9 @@
-import { useMemo } from 'react';
-import { ClipboardCheck, AlertTriangle, Flag, ChevronRight } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ClipboardCheck, AlertTriangle, Flag, ChevronRight, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { useIsMobile } from '@/hooks/use-mobile';
 import {
   availableOf, formatShortDate, type Build, type StockRecord, type CoverageStatus,
 } from './inventoryData';
@@ -49,23 +51,51 @@ interface AlertsPanelProps {
 }
 
 export function AlertsPanel({ builds, stock, coverageOf, onSelectPart, onViewBuilds }: AlertsPanelProps) {
+  const isMobile = useIsMobile();
+  const [mobileSearch, setMobileSearch] = useState('');
   const shortBuilds = builds.filter(b => b.shortLines.length > 0);
+  const buildsForStatus = isMobile ? builds : shortBuilds;
 
-  const belowCoverage = useMemo(() => {
+  const belowCoverageAll = useMemo(() => {
     return stock
       .map(r => ({ record: r, status: coverageOf(r), available: availableOf(r) }))
       .filter(row => row.status === 'short' || row.status === 'conflict')
       .sort((a, b) => a.available - b.available);
   }, [stock, coverageOf]);
 
-  const alerts = useMemo(() => buildAlerts(builds), [builds]);
+  const alertsAll = useMemo(() => buildAlerts(builds), [builds]);
+
+  const q = mobileSearch.trim().toLowerCase();
+  const alerts = isMobile && q
+    ? alertsAll.filter(a => `${a.title} ${a.description}`.toLowerCase().includes(q))
+    : alertsAll;
+  const buildsForStatusFiltered = isMobile && q
+    ? buildsForStatus.filter(b => `${b.name} ${b.type}`.toLowerCase().includes(q))
+    : buildsForStatus;
+  const belowCoverage = isMobile && q
+    ? belowCoverageAll.filter(({ record }) => `${record.pn} ${record.name}`.toLowerCase().includes(q))
+    : belowCoverageAll;
 
   return (
     <div className="space-y-4">
+      {isMobile && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search alerts..."
+            value={mobileSearch}
+            onChange={(e) => setMobileSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      )}
+
       <div className="space-y-3">
-        <h3 className="text-xs font-semibold tracking-wide text-muted-foreground">
-          ALERTS <span className="ml-1 text-muted-foreground">{alerts.length}</span>
-        </h3>
+        {!isMobile && (
+          <h3 className="text-xs font-semibold tracking-wide text-muted-foreground">
+            ALERTS <span className="ml-1 text-muted-foreground">{alertsAll.length}</span>
+          </h3>
+        )}
         {alerts.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-sm text-muted-foreground">No active alerts.</CardContent>
@@ -99,6 +129,79 @@ export function AlertsPanel({ builds, stock, coverageOf, onSelectPart, onViewBui
         )}
       </div>
 
+      {isMobile ? (
+        <div className="space-y-5">
+          <div className="space-y-2.5">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Builds by clear-to-build status
+            </h3>
+            {buildsForStatusFiltered.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                {q ? 'No builds match your search.' : 'All builds are clear to build.'}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {buildsForStatusFiltered.map((b) => {
+                  const isShort = b.shortLines.length > 0;
+                  return (
+                    <div key={b.id} className="rounded-xl border border-border bg-card p-3 flex items-center justify-between gap-3">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <span className="h-2 w-2 rounded-full mt-1.5 shrink-0" style={{ background: isShort ? '#DC2626' : '#16A34A' }} />
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate">
+                            {b.name} <span className="text-muted-foreground font-normal">· {b.type}</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {b.readyCount} ready · {b.onOrderCount} on order · {b.shortLines.length} short
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isShort ? (
+                          <>
+                            <Badge variant="outline" className="text-[10px] font-normal gap-1">
+                              <Flag className="h-2.5 w-2.5" />{b.daysLate}d
+                            </Badge>
+                            <Badge variant="destructive" className="text-[10px]">Short</Badge>
+                          </>
+                        ) : (
+                          <Badge className="text-[10px] border-transparent" style={{ background: 'rgba(22,163,74,0.1)', color: '#16A34A' }}>Ready</Badge>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Parts below coverage</h3>
+              <span className="text-xs text-muted-foreground">{belowCoverage.length}</span>
+            </div>
+            {belowCoverage.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">Nothing below coverage.</p>
+            ) : (
+              <div className="space-y-2">
+                {belowCoverage.map(({ record, status, available }) => (
+                  <button
+                    key={record.id}
+                    onClick={() => onSelectPart(record.partId)}
+                    className="w-full flex items-center justify-between gap-2 text-left rounded-xl border border-border bg-card p-3 active:bg-muted/50 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="h-2 w-2 rounded-full shrink-0" style={{ background: status === 'conflict' ? '#DC2626' : '#D97706' }} />
+                      <span className="text-sm font-medium truncate">{record.name}</span>
+                    </span>
+                    <span className="text-lg font-bold text-destructive shrink-0">{available}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
           <CardContent className="p-4 space-y-3">
@@ -174,6 +277,7 @@ export function AlertsPanel({ builds, stock, coverageOf, onSelectPart, onViewBui
           </CardContent>
         </Card>
       </div>
+      )}
     </div>
   );
 }
