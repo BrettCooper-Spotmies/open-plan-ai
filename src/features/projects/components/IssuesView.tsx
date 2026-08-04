@@ -58,6 +58,7 @@ interface IssuesViewProps {
   assignedByFilter?: string[];
   dueDateFilter?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
   reportedDateFilter?: 'today' | 'this-week' | 'this-month';
+  tagsFilter?: string[];
   isAddDialogOpen?: boolean;
   onAddDialogClose?: () => void;
   onIssueUpdate?: (issue: Issue) => void;
@@ -142,6 +143,7 @@ export function IssuesView({
   assignedByFilter: externalAssignedByFilter = [],
   dueDateFilter: externalDueDateFilter,
   reportedDateFilter: externalReportedDateFilter,
+  tagsFilter: externalTagsFilter = [],
   isAddDialogOpen: externalIsAddDialogOpen,
   onAddDialogClose,
   onIssueUpdate,
@@ -192,6 +194,7 @@ export function IssuesView({
   const assignedByFilter = externalAssignedByFilter;
   const dueDateFilter = externalDueDateFilter;
   const reportedDateFilter = externalReportedDateFilter;
+  const tagsFilter = externalTagsFilter;
 
   useEffect(() => {
     setLocalIssues(issues);
@@ -246,6 +249,8 @@ export function IssuesView({
       (issue.assignees?.some(a => assigneeFilter.includes(a.id)));
     const matchesAssignedBy = !assignedByFilter.length ||
       assignedByFilter.includes(issue.reportedBy.id);
+    const matchesTags = !tagsFilter.length ||
+      (issue.tags?.some(tag => tagsFilter.includes(tag)) ?? false);
     let matchesDueDate = true;
     if (dueDateFilter) {
       const today = new Date();
@@ -301,7 +306,7 @@ export function IssuesView({
       }
     }
 
-    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesAssignedBy && matchesDueDate && matchesReportedDate;
+    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesAssignedBy && matchesTags && matchesDueDate && matchesReportedDate;
   });
 
   // Sort by severity (critical first), then by date
