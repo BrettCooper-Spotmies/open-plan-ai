@@ -235,6 +235,7 @@ export const ENDPOINTS = {
   },
   // Links
   LINKS: {
+    UPDATE: (id: string) => `/links/${id}`,
     DELETE: (id: string) => `/links/${id}`,
   },
   // Google Meet integration
