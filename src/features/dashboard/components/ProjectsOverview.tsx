@@ -52,7 +52,7 @@ export function ProjectsOverview({ projects, atRiskProjectIds }: ProjectsOvervie
         </CardTitle>
         <Button variant="ghost" size="sm" className="shrink-0" asChild>
           <Link to="/projects" className="text-muted-foreground hover:text-foreground">
-            {isMobile ? 'All' : 'All projects'}
+            {isMobile ? 'View All' : 'All projects'}
             <ArrowRight className="h-4 w-4 ml-1" />
           </Link>
         </Button>

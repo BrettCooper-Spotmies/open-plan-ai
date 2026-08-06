@@ -193,7 +193,7 @@ export default function Dashboard() {
       <div className="flex flex-col gap-3 md:gap-4 min-h-full animate-fade-in overflow-x-hidden">
 
         {/* Compact Create Organization Banner */}
-        {showNoOrgState && (
+        {/* {showNoOrgState && (
           <Card className="border-dashed border border-primary/25 bg-primary/[0.03]">
             <CardContent className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-4 px-4 sm:px-5">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -211,10 +211,10 @@ export default function Dashboard() {
               </Button>
             </CardContent>
           </Card>
-        )}
+        )} */}
 
         {/* Pending Invitations Banner */}
-        {pendingInvitations && pendingInvitations.length > 0 && pendingInvitations.map((inv: any) => (
+        {/* {pendingInvitations && pendingInvitations.length > 0 && pendingInvitations.map((inv: any) => (
           <Card key={inv.id} className="border-dashed border border-primary/25 bg-primary/[0.03]">
             <CardContent className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 py-4 px-4 sm:px-5">
               <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
@@ -243,24 +243,27 @@ export default function Dashboard() {
               </Button>
             </CardContent>
           </Card>
-        ))}
+        ))} */}
 
         {isLoading ? (
           <AppLayoutSkeleton variant="dashboard" />
         ) : (
           <>
-            <DashboardStats
+            {/* Dashboard Stats */}
+            {/* <DashboardStats
               portfolio={{ onTrack: onTrackCount, total: dashboardProjects.length }}
               eco={{ open: ecoAgg.open, awaitingMyAction: ecoAgg.awaitingMyAction }}
               bom={{ pct: bomAgg.pct, pending: bomAgg.pending }}
               nextGate={nextGate ? { days: nextGate.days, label: nextGate.name } : null}
-            />
+            /> */}
 
-            {isMobile && (
+            {/* Dashboard Welcome / Greeting Container */}
+            {/* {isMobile && (
               <DashboardGreeting name={firstName} attentionCount={atRiskCount + bomAgg.rejected} />
-            )}
+            )} */}
 
-            {isMobile && (
+            {/* Needs Attention Card */}
+            {/* {isMobile && (
               <NeedsAttentionCard
                 overdueProject={mostOverdueProject ? {
                   id: mostOverdueProject.project.id,
@@ -271,7 +274,7 @@ export default function Dashboard() {
                 atRiskCount={atRiskCount}
                 bomRejected={bomAgg.rejected}
               />
-            )}
+            )} */}
 
             <div
               ref={gridRef}

@@ -526,7 +526,7 @@ export const TaskDetailModal = ({
           email: profile.email,
           role: profile.role || 'member',
           initials: profile.initials || (profile.name || profile.email || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2),
-          avatar: profile.avatarUrl || profile.avatar_url || '',
+          avatar: profile.avatarUrl || '',
         }
         : undefined,
     } : editedTask);
@@ -619,7 +619,7 @@ export const TaskDetailModal = ({
             email: profile.email,
             role: profile.role || 'member',
             initials: profile.initials || (profile.name || profile.email || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2),
-            avatar: profile.avatarUrl || profile.avatar_url || '',
+            avatar: profile.avatarUrl || '',
           }
           : editedTask.createdBy,
       };
@@ -920,8 +920,8 @@ export const TaskDetailModal = ({
         author: {
           id: profile.id,
           name: profile.name || profile.email,
-          initials: profile.initials,
-          avatar: profile.avatar_url || undefined,
+          initials: profile.initials || '',
+          avatar: profile.avatarUrl || undefined,
           email: profile.email,
           role: profile.role || 'member'
         },
@@ -1891,7 +1891,7 @@ export const TaskDetailModal = ({
                                     moduleId: updatedIds[0] || undefined,
                                     module: updatedIds.length > 0
                                       ? (modules.find(m => m.id === updatedIds[0])?.type || prev.module)
-                                      : undefined,
+                                      : prev.module,
                                     updatedAt: new Date().toISOString()
                                   }));
                                 }}

@@ -441,7 +441,7 @@ export function IssueDetailContent({
                     fileType: r.mimeType ?? r.mime_type ?? '',
                     uploadedAt: r.createdAt ?? r.uploaded_at ?? new Date().toISOString(),
                     uploadedBy: profile
-                        ? { id: profile.id, name: profile.name, email: profile.email, role: '', initials: profile.initials ?? '' }
+                        ? { id: profile.id, name: profile.name, email: profile.email, role: profile.role || 'member', initials: profile.initials ?? '' }
                         : { id: '', name: 'You', email: '', role: '', initials: '' },
                 })),
             ]);

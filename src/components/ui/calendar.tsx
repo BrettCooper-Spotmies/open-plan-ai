@@ -7,6 +7,7 @@ import {
   type CaptionProps,
   type DayPickerProps,
   type ActiveModifiers,
+  type SelectSingleEventHandler,
 } from "react-day-picker";
 import {
   format,
@@ -254,13 +255,8 @@ function DualMonthSidebar() {
   const goToToday = (e: React.MouseEvent<HTMLButtonElement>) => {
     goToMonth(today);
     if (mode === "single" && onSelect) {
-      const handler = onSelect as (
-        day: Date | undefined,
-        selectedDay: Date,
-        activeModifiers: ActiveModifiers,
-        ev: MouseEvent
-      ) => void;
-      handler(today, today, {} as ActiveModifiers, e.nativeEvent);
+      const handler = onSelect as unknown as SelectSingleEventHandler;
+      handler(today, today, {} as ActiveModifiers, e);
     }
   };
 
