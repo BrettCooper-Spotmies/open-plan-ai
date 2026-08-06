@@ -262,6 +262,7 @@ export const TaskDetailModal = ({
   });
 
   const [, setIsLoadingComments] = useState(false);
+  const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistValue, setEditingChecklistValue] = useState('');
@@ -2345,7 +2346,7 @@ export const TaskDetailModal = ({
                 {attachments.map((attachment) => {
                   const FileIcon = getFileIcon(attachment.fileType);
                   const viewUrl = resolveFileUrl(attachment.url) ?? attachment.url;
-                  const isImage = attachment.fileType.startsWith('image/');
+                  const isImage = attachment.fileType.startsWith('image/') && !failedThumbnails.has(attachment.id);
                   return (
                     <div
                       key={attachment.id}
@@ -2357,6 +2358,7 @@ export const TaskDetailModal = ({
                           src={viewUrl}
                           alt={attachment.filename}
                           className="h-8 w-8 rounded object-cover shrink-0 border"
+                          onError={() => setFailedThumbnails(prev => new Set(prev).add(attachment.id))}
                         />
                       ) : (
                         <FileIcon className="h-8 w-8 text-muted-foreground shrink-0" />
