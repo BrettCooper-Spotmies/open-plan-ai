@@ -190,7 +190,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="flex flex-col gap-3 md:gap-4 min-h-full animate-fade-in overflow-x-hidden">
+      <div className="flex flex-col gap-3 md:gap-4 animate-fade-in overflow-x-hidden">
 
         {/* Compact Create Organization Banner */}
         {/* {showNoOrgState && (
@@ -276,23 +276,18 @@ export default function Dashboard() {
               />
             )} */}
 
-            <div
-              ref={gridRef}
-              className="grid gap-3 md:gap-3 lg:grid-cols-3 overflow-hidden"
-              style={!isMobile && gridHeight ? { height: gridHeight } : undefined}
-            >
-              <div className="h-full overflow-hidden">
+            <div className="grid gap-3 md:gap-4 lg:grid-cols-3 items-start">
+              <div>
                 <ProjectsOverview projects={dashboardProjects} atRiskProjectIds={atRiskProjectIds} />
               </div>
-              <div className="h-full overflow-hidden">
+              <div>
                 <EngineeringChangesSummary projectIds={projectIds} projects={dashboardProjects} />
               </div>
-              <div className="h-full flex flex-col space-y-4 md:space-y-3 overflow-hidden">
+              <div className="flex flex-col space-y-4 md:space-y-3">
                 <BomReadiness projectIds={projectIds} projects={dashboardProjects} />
                 <ActivityFeed
                   activities={activityItems}
                   isLoading={activitiesLoading || isLoading}
-                  className="flex-1 min-h-0"
                 />
               </div>
             </div>
