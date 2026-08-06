@@ -1740,7 +1740,7 @@ export function IssueDetailContent({
 
                             <div className="flex gap-2">
                                 <Input
-                                    placeholder="Paste YouTube, Vimeo, or direct video URL…"
+                                    placeholder="Paste video URL…"
                                     value={videoLinkInput}
                                     onChange={(e) => setVideoLinkInput(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddVideoLink(); } }}
