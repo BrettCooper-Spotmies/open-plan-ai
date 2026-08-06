@@ -262,6 +262,7 @@ export const TaskDetailModal = ({
   });
 
   const [, setIsLoadingComments] = useState(false);
+  const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
   const [newChecklistItem, setNewChecklistItem] = useState('');
   const [editingChecklistId, setEditingChecklistId] = useState<string | null>(null);
   const [editingChecklistValue, setEditingChecklistValue] = useState('');
@@ -282,6 +283,7 @@ export const TaskDetailModal = ({
   const [editingTagOriginal, setEditingTagOriginal] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingFileUrls, setPendingFileUrls] = useState<(string | null)[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
@@ -465,6 +467,12 @@ export const TaskDetailModal = ({
         .finally(() => setIsLoadingComments(false));
     }
   }, [isOpen, task?.id, mode]);
+
+  useEffect(() => {
+    const urls = pendingFiles.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+    setPendingFileUrls(urls);
+    return () => { urls.forEach(url => { if (url) URL.revokeObjectURL(url); }); };
+  }, [pendingFiles]);
 
   // The task payload returned by the project/task endpoints never embeds
   // attachments (they live behind a separate uploads endpoint), so fetch them
