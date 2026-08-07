@@ -48,7 +48,7 @@ export default function Chat() {
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [forwardMessages, setForwardMessages] = useState<ChatMessage[] | null>(null);
   const activeId = conversationId || (isMobile ? null : activeConversationId);
-  const { messages, loading: msgsLoading, hasMore, loadMore, refetchMessages, sendMessage, readOnly, readOnlyNotice } = useMessages(activeId ?? null);
+  const { messages, loading: msgsLoading, error: msgsError, hasMore, loadMore, refetchMessages, sendMessage, readOnly, readOnlyNotice } = useMessages(activeId ?? null);
   const { reactionMap, handleToggleReaction } = useReactions(messages, user?.id, activeId ?? null);
   const { data: reachableUsers = [] } = useReachableUsers();
   const onlineUserIds = useChatStore((s) => s.onlineUserIds);
@@ -286,6 +286,8 @@ export default function Chat() {
                 )}
                 {msgsLoading ? (
                   <MessageAreaSkeleton />
+                ) : !messageFilter && msgsError && messages.length === 0 ? (
+                  <EmptyState type="error" description={msgsError} onRetry={refetchMessages} />
                 ) : (
                   <MessageArea
                     messages={displayMessages}
