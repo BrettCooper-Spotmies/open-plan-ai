@@ -155,6 +155,16 @@ export default function Chat() {
     }
   }, [refetchMessages]);
 
+  const handleDeleteMessageForMe = useCallback(async (messageId: string) => {
+    try {
+      await chatService.deleteMessageForMe(messageId);
+      await refetchMessages();
+    } catch (err) {
+      logger.error('Failed to delete message for me:', err);
+      toast.error('Failed to delete message');
+    }
+  }, [refetchMessages]);
+
   const handleReplyMessage = useCallback((message: ChatMessage) => {
     setReplyingTo(message);
   }, []);
@@ -286,6 +296,7 @@ export default function Chat() {
                     reactionMap={reactionMap}
                     onEditMessage={handleEditMessage}
                     onDeleteMessage={handleDeleteMessage}
+                    onDeleteMessageForMe={handleDeleteMessageForMe}
                     onToggleReaction={handleToggleReaction}
                     onReplyMessage={handleReplyMessage}
                     onForwardMessage={handleForwardMessage}
