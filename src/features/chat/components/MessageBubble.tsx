@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, Forward, ZoomIn, FileImage, File as FileIcon2, Pin, PinOff, Star, Eye } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { FilePreviewDialog } from '@/components/FilePreviewDialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -65,6 +65,7 @@ interface MessageBubbleProps {
   isFavourited?: boolean;
   onEdit?: (messageId: string, newContent: string) => void;
   onDelete?: (messageId: string, senderName: string) => void;
+  onDeleteForMe?: (messageId: string) => void;
   onToggleReaction?: (messageId: string, emoji: string) => void | Promise<void>;
   onReply?: (message: ChatMessage) => void;
   onForward?: (message: ChatMessage) => void;
@@ -475,7 +476,7 @@ function FileAttachment({
 export function MessageBubble({
   message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
   searchQuery, memberNames, reactionUsers, readReceipts, otherMembersCount, reactions,
-  isPinned, isFavourited, onEdit, onDelete, onToggleReaction, onReply, onForward, onTogglePin, onToggleFavourite,
+  isPinned, isFavourited, onEdit, onDelete, onDeleteForMe, onToggleReaction, onReply, onForward, onTogglePin, onToggleFavourite,
 }: MessageBubbleProps) {
   const timezone = useUserTimezone();
   const navigate = useNavigate();
@@ -510,8 +511,7 @@ export function MessageBubble({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const editRef = useRef<HTMLTextAreaElement>(null);
-  const editBubbleRef = useRef<HTMLDivElement>(null);
-  const editSizerRef = useRef<HTMLSpanElement>(null);
+  const [isEditEmojiOpen, setIsEditEmojiOpen] = useState(false);
 
   // State-based hover + popover/dropdown management
   const [isHovered, setIsHovered] = useState(false);
@@ -628,30 +628,11 @@ export function MessageBubble({
     };
   }, []);
 
-  // Chat bubbles hug their text (no explicit width), but a <textarea> can't shrink-wrap
-  // content on its own — so an invisible mirror span, styled identically to the textarea
-  // text, measures the current content and the bubble borrows that width. Keeps the edit
-  // box the same snug size as the sent bubble instead of always claiming a fixed width.
-  const EDIT_BUBBLE_MIN_WIDTH = 72;
-  const EDIT_BUBBLE_MAX_WIDTH = 320;
-  const EDIT_BUBBLE_H_PADDING = 24; // px-3 on both sides
-
   const resizeEditTextarea = useCallback(() => {
     const el = editRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
-
-    const bubble = editBubbleRef.current;
-    const sizer = editSizerRef.current;
-    if (bubble && sizer) {
-      const textWidth = sizer.offsetWidth;
-      const width = Math.min(
-        EDIT_BUBBLE_MAX_WIDTH,
-        Math.max(EDIT_BUBBLE_MIN_WIDTH, textWidth + EDIT_BUBBLE_H_PADDING)
-      );
-      bubble.style.width = `${width}px`;
-    }
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
   }, []);
 
   useLayoutEffect(() => {
@@ -677,8 +658,22 @@ export function MessageBubble({
     setEditContent(message.content);
   };
 
-  const handleDelete = () => {
+  const handleInsertEditEmoji = (emoji: string) => {
+    setEditContent((prev) => prev + emoji);
+    setIsEditEmojiOpen(false);
+    requestAnimationFrame(() => {
+      editRef.current?.focus();
+      resizeEditTextarea();
+    });
+  };
+
+  const handleDeleteForEveryone = () => {
     onDelete?.(message.id, message.senderName);
+    setShowDeleteConfirm(false);
+  };
+
+  const handleDeleteForMe = () => {
+    onDeleteForMe?.(message.id);
     setShowDeleteConfirm(false);
   };
 
@@ -863,15 +858,11 @@ export function MessageBubble({
                     </DropdownMenuItem>
                   </>
                 )}
-                {canModify && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setShowDeleteConfirm(true)} className="cursor-pointer text-destructive focus:text-destructive">
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </>
-                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setShowDeleteConfirm(true)} className="cursor-pointer text-destructive focus:text-destructive">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -897,127 +888,66 @@ export function MessageBubble({
           )}
 
           {/* Message bubble content */}
-          {isEditing ? (
-            <div
-              ref={editBubbleRef}
-              className={cn(
-                'relative rounded-2xl px-3 py-2 text-sm leading-relaxed min-w-[72px] max-w-[320px] overflow-hidden',
-                isOwn
-                  ? 'bg-primary text-primary-foreground rounded-br-md border border-primary/20'
-                  : 'bg-muted text-foreground rounded-bl-md border border-border'
-              )}
-            >
-              {/* Invisible mirror of the text, used only to measure how wide the bubble should be */}
-              <span
-                ref={editSizerRef}
-                aria-hidden
-                className="pointer-events-none invisible absolute whitespace-pre-wrap break-words text-sm leading-relaxed"
-                style={{ maxWidth: EDIT_BUBBLE_MAX_WIDTH - EDIT_BUBBLE_H_PADDING }}
-              >
-                {editContent || ' '}
-              </span>
-              <Textarea
-                ref={editRef}
-                value={editContent}
-                onChange={(e) => { setEditContent(e.target.value); resizeEditTextarea(); }}
+          <div
+            className={cn(
+              'relative rounded-2xl px-3 py-2 text-sm leading-relaxed max-w-full min-w-0 overflow-hidden break-words [overflow-wrap:anywhere] touch-pan-y',
+              isDragging
+                ? 'transition-none select-none cursor-grabbing ring-2 ring-primary/50 shadow-lg'
+                : cn(
+                    'transition-transform duration-200 ease-out',
+                    isMobile ? 'cursor-grab' : 'cursor-text select-text'
+                  ),
+              isOwn
+                ? 'bg-primary text-primary-foreground rounded-br-md border border-primary/20'
+                : 'bg-muted text-foreground rounded-bl-md border border-border'
+            )}
+            style={{ transform: `translateX(${dragX * dragDirection}px)` }}
+            onClick={handleBubbleClick}
+            onPointerDown={handleDragPointerDown}
+            onPointerMove={handleDragPointerMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+          >
+            {message.replyToMessage && (
+              <div
                 className={cn(
-                  'min-h-[20px] max-h-[200px] w-full resize-none overflow-y-auto whitespace-pre-wrap break-words',
-                  'border-0 bg-transparent p-0 text-sm leading-relaxed shadow-none rounded-none',
-                  'focus-visible:ring-0 focus-visible:ring-offset-0',
-                  isOwn ? 'text-primary-foreground placeholder:text-primary-foreground/60' : 'text-foreground'
+                  'mb-2 rounded-md border-l-2 px-2 py-1 text-xs',
+                  isOwn
+                    ? 'border-primary-foreground/50 bg-primary-foreground/10'
+                    : 'border-primary/40 bg-primary/10'
                 )}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEdit(); }
-                  if (e.key === 'Escape') handleCancelEdit();
-                }}
-              />
-              <div className="flex items-center justify-end gap-1 mt-1">
-                <button
-                  type="button"
-                  title="Cancel"
-                  onClick={handleCancelEdit}
-                  className={cn(
-                    'flex h-5 w-5 items-center justify-center rounded-full transition-colors',
-                    isOwn ? 'hover:bg-primary-foreground/20' : 'hover:bg-foreground/10'
-                  )}
-                >
-                  <X className="h-3 w-3" />
-                </button>
-                <button
-                  type="button"
-                  title="Save"
-                  onClick={handleSaveEdit}
-                  className={cn(
-                    'flex h-5 w-5 items-center justify-center rounded-full transition-colors',
-                    isOwn ? 'hover:bg-primary-foreground/20' : 'hover:bg-foreground/10'
-                  )}
-                >
-                  <Check className="h-3 w-3" />
-                </button>
+              >
+                <div className="font-medium opacity-90">{message.replyToMessage.senderName}</div>
+                <div className="opacity-80 truncate">
+                  {message.replyToMessage.deletedAt
+                    ? 'Message deleted'
+                    : message.replyToMessage.contentType === 'file'
+                      ? 'Attachment'
+                      : message.replyToMessage.content}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div
-              className={cn(
-                'relative rounded-2xl px-3 py-2 text-sm leading-relaxed max-w-full min-w-0 overflow-hidden break-words [overflow-wrap:anywhere] touch-pan-y',
-                isDragging
-                  ? 'transition-none select-none cursor-grabbing ring-2 ring-primary/50 shadow-lg'
-                  : cn(
-                      'transition-transform duration-200 ease-out',
-                      isMobile ? 'cursor-grab' : 'cursor-text select-text'
-                    ),
-                isOwn
-                  ? 'bg-primary text-primary-foreground rounded-br-md border border-primary/20'
-                  : 'bg-muted text-foreground rounded-bl-md border border-border'
-              )}
-              style={{ transform: `translateX(${dragX * dragDirection}px)` }}
-              onClick={handleBubbleClick}
-              onPointerDown={handleDragPointerDown}
-              onPointerMove={handleDragPointerMove}
-              onPointerUp={endDrag}
-              onPointerCancel={endDrag}
-            >
-              {message.replyToMessage && (
-                <div
-                  className={cn(
-                    'mb-2 rounded-md border-l-2 px-2 py-1 text-xs',
-                    isOwn
-                      ? 'border-primary-foreground/50 bg-primary-foreground/10'
-                      : 'border-primary/40 bg-primary/10'
-                  )}
-                >
-                  <div className="font-medium opacity-90">{message.replyToMessage.senderName}</div>
-                  <div className="opacity-80 truncate">
-                    {message.replyToMessage.deletedAt
-                      ? 'Message deleted'
-                      : message.replyToMessage.contentType === 'file'
-                        ? 'Attachment'
-                        : message.replyToMessage.content}
-                  </div>
-                </div>
-              )}
-              {isFile && fileData ? (
-                <div onClick={(e) => e.stopPropagation()}>
-                  <FileAttachment file={fileData} isOwn={isOwn} message={message} onForward={onForward} />
-                </div>
-              ) : (
-                <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} memberNames={memberNames} />
-              )}
-              {message.entityTags && message.entityTags.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
-                  {message.entityTags.map((tag, i) => (
-                    <EntityTagChip
-                      key={`${tag.entityType}-${tag.entityId}-${i}`}
-                      tag={tag}
-                      variant="sent"
-                      isOwn={isOwn}
-                      onClick={() => navigate(ENTITY_TAG_ROUTE[tag.entityType](tag))}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+            )}
+            {isFile && fileData ? (
+              <div onClick={(e) => e.stopPropagation()}>
+                <FileAttachment file={fileData} isOwn={isOwn} message={message} onForward={onForward} />
+              </div>
+            ) : (
+              <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} memberNames={memberNames} />
+            )}
+            {message.entityTags && message.entityTags.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
+                {message.entityTags.map((tag, i) => (
+                  <EntityTagChip
+                    key={`${tag.entityType}-${tag.entityId}-${i}`}
+                    tag={tag}
+                    variant="sent"
+                    isOwn={isOwn}
+                    onClick={() => navigate(ENTITY_TAG_ROUTE[tag.entityType](tag))}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Reaction pills — clicking opens picker to modify reaction */}
@@ -1091,12 +1021,89 @@ export function MessageBubble({
       <ConfirmationDialog
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
-        onConfirm={handleDelete}
-        title="Delete Message"
-        description="Are you sure you want to delete this message? It will show as deleted to everyone in the chat."
-        confirmText="Delete"
+        onConfirm={canModify ? handleDeleteForEveryone : handleDeleteForMe}
+        title="Delete message?"
+        description={
+          canModify
+            ? 'Choose whether to remove this message just for you, or for everyone in the chat.'
+            : 'This removes the message from your view only — other people in the chat will still see it.'
+        }
+        confirmText={canModify ? 'Delete for everyone' : 'Delete for me'}
+        cancelText="Cancel"
         variant="destructive"
+        extraActionText={canModify ? 'Delete for me' : undefined}
+        onExtraAction={canModify ? handleDeleteForMe : undefined}
       />
+      <Dialog open={isEditing} onOpenChange={(open) => { if (!open) handleCancelEdit(); }}>
+        <DialogContent hideClose className="max-w-sm gap-0 overflow-hidden p-0">
+          <div className="flex items-center gap-3 border-b border-border px-4 py-3">
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              title="Close"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <DialogTitle className="text-base font-medium">Edit message</DialogTitle>
+          </div>
+
+          <div className="flex flex-col gap-3 p-4">
+            {/* Live preview of the bubble being edited, same styling as the sent message */}
+            <div className="flex justify-end">
+              <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-primary px-3 py-2 text-sm text-primary-foreground">
+                {editContent || message.content}
+                <div className="mt-1 flex items-center justify-end gap-1 text-[10px] text-primary-foreground/80">
+                  {formatMessageTimestamp(message.createdAt, timezone)}
+                  <CheckCheck className="h-3 w-3" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-end gap-2">
+              <Textarea
+                ref={editRef}
+                value={editContent}
+                onChange={(e) => { setEditContent(e.target.value); resizeEditTextarea(); }}
+                className="min-h-[36px] max-h-[160px] flex-1 resize-none rounded-lg border-0 border-b-2 border-border bg-transparent px-1 py-1.5 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 focus:border-primary"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEdit(); }
+                  if (e.key === 'Escape') handleCancelEdit();
+                }}
+              />
+              <Popover open={isEditEmojiOpen} onOpenChange={setIsEditEmojiOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-full text-muted-foreground" title="Emoji">
+                    <SmilePlus className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-2" side="top" align="end">
+                  <div className="grid grid-cols-8 gap-1">
+                    {EXTENDED_EMOJI_SET.map((emoji) => (
+                      <button
+                        key={emoji}
+                        className="text-lg hover:bg-muted rounded p-1 transition-colors cursor-pointer leading-none"
+                        onClick={() => handleInsertEditEmoji(emoji)}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <button
+                type="button"
+                title="Save"
+                onClick={handleSaveEdit}
+                disabled={!editContent.trim()}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Check className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

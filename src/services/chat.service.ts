@@ -260,6 +260,10 @@ export const chatService = {
     await apiClient.delete(ENDPOINTS.MESSAGES.DELETE(messageId));
   },
 
+  async deleteMessageForMe(messageId: string): Promise<void> {
+    await apiClient.delete(ENDPOINTS.MESSAGES.DELETE_FOR_ME(messageId));
+  },
+
   async markConversationAsRead(conversationId: string): Promise<void> {
     await apiClient.patch(ENDPOINTS.CONVERSATIONS.READ(conversationId), {});
   },
