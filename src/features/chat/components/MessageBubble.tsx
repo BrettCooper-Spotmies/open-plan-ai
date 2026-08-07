@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -510,6 +510,8 @@ export function MessageBubble({
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(message.content);
   const editRef = useRef<HTMLTextAreaElement>(null);
+  const editBubbleRef = useRef<HTMLDivElement>(null);
+  const editSizerRef = useRef<HTMLSpanElement>(null);
 
   // State-based hover + popover/dropdown management
   const [isHovered, setIsHovered] = useState(false);
@@ -626,9 +628,38 @@ export function MessageBubble({
     };
   }, []);
 
-  useEffect(() => {
-    if (isEditing) editRef.current?.focus();
-  }, [isEditing]);
+  // Chat bubbles hug their text (no explicit width), but a <textarea> can't shrink-wrap
+  // content on its own — so an invisible mirror span, styled identically to the textarea
+  // text, measures the current content and the bubble borrows that width. Keeps the edit
+  // box the same snug size as the sent bubble instead of always claiming a fixed width.
+  const EDIT_BUBBLE_MIN_WIDTH = 72;
+  const EDIT_BUBBLE_MAX_WIDTH = 320;
+  const EDIT_BUBBLE_H_PADDING = 24; // px-3 on both sides
+
+  const resizeEditTextarea = useCallback(() => {
+    const el = editRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
+
+    const bubble = editBubbleRef.current;
+    const sizer = editSizerRef.current;
+    if (bubble && sizer) {
+      const textWidth = sizer.offsetWidth;
+      const width = Math.min(
+        EDIT_BUBBLE_MAX_WIDTH,
+        Math.max(EDIT_BUBBLE_MIN_WIDTH, textWidth + EDIT_BUBBLE_H_PADDING)
+      );
+      bubble.style.width = `${width}px`;
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    if (isEditing) {
+      editRef.current?.focus();
+      resizeEditTextarea();
+    }
+  }, [isEditing, resizeEditTextarea]);
 
   const handleSaveEdit = () => {
     const trimmed = editContent.trim();
@@ -867,24 +898,62 @@ export function MessageBubble({
 
           {/* Message bubble content */}
           {isEditing ? (
-            <div className="flex flex-col gap-1 min-w-[200px]">
+            <div
+              ref={editBubbleRef}
+              className={cn(
+                'relative rounded-2xl px-3 py-2 text-sm leading-relaxed min-w-[72px] max-w-[320px] overflow-hidden',
+                isOwn
+                  ? 'bg-primary text-primary-foreground rounded-br-md border border-primary/20'
+                  : 'bg-muted text-foreground rounded-bl-md border border-border'
+              )}
+            >
+              {/* Invisible mirror of the text, used only to measure how wide the bubble should be */}
+              <span
+                ref={editSizerRef}
+                aria-hidden
+                className="pointer-events-none invisible absolute whitespace-pre-wrap break-words text-sm leading-relaxed"
+                style={{ maxWidth: EDIT_BUBBLE_MAX_WIDTH - EDIT_BUBBLE_H_PADDING }}
+              >
+                {editContent || ' '}
+              </span>
               <Textarea
                 ref={editRef}
                 value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="min-h-[60px] text-sm"
+                onChange={(e) => { setEditContent(e.target.value); resizeEditTextarea(); }}
+                className={cn(
+                  'min-h-[20px] max-h-[200px] w-full resize-none overflow-y-auto whitespace-pre-wrap break-words',
+                  'border-0 bg-transparent p-0 text-sm leading-relaxed shadow-none rounded-none',
+                  'focus-visible:ring-0 focus-visible:ring-offset-0',
+                  isOwn ? 'text-primary-foreground placeholder:text-primary-foreground/60' : 'text-foreground'
+                )}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSaveEdit(); }
                   if (e.key === 'Escape') handleCancelEdit();
                 }}
               />
-              <div className="flex gap-1 justify-end">
-                <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={handleCancelEdit}>
-                  <X className="h-3 w-3 mr-1" /> Cancel
-                </Button>
-                <Button size="sm" className="h-6 text-xs" onClick={handleSaveEdit}>
-                  <Check className="h-3 w-3 mr-1" /> Save
-                </Button>
+              <div className="flex items-center justify-end gap-1 mt-1">
+                <button
+                  type="button"
+                  title="Cancel"
+                  onClick={handleCancelEdit}
+                  className={cn(
+                    'flex h-5 w-5 items-center justify-center rounded-full transition-colors',
+                    isOwn ? 'hover:bg-primary-foreground/20' : 'hover:bg-foreground/10'
+                  )}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
+                  title="Save"
+                  onClick={handleSaveEdit}
+                  className={cn(
+                    'flex h-5 w-5 items-center justify-center rounded-full transition-colors',
+                    isOwn ? 'hover:bg-primary-foreground/20' : 'hover:bg-foreground/10'
+                  )}
+                >
+                  <Check className="h-3 w-3" />
+                </button>
               </div>
             </div>
           ) : (

@@ -186,6 +186,7 @@ export const ENDPOINTS = {
   // Chat messages (single-message operations, not nested under a conversation)
   MESSAGES: {
     DELETE: (messageId: string) => `/messages/${messageId}`,
+    UPDATE: (messageId: string) => `/messages/${messageId}`,
   },
   // Message reactions
   REACTIONS: {
