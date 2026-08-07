@@ -104,9 +104,9 @@ export function BuildsPanel({ builds, onSelectPart }: BuildsPanelProps) {
         )}
 
         <Dialog open={mobileDetailOpen} onOpenChange={setMobileDetailOpen}>
-          <DialogContent className="p-0 inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 overflow-y-auto">
+          <DialogContent className="p-0 inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 overflow-y-auto overflow-x-hidden">
             <DialogTitle className="sr-only">{selectedBuild.name}</DialogTitle>
-            <div className="p-4 space-y-4">
+            <div className="min-w-0 p-4 space-y-4">
               <div className="flex items-center gap-2 flex-wrap pr-6">
                 <h2 className="text-lg font-bold">{selectedBuild.name}</h2>
                 <Badge variant="outline">{selectedBuild.type}</Badge>
@@ -147,14 +147,14 @@ export function BuildsPanel({ builds, onSelectPart }: BuildsPanelProps) {
               )}
 
               <div className="flex flex-col gap-2">
-                <Button disabled title="Coming soon">
-                  <ClipboardCheck className="h-4 w-4 mr-2" /> Auto-allocate available
+                <Button className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left" disabled title="Coming soon">
+                  <ClipboardCheck className="h-4 w-4 mr-2 shrink-0" /> Auto-allocate available
                 </Button>
-                <Button variant="outline" disabled title="Coming soon">
-                  <Truck className="h-4 w-4 mr-2" /> Generate shortage → Procurement
+                <Button className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left" variant="outline" disabled title="Coming soon">
+                  <Truck className="h-4 w-4 mr-2 shrink-0" /> Generate shortage → Procurement
                 </Button>
-                <Button variant="outline" disabled title="Coming soon">
-                  <CheckCircle className="h-4 w-4 mr-2" /> Mark kitted
+                <Button className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left" variant="outline" disabled title="Coming soon">
+                  <CheckCircle className="h-4 w-4 mr-2 shrink-0" /> Mark kitted
                 </Button>
               </div>
 

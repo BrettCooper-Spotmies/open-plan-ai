@@ -39,8 +39,8 @@ interface PartDetailSheetProps {
 function StatItem({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-2xl font-bold leading-tight" style={color ? { color } : undefined}>{value}</div>
-      <div className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{label}</div>
+      <div className="text-xl sm:text-2xl font-bold leading-tight" style={color ? { color } : undefined}>{value}</div>
+      <div className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase truncate">{label}</div>
     </div>
   );
 }
@@ -80,7 +80,7 @@ export function PartDetailSheet({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
         className={cn(
-          'p-0 overflow-y-auto',
+          'p-0 overflow-y-auto overflow-x-hidden',
           isMobile
             ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0'
             : 'max-w-3xl max-h-[85vh]'
@@ -88,7 +88,7 @@ export function PartDetailSheet({
       >
         <DialogTitle className="sr-only">{record.pn} — {record.name}</DialogTitle>
 
-        <div className="p-4 sm:p-6 space-y-4">
+        <div className="min-w-0 p-4 sm:p-6 space-y-4">
           <div className="flex items-start gap-3">
             {record.imageUrl ? (
               <img src={record.imageUrl} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
@@ -112,7 +112,7 @@ export function PartDetailSheet({
             </div>
           </div>
 
-          <div className="flex items-center gap-6 flex-wrap py-2">
+          <div className="grid grid-cols-3 gap-x-3 gap-y-3 sm:flex sm:flex-wrap sm:items-center sm:gap-6 py-2">
             <StatItem label="On Hand" value={record.onHand} />
             <StatItem label="Allocated" value={record.allocated} />
             <StatItem label="Available" value={availableOf(record)} color={availableOf(record) < 0 ? '#DC2626' : '#16A34A'} />
@@ -121,25 +121,25 @@ export function PartDetailSheet({
           </div>
 
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
-            <Button onClick={onReceive}>
-              <Download className="h-4 w-4 mr-2" /> Receive
+            <Button className="min-w-0 px-2 sm:px-4" onClick={onReceive}>
+              <Download className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Receive</span>
             </Button>
-            <Button variant="outline" onClick={onAdjust}>
-              <Pencil className="h-4 w-4 mr-2" /> Adjust
+            <Button className="min-w-0 px-2 sm:px-4" variant="outline" onClick={onAdjust}>
+              <Pencil className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Adjust</span>
             </Button>
-            <Button variant="outline" disabled title="Coming soon">
-              <Upload className="h-4 w-4 mr-2" /> Issue
+            <Button className="min-w-0 px-2 sm:px-4" variant="outline" disabled title="Coming soon">
+              <Upload className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Issue</span>
             </Button>
-            <Button variant="outline" disabled title="Coming soon">
-              <ArrowLeftRight className="h-4 w-4 mr-2" /> Transfer
+            <Button className="min-w-0 px-2 sm:px-4" variant="outline" disabled title="Coming soon">
+              <ArrowLeftRight className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Transfer</span>
             </Button>
-            <Button variant="outline" disabled title="Coming soon">
-              <ClipboardCheck className="h-4 w-4 mr-2" /> Allocate
+            <Button className="min-w-0 px-2 sm:px-4 col-span-2 sm:col-auto" variant="outline" disabled title="Coming soon">
+              <ClipboardCheck className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Allocate</span>
             </Button>
           </div>
         </div>
 
-        <Tabs defaultValue="stock" className="border-t">
+        <Tabs defaultValue="stock" className="min-w-0 border-t">
           <div className="px-4 sm:px-6 pt-3 overflow-x-auto no-scrollbar">
             <TabsList>
               <TabsTrigger value="stock">
