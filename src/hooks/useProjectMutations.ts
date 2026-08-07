@@ -16,9 +16,13 @@ export function useCreateTask(projectId: string) {
   return useMutation({
     mutationFn: (task: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>) =>
       tasksService.create(projectId, task),
-    onSuccess: () => {
+    onSuccess: (createdTask) => {
+      // Patch the cache directly rather than relying solely on the invalidated
+      // refetch landing — see the matching comment in useCreateIssue above.
+      queryClient.setQueryData(queryKeys.projects.detail(projectId), (old: any) =>
+        old ? { ...old, tasks: [...(old.tasks || []), createdTask] } : old
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
@@ -67,7 +71,6 @@ export function useUpdateTask(projectId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
@@ -81,9 +84,13 @@ export function useDeleteTask(projectId: string) {
 
   return useMutation({
     mutationFn: (taskId: string) => tasksService.delete(projectId, taskId),
-    onSuccess: () => {
+    onSuccess: (_data, taskId) => {
+      // Patch the cache directly rather than relying solely on the invalidated
+      // refetch landing — see the matching comment in useCreateIssue above.
+      queryClient.setQueryData(queryKeys.projects.detail(projectId), (old: any) =>
+        old ? { ...old, tasks: (old.tasks || []).filter((t: Task) => t.id !== taskId) } : old
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
@@ -103,7 +110,6 @@ export function useBatchUpdateTasks(projectId: string) {
       tasksService.batchUpdate(projectId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.tasks.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
@@ -122,9 +128,16 @@ export function useCreateIssue(projectId: string) {
   return useMutation({
     mutationFn: (issue: Omit<Issue, 'id' | 'reportedAt'>) =>
       issuesService.create(projectId, issue),
-    onSuccess: () => {
+    onSuccess: (createdIssue) => {
+      // Patch the cache directly rather than relying solely on the invalidated
+      // refetch landing — if that refetch gets cancelled/raced (it shares an
+      // AbortSignal with the other project-detail sub-fetches and can lose that
+      // race right after a mutation), the board would otherwise be left showing
+      // stale empty data until a hard reload. See useProjectDetail.ts.
+      queryClient.setQueryData(queryKeys.projects.detail(projectId), (old: any) =>
+        old ? { ...old, issues: [...(old.issues || []), createdIssue] } : old
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
@@ -167,7 +180,6 @@ export function useUpdateIssue(projectId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
@@ -217,9 +229,13 @@ export function useDeleteIssue(projectId: string) {
 
   return useMutation({
     mutationFn: (issueId: string) => issuesService.delete(issueId),
-    onSuccess: () => {
+    onSuccess: (_data, issueId) => {
+      // Patch the cache directly rather than relying solely on the invalidated
+      // refetch landing — see the matching comment in useCreateIssue above.
+      queryClient.setQueryData(queryKeys.projects.detail(projectId), (old: any) =>
+        old ? { ...old, issues: (old.issues || []).filter((i: Issue) => i.id !== issueId) } : old
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
@@ -241,7 +257,6 @@ export function useCreateMilestone(projectId: string) {
       milestonesService.create({ ...milestone, project_id: projectId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.milestones.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       toast.success('Milestone created successfully');
@@ -283,7 +298,6 @@ export function useUpdateMilestone(projectId: string) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.milestones.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
     },
@@ -298,7 +312,6 @@ export function useToggleMilestoneComplete(projectId: string) {
       milestonesService.complete(milestoneId, completed),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.milestones.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
     },
@@ -313,9 +326,13 @@ export function useDeleteMilestone(projectId: string) {
 
   return useMutation({
     mutationFn: (milestoneId: string) => milestonesService.delete(milestoneId),
-    onSuccess: () => {
+    onSuccess: (_data, milestoneId) => {
+      // Patch the cache directly rather than relying solely on the invalidated
+      // refetch landing — see the matching comment in useCreateIssue above.
+      queryClient.setQueryData(queryKeys.projects.detail(projectId), (old: any) =>
+        old ? { ...old, milestones: (old.milestones || []).filter((m: Milestone) => m.id !== milestoneId) } : old
+      );
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.milestones.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       toast.success('Milestone deleted');
@@ -353,7 +370,6 @@ export function useUpdateModule(projectId: string) {
       modulesService.update(moduleId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.modules.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       toast.success('Module updated successfully');
@@ -387,7 +403,6 @@ export function useBatchUpdateModules(projectId: string) {
       modulesService.updateMany(updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.modules.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
     },

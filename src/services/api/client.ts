@@ -21,9 +21,10 @@ import { config } from '@/config';
 // BroadcastChannel so waiting tabs can flush their queues.
 
 const LOCK_KEY = 'auth_refresh_lock';
-// TTL must exceed the Axios network timeout (15 s) so a slow-but-live tab never
-// has its lock stolen by an impatient one.
-const LOCK_TTL_MS = 20_000;
+// TTL must exceed the worst-case refresh time: up to REFRESH_MAX_ATTEMPTS
+// network round-trips (15 s Axios timeout each) plus jittered backoff between
+// them, so a slow-but-live tab never has its lock stolen by an impatient one.
+const LOCK_TTL_MS = 35_000;
 
 function tryAcquireLock(): boolean {
   try {
@@ -56,6 +57,7 @@ function initBC(): void {
     cancelCrossTabTimer();
     isRefreshing = false;
     if (data.type === 'SUCCESS') {
+      notifyTokenRefreshed();
       flushQueue(false);
     } else {
       flushQueue(true);
@@ -66,6 +68,20 @@ function initBC(): void {
 
 function broadcast(type: 'SUCCESS' | 'FAILURE'): void {
   bc?.postMessage({ type });
+}
+
+// ─── Token-refreshed notification ──────────────────────────────────────────────
+//
+// Fired whenever the accessToken cookie is successfully rotated, in this tab
+// or another. Anything holding a long-lived connection authenticated by that
+// cookie at handshake time — currently just the chat Socket.IO transport —
+// listens for this to retry immediately instead of waiting out its own
+// reconnect backoff with a cookie it already knows is stale.
+
+export const AUTH_TOKEN_REFRESHED_EVENT = 'auth:token-refreshed';
+
+function notifyTokenRefreshed(): void {
+  window.dispatchEvent(new Event(AUTH_TOKEN_REFRESHED_EVENT));
 }
 
 // ─── Fallback timer ───────────────────────────────────────────────────────────
@@ -134,6 +150,102 @@ const SKIP_REFRESH_URLS = [
   '/auth/verify-otp',
 ];
 
+// ─── Refresh retry (transient-failure tolerance) ─────────────────────────────
+//
+// A 429 (shared rate-limit headroom briefly exhausted) or a network/5xx blip
+// on /auth/refresh does not mean the session is invalid — but treating it as
+// a hard failure used to force-logout a perfectly healthy session. Only a
+// definitive 401/403 response (the refresh token itself was rejected) skips
+// the retry and fails immediately.
+
+const REFRESH_MAX_ATTEMPTS = 2;
+const REFRESH_RETRY_BASE_DELAY_MS = 500;
+
+function isRetryableRefreshError(err: unknown): boolean {
+  const e = err as { response?: { status?: number } };
+  if (!e?.response) return true; // network error / timeout — worth one retry
+  const status = e.response.status;
+  return status === 429 || status >= 500;
+}
+
+function jitteredBackoff(attempt: number): number {
+  const base = REFRESH_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+  return base + Math.random() * base * 0.5;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function postRefreshWithRetry(): Promise<void> {
+  for (let attempt = 1; attempt <= REFRESH_MAX_ATTEMPTS; attempt++) {
+    try {
+      await axios.post(`${config.api.baseUrl}/auth/refresh`, {}, { withCredentials: true });
+      return;
+    } catch (err) {
+      const isLastAttempt = attempt === REFRESH_MAX_ATTEMPTS;
+      if (isLastAttempt || !isRetryableRefreshError(err)) throw err;
+      await sleep(jitteredBackoff(attempt));
+    }
+  }
+}
+
+// ─── Shared refresh flow ────────────────────────────────────────────────────
+//
+// Performs (or waits out) a cross-tab-coordinated token refresh. Used by the
+// 401 interceptor below, and exported so other long-lived connections
+// authenticated via the same cookie (the chat Socket.IO transport) can
+// proactively trigger the same flow instead of only reacting to a failed
+// REST call. Resolves true once the accessToken cookie is known-fresh,
+// false if the refresh ultimately failed (session is gone).
+export function refreshAccessToken(): Promise<boolean> {
+  // Ensure the BroadcastChannel listener is set up before we do anything else
+  // so we don't miss a broadcast that arrives while we're deciding what to do.
+  initBC();
+
+  // ── Case 1: same tab — a refresh is already in flight ───────────────────
+  if (isRefreshing) {
+    return new Promise<boolean>((resolve) => {
+      refreshSubscribers.push((failed) => resolve(!failed));
+    });
+  }
+
+  isRefreshing = true;
+
+  // ── Case 2: cross-tab — another tab holds the refresh lock ──────────────
+  // Wait for that tab's BroadcastChannel message. The fallback timer handles
+  // the case where that tab crashes mid-refresh.
+  if (!tryAcquireLock()) {
+    startCrossTabTimer();
+    return new Promise<boolean>((resolve) => {
+      refreshSubscribers.push((failed) => resolve(!failed));
+    });
+  }
+
+  // ── Case 3: this tab holds the lock — perform the refresh ────────────────
+  // POST /auth/refresh with no body — the browser sends the httpOnly
+  // refresh-token cookie automatically. The backend rotates both cookies.
+  // Transient failures (429/5xx/network) get one jittered retry before this
+  // is treated as a real session failure — see postRefreshWithRetry().
+  return postRefreshWithRetry()
+    .then(() => {
+      releaseLock();
+      isRefreshing = false;
+      broadcast('SUCCESS');
+      notifyTokenRefreshed();
+      flushQueue(false);
+      return true;
+    })
+    .catch(() => {
+      releaseLock();
+      isRefreshing = false;
+      broadcast('FAILURE');
+      flushQueue(true);
+      redirectToLogin();
+      return false;
+    });
+}
+
 // Response interceptor — silent token refresh on 401.
 // No Authorization header is set: the access token is an httpOnly cookie the
 // browser attaches automatically via withCredentials.
@@ -151,59 +263,10 @@ axiosInstance.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Ensure the BroadcastChannel listener is set up before we do anything else
-    // so we don't miss a broadcast that arrives while we're deciding what to do.
-    initBC();
-
-    // ── Case 1: same tab — a refresh is already in flight ───────────────────
-    // Queue this request; the in-flight refresh will flush the queue when done.
-    if (isRefreshing) {
-      return new Promise<AxiosResponse>((resolve, reject) => {
-        refreshSubscribers.push((failed) => {
-          if (failed) return reject(error);
-          originalRequest._retry = true;
-          resolve(axiosInstance(originalRequest));
-        });
-      });
-    }
-
-    isRefreshing = true;
-
-    // ── Case 2: cross-tab — another tab holds the refresh lock ──────────────
-    // Queue this request and wait for that tab's BroadcastChannel message.
-    // The fallback timer handles the case where that tab crashes mid-refresh.
-    if (!tryAcquireLock()) {
-      startCrossTabTimer();
-      return new Promise<AxiosResponse>((resolve, reject) => {
-        refreshSubscribers.push((failed) => {
-          if (failed) return reject(error);
-          originalRequest._retry = true;
-          resolve(axiosInstance(originalRequest));
-        });
-      });
-    }
-
-    // ── Case 3: this tab holds the lock — perform the refresh ────────────────
     originalRequest._retry = true;
-
-    try {
-      // POST /auth/refresh with no body — the browser sends the httpOnly
-      // refresh-token cookie automatically. The backend rotates both cookies.
-      await axios.post(`${config.api.baseUrl}/auth/refresh`, {}, { withCredentials: true });
-
-      releaseLock();
-      isRefreshing = false;
-      broadcast('SUCCESS');
-      flushQueue(false);
-      return axiosInstance(originalRequest);
-    } catch (refreshError) {
-      releaseLock();
-      isRefreshing = false;
-      broadcast('FAILURE');
-      flushQueue(true);
-      redirectToLogin();
-      return Promise.reject(refreshError);
-    }
+    const refreshed = await refreshAccessToken();
+    if (!refreshed) return Promise.reject(error);
+    return axiosInstance(originalRequest);
   },
 );
 

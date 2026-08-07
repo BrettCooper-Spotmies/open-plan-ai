@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
-import { Sun, Moon, ChevronLeft, BarChart3, Plus, Users, Bug, Download } from 'lucide-react';
+import { Sun, Moon, ChevronLeft, BarChart3, Plus, Users, Bug, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +31,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useChatStore } from '@/features/chat/stores/useChatStore';
+import { useAssistantStore } from '@/features/assistant/stores/useAssistantStore';
 import { ProjectTeamButton } from '@/features/projects/components/ProjectTeamButton';
 import { cn } from '@/lib/utils';
 
@@ -53,6 +54,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith('/team')) return 'Team';
   if (pathname.startsWith('/settings')) return 'Settings';
   if (pathname.startsWith('/notifications')) return 'Notifications';
+  if (pathname.startsWith('/assistant')) return 'Assistant';
   return 'Open Plan AI';
 }
 
@@ -66,6 +68,7 @@ export function AppHeader() {
   const [showReportBugDialog, setShowReportBugDialog] = useState(false);
   const setNewDMDialogOpen = useChatStore((s) => s.setNewDMDialogOpen);
   const setNewGroupDialogOpen = useChatStore((s) => s.setNewGroupDialogOpen);
+  const toggleAssistant = useAssistantStore((s) => s.toggle);
 
   // Mobile chat list route: AppHeader is only rendered here (not on /chat/:id,
   // see AppLayout's showAppHeader), so pathname alone is enough to detect it.
@@ -146,6 +149,11 @@ export function AppHeader() {
             )}
             <h1 className={cn('font-semibold text-foreground leading-none', isMobileInventory ? 'text-lg' : 'text-2xl')}>
               {pageTitle}
+              {location.pathname.startsWith('/assistant') && (
+                <span className="ml-1.5 text-xs font-medium text-muted-foreground align-middle">
+                  (BETA)
+                </span>
+              )}
             </h1>
           </div>
         )}
@@ -197,6 +205,23 @@ export function AppHeader() {
           isMobileProjectDetail ? <ProjectTeamButton projectId={projectId!} /> : null
         ) : (
           <>
+            {/* Ask Assistant */}
+            {!isMobile && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 px-3 text-muted-foreground hover:text-foreground"
+                onClick={toggleAssistant}
+                title="Ask the Assistant"
+              >
+                <Sparkles className="h-4 w-4" />
+                Ask
+                <span className="text-[10px] font-medium text-muted-foreground">
+                  (BETA)
+                </span>
+              </Button>
+            )}
+
             {/* Report a Bug */}
             <Button
               variant="ghost"

@@ -12,6 +12,7 @@ import { AppLayoutOutlet } from "@/components/layout/AppLayoutOutlet";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { useUserStore } from "@/stores/useUserStore";
 import { ChatNotificationsProvider } from "@/features/chat/providers/ChatNotificationsProvider";
+import { AssistantWidget } from "@/features/assistant/components/AssistantWidget";
 
 // ── Auth module (new canonical location) ──────────────────────────────────────
 import {
@@ -30,6 +31,7 @@ import NotFound from "./pages/NotFound";
 
 // ── Feature routes — lazy loaded for code splitting ───────────────────────────
 const Dashboard     = lazy(() => import("./features/dashboard"));
+const Assistant     = lazy(() => import("./features/assistant"));
 const MyDay         = lazy(() => import("./features/myday"));
 const Calendar      = lazy(() => import("./features/calendar"));
 const Projects      = lazy(() => import("./features/projects"));
@@ -69,6 +71,7 @@ function AppShell() {
   return (
     <>
       <ChatNotificationsProvider />
+      <AssistantWidget />
       <Routes>
         {/* ── Public (auth) routes ─────────────────────────────── */}
         <Route path="/login"           element={<LoginPage />} />
@@ -249,6 +252,14 @@ function AppShell() {
 
           {/* ── Routes without content padding ───────────────── */}
           <Route element={<AppLayoutOutlet noPadding />}>
+            <Route
+              path="/assistant"
+              element={
+                <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                  <Assistant />
+                </Suspense>
+              }
+            />
             <Route
               path="/calendar"
               element={

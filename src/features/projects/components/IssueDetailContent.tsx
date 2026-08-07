@@ -174,6 +174,7 @@ export function IssueDetailContent({
     // and hasn't switched it on yet. Uncontrolled callers (e.g. IssuePage) stay always-editable.
     const isMobileFieldsLocked = isMobileLayout && isMobileEditMode === false;
     const [editedIssue, setEditedIssue] = useState<Issue | null>(issue);
+    const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
     const [newComment, setNewComment] = useState('');
     const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
     const [isBlockingTaskPopoverOpen, setIsBlockingTaskPopoverOpen] = useState(false);
@@ -441,7 +442,7 @@ export function IssueDetailContent({
                     fileType: r.mimeType ?? r.mime_type ?? '',
                     uploadedAt: r.createdAt ?? r.uploaded_at ?? new Date().toISOString(),
                     uploadedBy: profile
-                        ? { id: profile.id, name: profile.name, email: profile.email, role: '', initials: profile.initials ?? '' }
+                        ? { id: profile.id, name: profile.name, email: profile.email, role: profile.role || 'member', initials: profile.initials ?? '' }
                         : { id: '', name: 'You', email: '', role: '', initials: '' },
                 })),
             ]);
@@ -1491,7 +1492,7 @@ export function IssueDetailContent({
                             {attachments.map((attachment) => {
                                 const FileIcon = getFileIcon(attachment.fileType);
                                 const viewUrl = resolveFileUrl(attachment.url) ?? attachment.url;
-                                const isImage = attachment.fileType.startsWith('image/');
+                                const isImage = attachment.fileType.startsWith('image/') && !failedThumbnails.has(attachment.id);
                                 return (
                                     <div
                                         key={attachment.id}
@@ -1503,6 +1504,7 @@ export function IssueDetailContent({
                                                 src={viewUrl}
                                                 alt={attachment.filename}
                                                 className="h-8 w-8 rounded object-cover shrink-0 border"
+                                                onError={() => setFailedThumbnails(prev => new Set(prev).add(attachment.id))}
                                             />
                                         ) : (
                                             <FileIcon className="h-8 w-8 text-muted-foreground shrink-0" />
@@ -1657,7 +1659,7 @@ export function IssueDetailContent({
                                         </div>
                                         {!isUploading && <p className="text-xs text-muted-foreground mt-1">or drag and drop, or paste image</p>}
                                     </div>
-                                    <input type="file" className="hidden" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,video/*" onChange={handleFileUpload} disabled={isUploading} />
+                                    <input type="file" className="hidden" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.zip,.rar,video/*" onChange={handleFileUpload} disabled={isUploading} />
                                 </label>
                             </div>
                             )}
@@ -1740,7 +1742,7 @@ export function IssueDetailContent({
 
                             <div className="flex gap-2">
                                 <Input
-                                    placeholder="Paste YouTube, Vimeo, or direct video URL…"
+                                    placeholder="Paste video URL…"
                                     value={videoLinkInput}
                                     onChange={(e) => setVideoLinkInput(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddVideoLink(); } }}

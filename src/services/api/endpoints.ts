@@ -49,6 +49,7 @@ export const ENDPOINTS = {
     DELETE: (id: string) => `/projects/${id}`,
     STAGE: (id: string) => `/projects/${id}/stage`,
     PROGRESS: (id: string) => `/projects/${id}/progress`,
+    PIN: (id: string) => `/projects/${id}/pin`,
     MEMBERS: (id: string) => `/projects/${id}/members`,
     MEMBER: (projectId: string, userId: string) => `/projects/${projectId}/members/${userId}`,
     MEMBER_ROLE: (projectId: string, userId: string) => `/projects/${projectId}/members/${userId}/role`,
@@ -77,6 +78,8 @@ export const ENDPOINTS = {
     DEPENDENCY: (taskId: string, depId: string) => `/tasks/${taskId}/dependencies/${depId}`,
     COMMENTS: (id: string) => `/tasks/${id}/comments`,
     ME_ALL: '/tasks/me/all',
+    /** Personal "My Tasks" item — no project. */
+    CREATE_PERSONAL: '/tasks',
   },
   // Hardware Modules
   MODULES: {
@@ -232,6 +235,7 @@ export const ENDPOINTS = {
   },
   // Links
   LINKS: {
+    UPDATE: (id: string) => `/links/${id}`,
     DELETE: (id: string) => `/links/${id}`,
   },
   // Google Meet integration
@@ -247,6 +251,19 @@ export const ENDPOINTS = {
     CONNECT: (orgId: string) => `/organizations/${orgId}/integrations/google-drive/connect`,
     DISCONNECT: (orgId: string) => `/organizations/${orgId}/integrations/google-drive/disconnect`,
     STATUS: (orgId: string) => `/organizations/${orgId}/integrations/google-drive/status`,
+  },
+  // AI Assistant (Ask — read-only, Phase 1). Deliberately separate from the
+  // /conversations/* namespace above, which is the team-chat feature.
+  AI_CONVERSATIONS: {
+    LIST: '/ai/conversations',
+    CREATE: '/ai/conversations',
+    DELETE_ALL: '/ai/conversations',
+    BY_ID: (id: string) => `/ai/conversations/${id}`,
+    MESSAGES: (id: string) => `/ai/conversations/${id}/messages`,
+    EDIT_MESSAGE: (id: string, messageId: string) => `/ai/conversations/${id}/messages/${messageId}`,
+    ANSWER: (id: string) => `/ai/conversations/${id}/answer`,
+    STOP: (id: string) => `/ai/conversations/${id}/stop`,
+    UPLOAD_ATTACHMENT: '/ai/conversations/attachments',
   },
   // Uploads
   UPLOADS: {

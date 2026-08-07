@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { Plus } from 'lucide-react';
 // import { LayoutGrid, List } from 'lucide-react'; // Kanban view hidden — re-enable if Kanban toggle is restored
 import { MyDayStats } from './components/MyDayStats';
 // import { MyDayKanbanView } from './components/MyDayKanbanView'; // Kanban view hidden
@@ -8,16 +9,30 @@ import { MyTasksFiltersDropdown } from './components/MyTasksFiltersDropdown';
 import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal';
 import { IssueDetailModal } from '@/features/projects/components/IssueDetailModal';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Button } from '@/components/ui/button';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
 import { Task, Issue, TaskStatus, IssueStatus, MyDayGroupBy, MyDayFilter, MyTasksColumnFilters } from '@/types';
 import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
-import { useUpdateTask, useBatchUpdateTasks } from '@/hooks/useTasks';
+import { useUpdateTask, useBatchUpdateTasks, useCreatePersonalTask } from '@/hooks/useTasks';
 import { useUpdateIssue } from '@/hooks/useIssues';
 import { useProjects } from '@/hooks/useProjects';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
+import { useAuth } from '@/contexts/AuthContext';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { attachmentsService } from '@/services/attachments.service';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
+
+// Personal (no-project) tasks only accept this fixed status set — mirrors
+// MY_DAY_STANDARD_STATUSES in the backend (tasks.service.ts), since there's
+// no project task_columns to offer a custom status from.
+const PERSONAL_TASK_STATUS_OPTIONS = [
+  { value: 'todo', label: 'To Do', color: 'bg-[#3b82f6]' },
+  { value: 'in-progress', label: 'In Progress', color: 'bg-[#f59e0b]' },
+  { value: 'blocked', label: 'Blocked', color: 'bg-[#ef4444]' },
+  { value: 'done', label: 'Done', color: 'bg-[#10b981]' },
+];
 
 export default function MyDay() {
   useEffect(() => {
@@ -32,19 +47,39 @@ export default function MyDay() {
   const [groupBy, setGroupBy] = useState<MyDayGroupBy>('progress');
   const [filter, setFilter] = useState<MyDayFilter>('today');
   const [columnFilters, setColumnFilters] = useState<MyTasksColumnFilters>({});
+  const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
 
   // Fetch dynamic data
   const { data: userTasks = [], isLoading: tasksLoading } = useMyDayTasks(filter);
   const { data: overdueTasks = [] } = useMyDayTasks('overdue');
+  const { data: todayTasks = [] } = useMyDayTasks('today');
   // Stat tiles reflect the full assigned set, not just the active tab — otherwise
   // e.g. the default "today" tab makes every surviving item `isDueToday`, which the
   // categorizer treats as "needs attention", so "Ready to Work" could never be > 0.
   const { data: allDayItems = [] } = useMyDayTasks('all');
   const { data: completedTodayCount = 0 } = useCompletedTodayCount();
   const { data: projects = [] } = useProjects();
+  const { user: profile } = useAuth();
+  const { currentOrganization } = useOrganization();
   const updateTaskMutation = useUpdateTask();
   const batchUpdateTasksMutation = useBatchUpdateTasks();
   const updateIssueMutation = useUpdateIssue();
+  const createPersonalTaskMutation = useCreatePersonalTask();
+
+  // The assignee picker for a personal task only ever offers the current
+  // user — personal tasks are private to their creator, who is always the
+  // sole assignee (enforced server-side regardless of what's picked here).
+  const selfAsAssignableMember = useMemo(() => {
+    if (!profile) return [];
+    return [{
+      id: profile.id,
+      name: profile.name || profile.email,
+      email: profile.email,
+      role: 'member',
+      initials: profile.initials || (profile.name || profile.email || '?').split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2),
+      avatar: profile.avatarUrl || '',
+    }];
+  }, [profile]);
 
   const allTasks = useMemo(() => {
     return projects.flatMap(p => p.tasks || []);
@@ -153,6 +188,36 @@ export default function MyDay() {
     setSelectedTask(null);
   };
 
+  const handleCloseAddTaskModal = () => {
+    setIsAddTaskOpen(false);
+  };
+
+  const handleTaskCreate = async (newTask: Omit<Task, 'id' | 'createdAt' | 'updatedAt'>, pendingFiles?: File[]) => {
+    if (!currentOrganization) return;
+    try {
+      const created = await createPersonalTaskMutation.mutateAsync({ organizationId: currentOrganization.id, task: newTask });
+      if (pendingFiles && pendingFiles.length > 0 && created?.id) {
+        try {
+          await Promise.all(
+            pendingFiles.map(file =>
+              attachmentsService.upload({
+                entityId: created.id,
+                entityType: 'task',
+                file,
+              })
+            )
+          );
+        } catch {
+          toast.warning('Task created but some attachments failed to upload');
+        }
+      }
+      toast.success('Task created');
+    } catch (error) {
+      logger.error('Failed to create task:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create task');
+    }
+  };
+
   const handleCloseIssueModal = () => {
     setIsIssueModalOpen(false);
     setSelectedIssue(null);
@@ -183,7 +248,10 @@ export default function MyDay() {
   // My Day aggregates items across projects, so `project.team` (unpopulated for
   // API-backed projects) can't be used for the assignee picker — fetch the real
   // membership list for whichever project the open task/issue belongs to.
-  const activeProjectId = selectedTask?.projectId ?? selectedIssue?.projectId;
+  // A personal task (no project) has no membership list to fetch — undefined
+  // leaves `activeProjectMembers` empty, which is fine since it isn't used
+  // for personal tasks (see selfAsAssignableMember).
+  const activeProjectId = selectedTask?.projectId ?? selectedIssue?.projectId ?? undefined;
   const { data: activeProjectMembers = [] } = useProjectMembers(activeProjectId);
 
   // Early return: show identical skeleton to Suspense fallback while data loads
@@ -202,41 +270,47 @@ export default function MyDay() {
           completedTodayCount={completedTodayCount}
         />
 
-       {/* View controls - always visible once data is ready */}
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
-          <Tabs value={filter} onValueChange={(v) => setFilter(v as MyDayFilter)}>
-            <TabsList>
-              <TabsTrigger value="today">My Day</TabsTrigger>
-              <TabsTrigger value="overdue" className="relative">
+        {/* View controls - always visible once data is ready */}
+        <div className="flex items-center justify-between mb-6 gap-2 sm:gap-4 flex-nowrap sm:flex-wrap overflow-x-auto sm:overflow-visible pb-1 sm:pb-0">
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as MyDayFilter)} className="shrink-0">
+            <TabsList className="h-9 p-1 shrink-0 gap-2">
+              <TabsTrigger value="today" className="relative px-3.5 sm:px-4 text-xs sm:text-sm shrink-0">
+                My Day
+                {todayTasks.length > 0 && filter !== 'today' && (
+                  <span className="absolute -top-1.5 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground leading-none z-10 shadow-xs">
+                    {todayTasks.length}
+                  </span>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="overdue" className="relative px-3.5 sm:px-4 text-xs sm:text-sm shrink-0">
                 Overdue
-                {overdueTasks.length > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground leading-none">
+                {overdueTasks.length > 0 && filter !== 'overdue' && (
+                  <span className="absolute -top-1.5 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground leading-none z-10 shadow-xs">
                     {overdueTasks.length}
                   </span>
                 )}
               </TabsTrigger>
-              <TabsTrigger value="all">All</TabsTrigger>
+              <TabsTrigger value="all" className="px-3.5 sm:px-4 text-xs sm:text-sm shrink-0">All</TabsTrigger>
             </TabsList>
           </Tabs>
 
-          <MyTasksFiltersDropdown
-            items={userTasks}
-            filters={columnFilters}
-            onFiltersChange={setColumnFilters}
-          />
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <MyTasksFiltersDropdown
+              items={userTasks}
+              filters={columnFilters}
+              onFiltersChange={setColumnFilters}
+              className="order-2 sm:order-1"
+            />
 
-          {/* <Tabs value={view} onValueChange={(v) => setView(v as MyDayView)}>
-            <TabsList>
-              <TabsTrigger value="kanban" className="gap-2">
-                <LayoutGrid className="h-4 w-4" />
-                Kanban
-              </TabsTrigger>
-              <TabsTrigger value="list" className="gap-2">
-                <List className="h-4 w-4" />
-                List
-              </TabsTrigger>
-            </TabsList>
-          </Tabs> */}
+            <Button
+              size="sm"
+              className="gap-1.5 sm:gap-2 h-9 rounded-lg px-2.5 sm:px-3 text-xs sm:text-sm order-1 sm:order-2"
+              onClick={() => setIsAddTaskOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+              Add<span className="hidden sm:inline">&nbsp;Task</span>
+            </Button>
+          </div>
         </div>
 
         {/* List content */}
@@ -289,8 +363,9 @@ export default function MyDay() {
           allTasks={allTasks}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
-          assignableMembers={activeProjectMembers}
-          projectName={selectedTaskProject?.name}
+          assignableMembers={selectedTask.projectId ? activeProjectMembers : selfAsAssignableMember}
+          statusOptions={selectedTask.projectId ? undefined : PERSONAL_TASK_STATUS_OPTIONS}
+          projectName={selectedTaskProject?.name ?? (selectedTask.projectId ? undefined : 'Personal')}
           onUpdate={async (updatedTask) => {
             try {
               const item = userTasks.find(t => t.id === updatedTask.id);
@@ -338,6 +413,23 @@ export default function MyDay() {
           isOpen={isIssueModalOpen}
           onClose={handleCloseIssueModal}
           onUpdate={handleIssueUpdate}
+        />
+      )}
+
+      {isAddTaskOpen && (
+        <TaskDetailModal
+          task={null}
+          allTasks={[]}
+          isOpen={isAddTaskOpen}
+          onClose={handleCloseAddTaskModal}
+          onUpdate={() => { }}
+          mode="create"
+          onCreate={handleTaskCreate}
+          modules={[]}
+          milestones={[]}
+          assignableMembers={selfAsAssignableMember}
+          statusOptions={PERSONAL_TASK_STATUS_OPTIONS}
+          projectName="Personal"
         />
       )}
     </>

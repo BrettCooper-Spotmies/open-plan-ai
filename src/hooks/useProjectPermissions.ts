@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
-import { useProjectMembers } from '@/hooks/useProjectTeam';
+import { useProjectDetail } from '@/hooks/useProjectDetail';
 import type { OrgRole, ProjectRole } from '@/types';
 
 export interface EditableResource {
@@ -29,29 +29,45 @@ export interface ProjectPermissions {
 }
 
 /**
- * Centralized project-role permission hook. Reuses the existing
- * useProjectMembers query cache rather than issuing a new network call.
- * Org Admins get implicit Admin access to every project, even without an
- * explicit project_members row (mirrors the backend's loadProjectMember
- * fallback behavior).
+ * Centralized project-role permission hook. Reuses the useProjectDetail
+ * query cache (shared with ProjectDetail) rather than issuing a new network
+ * call. Deliberately NOT useProject — that hook shares the same query key
+ * but a thinner queryFn (bare GET /projects/:id with no tasks/milestones/
+ * issues), and since React Query replaces rather than merges cached data,
+ * enabling it here would race with ProjectDetail's richer fetch and wipe
+ * out project.issues/tasks/milestones for any mounted board.
+ *
+ * `myRole` comes straight from the backend's `GET /projects/:id` response,
+ * which resolves it the same way `requireProjectRole` does: a direct
+ * project_members row if one exists, otherwise implicit Admin when the
+ * caller is an org Admin **of this project's own organization**. This is
+ * deliberately *not* derived from the globally-selected organization
+ * (`useOrgPermissions`/`currentOrganization`) — a user can be an org Admin
+ * of one org while merely a project Member on a project that belongs to a
+ * different org, and using the globally-selected org here would show
+ * Admin-only controls the backend would then reject.
  */
 export function useProjectPermissions(projectId: string | undefined): ProjectPermissions {
   const { user } = useAuth();
-  const { data: members = [], isLoading } = useProjectMembers(projectId);
-  const { isOrgAdmin } = useOrgPermissions();
+  const { data: project, isLoading } = useProjectDetail(projectId);
 
   return useMemo(() => {
-    const myMembership = user ? members.find((m) => m.id === user.id) : undefined;
-    const myProjectRole: ProjectRole | null = isOrgAdmin
-      ? 'admin'
-      : ((myMembership?.role as ProjectRole | undefined) ?? null);
+    const myProjectRole: ProjectRole | null = (project?.myRole as ProjectRole | undefined) ?? null;
 
     const isProjectAdmin = myProjectRole === 'admin';
     const isProjectMaintainerPlus = myProjectRole === 'admin' || myProjectRole === 'maintainer';
     const isProjectMemberPlus = myProjectRole !== null;
 
     const canEditResource = (resource: EditableResource): boolean => {
-      if (!user || !myProjectRole) return false;
+      if (!user) return false;
+      // No projectId means the resource has no project (e.g. a personal My
+      // Tasks item) — there's no project role to check, so it's editable
+      // only by its creator/owner, mirroring the backend's ownership check.
+      if (projectId === undefined) {
+        const ownerIds = [resource.createdBy, resource.ownerId, ...(resource.assigneeIds ?? [])];
+        return ownerIds.includes(user.id);
+      }
+      if (!myProjectRole) return false;
       if (isProjectMaintainerPlus) return true;
       const ownerIds = [resource.createdBy, resource.ownerId, ...(resource.assigneeIds ?? [])];
       return ownerIds.includes(user.id);
@@ -60,7 +76,11 @@ export function useProjectPermissions(projectId: string | undefined): ProjectPer
     // Deleting is admin-or-creator only — plain Maintainers and assignees
     // (who aren't the creator) cannot delete, unlike canEditResource above.
     const canDeleteResource = (resource: EditableResource): boolean => {
-      if (!user || !myProjectRole) return false;
+      if (!user) return false;
+      if (projectId === undefined) {
+        return resource.createdBy === user.id;
+      }
+      if (!myProjectRole) return false;
       if (isProjectAdmin) return true;
       return resource.createdBy === user.id;
     };
@@ -77,7 +97,7 @@ export function useProjectPermissions(projectId: string | undefined): ProjectPer
       canDeleteResource,
       isLoading,
     };
-  }, [user, members, isOrgAdmin, isLoading]);
+  }, [user, project, isLoading, projectId]);
 }
 
 export interface OrgPermissions {

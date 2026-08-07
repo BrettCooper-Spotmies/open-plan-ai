@@ -53,7 +53,10 @@ import {
     ChevronDown,
     ChevronUp,
     Palette,
-    Eye
+    Eye,
+    EyeOff,
+    GripVertical,
+    LayoutGrid
 } from "lucide-react";
 import { format, isBefore, startOfMonth } from "date-fns";
 import { cn, isValidPhoneNumber } from "@/lib/utils";
@@ -67,7 +70,7 @@ import { useUpdateProject, useUpdateProjectStage, useProject, useDeleteProject }
 import { useOrganizationMembers, useProjectMembers } from "@/hooks/useProjectTeam";
 import { useProjectPermissions } from "@/hooks/useProjectPermissions";
 import { useProjectAttachments, useDeleteAttachment } from "@/hooks/useProjectAttachments";
-import { useProjectLinks, useCreateProjectLink, useDeleteProjectLink } from "@/hooks/useProjectLinks";
+import { useProjectLinks, useCreateProjectLink, useUpdateProjectLink, useDeleteProjectLink } from "@/hooks/useProjectLinks";
 import { projectStorageService } from "@/services/projectStorage.service";
 import { resolveFileUrl } from "@/utils/fileUrl";
 import { FilePreviewDialog } from "@/components/FilePreviewDialog";
@@ -78,7 +81,10 @@ import { chatService } from "@/services/chat.service";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryClient";
 import { logger } from '@/services/monitoring/logger';
-import type { ProjectRole } from "@/types";
+import type { ProjectRole, ProjectTabConfig } from "@/types";
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
+import { Switch } from "@/components/ui/switch";
+import { DEFAULT_PROJECT_TAB_CONFIG, PROJECT_TAB_DEFINITIONS, resolveProjectTabConfig } from "./projectTabsConfig";
 
 const projectTypes = [
     "Hardware Development",
@@ -193,6 +199,7 @@ const EditProject = () => {
     // Mutations
     const deleteAttachmentMutation = useDeleteAttachment();
     const createLinkMutation = useCreateProjectLink();
+    const updateLinkMutation = useUpdateProjectLink();
     const deleteLinkMutation = useDeleteProjectLink();
 
     // Form state
@@ -228,6 +235,9 @@ const EditProject = () => {
     const [customDepartments, setCustomDepartments] = useState<Department[]>([]);
     const [newDeptName, setNewDeptName] = useState("");
     const [isAddDeptOpen, setIsAddDeptOpen] = useState(false);
+
+    // Tabs: per-project order + visibility of the project detail page's section tabs
+    const [tabConfig, setTabConfig] = useState<ProjectTabConfig[]>(DEFAULT_PROJECT_TAB_CONFIG);
 
     // Modules
     const [modules, setModules] = useState<ProjectModule[]>([]);
@@ -298,6 +308,9 @@ const EditProject = () => {
     // Links state
     const [newLinkName, setNewLinkName] = useState("");
     const [newLinkUrl, setNewLinkUrl] = useState("");
+    const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
+    const [editingLinkName, setEditingLinkName] = useState("");
+    const [editingLinkUrl, setEditingLinkUrl] = useState("");
 
     // Deletion Confirmation State
     const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -553,6 +566,20 @@ const EditProject = () => {
         );
     };
 
+    const handleTabVisibilityToggle = (tabId: ProjectTabConfig['id']) => {
+        setTabConfig(prev =>
+            prev.map(t => t.id === tabId ? { ...t, visible: !t.visible } : t)
+        );
+    };
+
+    const handleTabDragEnd = (result: DropResult) => {
+        if (!result.destination) return;
+        const reordered = Array.from(tabConfig);
+        const [moved] = reordered.splice(result.source.index, 1);
+        reordered.splice(result.destination.index, 0, moved);
+        setTabConfig(reordered.map((t, index) => ({ ...t, order: index })));
+    };
+
     const handleAddCustomDepartment = () => {
         if (newDeptName.trim()) {
             const newId = `custom-${Date.now()}`;
@@ -603,6 +630,9 @@ const EditProject = () => {
                     })));
                 }
             }
+
+            // Populating tab order/visibility
+            setTabConfig(resolveProjectTabConfig(project.tabConfig));
 
         }
     }, [project]);
@@ -721,6 +751,33 @@ const EditProject = () => {
         }
     };
 
+    const handleEditLink = (link: any) => {
+        setEditingLinkId(link.id);
+        setEditingLinkName(link.title || link.name || "");
+        setEditingLinkUrl(link.url || "");
+    };
+
+    const handleCancelLinkEdit = () => {
+        setEditingLinkId(null);
+        setEditingLinkName("");
+        setEditingLinkUrl("");
+    };
+
+    const handleSaveLinkEdit = async () => {
+        if (!editingLinkName || !editingLinkUrl || !editingLinkId || !id) return;
+
+        try {
+            await updateLinkMutation.mutateAsync({
+                linkId: editingLinkId,
+                projectId: id,
+                input: { title: editingLinkName, url: editingLinkUrl },
+            });
+            handleCancelLinkEdit();
+        } catch (err) {
+            toast.error('Failed to update link');
+        }
+    };
+
     const handleDeleteAttachment = (attachmentId: string) => {
         setDeleteConfirmation({ isOpen: true, type: 'attachment', id: attachmentId });
     };
@@ -804,6 +861,7 @@ const EditProject = () => {
                         clientContact: clientContact || undefined,
                         notes: notes || undefined,
                         departments: selectedDepartments,
+                        tabConfig,
                     },
                 });
             }
@@ -1504,6 +1562,79 @@ const EditProject = () => {
                     </CardContent>
                 </Card>
 
+                {/* Project Tabs Section */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <LayoutGrid className="h-5 w-5 text-primary" />
+                            Project Tabs
+                        </CardTitle>
+                        <CardDescription>
+                            Drag to reorder the tabs shown on this project, or hide the ones this project doesn't need
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <DragDropContext onDragEnd={handleTabDragEnd}>
+                            <Droppable droppableId="project-tabs">
+                                {(provided) => (
+                                    <div ref={provided.innerRef} {...provided.droppableProps} className="space-y-2">
+                                        {tabConfig.map((tab, index) => {
+                                            const def = PROJECT_TAB_DEFINITIONS[tab.id];
+                                            const Icon = def.icon;
+                                            return (
+                                                <Draggable
+                                                    key={tab.id}
+                                                    draggableId={tab.id}
+                                                    index={index}
+                                                    isDragDisabled={!canManageProjectSettings}
+                                                >
+                                                    {(dragProvided, snapshot) => (
+                                                        <div
+                                                            ref={dragProvided.innerRef}
+                                                            {...dragProvided.draggableProps}
+                                                            className={cn(
+                                                                "flex items-center gap-3 rounded-lg border bg-card px-3 py-2.5 transition-colors",
+                                                                snapshot.isDragging && "shadow-md border-primary/50",
+                                                                !tab.visible && "opacity-60"
+                                                            )}
+                                                        >
+                                                            <span
+                                                                {...dragProvided.dragHandleProps}
+                                                                className={cn(
+                                                                    "text-muted-foreground shrink-0",
+                                                                    canManageProjectSettings ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed opacity-50"
+                                                                )}
+                                                            >
+                                                                <GripVertical className="h-4 w-4" />
+                                                            </span>
+                                                            <Icon className="h-4 w-4 text-primary shrink-0" />
+                                                            <span className="flex-1 text-sm font-medium">{def.label}</span>
+                                                            {tab.visible ? (
+                                                                <Eye className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                            ) : (
+                                                                <EyeOff className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                            )}
+                                                            <Switch
+                                                                checked={tab.visible}
+                                                                onCheckedChange={() => handleTabVisibilityToggle(tab.id)}
+                                                                disabled={!canManageProjectSettings}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </Draggable>
+                                            );
+                                        })}
+                                        {provided.placeholder}
+                                    </div>
+                                )}
+                            </Droppable>
+                        </DragDropContext>
+                        {tabConfig.every(t => !t.visible) && (
+                            <p className="text-xs text-destructive mt-2">At least one tab should stay visible.</p>
+                        )}
+                    </CardContent>
+                </Card>
+
                 {/* Team Members Section */}
                 <Card>
                     <CardHeader>
@@ -2018,33 +2149,97 @@ const EditProject = () => {
                         {/* Existing Links */}
                         {projectLinks.length > 0 && (
                             <div className="space-y-2">
-                                {projectLinks.map((link: any) => (
-                                    <div
-                                        key={link.id}
-                                        className="flex items-center justify-between p-3 rounded-md bg-muted/50"
-                                    >
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            <LinkIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                                            <span className="text-sm font-medium">{link.title || link.name}</span>
-                                            <a
-                                                href={link.url}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-xs text-primary hover:underline truncate max-w-[200px]"
-                                            >
-                                                {link.url}
-                                            </a>
-                                        </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className="h-8 w-8 shrink-0"
-                                            onClick={() => handleDeleteLink(link.id)}
+                                {projectLinks.map((link: any) => {
+                                    const isEditingLink = editingLinkId === link.id;
+                                    return (
+                                        <div
+                                            key={link.id}
+                                            className="flex items-center justify-between gap-2 p-3 rounded-md bg-muted/50"
                                         >
-                                            <X className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                ))}
+                                            {isEditingLink ? (
+                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                    <LinkIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                    <Input
+                                                        autoFocus
+                                                        value={editingLinkName}
+                                                        onChange={(e) => setEditingLinkName(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') handleSaveLinkEdit();
+                                                            if (e.key === 'Escape') handleCancelLinkEdit();
+                                                        }}
+                                                        className="h-8 flex-1"
+                                                        placeholder="Link name"
+                                                    />
+                                                    <Input
+                                                        value={editingLinkUrl}
+                                                        onChange={(e) => setEditingLinkUrl(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') handleSaveLinkEdit();
+                                                            if (e.key === 'Escape') handleCancelLinkEdit();
+                                                        }}
+                                                        className="h-8 flex-1"
+                                                        placeholder="URL"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <LinkIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                                                    <span className="text-sm font-medium">{link.title || link.name}</span>
+                                                    <a
+                                                        href={link.url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-xs text-primary hover:underline truncate max-w-[200px]"
+                                                    >
+                                                        {link.url}
+                                                    </a>
+                                                </div>
+                                            )}
+                                            <div className="flex gap-1 shrink-0">
+                                                {isEditingLink ? (
+                                                    <>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8"
+                                                            onClick={handleSaveLinkEdit}
+                                                            disabled={!editingLinkName.trim() || !editingLinkUrl.trim()}
+                                                        >
+                                                            <Check className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8"
+                                                            onClick={handleCancelLinkEdit}
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8"
+                                                            onClick={() => handleEditLink(link)}
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8"
+                                                            onClick={() => handleDeleteLink(link.id)}
+                                                        >
+                                                            <X className="h-4 w-4" />
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </CardContent>
