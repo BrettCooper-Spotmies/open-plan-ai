@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
-import { Sun, Moon, ChevronLeft, BarChart3, Plus, Users, Bug, Sparkles } from 'lucide-react';
+import { Sun, Moon, ChevronLeft, BarChart3, Plus, Users, Bug, Sparkles, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';

@@ -21,7 +21,7 @@ import {
   KNOWN_BOM_CATEGORIES, getCategoryMeta, type BOMCategory,
 } from './bomData';
 import {
-  generateMockStock, generateMockBuilds, computeCoverage, availableOf, CoveragePill, CoverageBar,
+  generateMockStock, generateDemoStock, generateMockBuilds, computeCoverage, availableOf, CoveragePill, CoverageBar,
   type StockRecord, type StockTransaction, type CoverageStatus,
 } from './inventoryData';
 import { HoverZoomImage, PartThumb } from './BOMShared';
@@ -99,11 +99,17 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
   const [transactions, setTransactions] = useState<StockTransaction[]>([]);
   const seededRef = useRef(false);
   useEffect(() => {
-    if (!seededRef.current && rootNodes.length > 0) {
+    if (seededRef.current) return;
+    if (rootNodes.length > 0) {
       setStock(generateMockStock(rootNodes));
       seededRef.current = true;
+    } else if (bomTree) {
+      // BOM tree has loaded but has no parts yet — show the static demo catalog instead
+      // of an empty table, so Inventory always has something to preview.
+      setStock(generateDemoStock());
+      seededRef.current = true;
     }
-  }, [rootNodes]);
+  }, [rootNodes, bomTree]);
 
   const [search, setSearch] = useState('');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');

@@ -154,6 +154,61 @@ export function generateMockStock(bomNodes: BOMNode[]): StockRecord[] {
   });
 }
 
+// Static fallback catalog shown whenever a project's BOM is empty (new project, no BOM
+// imported yet, etc.) so Inventory never renders a totally blank table. Spans all seven
+// known BOM categories with plausible EVSE (EV charger) hardware — same domain the category
+// set (Charging Connectors, Power Electronics, ...) implies. Deterministic per-PN like
+// generateMockStock, so numbers stay stable across re-renders.
+const DEMO_PART_DEFS: { pn: string; name: string; cat: BOMCategory; demand: number; leadTime: number }[] = [
+  { pn: 'ASM-1000', name: 'EVSE Charging Station Assembly', cat: 'assembly', demand: 1, leadTime: 21 },
+  { pn: 'ASM-1010', name: 'Charging Cable Reel Assembly',   cat: 'assembly', demand: 1, leadTime: 18 },
+  { pn: 'PWR-2001',  name: 'AC-DC Power Supply Module 3.3kW', cat: 'power', demand: 1, leadTime: 28 },
+  { pn: 'PWR-2015',  name: 'Relay Contactor 32A',              cat: 'power', demand: 2, leadTime: 14 },
+  { pn: 'PWR-2030',  name: 'EMI Filter Module',                cat: 'power', demand: 1, leadTime: 10 },
+  { pn: 'CTL-3001',  name: 'Main Control PCB (ESP32)',         cat: 'control', demand: 1, leadTime: 35 },
+  { pn: 'CTL-3012',  name: 'RS-485 Communication Module',      cat: 'control', demand: 1, leadTime: 12 },
+  { pn: 'CTL-3020',  name: '4G/LTE Cellular Modem',            cat: 'control', demand: 1, leadTime: 40 },
+  { pn: 'CON-4001',  name: 'Type 2 Charging Connector',        cat: 'connector', demand: 1, leadTime: 21 },
+  { pn: 'CON-4010',  name: 'CCS Combo Connector',               cat: 'connector', demand: 1, leadTime: 30 },
+  { pn: 'CON-4020',  name: 'Charging Cable 5m, 32A',            cat: 'connector', demand: 1, leadTime: 15 },
+  { pn: 'ENC-5001',  name: 'IP65 Outdoor Enclosure',            cat: 'enclosure', demand: 1, leadTime: 25 },
+  { pn: 'ENC-5010',  name: 'Mounting Bracket Kit',              cat: 'enclosure', demand: 1, leadTime: 9 },
+  { pn: 'ENC-5020',  name: 'Cable Gland Set',                   cat: 'enclosure', demand: 4, leadTime: 7 },
+  { pn: 'HMI-6001',  name: '7" Touch Display',                  cat: 'hmi', demand: 1, leadTime: 32 },
+  { pn: 'HMI-6010',  name: 'Status LED Ring',                   cat: 'hmi', demand: 1, leadTime: 11 },
+  { pn: 'HMI-6020',  name: 'RFID Card Reader',                  cat: 'hmi', demand: 1, leadTime: 20 },
+  { pn: 'SAF-7001',  name: 'RCD Type B 30mA',                   cat: 'safety', demand: 1, leadTime: 17 },
+  { pn: 'SAF-7010',  name: 'Surge Protection Device',           cat: 'safety', demand: 1, leadTime: 13 },
+  { pn: 'SAF-7020',  name: 'Emergency Stop Button',             cat: 'safety', demand: 1, leadTime: 8 },
+];
+
+export function generateDemoStock(): StockRecord[] {
+  const nonQuarantineLocations = STOCK_LOCATIONS.filter(l => l !== 'Quarantine');
+
+  return DEMO_PART_DEFS.map((d) => {
+    const r = seededRandom(d.pn);
+    const onHand = Math.max(0, Math.round(d.demand * (0.5 + r * 3)));
+    const allocated = Math.round(onHand * (r * 0.6));
+    const onOrder = r > 0.7 ? Math.round(d.demand * r) : 0;
+    const location = nonQuarantineLocations[Math.floor(r * nonQuarantineLocations.length)];
+
+    return {
+      id: `demo-${d.pn}`,
+      partId: `demo-${d.pn}`,
+      pn: d.pn,
+      name: d.name,
+      cat: d.cat,
+      onHand,
+      allocated,
+      onOrder,
+      location,
+      leadTimeDays: d.leadTime,
+      quarantineQty: r > 0.9 ? Math.max(1, Math.round(onHand * 0.1)) : undefined,
+      lotSerial: r > 0.8 && r <= 0.9 ? `LOT-${d.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
+    };
+  });
+}
+
 export interface BuildLine {
   partId: string;
   pn: string;
