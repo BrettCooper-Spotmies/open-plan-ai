@@ -14,7 +14,7 @@ interface Alert {
   title: string;
   severity: 'HIGH' | 'MEDIUM';
   description: string;
-  partId?: string;
+  buildId: string;
 }
 
 function buildAlerts(builds: Build[]): Alert[] {
@@ -29,7 +29,7 @@ function buildAlerts(builds: Build[]): Alert[] {
       description: b.longestLead
         ? `Longest lead: ${b.longestLead.name} (${b.longestLead.pn}). Projected ready ${formatShortDate(b.projectedDate)}.`
         : `Projected ready ${formatShortDate(b.projectedDate)}.`,
-      partId: b.longestLead?.partId,
+      buildId: b.id,
     });
     alerts.push({
       id: `milestone-${b.id}`,
@@ -37,6 +37,7 @@ function buildAlerts(builds: Build[]): Alert[] {
       title: `Milestone at risk — ${b.linkedMilestone}`,
       severity: 'HIGH',
       description: `${b.name} projected ready ${formatShortDate(b.projectedDate)}, ${b.daysLate} days past target ${formatShortDate(b.targetDate)}.`,
+      buildId: b.id,
     });
   }
   return alerts;
@@ -47,10 +48,11 @@ interface AlertsPanelProps {
   stock: StockRecord[];
   coverageOf: (r: StockRecord) => CoverageStatus;
   onSelectPart: (partId: string) => void;
+  onSelectBuild: (buildId: string) => void;
   onViewBuilds: () => void;
 }
 
-export function AlertsPanel({ builds, stock, coverageOf, onSelectPart, onViewBuilds }: AlertsPanelProps) {
+export function AlertsPanel({ builds, stock, coverageOf, onSelectPart, onSelectBuild, onViewBuilds }: AlertsPanelProps) {
   const isMobile = useIsMobile();
   const [mobileSearch, setMobileSearch] = useState('');
   const shortBuilds = builds.filter(b => b.shortLines.length > 0);
@@ -105,9 +107,8 @@ export function AlertsPanel({ builds, stock, coverageOf, onSelectPart, onViewBui
             {alerts.map((a) => (
               <button
                 key={a.id}
-                onClick={() => a.partId && onSelectPart(a.partId)}
-                disabled={!a.partId}
-                className="w-full rounded-lg border border-l-4 p-3 sm:p-4 flex items-start gap-3 text-left hover:bg-muted/30 transition-colors disabled:cursor-default"
+                onClick={() => onSelectBuild(a.buildId)}
+                className="w-full rounded-lg border border-l-4 p-3 sm:p-4 flex items-start gap-3 text-left hover:bg-muted/30 transition-colors"
                 style={{ borderLeftColor: '#DC2626' }}
               >
                 {a.icon === 'shortage' ? (
@@ -122,7 +123,7 @@ export function AlertsPanel({ builds, stock, coverageOf, onSelectPart, onViewBui
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">{a.description}</p>
                 </div>
-                {a.partId && <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+                <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
               </button>
             ))}
           </div>
@@ -144,7 +145,11 @@ export function AlertsPanel({ builds, stock, coverageOf, onSelectPart, onViewBui
                 {buildsForStatusFiltered.map((b) => {
                   const isShort = b.shortLines.length > 0;
                   return (
-                    <div key={b.id} className="rounded-xl border border-border bg-card p-3 flex items-center justify-between gap-3">
+                    <button
+                      key={b.id}
+                      onClick={() => onSelectBuild(b.id)}
+                      className="w-full rounded-xl border border-border bg-card p-3 flex items-center justify-between gap-3 text-left active:bg-muted/50 transition-colors"
+                    >
                       <div className="flex items-start gap-2.5 min-w-0">
                         <span className="h-2 w-2 rounded-full mt-1.5 shrink-0" style={{ background: isShort ? '#DC2626' : '#16A34A' }} />
                         <div className="min-w-0">
@@ -168,7 +173,7 @@ export function AlertsPanel({ builds, stock, coverageOf, onSelectPart, onViewBui
                           <Badge className="text-[10px] border-transparent" style={{ background: 'rgba(22,163,74,0.1)', color: '#16A34A' }}>Ready</Badge>
                         )}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>

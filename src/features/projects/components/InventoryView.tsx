@@ -224,6 +224,8 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
 
   const builds = useMemo(() => generateMockBuilds(stock, demandByPartId), [stock, demandByPartId]);
   const [activeTab, setActiveTab] = useState('stock');
+  const [openBuildId, setOpenBuildId] = useState<string | null>(null);
+  const openBuild = (buildId: string) => { setActiveTab('builds'); setOpenBuildId(buildId); };
 
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -706,7 +708,12 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
         </TabsContent>
 
         <TabsContent value="builds" className="mt-4">
-          <BuildsPanel builds={builds} onSelectPart={openDetail} />
+          <BuildsPanel
+            builds={builds}
+            onSelectPart={openDetail}
+            openBuildId={openBuildId}
+            onOpenBuildHandled={() => setOpenBuildId(null)}
+          />
         </TabsContent>
 
         <TabsContent value="alerts" className="mt-4">
@@ -715,6 +722,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
             stock={stock}
             coverageOf={coverageOf}
             onSelectPart={openDetail}
+            onSelectBuild={openBuild}
             onViewBuilds={() => setActiveTab('builds')}
           />
         </TabsContent>

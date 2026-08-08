@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CheckCircle, Truck, Flag, ArrowRight, ClipboardCheck, Plus, Search,
   Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag,
@@ -23,14 +23,24 @@ const BUILD_TYPE_TINT: Record<string, string> = { EVT: '#7C3AED', DVT: '#2563EB'
 interface BuildsPanelProps {
   builds: Build[];
   onSelectPart: (partId: string) => void;
+  openBuildId?: string | null;
+  onOpenBuildHandled?: () => void;
 }
 
-export function BuildsPanel({ builds, onSelectPart }: BuildsPanelProps) {
+export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHandled }: BuildsPanelProps) {
   const isMobile = useIsMobile();
   const [selectedBuildId, setSelectedBuildId] = useState(builds[0]?.id);
   const [mobileSearch, setMobileSearch] = useState('');
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const selectedBuild = builds.find(b => b.id === selectedBuildId) ?? builds[0];
+
+  // Alerts tab hands off a build to open here — jump to it and, on mobile, pop the detail dialog.
+  useEffect(() => {
+    if (!openBuildId) return;
+    setSelectedBuildId(openBuildId);
+    if (isMobile) setMobileDetailOpen(true);
+    onOpenBuildHandled?.();
+  }, [openBuildId, isMobile, onOpenBuildHandled]);
 
   if (!selectedBuild) {
     return (
