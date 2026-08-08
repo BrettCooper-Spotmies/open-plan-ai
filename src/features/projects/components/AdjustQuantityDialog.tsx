@@ -251,7 +251,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
                   )}
                 />
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
                     name="direction"
@@ -263,12 +263,20 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
                             type="single"
                             value={field.value}
                             onValueChange={(v) => v && field.onChange(v)}
-                            className="justify-start border rounded-md p-1"
+                            className="justify-start gap-2"
                           >
-                            <ToggleGroupItem value="add" className="gap-1.5 flex-1 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                            <ToggleGroupItem
+                              value="add"
+                              variant="outline"
+                              className="gap-1.5 flex-1 border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                            >
                               <Plus className="h-3.5 w-3.5" /> Add
                             </ToggleGroupItem>
-                            <ToggleGroupItem value="remove" className="gap-1.5 flex-1 data-[state=on]:bg-destructive data-[state=on]:text-destructive-foreground">
+                            <ToggleGroupItem
+                              value="remove"
+                              variant="outline"
+                              className="gap-1.5 flex-1 border-input data-[state=on]:bg-destructive data-[state=on]:text-destructive-foreground data-[state=on]:border-destructive"
+                            >
                               <Minus className="h-3.5 w-3.5" /> Remove
                             </ToggleGroupItem>
                           </ToggleGroup>
