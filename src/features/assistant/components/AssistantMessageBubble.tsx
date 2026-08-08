@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Copy, Pencil, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { fileIconFor } from './AssistantComposer';
+import { AssistantMarkdown } from './AssistantMarkdown';
+import { AssistantAttachmentGrid } from './AssistantAttachments';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import type { AiMessageAttachment } from '../assistantData';
 import type { MessageVersionInfo } from '../lib/messageBranches';
 
@@ -168,20 +170,16 @@ export function AssistantMessageBubble({
     return (
       <div className="group flex flex-col items-end gap-1">
         {attachments && attachments.length > 0 && (
-          <div className="flex flex-wrap justify-end gap-1.5">
-            {attachments.map((attachment) => {
-              const FileIcon = fileIconFor(attachment.fileName);
-              return (
-                <div
-                  key={attachment.id}
-                  className="flex items-center gap-1.5 rounded-lg border border-border bg-muted px-2.5 py-1.5 text-xs"
-                >
-                  <FileIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="max-w-[160px] truncate font-medium text-foreground">{attachment.fileName}</span>
-                </div>
-              );
-            })}
-          </div>
+          <AssistantAttachmentGrid
+            align="end"
+            items={attachments.map((attachment) => ({
+              key: attachment.id,
+              name: attachment.fileName,
+              mimeType: attachment.mimeType,
+              sizeBytes: attachment.fileSize,
+              previewUrl: resolveFileUrl(attachment.fileUrl) ?? attachment.fileUrl,
+            }))}
+          />
         )}
         {content && (
           <div className="max-w-[80%] whitespace-pre-wrap rounded-2xl rounded-tr-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground">
@@ -226,16 +224,15 @@ export function AssistantMessageBubble({
         <Sparkles className="h-3.5 w-3.5" />
       </div>
       <div className={cn('flex min-w-0 flex-col items-start gap-1', isCompact ? 'flex-1' : 'max-w-[80%]')}>
-        <div
+        <AssistantMarkdown
+          content={content}
           className={cn(
-            'min-w-0 whitespace-pre-wrap text-sm text-foreground',
+            'text-foreground',
             isCompact
               ? 'w-full rounded-lg border border-border bg-card px-3.5 py-3'
               : 'rounded-2xl rounded-tl-sm bg-muted px-4 py-2.5',
           )}
-        >
-          {content}
-        </div>
+        />
         {!isOptimistic && (
           <button
             type="button"

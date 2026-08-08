@@ -18,6 +18,7 @@ import { AssistantWidget } from "@/features/assistant/components/AssistantWidget
 import {
   AuthProvider,
   ProtectedRoute,
+  GuestRoute,
   LoginPage,
   SignupPage,
   ForgotPasswordPage,
@@ -74,8 +75,10 @@ function AppShell() {
       <AssistantWidget />
       <Routes>
         {/* ── Public (auth) routes ─────────────────────────────── */}
-        <Route path="/login"           element={<LoginPage />} />
-        <Route path="/signup"          element={<SignupPage />} />
+        <Route element={<GuestRoute />}>
+          <Route path="/login"  element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+        </Route>
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password"  element={<ResetPasswordPage />} />
         <Route path="/verify-email"    element={<VerifyEmailPage />} />
@@ -254,6 +257,14 @@ function AppShell() {
           <Route element={<AppLayoutOutlet noPadding />}>
             <Route
               path="/assistant"
+              element={
+                <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                  <Assistant />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/assistant/:conversationId"
               element={
                 <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
                   <Assistant />
