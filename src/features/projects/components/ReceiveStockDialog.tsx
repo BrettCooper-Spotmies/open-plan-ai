@@ -202,7 +202,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
             <DialogTitle>Receive stock</DialogTitle>
             <DialogDescription>Writes one immutable ledger entry</DialogDescription>
           </div>
-          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none">
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </DialogClose>
@@ -218,7 +218,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
                   render={() => (
                     <FormItem>
                       <div className="flex items-center justify-between">
-                        <FormLabel>Part *</FormLabel>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Part <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                         {!showAddPart && (
                           <Button
                             type="button"
@@ -377,7 +377,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
                   name="location"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Destination location *</FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Destination location <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -400,7 +400,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
                   name="quantity"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Quantity *</FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Quantity <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                       <FormControl>
                         <Input type="number" min={1} {...field} />
                       </FormControl>
@@ -414,7 +414,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
                   name="reference"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Reference <span className="text-muted-foreground font-normal">(expected receipt / PO)</span></FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reference <span className="normal-case font-normal">(expected receipt / PO)</span></FormLabel>
                       <FormControl>
                         <Input placeholder="ER-…" {...field} />
                       </FormControl>
@@ -444,7 +444,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
                   name="note"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Note <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Note <span className="normal-case font-normal">optional</span></FormLabel>
                       <FormControl>
                         <Textarea placeholder="Optional note..." className="min-h-[70px] resize-none" {...field} />
                       </FormControl>
@@ -456,8 +456,8 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
             </div>
 
             <DialogFooter className="flex-row justify-end gap-2 space-x-0 sm:space-x-0 px-4 sm:px-6 py-4 border-t shrink-0">
-              <Button type="button" variant="outline" onClick={attemptClose}>Cancel</Button>
-              <Button type="submit" disabled={!selectedPart}>Receive</Button>
+              <Button type="button" variant="outline" className="flex-1" onClick={attemptClose}>Cancel</Button>
+              <Button type="submit" className="flex-1" disabled={!selectedPart}>Receive</Button>
             </DialogFooter>
           </form>
         </Form>

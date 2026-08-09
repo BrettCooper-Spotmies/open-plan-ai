@@ -160,7 +160,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
             <DialogTitle>Adjust quantity</DialogTitle>
             <DialogDescription>Writes one immutable ledger entry</DialogDescription>
           </div>
-          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none">
             <X className="h-4 w-4" />
             <span className="sr-only">Close</span>
           </DialogClose>
@@ -175,7 +175,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
                   name="partId"
                   render={() => (
                     <FormItem>
-                      <FormLabel>Part *</FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Part <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                       <Popover open={partPickerOpen} onOpenChange={setPartPickerOpen}>
                         <PopoverTrigger asChild>
                           <FormControl>
@@ -239,7 +239,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
                   name="location"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Location *</FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Location <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -263,7 +263,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
                     name="direction"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Direction</FormLabel>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Direction</FormLabel>
                         <FormControl>
                           <ToggleGroup
                             type="single"
@@ -297,7 +297,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
                     name="quantity"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Quantity *</FormLabel>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Quantity <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                         <FormControl>
                           <Input type="number" min={1} {...field} />
                         </FormControl>
@@ -312,7 +312,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
                   name="reasonCode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Reason code *</FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reason code <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -336,7 +336,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
                   name="note"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Note <span className="text-muted-foreground font-normal">optional</span></FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Note <span className="normal-case font-normal">optional</span></FormLabel>
                       <FormControl>
                         <Textarea placeholder="Optional note..." className="min-h-[70px] resize-none" {...field} />
                       </FormControl>
@@ -348,8 +348,8 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
             </div>
 
             <DialogFooter className="flex-row justify-end gap-2 space-x-0 sm:space-x-0 px-4 sm:px-6 py-4 border-t shrink-0">
-              <Button type="button" variant="outline" onClick={attemptClose}>Cancel</Button>
-              <Button type="submit" disabled={!selectedRecord}>Post adjustment</Button>
+              <Button type="button" variant="outline" className="flex-1" onClick={attemptClose}>Cancel</Button>
+              <Button type="submit" className="flex-1" disabled={!selectedRecord}>Post adjustment</Button>
             </DialogFooter>
           </form>
         </Form>
