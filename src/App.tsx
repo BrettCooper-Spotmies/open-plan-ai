@@ -29,6 +29,7 @@ import {
 
 // 404 — eagerly loaded (tiny, always needed)
 import NotFound from "./pages/NotFound";
+import DebugDialogs from "./DebugDialogs";
 
 // ── Feature routes — lazy loaded for code splitting ───────────────────────────
 const Dashboard     = lazy(() => import("./features/dashboard"));
@@ -83,6 +84,7 @@ function AppShell() {
         <Route path="/reset-password"  element={<ResetPasswordPage />} />
         <Route path="/verify-email"    element={<VerifyEmailPage />} />
         <Route path="/join-org"        element={<JoinOrganizationPage />} />
+        <Route path="/debug-dialogs"   element={<DebugDialogs />} />
 
         {/* ── Protected routes ─────────────────────────────────── */}
         <Route element={<ProtectedRoute />}>

@@ -47,7 +47,7 @@ import {
 } from '@/components/ui/form';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { cn } from '@/lib/utils';
-import { Check, ChevronLeft, ChevronsUpDown, Download, Plus, X } from 'lucide-react';
+import { Check, ChevronsUpDown, Download, Plus, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart } from '@/hooks/useParts';
 import { KNOWN_BOM_CATEGORIES, type ApiPartResponse, type BOMCategory } from './bomData';
@@ -202,9 +202,9 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
             <DialogTitle>Receive stock</DialogTitle>
             <DialogDescription>Writes one immutable ledger entry</DialogDescription>
           </div>
-          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
-            <ChevronLeft className="h-5 w-5" />
-            <span className="sr-only">Back</span>
+          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
           </DialogClose>
         </DialogHeader>
 
@@ -455,7 +455,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
               </div>
             </div>
 
-            <DialogFooter className="px-4 sm:px-6 py-4 border-t shrink-0">
+            <DialogFooter className="flex-row justify-end gap-2 space-x-0 sm:space-x-0 px-4 sm:px-6 py-4 border-t shrink-0">
               <Button type="button" variant="outline" onClick={attemptClose}>Cancel</Button>
               <Button type="submit" disabled={!selectedPart}>Receive</Button>
             </DialogFooter>

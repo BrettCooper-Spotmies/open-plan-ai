@@ -39,8 +39,8 @@ interface PartDetailSheetProps {
 function StatItem({ label, value, color }: { label: string; value: number; color?: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-xl sm:text-2xl font-bold leading-tight" style={color ? { color } : undefined}>{value}</div>
-      <div className="text-[10px] font-medium tracking-wide text-muted-foreground uppercase truncate">{label}</div>
+      <div className="text-sm font-semibold leading-tight" style={color ? { color } : undefined}>{value}</div>
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">{label}</div>
     </div>
   );
 }
@@ -88,7 +88,7 @@ export function PartDetailSheet({
         className={cn(
           'p-0 overflow-y-auto overflow-x-hidden',
           isMobile
-            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 bg-muted'
+            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 bg-background flex flex-col gap-0'
             : 'max-w-3xl max-h-[85vh]'
         )}
       >
@@ -108,7 +108,7 @@ export function PartDetailSheet({
         )}
 
         <div className={cn('min-w-0 p-4 sm:p-6 space-y-4', isMobile && 'pt-3 pb-6')}>
-          <div className={cn(isMobile && 'rounded-2xl border bg-background overflow-hidden shadow-sm')}>
+          <div className={cn(isMobile && 'rounded-2xl border bg-background overflow-hidden')}>
             <div className={cn('flex items-start gap-3', isMobile && 'p-4')}>
               {record.imageUrl ? (
                 <img src={record.imageUrl} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
@@ -148,17 +148,17 @@ export function PartDetailSheet({
 
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
             <Button
-              className="h-11 rounded-xl min-w-0 sm:h-10 sm:w-auto sm:rounded-md sm:px-4"
+              className="min-w-0 sm:w-auto px-4"
               onClick={onReceive}
             >
-              <Download className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Receive</span>
+              <Download className="h-3.5 w-3.5 mr-1.5 shrink-0" /> <span className="truncate">Receive</span>
             </Button>
             <Button
-              className="h-11 rounded-xl min-w-0 sm:h-10 sm:w-auto sm:rounded-md sm:px-4"
+              className="min-w-0 sm:w-auto px-4"
               variant="outline"
               onClick={onAdjust}
             >
-              <Pencil className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Adjust</span>
+              <Pencil className="h-3.5 w-3.5 mr-1.5 shrink-0" /> <span className="truncate">Adjust</span>
             </Button>
             {!isMobile && (
               <>
@@ -201,7 +201,7 @@ export function PartDetailSheet({
             {stockRows.map((row) => (
               <div
                 key={`${row.location}-${row.label}`}
-                className="rounded-2xl border bg-background p-3.5 flex items-center justify-between gap-3 shadow-sm"
+                className="rounded-2xl border bg-background p-3.5 flex items-center justify-between gap-3"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5 text-sm font-semibold truncate">
@@ -215,7 +215,7 @@ export function PartDetailSheet({
                     {row.label}
                   </div>
                 </div>
-                <span className="text-base font-bold shrink-0">{row.qty} {part?.unit ?? 'EA'}</span>
+                <span className="text-sm font-semibold shrink-0">{row.qty} {part?.unit ?? 'EA'}</span>
               </div>
             ))}
           </TabsContent>
@@ -226,7 +226,7 @@ export function PartDetailSheet({
             ) : (
               <div className="space-y-3">
                 {partTxns.map((t) => (
-                  <div key={t.id} className="rounded-2xl border bg-background p-3.5 flex items-center justify-between gap-3 shadow-sm">
+                  <div key={t.id} className="rounded-2xl border bg-background p-3.5 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-sm font-semibold capitalize">
                         {t.type === 'receive' ? 'Received' : t.direction === 'add' ? 'Adjusted +' : 'Adjusted −'}
@@ -235,7 +235,7 @@ export function PartDetailSheet({
                         {t.location} · {new Date(t.createdAt).toLocaleString()}
                       </div>
                     </div>
-                    <span className="text-base font-bold shrink-0">{t.qty}</span>
+                    <span className="text-sm font-semibold shrink-0">{t.qty}</span>
                   </div>
                 ))}
               </div>
@@ -244,7 +244,7 @@ export function PartDetailSheet({
 
           <TabsContent value="allocations" className="mt-0 p-4 sm:p-6">
             {record.allocated > 0 ? (
-              <div className="rounded-2xl border bg-background p-3.5 flex items-center justify-between text-sm shadow-sm">
+              <div className="rounded-2xl border bg-background p-3.5 flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Reserved against BOM demand</span>
                 <span className="font-semibold">{record.allocated} {part?.unit ?? 'EA'}</span>
               </div>
@@ -259,7 +259,7 @@ export function PartDetailSheet({
             ) : (
               <div className="space-y-3">
                 {whereUsed.map((w, i) => (
-                  <div key={i} className="rounded-2xl border bg-background p-3.5 flex items-center justify-between gap-3 shadow-sm">
+                  <div key={i} className="rounded-2xl border bg-background p-3.5 flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="text-sm font-semibold truncate">
                         {w.levelLabel && <span className="text-muted-foreground">{w.levelLabel} — </span>}
@@ -269,7 +269,7 @@ export function PartDetailSheet({
                         <div className="mt-1 text-xs text-muted-foreground truncate">{w.designators}</div>
                       )}
                     </div>
-                    <span className="text-base font-bold shrink-0">{w.qty} {w.uom}</span>
+                    <span className="text-sm font-semibold shrink-0">{w.qty} {w.uom}</span>
                   </div>
                 ))}
               </div>
@@ -278,7 +278,7 @@ export function PartDetailSheet({
 
           <TabsContent value="supply" className="mt-0 p-4 sm:p-6">
             {record.onOrder > 0 ? (
-              <div className="rounded-2xl border bg-background p-3.5 space-y-2 text-sm shadow-sm">
+              <div className="rounded-2xl border bg-background p-3.5 space-y-2 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">On order</span>
                   <span className="font-semibold">{record.onOrder} {part?.unit ?? 'EA'}</span>
