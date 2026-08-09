@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import {
-  Download, Upload, Pencil, ArrowLeftRight, ClipboardCheck, MapPin,
+  Download, Upload, Pencil, ArrowLeftRight, ClipboardCheck, MapPin, ChevronLeft,
   Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -76,109 +76,146 @@ export function PartDetailSheet({
   const meta = getCategoryMeta(record.cat);
   const CategoryIcon = CATEGORY_ICON_MAP[meta.iconName] ?? Tag;
 
+  const tabTriggerClass = cn(
+    'rounded-full border border-border px-3.5 py-1.5 text-sm font-medium text-muted-foreground shrink-0',
+    'data-[state=active]:border-primary data-[state=active]:bg-primary/5 data-[state=active]:text-primary data-[state=active]:shadow-none'
+  );
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent
+        hideClose={isMobile}
         className={cn(
           'p-0 overflow-y-auto overflow-x-hidden',
           isMobile
-            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0'
+            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 bg-muted'
             : 'max-w-3xl max-h-[85vh]'
         )}
       >
         <DialogTitle className="sr-only">{record.pn} — {record.name}</DialogTitle>
 
-        <div className="min-w-0 p-4 sm:p-6 space-y-4">
-          <div className="flex items-start gap-3">
-            {record.imageUrl ? (
-              <img src={record.imageUrl} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
-            ) : (
-              <div
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
-                style={{ background: `${meta.tint}1a`, color: meta.tint }}
-              >
-                <CategoryIcon className="h-5 w-5" />
+        {isMobile && (
+          <div className="sticky top-0 z-10 flex items-center gap-3 border-b bg-background px-4 py-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <h2 className="text-lg font-bold truncate">{record.pn}</h2>
+          </div>
+        )}
+
+        <div className={cn('min-w-0 p-4 sm:p-6 space-y-4', isMobile && 'pt-3 pb-6')}>
+          <div className={cn(isMobile && 'rounded-2xl border bg-background overflow-hidden shadow-sm')}>
+            <div className={cn('flex items-start gap-3', isMobile && 'p-4')}>
+              {record.imageUrl ? (
+                <img src={record.imageUrl} alt="" className="h-11 w-11 shrink-0 rounded-lg object-cover" />
+              ) : (
+                <div
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg"
+                  style={{ background: `${meta.tint}1a`, color: meta.tint }}
+                >
+                  <CategoryIcon className="h-5 w-5" />
+                </div>
+              )}
+              <div className={cn('min-w-0 flex-1', !isMobile && 'pr-8')}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-medium text-primary">{record.pn}</span>
+                  <CoveragePill status={status} />
+                </div>
+                <h2 className="text-lg font-semibold leading-tight truncate">{record.name}</h2>
+                <p className="text-xs text-muted-foreground truncate">
+                  {[part?.manufacturer, part?.mpn, meta.label, part?.unit ?? 'EA'].filter(Boolean).join(' · ')}
+                </p>
               </div>
-            )}
-            <div className="min-w-0 flex-1 pr-8">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-medium text-primary">{record.pn}</span>
-                <CoveragePill status={status} />
-              </div>
-              <h2 className="text-lg font-semibold leading-tight truncate">{record.name}</h2>
-              <p className="text-xs text-muted-foreground truncate">
-                {[part?.manufacturer, part?.mpn, meta.label, part?.unit ?? 'EA'].filter(Boolean).join(' · ')}
-              </p>
+            </div>
+
+            <div
+              className={cn(
+                'grid grid-cols-3 gap-x-3 gap-y-3 sm:flex sm:flex-wrap sm:items-center sm:gap-6',
+                isMobile ? 'border-t px-4 py-4' : 'py-2'
+              )}
+            >
+              <StatItem label="On Hand" value={record.onHand} />
+              <StatItem label="Allocated" value={record.allocated} />
+              <StatItem label="Available" value={availableOf(record)} color={availableOf(record) < 0 ? '#DC2626' : '#16A34A'} />
+              <StatItem label="On Order" value={record.onOrder} color={record.onOrder > 0 ? '#D97706' : undefined} />
+              <StatItem label="Quarantine" value={record.quarantineQty ?? 0} />
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-x-3 gap-y-3 sm:flex sm:flex-wrap sm:items-center sm:gap-6 py-2">
-            <StatItem label="On Hand" value={record.onHand} />
-            <StatItem label="Allocated" value={record.allocated} />
-            <StatItem label="Available" value={availableOf(record)} color={availableOf(record) < 0 ? '#DC2626' : '#16A34A'} />
-            <StatItem label="On Order" value={record.onOrder} color={record.onOrder > 0 ? '#D97706' : undefined} />
-            <StatItem label="Quarantine" value={record.quarantineQty ?? 0} />
-          </div>
-
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
-            <Button className="min-w-0 px-2 sm:px-4" onClick={onReceive}>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            <Button
+              className="h-11 rounded-xl min-w-0 sm:h-10 sm:w-auto sm:rounded-md sm:px-4"
+              onClick={onReceive}
+            >
               <Download className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Receive</span>
             </Button>
-            <Button className="min-w-0 px-2 sm:px-4" variant="outline" onClick={onAdjust}>
+            <Button
+              className="h-11 rounded-xl min-w-0 sm:h-10 sm:w-auto sm:rounded-md sm:px-4"
+              variant="outline"
+              onClick={onAdjust}
+            >
               <Pencil className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Adjust</span>
             </Button>
-            <Button className="min-w-0 px-2 sm:px-4" variant="outline" disabled title="Coming soon">
-              <Upload className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Issue</span>
-            </Button>
-            <Button className="min-w-0 px-2 sm:px-4" variant="outline" disabled title="Coming soon">
-              <ArrowLeftRight className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Transfer</span>
-            </Button>
-            <Button className="min-w-0 px-2 sm:px-4 col-span-2 sm:col-auto" variant="outline" disabled title="Coming soon">
-              <ClipboardCheck className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Allocate</span>
-            </Button>
+            {!isMobile && (
+              <>
+                <Button className="min-w-0 px-4" variant="outline" disabled title="Coming soon">
+                  <Upload className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Issue</span>
+                </Button>
+                <Button className="min-w-0 px-4" variant="outline" disabled title="Coming soon">
+                  <ArrowLeftRight className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Transfer</span>
+                </Button>
+                <Button className="min-w-0 px-4" variant="outline" disabled title="Coming soon">
+                  <ClipboardCheck className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Allocate</span>
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
         <Tabs defaultValue="stock" className="min-w-0 border-t">
           <div className="px-4 sm:px-6 pt-3 overflow-x-auto no-scrollbar">
-            <TabsList>
-              <TabsTrigger value="stock">
-                Stock <span className="ml-1.5 text-[11px] text-muted-foreground">{stockRows.length}</span>
+            <TabsList className="bg-transparent p-0 h-auto gap-2 justify-start">
+              <TabsTrigger value="stock" className={tabTriggerClass}>
+                Stock <span className="ml-1 text-[11px] opacity-70">{stockRows.length}</span>
               </TabsTrigger>
-              <TabsTrigger value="movements">
-                Movements <span className="ml-1.5 text-[11px] text-muted-foreground">{partTxns.length}</span>
+              <TabsTrigger value="movements" className={tabTriggerClass}>
+                Movements <span className="ml-1 text-[11px] opacity-70">{partTxns.length}</span>
               </TabsTrigger>
-              <TabsTrigger value="allocations">
-                Allocations <span className="ml-1.5 text-[11px] text-muted-foreground">{record.allocated > 0 ? 1 : 0}</span>
+              <TabsTrigger value="allocations" className={tabTriggerClass}>
+                Allocations <span className="ml-1 text-[11px] opacity-70">{record.allocated > 0 ? 1 : 0}</span>
               </TabsTrigger>
-              <TabsTrigger value="where-used">
-                Where-used <span className="ml-1.5 text-[11px] text-muted-foreground">{whereUsed.length}</span>
+              <TabsTrigger value="where-used" className={tabTriggerClass}>
+                Where-used <span className="ml-1 text-[11px] opacity-70">{whereUsed.length}</span>
               </TabsTrigger>
-              <TabsTrigger value="supply">
-                Supply <span className="ml-1.5 text-[11px] text-muted-foreground">{record.onOrder > 0 ? 1 : 0}</span>
+              <TabsTrigger value="supply" className={tabTriggerClass}>
+                Supply <span className="ml-1 text-[11px] opacity-70">{record.onOrder > 0 ? 1 : 0}</span>
               </TabsTrigger>
             </TabsList>
           </div>
 
           <TabsContent value="stock" className="mt-0 p-4 sm:p-6 space-y-3">
             {stockRows.map((row) => (
-              <div key={`${row.location}-${row.label}`} className="rounded-lg border p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 text-sm font-medium">
-                    <MapPin className="h-3.5 w-3.5 text-muted-foreground" /> {row.location}
-                  </span>
-                  <span className="text-sm font-semibold">{row.qty} {part?.unit ?? 'EA'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span
-                    className="inline-flex items-center gap-1.5 text-xs font-medium"
+              <div
+                key={`${row.location}-${row.label}`}
+                className="rounded-2xl border bg-background p-3.5 flex items-center justify-between gap-3 shadow-sm"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-sm font-semibold truncate">
+                    <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> {row.location}
+                  </div>
+                  <div
+                    className="mt-1 flex items-center gap-1.5 text-xs font-medium"
                     style={{ color: row.color }}
                   >
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: row.color }} />
+                    <span className="h-1.5 w-1.5 rounded-full shrink-0" style={{ background: row.color }} />
                     {row.label}
-                  </span>
-                  <span className="text-sm font-medium">{row.qty}</span>
+                  </div>
                 </div>
+                <span className="text-base font-bold shrink-0">{row.qty} {part?.unit ?? 'EA'}</span>
               </div>
             ))}
           </TabsContent>
@@ -187,18 +224,18 @@ export function PartDetailSheet({
             {partTxns.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">No movements yet this session.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {partTxns.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between text-sm border-b pb-2 last:border-0">
+                  <div key={t.id} className="rounded-2xl border bg-background p-3.5 flex items-center justify-between gap-3 shadow-sm">
                     <div className="min-w-0">
-                      <div className="font-medium capitalize">
+                      <div className="text-sm font-semibold capitalize">
                         {t.type === 'receive' ? 'Received' : t.direction === 'add' ? 'Adjusted +' : 'Adjusted −'}
                       </div>
-                      <div className="text-xs text-muted-foreground truncate">
+                      <div className="mt-1 text-xs text-muted-foreground truncate">
                         {t.location} · {new Date(t.createdAt).toLocaleString()}
                       </div>
                     </div>
-                    <span className="font-semibold shrink-0">{t.qty}</span>
+                    <span className="text-base font-bold shrink-0">{t.qty}</span>
                   </div>
                 ))}
               </div>
@@ -207,7 +244,7 @@ export function PartDetailSheet({
 
           <TabsContent value="allocations" className="mt-0 p-4 sm:p-6">
             {record.allocated > 0 ? (
-              <div className="rounded-lg border p-3 flex items-center justify-between text-sm">
+              <div className="rounded-2xl border bg-background p-3.5 flex items-center justify-between text-sm shadow-sm">
                 <span className="text-muted-foreground">Reserved against BOM demand</span>
                 <span className="font-semibold">{record.allocated} {part?.unit ?? 'EA'}</span>
               </div>
@@ -220,19 +257,19 @@ export function PartDetailSheet({
             {whereUsed.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">Not referenced in the BOM.</p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {whereUsed.map((w, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm border-b pb-2 last:border-0">
+                  <div key={i} className="rounded-2xl border bg-background p-3.5 flex items-center justify-between gap-3 shadow-sm">
                     <div className="min-w-0">
-                      <div className="font-medium truncate">
+                      <div className="text-sm font-semibold truncate">
                         {w.levelLabel && <span className="text-muted-foreground">{w.levelLabel} — </span>}
                         {w.name}
                       </div>
                       {w.designators && (
-                        <div className="text-xs text-muted-foreground truncate">{w.designators}</div>
+                        <div className="mt-1 text-xs text-muted-foreground truncate">{w.designators}</div>
                       )}
                     </div>
-                    <span className="font-semibold shrink-0">{w.qty} {w.uom}</span>
+                    <span className="text-base font-bold shrink-0">{w.qty} {w.uom}</span>
                   </div>
                 ))}
               </div>
@@ -241,7 +278,7 @@ export function PartDetailSheet({
 
           <TabsContent value="supply" className="mt-0 p-4 sm:p-6">
             {record.onOrder > 0 ? (
-              <div className="rounded-lg border p-3 space-y-2 text-sm">
+              <div className="rounded-2xl border bg-background p-3.5 space-y-2 text-sm shadow-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">On order</span>
                   <span className="font-semibold">{record.onOrder} {part?.unit ?? 'EA'}</span>

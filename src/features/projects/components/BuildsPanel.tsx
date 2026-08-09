@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   CheckCircle, Truck, Flag, ArrowRight, ClipboardCheck, Plus, Search,
-  Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag,
+  Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag, ChevronLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -114,11 +114,21 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
         )}
 
         <Dialog open={mobileDetailOpen} onOpenChange={setMobileDetailOpen}>
-          <DialogContent className="p-0 inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 overflow-y-auto overflow-x-hidden">
+          <DialogContent hideClose className="p-0 inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 overflow-y-auto overflow-x-hidden data-[state=open]:!slide-in-from-left-0 data-[state=open]:!slide-in-from-top-0 data-[state=closed]:!slide-out-to-left-0 data-[state=closed]:!slide-out-to-top-0">
             <DialogTitle className="sr-only">{selectedBuild.name}</DialogTitle>
+            <div className="sticky -top-4 z-20 flex items-center gap-3 px-4 py-3 border-b border-border shrink-0 bg-background">
+              <button
+                type="button"
+                onClick={() => setMobileDetailOpen(false)}
+                className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0 text-foreground active:bg-muted/70 transition-colors"
+                aria-label="Back"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <h1 className="text-[15px] font-bold text-foreground truncate">{selectedBuild.name}</h1>
+            </div>
             <div className="min-w-0 p-4 space-y-4">
-              <div className="flex items-center gap-2 flex-wrap pr-6">
-                <h2 className="text-lg font-bold">{selectedBuild.name}</h2>
+              <div className="flex items-center gap-2 flex-wrap">
                 <Badge variant="outline">{selectedBuild.type}</Badge>
                 {selectedBuild.shortLines.length === 0 && (
                   <Badge className="gap-1 border-transparent" style={{ background: 'rgba(22,163,74,0.1)', color: '#16A34A' }}>

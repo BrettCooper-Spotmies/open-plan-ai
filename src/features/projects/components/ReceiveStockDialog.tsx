@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { toast } from 'sonner';
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -46,7 +47,7 @@ import {
 } from '@/components/ui/form';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { cn } from '@/lib/utils';
-import { Check, ChevronsUpDown, Download, Plus, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronsUpDown, Download, Plus, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart } from '@/hooks/useParts';
 import { KNOWN_BOM_CATEGORIES, type ApiPartResponse, type BOMCategory } from './bomData';
@@ -185,10 +186,11 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && attemptClose()}>
       <DialogContent
+        hideClose
         className={cn(
           'p-0 flex flex-col gap-0',
           isMobile
-            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0'
+            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 data-[state=open]:!slide-in-from-left-0 data-[state=open]:!slide-in-from-top-0 data-[state=closed]:!slide-out-to-left-0 data-[state=closed]:!slide-out-to-top-0'
             : 'max-w-lg'
         )}
       >
@@ -200,6 +202,10 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
             <DialogTitle>Receive stock</DialogTitle>
             <DialogDescription>Writes one immutable ledger entry</DialogDescription>
           </div>
+          <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+            <ChevronLeft className="h-5 w-5" />
+            <span className="sr-only">Back</span>
+          </DialogClose>
         </DialogHeader>
 
         <Form {...form}>
