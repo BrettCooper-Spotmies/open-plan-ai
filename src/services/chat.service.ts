@@ -48,6 +48,9 @@ function computeInitials(name: string): string {
 function mapChatMessage(raw: any): ChatMessage {
   const fileUrl = raw.fileUrl ?? raw.file_url ?? null;
   const resolvedFileUrl = fileUrl ? (resolveFileUrl(fileUrl) ?? fileUrl) : undefined;
+  const createdAt = raw.createdAt ?? raw.created_at ?? new Date().toISOString();
+  const updatedAt = raw.updatedAt ?? raw.updated_at ?? createdAt;
+  const deletedAt = raw.deletedAt ?? raw.deleted_at ?? undefined;
 
   return {
     id: raw.id,
@@ -67,10 +70,10 @@ function mapChatMessage(raw: any): ChatMessage {
       mimeType: raw.fileMimeType ?? raw.file_mime_type ?? '',
     }] : (raw.attachments ?? []),
     entityTags: raw.entityTags ?? raw.entity_tags ?? [],
-    createdAt: raw.createdAt ?? raw.created_at ?? new Date().toISOString(),
-    updatedAt: raw.updatedAt ?? raw.updated_at ?? raw.createdAt ?? new Date().toISOString(),
-    isEdited: false,
-    deletedAt: raw.deletedAt ?? raw.deleted_at ?? undefined,
+    createdAt,
+    updatedAt,
+    isEdited: updatedAt !== createdAt && !deletedAt,
+    deletedAt,
     replyToMessageId: raw.replyToMessageId ?? raw.reply_to_message_id ?? undefined,
   };
 }
