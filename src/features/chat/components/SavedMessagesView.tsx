@@ -12,7 +12,7 @@ interface SavedMessagesViewProps {
   conversations: Conversation[];
   loading: boolean;
   currentUserId?: string;
-  onOpenMessage: (conversationId: string) => void;
+  onOpenMessage: (message: FavouriteMessage) => void;
   onRemove: (messageId: string) => void;
   onClose: () => void;
 }
@@ -79,7 +79,7 @@ export function SavedMessagesView({
                 <button
                   key={message.id}
                   type="button"
-                  onClick={() => onOpenMessage(message.conversationId)}
+                  onClick={() => onOpenMessage(message)}
                   className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-muted/60 transition-colors group"
                 >
                   <Avatar className="h-9 w-9 shrink-0 mt-0.5">
