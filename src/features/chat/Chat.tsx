@@ -342,6 +342,7 @@ export default function Chat() {
           open={forwardMessages !== null}
           onOpenChange={(open) => { if (!open) setForwardMessages(null); }}
           conversations={conversations}
+          reachableUsers={reachableUsers}
           messages={forwardMessages}
           onForward={handleForwardSubmit}
         />
