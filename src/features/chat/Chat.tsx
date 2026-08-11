@@ -21,7 +21,7 @@ import { useReachableUsers } from './hooks/useReachableUsers';
 import { useReadReceipts } from './hooks/useReadReceipts';
 import { chatService } from '@/services/chat.service';
 import { toast } from 'sonner';
-import { ChatMessage } from './types';
+import { ChatMessage, FavouriteMessage } from './types';
 import { logger } from '@/services/monitoring/logger';
 
 
@@ -59,9 +59,10 @@ export default function Chat() {
   const [messageFilter, setMessageFilter] = useState<'pinned' | 'favourites' | null>(null);
   const pendingFilterRef = useRef<'pinned' | 'favourites' | null>(null);
   const { pinnedMessages, pinnedMessageIds, pinMessage, unpinMessage } = usePinnedMessages(activeId ?? null);
-  const { favouriteMessages, favouriteIds, toggleFavourite } = useFavouriteMessages(activeId ?? null);
+  const { favouriteMessages, favouriteIds, toggleFavourite, refetchFavourites } = useFavouriteMessages(activeId ?? null);
   const [showSaved, setShowSaved] = useState(false);
-  const { messages: savedMessages, loading: savedLoading, removeFavourite: removeSavedMessage } = useGlobalFavourites();
+  const [highlightMessageId, setHighlightMessageId] = useState<string | null>(null);
+  const { messages: savedMessages, loading: savedLoading, refetch: refetchSaved, removeFavourite: removeSavedMessage } = useGlobalFavourites();
 
   const activeConv = conversations.find((c) => c.id === activeId);
 
@@ -133,11 +134,16 @@ export default function Chat() {
     }
   }, [isMobile, conversationId, activeConversationId, setActiveConversation]);
 
-  const handleSelectConversation = useCallback((id: string) => {
-    setShowSaved(false);
+  const navigateToConversation = useCallback((id: string) => {
     setActiveConversation(id);
     navigate(`/chat/${id}`);
   }, [navigate, setActiveConversation]);
+
+  const handleSelectConversation = useCallback((id: string) => {
+    setShowSaved(false);
+    setHighlightMessageId(null);
+    navigateToConversation(id);
+  }, [navigateToConversation]);
 
   const handleBack = useCallback(() => {
     setActiveConversation(null);
@@ -216,12 +222,15 @@ export default function Chat() {
     }
   }, [activeId, pinnedMessageIds, pinMessage, unpinMessage]);
 
-  const handleToggleFavourite = useCallback((messageId: string) => {
+  const handleToggleFavourite = useCallback(async (messageId: string) => {
     const msg = messages.find((m) => m.id === messageId)
       ?? pinnedMessages.find((m) => m.id === messageId)
       ?? favouriteMessages.find((m) => m.id === messageId);
-    if (msg) toggleFavourite(msg);
-  }, [messages, pinnedMessages, favouriteMessages, toggleFavourite]);
+    if (msg) await toggleFavourite(msg);
+    // Keep the global Saved panel (a separate fetch) in sync with per-message toggles
+    // made anywhere else, so a newly-saved message shows up without a manual refresh.
+    refetchSaved();
+  }, [messages, pinnedMessages, favouriteMessages, toggleFavourite, refetchSaved]);
 
   const handleShowPinned = useCallback(() => {
     useChatStore.getState().setDetailPanelOpen(false);
@@ -240,26 +249,41 @@ export default function Chat() {
   const handleShowSaved = useCallback(() => {
     useChatStore.getState().setDetailPanelOpen(false);
     setShowSaved(true);
-  }, []);
+    refetchSaved();
+  }, [refetchSaved]);
+
+  const handleRemoveSaved = useCallback(async (messageId: string) => {
+    await removeSavedMessage(messageId);
+    // The removed message might be the currently open conversation's — refresh its
+    // own favourites so the bookmark icon on that bubble updates too.
+    refetchFavourites();
+  }, [removeSavedMessage, refetchFavourites]);
 
   const handleDeleteChat = useCallback((targetConversationId: string) => {
     hideConversation(targetConversationId);
     if (targetConversationId === activeId) handleBack();
   }, [hideConversation, activeId, handleBack]);
 
-  const handleOpenSavedMessage = useCallback((targetConversationId: string) => {
-    setShowSaved(false);
-    if (targetConversationId === activeId) {
-      setMessageFilter('favourites');
+  const handleOpenSavedMessage = useCallback((message: FavouriteMessage) => {
+    // Desktop keeps the Saved panel open as a third column (Teams-style) so another
+    // saved item can be picked next; mobile has no room for three panes, so it closes.
+    if (isMobile) setShowSaved(false);
+    setHighlightMessageId(message.id);
+    if (message.conversationId === activeId) {
+      setMessageFilter(null);
     } else {
-      pendingFilterRef.current = 'favourites';
-      handleSelectConversation(targetConversationId);
+      pendingFilterRef.current = null;
+      navigateToConversation(message.conversationId);
     }
-  }, [activeId, handleSelectConversation]);
+  }, [isMobile, activeId, navigateToConversation]);
 
   const routeHasConversation = Boolean(conversationId);
+  // Desktop shows conversation list + (optionally) the Saved panel + the chat pane all at
+  // once — three columns, like Teams' Quick views. Mobile has room for only one at a time,
+  // so panes are shown/hidden in sequence instead (list -> saved -> chat).
   const showConversationList = isMobile ? !routeHasConversation && !showSaved : true;
-  const showMessageArea = isMobile ? routeHasConversation || showSaved : true;
+  const showSavedPane = showSaved;
+  const showChatPane = isMobile ? routeHasConversation && !showSaved : true;
 
   const typingText = typingNames.length > 0
     ? typingNames.length === 1
@@ -294,19 +318,23 @@ export default function Chat() {
           </div>
         )}
 
-        {showMessageArea && (
+        {showSavedPane && (
+          <div className="w-full md:w-[320px] shrink-0 overflow-hidden border-r border-border">
+            <SavedMessagesView
+              messages={savedMessages}
+              conversations={conversations}
+              loading={savedLoading}
+              currentUserId={user?.id}
+              onOpenMessage={handleOpenSavedMessage}
+              onRemove={handleRemoveSaved}
+              onClose={() => setShowSaved(false)}
+            />
+          </div>
+        )}
+
+        {showChatPane && (
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            {showSaved ? (
-              <SavedMessagesView
-                messages={savedMessages}
-                conversations={conversations}
-                loading={savedLoading}
-                currentUserId={user?.id}
-                onOpenMessage={handleOpenSavedMessage}
-                onRemove={removeSavedMessage}
-                onClose={() => setShowSaved(false)}
-              />
-            ) : activeConv ? (
+            {activeConv ? (
               <>
                 <ChatHeader
                   conversation={activeConv}
@@ -352,6 +380,8 @@ export default function Chat() {
                     favouriteMessageIds={favouriteIds}
                     onTogglePin={handleTogglePin}
                     onToggleFavourite={handleToggleFavourite}
+                    highlightMessageId={highlightMessageId}
+                    onHighlightHandled={() => setHighlightMessageId(null)}
                   />
                 )}
                 <TypingIndicator typingNames={typingNames} />
