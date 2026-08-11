@@ -270,6 +270,8 @@ export const ENDPOINTS = {
     ANSWER: (id: string) => `/ai/conversations/${id}/answer`,
     STOP: (id: string) => `/ai/conversations/${id}/stop`,
     UPLOAD_ATTACHMENT: '/ai/conversations/attachments',
+    SHARE: (id: string) => `/ai/conversations/${id}/share`,
+    SHARED: (shareId: string) => `/ai/conversations/shared/${shareId}`,
   },
   // Uploads
   UPLOADS: {
