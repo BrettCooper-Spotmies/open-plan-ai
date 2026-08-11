@@ -123,7 +123,7 @@ export function MessageArea({
     if (filterMode === 'favourites') {
       return (
         <div className="flex-1 flex items-center justify-center text-center text-sm text-muted-foreground px-8">
-          No favourite messages yet. Star a message to save it here.
+          No saved messages yet. Save a message to see it here.
         </div>
       );
     }

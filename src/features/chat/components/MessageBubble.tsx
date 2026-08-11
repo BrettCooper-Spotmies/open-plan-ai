@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, Forward, ZoomIn, FileImage, File as FileIcon2, Pin, PinOff, Star, Eye } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, Forward, ZoomIn, FileImage, File as FileIcon2, Pin, PinOff, Bookmark, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { FilePreviewDialog } from '@/components/FilePreviewDialog';
 import { Button } from '@/components/ui/button';
@@ -782,8 +782,8 @@ export function MessageBubble({
                 )}
                 {!isDeleted && onToggleFavourite && (
                   <DropdownMenuItem onClick={() => onToggleFavourite(message.id)} className="cursor-pointer">
-                    <Star className={cn('h-4 w-4 mr-2', isFavourited && 'fill-amber-500 text-amber-500')} />
-                    {isFavourited ? 'Remove from Favourites' : 'Add to Favourites'}
+                    <Bookmark className={cn('h-4 w-4 mr-2', isFavourited && 'fill-amber-500 text-amber-500')} />
+                    {isFavourited ? 'Remove from Saved' : 'Save message'}
                   </DropdownMenuItem>
                 )}
                 {canModify && !isFile && (
@@ -911,7 +911,7 @@ export function MessageBubble({
         {showTimestamp && (
           <span className="text-[10px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1">
             {isPinned && <Pin className="h-2.5 w-2.5" aria-label="Pinned" />}
-            {isFavourited && <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" aria-label="Favourited" />}
+            {isFavourited && <Bookmark className="h-2.5 w-2.5 fill-amber-500 text-amber-500" aria-label="Saved" />}
             {message.isEdited && <span>Edited</span>}
             {formatMessageTimestamp(message.createdAt, timezone)}
             {isOwn && renderStatusIcon()}
@@ -925,7 +925,7 @@ export function MessageBubble({
             )}
           >
             {isPinned && <Pin className="h-2.5 w-2.5" aria-label="Pinned" />}
-            {isFavourited && <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" aria-label="Favourited" />}
+            {isFavourited && <Bookmark className="h-2.5 w-2.5 fill-amber-500 text-amber-500" aria-label="Saved" />}
             {message.isEdited && <span>Edited</span>}
             {isOwn && renderStatusIcon()}
           </span>
