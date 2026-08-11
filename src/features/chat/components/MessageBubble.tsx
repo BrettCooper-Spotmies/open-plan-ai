@@ -1005,16 +1005,22 @@ export function MessageBubble({
           <span className="text-[10px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1">
             {isPinned && <Pin className="h-2.5 w-2.5" aria-label="Pinned" />}
             {isFavourited && <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" aria-label="Favourited" />}
+            {message.isEdited && <span>Edited</span>}
             {formatMessageTimestamp(message.createdAt, timezone)}
-            {message.isEdited && ' (edited)'}
             {isOwn && renderStatusIcon()}
           </span>
         )}
-        {!showTimestamp && isOwn && (
-          <span className="text-[10px] mt-0.5 px-1 flex items-center justify-end gap-1">
+        {!showTimestamp && (isOwn || message.isEdited) && (
+          <span
+            className={cn(
+              'text-[10px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1',
+              isOwn ? 'justify-end' : 'justify-start'
+            )}
+          >
             {isPinned && <Pin className="h-2.5 w-2.5" aria-label="Pinned" />}
             {isFavourited && <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" aria-label="Favourited" />}
-            {renderStatusIcon()}
+            {message.isEdited && <span>Edited</span>}
+            {isOwn && renderStatusIcon()}
           </span>
         )}
       </div>
