@@ -152,6 +152,7 @@ function mapConversation(raw: any): Conversation {
     lastMessageAt: raw.updatedAt ?? raw.lastMessageAt ?? raw.createdAt ?? new Date().toISOString(),
     createdAt: raw.createdAt ?? new Date().toISOString(),
     unreadCount: raw.unreadCount ?? 0,
+    isFavourite: raw.isFavourite ?? raw.is_favourite ?? false,
   };
 }
 
@@ -300,6 +301,14 @@ export const chatService = {
     await apiClient.delete(ENDPOINTS.CONVERSATIONS.BY_ID(conversationId));
   },
 
+  async toggleConversationFavourite(conversationId: string): Promise<{ action: 'added' | 'removed' }> {
+    return apiClient.post(ENDPOINTS.CONVERSATIONS.FAVOURITE_TOGGLE(conversationId), {});
+  },
+
+  async hideConversation(conversationId: string): Promise<void> {
+    await apiClient.post(ENDPOINTS.CONVERSATIONS.HIDE(conversationId), {});
+  },
+
   async updateMemberRole(
     conversationId: string,
     userId: string,
@@ -371,6 +380,11 @@ export const chatService = {
 
   async getFavouriteMessages(conversationId: string): Promise<FavouriteMessage[]> {
     const data = await apiClient.get<any[]>(ENDPOINTS.FAVOURITES.LIST(conversationId));
+    return (data || []).map(mapFavouriteMessage);
+  },
+
+  async getAllFavouriteMessages(): Promise<FavouriteMessage[]> {
+    const data = await apiClient.get<any[]>(ENDPOINTS.FAVOURITES.LIST_ALL);
     return (data || []).map(mapFavouriteMessage);
   },
 

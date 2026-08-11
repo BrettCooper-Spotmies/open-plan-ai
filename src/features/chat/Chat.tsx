@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,8 +13,9 @@ import { EmptyState } from './components/EmptyState';
 import { TypingIndicator } from './components/TypingIndicator';
 import { MessageAreaSkeleton } from './components/MessageAreaSkeleton';
 import { PinnedBanner } from './components/PinnedBanner';
+import { SavedMessagesView } from './components/SavedMessagesView';
 import { useChatStore } from './stores/useChatStore';
-import { useConversations, useMessages, useReactions, usePinnedMessages, useFavouriteMessages } from './hooks/useChatData';
+import { useConversations, useMessages, useReactions, usePinnedMessages, useFavouriteMessages, useGlobalFavourites } from './hooks/useChatData';
 import { useTypingIndicator } from './hooks/useTypingIndicator';
 import { useReachableUsers } from './hooks/useReachableUsers';
 import { useReadReceipts } from './hooks/useReadReceipts';
@@ -43,7 +44,10 @@ export default function Chat() {
   const { user } = useAuth();
   const { activeConversationId, lastActiveConversationId, setActiveConversation, isDetailPanelOpen, isMessageSearchOpen } = useChatStore();
 
-  const { conversations, loading: convsLoading, refetch } = useConversations();
+  const {
+    conversations, loading: convsLoading, refetch,
+    toggleConversationFavourite, hideConversation, toggleMute, markConversationRead,
+  } = useConversations();
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [addMemberOpen, setAddMemberOpen] = useState(false);
   const [forwardMessages, setForwardMessages] = useState<ChatMessage[] | null>(null);
@@ -53,8 +57,11 @@ export default function Chat() {
   const { data: reachableUsers = [] } = useReachableUsers();
   const onlineUserIds = useChatStore((s) => s.onlineUserIds);
   const [messageFilter, setMessageFilter] = useState<'pinned' | 'favourites' | null>(null);
+  const pendingFilterRef = useRef<'pinned' | 'favourites' | null>(null);
   const { pinnedMessages, pinnedMessageIds, pinMessage, unpinMessage } = usePinnedMessages(activeId ?? null);
   const { favouriteMessages, favouriteIds, toggleFavourite } = useFavouriteMessages(activeId ?? null);
+  const [showSaved, setShowSaved] = useState(false);
+  const { messages: savedMessages, loading: savedLoading, removeFavourite: removeSavedMessage } = useGlobalFavourites();
 
   const activeConv = conversations.find((c) => c.id === activeId);
 
@@ -74,7 +81,8 @@ export default function Chat() {
 
   useEffect(() => {
     setReplyingTo(null);
-    setMessageFilter(null);
+    setMessageFilter(pendingFilterRef.current);
+    pendingFilterRef.current = null;
   }, [activeId]);
 
   // Landing on bare /chat (e.g. via the sidebar nav icon) after previously having
@@ -126,6 +134,7 @@ export default function Chat() {
   }, [isMobile, conversationId, activeConversationId, setActiveConversation]);
 
   const handleSelectConversation = useCallback((id: string) => {
+    setShowSaved(false);
     setActiveConversation(id);
     navigate(`/chat/${id}`);
   }, [navigate, setActiveConversation]);
@@ -228,9 +237,29 @@ export default function Chat() {
     setMessageFilter(null);
   }, []);
 
+  const handleShowSaved = useCallback(() => {
+    useChatStore.getState().setDetailPanelOpen(false);
+    setShowSaved(true);
+  }, []);
+
+  const handleDeleteChat = useCallback((targetConversationId: string) => {
+    hideConversation(targetConversationId);
+    if (targetConversationId === activeId) handleBack();
+  }, [hideConversation, activeId, handleBack]);
+
+  const handleOpenSavedMessage = useCallback((targetConversationId: string) => {
+    setShowSaved(false);
+    if (targetConversationId === activeId) {
+      setMessageFilter('favourites');
+    } else {
+      pendingFilterRef.current = 'favourites';
+      handleSelectConversation(targetConversationId);
+    }
+  }, [activeId, handleSelectConversation]);
+
   const routeHasConversation = Boolean(conversationId);
-  const showConversationList = isMobile ? !routeHasConversation : true;
-  const showMessageArea = isMobile ? routeHasConversation : true;
+  const showConversationList = isMobile ? !routeHasConversation && !showSaved : true;
+  const showMessageArea = isMobile ? routeHasConversation || showSaved : true;
 
   const typingText = typingNames.length > 0
     ? typingNames.length === 1
@@ -255,13 +284,29 @@ export default function Chat() {
               onSelect={handleSelectConversation}
               onConversationCreated={refetch}
               onlineUserIds={onlineUserIds}
+              onShowSaved={handleShowSaved}
+              isSavedActive={showSaved}
+              onToggleFavourite={toggleConversationFavourite}
+              onToggleMute={user?.id ? (id) => toggleMute(id, user.id) : undefined}
+              onMarkRead={markConversationRead}
+              onDeleteChat={handleDeleteChat}
             />
           </div>
         )}
 
         {showMessageArea && (
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            {activeConv ? (
+            {showSaved ? (
+              <SavedMessagesView
+                messages={savedMessages}
+                conversations={conversations}
+                loading={savedLoading}
+                currentUserId={user?.id}
+                onOpenMessage={handleOpenSavedMessage}
+                onRemove={removeSavedMessage}
+                onClose={() => setShowSaved(false)}
+              />
+            ) : activeConv ? (
               <>
                 <ChatHeader
                   conversation={activeConv}
