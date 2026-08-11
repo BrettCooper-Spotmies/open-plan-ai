@@ -334,7 +334,17 @@ export default function Chat() {
 
         {showChatPane && (
           <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-            {activeConv ? (
+            {showSaved ? (
+              <SavedMessagesView
+                messages={savedMessages}
+                conversations={conversations}
+                loading={savedLoading}
+                currentUserId={user?.id}
+                onOpenMessage={handleOpenSavedMessage}
+                onRemove={removeSavedMessage}
+                onClose={() => setShowSaved(false)}
+              />
+            ) : activeConv ? (
               <>
                 <ChatHeader
                   conversation={activeConv}
