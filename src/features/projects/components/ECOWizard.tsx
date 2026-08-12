@@ -85,16 +85,20 @@ function ParamCombobox({
 }: {
   value: string;
   onChange: (label: string, autoFrom: string) => void;
-  onSelectOther: () => void;
+  onSelectOther: (initialValue?: string) => void;
   firstSelectedNode: BOMNode | null;
   usedParams: Set<string>;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
 
   const selectedLabel = value || 'Select parameter';
+  const trimmedSearch = search.trim();
+  const hasKnownMatch = trimmedSearch !== '' && [...BOM_PARAM_OPTIONS.map(o => o.label), ...ECO_RECOMMENDED_PARAMS]
+    .some(label => label.toLowerCase().includes(trimmedSearch.toLowerCase()));
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={next => { setOpen(next); if (next) setSearch(''); }}>
       <PopoverTrigger asChild>
         <button
           className="flex items-center justify-between gap-1 flex-[1.2] bg-muted/40 border border-border rounded-md text-foreground text-[13px] px-3 py-2 outline-none focus:border-primary/40 cursor-pointer font-[inherit] min-w-0"
@@ -106,7 +110,23 @@ function ParamCombobox({
       </PopoverTrigger>
       <PopoverContent className="p-0 w-[260px] z-[300]" align="start">
         <Command>
-          <CommandInput placeholder="Search parameters…" />
+          <CommandInput
+            placeholder="Search parameters…"
+            value={search}
+            onValueChange={setSearch}
+            onKeyDown={e => {
+              // No known field matches the typed text — Enter commits it as a
+              // custom parameter instead of doing nothing (the "Other…" item
+              // itself gets filtered out of the list in this case, so Enter
+              // is otherwise the only way to proceed without clearing the box).
+              if (e.key === 'Enter' && trimmedSearch !== '' && !hasKnownMatch) {
+                e.preventDefault();
+                e.stopPropagation();
+                onSelectOther(trimmedSearch);
+                setOpen(false);
+              }
+            }}
+          />
           <CommandList>
             <CommandEmpty>No match — use Other to enter custom.</CommandEmpty>
             <CommandGroup heading="BOM Fields">
@@ -146,11 +166,12 @@ function ParamCombobox({
                 </CommandItem>
               ))}
             </CommandGroup>
-            <CommandGroup heading="Custom">
+            <CommandGroup heading="Custom" forceMount>
               <CommandItem
                 value="other"
+                forceMount
                 onSelect={() => {
-                  onSelectOther();
+                  onSelectOther(hasKnownMatch ? undefined : trimmedSearch || undefined);
                   setOpen(false);
                 }}
               >
@@ -1195,8 +1216,8 @@ export function ECOWizard({
                 onChange={(label, autoFrom) => {
                   setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: label, from: autoFrom, paramIsCustom: false } : x));
                 }}
-                onSelectOther={() => {
-                  setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: '', paramIsCustom: true } : x));
+                onSelectOther={(initialValue) => {
+                  setDiffRows(prev => prev.map((x, i) => i === idx ? { ...x, param: initialValue ?? '', paramIsCustom: true } : x));
                 }}
               />
             );
