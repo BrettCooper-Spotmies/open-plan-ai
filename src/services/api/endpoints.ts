@@ -38,6 +38,7 @@ export const ENDPOINTS = {
     REPORTS_OVERVIEW: (orgId: string) => `/organizations/${orgId}/reports/overview`,
     ALL_TASKS: (orgId: string) => `/organizations/${orgId}/tasks`,
     ALL_ISSUES: (orgId: string) => `/organizations/${orgId}/issues`,
+    DASHBOARD: (orgId: string) => `/organizations/${orgId}/dashboard`,
     LOGO: (orgId: string) => `/organizations/${orgId}/logo`,
   },
   // Projects
@@ -270,6 +271,8 @@ export const ENDPOINTS = {
     ANSWER: (id: string) => `/ai/conversations/${id}/answer`,
     STOP: (id: string) => `/ai/conversations/${id}/stop`,
     UPLOAD_ATTACHMENT: '/ai/conversations/attachments',
+    SHARE: (id: string) => `/ai/conversations/${id}/share`,
+    SHARED: (shareId: string) => `/ai/conversations/shared/${shareId}`,
   },
   // Uploads
   UPLOADS: {
