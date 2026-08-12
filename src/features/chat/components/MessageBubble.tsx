@@ -56,6 +56,7 @@ interface MessageBubbleProps {
   showTimestamp: boolean;
   isGroupChat: boolean;
   currentUserId?: string;
+  currentUserName?: string;
   searchQuery?: string;
   memberNames?: string[];
   reactionUsers?: Record<string, string>;
@@ -100,7 +101,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-function ExpandableText({ text, query, isOwn = false, memberNames }: { text: string; query?: string; isOwn?: boolean; memberNames?: string[] }) {
+function ExpandableText({ text, query, isOwn = false, memberNames, currentUserName }: { text: string; query?: string; isOwn?: boolean; memberNames?: string[]; currentUserName?: string }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isLong = text.length > 300 || (text.match(/\n/g) || []).length > 5;
@@ -112,7 +113,7 @@ function ExpandableText({ text, query, isOwn = false, memberNames }: { text: str
   const renderText = (content: string) => {
     return content.split('\n').map((line, i) => (
       <span key={i}>
-        <MentionHighlightedText text={line} query={query} isOwn={isOwn} memberNames={memberNames} />
+        <MentionHighlightedText text={line} query={query} isOwn={isOwn} memberNames={memberNames} currentUserName={currentUserName} />
         {i < content.split('\n').length - 1 && <br />}
       </span>
     ));
@@ -135,7 +136,8 @@ function ExpandableText({ text, query, isOwn = false, memberNames }: { text: str
   );
 }
 
-function MentionHighlightedText({ text, query, isOwn = false, memberNames }: { text: string; query?: string; isOwn?: boolean; memberNames?: string[] }) {
+function MentionHighlightedText({ text, query, isOwn = false, memberNames, currentUserName }: { text: string; query?: string; isOwn?: boolean; memberNames?: string[]; currentUserName?: string }) {
+  const currentUserNameLower = currentUserName?.trim().toLowerCase();
   // First pass: split out @everyone tokens (case-insensitive)
   const everyoneRegex = /(@everyone)(?=\s|$|[.,!?])/gi;
   const withEveryone: { text: string; isEveryone: boolean; isMention: boolean }[] = [];
@@ -213,14 +215,20 @@ function MentionHighlightedText({ text, query, isOwn = false, memberNames }: { t
           );
         }
         if (part.isMention) {
+          // Teams-style "you were mentioned" — the mentioned name matches the
+          // viewer's own name, so it gets a distinct, always-bright highlight
+          // regardless of which side of the conversation the bubble is on.
+          const isSelfMention = !!currentUserNameLower && part.text.slice(1).toLowerCase() === currentUserNameLower;
           return (
             <span
               key={i}
               className={cn(
                 'font-medium rounded px-0.5',
-                isOwn
-                  ? 'bg-primary-foreground/20 text-primary-foreground'
-                  : 'bg-primary/20 text-primary'
+                isSelfMention
+                  ? 'font-semibold bg-yellow-300/90 text-yellow-950 ring-1 ring-yellow-500/50 dark:bg-yellow-400/30 dark:text-yellow-200 dark:ring-yellow-400/40'
+                  : isOwn
+                    ? 'bg-primary-foreground/20 text-primary-foreground'
+                    : 'bg-primary/20 text-primary'
               )}
             >
               <HighlightedText text={part.text} query={query} />
@@ -459,7 +467,7 @@ function FileAttachment({
 }
 
 export function MessageBubble({
-  message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
+  message, showSenderInfo, showTimestamp, isGroupChat, currentUserId, currentUserName,
   searchQuery, memberNames, reactionUsers, readReceipts, otherMembersCount, reactions,
   isPinned, isFavourited, onEdit, onDelete, onDeleteForMe, onToggleReaction, onReply, onForward, onTogglePin, onToggleFavourite, onJumpToMessage,
 }: MessageBubbleProps) {
@@ -829,7 +837,7 @@ export function MessageBubble({
                 <FileAttachment file={fileData} isOwn={isOwn} message={message} onForward={onForward} />
               </div>
             ) : (
-              <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} memberNames={memberNames} />
+              <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} memberNames={memberNames} currentUserName={currentUserName} />
             )}
             {message.entityTags && message.entityTags.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>

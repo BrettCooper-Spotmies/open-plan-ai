@@ -295,6 +295,7 @@ export function MessageArea({
                     showTimestamp={showTimestamp}
                     isGroupChat={isGroup}
                     currentUserId={user?.id}
+                    currentUserName={user?.name}
                     searchQuery={searchQuery}
                     memberNames={conversation.members.map((m) => m.name)}
                     readReceipts={readReceiptMap?.[msg.id]}
