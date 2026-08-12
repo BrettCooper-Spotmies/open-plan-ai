@@ -34,13 +34,15 @@ interface MessageAreaProps {
   /** Scrolls to and briefly highlights this message once it's loaded (paging older history if needed). */
   highlightMessageId?: string | null;
   onHighlightHandled?: () => void;
+  /** Jumps to a message within this same conversation, e.g. clicking a reply quote. */
+  onJumpToMessage?: (messageId: string) => void;
 }
 
 export function MessageArea({
   messages, conversation, hasMore, onLoadMore, readReceiptMap, reactionMap,
   onEditMessage, onDeleteMessage, onDeleteMessageForMe, onToggleReaction, onReplyMessage, onForwardMessage,
   filterMode, pinnedMessageIds, favouriteMessageIds, onTogglePin, onToggleFavourite,
-  highlightMessageId, onHighlightHandled,
+  highlightMessageId, onHighlightHandled, onJumpToMessage,
 }: MessageAreaProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -124,7 +126,11 @@ export function MessageArea({
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       el.style.transition = 'background-color 1.2s ease';
       el.style.backgroundColor = 'rgba(251, 191, 36, 0.25)';
-      window.setTimeout(() => { el.style.backgroundColor = ''; }, 1000);
+      window.setTimeout(() => {
+        el.style.backgroundColor = '';
+        // Allow jumping to this same message again on a later click.
+        if (highlightedRef.current === highlightMessageId) highlightedRef.current = null;
+      }, 1000);
     }
     onHighlightHandled?.();
   }, [highlightMessageId, messageById, hasMore, onLoadMore, onHighlightHandled]);
@@ -305,6 +311,7 @@ export function MessageArea({
                     onForward={onForwardMessage ? (message) => onForwardMessage([message]) : undefined}
                     onTogglePin={onTogglePin}
                     onToggleFavourite={onToggleFavourite}
+                    onJumpToMessage={onJumpToMessage}
                   />
                 </div>
               </div>
