@@ -109,6 +109,12 @@ function escapeRegExp(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Some browsers auto-boost/shrink text-node font-size in plain <div>s but exempt
+// form controls from that heuristic, which desyncs the mention overlay's font size
+// from the textarea's even though both declare the same Tailwind text-sm class.
+// Locking both to 100% keeps them pixel-matched.
+const TEXT_SIZE_ADJUST_STYLE = { WebkitTextSizeAdjust: '100%', textSizeAdjust: '100%' } as const;
+
 /** Byte ranges of recognized "@Name"/"@everyone" runs anywhere in the draft, for live blue highlighting. */
 function findKnownMentionRanges(value: string, knownNames: string[]): { start: number; end: number }[] {
   if (knownNames.length === 0) return [];
@@ -1136,11 +1142,12 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
 
             {/* Bordered message pill */}
             <div className="flex-1 min-w-0 flex items-center gap-1 rounded-full border border-input bg-background px-4 min-h-[42px] focus-within:ring-2 focus-within:ring-ring/70 transition-all">
-              <div className="relative flex-1 min-w-0">
+              <div className="relative flex-1 min-w-0 flex items-center">
                 <div
                   ref={mentionOverlayRef}
                   aria-hidden="true"
-                  className="absolute inset-0 overflow-hidden whitespace-pre-wrap break-words text-sm leading-5 max-h-[140px] pointer-events-none"
+                  className="absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-hidden whitespace-pre-wrap break-words text-sm leading-5 max-h-[140px] pointer-events-none"
+                  style={TEXT_SIZE_ADJUST_STYLE}
                 >
                   {mentionHighlightNodes}
                 </div>
@@ -1154,6 +1161,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
                   placeholder="Type a message..."
                   rows={1}
                   className="relative w-full resize-none overflow-hidden bg-transparent text-sm leading-5 max-h-[140px] text-transparent caret-foreground placeholder:text-muted-foreground/90 focus-visible:outline-none"
+                  style={TEXT_SIZE_ADJUST_STYLE}
                   disabled={readOnly}
                 />
               </div>
@@ -1208,7 +1216,8 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
               <div
                 ref={mentionOverlayRef}
                 aria-hidden="true"
-                className="absolute inset-0 px-0.5 overflow-hidden whitespace-pre-wrap break-words text-sm leading-5 max-h-[140px] pointer-events-none"
+                className="absolute inset-x-0 top-1/2 -translate-y-1/2 px-0.5 overflow-hidden whitespace-pre-wrap break-words text-sm leading-5 max-h-[140px] pointer-events-none"
+                style={TEXT_SIZE_ADJUST_STYLE}
               >
                 {mentionHighlightNodes}
               </div>
@@ -1222,6 +1231,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
                 placeholder={otherMembers.length <= 1 ? 'Type a message...' : 'Type a message... Use @ to mention'}
                 rows={1}
                 className="relative w-full resize-none bg-transparent text-sm leading-5 max-h-[140px] text-transparent caret-foreground placeholder:text-muted-foreground/90 focus-visible:outline-none"
+                style={TEXT_SIZE_ADJUST_STYLE}
                 disabled={readOnly}
               />
               {showCharCount && (
