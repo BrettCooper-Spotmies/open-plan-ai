@@ -254,6 +254,7 @@ export interface Project {
   targetDate: string;
   type?: string; // Project Type (e.g., "Hardware Development")
   icon?: string; // Emoji icon for the project
+  logoUrl?: string | null; // Uploaded square logo image, takes precedence over icon when set
   team: TeamMember[];
   memberCount?: number;
   tasks: Task[];
