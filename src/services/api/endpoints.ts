@@ -203,6 +203,7 @@ export const ENDPOINTS = {
   FAVOURITES: {
     TOGGLE: (messageId: string) => `/messages/${messageId}/favourite`,
     LIST: (conversationId: string) => `/conversations/${conversationId}/favourites`,
+    LIST_ALL: '/favourites',
   },
   // Chat / Conversations
   CONVERSATIONS: {
@@ -217,6 +218,8 @@ export const ENDPOINTS = {
     MEMBER: (conversationId: string, userId: string) => `/conversations/${conversationId}/members/${userId}`,
     FILES: (id: string) => `/conversations/${id}/files`,
     MUTUAL_PROJECTS: (id: string) => `/conversations/${id}/mutual-projects`,
+    FAVOURITE_TOGGLE: (id: string) => `/conversations/${id}/favourite`,
+    HIDE: (id: string) => `/conversations/${id}/hide`,
   },
   // Engineering Changes (ECO)
   ECOS: {
@@ -267,6 +270,8 @@ export const ENDPOINTS = {
     ANSWER: (id: string) => `/ai/conversations/${id}/answer`,
     STOP: (id: string) => `/ai/conversations/${id}/stop`,
     UPLOAD_ATTACHMENT: '/ai/conversations/attachments',
+    SHARE: (id: string) => `/ai/conversations/${id}/share`,
+    SHARED: (shareId: string) => `/ai/conversations/shared/${shareId}`,
   },
   // Uploads
   UPLOADS: {
