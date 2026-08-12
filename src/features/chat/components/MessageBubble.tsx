@@ -24,6 +24,7 @@ import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { useUserTimezone } from '@/hooks/useUserTimezone';
 import { formatMessageTimestamp } from '@/utils/dateTime';
 import EntityTagChip from './EntityTagChip';
+import { HighlightedText } from './HighlightedText';
 
 const ENTITY_TAG_ROUTE: Record<ChatEntityType, (tag: EntityTagRef) => string> = {
   task: (tag) => `/projects/${tag.projectId}/tasks/${tag.entityId}`,
@@ -71,6 +72,7 @@ interface MessageBubbleProps {
   onForward?: (message: ChatMessage) => void;
   onTogglePin?: (messageId: string) => void;
   onToggleFavourite?: (messageId: string) => void;
+  onJumpToMessage?: (messageId: string) => void;
 }
 
 interface FileContent {
@@ -256,23 +258,6 @@ function LinkifiedText({ text, query, isOwn = false }: { text: string; query?: s
           </a>
         ) : (
           <HighlightedText key={i} text={segment} query={query} />
-        )
-      )}
-    </>
-  );
-}
-
-function HighlightedText({ text, query }: { text: string; query?: string }) {
-  if (!query?.trim()) return <>{text}</>;
-  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  const parts = text.split(regex);
-  return (
-    <>
-      {parts.map((part, i) =>
-        part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={i} className="bg-yellow-300/60 dark:bg-yellow-500/40 rounded-sm px-0.5">{part}</mark>
-        ) : (
-          <span key={i}>{part}</span>
         )
       )}
     </>
@@ -476,7 +461,7 @@ function FileAttachment({
 export function MessageBubble({
   message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
   searchQuery, memberNames, reactionUsers, readReceipts, otherMembersCount, reactions,
-  isPinned, isFavourited, onEdit, onDelete, onDeleteForMe, onToggleReaction, onReply, onForward, onTogglePin, onToggleFavourite,
+  isPinned, isFavourited, onEdit, onDelete, onDeleteForMe, onToggleReaction, onReply, onForward, onTogglePin, onToggleFavourite, onJumpToMessage,
 }: MessageBubbleProps) {
   const timezone = useUserTimezone();
   const navigate = useNavigate();
@@ -817,8 +802,13 @@ export function MessageBubble({
           >
             {message.replyToMessage && (
               <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!message.replyToMessage!.deletedAt) onJumpToMessage?.(message.replyToMessage!.id);
+                }}
                 className={cn(
                   'mb-2 rounded-md border-l-2 px-2 py-1 text-xs',
+                  !message.replyToMessage.deletedAt && 'cursor-pointer hover:brightness-95',
                   isOwn
                     ? 'border-primary-foreground/50 bg-primary-foreground/10'
                     : 'border-primary/40 bg-primary/10'
