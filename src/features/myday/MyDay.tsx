@@ -14,7 +14,7 @@ import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
 import { Task, Issue, TaskStatus, IssueStatus, MyDayGroupBy, MyDayFilter, MyTasksColumnFilters } from '@/types';
 import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
-import { useUpdateTask, useBatchUpdateTasks, useCreatePersonalTask } from '@/hooks/useTasks';
+import { useUpdateTask, useBatchUpdateTasks, useCreatePersonalTask, useDeleteTask } from '@/hooks/useTasks';
 import { useUpdateIssue } from '@/hooks/useIssues';
 import { useProjects } from '@/hooks/useProjects';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
@@ -53,13 +53,7 @@ export default function MyDay() {
   const { data: userTasks = [], isLoading: tasksLoading } = useMyDayTasks(filter);
   const { data: overdueTasks = [] } = useMyDayTasks('overdue');
   const { data: todayTasks = [] } = useMyDayTasks('today');
-  // The "today" list intentionally keeps items completed today so they show as done
-  // rather than vanishing mid-day (see useMyDayTasks.ts). The tab badge, though, is a
-  // "still needs attention" count, so it must exclude those already-completed items.
-  const todayActiveCount = useMemo(
-    () => todayTasks.filter(item => item.status !== 'done' && item.status !== 'resolved').length,
-    [todayTasks]
-  );
+  const todayActiveCount = todayTasks.length;
   // Stat tiles reflect the full assigned set, not just the active tab — otherwise
   // e.g. the default "today" tab makes every surviving item `isDueToday`, which the
   // categorizer treats as "needs attention", so "Ready to Work" could never be > 0.
@@ -72,6 +66,7 @@ export default function MyDay() {
   const batchUpdateTasksMutation = useBatchUpdateTasks();
   const updateIssueMutation = useUpdateIssue();
   const createPersonalTaskMutation = useCreatePersonalTask();
+  const deleteTaskMutation = useDeleteTask();
 
   // The assignee picker for a personal task only ever offers the current
   // user — personal tasks are private to their creator, who is always the
@@ -225,6 +220,21 @@ export default function MyDay() {
     }
   };
 
+  const handleTaskDelete = async (taskId: string) => {
+    const item = userTasks.find(t => t.id === taskId) ?? allDayItems.find(t => t.id === taskId);
+    // Personal (no-project) tasks carry projectId === '' — only bail if the
+    // task itself couldn't be resolved, not on a falsy-but-valid projectId.
+    if (!item && selectedTask?.id !== taskId) return;
+    const projectId = item?.projectId ?? selectedTask?.projectId ?? '';
+    try {
+      await deleteTaskMutation.mutateAsync({ projectId, taskId });
+      toast.success('Task deleted');
+    } catch (error) {
+      logger.error('Failed to delete task:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete task');
+    }
+  };
+
   const handleCloseIssueModal = () => {
     setIsIssueModalOpen(false);
     setSelectedIssue(null);
@@ -373,6 +383,7 @@ export default function MyDay() {
           assignableMembers={selectedTask.projectId ? activeProjectMembers : selfAsAssignableMember}
           statusOptions={selectedTask.projectId ? undefined : PERSONAL_TASK_STATUS_OPTIONS}
           projectName={selectedTaskProject?.name ?? (selectedTask.projectId ? undefined : 'Personal')}
+          onDelete={handleTaskDelete}
           onUpdate={async (updatedTask) => {
             try {
               const item = userTasks.find(t => t.id === updatedTask.id);

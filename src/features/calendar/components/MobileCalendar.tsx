@@ -42,9 +42,13 @@ function getDayLabel(date: Date): string {
 }
 
 /** Get the accent colour class for an event row's left border */
+function isIssueResolved(event: CalendarEvent): boolean {
+  return event.type === 'issue' && (event.issueStatus === 'resolved' || event.issueStatus === 'wont-fix');
+}
+
 function eventBorderClass(event: CalendarEvent): string {
   if (event.type === 'milestone') return 'border-l-amber-500';
-  if (event.type === 'issue') return 'border-l-destructive';
+  if (event.type === 'issue') return isIssueResolved(event) ? 'border-l-green-500' : 'border-l-destructive';
   const statusMap: Record<string, string> = {
     'todo': 'border-l-muted-foreground/40',
     'in-progress': 'border-l-blue-500',
@@ -60,7 +64,9 @@ function EventTypeIcon({ event }: { event: CalendarEvent }) {
   if (event.type === 'milestone')
     return <Flag className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />;
   if (event.type === 'issue')
-    return <AlertCircle className="h-3.5 w-3.5 text-destructive flex-shrink-0" />;
+    return isIssueResolved(event)
+      ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />
+      : <AlertCircle className="h-3.5 w-3.5 text-destructive flex-shrink-0" />;
   if (event.status === 'done')
     return <CheckCircle2 className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />;
   return (
@@ -287,6 +293,7 @@ function AgendaEventRow({
             'text-sm font-medium text-foreground truncate',
             event.type === 'task' && event.status === 'done' && 'line-through text-muted-foreground',
             event.type === 'milestone' && event.completed && 'line-through text-muted-foreground',
+            isIssueResolved(event) && 'line-through text-muted-foreground',
           )}
         >
           {event.title}
@@ -299,7 +306,7 @@ function AgendaEventRow({
         className={cn(
           'text-[10px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 capitalize',
           event.type === 'milestone' && 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-          event.type === 'issue' && 'bg-destructive/10 text-destructive',
+          event.type === 'issue' && (isIssueResolved(event) ? 'bg-green-500/10 text-green-600' : 'bg-destructive/10 text-destructive'),
           event.type === 'task' && 'bg-primary/10 text-primary',
         )}
       >
