@@ -321,11 +321,11 @@ export default function MyDay() {
 
             <Button
               size="sm"
-              className="gap-1.5 sm:gap-2 h-9 rounded-lg px-2.5 sm:px-3 text-xs sm:text-sm order-1 sm:order-2"
+              className="gap-1 h-9 rounded-lg px-2.5 sm:px-3 text-xs sm:text-sm order-1 sm:order-2"
               onClick={() => setIsAddTaskOpen(true)}
             >
               <Plus className="h-4 w-4" />
-              Add<span className="hidden sm:inline">&nbsp;Task</span>
+              Add<span className="hidden sm:inline"> Task</span>
             </Button>
           </div>
         </div>
