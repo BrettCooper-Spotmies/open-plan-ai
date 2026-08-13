@@ -53,6 +53,13 @@ export default function MyDay() {
   const { data: userTasks = [], isLoading: tasksLoading } = useMyDayTasks(filter);
   const { data: overdueTasks = [] } = useMyDayTasks('overdue');
   const { data: todayTasks = [] } = useMyDayTasks('today');
+  // The "today" list intentionally keeps items completed today so they show as done
+  // rather than vanishing mid-day (see useMyDayTasks.ts). The tab badge, though, is a
+  // "still needs attention" count, so it must exclude those already-completed items.
+  const todayActiveCount = useMemo(
+    () => todayTasks.filter(item => item.status !== 'done' && item.status !== 'resolved').length,
+    [todayTasks]
+  );
   // Stat tiles reflect the full assigned set, not just the active tab — otherwise
   // e.g. the default "today" tab makes every surviving item `isDueToday`, which the
   // categorizer treats as "needs attention", so "Ready to Work" could never be > 0.
@@ -276,9 +283,9 @@ export default function MyDay() {
             <TabsList className="h-9 p-1 shrink-0 gap-2">
               <TabsTrigger value="today" className="relative px-3.5 sm:px-4 text-xs sm:text-sm shrink-0">
                 My Day
-                {todayTasks.length > 0 && filter !== 'today' && (
+                {todayActiveCount > 0 && filter !== 'today' && (
                   <span className="absolute -top-1.5 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground leading-none z-10 shadow-xs">
-                    {todayTasks.length}
+                    {todayActiveCount}
                   </span>
                 )}
               </TabsTrigger>

@@ -255,14 +255,14 @@ export default function Projects() {
     });
   };
 
-  const isProjectOwner = selectedProjectDetails?.createdBy === user?.id;
-
   const canEditSelectedProject = (() => {
     if (!selectedProjectDetails || !user?.id) return false;
     if (selectedProjectDetails.createdBy === user.id) return true;
     const role = (selectedProjectDetails.myRole || '').toLowerCase();
     return role === 'admin';
   })();
+
+  const isProjectOwner = canEditSelectedProject;
 
   const canEditProject = (project: { createdBy?: string; myRole?: string }) => {
     if (!user?.id) return false;
