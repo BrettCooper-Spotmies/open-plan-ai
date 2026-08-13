@@ -1366,13 +1366,13 @@ export default function ProjectDetail() {
                       placeholder="Search tasks..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 h-9 w-full bg-background rounded-lg"
+                      className="pl-9 pr-9 h-9 w-full bg-background rounded-lg"
                     />
                     {searchQuery && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute right-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                        className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
                         onClick={() => setSearchQuery('')}
                       >
                         <X className="h-4 w-4" />
@@ -1417,13 +1417,13 @@ export default function ProjectDetail() {
                       placeholder="Search modules..."
                       value={moduleSearchQuery}
                       onChange={(e) => setModuleSearchQuery(e.target.value)}
-                      className="pl-9 h-9 w-full bg-background rounded-full md:rounded-lg"
+                      className="pl-9 pr-9 h-9 w-full bg-background rounded-full md:rounded-lg"
                     />
                     {moduleSearchQuery && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute right-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                        className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
                         onClick={() => setModuleSearchQuery('')}
                       >
                         <X className="h-4 w-4" />
@@ -1458,13 +1458,13 @@ export default function ProjectDetail() {
                       placeholder="Search milestones..."
                       value={milestoneSearchQuery}
                       onChange={(e) => setMilestoneSearchQuery(e.target.value)}
-                      className="pl-9 h-9 w-full bg-background rounded-lg"
+                      className="pl-9 pr-9 h-9 w-full bg-background rounded-lg"
                     />
                     {milestoneSearchQuery && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute right-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                        className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
                         onClick={() => setMilestoneSearchQuery('')}
                       >
                         <X className="h-4 w-4" />
@@ -1499,13 +1499,13 @@ export default function ProjectDetail() {
                       placeholder="Search issues..."
                       value={issueSearchQuery}
                       onChange={(e) => setIssueSearchQuery(e.target.value)}
-                      className="pl-9 h-9 w-full bg-background rounded-lg"
+                      className="pl-9 pr-9 h-9 w-full bg-background rounded-lg"
                     />
                     {issueSearchQuery && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="absolute right-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                        className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
                         onClick={() => setIssueSearchQuery('')}
                       >
                         <X className="h-4 w-4" />
