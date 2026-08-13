@@ -374,11 +374,13 @@ export function useUpdateModule(projectId: string) {
   return useMutation({
     mutationFn: ({ moduleId, updates }: { moduleId: string; updates: ModuleUpdate }) =>
       modulesService.update(moduleId, updates),
+    // No success toast: the module detail modal autosaves per field on
+    // blur/select-change, so a toast here would fire on every single field
+    // edit instead of once for the overall edit session.
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
       queryClient.invalidateQueries({ queryKey: queryKeys.modules.list(projectId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
-      toast.success('Module updated successfully');
     },
     onError: () => {
       toast.error('Failed to update module');
