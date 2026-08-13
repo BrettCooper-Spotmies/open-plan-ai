@@ -31,6 +31,7 @@ import {
   ReportFilter,
   getDateRangeFromTimeRange,
   getTaskStatusBreakdown,
+  getIssueStatusBreakdown,
   getMilestoneHealth,
   getTeamWorkload,
   getModuleProgress,
@@ -187,6 +188,7 @@ export default function Reports() {
 
   // ─── Chart data ───────────────────────────────────────────────────────────
   const statusBreakdown = useMemo(() => getTaskStatusBreakdown(filteredTasks), [filteredTasks]);
+  const issueStatusBreakdown = useMemo(() => getIssueStatusBreakdown(issues), [issues]);
   const milestoneHealth = useMemo(() => getMilestoneHealth(milestones, tasks), [milestones, tasks]);
   const teamWorkload = useMemo(() => getTeamWorkload(filteredTasks, allAdaptedTeamMembers, issues), [filteredTasks, allAdaptedTeamMembers, issues]);
   const moduleProgress = useMemo(() => getModuleProgress(tasks, modules), [tasks, modules]);
@@ -284,6 +286,7 @@ export default function Reports() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ReportTaskStatusChart
             data={statusBreakdown}
+            issueData={issueStatusBreakdown}
             onStatusClick={handleStatusClick}
           />
           <ReportMilestoneHealth
