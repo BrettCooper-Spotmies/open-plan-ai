@@ -81,7 +81,7 @@ export function ChatNotificationsProvider() {
         const activeId = store.activeConversationId;
         const isOwnMessage = (raw.senderId ?? raw.sender?.id) === user.id;
 
-        if (convId !== activeId) {
+        if (convId !== activeId && !isOwnMessage) {
           store.incrementUnread(convId);
         }
 
