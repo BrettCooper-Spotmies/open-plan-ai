@@ -1486,12 +1486,12 @@ export function IssueDetailContent({
 
                             <div className={cn(isMobileLayout && checklist.length > 0 && 'border rounded-xl divide-y')}>
                             {checklist.map((item) => (
-                                <div key={item.id} className={cn('flex items-center gap-3 group', isMobileLayout && 'px-3 py-2.5')}>
+                                <div key={item.id} className={cn('flex items-start gap-3 group', isMobileLayout && 'px-3 py-2.5')}>
                                     <Checkbox
                                         checked={item.completed}
                                         onCheckedChange={() => handleToggleChecklistItem(item.id)}
                                         disabled={isMobileFieldsLocked}
-                                        className={cn(isMobileLayout && 'h-5 w-5 rounded-md data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 disabled:opacity-100 disabled:cursor-default')}
+                                        className={cn('mt-0.5', isMobileLayout && 'h-5 w-5 rounded-md data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 disabled:opacity-100 disabled:cursor-default')}
                                     />
                                     {editingChecklistId === item.id ? (
                                         <div className="flex-1 flex items-center gap-2">
@@ -1514,11 +1514,11 @@ export function IssueDetailContent({
                                         </div>
                                     ) : (
                                         <>
-                                            <span className={cn('flex-1 text-sm', item.completed && 'line-through text-muted-foreground')}>
+                                            <span className={cn('flex-1 text-sm pt-0.5', item.completed && 'line-through text-muted-foreground')}>
                                                 {item.text}
                                             </span>
                                             {!isMobileFieldsLocked && (
-                                            <div className={cn('flex items-center gap-1', isMobileLayout ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
+                                            <div className={cn('flex items-center gap-1 mt-0.5', isMobileLayout ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}>
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
