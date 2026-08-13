@@ -228,10 +228,6 @@ export default function Reports() {
     setFilter(prev => ({ ...prev, assigneeIds: [memberId] }));
   }, []);
 
-  const handleModuleClick = useCallback((moduleId: string) => {
-    setFilter(prev => ({ ...prev, moduleIds: [moduleId] }));
-  }, []);
-
   const handleIssueClick = useCallback((issueId: string) => {
     const issue = allIssues.find(i => i.id === issueId);
     if (issue?.projectId) navigate(`/projects/${issue.projectId}/issues/${issueId}`);
@@ -299,7 +295,6 @@ export default function Reports() {
           />
           <ReportModuleProgress
             data={moduleProgress}
-            onModuleClick={handleModuleClick}
           />
         </div>
 
