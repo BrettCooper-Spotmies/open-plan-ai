@@ -137,7 +137,13 @@ export function useCreateIssue(projectId: string) {
       queryClient.setQueryData(queryKeys.projects.detail(projectId), (old: any) =>
         old ? { ...old, issues: [...(old.issues || []), createdIssue] } : old
       );
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root });
+      // refetchType: 'none' — the detail cache above is already patched with the
+      // new issue, so an immediate refetch here only serves other (unmounted)
+      // consumers of queryKeys.projects.root. Forcing it right away would abort
+      // the project-detail query's in-flight combined fetch (see useProjectDetail.ts),
+      // which shares one AbortSignal across its tasks/milestones/issues sub-requests
+      // and shows up in devtools as those requests being cancelled and re-fired.
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.root, refetchType: 'none' });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.myDay.all });
