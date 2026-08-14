@@ -20,6 +20,20 @@ export interface ToolStatusEntry {
   done: boolean;
 }
 
+// Detects the backend's message-length / request-size validation failures so
+// sendMessageMutation can explain itself inline in the transcript instead of
+// a generic toast — see ai-conversations.validator.ts (message capped at 8000
+// chars, UNPROCESSABLE) and server.ts's 10mb JSON body limit (PAYLOAD_TOO_LARGE).
+export function isMessageTooLargeError(error: unknown): boolean {
+  const err = error as { response?: { status?: number }; message?: string };
+  if (err?.response?.status === 413) return true;
+  if (err?.response?.status === 422 && /character/i.test(err?.message ?? '')) return true;
+  return false;
+}
+
+export const MESSAGE_TOO_LARGE_NOTICE =
+  "That message is too long for me to process in one go. Try summarizing it or breaking it into smaller messages, then send it again.";
+
 /**
  * Owns everything needed to render one active conversation: the persisted
  * detail (React Query), plus live streaming state fed by the socket
@@ -41,6 +55,11 @@ export function useAssistantConversation(conversationId: string | null) {
   const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
   const [optimisticAttachments, setOptimisticAttachments] = useState<AiMessageAttachment[] | null>(null);
   const sentMessageCountRef = useRef(0);
+  // Rendered as a synthetic assistant bubble at the tail of the transcript
+  // when a send fails specifically because the message/body was too large —
+  // see isMessageTooLargeError above. Never persisted; cleared on the next
+  // send attempt or conversation switch.
+  const [sendFailureNotice, setSendFailureNotice] = useState<string | null>(null);
   // An edit in flight — shown immediately by truncating the displayed path
   // right after the edited message and swapping in the new text, dropping
   // everything downstream (the old branch), same "show it now, clear once
@@ -109,6 +128,7 @@ export function useAssistantConversation(conversationId: string | null) {
     setOptimisticAttachments(null);
     setEditingMessage(null);
     setBranchOverrides({});
+    setSendFailureNotice(null);
     stoppedRef.current = false;
 
     const unsubs = [
@@ -183,6 +203,7 @@ export function useAssistantConversation(conversationId: string | null) {
       sentMessageCountRef.current = query.data?.messages.length ?? 0;
       setOptimisticMessage(message);
       setOptimisticAttachments(attachments?.length ? attachments : null);
+      setSendFailureNotice(null);
       touchConversationInList();
     },
     onSuccess: () => {
@@ -194,10 +215,14 @@ export function useAssistantConversation(conversationId: string | null) {
       setLiveCard(null);
       invalidate();
     },
-    onError: () => {
+    onError: (error) => {
       setOptimisticMessage(null);
       setOptimisticAttachments(null);
-      toast.error("Couldn't send that message — try again.");
+      if (isMessageTooLargeError(error)) {
+        setSendFailureNotice(MESSAGE_TOO_LARGE_NOTICE);
+      } else {
+        toast.error("Couldn't send that message — try again.");
+      }
     },
   });
 
@@ -244,16 +269,24 @@ export function useAssistantConversation(conversationId: string | null) {
     onError: () => toast.error("Couldn't stop that — it may finish on its own shortly."),
   });
 
-  const stopStreaming = useCallback(() => {
+  const stopStreaming = useCallback(async () => {
     if (!conversationId) return;
-    // Flip the UI immediately rather than waiting on the round-trip — the
-    // request to actually cancel the backend turn (and drop the partial
-    // answer it persists) still goes out via stopTurnMutation.
+    // Flip the UI immediately rather than waiting on the round-trip — but
+    // still await the request itself (mutateAsync, not mutate) so callers
+    // that need to send a follow-up right after stopping can be sure the
+    // backend has actually registered the cancellation first. Without that,
+    // the new turn's worker could call registerTurn() before this stop
+    // request lands, and aiAbortRegistry (keyed by conversationId) would end
+    // up cancelling the *new* turn instead of the one being replaced.
     stoppedRef.current = true;
     setIsStreaming(false);
     setStreamingText('');
     setToolStatus([]);
-    stopTurnMutation.mutate();
+    try {
+      await stopTurnMutation.mutateAsync();
+    } catch {
+      // onError above already surfaced a toast — nothing further to do.
+    }
   }, [conversationId, stopTurnMutation]);
 
   const pendingQuestions = liveQuestion ?? query.data?.pendingQuestions ?? null;
@@ -291,6 +324,20 @@ export function useAssistantConversation(conversationId: string | null) {
         : [...activePath.slice(0, idx), { ...activePath[idx], content: editingMessage.content }];
   } else {
     messages = activePath;
+  }
+
+  if (sendFailureNotice) {
+    const tip = messages[messages.length - 1];
+    messages = [
+      ...messages,
+      {
+        id: 'send-failure-notice',
+        parentId: tip?.id ?? null,
+        role: 'assistant',
+        content: sendFailureNotice,
+        createdAt: new Date().toISOString(),
+      },
+    ];
   }
 
   return {

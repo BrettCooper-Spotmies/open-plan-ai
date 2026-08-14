@@ -5,6 +5,7 @@ import { AssistantConversationList } from './components/AssistantConversationLis
 import { AssistantPanel } from './components/AssistantPanel';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { useAssistantDraftStore } from './stores/useAssistantDraftStore';
 
 // `100vh`/`h-full` don't shrink when the on-screen keyboard opens on mobile,
 // so the composer (a plain flex child) ends up positioned below the visible
@@ -40,11 +41,20 @@ export default function Assistant() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const keyboardAwareHeight = useKeyboardAwareHeight(isMobile);
+  const setLastActiveConversationId = useAssistantDraftStore((s) => s.setLastActiveConversationId);
 
   useEffect(() => {
     document.title = 'Assistant | Open Plan AI';
     return () => { document.title = 'Open Plan AI'; };
   }, []);
+
+  // Remembers whichever thread is open so that navigating away to another
+  // tab and back (via the sidebar/bottom-nav "Assistant" link, which always
+  // points at the bare /assistant path) returns here instead of dropping
+  // back to a blank composer.
+  useEffect(() => {
+    if (activeId) setLastActiveConversationId(activeId);
+  }, [activeId, setLastActiveConversationId]);
 
   // Each selection pushes its own history entry (rather than replacing), so
   // clicking through several past conversations and then hitting the
@@ -56,9 +66,12 @@ export default function Assistant() {
   }, [navigate]);
 
   const handleNewConversation = useCallback(() => {
+    // Explicit intent to start fresh — don't let the nav-restore effect above
+    // bounce a later visit to the Assistant tab back to the old thread.
+    setLastActiveConversationId(null);
     navigate('/assistant');
     setDrawerOpen(false);
-  }, [navigate]);
+  }, [navigate, setLastActiveConversationId]);
 
   // The very first message of a brand-new conversation creates it server-side
   // before any id exists; once that resolves, reflect it in the URL so a

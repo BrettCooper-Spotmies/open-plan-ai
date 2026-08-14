@@ -20,8 +20,9 @@ import {
   type AssistantFocusEntity,
   type AiMessageAttachment,
 } from '../assistantData';
-import { useAssistantConversation } from '../hooks/useAssistantConversation';
+import { isMessageTooLargeError, MESSAGE_TOO_LARGE_NOTICE, useAssistantConversation } from '../hooks/useAssistantConversation';
 import { useCreateAssistantConversation } from '../hooks/useAssistantConversations';
+import { EMPTY_ASSISTANT_DRAFT, EMPTY_ASSISTANT_FILES, useAssistantDraftStore } from '../stores/useAssistantDraftStore';
 
 interface AssistantPanelProps {
   variant?: 'page' | 'widget';
@@ -40,11 +41,20 @@ export function AssistantPanel({
   const { currentOrganization } = useOrganization();
   const { data: projects = [], isLoading: projectsLoading } = useProjects();
 
-  const [value, setValue] = useState('');
-  const [files, setFiles] = useState<File[]>([]);
-  const [scope, setScope] = useState<AssistantScope>('All projects');
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [focusEntities, setFocusEntities] = useState<AssistantFocusEntity[]>([]);
+  // Keyed by conversation so each thread (and the blank "new chat" composer,
+  // key 'new') keeps its own draft in a store that outlives this component —
+  // AssistantPanel remounts on every route navigation and widget close/reopen.
+  const draftKey = conversationId ?? 'new';
+  const draft = useAssistantDraftStore((s) => s.drafts[draftKey]) ?? EMPTY_ASSISTANT_DRAFT;
+  const files = useAssistantDraftStore((s) => s.files[draftKey]) ?? EMPTY_ASSISTANT_FILES;
+  const setDraft = useAssistantDraftStore((s) => s.setDraft);
+  const clearDraft = useAssistantDraftStore((s) => s.clearDraft);
+  const setDraftFiles = useAssistantDraftStore((s) => s.setFiles);
+  const { value, scope, selectedProjectId, focusEntities } = draft;
+  const setValue = (next: string) => setDraft(draftKey, { value: next });
+  const setScope = (next: AssistantScope) => setDraft(draftKey, { scope: next });
+  const setSelectedProjectId = (next: string | null) => setDraft(draftKey, { selectedProjectId: next });
+  const setFocusEntities = (next: AssistantFocusEntity[]) => setDraft(draftKey, { focusEntities: next });
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
@@ -87,15 +97,6 @@ export function AssistantPanel({
   const visibleCategories = ASSISTANT_CATEGORIES.filter((category) => !category.hidden);
   const askSuggestions = useMemo(() => buildAskSuggestions(projects), [projects]);
 
-  // Clear the composer whenever the active conversation identity changes
-  // (new conversation, or switching to a different past one from the
-  // sidebar) — deliberately not tied to a remount/key so the in-flight
-  // "just submitted" optimistic state below survives create → activate.
-  useEffect(() => {
-    setValue('');
-    setFiles([]);
-  }, [conversationId]);
-
   useEffect(() => {
     if (isStreaming) setJustSubmitted(false);
   }, [isStreaming]);
@@ -105,6 +106,15 @@ export function AssistantPanel({
     // The box can be sent with only attachments — give the transcript/model
     // something readable rather than an empty user turn.
     const effectiveMessage = value.trim() || 'Please review the attached file(s).';
+
+    // Typing is always allowed, even mid-response, but sending while a turn
+    // is still active must stop that turn first — await it so the backend
+    // has actually cancelled the old turn before the new one is enqueued
+    // (see stopStreaming's comment for why order matters here).
+    if (conversationId && effectivelyStreaming) {
+      setJustSubmitted(false);
+      await stopStreaming();
+    }
 
     let attachments: AiMessageAttachment[] | undefined;
     if (files.length > 0) {
@@ -125,8 +135,7 @@ export function AssistantPanel({
     if (conversationId) {
       setJustSubmitted(true);
       sendMessage(effectiveMessage, attachments);
-      setValue('');
-      setFiles([]);
+      clearDraft(draftKey);
       return;
     }
 
@@ -153,17 +162,19 @@ export function AssistantPanel({
       },
       {
         onSuccess: (created) => onConversationCreated(created.id),
-        onError: () => {
+        onError: (error) => {
           setJustSubmitted(false);
           setPendingFirstMessage(null);
           setPendingFirstAttachments(null);
-          toast.error("Couldn't start that conversation — try again.");
+          // No conversation/transcript exists yet to show an inline notice in
+          // (see useAssistantConversation's sendFailureNotice for the
+          // in-conversation equivalent) — a toast is the best we can do here.
+          toast.error(isMessageTooLargeError(error) ? MESSAGE_TOO_LARGE_NOTICE : "Couldn't start that conversation — try again.");
         },
       },
     );
 
-    setValue('');
-    setFiles([]);
+    clearDraft(draftKey);
   };
 
   const handleStop = () => {
@@ -177,18 +188,17 @@ export function AssistantPanel({
   };
 
   const handleFilesAdd = (added: File[]) => {
-    setFiles((prev) => {
-      const combined = [...prev, ...added];
-      if (combined.length > ASSISTANT_MAX_ATTACHMENTS) {
-        toast.warning(`Only ${ASSISTANT_MAX_ATTACHMENTS} files allowed. Extra file(s) were skipped.`);
-        return combined.slice(0, ASSISTANT_MAX_ATTACHMENTS);
-      }
-      return combined;
-    });
+    const combined = [...files, ...added];
+    if (combined.length > ASSISTANT_MAX_ATTACHMENTS) {
+      toast.warning(`Only ${ASSISTANT_MAX_ATTACHMENTS} files allowed. Extra file(s) were skipped.`);
+      setDraftFiles(draftKey, combined.slice(0, ASSISTANT_MAX_ATTACHMENTS));
+      return;
+    }
+    setDraftFiles(draftKey, combined);
   };
 
   const handleFileRemove = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+    setDraftFiles(draftKey, files.filter((_, i) => i !== index));
   };
 
   // dragenter/dragleave fire for every child element the pointer crosses, so
@@ -227,6 +237,12 @@ export function AssistantPanel({
 
   const effectivelyStreaming = isStreaming || justSubmitted;
   const isBusy = createConversation.isPending || effectivelyStreaming || isUploading;
+  // Deliberately excludes effectivelyStreaming — typing (and dictating) the
+  // next message must stay possible while a turn is still streaming, so the
+  // composer's text input isn't blocked by it. Sending while streaming is
+  // still handled (stop-then-send in handleSend); this only governs the
+  // input field itself and only blocks it for states with no fallback path.
+  const isComposerInputDisabled = createConversation.isPending || isUploading;
   // Stop only ever targets an existing conversation's turn — the brief
   // window while the very first message is still creating the conversation
   // has no backend job to cancel yet.
@@ -360,7 +376,7 @@ export function AssistantPanel({
             focusEntities={focusEntities}
             onFocusEntitiesChange={setFocusEntities}
             onSend={handleSend}
-            disabled={isBusy}
+            disabled={isComposerInputDisabled}
             isGenerating={canStop}
             onStop={handleStop}
           />

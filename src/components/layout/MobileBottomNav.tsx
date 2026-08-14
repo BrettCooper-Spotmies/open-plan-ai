@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAssistantDraftStore } from '@/features/assistant/stores/useAssistantDraftStore';
 
 interface NavItem {
   title: string;
@@ -44,6 +45,15 @@ export function MobileBottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const visibleMoreNavItems = moreNavItems;
+  const lastAssistantConversationId = useAssistantDraftStore((s) => s.lastActiveConversationId);
+
+  // Tapping "Assistant" always used to reset to a blank composer, even if a
+  // thread was already open before navigating elsewhere — send it back to
+  // that thread instead, mirroring ChatGPT's persistent nav behavior.
+  const navDestination = (item: NavItem) =>
+    item.url === '/assistant' && lastAssistantConversationId
+      ? `/assistant/${lastAssistantConversationId}`
+      : item.url;
 
   const isActive = (path: string) => {
     if (path === '/') {
@@ -123,7 +133,7 @@ export function MobileBottomNav() {
             return (
               <button
                 key={item.url}
-                onClick={() => handleNavClick(item.url)}
+                onClick={() => handleNavClick(navDestination(item))}
                 className={cn(
                   'flex flex-col items-center gap-1.5 p-3 rounded-xl transition-all duration-150',
                   active
