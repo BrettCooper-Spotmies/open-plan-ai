@@ -397,7 +397,7 @@ export function MyDayListView({
                       </TooltipContent>
                     </Tooltip>
                     {task.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                      <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5 break-all">
                         {task.description}
                       </p>
                     )}
