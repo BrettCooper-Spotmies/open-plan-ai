@@ -38,6 +38,13 @@ interface AssistantDraftState {
   lastActiveConversationId: string | null;
   setDraft: (key: string, patch: Partial<AssistantDraft>) => void;
   clearDraft: (key: string) => void;
+  // Clears only the sent message (text/focus/files) once it's on its way,
+  // leaving scope/selectedProjectId in place — see AssistantPanel.handleSend.
+  clearDraftMessage: (key: string) => void;
+  // Scope/project picks are meant to survive within a single Assistant visit
+  // (e.g. surviving a send) but not outlive it — called when the Assistant
+  // route unmounts so returning later starts back at "All projects".
+  resetAllScopes: () => void;
   setFiles: (key: string, files: File[]) => void;
   setLastActiveConversationId: (id: string | null) => void;
 }
@@ -65,6 +72,27 @@ export const useAssistantDraftStore = create<AssistantDraftState>()(
           delete restFiles[key];
           return { drafts: rest, files: restFiles };
         }),
+
+      clearDraftMessage: (key) =>
+        set((state) => {
+          const existing = state.drafts[key] ?? EMPTY_ASSISTANT_DRAFT;
+          const restFiles = { ...state.files };
+          delete restFiles[key];
+          return {
+            drafts: { ...state.drafts, [key]: { ...existing, value: '', focusEntities: [] } },
+            files: restFiles,
+          };
+        }),
+
+      resetAllScopes: () =>
+        set((state) => ({
+          drafts: Object.fromEntries(
+            Object.entries(state.drafts).map(([key, draft]) => [
+              key,
+              { ...draft, scope: EMPTY_ASSISTANT_DRAFT.scope, selectedProjectId: EMPTY_ASSISTANT_DRAFT.selectedProjectId },
+            ]),
+          ),
+        })),
 
       setFiles: (key, files) =>
         set((state) => ({ files: { ...state.files, [key]: files } })),

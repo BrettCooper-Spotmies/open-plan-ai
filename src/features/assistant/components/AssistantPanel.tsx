@@ -49,6 +49,7 @@ export function AssistantPanel({
   const files = useAssistantDraftStore((s) => s.files[draftKey]) ?? EMPTY_ASSISTANT_FILES;
   const setDraft = useAssistantDraftStore((s) => s.setDraft);
   const clearDraft = useAssistantDraftStore((s) => s.clearDraft);
+  const clearDraftMessage = useAssistantDraftStore((s) => s.clearDraftMessage);
   const setDraftFiles = useAssistantDraftStore((s) => s.setFiles);
   const { value, scope, selectedProjectId, focusEntities } = draft;
   const setValue = (next: string) => setDraft(draftKey, { value: next });
@@ -74,6 +75,7 @@ export function AssistantPanel({
     answerQuestion,
     stopStreaming,
     isAnswering,
+    isSending,
   } = useAssistantConversation(conversationId);
   const createConversation = useCreateAssistantConversation();
   // Covers only the very first message of a brand-new conversation: sent
@@ -98,8 +100,15 @@ export function AssistantPanel({
   const askSuggestions = useMemo(() => buildAskSuggestions(projects), [projects]);
 
   useEffect(() => {
-    if (isStreaming) setJustSubmitted(false);
-  }, [isStreaming]);
+    // isStreaming flipping true is the normal path (a successful send started
+    // a turn). But sendMessageMutation settling back to !isSending WITHOUT
+    // isStreaming ever turning true means the send itself failed (e.g. the
+    // message was rejected as too long) — without this, justSubmitted was
+    // left stuck true forever, pinning effectivelyStreaming true and leaving
+    // the composer showing a permanent Stop button over a turn that was
+    // never actually started.
+    if (isStreaming || !isSending) setJustSubmitted(false);
+  }, [isStreaming, isSending]);
 
   const handleSend = async () => {
     if (!value.trim() && files.length === 0) return;
@@ -135,7 +144,7 @@ export function AssistantPanel({
     if (conversationId) {
       setJustSubmitted(true);
       sendMessage(effectiveMessage, attachments);
-      clearDraft(draftKey);
+      clearDraftMessage(draftKey);
       return;
     }
 
@@ -161,7 +170,13 @@ export function AssistantPanel({
         attachments,
       },
       {
-        onSuccess: (created) => onConversationCreated(created.id),
+        // Carries the picked scope/project over to the new conversation's own
+        // draft key so the composer keeps showing it instead of snapping back
+        // to "All projects" once the URL/draftKey switches post-creation.
+        onSuccess: (created) => {
+          setDraft(created.id, { scope, selectedProjectId });
+          onConversationCreated(created.id);
+        },
         onError: (error) => {
           setJustSubmitted(false);
           setPendingFirstMessage(null);

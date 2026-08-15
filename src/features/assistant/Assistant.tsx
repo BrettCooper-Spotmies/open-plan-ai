@@ -42,11 +42,20 @@ export default function Assistant() {
   const navigate = useNavigate();
   const keyboardAwareHeight = useKeyboardAwareHeight(isMobile);
   const setLastActiveConversationId = useAssistantDraftStore((s) => s.setLastActiveConversationId);
+  const resetAllScopes = useAssistantDraftStore((s) => s.resetAllScopes);
 
   useEffect(() => {
     document.title = 'Assistant | Open Plan AI';
     return () => { document.title = 'Open Plan AI'; };
   }, []);
+
+  // Scope/project picks should survive within a visit (including across a
+  // send — see AssistantPanel.handleSend) but not persist beyond it, so
+  // leaving the Assistant page entirely resets the composer back to "All
+  // projects" for next time.
+  useEffect(() => {
+    return () => resetAllScopes();
+  }, [resetAllScopes]);
 
   // Remembers whichever thread is open so that navigating away to another
   // tab and back (via the sidebar/bottom-nav "Assistant" link, which always

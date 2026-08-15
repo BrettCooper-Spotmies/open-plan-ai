@@ -21,9 +21,10 @@ export interface ToolStatusEntry {
 }
 
 // Detects the backend's message-length / request-size validation failures so
-// sendMessageMutation can explain itself inline in the transcript instead of
-// a generic toast — see ai-conversations.validator.ts (message capped at 8000
-// chars, UNPROCESSABLE) and server.ts's 10mb JSON body limit (PAYLOAD_TOO_LARGE).
+// send failures can surface a specific, actionable toast instead of the
+// generic "try again" one — see ai-conversations.validator.ts (message capped
+// at 8000 chars, UNPROCESSABLE) and server.ts's 10mb JSON body limit
+// (PAYLOAD_TOO_LARGE).
 export function isMessageTooLargeError(error: unknown): boolean {
   const err = error as { response?: { status?: number }; message?: string };
   if (err?.response?.status === 413) return true;
@@ -55,11 +56,6 @@ export function useAssistantConversation(conversationId: string | null) {
   const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
   const [optimisticAttachments, setOptimisticAttachments] = useState<AiMessageAttachment[] | null>(null);
   const sentMessageCountRef = useRef(0);
-  // Rendered as a synthetic assistant bubble at the tail of the transcript
-  // when a send fails specifically because the message/body was too large —
-  // see isMessageTooLargeError above. Never persisted; cleared on the next
-  // send attempt or conversation switch.
-  const [sendFailureNotice, setSendFailureNotice] = useState<string | null>(null);
   // An edit in flight — shown immediately by truncating the displayed path
   // right after the edited message and swapping in the new text, dropping
   // everything downstream (the old branch), same "show it now, clear once
@@ -128,7 +124,6 @@ export function useAssistantConversation(conversationId: string | null) {
     setOptimisticAttachments(null);
     setEditingMessage(null);
     setBranchOverrides({});
-    setSendFailureNotice(null);
     stoppedRef.current = false;
 
     const unsubs = [
@@ -203,7 +198,6 @@ export function useAssistantConversation(conversationId: string | null) {
       sentMessageCountRef.current = query.data?.messages.length ?? 0;
       setOptimisticMessage(message);
       setOptimisticAttachments(attachments?.length ? attachments : null);
-      setSendFailureNotice(null);
       touchConversationInList();
     },
     onSuccess: () => {
@@ -218,11 +212,7 @@ export function useAssistantConversation(conversationId: string | null) {
     onError: (error) => {
       setOptimisticMessage(null);
       setOptimisticAttachments(null);
-      if (isMessageTooLargeError(error)) {
-        setSendFailureNotice(MESSAGE_TOO_LARGE_NOTICE);
-      } else {
-        toast.error("Couldn't send that message — try again.");
-      }
+      toast.error(isMessageTooLargeError(error) ? MESSAGE_TOO_LARGE_NOTICE : "Couldn't send that message — try again.");
     },
   });
 
@@ -324,20 +314,6 @@ export function useAssistantConversation(conversationId: string | null) {
         : [...activePath.slice(0, idx), { ...activePath[idx], content: editingMessage.content }];
   } else {
     messages = activePath;
-  }
-
-  if (sendFailureNotice) {
-    const tip = messages[messages.length - 1];
-    messages = [
-      ...messages,
-      {
-        id: 'send-failure-notice',
-        parentId: tip?.id ?? null,
-        role: 'assistant',
-        content: sendFailureNotice,
-        createdAt: new Date().toISOString(),
-      },
-    ];
   }
 
   return {
