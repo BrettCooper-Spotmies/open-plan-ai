@@ -4,6 +4,7 @@ import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
   CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check, Download, ExternalLink,
   FileSpreadsheet, PenLine, Trash2, Eye,
+  Sheet as SheetIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -77,6 +78,9 @@ import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMRejectDialog } from './BOMRejectDialog';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
+import BOMGoogleSheetsLinkDialog from './BOMGoogleSheetsLinkDialog';
+import BOMGoogleSheetsPullDialog from './BOMGoogleSheetsPullDialog';
+import { useGoogleSheetsLinkStatus } from '@/hooks/useGoogleSheets';
 import { useCurrency } from '@/hooks/useCurrency';
 
 // ── Skeletons ──────────────────────────────────────────────────────
@@ -934,6 +938,12 @@ export function BOMView({
   const [addChoiceOpen, setAddChoiceOpen] = useState(false);
   const [addManualOpen, setAddManualOpen] = useState(false);
   const [addImportOpen, setAddImportOpen] = useState(false);
+  // Google Sheets entry in the Add Part chooser below — reads link status so
+  // the card only shows once the org has connected from Integrations, and
+  // routes to Link (if not yet linked) or straight to Pull (if already linked).
+  const { data: sheetsLinkStatus } = useGoogleSheetsLinkStatus(projectId);
+  const [sheetsLinkOpen, setSheetsLinkOpen] = useState(false);
+  const [sheetsPullOpen, setSheetsPullOpen] = useState(false);
   const [addSubNode, setAddSubNode] = useState<BOMNode | null>(null);
   const [createSubNode, setCreateSubNode] = useState<BOMNode | null>(null);
   const [importSubNode, setImportSubNode] = useState<BOMNode | null>(null);
@@ -1562,6 +1572,32 @@ export function BOMView({
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
             </button>
+            {/* Only shown once Google Sheets is connected from Integrations —
+                routes to linking a sheet first, or straight to Pull if this
+                project already has one linked. */}
+            {sheetsLinkStatus?.orgConnected && (
+              <button
+                onClick={() => {
+                  setAddChoiceOpen(false);
+                  if (sheetsLinkStatus.linked) setSheetsPullOpen(true);
+                  else setSheetsLinkOpen(true);
+                }}
+                className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-foreground/20 transition-colors text-left group"
+              >
+                <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-blue-500/10 text-blue-600">
+                  <SheetIcon className="w-4 h-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-foreground">Import from Google Sheets</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {sheetsLinkStatus.linked
+                      ? 'Pull parts from your linked spreadsheet.'
+                      : 'Link a spreadsheet, then pull parts from it.'}
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+              </button>
+            )}
           </div>
           <div className="px-4 pb-4 flex justify-end">
             <Button variant="outline" size="sm" onClick={() => { setAddChoiceOpen(false); onAddClose?.(); }}>Cancel</Button>
@@ -1588,6 +1624,19 @@ export function BOMView({
           orgId={orgId}
         />
       )}
+
+      {/* Add Part — import from Google Sheets (top-level, no parent) */}
+      <BOMGoogleSheetsLinkDialog
+        open={sheetsLinkOpen}
+        onClose={() => { setSheetsLinkOpen(false); onAddClose?.(); }}
+        projectId={projectId}
+        linkStatus={sheetsLinkStatus}
+      />
+      <BOMGoogleSheetsPullDialog
+        open={sheetsPullOpen}
+        onClose={() => { setSheetsPullOpen(false); onAddClose?.(); }}
+        projectId={projectId}
+      />
 
       {/* Add Sub-component dialog (from list row "+" action) */}
       {addSubNode && (
@@ -1640,6 +1689,7 @@ export function BOMView({
         confirmText={deleteTarget && bomFlatAll(deleteTarget.children ?? []).length > 0 ? 'Delete All' : 'Delete Part'}
         {...(deleteTarget ? describeDeleteImpact(deleteTarget) : { title: '', description: '' })}
       />
+
     </div>
   );
 }
