@@ -15,7 +15,12 @@ import type { OrgReviewBlock } from "../orgReview";
  * state only an operator can change. Hence a manual button.
  */
 
-const SUPPORT_EMAIL = "support@openplanai.com";
+/**
+ * Opened in a new tab rather than navigated to: the applicant is mid-flow on the
+ * login/verify card, and replacing it would lose the email they just typed and the
+ * explanation they are reading.
+ */
+const SUPPORT_URL = "https://www.openplanai.com/contact";
 
 interface OrgReviewNoticeProps {
   review: OrgReviewBlock;
@@ -83,11 +88,7 @@ export function OrgReviewNotice({ review, onRetry, retrying }: OrgReviewNoticePr
           </Button>
         )}
         <Button variant="ghost" className="w-full" asChild>
-          <a
-            href={`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(
-              review.orgName ? `Registration for ${review.orgName}` : "Registration review",
-            )}`}
-          >
+          <a href={SUPPORT_URL} target="_blank" rel="noopener noreferrer">
             <LifeBuoy className="mr-2 h-4 w-4" />
             Contact support
           </a>
