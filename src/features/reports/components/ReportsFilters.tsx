@@ -60,6 +60,7 @@ export function ReportsFilters({
   const isMobile = useIsMobile();
   const [showCustomDate, setShowCustomDate] = useState(filter.timeRange === 'custom');
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
+  const [customDateOpen, setCustomDateOpen] = useState(false);
 
   useEffect(() => {
     setShowCustomDate(filter.timeRange === 'custom');
@@ -76,6 +77,11 @@ export function ReportsFilters({
 
   const handleTimeRangeChange = (value: ReportTimeRange) => {
     setShowCustomDate(value === 'custom');
+    if (value === 'custom') {
+      // Open the picker right away so the user isn't left staring at a
+      // "Select dates" button with no indication a range is needed.
+      setCustomDateOpen(true);
+    }
     onFilterChange({ ...filter, timeRange: value });
   };
 
@@ -350,7 +356,7 @@ export function ReportsFilters({
 
         {/* Custom Date Range */}
         {showCustomDate && (
-          <Popover>
+          <Popover open={customDateOpen} onOpenChange={setCustomDateOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm">
                 {dateRange.from && dateRange.to
@@ -373,6 +379,7 @@ export function ReportsFilters({
                         end: format(range.to, 'yyyy-MM-dd'),
                       },
                     });
+                    setCustomDateOpen(false);
                   }
                 }}
                 numberOfMonths={isMobile ? 1 : 2}
