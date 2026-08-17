@@ -55,6 +55,7 @@ export function ConversationList({
   const handleSelectQuickView = (view: QuickView) => {
     if (view === 'saved') {
       // Saved messages are their own panel (wired up by the parent), not a filter over this list.
+      setActiveQuickView(null);
       onShowSaved?.();
       return;
     }
