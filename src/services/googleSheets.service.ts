@@ -103,6 +103,7 @@ export interface ImportRowPreview {
   leadTimeRaw: string | null;
   leadTimeDays: number | null;
   leadTimeAmbiguous: boolean;
+  leadTimeRequired: boolean;
   changes: ExportFieldChange[];
 }
 
@@ -116,7 +117,7 @@ export interface ImportPreview {
 
 export interface ImportRowResolution {
   rowIndex: number;
-  resolvedRequiredFields?: Partial<Record<'Part Number' | 'Part Name' | 'Description' | 'Category' | 'Quantity', string>>;
+  resolvedRequiredFields?: Partial<Record<'Part Number' | 'Part Name' | 'Description' | 'Category' | 'Manufacturer' | 'MPN' | 'Supplier' | 'Unit Price' | 'Quantity', string>>;
   resolvedLeadTimeDays?: number;
 }
 

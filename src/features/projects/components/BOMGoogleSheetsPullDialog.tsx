@@ -36,7 +36,13 @@ interface Props {
 
 type LeadTimeUnit = 'days' | 'weeks' | 'months';
 const UNIT_MULTIPLIER: Record<LeadTimeUnit, number> = { days: 1, weeks: 7, months: 30 };
-const REQUIRED_FIELD_ORDER = ['Part Number', 'Part Name', 'Description', 'Category', 'Quantity'] as const;
+// Mirrors BOMPartSheet's required-field set for a brand-new part — Owner
+// ("Handled By") is deliberately excluded: it's never asked here, the
+// importing user is always set as owner automatically (see commitImport).
+// Supplier/Unit Price only ever appear in missingRequiredFields for
+// brand-new parts (see the backend's NEW_PART_REQUIRED_FIELDS) — an existing
+// part being merely updated on some other column isn't forced to gain them.
+const REQUIRED_FIELD_ORDER = ['Part Number', 'Part Name', 'Description', 'Category', 'Manufacturer', 'MPN', 'Supplier', 'Unit Price', 'Quantity'] as const;
 
 export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: Props) {
   const preview = useGoogleSheetsImportPreview(projectId);
@@ -44,6 +50,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
 
   const [fieldEdits, setFieldEdits] = useState<Record<number, Record<string, string>>>({});
   const [unitEdits, setUnitEdits] = useState<Record<number, LeadTimeUnit>>({});
+  const [leadTimeValueEdits, setLeadTimeValueEdits] = useState<Record<number, string>>({});
   const [bulkUnit, setBulkUnit] = useState<LeadTimeUnit | ''>('');
   const [skippedRows, setSkippedRows] = useState<Set<number>>(new Set());
   const [result, setResult] = useState<ImportCommitResult | null>(null);
@@ -52,6 +59,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
     if (open) {
       setFieldEdits({});
       setUnitEdits({});
+      setLeadTimeValueEdits({});
       setBulkUnit('');
       setSkippedRows(new Set());
       setResult(null);
@@ -76,7 +84,10 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
   const isRowFullyResolved = (row: ImportRowPreview): boolean => {
     if (skippedRows.has(row.rowIndex)) return true;
     if (row.status === 'needs-input') {
-      return row.missingRequiredFields.every((f) => resolvedFieldValue(row, f).trim() !== '');
+      const fieldsOk = row.missingRequiredFields.every((f) => resolvedFieldValue(row, f).trim() !== '');
+      const leadTimeOk = !row.leadTimeRequired
+        || (!!unitEdits[row.rowIndex] && (leadTimeValueEdits[row.rowIndex] ?? '').trim() !== '');
+      return fieldsOk && leadTimeOk;
     }
     if (row.status === 'ambiguous-unit') {
       return !!unitEdits[row.rowIndex];
@@ -117,7 +128,12 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
           resolution.resolvedRequiredFields = resolved as ImportRowResolution['resolvedRequiredFields'];
         }
         const unit = unitEdits[row.rowIndex];
-        if (unit && row.leadTimeRaw) {
+        if (row.leadTimeRequired) {
+          const value = leadTimeValueEdits[row.rowIndex];
+          if (unit && value) {
+            resolution.resolvedLeadTimeDays = Number(value) * UNIT_MULTIPLIER[unit];
+          }
+        } else if (unit && row.leadTimeRaw) {
           resolution.resolvedLeadTimeDays = Number(row.leadTimeRaw) * UNIT_MULTIPLIER[unit];
         }
         return resolution;
@@ -250,25 +266,58 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                           {skipped ? (
                             <p className="text-xs text-muted-foreground italic">Won't be imported.</p>
                           ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {REQUIRED_FIELD_ORDER.filter((f) => row.missingRequiredFields.includes(f)).map((field) => {
-                                const hasAiSuggestion = field in row.aiSuggestions;
-                                return (
-                                  <div key={field} className="space-y-1">
-                                    <Label className="text-xs flex items-center gap-1">
-                                      {field}
-                                      {hasAiSuggestion && <Sparkles className="h-3 w-3 text-primary" aria-label="AI-suggested" />}
-                                    </Label>
+                            <>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {REQUIRED_FIELD_ORDER.filter((f) => row.missingRequiredFields.includes(f)).map((field) => {
+                                  const hasAiSuggestion = field in row.aiSuggestions;
+                                  return (
+                                    <div key={field} className="space-y-1">
+                                      <Label className="text-xs flex items-center gap-1">
+                                        {field}
+                                        {hasAiSuggestion && <Sparkles className="h-3 w-3 text-primary" aria-label="AI-suggested" />}
+                                      </Label>
+                                      <Input
+                                        className="h-8 text-sm"
+                                        value={resolvedFieldValue(row, field)}
+                                        placeholder={hasAiSuggestion ? undefined : 'Required'}
+                                        onChange={(e) => handleFieldChange(row.rowIndex, field, e.target.value)}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {row.leadTimeRequired && (
+                                <div className="space-y-1 pt-1">
+                                  <Label className="text-xs">Lead Time</Label>
+                                  <div className="flex gap-2">
                                     <Input
-                                      className="h-8 text-sm"
-                                      value={resolvedFieldValue(row, field)}
-                                      placeholder={hasAiSuggestion ? undefined : 'Required'}
-                                      onChange={(e) => handleFieldChange(row.rowIndex, field, e.target.value)}
+                                      className="h-8 text-sm w-24"
+                                      type="text"
+                                      inputMode="numeric"
+                                      value={leadTimeValueEdits[row.rowIndex] ?? ''}
+                                      placeholder="Required"
+                                      onChange={(e) => {
+                                        const v = e.target.value.replace(/[^0-9]/g, '');
+                                        setLeadTimeValueEdits((prev) => ({ ...prev, [row.rowIndex]: v }));
+                                      }}
                                     />
+                                    <Select
+                                      value={unitEdits[row.rowIndex] ?? ''}
+                                      onValueChange={(v) => setUnitEdits((prev) => ({ ...prev, [row.rowIndex]: v as LeadTimeUnit }))}
+                                    >
+                                      <SelectTrigger className="h-8 w-28 text-xs">
+                                        <SelectValue placeholder="Unit?" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="days">Days</SelectItem>
+                                        <SelectItem value="weeks">Weeks</SelectItem>
+                                        <SelectItem value="months">Months</SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                   </div>
-                                );
-                              })}
-                            </div>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       );
