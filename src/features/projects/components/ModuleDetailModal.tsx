@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -93,6 +93,9 @@ export function ModuleDetailModal({
   const [isLinkingIssues, setIsLinkingIssues] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // Baseline snapshot to diff against so blurring/tabbing without changing a
+  // field's value doesn't fire an unnecessary update.
+  const savedModuleRef = useRef<Module | null>(null);
 
   // Reset transient editing state when dialog closes or when selecting a different module.
   useEffect(() => {
@@ -144,7 +147,9 @@ export function ModuleDetailModal({
   const progress = moduleTasks.length > 0 ? (completedTasks / moduleTasks.length) * 100 : 0;
 
   const handleEdit = () => {
-    setEditedModule({ ...module });
+    const snapshot = { ...module };
+    setEditedModule(snapshot);
+    savedModuleRef.current = snapshot;
     setIsEditing(true);
   };
 
@@ -154,6 +159,7 @@ export function ModuleDetailModal({
     setIsSaving(true);
     try {
       await onUpdate(updated);
+      savedModuleRef.current = updated;
     } finally {
       setIsSaving(false);
     }
@@ -165,7 +171,13 @@ export function ModuleDetailModal({
   };
 
   const handleFieldBlur = () => {
-    if (editedModule) commitFieldUpdate(editedModule);
+    if (!editedModule) return;
+    const saved = savedModuleRef.current;
+    // Tabbing/clicking away without actually editing shouldn't fire an update.
+    if (saved && saved.name === editedModule.name && saved.description === editedModule.description) {
+      return;
+    }
+    commitFieldUpdate(editedModule);
   };
 
   const handleSelectFieldChange = (patch: Partial<Module>) => {
@@ -176,6 +188,15 @@ export function ModuleDetailModal({
   };
 
   const handleDone = () => {
+    // Flush any change still pending from the field that just lost focus —
+    // don't rely on the blur handler having already resolved, since Done can
+    // be reached via keyboard/synthetic activation without a prior blur.
+    if (editedModule) {
+      const saved = savedModuleRef.current;
+      if (!saved || saved.name !== editedModule.name || saved.description !== editedModule.description) {
+        commitFieldUpdate(editedModule);
+      }
+    }
     setEditedModule(null);
     setIsLinkingTasks(false);
     setIsLinkingIssues(false);
@@ -259,7 +280,7 @@ export function ModuleDetailModal({
             </div>
             <div className="flex items-center gap-2 shrink-0">
               {isEditing ? (
-                <Button variant="outline" size="sm" onClick={handleDone} disabled={isSaving}>
+                <Button variant="outline" size="sm" onClick={handleDone}>
                   {isSaving ? 'Saving...' : 'Done'}
                 </Button>
               ) : (
@@ -510,13 +531,24 @@ export function ModuleDetailModal({
                           <span className="text-sm truncate">{task.title}</span>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
-                          {task.assignees?.[0] && (
-                            <Avatar className="h-5 w-5">
-                              <AvatarImage src={resolveFileUrl(task.assignees[0].avatar) ?? task.assignees[0].avatar} alt={task.assignees[0].name} />
-                              <AvatarFallback className="text-[9px]">
-                                {task.assignees[0].initials}
-                              </AvatarFallback>
-                            </Avatar>
+                          {(task.assignees?.length ?? 0) > 0 && (
+                            <div className="flex -space-x-2">
+                              {task.assignees!.slice(0, 3).map((assignee) => (
+                                <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
+                                  <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
+                                  <AvatarFallback className="text-[9px]">
+                                    {assignee.initials}
+                                  </AvatarFallback>
+                                </Avatar>
+                              ))}
+                              {task.assignees!.length > 3 && (
+                                <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
+                                  <span className="text-[8px] text-muted-foreground font-medium">
+                                    +{task.assignees!.length - 3}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           )}
                           {onUnlinkTask && (
                             <Button
