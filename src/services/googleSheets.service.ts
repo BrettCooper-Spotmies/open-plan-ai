@@ -134,6 +134,21 @@ export interface ImportCommitResult {
   failedCount: number;
 }
 
+// Sheets preview calls round-trip through the Google Sheets API and, for
+// column mapping / required-field suggestions, an AI call on top of that —
+// both can comfortably exceed the client's default 15s timeout on a large
+// sheet. Give these specific calls more headroom than the rest of the app.
+const SHEETS_SYNC_TIMEOUT_MS = 60_000;
+
+// Commit (Push/Pull "confirm") writes one row at a time — create/update part,
+// create/update node, append a revision, activity log — so its wall-clock
+// time scales linearly with row count and has no fixed upper bound the way
+// preview does. These are explicit, user-confirmed, one-shot actions with
+// their own loading state already in the UI, not routine calls that need a
+// timeout safety net, so give them none (0 = no Axios timeout) rather than
+// picking an arbitrary cap that a big enough sheet would still blow through.
+const SHEETS_COMMIT_TIMEOUT_MS = 0;
+
 export const googleSheetsService = {
   /**
    * Full backend URL that kicks off the OAuth flow. Must be used as a real
@@ -160,11 +175,11 @@ export const googleSheetsService = {
   },
 
   async previewTabs(projectId: string, spreadsheetUrl: string): Promise<SheetTabsResponse> {
-    return apiClient.post<SheetTabsResponse>(ENDPOINTS.GOOGLE_SHEETS.TABS(projectId), { spreadsheetUrl });
+    return apiClient.post<SheetTabsResponse>(ENDPOINTS.GOOGLE_SHEETS.TABS(projectId), { spreadsheetUrl }, { timeout: SHEETS_SYNC_TIMEOUT_MS });
   },
 
   async linkSpreadsheet(projectId: string, spreadsheetUrl: string, sheetTabName?: string): Promise<LinkSpreadsheetResponse> {
-    return apiClient.post<LinkSpreadsheetResponse>(ENDPOINTS.GOOGLE_SHEETS.LINK(projectId), { spreadsheetUrl, sheetTabName });
+    return apiClient.post<LinkSpreadsheetResponse>(ENDPOINTS.GOOGLE_SHEETS.LINK(projectId), { spreadsheetUrl, sheetTabName }, { timeout: SHEETS_SYNC_TIMEOUT_MS });
   },
 
   async unlinkSpreadsheet(projectId: string): Promise<void> {
@@ -172,26 +187,26 @@ export const googleSheetsService = {
   },
 
   async previewColumnMapping(projectId: string): Promise<ColumnMappingPreview> {
-    return apiClient.get<ColumnMappingPreview>(ENDPOINTS.GOOGLE_SHEETS.COLUMN_MAPPING(projectId));
+    return apiClient.get<ColumnMappingPreview>(ENDPOINTS.GOOGLE_SHEETS.COLUMN_MAPPING(projectId), { timeout: SHEETS_SYNC_TIMEOUT_MS });
   },
 
   async confirmColumnMapping(projectId: string, mapping: Record<string, string>): Promise<void> {
-    await apiClient.post(ENDPOINTS.GOOGLE_SHEETS.COLUMN_MAPPING(projectId), { mapping });
+    await apiClient.post(ENDPOINTS.GOOGLE_SHEETS.COLUMN_MAPPING(projectId), { mapping }, { timeout: SHEETS_SYNC_TIMEOUT_MS });
   },
 
   async previewExport(projectId: string): Promise<ExportPreview> {
-    return apiClient.get<ExportPreview>(ENDPOINTS.GOOGLE_SHEETS.EXPORT_PREVIEW(projectId));
+    return apiClient.get<ExportPreview>(ENDPOINTS.GOOGLE_SHEETS.EXPORT_PREVIEW(projectId), { timeout: SHEETS_SYNC_TIMEOUT_MS });
   },
 
   async commitExport(projectId: string, answers: ExportAnswers): Promise<ExportCommitResult> {
-    return apiClient.post<ExportCommitResult>(ENDPOINTS.GOOGLE_SHEETS.EXPORT_COMMIT(projectId), answers);
+    return apiClient.post<ExportCommitResult>(ENDPOINTS.GOOGLE_SHEETS.EXPORT_COMMIT(projectId), answers, { timeout: SHEETS_COMMIT_TIMEOUT_MS });
   },
 
   async previewImport(projectId: string): Promise<ImportPreview> {
-    return apiClient.get<ImportPreview>(ENDPOINTS.GOOGLE_SHEETS.IMPORT_PREVIEW(projectId));
+    return apiClient.get<ImportPreview>(ENDPOINTS.GOOGLE_SHEETS.IMPORT_PREVIEW(projectId), { timeout: SHEETS_SYNC_TIMEOUT_MS });
   },
 
   async commitImport(projectId: string, rows: ImportRowResolution[]): Promise<ImportCommitResult> {
-    return apiClient.post<ImportCommitResult>(ENDPOINTS.GOOGLE_SHEETS.IMPORT_COMMIT(projectId), { rows });
+    return apiClient.post<ImportCommitResult>(ENDPOINTS.GOOGLE_SHEETS.IMPORT_COMMIT(projectId), { rows }, { timeout: SHEETS_COMMIT_TIMEOUT_MS });
   },
 };

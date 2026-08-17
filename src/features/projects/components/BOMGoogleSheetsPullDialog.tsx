@@ -2,14 +2,15 @@
  * BOMGoogleSheetsPullDialog — Pull (Import) preview/confirm. Implements the
  * row classification + required-field/ambiguous-unit resolution flow from
  * GOOGLE_SHEETS_BOM_INTEGRATION.md §1/Step 5. Confirm & Import stays
- * disabled until every flagged row is resolved — nothing commits from this
- * screen without that.
+ * disabled until every flagged row is either resolved or explicitly skipped
+ * — nothing commits from this screen without that.
  *
- * Known v1 simplification: there's no per-row "exclude from this import"
- * checkbox — every resolvable row (new/changed/resolved-needs-input/
- * resolved-ambiguous) commits together. Unchanged rows are always skipped
- * (no-op). Column-level unmatched/ambiguous headers are surfaced as an
- * informational banner, not an interactive remap UI.
+ * Per-row skip: a flagged row (needs-input or ambiguous-unit) can be
+ * excluded from the import entirely — useful for junk/blank rows that
+ * shouldn't become parts at all. Skipped rows are dropped from the commit
+ * payload just like already-unchanged rows. Column-level unmatched/
+ * ambiguous headers are still just an informational banner, not an
+ * interactive remap UI.
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -23,7 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Loader2, ArrowDownToLine, CheckCircle2, AlertCircle, ChevronDown, Sparkles } from 'lucide-react';
+import { Loader2, ArrowDownToLine, CheckCircle2, AlertCircle, ChevronDown, Sparkles, X, Undo2 } from 'lucide-react';
 import { useGoogleSheetsImportPreview, useGoogleSheetsImportCommit } from '@/hooks/useGoogleSheets';
 import type { ImportRowPreview, ImportRowResolution, ImportCommitResult } from '@/services/googleSheets.service';
 
@@ -44,6 +45,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
   const [fieldEdits, setFieldEdits] = useState<Record<number, Record<string, string>>>({});
   const [unitEdits, setUnitEdits] = useState<Record<number, LeadTimeUnit>>({});
   const [bulkUnit, setBulkUnit] = useState<LeadTimeUnit | ''>('');
+  const [skippedRows, setSkippedRows] = useState<Set<number>>(new Set());
   const [result, setResult] = useState<ImportCommitResult | null>(null);
 
   useEffect(() => {
@@ -51,6 +53,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
       setFieldEdits({});
       setUnitEdits({});
       setBulkUnit('');
+      setSkippedRows(new Set());
       setResult(null);
       preview.mutate();
     }
@@ -71,6 +74,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
     fieldEdits[row.rowIndex]?.[field] ?? row.aiSuggestions[field as keyof ImportRowPreview['aiSuggestions']] ?? '';
 
   const isRowFullyResolved = (row: ImportRowPreview): boolean => {
+    if (skippedRows.has(row.rowIndex)) return true;
     if (row.status === 'needs-input') {
       return row.missingRequiredFields.every((f) => resolvedFieldValue(row, f).trim() !== '');
     }
@@ -93,9 +97,18 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
     setUnitEdits(next);
   };
 
+  const toggleSkipRow = (rowIndex: number) => {
+    setSkippedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowIndex)) next.delete(rowIndex);
+      else next.add(rowIndex);
+      return next;
+    });
+  };
+
   const handleConfirm = async () => {
     const resolutions: ImportRowResolution[] = (data?.rows ?? [])
-      .filter((r) => r.status !== 'matched-unchanged')
+      .filter((r) => r.status !== 'matched-unchanged' && !skippedRows.has(r.rowIndex))
       .map((row) => {
         const resolution: ImportRowResolution = { rowIndex: row.rowIndex };
         if (row.status === 'needs-input') {
@@ -120,12 +133,12 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
   };
 
   const hasAnyWork = data
-    ? data.rows.some((r) => r.status !== 'matched-unchanged')
+    ? data.rows.some((r) => r.status !== 'matched-unchanged' && !skippedRows.has(r.rowIndex))
     : false;
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ArrowDownToLine className="h-5 w-5 text-emerald-600" />
@@ -198,34 +211,68 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                 <div className="space-y-3">
                   <p className="text-sm font-medium">
                     Needs your input — {rowsByStatus['needs-input'].length} row(s) are missing required fields
+                    {rowsByStatus['needs-input'].some((r) => skippedRows.has(r.rowIndex)) && (
+                      <span className="text-muted-foreground font-normal">
+                        {' '}({rowsByStatus['needs-input'].filter((r) => skippedRows.has(r.rowIndex)).length} skipped)
+                      </span>
+                    )}
                   </p>
-                  <div className="space-y-3">
-                    {rowsByStatus['needs-input'].map((row) => (
-                      <div key={row.rowIndex} className="rounded-md border border-amber-500/30 p-3 space-y-2">
-                        <p className="text-xs text-muted-foreground">
-                          Row {row.rowIndex + 1}{row.partNumber ? ` — ${row.partNumber}` : ''}
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {REQUIRED_FIELD_ORDER.filter((f) => row.missingRequiredFields.includes(f)).map((field) => {
-                            const hasAiSuggestion = field in row.aiSuggestions;
-                            return (
-                              <div key={field} className="space-y-1">
-                                <Label className="text-xs flex items-center gap-1">
-                                  {field}
-                                  {hasAiSuggestion && <Sparkles className="h-3 w-3 text-primary" aria-label="AI-suggested" />}
-                                </Label>
-                                <Input
-                                  className="h-8 text-sm"
-                                  value={resolvedFieldValue(row, field)}
-                                  placeholder={hasAiSuggestion ? undefined : 'Required'}
-                                  onChange={(e) => handleFieldChange(row.rowIndex, field, e.target.value)}
-                                />
-                              </div>
-                            );
-                          })}
+                  <div className="max-h-[26rem] overflow-y-auto rounded-md border border-border p-4 space-y-3">
+                    {rowsByStatus['needs-input'].map((row) => {
+                      const skipped = skippedRows.has(row.rowIndex);
+                      return (
+                        <div
+                          key={row.rowIndex}
+                          className={`rounded-md border p-3 space-y-2 ${skipped ? 'border-border bg-muted/30' : 'border-amber-500/30'}`}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs text-muted-foreground">
+                              Row {row.rowIndex + 1}{row.partNumber ? ` — ${row.partNumber}` : ''}
+                            </p>
+                            {skipped ? (
+                              <Button
+                                type="button" variant="ghost" size="sm"
+                                className="h-6 px-2 text-xs text-muted-foreground"
+                                onClick={() => toggleSkipRow(row.rowIndex)}
+                              >
+                                <Undo2 className="h-3 w-3 mr-1" /> Undo
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button" variant="ghost" size="sm"
+                                className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                                onClick={() => toggleSkipRow(row.rowIndex)}
+                              >
+                                <X className="h-3 w-3 mr-1" /> Skip row
+                              </Button>
+                            )}
+                          </div>
+                          {skipped ? (
+                            <p className="text-xs text-muted-foreground italic">Won't be imported.</p>
+                          ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {REQUIRED_FIELD_ORDER.filter((f) => row.missingRequiredFields.includes(f)).map((field) => {
+                                const hasAiSuggestion = field in row.aiSuggestions;
+                                return (
+                                  <div key={field} className="space-y-1">
+                                    <Label className="text-xs flex items-center gap-1">
+                                      {field}
+                                      {hasAiSuggestion && <Sparkles className="h-3 w-3 text-primary" aria-label="AI-suggested" />}
+                                    </Label>
+                                    <Input
+                                      className="h-8 text-sm"
+                                      value={resolvedFieldValue(row, field)}
+                                      placeholder={hasAiSuggestion ? undefined : 'Required'}
+                                      onChange={(e) => handleFieldChange(row.rowIndex, field, e.target.value)}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -249,28 +296,55 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                       </Select>
                     )}
                   </div>
-                  <div className="space-y-2">
-                    {rowsByStatus['ambiguous-unit'].map((row) => (
-                      <div key={row.rowIndex} className="flex items-center justify-between gap-3 rounded-md border border-amber-500/30 p-2.5">
-                        <span className="text-xs">
-                          <span className="font-medium text-foreground">{row.partNumber || `Row ${row.rowIndex + 1}`}</span>
-                          {' — lead time '}"{row.leadTimeRaw}"
-                        </span>
-                        <Select
-                          value={unitEdits[row.rowIndex] ?? ''}
-                          onValueChange={(v) => setUnitEdits((prev) => ({ ...prev, [row.rowIndex]: v as LeadTimeUnit }))}
+                  <div className="max-h-56 overflow-y-auto space-y-2">
+                    {rowsByStatus['ambiguous-unit'].map((row) => {
+                      const skipped = skippedRows.has(row.rowIndex);
+                      return (
+                        <div
+                          key={row.rowIndex}
+                          className={`flex items-center justify-between gap-3 rounded-md border p-2.5 ${skipped ? 'border-border bg-muted/30' : 'border-amber-500/30'}`}
                         >
-                          <SelectTrigger className="h-8 w-28 text-xs">
-                            <SelectValue placeholder="Unit?" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="days">Days</SelectItem>
-                            <SelectItem value="weeks">Weeks</SelectItem>
-                            <SelectItem value="months">Months</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ))}
+                          <span className="text-xs">
+                            <span className="font-medium text-foreground">{row.partNumber || `Row ${row.rowIndex + 1}`}</span>
+                            {' — lead time '}"{row.leadTimeRaw}"
+                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {skipped ? (
+                              <Button
+                                type="button" variant="ghost" size="sm"
+                                className="h-6 px-2 text-xs text-muted-foreground"
+                                onClick={() => toggleSkipRow(row.rowIndex)}
+                              >
+                                <Undo2 className="h-3 w-3 mr-1" /> Undo
+                              </Button>
+                            ) : (
+                              <>
+                                <Select
+                                  value={unitEdits[row.rowIndex] ?? ''}
+                                  onValueChange={(v) => setUnitEdits((prev) => ({ ...prev, [row.rowIndex]: v as LeadTimeUnit }))}
+                                >
+                                  <SelectTrigger className="h-8 w-28 text-xs">
+                                    <SelectValue placeholder="Unit?" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="days">Days</SelectItem>
+                                    <SelectItem value="weeks">Weeks</SelectItem>
+                                    <SelectItem value="months">Months</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button" variant="ghost" size="sm"
+                                  className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
+                                  onClick={() => toggleSkipRow(row.rowIndex)}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
