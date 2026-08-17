@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCurrency } from '@/hooks/useCurrency';
 import { cn } from '@/lib/utils';
 import type {
@@ -90,6 +91,23 @@ const SEVERITY_BADGE_META: Record<CardSeverity, { label: string; className: stri
   trivial: { label: 'Trivial', className: 'border-muted-foreground/30 bg-muted text-muted-foreground' },
 };
 
+// Detail-card tag pills (severity/type/module/etc.) read as bare labels with
+// no indication of what each one means — wrapping them here shows the
+// category ("Priority", "Type", "Module", ...) on hover so the pill row
+// stays scannable without a legend.
+function TagBadge({ category, className, children }: { category: string; className?: string; children: ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant="outline" className={cn('text-[10px]', className)}>
+          {children}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent side="top">{category}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 const AVATAR_PALETTE = ['#2563EB', '#9333EA', '#16A34A', '#D97706', '#DC2626', '#0891B2', '#DB2777', '#0D9488'];
 
 function hashIndex(str: string): number {
@@ -103,6 +121,36 @@ function initials(name: string): string {
   if (!parts.length) return '?';
   if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
   return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+const MAX_VISIBLE_ASSIGNEES = 3;
+
+// Overlapping avatar stack so a multi-assignee row reads as "more than one
+// person" at a glance instead of only revealing that on hover (the previous
+// behavior — a single avatar whose title listed everyone).
+function AssigneeAvatars({ assignees }: { assignees?: string[] }) {
+  if (!assignees?.length) return null;
+  const visible = assignees.slice(0, MAX_VISIBLE_ASSIGNEES);
+  const overflow = assignees.length - visible.length;
+
+  return (
+    <div className="flex shrink-0 -space-x-2" title={assignees.join(', ')}>
+      {visible.map((name, index) => (
+        <span
+          key={`${name}-${index}`}
+          className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-background text-[10px] font-semibold text-white"
+          style={{ background: AVATAR_PALETTE[hashIndex(name)] }}
+        >
+          {initials(name)}
+        </span>
+      ))}
+      {overflow > 0 && (
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-background bg-muted text-[10px] font-semibold text-muted-foreground">
+          +{overflow}
+        </span>
+      )}
+    </div>
+  );
 }
 
 // Never model-supplied — derived purely from the item's real UUID/dueDate so
@@ -406,7 +454,6 @@ function CardItemRow({
   const navigate = useNavigate();
   const due = dueLabel(item.dueDate);
   const metaLine = [item.contextLabel, due].filter(Boolean).join(' · ');
-  const primaryAssignee = item.assignees?.[0];
   const entityType = item.entityType ?? (subject === 'tasks' ? 'task' : subject === 'issues' ? 'issue' : undefined);
   const target =
     !readOnly && entityType && item.projectId ? ENTITY_DEEP_LINK[entityType](item.projectId, item.id) : undefined;
@@ -421,15 +468,7 @@ function CardItemRow({
         <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
         {metaLine && <p className="truncate text-xs text-muted-foreground">{metaLine}</p>}
       </div>
-      {primaryAssignee && (
-        <span
-          title={item.assignees?.join(', ')}
-          className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-          style={{ background: AVATAR_PALETTE[hashIndex(primaryAssignee)] }}
-        >
-          {initials(primaryAssignee)}
-        </span>
-      )}
+      <AssigneeAvatars assignees={item.assignees} />
       <Badge variant="outline" className="shrink-0 font-mono text-[10px]">
         {shortId(item.id)}
       </Badge>
@@ -660,14 +699,14 @@ export function AssistantCardMessage({ card, createdAt, onFollowUp, readOnly }: 
                 {(card.priority || card.hasDependency) && (
                   <div className="flex flex-wrap gap-1.5">
                     {card.priority && (
-                      <Badge variant="outline" className={cn('text-[10px]', SEVERITY_BADGE_META[card.priority].className)}>
+                      <TagBadge category="Priority" className={SEVERITY_BADGE_META[card.priority].className}>
                         {SEVERITY_BADGE_META[card.priority].label}
-                      </Badge>
+                      </TagBadge>
                     )}
                     {card.hasDependency && (
-                      <Badge variant="outline" className="gap-1 text-[10px]">
+                      <TagBadge category="Dependency" className="gap-1">
                         <Link2 className="h-3 w-3" /> Has dependency
-                      </Badge>
+                      </TagBadge>
                     )}
                   </div>
                 )}
@@ -688,20 +727,12 @@ export function AssistantCardMessage({ card, createdAt, onFollowUp, readOnly }: 
                 {(card.severity || card.category || card.module) && (
                   <div className="flex flex-wrap gap-1.5">
                     {card.severity && (
-                      <Badge variant="outline" className={cn('text-[10px]', SEVERITY_BADGE_META[card.severity].className)}>
+                      <TagBadge category="Priority" className={SEVERITY_BADGE_META[card.severity].className}>
                         {SEVERITY_BADGE_META[card.severity].label}
-                      </Badge>
+                      </TagBadge>
                     )}
-                    {card.category && (
-                      <Badge variant="outline" className="text-[10px]">
-                        {titleCase(card.category)}
-                      </Badge>
-                    )}
-                    {card.module && (
-                      <Badge variant="outline" className="text-[10px]">
-                        {card.module}
-                      </Badge>
-                    )}
+                    {card.category && <TagBadge category="Type">{titleCase(card.category)}</TagBadge>}
+                    {card.module && <TagBadge category="Module">{card.module}</TagBadge>}
                   </div>
                 )}
                 <DetailFacts>
@@ -722,16 +753,8 @@ export function AssistantCardMessage({ card, createdAt, onFollowUp, readOnly }: 
                 {card.description && <p className="text-sm text-muted-foreground">{card.description}</p>}
                 {(card.priority || card.changeClass) && (
                   <div className="flex flex-wrap gap-1.5">
-                    {card.priority && (
-                      <Badge variant="outline" className="text-[10px]">
-                        {titleCase(card.priority)}
-                      </Badge>
-                    )}
-                    {card.changeClass && (
-                      <Badge variant="outline" className="text-[10px]">
-                        Class {card.changeClass}
-                      </Badge>
-                    )}
+                    {card.priority && <TagBadge category="Priority">{titleCase(card.priority)}</TagBadge>}
+                    {card.changeClass && <TagBadge category="Change Class">Class {card.changeClass}</TagBadge>}
                   </div>
                 )}
                 <DetailFacts>
@@ -753,9 +776,7 @@ export function AssistantCardMessage({ card, createdAt, onFollowUp, readOnly }: 
                 {card.description && <p className="text-sm text-muted-foreground">{card.description}</p>}
                 {card.moduleType && (
                   <div className="flex flex-wrap gap-1.5">
-                    <Badge variant="outline" className="text-[10px]">
-                      {titleCase(card.moduleType)}
-                    </Badge>
+                    <TagBadge category="Module Type">{titleCase(card.moduleType)}</TagBadge>
                   </div>
                 )}
                 {card.progress != null && (
