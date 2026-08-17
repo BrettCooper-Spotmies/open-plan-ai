@@ -11,6 +11,7 @@ import {
   Settings,
   Calendar,
   Sparkles,
+  Plug,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -35,6 +36,7 @@ const moreNavItems: NavItem[] = [
   { title: 'Team',      url: '/team',     icon: Users         },
   { title: 'Calendar',  url: '/calendar', icon: Calendar      },
   { title: 'Reports',   url: '/reports',  icon: BarChart3     },
+  { title: 'Integrations', url: '/integrations', icon: Plug   },
   { title: 'Settings',  url: '/settings', icon: Settings      },
 ];
 
