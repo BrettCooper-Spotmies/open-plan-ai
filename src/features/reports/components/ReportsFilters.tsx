@@ -126,7 +126,31 @@ export function ReportsFilters({
     });
   };
 
+  const activeChips: { key: string; label: string; onRemove: () => void }[] = [
+    ...(filter.assigneeIds?.map(id => ({
+      key: `assignee-${id}`,
+      label: `Assignee: ${teamMembers.find(m => m.id === id)?.name ?? id}`,
+      onRemove: () => handleAssigneeToggle(id),
+    })) ?? []),
+    ...(filter.priority?.map(p => ({
+      key: `priority-${p}`,
+      label: `Priority: ${p}`,
+      onRemove: () => handlePriorityToggle(p),
+    })) ?? []),
+    ...(filter.status?.map(s => ({
+      key: `status-${s}`,
+      label: `Status: ${s.replace('-', ' ')}`,
+      onRemove: () => handleStatusToggle(s),
+    })) ?? []),
+    ...(filter.moduleIds?.map(id => ({
+      key: `module-${id}`,
+      label: `Module: ${modules.find(m => m.id === id)?.name ?? id}`,
+      onRemove: () => handleModuleToggle(id),
+    })) ?? []),
+  ];
+
   return (
+    <div className="flex flex-col gap-2">
     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
       {/* Project Selector - Left Side */}
       <div className="flex items-center w-full md:w-auto">
@@ -357,6 +381,34 @@ export function ReportsFilters({
           </Popover>
         )}
       </div>
+    </div>
+
+    {activeChips.length > 0 && (
+      <div className="flex flex-wrap items-center gap-2">
+        {activeChips.map(chip => (
+          <Badge
+            key={chip.key}
+            variant="secondary"
+            className="capitalize flex items-center gap-1 pr-1"
+          >
+            {chip.label}
+            <button
+              type="button"
+              onClick={chip.onRemove}
+              className="ml-1 rounded-full hover:bg-muted p-0.5"
+              aria-label={`Remove ${chip.label} filter`}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </Badge>
+        ))}
+        {activeChips.length > 1 && (
+          <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={clearFilters}>
+            Clear all
+          </Button>
+        )}
+      </div>
+    )}
     </div>
   );
 }
