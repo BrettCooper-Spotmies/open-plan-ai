@@ -140,17 +140,21 @@ export function useGoogleSheetsImportCommit(projectId: string | undefined) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (rows: ImportRowResolution[]) => googleSheetsService.commitImport(projectId!, rows),
+    mutationFn: ({ rows, deleteNodeIds }: { rows: ImportRowResolution[]; deleteNodeIds?: string[] }) =>
+      googleSheetsService.commitImport(projectId!, rows, deleteNodeIds),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: linkStatusKey(projectId) });
       // Broad invalidation — Pull can create/update parts, nodes, and
       // revisions across the whole tree, not one node at a time like a
       // normal edit, so a targeted invalidate isn't worth the complexity.
       queryClient.invalidateQueries({ queryKey: queryKeys.bom.all });
-      if (result.failedCount > 0) {
-        toast.warning(`Imported with ${result.failedCount} row(s) skipped`, {
-          description: `${result.createdCount} created, ${result.updatedCount} updated, ${result.failedCount} failed.`,
+      const totalFailed = result.failedCount + result.deleteResults.filter((d) => d.outcome === 'failed').length;
+      if (totalFailed > 0) {
+        toast.warning(`Imported with ${totalFailed} issue(s)`, {
+          description: `${result.createdCount} created, ${result.updatedCount} updated, ${result.deletedCount} removed, ${totalFailed} failed.`,
         });
+      } else if (result.deletedCount > 0) {
+        toast.success(`Imported — ${result.deletedCount} part(s) removed to match the sheet`);
       }
     },
     onError: (error) => {

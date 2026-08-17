@@ -107,12 +107,23 @@ export interface ImportRowPreview {
   changes: ExportFieldChange[];
 }
 
+// A BOM part with no matching row in the sheet anymore (deleted there, or
+// its Part Number cell was cleared/changed). Surfaced for the user to
+// explicitly opt into removing — never auto-deleted.
+export interface ImportDeletedPartPreview {
+  nodeId: string;
+  partId: string;
+  partNumber: string;
+  name: string;
+}
+
 export interface ImportPreview {
   headerRowIndex: number;
   headerRowLowConfidence: boolean;
   unmatchedColumns: string[];
   ambiguousColumns: string[];
   rows: ImportRowPreview[];
+  deletedParts: ImportDeletedPartPreview[];
 }
 
 export interface ImportRowResolution {
@@ -128,11 +139,20 @@ export interface ImportCommitRowResult {
   reason?: string;
 }
 
+export interface ImportCommitDeleteResult {
+  nodeId: string;
+  partNumber: string;
+  outcome: 'deleted' | 'failed';
+  reason?: string;
+}
+
 export interface ImportCommitResult {
   results: ImportCommitRowResult[];
   createdCount: number;
   updatedCount: number;
   failedCount: number;
+  deleteResults: ImportCommitDeleteResult[];
+  deletedCount: number;
 }
 
 // Sheets preview calls round-trip through the Google Sheets API and, for
@@ -207,7 +227,7 @@ export const googleSheetsService = {
     return apiClient.get<ImportPreview>(ENDPOINTS.GOOGLE_SHEETS.IMPORT_PREVIEW(projectId), { timeout: SHEETS_SYNC_TIMEOUT_MS });
   },
 
-  async commitImport(projectId: string, rows: ImportRowResolution[]): Promise<ImportCommitResult> {
-    return apiClient.post<ImportCommitResult>(ENDPOINTS.GOOGLE_SHEETS.IMPORT_COMMIT(projectId), { rows }, { timeout: SHEETS_COMMIT_TIMEOUT_MS });
+  async commitImport(projectId: string, rows: ImportRowResolution[], deleteNodeIds?: string[]): Promise<ImportCommitResult> {
+    return apiClient.post<ImportCommitResult>(ENDPOINTS.GOOGLE_SHEETS.IMPORT_COMMIT(projectId), { rows, deleteNodeIds }, { timeout: SHEETS_COMMIT_TIMEOUT_MS });
   },
 };

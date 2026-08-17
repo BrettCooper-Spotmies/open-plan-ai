@@ -24,7 +24,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Loader2, ArrowDownToLine, CheckCircle2, AlertCircle, ChevronDown, Sparkles, X, Undo2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Loader2, ArrowDownToLine, CheckCircle2, AlertCircle, ChevronDown, Sparkles, X, Undo2, Trash2 } from 'lucide-react';
 import { useGoogleSheetsImportPreview, useGoogleSheetsImportCommit } from '@/hooks/useGoogleSheets';
 import type { ImportRowPreview, ImportRowResolution, ImportCommitResult } from '@/services/googleSheets.service';
 
@@ -53,6 +54,9 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
   const [leadTimeValueEdits, setLeadTimeValueEdits] = useState<Record<number, string>>({});
   const [bulkUnit, setBulkUnit] = useState<LeadTimeUnit | ''>('');
   const [skippedRows, setSkippedRows] = useState<Set<number>>(new Set());
+  // Parts missing from the sheet (deleted there, or Part Number changed) —
+  // never removed automatically, only ever the nodeIds explicitly checked here.
+  const [deleteChecked, setDeleteChecked] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<ImportCommitResult | null>(null);
 
   useEffect(() => {
@@ -62,6 +66,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
       setLeadTimeValueEdits({});
       setBulkUnit('');
       setSkippedRows(new Set());
+      setDeleteChecked(new Set());
       setResult(null);
       preview.mutate();
     }
@@ -117,6 +122,15 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
     });
   };
 
+  const toggleDeleteChecked = (nodeId: string) => {
+    setDeleteChecked((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  };
+
   const handleConfirm = async () => {
     const resolutions: ImportRowResolution[] = (data?.rows ?? [])
       .filter((r) => r.status !== 'matched-unchanged' && !skippedRows.has(r.rowIndex))
@@ -139,7 +153,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
         return resolution;
       });
 
-    const res = await commit.mutateAsync(resolutions);
+    const res = await commit.mutateAsync({ rows: resolutions, deleteNodeIds: [...deleteChecked] });
     setResult(res);
   };
 
@@ -149,7 +163,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
   };
 
   const hasAnyWork = data
-    ? data.rows.some((r) => r.status !== 'matched-unchanged' && !skippedRows.has(r.rowIndex))
+    ? data.rows.some((r) => r.status !== 'matched-unchanged' && !skippedRows.has(r.rowIndex)) || deleteChecked.size > 0
     : false;
 
   return (
@@ -188,15 +202,27 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
             <ul className="text-sm text-muted-foreground space-y-1">
               <li>{result.createdCount} part(s) created</li>
               <li>{result.updatedCount} part(s) updated</li>
+              {result.deletedCount > 0 && <li>{result.deletedCount} part(s) removed</li>}
               {result.failedCount > 0 && <li className="text-destructive">{result.failedCount} row(s) failed</li>}
+              {result.deleteResults.some((d) => d.outcome === 'failed') && (
+                <li className="text-destructive">
+                  {result.deleteResults.filter((d) => d.outcome === 'failed').length} removal(s) failed
+                </li>
+              )}
             </ul>
-            {result.failedCount > 0 && (
+            {(result.failedCount > 0 || result.deleteResults.some((d) => d.outcome === 'failed')) && (
               <ScrollArea className="max-h-40 rounded-md border border-border p-2">
                 <div className="space-y-1">
                   {result.results.filter((r) => r.outcome === 'failed').map((r) => (
-                    <div key={r.rowIndex} className="text-xs">
+                    <div key={`row-${r.rowIndex}`} className="text-xs">
                       <span className="font-medium text-foreground">{r.partNumber || `Row ${r.rowIndex + 1}`}</span>{' '}
                       <span className="text-destructive">— {r.reason}</span>
+                    </div>
+                  ))}
+                  {result.deleteResults.filter((d) => d.outcome === 'failed').map((d) => (
+                    <div key={`del-${d.nodeId}`} className="text-xs">
+                      <span className="font-medium text-foreground">{d.partNumber || d.nodeId}</span>{' '}
+                      <span className="text-destructive">— {d.reason}</span>
                     </div>
                   ))}
                 </div>
@@ -219,7 +245,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                 </div>
               )}
 
-              {!hasAnyWork && (
+              {!hasAnyWork && data.deletedParts.length === 0 && (
                 <p className="text-sm text-muted-foreground">Nothing to import — the sheet already matches your BOM.</p>
               )}
 
@@ -437,6 +463,38 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                     </div>
                   </CollapsibleContent>
                 </Collapsible>
+              )}
+
+              {data.deletedParts.length > 0 && (
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">
+                      Removed from sheet — {data.deletedParts.length} part(s)
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      These BOM parts no longer have a matching row in the sheet. Check any you'd like
+                      to remove from the BOM too — nothing is deleted unless you check it.
+                    </p>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto space-y-1.5">
+                    {data.deletedParts.map((part) => {
+                      const checked = deleteChecked.has(part.nodeId);
+                      return (
+                        <label
+                          key={part.nodeId}
+                          className={`flex items-center gap-2.5 rounded-md border p-2.5 cursor-pointer transition-colors ${checked ? 'border-destructive/40 bg-destructive/5' : 'border-border hover:bg-muted/40'}`}
+                        >
+                          <Checkbox checked={checked} onCheckedChange={() => toggleDeleteChecked(part.nodeId)} />
+                          <Trash2 className={`h-3.5 w-3.5 shrink-0 ${checked ? 'text-destructive' : 'text-muted-foreground'}`} />
+                          <span className="text-xs min-w-0 flex-1">
+                            <span className="font-medium text-foreground">{part.partNumber}</span>
+                            {part.name && <span className="text-muted-foreground"> — {part.name}</span>}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
 
               <Separator />
