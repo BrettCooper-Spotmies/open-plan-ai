@@ -2831,6 +2831,12 @@ export const TaskDetailModal = ({
                     placeholder="Add a comment..."
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                        e.preventDefault();
+                        handleAddComment();
+                      }
+                    }}
                     className="min-h-[80px]"
                   />
                   <Button className="h-auto" onClick={handleAddComment} disabled={!newComment.trim()}>
