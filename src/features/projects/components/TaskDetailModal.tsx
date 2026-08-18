@@ -2398,14 +2398,25 @@ export const TaskDetailModal = ({
                   {/* Pending files (create mode only) */}
                   {mode === 'create' && pendingFiles.length > 0 && (
                     <div className="space-y-1">
-                      {pendingFiles.map((f, i) => (
+                      {pendingFiles.map((f, i) => {
+                        const previewUrl = pendingFileUrls[i];
+                        const isImage = f.type.startsWith('image/');
+                        return (
                         <div
                           key={i}
                           className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm cursor-pointer hover:bg-muted/50"
-                          onClick={() => setPreviewingFile({ url: pendingFileUrls[i], fileName: f.name, mimeType: f.type })}
+                          onClick={() => setPreviewingFile({ url: previewUrl, fileName: f.name, mimeType: f.type })}
                         >
                           <div className="flex items-center gap-2 min-w-0">
-                            <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            {isImage && previewUrl ? (
+                              <img
+                                src={previewUrl}
+                                alt={f.name}
+                                className="h-10 w-10 rounded object-cover shrink-0 border"
+                              />
+                            ) : (
+                              <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            )}
                             <span className="truncate">{f.name}</span>
                             <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
                           </div>
@@ -2421,7 +2432,8 @@ export const TaskDetailModal = ({
                             <X className="h-3 w-3" />
                           </Button>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
 
