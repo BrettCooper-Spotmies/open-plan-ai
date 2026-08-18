@@ -219,7 +219,7 @@ function GoogleSheetsToolbarMenu({
               onClick={() => unlinkSheet.mutate()}
               disabled={unlinkSheet.isPending}
             >
-              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+              <Unlink className="w-3.5 h-3.5 shrink-0" />
               <span>Disconnect</span>
             </button>
           </div>
@@ -1738,15 +1738,12 @@ export function BOMView({
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
             </button>
-            {/* Only shown once Google Sheets is connected from Integrations —
-                routes to linking a sheet first, or straight to Pull if this
-                project already has one linked. */}
-            {sheetsLinkStatus?.orgConnected && (
+            {/* Only shown when Google Sheets is connected at org level but NOT yet linked for this project */}
+            {sheetsLinkStatus?.orgConnected && !sheetsLinkStatus?.linked && (
               <button
                 onClick={() => {
                   setAddChoiceOpen(false);
-                  if (sheetsLinkStatus.linked) setSheetsPullOpen(true);
-                  else setSheetsLinkOpen(true);
+                  setSheetsLinkOpen(true);
                 }}
                 className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-foreground/20 transition-colors text-left group"
               >
@@ -1756,9 +1753,7 @@ export function BOMView({
                 <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium text-foreground">Import from Google Sheets</div>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    {sheetsLinkStatus.linked
-                      ? 'Pull parts from your linked spreadsheet.'
-                      : 'Link a spreadsheet, then pull parts from it.'}
+                    Link a spreadsheet, then pull parts from it.
                   </div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
