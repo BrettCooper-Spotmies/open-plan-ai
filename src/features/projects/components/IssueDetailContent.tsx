@@ -802,7 +802,7 @@ export function IssueDetailContent({
                                     {(editedIssue.assignees || []).length > 0 && (
                                         <div className="p-2 border-b">
                                             <p className="text-xs font-medium text-muted-foreground px-2 mb-1">Assigned</p>
-                                            {(editedIssue.assignees || []).map((assignee) => (
+                                            {[...(editedIssue.assignees || [])].sort((a, b) => a.name.localeCompare(b.name)).map((assignee) => (
                                                 <div key={assignee.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted group">
                                                     <Avatar className="h-6 w-6 shrink-0">
                                                         <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
@@ -842,6 +842,7 @@ export function IssueDetailContent({
                                             <CommandGroup heading="Add members">
                                                 {teamMembers
                                                     .filter(m => !editedIssue.assignees?.some(a => a.id === m.id))
+                                                    .sort((a, b) => a.name.localeCompare(b.name))
                                                     .map((member) => (
                                                         <CommandItem
                                                             key={member.id}
