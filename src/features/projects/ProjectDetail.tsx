@@ -1323,11 +1323,11 @@ export default function ProjectDetail() {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-6 animate-fade-in w-full min-w-0">
+      <div className="grid grid-cols-1 gap-6 w-full min-w-0">
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => navigate(`/projects/${id}/${v}`)} className="w-full">
-          <div className="sticky top-0 z-20 bg-background">
+          <div className="sticky top-0 z-20 bg-background -mx-4 px-4 pt-2.5 pb-2.5 border-b md:border-b-0 md:static md:top-auto md:pt-0 md:mx-0 md:px-0 md:pb-0 [transform:translateZ(0)] will-change-transform">
           {!partId && !ecoId && !isMobileModuleDetailOpen && (
             <div className="flex flex-row md:items-center justify-between gap-2 w-full pb-1">
               {/* Left Side: Tabs */}
@@ -1468,7 +1468,7 @@ export default function ProjectDetail() {
 
           {/* Second Row: Search + View Toggle + Filter toolbar (below tabs, like BOM UI) */}
           {(section === 'tasks' || section === 'modules' || section === 'milestones' || section === 'issues') && !isMobileModuleDetailOpen && (
-            <div className="flex items-center justify-between gap-3 mt-3 pb-3 border-b w-full">
+            <div className="flex items-center justify-between gap-3 mt-3 md:pb-3 md:border-b w-full">
               {section === 'tasks' && (
                 <>
                   {/* Left: Search */}
