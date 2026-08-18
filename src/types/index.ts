@@ -271,6 +271,13 @@ export interface Project {
   myRole?: string;
   pinned?: boolean;
   createdBy?: string;
+  creator?: {
+    id: string;
+    name: string | null;
+    email: string;
+    avatarUrl: string | null;
+    initials: string | null;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
