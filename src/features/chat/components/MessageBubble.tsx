@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, Forward, ZoomIn, FileImage, File as FileIcon2, Pin, PinOff, Star, Eye } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, Forward, ZoomIn, FileImage, File as FileIcon2, Pin, PinOff, Bookmark, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { FilePreviewDialog } from '@/components/FilePreviewDialog';
 import { Button } from '@/components/ui/button';
@@ -24,6 +24,7 @@ import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { useUserTimezone } from '@/hooks/useUserTimezone';
 import { formatMessageTimestamp } from '@/utils/dateTime';
 import EntityTagChip from './EntityTagChip';
+import { HighlightedText } from './HighlightedText';
 
 const ENTITY_TAG_ROUTE: Record<ChatEntityType, (tag: EntityTagRef) => string> = {
   task: (tag) => `/projects/${tag.projectId}/tasks/${tag.entityId}`,
@@ -55,6 +56,7 @@ interface MessageBubbleProps {
   showTimestamp: boolean;
   isGroupChat: boolean;
   currentUserId?: string;
+  currentUserName?: string;
   searchQuery?: string;
   memberNames?: string[];
   reactionUsers?: Record<string, string>;
@@ -71,6 +73,7 @@ interface MessageBubbleProps {
   onForward?: (message: ChatMessage) => void;
   onTogglePin?: (messageId: string) => void;
   onToggleFavourite?: (messageId: string) => void;
+  onJumpToMessage?: (messageId: string) => void;
 }
 
 interface FileContent {
@@ -98,7 +101,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
-function ExpandableText({ text, query, isOwn = false, memberNames }: { text: string; query?: string; isOwn?: boolean; memberNames?: string[] }) {
+function ExpandableText({ text, query, isOwn = false, memberNames, currentUserName }: { text: string; query?: string; isOwn?: boolean; memberNames?: string[]; currentUserName?: string }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const isLong = text.length > 300 || (text.match(/\n/g) || []).length > 5;
@@ -110,7 +113,7 @@ function ExpandableText({ text, query, isOwn = false, memberNames }: { text: str
   const renderText = (content: string) => {
     return content.split('\n').map((line, i) => (
       <span key={i}>
-        <MentionHighlightedText text={line} query={query} isOwn={isOwn} memberNames={memberNames} />
+        <MentionHighlightedText text={line} query={query} isOwn={isOwn} memberNames={memberNames} currentUserName={currentUserName} />
         {i < content.split('\n').length - 1 && <br />}
       </span>
     ));
@@ -133,7 +136,8 @@ function ExpandableText({ text, query, isOwn = false, memberNames }: { text: str
   );
 }
 
-function MentionHighlightedText({ text, query, isOwn = false, memberNames }: { text: string; query?: string; isOwn?: boolean; memberNames?: string[] }) {
+function MentionHighlightedText({ text, query, isOwn = false, memberNames, currentUserName }: { text: string; query?: string; isOwn?: boolean; memberNames?: string[]; currentUserName?: string }) {
+  const currentUserNameLower = currentUserName?.trim().toLowerCase();
   // First pass: split out @everyone tokens (case-insensitive)
   const everyoneRegex = /(@everyone)(?=\s|$|[.,!?])/gi;
   const withEveryone: { text: string; isEveryone: boolean; isMention: boolean }[] = [];
@@ -211,14 +215,20 @@ function MentionHighlightedText({ text, query, isOwn = false, memberNames }: { t
           );
         }
         if (part.isMention) {
+          // Teams-style "you were mentioned" — the mentioned name matches the
+          // viewer's own name, so it gets a distinct, always-bright highlight
+          // regardless of which side of the conversation the bubble is on.
+          const isSelfMention = !!currentUserNameLower && part.text.slice(1).toLowerCase() === currentUserNameLower;
           return (
             <span
               key={i}
               className={cn(
                 'font-medium rounded px-0.5',
-                isOwn
-                  ? 'bg-primary-foreground/20 text-primary-foreground'
-                  : 'bg-primary/20 text-primary'
+                isSelfMention
+                  ? 'font-semibold bg-yellow-300/90 text-yellow-950 ring-1 ring-yellow-500/50 dark:bg-yellow-400/30 dark:text-yellow-200 dark:ring-yellow-400/40'
+                  : isOwn
+                    ? 'bg-primary-foreground/20 text-primary-foreground'
+                    : 'bg-primary/20 text-primary'
               )}
             >
               <HighlightedText text={part.text} query={query} />
@@ -256,23 +266,6 @@ function LinkifiedText({ text, query, isOwn = false }: { text: string; query?: s
           </a>
         ) : (
           <HighlightedText key={i} text={segment} query={query} />
-        )
-      )}
-    </>
-  );
-}
-
-function HighlightedText({ text, query }: { text: string; query?: string }) {
-  if (!query?.trim()) return <>{text}</>;
-  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  const parts = text.split(regex);
-  return (
-    <>
-      {parts.map((part, i) =>
-        part.toLowerCase() === query.toLowerCase() ? (
-          <mark key={i} className="bg-yellow-300/60 dark:bg-yellow-500/40 rounded-sm px-0.5">{part}</mark>
-        ) : (
-          <span key={i}>{part}</span>
         )
       )}
     </>
@@ -430,8 +423,8 @@ function FileAttachment({
           'flex w-full items-center justify-center h-16 transition-colors',
           'hover:bg-accent/40 disabled:opacity-50 disabled:cursor-not-allowed',
           fileType === 'pdf' ? 'bg-red-500/10 text-red-500' :
-          fileType === 'doc' ? 'bg-blue-500/10 text-blue-500' :
-          'bg-muted text-muted-foreground'
+            fileType === 'doc' ? 'bg-blue-500/10 text-blue-500' :
+              'bg-muted text-muted-foreground'
         )}
         title={isPreviewable ? `Open ${fileType.toUpperCase()} preview` : 'Open file'}
       >
@@ -474,9 +467,9 @@ function FileAttachment({
 }
 
 export function MessageBubble({
-  message, showSenderInfo, showTimestamp, isGroupChat, currentUserId,
+  message, showSenderInfo, showTimestamp, isGroupChat, currentUserId, currentUserName,
   searchQuery, memberNames, reactionUsers, readReceipts, otherMembersCount, reactions,
-  isPinned, isFavourited, onEdit, onDelete, onDeleteForMe, onToggleReaction, onReply, onForward, onTogglePin, onToggleFavourite,
+  isPinned, isFavourited, onEdit, onDelete, onDeleteForMe, onToggleReaction, onReply, onForward, onTogglePin, onToggleFavourite, onJumpToMessage,
 }: MessageBubbleProps) {
   const timezone = useUserTimezone();
   const navigate = useNavigate();
@@ -524,16 +517,6 @@ export function MessageBubble({
   // Touch devices don't fire hover reliably, so the toolbar is opened by tapping the bubble instead.
   const [isMobileToolbarOpen, setIsMobileToolbarOpen] = useState(false);
 
-  // Swipe-to-reply: drag the bubble horizontally past DRAG_REPLY_THRESHOLD to trigger reply.
-  const [dragX, setDragX] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const dragAxisRef = useRef<'horizontal' | 'vertical' | null>(null);
-  const dragXRef = useRef(0);
-  const hasDraggedRef = useRef(false);
-  const DRAG_REPLY_THRESHOLD = 60;
-  const DRAG_MAX = 80;
-
   const getReactorNames = useCallback((r: MessageReaction) => {
     return r.userIds.map((id) => {
       if (id === currentUserId) return 'You';
@@ -566,60 +549,7 @@ export function MessageBubble({
   };
 
   const handleBubbleClick = () => {
-    // Swallow the click that follows a drag so it doesn't also toggle the mobile toolbar.
-    if (hasDraggedRef.current) {
-      hasDraggedRef.current = false;
-      return;
-    }
     handleBubbleTap();
-  };
-
-  // dragDirection: bubble slides toward the empty side of the screen, uncovering the
-  // reply icon parked underneath it (own bubbles hug the right edge so they drag left;
-  // others hug the left edge so they drag right).
-  const dragDirection = isOwn ? -1 : 1;
-
-  const handleDragPointerDown = (e: React.PointerEvent) => {
-    if (isDeleted || isEditing || e.pointerType === 'mouse' && e.button !== 0) return;
-    const target = e.target as HTMLElement;
-    if (target.closest('button, a, textarea, input, [role="button"]')) return;
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
-    dragAxisRef.current = null;
-  };
-
-  const handleDragPointerMove = (e: React.PointerEvent) => {
-    if (!dragStartRef.current) return;
-    const dx = e.clientX - dragStartRef.current.x;
-    const dy = e.clientY - dragStartRef.current.y;
-
-    if (dragAxisRef.current === null) {
-      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-      dragAxisRef.current = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
-      if (dragAxisRef.current === 'horizontal') {
-        setIsDragging(true);
-        hasDraggedRef.current = true;
-        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-      }
-    }
-
-    if (dragAxisRef.current !== 'horizontal') return;
-    e.preventDefault();
-    const signedDx = dx * dragDirection;
-    const clamped = Math.max(0, Math.min(DRAG_MAX, signedDx));
-    dragXRef.current = clamped;
-    setDragX(clamped);
-  };
-
-  const endDrag = (e: React.PointerEvent) => {
-    if (dragAxisRef.current === 'horizontal') {
-      if (dragXRef.current >= DRAG_REPLY_THRESHOLD) onReply?.(message);
-      try { (e.target as HTMLElement).releasePointerCapture?.(e.pointerId); } catch { /* noop */ }
-    }
-    dragStartRef.current = null;
-    dragAxisRef.current = null;
-    dragXRef.current = 0;
-    setIsDragging(false);
-    setDragX(0);
   };
 
   useEffect(() => {
@@ -845,8 +775,8 @@ export function MessageBubble({
                 )}
                 {!isDeleted && onToggleFavourite && (
                   <DropdownMenuItem onClick={() => onToggleFavourite(message.id)} className="cursor-pointer">
-                    <Star className={cn('h-4 w-4 mr-2', isFavourited && 'fill-amber-500 text-amber-500')} />
-                    {isFavourited ? 'Remove from Favourites' : 'Add to Favourites'}
+                    <Bookmark className={cn('h-4 w-4 mr-2', isFavourited && 'fill-amber-500 text-amber-500')} />
+                    {isFavourited ? 'Remove from Saved' : 'Save message'}
                   </DropdownMenuItem>
                 )}
                 {canModify && !isFile && (
@@ -867,51 +797,26 @@ export function MessageBubble({
             </DropdownMenu>
           </div>
 
-          {/* Reply icon, parked behind the bubble and uncovered as it drags away */}
-          {!isEditing && (
-            <div
-              className={cn('absolute inset-y-0 flex items-center pointer-events-none', isOwn ? 'right-2' : 'left-2')}
-              style={{
-                opacity: Math.min(1, dragX / DRAG_REPLY_THRESHOLD),
-                transform: `scale(${0.6 + 0.4 * Math.min(1, dragX / DRAG_REPLY_THRESHOLD)})`,
-              }}
-            >
-              <span
-                className={cn(
-                  'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-                  dragX >= DRAG_REPLY_THRESHOLD ? 'bg-primary text-primary-foreground' : 'bg-primary/15 text-primary'
-                )}
-              >
-                <Reply className="h-3.5 w-3.5" />
-              </span>
-            </div>
-          )}
-
           {/* Message bubble content */}
           <div
             className={cn(
-              'relative rounded-2xl px-3 py-2 text-sm leading-relaxed max-w-full min-w-0 overflow-hidden break-words [overflow-wrap:anywhere] touch-pan-y',
-              isDragging
-                ? 'transition-none select-none cursor-grabbing ring-2 ring-primary/50 shadow-lg'
-                : cn(
-                    'transition-transform duration-200 ease-out',
-                    isMobile ? 'cursor-grab' : 'cursor-text select-text'
-                  ),
+              'relative rounded-2xl px-3 py-2 text-sm leading-relaxed max-w-full min-w-0 overflow-hidden break-words [overflow-wrap:anywhere]',
+              isMobile ? 'cursor-pointer' : 'cursor-text select-text',
               isOwn
                 ? 'bg-primary text-primary-foreground rounded-br-md border border-primary/20'
                 : 'bg-muted text-foreground rounded-bl-md border border-border'
             )}
-            style={{ transform: `translateX(${dragX * dragDirection}px)` }}
             onClick={handleBubbleClick}
-            onPointerDown={handleDragPointerDown}
-            onPointerMove={handleDragPointerMove}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
           >
             {message.replyToMessage && (
               <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!message.replyToMessage!.deletedAt) onJumpToMessage?.(message.replyToMessage!.id);
+                }}
                 className={cn(
                   'mb-2 rounded-md border-l-2 px-2 py-1 text-xs',
+                  !message.replyToMessage.deletedAt && 'cursor-pointer hover:brightness-95',
                   isOwn
                     ? 'border-primary-foreground/50 bg-primary-foreground/10'
                     : 'border-primary/40 bg-primary/10'
@@ -932,7 +837,7 @@ export function MessageBubble({
                 <FileAttachment file={fileData} isOwn={isOwn} message={message} onForward={onForward} />
               </div>
             ) : (
-              <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} memberNames={memberNames} />
+              <ExpandableText text={message.content} query={searchQuery} isOwn={isOwn} memberNames={memberNames} currentUserName={currentUserName} />
             )}
             {message.entityTags && message.entityTags.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -1004,14 +909,20 @@ export function MessageBubble({
         {showTimestamp && (
           <span className="text-[10px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1">
             {isPinned && <Pin className="h-2.5 w-2.5" aria-label="Pinned" />}
-            {isFavourited && <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" aria-label="Favourited" />}
+            {isFavourited && <Bookmark className="h-2.5 w-2.5 fill-amber-500 text-amber-500" aria-label="Saved" />}
+            {message.isEdited && <span>Edited</span>}
+            {message.isEdited && <span>Edited</span>}
             {formatMessageTimestamp(message.createdAt, timezone)}
-            {message.isEdited && ' (edited)'}
             {isOwn && renderStatusIcon()}
           </span>
         )}
-        {!showTimestamp && isOwn && (
-          <span className="text-[10px] mt-0.5 px-1 flex items-center justify-end gap-1">
+        {!showTimestamp && (isOwn || message.isEdited) && (
+          <span
+            className={cn(
+              'text-[10px] text-muted-foreground mt-0.5 px-1 flex items-center gap-1',
+              isOwn ? 'justify-end' : 'justify-start'
+            )}
+          >
             {isPinned && <Pin className="h-2.5 w-2.5" aria-label="Pinned" />}
             {isFavourited && <Star className="h-2.5 w-2.5 fill-amber-500 text-amber-500" aria-label="Favourited" />}
             {renderStatusIcon()}

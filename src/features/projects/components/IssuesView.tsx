@@ -35,6 +35,21 @@ import {
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { IssueDetailModal } from './IssueDetailModal';
 import { ISSUE_SEVERITY_DISPLAY } from './issueSeverity';
 import { useIssueColumns, useCreateIssueColumn, useUpdateIssueColumn, useDeleteIssueColumn, useReorderIssueColumns } from '@/hooks/useIssueColumns';
@@ -56,8 +71,11 @@ interface IssuesViewProps {
   statusFilter?: string[]; // status keys from the project's issue buckets (custom, not a fixed enum)
   assigneeFilter?: string[];
   assignedByFilter?: string[];
+  updatedByFilter?: string[];
   dueDateFilter?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
+  dueDateCustomFilter?: string;
   reportedDateFilter?: 'today' | 'this-week' | 'this-month';
+  reportedDateCustomFilter?: string;
   tagsFilter?: string[];
   isAddDialogOpen?: boolean;
   onAddDialogClose?: () => void;
@@ -141,8 +159,11 @@ export function IssuesView({
   statusFilter: externalStatusFilter = [],
   assigneeFilter: externalAssigneeFilter = [],
   assignedByFilter: externalAssignedByFilter = [],
+  updatedByFilter: externalUpdatedByFilter = [],
   dueDateFilter: externalDueDateFilter,
+  dueDateCustomFilter: externalDueDateCustomFilter,
   reportedDateFilter: externalReportedDateFilter,
+  reportedDateCustomFilter: externalReportedDateCustomFilter,
   tagsFilter: externalTagsFilter = [],
   isAddDialogOpen: externalIsAddDialogOpen,
   onAddDialogClose,
@@ -178,6 +199,8 @@ export function IssuesView({
   const [renamingColumn, setRenamingColumn] = useState<IssuesKanbanColumn | null>(null);
   const [renameColumnName, setRenameColumnName] = useState('');
   const [expandedChecklistPreview, setExpandedChecklistPreview] = useState<Record<string, boolean>>({});
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
 
   // Sync columns from API
   useEffect(() => {
@@ -192,8 +215,11 @@ export function IssuesView({
   const statusFilter = externalStatusFilter ?? internalStatusFilter;
   const assigneeFilter = externalAssigneeFilter;
   const assignedByFilter = externalAssignedByFilter;
+  const updatedByFilter = externalUpdatedByFilter;
   const dueDateFilter = externalDueDateFilter;
+  const dueDateCustomFilter = externalDueDateCustomFilter;
   const reportedDateFilter = externalReportedDateFilter;
+  const reportedDateCustomFilter = externalReportedDateCustomFilter;
   const tagsFilter = externalTagsFilter;
 
   useEffect(() => {
@@ -249,10 +275,15 @@ export function IssuesView({
       (issue.assignees?.some(a => assigneeFilter.includes(a.id)));
     const matchesAssignedBy = !assignedByFilter.length ||
       assignedByFilter.includes(issue.reportedBy.id);
+    const matchesUpdatedBy = !updatedByFilter.length ||
+      (!!issue.updatedBy && updatedByFilter.includes(issue.updatedBy.id));
     const matchesTags = !tagsFilter.length ||
       (issue.tags?.some(tag => tagsFilter.includes(tag)) ?? false);
     let matchesDueDate = true;
-    if (dueDateFilter) {
+    if (dueDateCustomFilter) {
+      const issueDueDate = issue.dueDate ? new Date(issue.dueDate) : null;
+      matchesDueDate = !!issueDueDate && issueDueDate.toDateString() === new Date(dueDateCustomFilter).toDateString();
+    } else if (dueDateFilter) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const issueDueDate = issue.dueDate ? new Date(issue.dueDate) : null;
@@ -282,7 +313,10 @@ export function IssuesView({
       }
     }
     let matchesReportedDate = true;
-    if (reportedDateFilter) {
+    if (reportedDateCustomFilter) {
+      const issueReportedDate = issue.reportedAt ? new Date(issue.reportedAt) : null;
+      matchesReportedDate = !!issueReportedDate && issueReportedDate.toDateString() === new Date(reportedDateCustomFilter).toDateString();
+    } else if (reportedDateFilter) {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
       const todayEnd = new Date();
@@ -306,7 +340,7 @@ export function IssuesView({
       }
     }
 
-    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesAssignedBy && matchesTags && matchesDueDate && matchesReportedDate;
+    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesAssignedBy && matchesUpdatedBy && matchesTags && matchesDueDate && matchesReportedDate;
   });
 
   // Sort by severity (critical first), then by date
@@ -317,6 +351,45 @@ export function IssuesView({
     }
     return new Date(b.reportedAt).getTime() - new Date(a.reportedAt).getTime();
   });
+
+  const totalPages = Math.max(1, Math.ceil(sortedIssues.length / pageSize));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    searchQuery,
+    severityFilter,
+    statusFilter,
+    assigneeFilter,
+    assignedByFilter,
+    updatedByFilter,
+    tagsFilter,
+    dueDateFilter,
+    dueDateCustomFilter,
+    reportedDateFilter,
+    reportedDateCustomFilter,
+    pageSize,
+  ]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const paginatedIssues = viewMode === 'kanban'
+    ? sortedIssues
+    : sortedIssues.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const getPageNumbers = (): (number | 'ellipsis')[] => {
+    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+    const pages: (number | 'ellipsis')[] = [1];
+    if (currentPage > 3) pages.push('ellipsis');
+    for (let p = Math.max(2, currentPage - 1); p <= Math.min(totalPages - 1, currentPage + 1); p++) {
+      pages.push(p);
+    }
+    if (currentPage < totalPages - 2) pages.push('ellipsis');
+    pages.push(totalPages);
+    return pages;
+  };
 
   const handleIssueClick = (issue: Issue) => {
     setSelectedIssue(issue);
@@ -506,6 +579,74 @@ export function IssuesView({
     setLocalIssues(localIssues.map((i) => (i.id === issueId ? updatedIssue : i)));
     onIssueUpdate?.(updatedIssue);
   };
+
+  const issuesPaginationControls = sortedIssues.length > 0 && (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-1">
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span>
+          Showing {(currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, sortedIssues.length)} of {sortedIssues.length}
+        </span>
+        <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+          <SelectTrigger className="h-8 w-[100px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="10">10 / page</SelectItem>
+            <SelectItem value="25">25 / page</SelectItem>
+            <SelectItem value="50">50 / page</SelectItem>
+            <SelectItem value="100">100 / page</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {totalPages > 1 && (
+        <Pagination className="mx-0 w-auto">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setCurrentPage((p) => Math.max(1, p - 1));
+                }}
+                className={cn(currentPage === 1 && 'pointer-events-none opacity-50')}
+              />
+            </PaginationItem>
+            {getPageNumbers().map((page, idx) =>
+              page === 'ellipsis' ? (
+                <PaginationItem key={`ellipsis-${idx}`}>
+                  <span className="flex h-9 w-9 items-center justify-center text-muted-foreground">…</span>
+                </PaginationItem>
+              ) : (
+                <PaginationItem key={page}>
+                  <PaginationLink
+                    href="#"
+                    isActive={page === currentPage}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage(page);
+                    }}
+                  >
+                    {page}
+                  </PaginationLink>
+                </PaginationItem>
+              ),
+            )}
+            <PaginationItem>
+              <PaginationNext
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setCurrentPage((p) => Math.min(totalPages, p + 1));
+                }}
+                className={cn(currentPage === totalPages && 'pointer-events-none opacity-50')}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -782,7 +923,10 @@ export function IssuesView({
                                   ) : (
                                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: column.color }} />
                                   )}
-                                  <h3 className={cn('font-medium text-sm', isDependenciesColumn && 'text-status-blocked')}>
+                                  <h3
+                                    title={column.label}
+                                    className={cn('font-medium text-sm truncate', isDependenciesColumn && 'text-status-blocked')}
+                                  >
                                     {column.label}
                                   </h3>
                                   <span className="text-xs text-muted-foreground">{columnIssues.length}</span>
@@ -901,7 +1045,7 @@ export function IssuesView({
           </div>
         ) : (
           <div className="space-y-3">
-            {sortedIssues.map((issue) => {
+            {paginatedIssues.map((issue) => {
               const severityDisplay = ISSUE_SEVERITY_DISPLAY[issue.severity];
               const SeverityIcon = severityDisplay.icon;
               const CategoryIcon = categoryConfig[issue.category].icon;
@@ -977,14 +1121,14 @@ export function IssuesView({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {sortedIssues.length === 0 ? (
+              {paginatedIssues.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No issues found
                   </TableCell>
                 </TableRow>
               ) : (
-                sortedIssues.map((issue) => {
+                paginatedIssues.map((issue) => {
                   const SeverityIcon = ISSUE_SEVERITY_DISPLAY[issue.severity].icon;
                   const CategoryIcon = categoryConfig[issue.category].icon;
                   const blockingCount = (issue.blocksTaskIds?.length || 0) + (issue.blocksMilestoneIds?.length || 0);
@@ -1073,6 +1217,8 @@ export function IssuesView({
           </Table>
         </div>
       )}
+
+      {viewMode !== 'kanban' && issuesPaginationControls}
 
       {/* Rename Bucket Dialog */}
       <Dialog

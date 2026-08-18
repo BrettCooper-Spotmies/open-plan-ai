@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CalendarHeader } from './components/CalendarHeader';
 import { CalendarFilters } from './components/CalendarFilters';
+import { ScheduleMeetDialog } from './components/ScheduleMeetDialog';
 import { CalendarMonthView } from './components/CalendarMonthView';
 import { CalendarWeekView } from './components/CalendarWeekView';
 import { CalendarDayView } from './components/CalendarDayView';
@@ -23,6 +24,7 @@ import { useProjects } from '@/hooks/useProjects';
 import { useAllTasks, useUpdateTask, useBatchUpdateTasks } from '@/hooks/useTasks';
 import { useAllIssues, useUpdateIssue } from '@/hooks/useIssues';
 import { useAllMilestones, useUpdateMilestone } from '@/hooks/useMilestones';
+import { useAllMeetings, Meeting } from '@/hooks/useMeetings';
 import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,6 +32,8 @@ import { parse, format as formatDate, isValid } from 'date-fns';
 import { toast } from 'sonner';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { logger } from '@/services/monitoring/logger';
+import { Button } from '@/components/ui/button';
+import { Video } from 'lucide-react';
 
 // Convert a DB milestone row to calendar event
 function dbMilestoneToCalendarEvent(m: any, projectName: string): CalendarEvent | null {
@@ -104,6 +108,22 @@ function issueToCalendarEvent(issue: Issue, projectName: string): CalendarEvent 
   };
 }
 
+// Convert a persisted meeting to a calendar event
+function meetingToCalendarEvent(meeting: Meeting): CalendarEvent {
+  return {
+    id: meeting.id,
+    title: meeting.title,
+    date: new Date(meeting.startTime),
+    endDate: new Date(meeting.endTime),
+    type: 'meeting',
+    projectId: '',
+    projectName: '',
+    meetingUri: meeting.meetingUri,
+    htmlLink: meeting.htmlLink,
+    attendeeEmails: meeting.attendeeEmails,
+  };
+}
+
 // Convert DB milestone to frontend Milestone shape for the modal
 function dbMilestoneToFrontend(m: any): Milestone {
   return {
@@ -129,6 +149,7 @@ const CalendarPage: React.FC = () => {
   const { data: allTasks = [], isLoading: tasksLoading } = useAllTasks();
   const { data: allMilestones = [], isLoading: milestonesLoading } = useAllMilestones();
   const { data: allIssues = [], isLoading: issuesLoading } = useAllIssues();
+  const { data: allMeetings = [] } = useAllMeetings();
   const { data: teamMembers = [] } = useOrganizationMembers(currentOrganization?.id);
 
   // Mutations
@@ -181,6 +202,15 @@ const CalendarPage: React.FC = () => {
   // Filter state remains local as it's complex and might be too long for URL
   const [filters, setFilters] = React.useState<CalendarFilter>({});
 
+  // "Schedule a meet" dialog state
+  const [scheduleMeetOpen, setScheduleMeetOpen] = React.useState(false);
+  const [scheduleMeetDate, setScheduleMeetDate] = React.useState<Date | undefined>(undefined);
+
+  const handleScheduleMeeting = (date?: Date) => {
+    setScheduleMeetDate(date);
+    setScheduleMeetOpen(true);
+  };
+
   // Build project map for lookups
   const projectMap = useMemo(
     () => new Map(projects.map(p => [p.id, p.name])),
@@ -195,7 +225,7 @@ const CalendarPage: React.FC = () => {
     allTasks
       .filter(task => task.assignees?.some(a => a.id === user?.id))
       .forEach(task => {
-        const projectName = projectMap.get(task.projectId || '') || 'Unknown Project';
+        const projectName = task.projectId ? projectMap.get(task.projectId) || 'Unknown Project' : 'Personal';
         const event = taskToCalendarEvent(task, projectName);
         if (event) events.push(event);
       });
@@ -216,8 +246,14 @@ const CalendarPage: React.FC = () => {
         if (event) events.push(event);
       });
 
+    // Meetings — organized by or inviting the current user (already scoped
+    // server-side); no project association.
+    allMeetings.forEach((meeting) => {
+      events.push(meetingToCalendarEvent(meeting));
+    });
+
     return events;
-  }, [allTasks, allMilestones, allIssues, projectMap, user?.id]);
+  }, [allTasks, allMilestones, allIssues, allMeetings, projectMap, user?.id]);
 
   // Apply filters
   const filteredEvents = useMemo(() => {
@@ -279,6 +315,8 @@ const CalendarPage: React.FC = () => {
       updateUrlParams({ milestone: event.id });
     } else if (event.type === 'issue') {
       updateUrlParams({ issue: event.id });
+    } else if (event.type === 'meeting') {
+      window.open(event.htmlLink || event.meetingUri, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -451,13 +489,24 @@ const CalendarPage: React.FC = () => {
             onNavigateNext={handleNavigateNext}
             onNavigateToday={handleNavigateToday}
             actions={
-              <CalendarFilters
-                filters={filters}
-                onFiltersChange={setFilters}
-                projects={projectsForFilter as any}
-                teamMembers={teamMembers}
-                hideActiveFilters
-              />
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 h-9 rounded-lg"
+                  onClick={() => handleScheduleMeeting()}
+                >
+                  <Video className="h-4 w-4" />
+                  <span className="hidden sm:inline">Schedule a meet</span>
+                </Button>
+                <CalendarFilters
+                  filters={filters}
+                  onFiltersChange={setFilters}
+                  projects={projectsForFilter as any}
+                  teamMembers={teamMembers}
+                  hideActiveFilters
+                />
+              </>
             }
           />
 
@@ -497,6 +546,7 @@ const CalendarPage: React.FC = () => {
                 date={currentDate}
                 events={filteredEvents}
                 onEventClick={handleEventClick}
+                onScheduleMeeting={handleScheduleMeeting}
               />
             )}
           </>
@@ -504,6 +554,12 @@ const CalendarPage: React.FC = () => {
       </div>
 
       {sharedModals}
+      <ScheduleMeetDialog
+        open={scheduleMeetOpen}
+        onOpenChange={setScheduleMeetOpen}
+        teamMembers={teamMembers}
+        initialDate={scheduleMeetDate}
+      />
     </>
   );
 };

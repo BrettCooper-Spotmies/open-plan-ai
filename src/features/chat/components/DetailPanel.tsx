@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Bell, LogOut, FileText, UserPlus, Download, Image, Pencil, Check, Loader2, Camera, Trash2, Shield, ShieldOff, ChevronLeft, ChevronRight, Pin, Star } from 'lucide-react';
+import { X, Bell, LogOut, FileText, UserPlus, Download, Image, Pencil, Check, Loader2, Camera, Trash2, Shield, ShieldOff, ChevronLeft, ChevronRight, Pin, Bookmark } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -718,49 +718,53 @@ export function DetailPanel({ conversation, onRefetch, className, pinnedCount = 
           <Separator />
 
           {/* Members */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <button
-                type="button"
-                className="flex items-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-                onClick={() => setView('people')}
-              >
-                Members ({conversation.members.length})
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-              {isGroup && canManageMembers && (
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={openAddDialog} title="Add member">
-                  <UserPlus className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => setView('people')}
-              className="flex items-center flex-wrap gap-2"
-            >
-              {conversation.members.slice(0, MEMBER_PREVIEW_COUNT).map((member) => (
-                <div key={member.id} className="relative">
-                  <Avatar className="h-9 w-9">
-                    {member.avatarUrl && (
-                      <AvatarImage src={member.avatarUrl} alt={member.name} className="object-cover" />
-                    )}
-                    <AvatarFallback className="text-[11px]">{member.initials}</AvatarFallback>
-                  </Avatar>
-                  <OnlineStatus isOnline={onlineUserIds.has(member.id)} className="absolute -bottom-0.5 -right-0.5" size="sm" />
+          {isGroup && (
+            <>
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <button
+                    type="button"
+                    className="flex items-center gap-0.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setView('people')}
+                  >
+                    Members ({conversation.members.length})
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                  {canManageMembers && (
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={openAddDialog} title="Add member">
+                      <UserPlus className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
-              ))}
-              {conversation.members.length > MEMBER_PREVIEW_COUNT && (
-                <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-[11px] font-medium text-muted-foreground shrink-0">
-                  +{conversation.members.length - MEMBER_PREVIEW_COUNT}
-                </div>
-              )}
-            </button>
-          </div>
+                <button
+                  type="button"
+                  onClick={() => setView('people')}
+                  className="flex items-center flex-wrap gap-2"
+                >
+                  {conversation.members.slice(0, MEMBER_PREVIEW_COUNT).map((member) => (
+                    <div key={member.id} className="relative">
+                      <Avatar className="h-9 w-9">
+                        {member.avatarUrl && (
+                          <AvatarImage src={member.avatarUrl} alt={member.name} className="object-cover" />
+                        )}
+                        <AvatarFallback className="text-[11px]">{member.initials}</AvatarFallback>
+                      </Avatar>
+                      <OnlineStatus isOnline={onlineUserIds.has(member.id)} className="absolute -bottom-0.5 -right-0.5" size="sm" />
+                    </div>
+                  ))}
+                  {conversation.members.length > MEMBER_PREVIEW_COUNT && (
+                    <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center text-[11px] font-medium text-muted-foreground shrink-0">
+                      +{conversation.members.length - MEMBER_PREVIEW_COUNT}
+                    </div>
+                  )}
+                </button>
+              </div>
 
-          <Separator />
+              <Separator />
+            </>
+          )}
 
-          {/* Pinned & Favourite messages */}
+          {/* Pinned & Saved messages */}
           <div className="space-y-1">
             <button
               type="button"
@@ -777,8 +781,8 @@ export function DetailPanel({ conversation, onRefetch, className, pinnedCount = 
               onClick={onShowFavourites}
               className="w-full flex items-center gap-2.5 p-2 -mx-2 rounded-md hover:bg-muted transition-colors text-left"
             >
-              <Star className="h-4 w-4 text-amber-500 shrink-0" />
-              <span className="text-sm flex-1">Favourite Messages</span>
+              <Bookmark className="h-4 w-4 text-amber-500 shrink-0" />
+              <span className="text-sm flex-1">Saved Messages</span>
               <span className="text-xs text-muted-foreground">{favouriteCount}</span>
               <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
             </button>

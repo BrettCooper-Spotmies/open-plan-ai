@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
+import { Loader2 } from "lucide-react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -31,6 +32,7 @@ import {
 
 // 404 — eagerly loaded (tiny, always needed)
 import NotFound from "./pages/NotFound";
+import DebugDialogs from "./DebugDialogs";
 
 // ── Feature routes — lazy loaded for code splitting ───────────────────────────
 const Dashboard     = lazy(() => import("./features/dashboard"));
@@ -49,6 +51,8 @@ const Reports       = lazy(() => import("./features/reports"));
 const Notifications = lazy(() => import("./features/notifications"));
 const Chat          = lazy(() => import("./features/chat"));
 const Integrations  = lazy(() => import("./features/integrations"));
+const Inventory     = lazy(() => import("./features/inventory"));
+const SharedConversation = lazy(() => import("./features/assistant/SharedConversation"));
 
 // ── ReactQueryDevtools — dev only, lazy so it is never in the production bundle
 const ReactQueryDevtools = import.meta.env.DEV
@@ -69,6 +73,17 @@ function ProjectLegacyTabRedirect() {
   return <Navigate to={`/projects/${id}/${target}`} replace />;
 }
 
+// Standalone-page Suspense fallback — AppLayoutSkeleton's variants are all
+// built for content rendering inside AppLayoutOutlet's app chrome, which
+// public pages like /share/:shareId deliberately don't use.
+function MinimalPageFallback() {
+  return (
+    <div className="flex h-screen items-center justify-center bg-background">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
+
 function AppShell() {
   usePageTracking();
 
@@ -86,6 +101,15 @@ function AppShell() {
         <Route path="/reset-password"  element={<ResetPasswordPage />} />
         <Route path="/verify-email"    element={<VerifyEmailPage />} />
         <Route path="/join-org"        element={<JoinOrganizationPage />} />
+        <Route path="/debug-dialogs"   element={<DebugDialogs />} />
+        <Route
+          path="/share/:shareId"
+          element={
+            <Suspense fallback={<MinimalPageFallback />}>
+              <SharedConversation />
+            </Suspense>
+          }
+        />
 
         {/* ── Protected routes ─────────────────────────────────── */}
         <Route element={<ProtectedRoute />}>
@@ -243,6 +267,14 @@ function AppShell() {
               element={
                 <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
                   <Integrations />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/inventory"
+              element={
+                <Suspense fallback={<AppLayoutSkeleton variant="default" />}>
+                  <Inventory />
                 </Suspense>
               }
             />

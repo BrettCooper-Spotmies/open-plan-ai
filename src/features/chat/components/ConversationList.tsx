@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import { Plus, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useOrganization } from '@/contexts/OrganizationContext';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { ConversationSearch } from './ConversationSearch';
 import { ConversationItem } from './ConversationItem';
+import { QuickViews, type QuickView } from './QuickViews';
 import { NewDMDialog } from './NewDMDialog';
 import { NewGroupDialog } from './NewGroupDialog';
 import { EmptyState } from './EmptyState';
@@ -26,15 +26,24 @@ interface ConversationListProps {
   onSelect: (id: string) => void;
   onConversationCreated?: () => Promise<void>;
   onlineUserIds?: Set<string>;
+  onShowQuickView?: (view: QuickView) => void;
+  activeQuickView?: QuickView | null;
+  onToggleFavourite?: (conversationId: string) => void;
+  onToggleMute?: (conversationId: string) => void;
+  onMarkRead?: (conversationId: string) => void;
+  onDeleteChat?: (conversationId: string) => void;
 }
 
-export function ConversationList({ conversations, loading, onSelect, onConversationCreated, onlineUserIds }: ConversationListProps) {
+export function ConversationList({
+  conversations, loading, onSelect, onConversationCreated, onlineUserIds, onShowQuickView, activeQuickView = null,
+  onToggleFavourite, onToggleMute, onMarkRead, onDeleteChat,
+}: ConversationListProps) {
   const isMobile = useIsMobile();
   const { currentOrganization } = useOrganization();
   const { user } = useAuth();
   const currentUserId = user?.id;
   const {
-    activeConversationId, conversationFilter, setConversationFilter, searchQuery, setSearchQuery, unreadCounts,
+    activeConversationId, conversationFilter, searchQuery, setSearchQuery, unreadCounts,
     isNewDMDialogOpen: dmDialogOpen, setNewDMDialogOpen: setDmDialogOpen,
     isNewGroupDialogOpen: groupDialogOpen, setNewGroupDialogOpen: setGroupDialogOpen,
   } = useChatStore();
@@ -69,6 +78,13 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
   }, [conversations, conversationFilter, searchQuery, activeConversationId, currentUserId]);
 
   const hasSelfConversation = conversations.some(isSelfConversation);
+
+  // Teams-style: chats favourited via the hover menu surface in their own
+  // section above the regular list. Skipped while searching, so results stay
+  // a single flat list.
+  const showFavouritesSection = !searchQuery.trim() && filtered.some((c) => c.isFavourite);
+  const favouriteConversations = showFavouritesSection ? filtered.filter((c) => c.isFavourite) : [];
+  const regularConversations = showFavouritesSection ? filtered.filter((c) => !c.isFavourite) : filtered;
 
   const filteredPeople = useMemo(() => {
     if (!searchQuery.trim() || conversationFilter === 'groups') return [];
@@ -134,15 +150,10 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
         </>
       )}
 
-      <div className="px-3 pb-2">
-        <Tabs value={conversationFilter} onValueChange={(v) => setConversationFilter(v as 'all' | 'dms' | 'groups')}>
-          <TabsList className="w-full h-8">
-            <TabsTrigger value="all" className="text-xs flex-1">All</TabsTrigger>
-            <TabsTrigger value="dms" className="text-xs flex-1">DMs</TabsTrigger>
-            <TabsTrigger value="groups" className="text-xs flex-1">Groups</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+      <QuickViews
+        activeQuickView={activeQuickView}
+        onSelect={(view) => onShowQuickView?.(view)}
+      />
 
       <ScrollArea className="flex-1 min-w-0">
         <div className="px-1.5 pb-2 overflow-hidden">
@@ -160,14 +171,39 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
               </div>
             ))
           ) : filtered.length === 0 && filteredPeople.length === 0 ? (
-            <EmptyState 
-              type="no-conversations" 
+            <EmptyState
+              type="no-conversations"
               onCreateGroup={conversationFilter !== 'dms' ? () => setGroupDialogOpen(true) : undefined}
               description={conversationFilter === 'dms' ? "Start a new direct message to get started" : undefined}
             />
           ) : (
             <>
-              {filtered.map((conv) => (
+              {showFavouritesSection && (
+                <>
+                  <div className="px-2.5 pt-2 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                    Favourites
+                  </div>
+                  {favouriteConversations.map((conv) => (
+                    <ConversationItem
+                      key={conv.id}
+                      conversation={conv}
+                      isActive={activeConversationId === conv.id}
+                      unreadCount={unreadCounts[conv.id] || 0}
+                      onClick={() => onSelect(conv.id)}
+                      onlineUserIds={onlineUserIds}
+                      onToggleFavourite={onToggleFavourite ? () => onToggleFavourite(conv.id) : undefined}
+                      onToggleMute={onToggleMute ? () => onToggleMute(conv.id) : undefined}
+                      onMarkRead={onMarkRead ? () => onMarkRead(conv.id) : undefined}
+                      onDeleteChat={onDeleteChat ? () => onDeleteChat(conv.id) : undefined}
+                      searchQuery={searchQuery}
+                    />
+                  ))}
+                  <div className="px-2.5 pt-3 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                    Chats
+                  </div>
+                </>
+              )}
+              {regularConversations.map((conv) => (
                 <ConversationItem
                   key={conv.id}
                   conversation={conv}
@@ -175,12 +211,17 @@ export function ConversationList({ conversations, loading, onSelect, onConversat
                   unreadCount={unreadCounts[conv.id] || 0}
                   onClick={() => onSelect(conv.id)}
                   onlineUserIds={onlineUserIds}
+                  onToggleFavourite={onToggleFavourite ? () => onToggleFavourite(conv.id) : undefined}
+                  onToggleMute={onToggleMute ? () => onToggleMute(conv.id) : undefined}
+                  onMarkRead={onMarkRead ? () => onMarkRead(conv.id) : undefined}
+                  onDeleteChat={onDeleteChat ? () => onDeleteChat(conv.id) : undefined}
                 />
               ))}
               <PeopleList
                 users={filteredPeople}
                 onSelect={handleSelectPerson}
                 onlineUserIds={onlineUserIds}
+                searchQuery={searchQuery}
               />
               {isCreatingDM && (
                 <div className="flex items-center gap-3 px-3 py-2 animate-pulse">

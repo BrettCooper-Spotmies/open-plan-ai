@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useGoogleMeetStatus } from '@/features/integrations/hooks/useGoogleMeetStatus';
 import { useEnsureGoogleMeetToken } from '@/features/integrations/hooks/useEnsureGoogleMeetToken';
 import { googleMeetService } from '@/services/googleMeet.service';
+import { useCreateMeeting } from '@/hooks/useMeetings';
 import { logger } from '@/services/monitoring/logger';
 import { Conversation } from '../types';
 import { Calendar, Clock, Loader2, Repeat, Users } from 'lucide-react';
@@ -105,6 +106,7 @@ export function ScheduleMeetingDialog({
   const { data: meetStatusMap } = useGoogleMeetStatus(user ? [user.id] : []);
   const isConnected = !!(user && meetStatusMap?.[user.id]?.connected);
   const { ensureFreshToken } = useEnsureGoogleMeetToken();
+  const { mutateAsync: createMeetingRecord } = useCreateMeeting();
   const [loading, setLoading] = useState(false);
   
   // Form states
@@ -148,6 +150,8 @@ export function ScheduleMeetingDialog({
     }
   }, [open, conversation]);
 
+  const hasAttendees = conversation.members.some((m) => selectedMembers[m.id] && m.email);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isConnected) {
@@ -174,6 +178,12 @@ export function ScheduleMeetingDialog({
       return;
     }
 
+    const hasSelectedAttendees = conversation.members.some((m) => selectedMembers[m.id] && m.email);
+    if (!hasSelectedAttendees) {
+      toast.error('Please select at least one attendee to schedule this meeting.');
+      return;
+    }
+
     const recurrenceRule = buildRecurrenceRule(repeatFreq, dailyMode, recurDays);
     const recurrenceSummary = describeRecurrence(repeatFreq, dailyMode, recurDays);
 
@@ -197,6 +207,23 @@ export function ScheduleMeetingDialog({
         attendees,
         recurrence: recurrenceRule ? [recurrenceRule] : undefined,
       });
+
+      // The Google Calendar event already exists at this point — persist a
+      // record so it shows up in this app's own Calendar view too. If this
+      // fails, the meeting still exists in Google Calendar, so we warn
+      // rather than blocking on it.
+      try {
+        await createMeetingRecord({
+          title,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
+          meetingUri: result.meetingUri,
+          htmlLink: result.htmlLink,
+          attendeeEmails: attendees,
+        });
+      } catch (persistErr) {
+        logger.error('Meeting created in Google Calendar but failed to save locally', { error: persistErr });
+      }
 
       // Format human-friendly schedule details
       const dateStr = format(startDateTime, 'EEEE, MMMM d, yyyy');
@@ -403,6 +430,11 @@ export function ScheduleMeetingDialog({
                 ))}
               </div>
             </ScrollArea>
+            {!hasAttendees && (
+              <p className="text-xs text-destructive">
+                Select at least one attendee to schedule this meeting.
+              </p>
+            )}
           </div>
 
           <DialogFooter className="pt-2">
@@ -414,7 +446,7 @@ export function ScheduleMeetingDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading} className="gap-2">
+            <Button type="submit" disabled={loading || !hasAttendees} className="gap-2">
               {loading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
