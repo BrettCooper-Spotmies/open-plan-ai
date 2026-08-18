@@ -49,6 +49,7 @@ export function QuickViews({ activeQuickView, onSelect }: QuickViewsProps) {
           ))}
         </div>
       )}
+      <div className="mt-1 border-t border-border" />
     </div>
   );
 }
