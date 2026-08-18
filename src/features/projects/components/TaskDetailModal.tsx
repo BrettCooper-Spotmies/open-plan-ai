@@ -497,7 +497,11 @@ export const TaskDetailModal = ({
           uploadedBy: uploader ?? { id: '', name: 'Unknown', email: '', role: '', initials: '?' },
         };
       });
-      setEditedTask(prev => ({ ...prev, attachments: mapped }));
+      setEditedTask(prev => {
+        const updated = { ...prev, attachments: mapped };
+        setInitialTaskSnapshot(current => current === '' ? current : serializeTaskForDirtyCheck(updated));
+        return updated;
+      });
     }).catch(() => { });
     return () => { cancelled = true; };
   }, [isOpen, task?.id, mode]);
