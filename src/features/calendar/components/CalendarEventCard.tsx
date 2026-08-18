@@ -1,5 +1,6 @@
 import React from 'react';
-import { Flag, AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { format } from 'date-fns';
+import { Flag, AlertTriangle, AlertCircle, CheckCircle2, Video } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -62,17 +63,49 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
     );
   }
 
-  if (event.type === 'issue') {
+  if (event.type === 'meeting') {
     return (
       <div
         onClick={onClick}
         className={cn(
           'flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition-colors',
-          'bg-destructive/5 hover:bg-destructive/10 border border-destructive/20'
+          'bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30'
         )}
       >
-        <AlertCircle className={cn('h-3 w-3 flex-shrink-0', severityColors[event.severity || 'major'])} />
-        <span className="text-xs font-medium text-destructive truncate flex-1 min-w-0">
+        <Video className="h-3 w-3 text-blue-600 flex-shrink-0" />
+        <span className="text-xs font-medium text-blue-700 dark:text-blue-400 truncate flex-1 min-w-0">
+          {event.title}
+        </span>
+        {!isCompact && (
+          <span className="text-[10px] text-muted-foreground shrink-0">
+            {format(event.date, 'h:mm a')}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (event.type === 'issue') {
+    const isResolved = event.issueStatus === 'resolved' || event.issueStatus === 'wont-fix';
+    return (
+      <div
+        onClick={onClick}
+        className={cn(
+          'flex items-center gap-1.5 px-2 py-1 rounded cursor-pointer transition-colors',
+          isResolved
+            ? 'bg-green-500/5 hover:bg-green-500/10 border border-green-500/20'
+            : 'bg-destructive/5 hover:bg-destructive/10 border border-destructive/20'
+        )}
+      >
+        {isResolved ? (
+          <CheckCircle2 className="h-3 w-3 flex-shrink-0 text-green-600" />
+        ) : (
+          <AlertCircle className={cn('h-3 w-3 flex-shrink-0', severityColors[event.severity || 'major'])} />
+        )}
+        <span className={cn(
+          'text-xs font-medium truncate flex-1 min-w-0',
+          isResolved ? 'text-green-600 line-through' : 'text-destructive'
+        )}>
           {event.title}
         </span>
         {!isCompact && event.projectName && (
@@ -80,7 +113,7 @@ export const CalendarEventCard: React.FC<CalendarEventCardProps> = ({
             {event.projectName}
           </Badge>
         )}
-        {!isCompact && event.severity && (
+        {!isCompact && event.severity && !isResolved && (
           <Badge variant="outline" className="text-[10px] h-4 shrink-0 bg-destructive/10 text-destructive border-destructive/20">
             {event.severity}
           </Badge>

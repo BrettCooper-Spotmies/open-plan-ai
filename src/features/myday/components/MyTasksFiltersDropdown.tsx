@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Filter, Flag, CheckSquare, FolderKanban } from 'lucide-react';
+import { format } from 'date-fns';
+import { Filter, Flag, CheckSquare, FolderKanban, UserCheck, CalendarClock, CalendarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MultiSelect } from '@/components/ui/multi-select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { MyDayItem, MyDayItemType, MyTasksColumnFilters } from '@/types';
 
@@ -38,6 +41,13 @@ const priorityOptions = [
   { value: 'trivial', label: 'Trivial' },
 ];
 
+const dueDateOptions = [
+  { value: 'overdue', label: 'Overdue' },
+  { value: 'today', label: 'Due Today' },
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'no-date', label: 'No Date' },
+];
+
 export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, className }: MyTasksFiltersDropdownProps) {
   const projectOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -49,12 +59,25 @@ export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, classN
     return Array.from(seen.entries()).map(([value, label]) => ({ value, label }));
   }, [items]);
 
+  const assignedByOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    items.forEach((item) => {
+      const assignedBy = item.itemType === 'task' ? item.originalTask?.createdBy : item.originalIssue?.reportedBy;
+      if (assignedBy?.id && !seen.has(assignedBy.id)) {
+        seen.set(assignedBy.id, assignedBy.name || assignedBy.email || assignedBy.id);
+      }
+    });
+    return Array.from(seen.entries()).map(([value, label]) => ({ value, label }));
+  }, [items]);
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.type?.length) count++;
     if (filters.status?.length) count++;
     if (filters.priority?.length) count++;
     if (filters.projectIds?.length) count++;
+    if (filters.assignedByIds?.length) count++;
+    if (filters.dueDate || filters.dueDateCustom) count++;
     return count;
   }, [filters]);
 
@@ -135,6 +158,89 @@ export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, classN
               onChange={(values) => onFiltersChange({ ...filters, projectIds: values.length ? values : undefined })}
               placeholder="All Projects"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs flex items-center gap-1">
+              <UserCheck className="h-3 w-3" />
+              Assigned By
+            </Label>
+            <MultiSelect
+              options={assignedByOptions}
+              selected={filters.assignedByIds || []}
+              onChange={(values) => onFiltersChange({ ...filters, assignedByIds: values.length ? values : undefined })}
+              placeholder="Anyone"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs flex items-center gap-1">
+              <CalendarClock className="h-3 w-3" />
+              Due Date
+            </Label>
+            <div className="flex items-center gap-1">
+              <Select
+                value={filters.dueDate || 'all'}
+                onValueChange={(value) =>
+                  onFiltersChange({
+                    ...filters,
+                    dueDate: value === 'all' ? undefined : (value as MyTasksColumnFilters['dueDate']),
+                    dueDateCustom: undefined,
+                  })
+                }
+              >
+                <SelectTrigger className="h-9 flex-1">
+                  <SelectValue placeholder="Any Date" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any Date</SelectItem>
+                  {dueDateOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={filters.dueDateCustom ? 'secondary' : 'outline'}
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                  >
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <CalendarPicker
+                    mode="single"
+                    selected={filters.dueDateCustom ? new Date(filters.dueDateCustom) : undefined}
+                    onSelect={(date) =>
+                      onFiltersChange({
+                        ...filters,
+                        dueDateCustom: date ? format(date, 'yyyy-MM-dd') : undefined,
+                        dueDate: date ? undefined : filters.dueDate,
+                      })
+                    }
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            {filters.dueDateCustom && (
+              <div className="flex items-center justify-between pl-1">
+                <span className="text-xs text-muted-foreground">{format(new Date(filters.dueDateCustom), 'PPP')}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 px-1.5 text-xs"
+                  onClick={() => onFiltersChange({ ...filters, dueDateCustom: undefined })}
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </PopoverContent>

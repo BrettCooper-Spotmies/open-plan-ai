@@ -255,14 +255,14 @@ export default function Projects() {
     });
   };
 
-  const isProjectOwner = selectedProjectDetails?.createdBy === user?.id;
-
   const canEditSelectedProject = (() => {
     if (!selectedProjectDetails || !user?.id) return false;
     if (selectedProjectDetails.createdBy === user.id) return true;
     const role = (selectedProjectDetails.myRole || '').toLowerCase();
     return role === 'admin';
   })();
+
+  const isProjectOwner = canEditSelectedProject;
 
   const canEditProject = (project: { createdBy?: string; myRole?: string }) => {
     if (!user?.id) return false;
@@ -331,6 +331,16 @@ export default function Projects() {
                   onChange={(e) => handleSearch(e.target.value)}
                   className="pl-9 pr-9 h-12 rounded-2xl bg-background border border-border/60 shadow-sm focus-visible:ring-1 focus-visible:ring-border"
                 />
+                {search && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-12 w-9 text-foreground/70 hover:text-foreground"
+                    onClick={() => handleSearch('')}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="relative flex-1 max-w-none md:max-w-sm">
@@ -339,8 +349,18 @@ export default function Projects() {
                   placeholder="Search projects..."
                   value={search}
                   onChange={(e) => handleSearch(e.target.value)}
-                  className="pl-9 h-10 md:h-9 rounded-xl md:rounded-md bg-background/80"
+                  className="pl-9 pr-9 h-10 md:h-9 rounded-xl md:rounded-md bg-background/80"
                 />
+                {search && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-0 top-0 h-10 md:h-9 w-9 text-foreground/70 hover:text-foreground"
+                    onClick={() => handleSearch('')}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             )}
 
@@ -418,10 +438,17 @@ export default function Projects() {
                     <div className={cn('flex items-start justify-between gap-3 flex-1', isMobile ? 'mb-2' : 'mb-4')}>
                       <div className="min-w-0 flex-1">
                         <h3 className={cn('font-semibold truncate flex items-center gap-2', isMobile ? 'text-sm' : '')}>
-                          {isMobile
-                            ? <span className="text-base">📁</span>
-                            : project.icon && <span className="text-lg">{project.icon}</span>
-                          }
+                          {project.logoUrl ? (
+                            <img
+                              src={resolveFileUrl(project.logoUrl) ?? project.logoUrl}
+                              alt=""
+                              className={cn('rounded object-cover shrink-0', isMobile ? 'h-4 w-4' : 'h-5 w-5')}
+                            />
+                          ) : isMobile ? (
+                            <span className="text-base">📁</span>
+                          ) : (
+                            project.icon && <span className="text-lg">{project.icon}</span>
+                          )}
                           {project.name}
                         </h3>
                         <p className={cn('text-muted-foreground/90 mt-0.5', isMobile ? 'text-xs line-clamp-1' : 'text-sm line-clamp-2')}>

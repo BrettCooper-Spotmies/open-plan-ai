@@ -6,6 +6,7 @@ import { clearProactiveRefresh } from '@/services/api/client';
 import { ENDPOINTS } from '@/shared/api/endpoints';
 import { config } from '@/config';
 import { setSentryUser, clearSentryUser } from '@/infrastructure/monitoring/sentry';
+import { parseOrgReviewError, type OrgReviewBlock } from './orgReview';
 
 interface AuthContextValue {
   user: BackendUser | null;
@@ -14,8 +15,8 @@ interface AuthContextValue {
   isEmailVerified: boolean;
   pendingVerificationEmail: string | null;
   setPendingVerificationEmail: (email: string | null) => void;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null; requiresVerification?: boolean; email?: string }>;
-  signUp: (email: string, password: string, metadata?: SignUpMetadata) => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null; requiresVerification?: boolean; email?: string; orgReview?: OrgReviewBlock }>;
+  signUp: (email: string, password: string, metadata?: SignUpMetadata) => Promise<{ error: Error | null; orgReview?: OrgReviewBlock }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: Error | null }>;
   updatePassword: (currentPassword: string, newPassword: string) => Promise<{ error: Error | null }>;
@@ -38,6 +39,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // from JS — bootstrap() probes the session (and refreshes if needed).
         const me = await authService.bootstrap();
         if (me) {
+          const pRole = me.platformRole?.toLowerCase();
+          if (pRole && pRole !== 'none') {
+            await authService.logout().catch(() => {});
+            setUser(null);
+            return;
+          }
           setUser(me);
           setSentryUser(me.id, me.email);
         }
@@ -86,6 +93,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = useCallback(async () => {
     try {
       const me = await authService.getMe();
+      const pRole = me.platformRole?.toLowerCase();
+      if (pRole && pRole !== 'none') {
+        await authService.logout().catch(() => {});
+        setUser(null);
+        window.location.href = '/login';
+        return;
+      }
       setUser(me);
     } catch {
       // ignore — token may have expired, interceptor handles redirect
@@ -95,6 +109,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     try {
       const result = await authService.login(email, password);
+      const pRole = result.user.platformRole?.toLowerCase();
+      if (pRole && pRole !== 'none') {
+        await authService.logout().catch(() => {});
+        return {
+          error: new Error(
+            'This account is a platform administrator. Please sign in at the Admin Console (admin.openplanai.com).',
+          ),
+        };
+      }
       setUser(result.user);
       setSentryUser(result.user.id, result.user.email);
       setPendingVerificationEmail(null);
@@ -114,7 +137,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return { error: null, requiresVerification: true, email };
         }
       }
-      const message = err instanceof Error ? err.message : 'Login failed';
+
+      // Organization awaiting (or refused) admin approval. Returned as state, not
+      // an Error: the login box renders an explanation in place of the form, and
+      // the raw payload is JSON that must never reach an error alert.
+      const orgReview = parseOrgReviewError(err);
+      if (orgReview) {
+        return { error: null, orgReview };
+      }
+      const serverMessage = axiosErr?.response?.data?.error?.message;
+      const message = serverMessage || (err instanceof Error ? err.message : 'Login failed');
       return { error: new Error(message) };
     }
   }, []);
@@ -126,7 +158,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setPendingVerificationEmail(email);
       return { error: null };
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Registration failed';
+      // Re-registering an email whose organization is already under review (or was
+      // rejected) returns the coded 403 instead of a duplicate-email conflict, so
+      // the signup box can explain the real situation.
+      const orgReview = parseOrgReviewError(err);
+      if (orgReview) {
+        return { error: null, orgReview };
+      }
+      // Prefer the server's message: this catch used to drop the axios response
+      // entirely, which left Signup.tsx rendering whatever `err.message` held.
+      const serverMessage = (err as { response?: { data?: { error?: { message?: string } } } })
+        ?.response?.data?.error?.message;
+      const message = serverMessage || (err instanceof Error ? err.message : 'Registration failed');
       return { error: new Error(message) };
     }
   }, []);
