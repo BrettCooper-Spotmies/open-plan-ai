@@ -141,7 +141,7 @@ export function ConversationList({
   };
 
   return (
-    <div className="flex flex-col h-full border-r border-border">
+    <div className="flex flex-col h-full md:border-r border-border w-full">
       {isMobile ? (
         <div className="px-3 py-2 border-b border-border">
           <ConversationSearch isMobileHeader />
@@ -168,8 +168,8 @@ export function ConversationList({
         onSelect={handleSelectQuickView}
       />
 
-      <ScrollArea className="flex-1 min-w-0">
-        <div className="px-1.5 pb-2 overflow-hidden">
+      <ScrollArea className="flex-1 min-w-0 w-full">
+        <div className="px-2 pb-2 overflow-hidden space-y-0.5">
           {loading ? (
             Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-md overflow-hidden">
