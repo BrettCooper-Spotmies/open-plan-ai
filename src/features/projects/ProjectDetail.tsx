@@ -77,6 +77,7 @@ import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { projectMembersService } from '@/services/projectMembers.service';
 import { attachmentsService } from '@/services/attachments.service';
+import { commentsService } from '@/services/comments.service';
 import { chatService } from '@/services/chat.service';
 import { ProjectChatPanel } from './components/ProjectChatPanel';
 import { toast } from 'sonner';
@@ -1092,6 +1093,22 @@ export default function ProjectDetail() {
         );
       } catch {
         toast.warning('Issue created but some attachments failed to upload');
+      }
+    }
+
+    if (newIssuePartial.comments && newIssuePartial.comments.length > 0 && created?.id) {
+      try {
+        await Promise.all(
+          newIssuePartial.comments.map(comment =>
+            commentsService.create({
+              content: comment.content,
+              entity_id: created.id,
+              entity_type: 'issue',
+            })
+          )
+        );
+      } catch {
+        toast.warning('Issue created but some comments failed to save');
       }
     }
   };
