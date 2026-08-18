@@ -14,19 +14,30 @@ export function useReadReceipts(
   conversationId: string | null | undefined,
   messages: ChatMessage[],
   currentUserId: string | undefined,
-  members: ConversationMember[]
+  members?: ConversationMember[]
 ) {
   const [memberLastReadAt, setMemberLastReadAt] = useState<Record<string, string>>({});
   const channelRef = useRef<Unsubscribe | null>(null);
 
+  const membersKey = useMemo(() => {
+    return (members || []).map((m) => `${m.id}:${m.lastReadAt || ''}`).join(',');
+  }, [members]);
+
   // Seed from the conversation's member list whenever it changes (e.g. on conversation switch).
   useEffect(() => {
     const seed: Record<string, string> = {};
-    for (const m of members) {
+    for (const m of members || []) {
       if (m.lastReadAt) seed[m.id] = m.lastReadAt;
     }
-    setMemberLastReadAt(seed);
-  }, [members]);
+    setMemberLastReadAt((prev) => {
+      const prevKeys = Object.keys(prev);
+      const seedKeys = Object.keys(seed);
+      if (prevKeys.length === seedKeys.length && prevKeys.every((k) => prev[k] === seed[k])) {
+        return prev;
+      }
+      return seed;
+    });
+  }, [membersKey]);
 
   // Mark the conversation as read whenever it's opened or new messages arrive.
   useEffect(() => {

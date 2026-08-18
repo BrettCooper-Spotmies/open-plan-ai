@@ -4,28 +4,20 @@
  * GOOGLE_SHEETS_BOM_INTEGRATION.md §1/Step 5. Confirm & Import stays
  * disabled until every flagged row is either resolved or explicitly skipped
  * — nothing commits from this screen without that.
- *
- * Per-row skip: a flagged row (needs-input or ambiguous-unit) can be
- * excluded from the import entirely — useful for junk/blank rows that
- * shouldn't become parts at all. Skipped rows are dropped from the commit
- * payload just like already-unchanged rows. Column-level unmatched/
- * ambiguous headers are still just an informational banner, not an
- * interactive remap UI.
  */
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, ArrowDownToLine, CheckCircle2, AlertCircle, ChevronDown, Sparkles, X, Undo2, Trash2 } from 'lucide-react';
+import { Loader2, ArrowDownToLine, CheckCircle2, AlertCircle, ChevronDown, X, Trash2 } from 'lucide-react';
 import { useGoogleSheetsImportPreview, useGoogleSheetsImportCommit } from '@/hooks/useGoogleSheets';
 import type { ImportRowPreview, ImportRowResolution, ImportCommitResult } from '@/services/googleSheets.service';
 
@@ -37,13 +29,18 @@ interface Props {
 
 type LeadTimeUnit = 'days' | 'weeks' | 'months';
 const UNIT_MULTIPLIER: Record<LeadTimeUnit, number> = { days: 1, weeks: 7, months: 30 };
-// Mirrors BOMPartSheet's required-field set for a brand-new part — Owner
-// ("Handled By") is deliberately excluded: it's never asked here, the
-// importing user is always set as owner automatically (see commitImport).
-// Supplier/Unit Price only ever appear in missingRequiredFields for
-// brand-new parts (see the backend's NEW_PART_REQUIRED_FIELDS) — an existing
-// part being merely updated on some other column isn't forced to gain them.
-const REQUIRED_FIELD_ORDER = ['Part Number', 'Part Name', 'Description', 'Category', 'Manufacturer', 'MPN', 'Supplier', 'Unit Price', 'Quantity'] as const;
+
+const REQUIRED_FIELD_ORDER = [
+  'Part Number',
+  'Part Name',
+  'Description',
+  'Category',
+  'Manufacturer',
+  'MPN',
+  'Supplier',
+  'Unit Price',
+  'Quantity',
+] as const;
 
 export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: Props) {
   const preview = useGoogleSheetsImportPreview(projectId);
@@ -54,8 +51,6 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
   const [leadTimeValueEdits, setLeadTimeValueEdits] = useState<Record<number, string>>({});
   const [bulkUnit, setBulkUnit] = useState<LeadTimeUnit | ''>('');
   const [skippedRows, setSkippedRows] = useState<Set<number>>(new Set());
-  // Parts missing from the sheet (deleted there, or Part Number changed) —
-  // never removed automatically, only ever the nodeIds explicitly checked here.
   const [deleteChecked, setDeleteChecked] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<ImportCommitResult | null>(null);
 
@@ -77,7 +72,11 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
 
   const rowsByStatus = useMemo(() => {
     const grouped: Record<ImportRowPreview['status'], ImportRowPreview[]> = {
-      'needs-input': [], 'ambiguous-unit': [], 'new-part': [], 'matched-changed': [], 'matched-unchanged': [],
+      'needs-input': [],
+      'ambiguous-unit': [],
+      'new-part': [],
+      'matched-changed': [],
+      'matched-unchanged': [],
     };
     for (const row of data?.rows ?? []) grouped[row.status].push(row);
     return grouped;
@@ -90,8 +89,9 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
     if (skippedRows.has(row.rowIndex)) return true;
     if (row.status === 'needs-input') {
       const fieldsOk = row.missingRequiredFields.every((f) => resolvedFieldValue(row, f).trim() !== '');
-      const leadTimeOk = !row.leadTimeRequired
-        || (!!unitEdits[row.rowIndex] && (leadTimeValueEdits[row.rowIndex] ?? '').trim() !== '');
+      const leadTimeOk =
+        !row.leadTimeRequired ||
+        (!!unitEdits[row.rowIndex] && (leadTimeValueEdits[row.rowIndex] ?? '').trim() !== '');
       return fieldsOk && leadTimeOk;
     }
     if (row.status === 'ambiguous-unit') {
@@ -163,68 +163,128 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
   };
 
   const hasAnyWork = data
-    ? data.rows.some((r) => r.status !== 'matched-unchanged' && !skippedRows.has(r.rowIndex)) || deleteChecked.size > 0
+    ? data.rows.some((r) => r.status !== 'matched-unchanged' && !skippedRows.has(r.rowIndex)) ||
+      deleteChecked.size > 0
     : false;
+
+  const needsInputCount = rowsByStatus['needs-input'].length;
+  const ambiguousUnitCount = rowsByStatus['ambiguous-unit'].length;
+  const unmatchedColsCount = (data?.unmatchedColumns.length ?? 0) + (data?.ambiguousColumns.length ?? 0);
+  const newPartsCount = rowsByStatus['new-part'].length;
+  const changedPartsCount = rowsByStatus['matched-changed'].length;
+  const unchangedPartsCount = rowsByStatus['matched-unchanged'].length;
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
-      <DialogContent className="sm:max-w-4xl max-h-[90vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <ArrowDownToLine className="h-5 w-5 text-emerald-600" />
-            Pull from Google Sheets
-          </DialogTitle>
-          <DialogDescription>
-            Review what would change before anything writes to your BOM.
-          </DialogDescription>
+      <DialogContent
+        hideClose
+        className="!flex flex-col w-[98vw] max-w-[98vw] sm:max-w-[98vw] md:max-w-[98vw] lg:max-w-[98vw] xl:max-w-[98vw] h-[96vh] max-h-[96vh] p-5 sm:p-7 rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl gap-0"
+      >
+        {/* Top Header Bar with Actions */}
+        <DialogHeader className="flex flex-row items-center justify-between gap-4 pb-4 border-b border-border/60 text-left space-y-0 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 text-emerald-600">
+              <ArrowDownToLine className="h-5 w-5" />
+            </div>
+            <div>
+              <DialogTitle className="text-lg sm:text-xl font-bold text-foreground">
+                Pull from Google Sheets
+              </DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                Review what would change before anything writes to your BOM.
+              </DialogDescription>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+            {!allResolved && !result && (
+              <span className="text-xs text-muted-foreground hidden md:inline-block font-medium">
+                Resolve flagged items to continue
+              </span>
+            )}
+            {result ? (
+              <Button onClick={handleClose} className="h-9 px-5 rounded-xl font-medium">
+                Done
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClose}
+                  className="h-9 px-4 rounded-xl text-xs sm:text-sm font-medium"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleConfirm}
+                  disabled={!data || !allResolved || !hasAnyWork || commit.isPending}
+                  className="h-9 px-4 rounded-xl text-xs sm:text-sm font-medium"
+                >
+                  {commit.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+                  Confirm & Import
+                </Button>
+              </>
+            )}
+          </div>
         </DialogHeader>
 
         {preview.isPending && (
-          <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Reading the sheet and matching against your BOM...
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 py-20 text-sm text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            Reading the sheet and matching against your BOM...
           </div>
         )}
 
         {preview.isError && (
-          <div className="flex flex-col items-center gap-2 py-10 text-sm text-destructive">
-            <AlertCircle className="h-5 w-5" />
-            Couldn't load the Pull preview.
-            <Button variant="outline" size="sm" onClick={() => preview.mutate()}>Retry</Button>
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 py-16 text-sm text-destructive">
+            <AlertCircle className="h-6 w-6" />
+            <span>Couldn't load the Pull preview.</span>
+            <Button variant="outline" size="sm" onClick={() => preview.mutate()} className="rounded-xl">
+              Retry
+            </Button>
           </div>
         )}
 
         {result && (
-          <div className="space-y-3 py-4">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-4 py-6">
             <div className="flex items-center gap-2 text-emerald-600">
-              <CheckCircle2 className="h-5 w-5" />
-              <span className="font-medium">Import complete</span>
+              <CheckCircle2 className="h-6 w-6" />
+              <span className="text-base font-semibold">Import completed successfully</span>
             </div>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>{result.createdCount} part(s) created</li>
-              <li>{result.updatedCount} part(s) updated</li>
-              {result.deletedCount > 0 && <li>{result.deletedCount} part(s) removed</li>}
-              {result.failedCount > 0 && <li className="text-destructive">{result.failedCount} row(s) failed</li>}
+            <ul className="text-sm text-muted-foreground space-y-1.5">
+              <li>• {result.createdCount} part(s) created</li>
+              <li>• {result.updatedCount} part(s) updated</li>
+              {result.deletedCount > 0 && <li>• {result.deletedCount} part(s) removed</li>}
+              {result.failedCount > 0 && <li className="text-destructive">• {result.failedCount} row(s) failed</li>}
               {result.deleteResults.some((d) => d.outcome === 'failed') && (
                 <li className="text-destructive">
-                  {result.deleteResults.filter((d) => d.outcome === 'failed').length} removal(s) failed
+                  • {result.deleteResults.filter((d) => d.outcome === 'failed').length} removal(s) failed
                 </li>
               )}
             </ul>
             {(result.failedCount > 0 || result.deleteResults.some((d) => d.outcome === 'failed')) && (
-              <ScrollArea className="max-h-40 rounded-md border border-border p-2">
-                <div className="space-y-1">
-                  {result.results.filter((r) => r.outcome === 'failed').map((r) => (
-                    <div key={`row-${r.rowIndex}`} className="text-xs">
-                      <span className="font-medium text-foreground">{r.partNumber || `Row ${r.rowIndex + 1}`}</span>{' '}
-                      <span className="text-destructive">— {r.reason}</span>
-                    </div>
-                  ))}
-                  {result.deleteResults.filter((d) => d.outcome === 'failed').map((d) => (
-                    <div key={`del-${d.nodeId}`} className="text-xs">
-                      <span className="font-medium text-foreground">{d.partNumber || d.nodeId}</span>{' '}
-                      <span className="text-destructive">— {d.reason}</span>
-                    </div>
-                  ))}
+              <ScrollArea className="max-h-48 rounded-xl border border-border p-3">
+                <div className="space-y-1.5">
+                  {result.results
+                    .filter((r) => r.outcome === 'failed')
+                    .map((r) => (
+                      <div key={`row-${r.rowIndex}`} className="text-xs">
+                        <span className="font-medium text-foreground">{r.partNumber || `Row ${r.rowIndex + 1}`}</span>{' '}
+                        <span className="text-destructive">— {r.reason}</span>
+                      </div>
+                    ))}
+                  {result.deleteResults
+                    .filter((d) => d.outcome === 'failed')
+                    .map((d) => (
+                      <div key={`del-${d.nodeId}`} className="text-xs">
+                        <span className="font-medium text-foreground">{d.partNumber || d.nodeId}</span>{' '}
+                        <span className="text-destructive">— {d.reason}</span>
+                      </div>
+                    ))}
                 </div>
               </ScrollArea>
             )}
@@ -232,118 +292,253 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
         )}
 
         {data && !result && (
-          <ScrollArea className="flex-1 -mx-1 px-1">
-            <div className="space-y-5 py-2">
-              {(data.unmatchedColumns.length > 0 || data.ambiguousColumns.length > 0) && (
-                <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground space-y-1">
-                  {data.unmatchedColumns.length > 0 && (
-                    <p>{data.unmatchedColumns.length} column(s) didn't match a BOM field and will be imported as custom fields: {data.unmatchedColumns.join(', ')}</p>
-                  )}
-                  {data.ambiguousColumns.length > 0 && (
-                    <p>{data.ambiguousColumns.length} column(s) were ambiguous and weren't imported: {data.ambiguousColumns.join(', ')}</p>
-                  )}
+          <>
+            {/* Static Summary Filter Pills Header */}
+            <div className="flex flex-wrap items-center gap-2 py-3 border-b border-border/40 shrink-0">
+              {needsInputCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('section-needs-input');
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 text-red-700 dark:text-red-300 hover:bg-red-100/70 dark:hover:bg-red-900/40 transition-colors cursor-pointer"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  Missing required fields
+                  <span className="px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-[10.5px] font-bold">
+                    {needsInputCount}
+                  </span>
+                  <AlertCircle className="w-3.5 h-3.5 text-red-500 ml-0.5" />
+                </button>
+              )}
+
+              {ambiguousUnitCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('section-ambiguous-unit');
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/20 text-red-700 dark:text-red-300 hover:bg-red-100/70 dark:hover:bg-red-900/40 transition-colors cursor-pointer"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  Lead time needs a unit
+                  <span className="px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 text-[10.5px] font-bold">
+                    {ambiguousUnitCount}
+                  </span>
+                  <AlertCircle className="w-3.5 h-3.5 text-red-500 ml-0.5" />
+                </button>
+              )}
+
+              {unmatchedColsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('section-unmatched-columns');
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-purple-200 dark:border-purple-900/50 bg-purple-50/50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100/70 dark:hover:bg-purple-900/40 transition-colors cursor-pointer"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+                  Columns we couldn't match
+                  <span className="px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-[10.5px] font-bold">
+                    {unmatchedColsCount}
+                  </span>
+                </button>
+              )}
+
+              {newPartsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('section-new-parts');
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-blue-200 dark:border-blue-900/50 bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 hover:bg-blue-100/70 dark:hover:bg-blue-900/40 transition-colors cursor-pointer"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                  New parts that will be added
+                  <span className="px-1.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/40 text-[10.5px] font-bold">
+                    {newPartsCount}
+                  </span>
+                </button>
+              )}
+
+              {changedPartsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('section-changed-parts');
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-300 hover:bg-amber-100/70 dark:hover:bg-amber-900/40 transition-colors cursor-pointer"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  Existing parts that will be updated
+                  <span className="px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 text-[10.5px] font-bold">
+                    {changedPartsCount}
+                  </span>
+                </button>
+              )}
+
+              {unchangedPartsCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('section-unchanged-parts');
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-border bg-muted/40 text-muted-foreground hover:bg-muted/70 transition-colors cursor-pointer"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60" />
+                  Already up to date
+                  <span className="px-1.5 py-0.5 rounded-full bg-muted text-[10.5px] font-semibold">
+                    {unchangedPartsCount}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            {/* Scrollable Content Body */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-5 py-4">
+              {!hasAnyWork && data.deletedParts.length === 0 && (
+                <div className="rounded-2xl border border-border/80 bg-muted/20 p-6 text-center text-sm text-muted-foreground">
+                  Nothing to import — the sheet already matches your BOM.
                 </div>
               )}
 
-              {!hasAnyWork && data.deletedParts.length === 0 && (
-                <p className="text-sm text-muted-foreground">Nothing to import — the sheet already matches your BOM.</p>
-              )}
-
+              {/* ── Section 1: Missing required fields ── */}
               {rowsByStatus['needs-input'].length > 0 && (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">
-                    Needs your input — {rowsByStatus['needs-input'].length} row(s) are missing required fields
-                    {rowsByStatus['needs-input'].some((r) => skippedRows.has(r.rowIndex)) && (
-                      <span className="text-muted-foreground font-normal">
-                        {' '}({rowsByStatus['needs-input'].filter((r) => skippedRows.has(r.rowIndex)).length} skipped)
+                <div id="section-needs-input" className="rounded-2xl border border-red-200/90 dark:border-red-900/60 bg-card p-5 space-y-4 shadow-2xs">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-red-500" />
+                      <span className="text-sm font-semibold text-foreground">Missing required fields</span>
+                      <span className="px-2 py-0.5 rounded-full bg-muted text-foreground text-xs font-bold">
+                        {rowsByStatus['needs-input'].length}
                       </span>
-                    )}
-                  </p>
-                  <div className="max-h-[26rem] overflow-y-auto rounded-md border border-border p-4 space-y-3">
+                      <span className="text-xs font-medium text-red-500 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        needs your input before you can continue
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      These parts are missing a field the BOM requires. AI has suggested a value where it could — check it,
+                      or type your own. Every field here needs a value before you can import.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
                     {rowsByStatus['needs-input'].map((row) => {
                       const skipped = skippedRows.has(row.rowIndex);
                       return (
                         <div
                           key={row.rowIndex}
-                          className={`rounded-md border p-3 space-y-2 ${skipped ? 'border-border bg-muted/30' : 'border-amber-500/30'}`}
+                          className={`rounded-xl border p-4 space-y-3 transition-colors ${
+                            skipped
+                              ? 'border-border/60 bg-muted/30 opacity-70'
+                              : 'border-border/80 bg-background/50'
+                          }`}
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs text-muted-foreground">
-                              Row {row.rowIndex + 1}{row.partNumber ? ` — ${row.partNumber}` : ''}
-                            </p>
-                            {skipped ? (
-                              <Button
-                                type="button" variant="ghost" size="sm"
-                                className="h-6 px-2 text-xs text-muted-foreground"
-                                onClick={() => toggleSkipRow(row.rowIndex)}
-                              >
-                                <Undo2 className="h-3 w-3 mr-1" /> Undo
-                              </Button>
-                            ) : (
-                              <Button
-                                type="button" variant="ghost" size="sm"
-                                className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
-                                onClick={() => toggleSkipRow(row.rowIndex)}
-                              >
-                                <X className="h-3 w-3 mr-1" /> Skip row
-                              </Button>
-                            )}
+                            <div className="text-xs font-medium">
+                              <span className="text-primary font-mono font-semibold">
+                                {row.partNumber || `Row ${row.rowIndex + 1}`}
+                              </span>
+                              {row.partName && (
+                                <span className="text-muted-foreground"> — {row.partName}</span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => toggleSkipRow(row.rowIndex)}
+                              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              {skipped ? 'Undo skip' : 'Skip this part'}
+                            </button>
                           </div>
+
                           {skipped ? (
                             <p className="text-xs text-muted-foreground italic">Won't be imported.</p>
                           ) : (
-                            <>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                {REQUIRED_FIELD_ORDER.filter((f) => row.missingRequiredFields.includes(f)).map((field) => {
-                                  const hasAiSuggestion = field in row.aiSuggestions;
-                                  return (
-                                    <div key={field} className="space-y-1">
-                                      <Label className="text-xs flex items-center gap-1">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                              {REQUIRED_FIELD_ORDER.filter((f) =>
+                                row.missingRequiredFields.includes(f)
+                              ).map((field) => {
+                                const hasAiSuggestion = field in row.aiSuggestions;
+                                return (
+                                  <div key={field} className="space-y-1.5">
+                                    <div className="flex items-center justify-between text-xs">
+                                      <Label className="text-xs font-medium text-foreground">
                                         {field}
-                                        {hasAiSuggestion && <Sparkles className="h-3 w-3 text-primary" aria-label="AI-suggested" />}
                                       </Label>
-                                      <Input
-                                        className="h-8 text-sm"
-                                        value={resolvedFieldValue(row, field)}
-                                        placeholder={hasAiSuggestion ? undefined : 'Required'}
-                                        onChange={(e) => handleFieldChange(row.rowIndex, field, e.target.value)}
-                                      />
+                                      {hasAiSuggestion && (
+                                        <span className="text-[10px] font-medium text-purple-600 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 px-1.5 py-0.5 rounded">
+                                          AI suggested — check it
+                                        </span>
+                                      )}
                                     </div>
-                                  );
-                                })}
-                              </div>
+                                    <Input
+                                      className="h-9 text-xs sm:text-sm rounded-lg"
+                                      value={resolvedFieldValue(row, field)}
+                                      placeholder={hasAiSuggestion ? undefined : 'Required'}
+                                      onChange={(e) =>
+                                        handleFieldChange(row.rowIndex, field, e.target.value)
+                                      }
+                                    />
+                                  </div>
+                                );
+                              })}
+
                               {row.leadTimeRequired && (
-                                <div className="space-y-1 pt-1">
-                                  <Label className="text-xs">Lead Time</Label>
+                                <div className="space-y-1.5">
+                                  <div className="flex items-center justify-between text-xs">
+                                    <Label className="text-xs font-medium text-foreground">
+                                      Lead Time
+                                    </Label>
+                                    <span className="text-[10px] font-medium text-purple-600 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 px-1.5 py-0.5 rounded">
+                                      AI suggested — check it
+                                    </span>
+                                  </div>
                                   <div className="flex gap-2">
                                     <Input
-                                      className="h-8 text-sm w-24"
+                                      className="h-9 text-xs sm:text-sm flex-1 rounded-lg"
                                       type="text"
                                       inputMode="numeric"
                                       value={leadTimeValueEdits[row.rowIndex] ?? ''}
-                                      placeholder="Required"
+                                      placeholder="4"
                                       onChange={(e) => {
                                         const v = e.target.value.replace(/[^0-9]/g, '');
-                                        setLeadTimeValueEdits((prev) => ({ ...prev, [row.rowIndex]: v }));
+                                        setLeadTimeValueEdits((prev) => ({
+                                          ...prev,
+                                          [row.rowIndex]: v,
+                                        }));
                                       }}
                                     />
                                     <Select
                                       value={unitEdits[row.rowIndex] ?? ''}
-                                      onValueChange={(v) => setUnitEdits((prev) => ({ ...prev, [row.rowIndex]: v as LeadTimeUnit }))}
+                                      onValueChange={(v) =>
+                                        setUnitEdits((prev) => ({
+                                          ...prev,
+                                          [row.rowIndex]: v as LeadTimeUnit,
+                                        }))
+                                      }
                                     >
-                                      <SelectTrigger className="h-8 w-28 text-xs">
+                                      <SelectTrigger className="h-9 w-28 text-xs rounded-lg">
                                         <SelectValue placeholder="Unit?" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="days">Days</SelectItem>
-                                        <SelectItem value="weeks">Weeks</SelectItem>
-                                        <SelectItem value="months">Months</SelectItem>
+                                        <SelectItem value="days">days</SelectItem>
+                                        <SelectItem value="weeks">weeks</SelectItem>
+                                        <SelectItem value="months">months</SelectItem>
                                       </SelectContent>
                                     </Select>
                                   </div>
                                 </div>
                               )}
-                            </>
+                            </div>
                           )}
                         </div>
                       );
@@ -352,123 +547,189 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                 </div>
               )}
 
+              {/* ── Section 2: Lead time needs a unit ── */}
               {rowsByStatus['ambiguous-unit'].length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium">
-                      Ambiguous lead time — {rowsByStatus['ambiguous-unit'].length} row(s) have no detectable unit
+                <div id="section-ambiguous-unit" className="rounded-2xl border border-red-200/90 dark:border-red-900/60 bg-card p-5 space-y-4 shadow-2xs">
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-red-500" />
+                      <span className="text-sm font-semibold text-foreground">Lead time needs a unit</span>
+                      <span className="px-2 py-0.5 rounded-full bg-muted text-foreground text-xs font-bold">
+                        {rowsByStatus['ambiguous-unit'].length}
+                      </span>
+                      <span className="text-xs font-medium text-red-500 flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        needs your input before you can continue
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      The sheet has a number for lead time but no day/week/month unit, so it can't be imported as-is. Pick a
+                      unit for each.
                     </p>
-                    {rowsByStatus['ambiguous-unit'].length > 1 && (
+                  </div>
+
+                  {rowsByStatus['ambiguous-unit'].length > 1 && (
+                    <div className="flex items-center gap-2 pt-1 pb-1">
+                      <span className="text-xs text-muted-foreground">Set the same unit for all of these:</span>
                       <Select value={bulkUnit} onValueChange={(v) => applyBulkUnit(v as LeadTimeUnit)}>
-                        <SelectTrigger className="h-8 w-40 text-xs">
-                          <SelectValue placeholder="Apply to all..." />
+                        <SelectTrigger className="h-8 w-36 text-xs rounded-lg">
+                          <SelectValue placeholder="Pick a unit..." />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="days">All are days</SelectItem>
-                          <SelectItem value="weeks">All are weeks</SelectItem>
-                          <SelectItem value="months">All are months</SelectItem>
+                          <SelectItem value="days">days</SelectItem>
+                          <SelectItem value="weeks">weeks</SelectItem>
+                          <SelectItem value="months">months</SelectItem>
                         </SelectContent>
                       </Select>
-                    )}
-                  </div>
-                  <div className="max-h-56 overflow-y-auto space-y-2">
-                    {rowsByStatus['ambiguous-unit'].map((row) => {
-                      const skipped = skippedRows.has(row.rowIndex);
-                      return (
-                        <div
-                          key={row.rowIndex}
-                          className={`flex items-center justify-between gap-3 rounded-md border p-2.5 ${skipped ? 'border-border bg-muted/30' : 'border-amber-500/30'}`}
-                        >
-                          <span className="text-xs">
-                            <span className="font-medium text-foreground">{row.partNumber || `Row ${row.rowIndex + 1}`}</span>
-                            {' — lead time '}"{row.leadTimeRaw}"
-                          </span>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {skipped ? (
-                              <Button
-                                type="button" variant="ghost" size="sm"
-                                className="h-6 px-2 text-xs text-muted-foreground"
-                                onClick={() => toggleSkipRow(row.rowIndex)}
+                    </div>
+                  )}
+
+                  <div className="rounded-xl border border-border/80 overflow-hidden">
+                    <div className="grid grid-cols-[1fr_120px_120px_130px] items-center px-4 py-2.5 bg-muted/30 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider border-b border-border/60">
+                      <div>PART</div>
+                      <div>FIELD</div>
+                      <div>VALUE IN SHEET</div>
+                      <div className="text-right">UNIT</div>
+                    </div>
+                    <div className="divide-y divide-border/50">
+                      {rowsByStatus['ambiguous-unit'].map((row) => {
+                        return (
+                          <div
+                            key={row.rowIndex}
+                            className="grid grid-cols-[1fr_120px_120px_130px] items-center px-4 py-2.5 text-xs bg-card hover:bg-muted/20 transition-colors"
+                          >
+                            <div className="font-mono text-primary font-medium truncate pr-2">
+                              {row.partNumber || `Row ${row.rowIndex + 1}`}
+                            </div>
+                            <div className="text-muted-foreground">Lead Time</div>
+                            <div className="font-mono text-muted-foreground">"{row.leadTimeRaw}"</div>
+                            <div className="flex items-center justify-end gap-2">
+                              <Select
+                                value={unitEdits[row.rowIndex] ?? ''}
+                                onValueChange={(v) =>
+                                  setUnitEdits((prev) => ({
+                                    ...prev,
+                                    [row.rowIndex]: v as LeadTimeUnit,
+                                  }))
+                                }
                               >
-                                <Undo2 className="h-3 w-3 mr-1" /> Undo
-                              </Button>
-                            ) : (
-                              <>
-                                <Select
-                                  value={unitEdits[row.rowIndex] ?? ''}
-                                  onValueChange={(v) => setUnitEdits((prev) => ({ ...prev, [row.rowIndex]: v as LeadTimeUnit }))}
-                                >
-                                  <SelectTrigger className="h-8 w-28 text-xs">
-                                    <SelectValue placeholder="Unit?" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="days">Days</SelectItem>
-                                    <SelectItem value="weeks">Weeks</SelectItem>
-                                    <SelectItem value="months">Months</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  type="button" variant="ghost" size="sm"
-                                  className="h-6 px-2 text-xs text-muted-foreground hover:text-destructive"
-                                  onClick={() => toggleSkipRow(row.rowIndex)}
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </>
-                            )}
+                                <SelectTrigger className="h-8 w-28 text-xs rounded-lg">
+                                  <SelectValue placeholder="Unit?" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="days">days</SelectItem>
+                                  <SelectItem value="weeks">weeks</SelectItem>
+                                  <SelectItem value="months">months</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
 
+              {/* ── Section 3: Columns we couldn't match ── */}
+              {(data.unmatchedColumns.length > 0 || data.ambiguousColumns.length > 0) && (
+                <div id="section-unmatched-columns" className="rounded-2xl border border-purple-200/90 dark:border-purple-900/60 bg-card p-5 space-y-3 shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-purple-500" />
+                    <span className="text-sm font-semibold text-foreground">Columns we couldn't match</span>
+                    <span className="px-2 py-0.5 rounded-full bg-muted text-foreground text-xs font-bold">
+                      {unmatchedColsCount}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 text-xs text-muted-foreground">
+                    {data.unmatchedColumns.length > 0 && (
+                      <p>
+                        • {data.unmatchedColumns.length} column(s) didn't match a standard BOM field and will be
+                        imported as custom fields: <strong className="text-foreground">{data.unmatchedColumns.join(', ')}</strong>
+                      </p>
+                    )}
+                    {data.ambiguousColumns.length > 0 && (
+                      <p>
+                        • {data.ambiguousColumns.length} column(s) were ambiguous and weren't imported:{' '}
+                        <strong className="text-foreground">{data.ambiguousColumns.join(', ')}</strong>
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Section 4: New parts that will be added ── */}
               {rowsByStatus['new-part'].length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">New parts — {rowsByStatus['new-part'].length}</p>
-                  <div className="flex flex-wrap gap-1.5">
+                <div id="section-new-parts" className="rounded-2xl border border-blue-200/90 dark:border-blue-900/60 bg-card p-5 space-y-3 shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span className="text-sm font-semibold text-foreground">New parts that will be added</span>
+                    <span className="px-2 py-0.5 rounded-full bg-muted text-foreground text-xs font-bold">
+                      {rowsByStatus['new-part'].length}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
                     {rowsByStatus['new-part'].map((row) => (
-                      <Badge key={row.rowIndex} variant="secondary" className="text-[11px]">{row.partNumber}</Badge>
+                      <Badge key={row.rowIndex} variant="secondary" className="text-xs px-2.5 py-1 font-mono rounded-lg">
+                        {row.partNumber || `Row ${row.rowIndex + 1}`}
+                      </Badge>
                     ))}
                   </div>
                 </div>
               )}
 
+              {/* ── Section 5: Existing parts that will be updated ── */}
               {rowsByStatus['matched-changed'].length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Changed — {rowsByStatus['matched-changed'].length}</p>
-                  <div className="space-y-1.5">
+                <div id="section-changed-parts" className="rounded-2xl border border-amber-200/90 dark:border-amber-900/60 bg-card p-5 space-y-3 shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-500" />
+                    <span className="text-sm font-semibold text-foreground">Existing parts that will be updated</span>
+                    <span className="px-2 py-0.5 rounded-full bg-muted text-foreground text-xs font-bold">
+                      {rowsByStatus['matched-changed'].length}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
                     {rowsByStatus['matched-changed'].map((row) => (
-                      <div key={row.rowIndex} className="text-xs">
-                        <span className="font-medium text-foreground">{row.partNumber}</span>{' '}
-                        <span className="text-muted-foreground">— {row.changes.map((c) => c.field).join(', ')}</span>
+                      <div key={row.rowIndex} className="text-xs flex items-baseline gap-2">
+                        <span className="font-mono font-semibold text-foreground">{row.partNumber}</span>
+                        <span className="text-muted-foreground">
+                          — updated fields: {row.changes.map((c) => c.field).join(', ')}
+                        </span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
+              {/* ── Section 6: Already up to date ── */}
               {rowsByStatus['matched-unchanged'].length > 0 && (
-                <Collapsible>
-                  <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
-                    <ChevronDown className="h-3.5 w-3.5" />
-                    {rowsByStatus['matched-unchanged'].length} part(s) unchanged
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="flex flex-wrap gap-1.5 pt-2">
-                      {rowsByStatus['matched-unchanged'].map((row) => (
-                        <Badge key={row.rowIndex} variant="outline" className="text-[11px]">{row.partNumber}</Badge>
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
+                <div id="section-unchanged-parts" className="rounded-2xl border border-border/80 bg-card p-4">
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center justify-between w-full text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer">
+                      <span className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-muted-foreground/60" />
+                        Already up to date ({rowsByStatus['matched-unchanged'].length} parts)
+                      </span>
+                      <ChevronDown className="h-4 w-4" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="flex flex-wrap gap-1.5 pt-3">
+                        {rowsByStatus['matched-unchanged'].map((row) => (
+                          <Badge key={row.rowIndex} variant="outline" className="text-[11px] font-mono rounded-md">
+                            {row.partNumber}
+                          </Badge>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </div>
               )}
 
+              {/* ── Section 7: Removed from sheet ── */}
               {data.deletedParts.length > 0 && (
-                <div className="space-y-3">
+                <div className="rounded-2xl border border-border/80 bg-card p-5 space-y-3">
                   <div>
-                    <p className="text-sm font-medium">
+                    <p className="text-sm font-semibold text-foreground">
                       Removed from sheet — {data.deletedParts.length} part(s)
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -482,12 +743,23 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                       return (
                         <label
                           key={part.nodeId}
-                          className={`flex items-center gap-2.5 rounded-md border p-2.5 cursor-pointer transition-colors ${checked ? 'border-destructive/40 bg-destructive/5' : 'border-border hover:bg-muted/40'}`}
+                          className={`flex items-center gap-2.5 rounded-xl border p-2.5 cursor-pointer transition-colors ${
+                            checked
+                              ? 'border-destructive/40 bg-destructive/5'
+                              : 'border-border hover:bg-muted/40'
+                          }`}
                         >
-                          <Checkbox checked={checked} onCheckedChange={() => toggleDeleteChecked(part.nodeId)} />
-                          <Trash2 className={`h-3.5 w-3.5 shrink-0 ${checked ? 'text-destructive' : 'text-muted-foreground'}`} />
+                          <Checkbox
+                            checked={checked}
+                            onCheckedChange={() => toggleDeleteChecked(part.nodeId)}
+                          />
+                          <Trash2
+                            className={`h-3.5 w-3.5 shrink-0 ${
+                              checked ? 'text-destructive' : 'text-muted-foreground'
+                            }`}
+                          />
                           <span className="text-xs min-w-0 flex-1">
-                            <span className="font-medium text-foreground">{part.partNumber}</span>
+                            <span className="font-mono font-medium text-foreground">{part.partNumber}</span>
                             {part.name && <span className="text-muted-foreground"> — {part.name}</span>}
                           </span>
                         </label>
@@ -496,33 +768,9 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                   </div>
                 </div>
               )}
-
-              <Separator />
-              {!allResolved && (
-                <p className="text-xs text-amber-600">
-                  Resolve every flagged row above before importing.
-                </p>
-              )}
             </div>
-          </ScrollArea>
+          </>
         )}
-
-        <DialogFooter>
-          {result ? (
-            <Button onClick={handleClose} className="w-full">Done</Button>
-          ) : (
-            <>
-              <Button variant="outline" onClick={handleClose}>Cancel</Button>
-              <Button
-                onClick={handleConfirm}
-                disabled={!data || !allResolved || !hasAnyWork || commit.isPending}
-              >
-                {commit.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
-                Confirm & Import
-              </Button>
-            </>
-          )}
-        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
