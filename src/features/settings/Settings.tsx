@@ -244,6 +244,24 @@ const Settings = () => {
     setActiveTab(getTabFromParams());
   }, [searchParams]);
 
+  // Discard any unsaved avatar/name edits when leaving the Profile tab
+  useEffect(() => {
+    if (activeTab !== 'profile') {
+      if (localAvatarPreviewRef.current) {
+        URL.revokeObjectURL(localAvatarPreviewRef.current);
+      }
+      setPendingAvatarFile(null);
+      setLocalAvatarPreview(null);
+      setIsEditingProfile(false);
+      if (profile) {
+        setProfileForm({
+          name: profile.name || '',
+          initials: profile.initials || '',
+        });
+      }
+    }
+  }, [activeTab, profile]);
+
   // Sync organization data to form - preserve local logoUrl if server hasn't updated yet
   const resetOrgFormFromOrganization = () => {
     if (currentOrganization) {
@@ -929,23 +947,30 @@ const Settings = () => {
                           </Button>
                         )}
                       </div>
-                      <Input
-                        id="full-name"
-                        value={profileForm.name}
-                        disabled={!isEditingProfile}
-                        autoFocus={isEditingProfile}
-                        className={cn(!isEditingProfile && 'bg-muted')}
-                        onChange={(e) => {
-                          const name = e.target.value;
-                          const initials = name
-                            .split(' ')
-                            .map(n => n[0])
-                            .join('')
-                            .toUpperCase()
-                            .slice(0, 2);
-                          setProfileForm({ ...profileForm, name, initials });
-                        }}
-                      />
+                      {isEditingProfile ? (
+                        <Input
+                          id="full-name"
+                          value={profileForm.name}
+                          autoFocus
+                          onChange={(e) => {
+                            const name = e.target.value;
+                            const initials = name
+                              .split(' ')
+                              .map(n => n[0])
+                              .join('')
+                              .toUpperCase()
+                              .slice(0, 2);
+                            setProfileForm({ ...profileForm, name, initials });
+                          }}
+                        />
+                      ) : (
+                        <p
+                          id="full-name"
+                          className="min-h-10 w-full break-words rounded-md border border-input bg-muted px-3 py-2 text-sm"
+                        >
+                          {profileForm.name || '—'}
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
