@@ -2557,14 +2557,12 @@ export const TaskDetailModal = ({
                       />
                       <Button
                         type="button"
-                        variant="outline"
                         size="sm"
                         onClick={handleAddVideoLink}
                         disabled={!videoLinkInput.trim()}
                         className="shrink-0"
                       >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add
+                        <Plus className="h-4 w-4" />
                       </Button>
                     </div>
                   )}
