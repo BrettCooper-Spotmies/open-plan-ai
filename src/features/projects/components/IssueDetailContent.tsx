@@ -247,8 +247,13 @@ export function IssueDetailContent({
 
     useEffect(() => {
         if (issue) {
-            // Preserve loaded comments — they're fetched separately via API
-            setEditedIssue(prev => ({ ...issue, comments: prev?.comments ?? issue.comments ?? [] }));
+            // Preserve loaded comments only when staying on the same issue —
+            // they're fetched separately via API and would otherwise leak
+            // stale comments into a newly opened/created issue.
+            setEditedIssue(prev => ({
+                ...issue,
+                comments: prev && prev.id === issue.id ? (prev.comments ?? issue.comments ?? []) : (issue.comments ?? []),
+            }));
         }
     }, [issue]);
 
