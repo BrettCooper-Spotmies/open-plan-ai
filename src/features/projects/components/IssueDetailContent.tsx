@@ -1750,6 +1750,25 @@ export function IssueDetailContent({
                         </h3>
 
                         <div className="space-y-2">
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="Paste video URL…"
+                                    value={videoLinkInput}
+                                    onChange={(e) => setVideoLinkInput(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddVideoLink(); } }}
+                                    className="text-sm"
+                                />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={handleAddVideoLink}
+                                    disabled={!videoLinkInput.trim()}
+                                    className="shrink-0"
+                                >
+                                    <Plus className="h-4 w-4" />
+                                </Button>
+                            </div>
+
                             {videoLinks.map((vl) => {
                                 const thumbnail = getVideoThumbnail(vl.url);
                                 return (
@@ -1807,25 +1826,6 @@ export function IssueDetailContent({
                                     ))}
                                 </div>
                             )}
-
-                            <div className="flex gap-2">
-                                <Input
-                                    placeholder="Paste video URL…"
-                                    value={videoLinkInput}
-                                    onChange={(e) => setVideoLinkInput(e.target.value)}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddVideoLink(); } }}
-                                    className="text-sm"
-                                />
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    onClick={handleAddVideoLink}
-                                    disabled={!videoLinkInput.trim()}
-                                    className="shrink-0"
-                                >
-                                    <Plus className="h-4 w-4" />
-                                </Button>
-                            </div>
                         </div>
                     </section>
 
