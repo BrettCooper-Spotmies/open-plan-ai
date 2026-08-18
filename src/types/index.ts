@@ -153,6 +153,7 @@ export interface Task {
   attachmentCounts?: AttachmentCounts;
   createdAt: string;
   updatedAt: string;
+  completedAt?: string | null;  // Set when status transitions to 'done'; cleared on reopen
   createdBy?: TeamMember;  // Who created this task
   updatedBy?: TeamMember | null;  // Who last modified this task
   lastModifiedFields?: string[] | null;  // Field keys changed in the most recent update
@@ -365,6 +366,8 @@ export interface TaskFilter {
   milestoneId?: string;
   dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
   dueDateCustom?: string; // exact date (yyyy-MM-dd) picked from the calendar, overrides dueDate preset
+  completedDate?: 'today' | 'this-week' | 'this-month';
+  completedDateCustom?: string; // exact date (yyyy-MM-dd) picked from the calendar, overrides completedDate preset
   tags?: string[];
   hasBlockers?: boolean;
 }
