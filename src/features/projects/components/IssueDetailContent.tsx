@@ -200,13 +200,13 @@ export function IssueDetailContent({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-    const [pendingFileUrls, setPendingFileUrls] = useState<(string | null)[]>([]);
+    const [pendingFileUrls, setPendingFileUrls] = useState<string[]>([]);
     const [videoLinkInput, setVideoLinkInput] = useState('');
 
     useEffect(() => {
-        const urls = pendingFiles.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+        const urls = pendingFiles.map(f => URL.createObjectURL(f));
         setPendingFileUrls(urls);
-        return () => { urls.forEach(url => { if (url) URL.revokeObjectURL(url); }); };
+        return () => { urls.forEach(url => URL.revokeObjectURL(url)); };
     }, [pendingFiles]);
 
     const projectId = issue?.projectId;
@@ -1673,15 +1673,8 @@ export function IssueDetailContent({
                                         return (
                                             <div
                                                 key={i}
-                                                className={cn(
-                                                    "flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm",
-                                                    isImage && previewUrl && "cursor-pointer hover:bg-muted"
-                                                )}
-                                                onClick={() => {
-                                                    if (isImage && previewUrl) {
-                                                        setPreviewingFile({ url: previewUrl, fileName: f.name, mimeType: f.type });
-                                                    }
-                                                }}
+                                                className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm cursor-pointer hover:bg-muted"
+                                                onClick={() => setPreviewingFile({ url: previewUrl, fileName: f.name, mimeType: f.type })}
                                             >
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     {isImage && previewUrl ? (
@@ -2193,6 +2186,7 @@ export function IssueDetailContent({
                 file={previewingFile}
                 files={[
                     ...attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType })),
+                    ...pendingFiles.map((f, i) => ({ url: pendingFileUrls[i], fileName: f.name, mimeType: f.type })),
                     ...videoLinks.map(v => ({ url: v.url, fileName: v.title || v.url })),
                 ]}
                 onClose={() => setPreviewingFile(null)}

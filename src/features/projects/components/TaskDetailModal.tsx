@@ -286,7 +286,7 @@ export const TaskDetailModal = ({
   const [editingTagOriginal, setEditingTagOriginal] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [pendingFileUrls, setPendingFileUrls] = useState<(string | null)[]>([]);
+  const [pendingFileUrls, setPendingFileUrls] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
@@ -472,9 +472,9 @@ export const TaskDetailModal = ({
   }, [isOpen, task?.id, mode]);
 
   useEffect(() => {
-    const urls = pendingFiles.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+    const urls = pendingFiles.map(f => URL.createObjectURL(f));
     setPendingFileUrls(urls);
-    return () => { urls.forEach(url => { if (url) URL.revokeObjectURL(url); }); };
+    return () => { urls.forEach(url => URL.revokeObjectURL(url)); };
   }, [pendingFiles]);
 
   // The task payload returned by the project/task endpoints never embeds
@@ -2399,7 +2399,11 @@ export const TaskDetailModal = ({
                   {mode === 'create' && pendingFiles.length > 0 && (
                     <div className="space-y-1">
                       {pendingFiles.map((f, i) => (
-                        <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
+                        <div
+                          key={i}
+                          className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm cursor-pointer hover:bg-muted/50"
+                          onClick={() => setPreviewingFile({ url: pendingFileUrls[i], fileName: f.name, mimeType: f.type })}
+                        >
                           <div className="flex items-center gap-2 min-w-0">
                             <File className="h-4 w-4 shrink-0 text-muted-foreground" />
                             <span className="truncate">{f.name}</span>
@@ -2409,7 +2413,10 @@ export const TaskDetailModal = ({
                             variant="ghost"
                             size="icon"
                             className="h-6 w-6 shrink-0"
-                            onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPendingFiles(prev => prev.filter((_, idx) => idx !== i));
+                            }}
                           >
                             <X className="h-3 w-3" />
                           </Button>
@@ -2947,6 +2954,7 @@ export const TaskDetailModal = ({
         file={previewingFile}
         files={[
           ...attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType })),
+          ...pendingFiles.map((f, i) => ({ url: pendingFileUrls[i], fileName: f.name, mimeType: f.type })),
           ...videoLinks.map(v => ({ url: v.url, fileName: v.title || v.url })),
         ]}
         onClose={() => setPreviewingFile(null)}
