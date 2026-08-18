@@ -28,17 +28,13 @@ import {
   CheckCircle, Clock, GitBranch, Save, Plus, X, ChevronRight, ChevronLeft,
   FileText, ImageIcon, Upload, Paperclip, AlertCircle, Link as LinkIcon,
   Check, XCircle, History, Loader2,
-  FileSpreadsheet, ArrowDownToLine, ArrowUpFromLine, ExternalLink,
+  FileSpreadsheet, ExternalLink,
 } from 'lucide-react';
 import {
   BOMNode, BOMStatus, BOMCategory, BOM_CAT_META, KNOWN_BOM_CATEGORIES, UOM_OPTIONS, SupplierEntry, CustomFieldEntry,
 } from './bomData';
 import { BOMStatusPill } from './BOMShared';
 import { BOMRejectDialog } from './BOMRejectDialog';
-import BOMGoogleSheetsPushDialog from './BOMGoogleSheetsPushDialog';
-import BOMGoogleSheetsPullDialog from './BOMGoogleSheetsPullDialog';
-import BOMGoogleSheetsLinkDialog from './BOMGoogleSheetsLinkDialog';
-import { useGoogleSheetsLinkStatus } from '@/hooks/useGoogleSheets';
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
@@ -460,17 +456,6 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   const { data: approvals = [], isLoading: approvalsLoading } = useBomNodeApprovals(isEdit ? node?.id : undefined);
   const { data: existingDocs = [], isLoading: docsLoading } = useBomDocuments(isEdit ? node?.id : undefined);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
-
-  // Google Sheets sync — shown in the Sourcing tab. Connecting the Google
-  // account happens once per org from Integrations (like Drive/Meet); this
-  // popup only ever offers to link a spreadsheet using that connection, and
-  // shows nothing at all if the org hasn't connected yet.
-  const { data: sheetsLinkStatus } = useGoogleSheetsLinkStatus(projectId);
-  const isSheetsConnected = !!sheetsLinkStatus?.orgConnected;
-  const isSheetsLinked = !!sheetsLinkStatus?.linked;
-  const [sheetsLinkOpen, setSheetsLinkOpen] = useState(false);
-  const [sheetsPullOpen, setSheetsPullOpen] = useState(false);
-  const [sheetsPushOpen, setSheetsPushOpen] = useState(false);
 
   // ── Form state ──
   const [pn, setPn] = useState(node?.pn ?? '');
@@ -1637,49 +1622,6 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
             <TabsContent value="sourcing" className="flex-1 overflow-y-auto px-7 py-5 mt-0 data-[state=inactive]:hidden">
               <div className="space-y-5">
 
-                {/* Google Sheets sync — only shown once the org has connected from
-                    Integrations; nothing renders here otherwise. */}
-                {isSheetsLinked ? (
-                  <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-                        Synced with Google Sheets
-                      </div>
-                      <a
-                        href={`https://docs.google.com/spreadsheets/d/${sheetsLinkStatus?.spreadsheetId}/edit`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary hover:underline shrink-0"
-                      >
-                        Open <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-                    <p className="text-xs text-muted-foreground">Tab "{sheetsLinkStatus?.sheetTabName}"</p>
-                    <div className="flex gap-2 pt-1">
-                      <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => setSheetsPullOpen(true)}>
-                        <ArrowDownToLine className="w-3.5 h-3.5 mr-1.5" /> Pull
-                      </Button>
-                      <Button type="button" variant="outline" size="sm" className="flex-1" onClick={() => setSheetsPushOpen(true)}>
-                        <ArrowUpFromLine className="w-3.5 h-3.5 mr-1.5" /> Push
-                      </Button>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setSheetsLinkOpen(true)}>
-                        Manage
-                      </Button>
-                    </div>
-                  </div>
-                ) : isSheetsConnected ? (
-                  <div className="rounded-md border border-dashed border-border p-3 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 text-sm text-foreground">
-                      <FileSpreadsheet className="w-4 h-4 text-muted-foreground" />
-                      No Google Sheet linked to this BOM yet
-                    </div>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setSheetsLinkOpen(true)}>
-                      Add Google Sheet link
-                    </Button>
-                  </div>
-                ) : null}
-
                 {/* MPN · Quantity · UOM */}
                 <div className="grid gap-y-2 grid-cols-3 gap-x-6">
                   {/* Manufacturer */}
@@ -2107,16 +2049,6 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
         partLabel={node?.pn}
         onClose={() => setShowRejectDialog(false)}
         onConfirm={handleRejectConfirm}
-      />
-
-      {/* Google Sheets Pull/Push — triggered from the Sourcing tab's sync block above */}
-      <BOMGoogleSheetsPullDialog open={sheetsPullOpen} onClose={() => setSheetsPullOpen(false)} projectId={projectId} />
-      <BOMGoogleSheetsPushDialog open={sheetsPushOpen} onClose={() => setSheetsPushOpen(false)} projectId={projectId} />
-      <BOMGoogleSheetsLinkDialog
-        open={sheetsLinkOpen}
-        onClose={() => setSheetsLinkOpen(false)}
-        projectId={projectId}
-        linkStatus={sheetsLinkStatus}
       />
     </>
   );

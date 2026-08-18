@@ -188,14 +188,14 @@ export function ActivityFeed({ activities, isLoading, className }: ActivityFeedP
 
   if (isLoading) {
     return (
-      <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden', className)}>
+      <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden rounded-2xl border-border/70 shadow-sm min-w-0', className)}>
         <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
           <CardTitle className="min-w-0 text-base font-medium flex items-center gap-2">
             <PanelIcon icon={ActivityIcon} color="#2563EB" />
             <span className="truncate">Recent Activity</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1">
+        <CardContent className="space-y-1 min-w-0">
           {/* Placeholder for loading state */}
           <div className="flex flex-col items-center justify-center py-8 text-center animate-pulse">
             <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
@@ -212,7 +212,7 @@ export function ActivityFeed({ activities, isLoading, className }: ActivityFeedP
   }
 
   return (
-    <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden', className)}>
+    <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden rounded-2xl border-border/70 shadow-sm min-w-0', className)}>
       <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
         <CardTitle className="min-w-0 text-base font-medium flex items-center gap-2">
           <PanelIcon icon={ActivityIcon} color="#2563EB" />

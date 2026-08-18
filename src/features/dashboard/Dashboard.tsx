@@ -183,7 +183,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="flex flex-col gap-3 md:gap-4 animate-fade-in overflow-x-hidden">
+      <div className="flex flex-col gap-3 md:gap-4 animate-fade-in overflow-x-hidden min-w-0 w-full">
 
         {/* Compact Create Organization Banner */}
         {/* {showNoOrgState && (
@@ -275,20 +275,20 @@ export default function Dashboard() {
             <div
               ref={gridRef}
               style={{ ['--dashboard-grid-h' as string]: gridHeight ? `${gridHeight}px` : 'auto' }}
-              className="grid gap-3 md:gap-4 lg:grid-cols-3 items-start lg:items-stretch lg:h-[var(--dashboard-grid-h)] lg:min-h-0"
+              className="grid gap-3 md:gap-4 lg:grid-cols-3 items-start lg:items-stretch lg:h-[var(--dashboard-grid-h)] lg:min-h-0 min-w-0 w-full"
             >
-              <div className="lg:h-full lg:min-h-0 flex flex-col">
+              <div className="lg:h-full lg:min-h-0 flex flex-col min-w-0">
                 <ProjectsOverview projects={dashboardProjects} atRiskProjectIds={atRiskProjectIds} />
               </div>
-              <div className="lg:h-full lg:min-h-0 flex flex-col">
+              <div className="lg:h-full lg:min-h-0 flex flex-col min-w-0">
                 <EngineeringChangesSummary projects={dashboardProjects} />
               </div>
-              <div className="flex flex-col space-y-4 md:space-y-3 lg:h-full lg:min-h-0">
+              <div className="flex flex-col space-y-4 md:space-y-3 lg:h-full lg:min-h-0 min-w-0">
                 <BomReadiness projects={dashboardProjects} />
                 <ActivityFeed
                   activities={activityItems}
                   isLoading={activitiesLoading || isLoading}
-                  className="flex-1 min-h-0"
+                  className="flex-1 min-h-0 min-w-0"
                 />
               </div>
             </div>
