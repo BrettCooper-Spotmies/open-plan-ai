@@ -180,7 +180,9 @@ const Settings = () => {
     logoUrl: '',
   });
   const [localAvatarPreview, setLocalAvatarPreview] = useState<string | null>(null);
+  const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
   const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [orgLoading, setOrgLoading] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
   const [isEditingOrg, setIsEditingOrg] = useState(false);
@@ -226,6 +228,17 @@ const Settings = () => {
       });
     }
   }, [profile]);
+
+  // Discard any unsaved avatar preview when leaving the page
+  const localAvatarPreviewRef = useRef<string | null>(null);
+  localAvatarPreviewRef.current = localAvatarPreview;
+  useEffect(() => {
+    return () => {
+      if (localAvatarPreviewRef.current) {
+        URL.revokeObjectURL(localAvatarPreviewRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     setActiveTab(getTabFromParams());
@@ -383,11 +396,20 @@ const Settings = () => {
   const handleSaveProfile = async () => {
     setProfileLoading(true);
     try {
+      if (pendingAvatarFile) {
+        await profileService.uploadAvatar(pendingAvatarFile);
+      }
       await profileService.updateProfile({
         name: profileForm.name,
         initials: profileForm.initials,
       });
       await refreshProfile();
+      if (localAvatarPreview) {
+        URL.revokeObjectURL(localAvatarPreview);
+      }
+      setPendingAvatarFile(null);
+      setLocalAvatarPreview(null);
+      setIsEditingProfile(false);
       toast.success('Profile updated successfully');
     } catch (error) {
       logger.error('Error saving profile:', error);
@@ -402,6 +424,16 @@ const Settings = () => {
   };
 
   const handleRemoveAvatar = async () => {
+    // Discard an unsaved selection instead of hitting the API
+    if (pendingAvatarFile) {
+      if (localAvatarPreview) {
+        URL.revokeObjectURL(localAvatarPreview);
+      }
+      setPendingAvatarFile(null);
+      setLocalAvatarPreview(null);
+      return;
+    }
+
     setAvatarLoading(true);
     try {
       await profileService.deleteAvatar();
@@ -415,7 +447,7 @@ const Settings = () => {
     }
   };
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (file.size > 5 * 1024 * 1024) {
@@ -423,26 +455,15 @@ const Settings = () => {
         return;
       }
 
-      // Show local preview immediately
+      // Only preview locally — actual upload happens when Save Profile is clicked
+      if (localAvatarPreview) {
+        URL.revokeObjectURL(localAvatarPreview);
+      }
       const localPreview = URL.createObjectURL(file);
       setLocalAvatarPreview(localPreview);
-
-      setAvatarLoading(true);
-      try {
-        await profileService.uploadAvatar(file);
-        await refreshProfile();
-        URL.revokeObjectURL(localPreview);
-        setLocalAvatarPreview(null);
-        toast.success('Avatar updated successfully');
-      } catch (error) {
-        URL.revokeObjectURL(localPreview);
-        setLocalAvatarPreview(null);
-        logger.error('Error uploading avatar:', error);
-        toast.error('Failed to upload avatar');
-      } finally {
-        setAvatarLoading(false);
-      }
+      setPendingAvatarFile(file);
     }
+    e.target.value = '';
   };
 
   const handleUpdatePassword = async () => {
@@ -865,7 +886,7 @@ const Settings = () => {
                           <Upload className="h-4 w-4 mr-2" />
                           Change Avatar
                         </Button>
-                        {profile?.avatarUrl && (
+                        {(profile?.avatarUrl || localAvatarPreview) && (
                           <Button variant="outline" size="sm" onClick={handleRemoveAvatar} disabled={avatarLoading}>
                             <Trash2 className="h-4 w-4 mr-2" />
                             Remove
@@ -873,7 +894,7 @@ const Settings = () => {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        JPG, PNG or GIF. Max 5MB.
+                        {pendingAvatarFile ? 'Click Save Profile to apply your new picture.' : 'JPG, PNG or GIF. Max 5MB.'}
                       </p>
                     </div>
                   </div>
@@ -895,10 +916,25 @@ const Settings = () => {
                   <Separator />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="full-name">Full Name</Label>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="full-name">Full Name</Label>
+                        {!isEditingProfile && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setIsEditingProfile(true)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                       <Input
                         id="full-name"
                         value={profileForm.name}
+                        disabled={!isEditingProfile}
+                        autoFocus={isEditingProfile}
+                        className={cn(!isEditingProfile && 'bg-muted')}
                         onChange={(e) => {
                           const name = e.target.value;
                           const initials = name
