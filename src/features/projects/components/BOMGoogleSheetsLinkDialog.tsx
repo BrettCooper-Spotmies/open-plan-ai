@@ -1,11 +1,3 @@
-/**
- * BOMGoogleSheetsLinkDialog — pick which spreadsheet/tab mirrors this
- * project's BOM. Google account connection happens once per org from the
- * Integrations page (like Drive/Meet) — this dialog only ever links a sheet
- * using that existing connection; it has no OAuth step of its own. Callers
- * should only render/open it once `linkStatus.orgConnected` is true.
- * See GOOGLE_SHEETS_BOM_INTEGRATION.md Step 2.
- */
 import { useState } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -14,7 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Loader2, Sheet as SheetIcon, ExternalLink, Unlink } from 'lucide-react';
+import { Loader2, Unlink } from 'lucide-react';
+import { LOGO_PATHS } from '@/features/integrations/logoPaths';
+import { cn } from '@/lib/utils';
 import type { GoogleSheetsLinkStatus, SheetTab } from '@/services/googleSheets.service';
 import {
   usePreviewGoogleSheetTabs,
@@ -29,10 +23,17 @@ interface Props {
   linkStatus: GoogleSheetsLinkStatus | undefined;
 }
 
+function GoogleSheetsLogo({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d={LOGO_PATHS.googleSheets} />
+    </svg>
+  );
+}
+
 export default function BOMGoogleSheetsLinkDialog({ open, onClose, projectId, linkStatus }: Props) {
   const [url, setUrl] = useState('');
   const [tabs, setTabs] = useState<SheetTab[] | null>(null);
-  const [spreadsheetTitle, setSpreadsheetTitle] = useState('');
   const [selectedTab, setSelectedTab] = useState<string>('');
 
   const previewTabs = usePreviewGoogleSheetTabs(projectId);
@@ -44,7 +45,6 @@ export default function BOMGoogleSheetsLinkDialog({ open, onClose, projectId, li
   const resetLinkForm = () => {
     setUrl('');
     setTabs(null);
-    setSpreadsheetTitle('');
     setSelectedTab('');
   };
 
@@ -57,7 +57,6 @@ export default function BOMGoogleSheetsLinkDialog({ open, onClose, projectId, li
     if (!url.trim()) return;
     const result = await previewTabs.mutateAsync(url.trim());
     setTabs(result.tabs);
-    setSpreadsheetTitle(result.spreadsheetTitle);
     setSelectedTab(result.tabs[0]?.title ?? '');
   };
 
@@ -74,96 +73,118 @@ export default function BOMGoogleSheetsLinkDialog({ open, onClose, projectId, li
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && handleClose()}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <SheetIcon className="h-5 w-5 text-emerald-600" />
-            Google Sheets
-          </DialogTitle>
-          <DialogDescription>
-            Link a Google Sheet to sync with this project's BOM. Nothing syncs automatically —
-            you'll always review changes before Pull or Push writes anything.
-          </DialogDescription>
+      <DialogContent className="sm:max-w-[540px] w-[95vw] rounded-2xl p-6 shadow-2xl border border-border bg-card">
+        <DialogHeader className="text-left space-y-0 pr-6">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0 text-emerald-600 mt-0.5">
+              <GoogleSheetsLogo className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-base sm:text-lg font-bold text-foreground">
+                Link a Google Sheet
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground mt-1 leading-normal">
+                One sheet syncs with this project's BOM. Nothing syncs automatically — Pull and Push always show a full review before anything writes.
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="space-y-4 pt-2 pb-1">
           {linkStatus?.email && (
-            <p className="text-xs text-muted-foreground">Connected as {linkStatus.email}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Connected as <span className="font-semibold text-foreground">{linkStatus.email}</span>
+            </p>
           )}
 
-          {isLinked && (
-            <div className="rounded-md border border-border bg-muted/40 p-3 text-sm">
-              <div className="font-medium text-foreground">Currently linked</div>
-              <div className="text-muted-foreground truncate">
-                Sheet ID {linkStatus?.spreadsheetId} — tab "{linkStatus?.sheetTabName}"
-              </div>
-              <a
-                href={`https://docs.google.com/spreadsheets/d/${linkStatus?.spreadsheetId}/edit`}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs text-primary mt-1 hover:underline"
-              >
-                Open in Google Sheets <ExternalLink className="h-3 w-3" />
-              </a>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="gs-url">{isLinked ? 'Link a different sheet' : 'Google Sheets link'}</Label>
-            <div className="flex gap-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="gs-url" className="text-xs font-semibold text-foreground">
+              Google Sheets link
+            </Label>
+            <div className="flex items-center gap-2 w-full">
               <Input
                 id="gs-url"
                 placeholder="https://docs.google.com/spreadsheets/d/..."
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
+                className="h-10 text-xs sm:text-sm rounded-xl flex-1 min-w-0 border-border/80 bg-background"
               />
               <Button
+                type="button"
                 variant="outline"
                 onClick={handleFindTabs}
                 disabled={!url.trim() || previewTabs.isPending}
+                className="h-10 px-4 shrink-0 font-medium text-xs rounded-xl border-border/80 hover:bg-muted"
               >
-                {previewTabs.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Find tabs'}
+                {previewTabs.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+                Find tabs
               </Button>
             </div>
           </div>
 
-          {tabs && (
-            <div className="space-y-2">
-              <Label>Which tab is your BOM? — "{spreadsheetTitle}"</Label>
-              <RadioGroup value={selectedTab} onValueChange={setSelectedTab} className="max-h-40 overflow-y-auto">
+          {tabs && tabs.length > 0 && (
+            <div className="space-y-2 pt-1 animate-in fade-in duration-200">
+              <Label className="text-xs font-semibold text-foreground">
+                Which tab is your BOM?
+              </Label>
+              <RadioGroup value={selectedTab} onValueChange={setSelectedTab} className="max-h-52 overflow-y-auto space-y-2 pr-1">
                 {tabs.map((tab) => (
-                  <div key={tab.sheetId} className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
+                  <label
+                    key={tab.sheetId}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl border px-3.5 py-3 cursor-pointer transition-all",
+                      selectedTab === tab.title
+                        ? "border-primary/50 bg-primary/5 text-foreground shadow-2xs font-medium"
+                        : "border-border/70 bg-card hover:bg-muted/30 text-foreground"
+                    )}
+                  >
                     <RadioGroupItem value={tab.title} id={`tab-${tab.sheetId}`} />
-                    <Label htmlFor={`tab-${tab.sheetId}`} className="cursor-pointer font-normal">
+                    <span className="text-xs sm:text-sm font-medium flex-1">
                       {tab.title}
-                    </Label>
-                  </div>
+                    </span>
+                  </label>
                 ))}
               </RadioGroup>
-              <Button onClick={handleLink} disabled={!selectedTab || linkSheet.isPending} className="w-full">
-                {linkSheet.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Link this sheet'}
-              </Button>
+            </div>
+          )}
+
+          {isLinked && (
+            <div className="flex items-center justify-between pt-2 text-xs">
+              <span className="text-muted-foreground truncate mr-2">
+                Currently linked to tab "{linkStatus?.sheetTabName || 'BOM Export'}"
+              </span>
+              <button
+                type="button"
+                onClick={handleUnlink}
+                disabled={unlinkSheet.isPending}
+                className="text-xs text-destructive hover:text-destructive/80 hover:underline flex items-center gap-1.5 shrink-0 cursor-pointer font-medium"
+              >
+                <Unlink className="w-3.5 h-3.5" />
+                Disconnect
+              </button>
             </div>
           )}
         </div>
 
-        <DialogFooter className="flex-row justify-between sm:justify-between">
-          {isLinked ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive"
-              onClick={handleUnlink}
-              disabled={unlinkSheet.isPending}
-            >
-              <Unlink className="h-3.5 w-3.5 mr-1.5" />
-              Unlink
-            </Button>
-          ) : (
-            <span />
-          )}
-          <Button variant="outline" size="sm" onClick={handleClose}>
-            Close
+        <DialogFooter className="flex flex-row items-center justify-end gap-2 pt-3 border-t border-border/60">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleClose}
+            className="h-9 px-4 text-xs font-medium rounded-xl"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleLink}
+            disabled={!selectedTab || linkSheet.isPending}
+            className="h-9 px-4 text-xs font-semibold rounded-xl"
+          >
+            {linkSheet.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+            Link this sheet
           </Button>
         </DialogFooter>
       </DialogContent>

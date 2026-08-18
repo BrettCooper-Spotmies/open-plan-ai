@@ -55,11 +55,12 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
   return (
     <SidebarProvider
       defaultOpen={!preferences.sidebarCollapsed}
+      className="w-full max-w-full overflow-x-hidden min-h-screen"
     >
-      <div className="h-screen flex w-full bg-background overflow-hidden">
+      <div className="h-screen flex w-full max-w-full bg-background overflow-hidden">
         {/* Sidebar hidden on mobile */}
         {!isMobile && <AppSidebar />}
-        <div className={`flex-1 flex flex-col h-full min-h-0 min-w-0 `}>
+        <div className="flex-1 flex flex-col h-full min-h-0 min-w-0 w-full max-w-full overflow-hidden">
           {showAppHeader && <AppHeader />}
 
           {/* Persistent warning banner whenever the selected organization is closed.
@@ -102,7 +103,7 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
 
           <main
             className={[
-              noPadding ? 'flex-1 min-h-0 overflow-hidden' : `flex-1 min-h-0 overflow-y-auto ${isMobile ? 'overflow-x-hidden p-4' : 'p-6'}`,
+              noPadding ? 'flex-1 min-h-0 overflow-hidden w-full max-w-full' : `flex-1 min-h-0 overflow-y-auto w-full max-w-full ${isMobile ? 'overflow-x-hidden p-4' : 'p-6'}`,
               showMobileBottomNav ? 'pb-24' : '',
             ].join(' ')}
           >
