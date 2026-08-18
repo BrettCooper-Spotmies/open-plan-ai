@@ -176,18 +176,20 @@ export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, classN
             />
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs flex items-center gap-1">
-              <FolderKanban className="h-3 w-3" />
-              Project
-            </Label>
-            <MultiSelect
-              options={projectOptions}
-              selected={filters.projectIds || []}
-              onChange={(values) => onFiltersChange({ ...filters, projectIds: values.length ? values : undefined })}
-              placeholder="All Projects"
-            />
-          </div>
+          {projectOptions.length > 1 && (
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <FolderKanban className="h-3 w-3" />
+                Project
+              </Label>
+              <MultiSelect
+                options={projectOptions}
+                selected={filters.projectIds || []}
+                onChange={(values) => onFiltersChange({ ...filters, projectIds: values.length ? values : undefined })}
+                placeholder="All Projects"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label className="text-xs flex items-center gap-1">
