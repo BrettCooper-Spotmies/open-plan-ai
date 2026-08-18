@@ -62,6 +62,7 @@ import { useAppTheme } from '@/hooks/useAppTheme';
 import { useUserStore } from '@/stores/useUserStore';
 import { getPasswordRequirements } from '@/lib/passwordValidation';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { cn } from '@/lib/utils';
 import { logger } from '@/services/monitoring/logger';
 import { SUPPORTED_CURRENCIES } from '@/hooks/useCurrency';
 import { useOrgPermissions } from '@/hooks/useProjectPermissions';
@@ -825,7 +826,17 @@ const Settings = () => {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="flex flex-col sm:flex-row items-center sm:items-center gap-4 sm:gap-6">
-                    <Avatar className="h-20 w-20 shrink-0">
+                    <Avatar
+                      className={cn(
+                        'h-20 w-20 shrink-0',
+                        (localAvatarPreview || profile?.avatarUrl) && 'cursor-pointer'
+                      )}
+                      onClick={() => {
+                        if (localAvatarPreview || profile?.avatarUrl) {
+                          setIsAvatarPreviewOpen(true);
+                        }
+                      }}
+                    >
                       {avatarLoading && !localAvatarPreview ? (
                         <AvatarFallback className="bg-primary/10">
                           <Loader2 className="h-6 w-6 animate-spin" />
@@ -866,6 +877,21 @@ const Settings = () => {
                       </p>
                     </div>
                   </div>
+
+                  <Dialog open={isAvatarPreviewOpen} onOpenChange={setIsAvatarPreviewOpen}>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Profile Picture</DialogTitle>
+                      </DialogHeader>
+                      <div className="flex items-center justify-center py-2">
+                        <img
+                          src={localAvatarPreview || resolveFileUrl(profile?.avatarUrl) || ''}
+                          alt={profile?.name || 'Avatar'}
+                          className="max-h-[60vh] w-full rounded-md object-contain"
+                        />
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                   <Separator />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
