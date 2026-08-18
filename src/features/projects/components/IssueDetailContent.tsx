@@ -2046,14 +2046,14 @@ export function IssueDetailContent({
                                                 {comment.author.initials}
                                             </AvatarFallback>
                                         </Avatar>
-                                        <div className="flex-1 space-y-1">
+                                        <div className="flex-1 min-w-0 space-y-1">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-sm font-medium">{comment.author.name}</span>
                                                 <span className="text-xs text-muted-foreground">
                                                     {format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}
                                                 </span>
                                                 {isOwnComment && !isEditingThisComment && (
-                                                    <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="ml-auto flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <button
                                                             type="button"
                                                             className="rounded p-0.5 text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground"
@@ -2097,7 +2097,7 @@ export function IssueDetailContent({
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <p className="text-sm text-muted-foreground">{comment.content}</p>
+                                                <p className="text-sm text-muted-foreground break-words">{comment.content}</p>
                                             )}
                                         </div>
                                     </div>

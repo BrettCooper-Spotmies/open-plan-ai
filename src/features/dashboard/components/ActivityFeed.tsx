@@ -294,7 +294,7 @@ export function ActivityFeed({ activities, isLoading, className }: ActivityFeedP
                   {/* Center: Content */}
                   <div className="flex-1 min-w-0">
                     {/* Primary: Actor name (bold) + action text */}
-                    <p className="text-sm leading-snug break-all line-clamp-2">
+                    <p className="text-sm leading-snug break-words line-clamp-2">
                       <span className="font-semibold">{activity.user.name}</span>
                       {' '}
                       <span className="text-muted-foreground text-foreground/80">{isMobile ? actionText : activity.description}</span>
