@@ -125,20 +125,22 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
   const seededRef = useRef(false);
   useEffect(() => {
     if (seededRef.current) return;
+
     if (rootNodes.length > 0) {
       const seeded = generateMockStock(rootNodes);
       setStock(seeded);
       setOrders(generateMockOrders(seeded));
       seededRef.current = true;
-    } else if (bomTree) {
-      // BOM tree has loaded but has no parts yet — show the static demo catalog instead
-      // of an empty table, so Inventory always has something to preview.
-      const seeded = generateDemoStock();
-      setStock(seeded);
-      setOrders(generateMockOrders(seeded));
-      seededRef.current = true;
+      return;
     }
-  }, [rootNodes, bomTree]);
+
+    // Even when BOM data has not loaded yet or the project has no BOM, show the frontend
+    // demo catalog so Inventory never looks empty/sparse on first load.
+    const seeded = generateDemoStock();
+    setStock(seeded);
+    setOrders(generateMockOrders(seeded));
+    seededRef.current = true;
+  }, [rootNodes]);
 
   // `onOrder` is derived from live order state rather than the static seeded field, so
   // Receive/Order actions are reflected immediately without touching stock rows directly.
