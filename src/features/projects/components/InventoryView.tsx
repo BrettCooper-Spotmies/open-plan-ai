@@ -355,6 +355,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
     const action = searchParams.get('action');
     if (action === 'receive') openReceiveFor();
     else if (action === 'adjust') openAdjustFor();
+    else if (action === 'order') openOrderFor();
     if (action) {
       setSearchParams((prev) => { prev.delete('action'); return prev; }, { replace: true });
     }
