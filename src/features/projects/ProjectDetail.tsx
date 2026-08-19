@@ -181,8 +181,8 @@ function IssueViewControls({
   const [filterOpen, setFilterOpen] = useState(false);
   return (
     <div className="flex items-center gap-2">
-      {/* View Toggle */}
-      <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
+      {/* View Toggle (kanban/table has no distinct mobile layout — hidden below md) */}
+      <div className="hidden md:flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
         <Button
           variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
           size="sm"
@@ -206,7 +206,7 @@ function IssueViewControls({
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="gap-2 h-9 rounded-lg">
             <Filter className="h-4 w-4" />
-            Filter
+            <span className="hidden md:inline">Filter</span>
             {activeFilterCount > 0 && (
               <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
                 {activeFilterCount}
@@ -507,7 +507,8 @@ export default function ProjectDetail() {
 
   const viewMode = viewModeStr || (isMobile ? 'list' : 'kanban');
   const moduleViewMode = moduleViewModeStr || (isMobile ? 'list' : 'kanban');
-  const issueViewMode = issueViewModeStr || (isMobile ? 'table' : 'kanban');
+  // Mobile has no kanban/table toggle — it always uses the grouped card list.
+  const issueViewMode = isMobile ? 'table' : (issueViewModeStr || 'kanban');
   const milestoneViewMode = milestoneViewModeStr || (isMobile ? 'list' : 'kanban');
 
   const setViewMode = (val: TaskViewMode) => setViewModeStr(val);
@@ -1637,7 +1638,6 @@ export default function ProjectDetail() {
                       activeFilterCount={activeIssueFilterCount}
                       onClearFilters={clearIssueFilters}
                     />
-                    {isMobile && id && <SupportLinksSheet projectId={id} iconOnly />}
                     {isMobile && (
                       <button
                         type="button"
