@@ -13,7 +13,7 @@ import {
   IssueSeverity,
   TeamMember,
 } from '@/types';
-import { IssueDetailContent } from './IssueDetailContent';
+import { IssueDetailContent, IssueDetailContentHandle } from './IssueDetailContent';
 import { Button } from '@/components/ui/button';
 import { DialogClose } from '@/components/ui/dialog';
 import {
@@ -101,6 +101,7 @@ export function IssueDetailModal({
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isMobileEditMode, setIsMobileEditMode] = useState(false);
   const initialSnapshotRef = useRef<string>('');
+  const issueContentRef = useRef<IssueDetailContentHandle>(null);
   const { canEditResource, canDeleteResource } = useProjectPermissions(editedIssue?.projectId);
   const canEditIssue = useMemo(
     () =>
@@ -152,9 +153,10 @@ export function IssueDetailModal({
     }
   };
 
-  const handleUpdateIssue = () => {
+  const handleUpdateIssue = async () => {
     if (editedIssue) {
       onUpdate(editedIssue);
+      await issueContentRef.current?.commitPendingComments();
       onClose();
     }
   };
@@ -281,6 +283,7 @@ export function IssueDetailModal({
         )}>
           <div className="p-6">
             <IssueDetailContent
+              ref={issueContentRef}
               issue={editedIssue}
               tasks={tasks}
               teamMembers={teamMembers}
