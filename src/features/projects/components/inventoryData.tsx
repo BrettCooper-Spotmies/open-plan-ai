@@ -347,11 +347,24 @@ export interface Build {
   longestLead: BuildLine | null;
 }
 
-const BUILD_DEFS = [
+export interface BuildDef {
+  id: string;
+  name: string;
+  type: string;
+  units: number;
+  bomRev: string;
+  scrapPct: number;
+  milestone: string;
+  /** User-entered target date (new builds). Legacy seeded builds omit this and fall back to
+   * a synthetic lateness offset so their numbers stay stable across re-renders. */
+  targetDate?: string;
+}
+
+const BUILD_DEFS: BuildDef[] = [
   { id: 'evt', name: 'EVT Build', type: 'EVT', units: 5, bomRev: 'Rev B', scrapPct: 5, milestone: 'EVT Complete' },
   { id: 'dvt', name: 'DVT Build', type: 'DVT', units: 25, bomRev: 'Rev C', scrapPct: 3, milestone: 'DVT Build Complete' },
   { id: 'pvt', name: 'PVT Build', type: 'PVT', units: 100, bomRev: 'Rev C', scrapPct: 2, milestone: 'PVT Kickoff' },
-] as const;
+];
 
 function addDays(date: Date, days: number): string {
   const d = new Date(date);
@@ -359,47 +372,61 @@ function addDays(date: Date, days: number): string {
   return d.toISOString();
 }
 
+function diffDays(laterIso: string, earlierIso: string): number {
+  return Math.round((new Date(laterIso).getTime() - new Date(earlierIso).getTime()) / 86400000);
+}
+
 export function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
 }
 
 /**
- * Builds one "Build" per fixed EVT/DVT/PVT phase, scaling each stocked part's real BOM
- * demand (qty-per-unit from demandByPartId) by that phase's unit count, then reusing
- * computeCoverage against the scaled requirement — so larger builds naturally show more
- * shortages against the same on-hand/on-order stock, same as a real MRP netting would.
+ * Computes one "Build" from a def, scaling each stocked part's real BOM demand (qty-per-unit
+ * from demandByPartId) by the def's unit count, then reusing computeCoverage against the
+ * scaled requirement — so larger builds naturally show more shortages against the same
+ * on-hand/on-order stock, same as a real MRP netting would.
  */
-export function generateMockBuilds(stock: StockRecord[], demandByPartId: Map<string, number>): Build[] {
+export function buildFromDef(def: BuildDef, stock: StockRecord[], demandByPartId: Map<string, number>): Build {
   const now = new Date();
-  return BUILD_DEFS.map((def) => {
-    const lines: BuildLine[] = stock.map((r) => {
-      const qtyPerUnit = demandByPartId.get(r.partId) ?? 1;
-      const required = qtyPerUnit * def.units;
-      const status = computeCoverage(r, required);
-      return {
-        partId: r.partId, pn: r.pn, name: r.name, cat: r.cat,
-        qtyPerUnit, uom: 'EA',
-        required, available: availableOf(r), allocated: r.allocated, onOrder: r.onOrder,
-        leadTimeDays: r.leadTimeDays, status,
-      };
-    });
-
-    const readyCount = lines.filter(l => l.status === 'ready').length;
-    const onOrderCount = lines.filter(l => l.status === 'covered-by-order').length;
-    const shortLines = lines.filter(l => l.status === 'short' || l.status === 'conflict');
-    const longestLead = shortLines.length
-      ? shortLines.reduce((max, l) => (l.leadTimeDays > (max?.leadTimeDays ?? 0) ? l : max), null as BuildLine | null)
-      : null;
-
-    const daysLate = shortLines.length ? Math.round(30 + seededRandom(def.id) * 150) : 0;
-    const projectedDate = addDays(now, longestLead?.leadTimeDays ?? 0);
-    const targetDate = addDays(new Date(projectedDate), -daysLate);
-
+  const lines: BuildLine[] = stock.map((r) => {
+    const qtyPerUnit = demandByPartId.get(r.partId) ?? 1;
+    const required = qtyPerUnit * def.units;
+    const status = computeCoverage(r, required);
     return {
-      id: def.id, name: def.name, type: def.type, units: def.units,
-      bomRev: def.bomRev, scrapPct: def.scrapPct, linkedMilestone: def.milestone,
-      targetDate, projectedDate, daysLate,
-      lines, readyCount, onOrderCount, shortLines, longestLead,
+      partId: r.partId, pn: r.pn, name: r.name, cat: r.cat,
+      qtyPerUnit, uom: 'EA',
+      required, available: availableOf(r), allocated: r.allocated, onOrder: r.onOrder,
+      leadTimeDays: r.leadTimeDays, status,
     };
   });
+
+  const readyCount = lines.filter(l => l.status === 'ready').length;
+  const onOrderCount = lines.filter(l => l.status === 'covered-by-order').length;
+  const shortLines = lines.filter(l => l.status === 'short' || l.status === 'conflict');
+  const longestLead = shortLines.length
+    ? shortLines.reduce((max, l) => (l.leadTimeDays > (max?.leadTimeDays ?? 0) ? l : max), null as BuildLine | null)
+    : null;
+
+  const projectedDate = addDays(now, longestLead?.leadTimeDays ?? 0);
+
+  let targetDate: string;
+  let daysLate: number;
+  if (def.targetDate) {
+    targetDate = def.targetDate;
+    daysLate = shortLines.length ? Math.max(0, diffDays(projectedDate, targetDate)) : 0;
+  } else {
+    daysLate = shortLines.length ? Math.round(30 + seededRandom(def.id) * 150) : 0;
+    targetDate = addDays(new Date(projectedDate), -daysLate);
+  }
+
+  return {
+    id: def.id, name: def.name, type: def.type, units: def.units,
+    bomRev: def.bomRev, scrapPct: def.scrapPct, linkedMilestone: def.milestone,
+    targetDate, projectedDate, daysLate,
+    lines, readyCount, onOrderCount, shortLines, longestLead,
+  };
+}
+
+export function generateMockBuilds(stock: StockRecord[], demandByPartId: Map<string, number>): Build[] {
+  return BUILD_DEFS.map((def) => buildFromDef(def, stock, demandByPartId));
 }

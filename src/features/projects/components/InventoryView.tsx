@@ -22,9 +22,9 @@ import {
   KNOWN_BOM_CATEGORIES, getCategoryMeta, type BOMCategory,
 } from './bomData';
 import {
-  generateMockStock, generateDemoStock, generateMockBuilds, generateMockOrders, computeCoverage, availableOf, onOrderOf,
+  generateMockStock, generateDemoStock, generateMockBuilds, generateMockOrders, buildFromDef, computeCoverage, availableOf, onOrderOf,
   CoveragePill, CoverageBar,
-  type StockRecord, type StockTransaction, type CoverageStatus, type OrderRecord,
+  type StockRecord, type StockTransaction, type CoverageStatus, type OrderRecord, type BuildDef,
 } from './inventoryData';
 import { HoverZoomImage, PartThumb } from './BOMShared';
 import { ReceiveStockDialog, type ReceiveStockInput } from './ReceiveStockDialog';
@@ -33,6 +33,7 @@ import { PlaceOrderDialog, type PlaceOrderInput } from './PlaceOrderDialog';
 import { PartDetailSheet, type WhereUsedRow } from './PartDetailSheet';
 import { BuildsPanel } from './BuildsPanel';
 import { AlertsPanel } from './AlertsPanel';
+import type { NewBuildInput } from './NewBuildDialog';
 
 const STAT_TOOLTIPS: Record<string, string> = {
   'On Hand': 'Physical quantity currently in stock, including anything held in quarantine.',
@@ -310,10 +311,21 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
   const incomingCount = displayStock.filter(r => r.onOrder > 0).length;
   const quarantineCount = displayStock.filter(r => (r.quarantineQty ?? 0) > 0).length;
 
-  const builds = useMemo(() => generateMockBuilds(displayStock, demandByPartId), [displayStock, demandByPartId]);
+  const [customBuildDefs, setCustomBuildDefs] = useState<BuildDef[]>([]);
+  const builds = useMemo(() => [
+    ...generateMockBuilds(displayStock, demandByPartId),
+    ...customBuildDefs.map(def => buildFromDef(def, displayStock, demandByPartId)),
+  ], [displayStock, demandByPartId, customBuildDefs]);
   const [activeTab, setActiveTab] = useState('stock');
   const [openBuildId, setOpenBuildId] = useState<string | null>(null);
   const openBuild = (buildId: string) => { setActiveTab('builds'); setOpenBuildId(buildId); };
+
+  const handleAddBuild = (input: NewBuildInput) => {
+    const newDef: BuildDef = { id: `build-${Date.now()}`, ...input };
+    setCustomBuildDefs(prev => [...prev, newDef]);
+    openBuild(newDef.id);
+    toast.success(`${newDef.name} created`);
+  };
 
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -821,6 +833,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
             onSelectPart={openDetail}
             openBuildId={openBuildId}
             onOpenBuildHandled={() => setOpenBuildId(null)}
+            onAddBuild={handleAddBuild}
           />
         </TabsContent>
 
