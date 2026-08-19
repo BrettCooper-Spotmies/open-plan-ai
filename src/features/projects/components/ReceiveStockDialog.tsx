@@ -51,7 +51,9 @@ import { Check, ChevronsUpDown, Download, Plus, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart } from '@/hooks/useParts';
 import { KNOWN_BOM_CATEGORIES, type ApiPartResponse, type BOMCategory } from './bomData';
-import { STOCK_LOCATIONS, type StockLocation } from './inventoryData';
+import { LocationCombobox, formatShortDate, type StockLocation, type OrderRecord } from './inventoryData';
+
+const NO_ORDER_SENTINEL = '__no_order__';
 
 const receiveSchema = z.object({
   partId: z.string().min(1, 'Select a part'),
@@ -60,6 +62,9 @@ const receiveSchema = z.object({
   reference: z.string().max(60, 'Reference must be less than 60 characters').optional(),
   quarantine: z.boolean(),
   note: z.string().max(300, 'Note must be less than 300 characters').optional(),
+  orderId: z.string().optional(),
+  lotNumber: z.string().max(60, 'Lot number must be less than 60 characters').optional(),
+  serialNumber: z.string().max(60, 'Serial number must be less than 60 characters').optional(),
 });
 
 type ReceiveFormData = z.infer<typeof receiveSchema>;
@@ -74,6 +79,9 @@ export interface ReceiveStockInput {
   reference?: string;
   quarantine: boolean;
   note?: string;
+  orderId?: string;
+  lotNumber?: string;
+  serialNumber?: string;
 }
 
 interface ReceiveStockDialogProps {
@@ -81,6 +89,7 @@ interface ReceiveStockDialogProps {
   onClose: () => void;
   orgId: string;
   parts: ApiPartResponse[];
+  orders: OrderRecord[];
   onReceive: (input: ReceiveStockInput) => void;
   /** Preselect a part (e.g. opened from that part's detail sheet) instead of starting on the picker. */
   initialPartId?: string;
@@ -88,7 +97,7 @@ interface ReceiveStockDialogProps {
 
 const emptyNewPart = { partNumber: '', name: '', description: '', category: '' as BOMCategory | '', manufacturer: '', mpn: '', unit: 'EA' };
 
-export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, initialPartId }: ReceiveStockDialogProps) {
+export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, orders, onReceive, initialPartId }: ReceiveStockDialogProps) {
   const isMobile = useIsMobile();
   const [selectedPart, setSelectedPart] = useState<ApiPartResponse | null>(null);
   const [partPickerOpen, setPartPickerOpen] = useState(false);
@@ -107,8 +116,15 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
       reference: '',
       quarantine: false,
       note: '',
+      orderId: '',
+      lotNumber: '',
+      serialNumber: '',
     },
   });
+
+  const openOrdersForPart = selectedPart
+    ? orders.filter(o => o.partId === selectedPart.id && o.remainingQty > 0)
+    : [];
 
   useEffect(() => {
     if (isOpen && initialPartId) {
@@ -179,6 +195,9 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
       reference: data.reference?.trim() || undefined,
       quarantine: data.quarantine,
       note: data.note?.trim() || undefined,
+      orderId: data.orderId && data.orderId !== NO_ORDER_SENTINEL ? data.orderId : undefined,
+      lotNumber: data.lotNumber?.trim() || undefined,
+      serialNumber: data.serialNumber?.trim() || undefined,
     });
     resetAndClose();
   };
@@ -378,22 +397,50 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Destination location <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a location..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {STOCK_LOCATIONS.map((loc) => (
-                            <SelectItem key={loc} value={loc}>{loc}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <LocationCombobox value={field.value} onChange={field.onChange} />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {selectedPart && openOrdersForPart.length > 0 && (
+                  <FormField
+                    control={form.control}
+                    name="orderId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Apply to order <span className="normal-case font-normal">optional</span></FormLabel>
+                        <Select
+                          onValueChange={(v) => {
+                            field.onChange(v);
+                            if (v !== NO_ORDER_SENTINEL) {
+                              const order = openOrdersForPart.find(o => o.id === v);
+                              if (order) form.setValue('quantity', order.remainingQty, { shouldDirty: true });
+                            }
+                          }}
+                          value={field.value || NO_ORDER_SENTINEL}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="None — not tied to an order" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value={NO_ORDER_SENTINEL}>None — not tied to an order</SelectItem>
+                            {openOrdersForPart.map((o) => (
+                              <SelectItem key={o.id} value={o.id}>
+                                {o.remainingQty} remaining · due {formatShortDate(o.expectedDate)}{o.supplierRef ? ` · ${o.supplierRef}` : ''}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <FormField
                   control={form.control}
@@ -408,6 +455,38 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, onReceive, i
                     </FormItem>
                   )}
                 />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="lotNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lot number <span className="normal-case font-normal">optional</span></FormLabel>
+                        <FormControl>
+                          <Input placeholder="LOT-…" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="serialNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Serial number <span className="normal-case font-normal">optional</span></FormLabel>
+                        <FormControl>
+                          <Input placeholder="SN-…" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground -mt-3">
+                  Both fields are available on every part while the hardware team decides which applies where.
+                </p>
 
                 <FormField
                   control={form.control}

@@ -1,20 +1,30 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Download, Upload, Pencil, ArrowLeftRight, ClipboardCheck, MapPin, ChevronLeft,
-  Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag,
+  Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag, Unlock,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getCategoryMeta, formatLeadTime, type ApiPartResponse } from './bomData';
 import {
-  availableOf, CoveragePill, STOCK_LOCATIONS,
-  type StockRecord, type StockTransaction, type CoverageStatus,
+  availableOf, CoveragePill, STOCK_LOCATIONS, formatShortDate,
+  type StockRecord, type StockTransaction, type CoverageStatus, type OrderRecord,
 } from './inventoryData';
 
 const CATEGORY_ICON_MAP: Record<string, React.ElementType> = { Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag };
+
+const STAT_TOOLTIPS: Record<string, string> = {
+  'On Hand': 'Physical quantity currently in stock, including anything held in quarantine.',
+  'Allocated': 'Quantity already reserved against BOM demand for planned builds.',
+  'Available': 'On Hand minus Allocated minus Quarantine — what can actually be used right now.',
+  'On Order': 'Quantity remaining on open purchase orders, not yet received.',
+  'Quarantine': 'Held out of Available until released — pending inspection or testing.',
+};
 
 export interface WhereUsedRow {
   levelLabel?: string;
@@ -30,25 +40,38 @@ interface PartDetailSheetProps {
   status: CoverageStatus;
   part?: ApiPartResponse;
   transactions: StockTransaction[];
+  orders: OrderRecord[];
   whereUsed: WhereUsedRow[];
   onClose: () => void;
   onReceive: () => void;
   onAdjust: () => void;
+  onReleaseQuarantine: (qty: number) => void;
 }
 
 function StatItem({ label, value, color }: { label: string; value: number; color?: string }) {
+  const tip = STAT_TOOLTIPS[label];
   return (
     <div className="min-w-0">
       <div className="text-sm font-semibold leading-tight" style={color ? { color } : undefined}>{value}</div>
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">{label}</div>
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wide truncate">
+        {tip ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="cursor-help underline decoration-dotted underline-offset-2">{label}</span>
+            </TooltipTrigger>
+            <TooltipContent>{tip}</TooltipContent>
+          </Tooltip>
+        ) : label}
+      </div>
     </div>
   );
 }
 
 export function PartDetailSheet({
-  isOpen, record, status, part, transactions, whereUsed, onClose, onReceive, onAdjust,
+  isOpen, record, status, part, transactions, orders, whereUsed, onClose, onReceive, onAdjust, onReleaseQuarantine,
 }: PartDetailSheetProps) {
   const isMobile = useIsMobile();
+  const [releaseQty, setReleaseQty] = useState('');
 
   const partTxns = useMemo(() => {
     if (!record) return [];
@@ -71,7 +94,19 @@ export function PartDetailSheet({
     return rows;
   }, [record]);
 
+  const partOrders = useMemo(() => {
+    if (!record) return [];
+    return orders.filter(o => o.partId === record.partId && (o.status === 'open' || o.status === 'partially_received'));
+  }, [record, orders]);
+
   if (!record) return null;
+
+  const handleRelease = () => {
+    const qty = Math.min(Number(releaseQty) || 0, record.quarantineQty ?? 0);
+    if (qty <= 0) return;
+    onReleaseQuarantine(qty);
+    setReleaseQty('');
+  };
 
   const meta = getCategoryMeta(record.cat);
   const CategoryIcon = CATEGORY_ICON_MAP[meta.iconName] ?? Tag;
@@ -129,6 +164,13 @@ export function PartDetailSheet({
                 <p className="text-xs text-muted-foreground truncate">
                   {[part?.manufacturer, part?.mpn, meta.label, part?.unit ?? 'EA'].filter(Boolean).join(' · ')}
                 </p>
+                {(record.lotNumber || record.serialNumber) && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {record.lotNumber && <>Lot {record.lotNumber}</>}
+                    {record.lotNumber && record.serialNumber && ' · '}
+                    {record.serialNumber && <>SN {record.serialNumber}</>}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -144,6 +186,23 @@ export function PartDetailSheet({
               <StatItem label="On Order" value={record.onOrder} color={record.onOrder > 0 ? '#D97706' : undefined} />
               <StatItem label="Quarantine" value={record.quarantineQty ?? 0} />
             </div>
+
+            {(record.quarantineQty ?? 0) > 0 && (
+              <div className={cn('flex items-center gap-2', isMobile ? 'px-4 pb-4' : 'pb-2')}>
+                <Input
+                  type="number"
+                  min={1}
+                  max={record.quarantineQty}
+                  placeholder={`Qty (up to ${record.quarantineQty})`}
+                  value={releaseQty}
+                  onChange={(e) => setReleaseQty(e.target.value)}
+                  className="h-8 w-40 text-sm"
+                />
+                <Button size="sm" variant="outline" className="h-8" onClick={handleRelease} disabled={!releaseQty || Number(releaseQty) <= 0}>
+                  <Unlock className="h-3.5 w-3.5 mr-1.5" /> Release from quarantine
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
@@ -276,18 +335,32 @@ export function PartDetailSheet({
             )}
           </TabsContent>
 
-          <TabsContent value="supply" className="mt-0 p-4 sm:p-6">
-            {record.onOrder > 0 ? (
-              <div className="rounded-2xl border bg-background p-3.5 space-y-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">On order</span>
-                  <span className="font-semibold">{record.onOrder} {part?.unit ?? 'EA'}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Lead time</span>
-                  <span className="font-medium">{formatLeadTime(record.leadTimeDays)}</span>
-                </div>
-              </div>
+          <TabsContent value="supply" className="mt-0 p-4 sm:p-6 space-y-3">
+            {partOrders.length > 0 ? (
+              <>
+                {partOrders.map((o) => (
+                  <div key={o.id} className="rounded-2xl border bg-background p-3.5 space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Remaining</span>
+                      <span className="font-semibold">{o.remainingQty} {part?.unit ?? 'EA'}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Expected</span>
+                      <span className="font-medium">{formatShortDate(o.expectedDate)}</span>
+                    </div>
+                    {o.supplierRef && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Supplier / PO</span>
+                        <span className="font-medium">{o.supplierRef}</span>
+                      </div>
+                    )}
+                    {o.status === 'partially_received' && (
+                      <div className="text-xs text-muted-foreground">Partially received — {o.quantity - o.remainingQty} of {o.quantity} so far</div>
+                    )}
+                  </div>
+                ))}
+                <div className="text-xs text-muted-foreground">Lead time: {formatLeadTime(record.leadTimeDays)}</div>
+              </>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-8">Nothing on order.</p>
             )}

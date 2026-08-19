@@ -6,10 +6,17 @@
 // "mock data only" precedent as requirementsData.ts: local types + a seed generator, with
 // the ledger held in the InventoryView orchestrator's local state.
 
+import { useState, useEffect } from 'react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { bomFlatAll, type BOMNode, type BOMCategory } from './bomData';
 
 export const STOCK_LOCATIONS = ['Lab Shelf A', 'Lab Shelf B', 'Incoming Dock', 'CM', 'Quarantine'] as const;
-export type StockLocation = typeof STOCK_LOCATIONS[number];
+// Locations are free-text (mirrors the BOMCategory custom-category pattern) — the presets
+// above are just suggestions surfaced in pickers, not a closed set the hardware team is
+// still deciding per-part-type constraints for.
+export type StockLocation = string;
 
 export type CoverageStatus = 'ready' | 'covered-by-order' | 'short' | 'conflict';
 
@@ -24,9 +31,77 @@ export interface StockRecord {
   onOrder: number;
   location: StockLocation;
   leadTimeDays: number;
-  lotSerial?: string;
+  lotNumber?: string;
+  serialNumber?: string;
   quarantineQty?: number;
   imageUrl?: string;   // part photo, when the catalog entry has one — falls back to a category icon
+}
+
+export interface OrderRecord {
+  id: string;
+  partId: string;
+  pn: string;
+  quantity: number;
+  remainingQty: number;
+  expectedDate: string;   // ISO
+  supplierRef?: string;
+  unitCost?: number;
+  location: string;
+  status: 'open' | 'partially_received' | 'received' | 'cancelled';
+  createdAt: string;
+  createdBy: string;
+}
+
+const CUSTOM_LOCATION_SENTINEL = '__custom_location__';
+
+/** Location picker: preset dropdown with a "custom" escape hatch — same pattern as
+ * BOMCategory's free-text + preset-list combo (bomData.ts). */
+export function LocationCombobox({ value, onChange, placeholder = 'Select a location...' }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const [customMode, setCustomMode] = useState(
+    () => value !== '' && !(STOCK_LOCATIONS as readonly string[]).includes(value)
+  );
+
+  useEffect(() => {
+    if (value === '') setCustomMode(false);
+  }, [value]);
+
+  if (customMode) {
+    return (
+      <div className="flex gap-2">
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Enter custom location..."
+          autoFocus
+        />
+        <Button type="button" variant="outline" size="sm" onClick={() => { setCustomMode(false); onChange(''); }}>
+          Presets
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Select
+      onValueChange={(v) => {
+        if (v === CUSTOM_LOCATION_SENTINEL) { setCustomMode(true); onChange(''); }
+        else onChange(v);
+      }}
+      value={value}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {STOCK_LOCATIONS.map((loc) => (
+          <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+        ))}
+        <SelectItem value={CUSTOM_LOCATION_SENTINEL}>Other (custom)…</SelectItem>
+      </SelectContent>
+    </Select>
+  );
 }
 
 export interface StockTransaction {
@@ -53,7 +128,15 @@ export const REASON_CODES = [
   'Consumed outside system',
 ] as const;
 
-export const availableOf = (r: StockRecord): number => r.onHand - r.allocated;
+export const availableOf = (r: StockRecord): number => r.onHand - r.allocated - (r.quarantineQty ?? 0);
+
+/** Sum of remaining qty across a part's open/partially-received orders — `onOrder` is
+ * derived from real order state rather than a static seeded field. */
+export function onOrderOf(orders: OrderRecord[], partId: string): number {
+  return orders
+    .filter(o => o.partId === partId && (o.status === 'open' || o.status === 'partially_received'))
+    .reduce((sum, o) => sum + o.remainingQty, 0);
+}
 
 /**
  * demandQty is the BOM quantity-required for this part (from BOMNode.qty). Coverage is
@@ -148,7 +231,7 @@ export function generateMockStock(bomNodes: BOMNode[]): StockRecord[] {
       location,
       leadTimeDays: n.leadTime || 14,
       quarantineQty: r > 0.9 ? Math.max(1, Math.round(onHand * 0.1)) : undefined,
-      lotSerial: r > 0.8 && r <= 0.9 ? `LOT-${n.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
+      lotNumber: r > 0.8 && r <= 0.9 ? `LOT-${n.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
       imageUrl: r > 0.75 && r <= 0.9 ? `https://picsum.photos/seed/${encodeURIComponent(n.pn)}/400` : undefined,
     };
   });
@@ -204,9 +287,31 @@ export function generateDemoStock(): StockRecord[] {
       location,
       leadTimeDays: d.leadTime,
       quarantineQty: r > 0.9 ? Math.max(1, Math.round(onHand * 0.1)) : undefined,
-      lotSerial: r > 0.8 && r <= 0.9 ? `LOT-${d.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
+      lotNumber: r > 0.8 && r <= 0.9 ? `LOT-${d.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
     };
   });
+}
+
+/**
+ * Seeds one open OrderRecord per stock row that already has demo `onOrder` > 0, so the
+ * order/receive flow starts populated consistent with today's demo numbers instead of empty.
+ */
+export function generateMockOrders(stock: StockRecord[]): OrderRecord[] {
+  const now = new Date();
+  return stock
+    .filter(r => r.onOrder > 0)
+    .map(r => ({
+      id: `ord-${r.partId}`,
+      partId: r.partId,
+      pn: r.pn,
+      quantity: r.onOrder,
+      remainingQty: r.onOrder,
+      expectedDate: addDays(now, r.leadTimeDays),
+      location: r.location,
+      status: 'open' as const,
+      createdAt: now.toISOString(),
+      createdBy: 'Seed',
+    }));
 }
 
 export interface BuildLine {

@@ -48,7 +48,7 @@ import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Minus, Pencil, Plus, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { REASON_CODES, STOCK_LOCATIONS, type StockLocation, type StockRecord } from './inventoryData';
+import { REASON_CODES, LocationCombobox, type StockLocation, type StockRecord } from './inventoryData';
 
 const adjustSchema = z.object({
   partId: z.string().min(1, 'Select a part'),
@@ -57,6 +57,8 @@ const adjustSchema = z.object({
   quantity: z.coerce.number().int().min(1, 'Quantity must be at least 1'),
   reasonCode: z.string().min(1, 'Reason code is required'),
   note: z.string().max(300, 'Note must be less than 300 characters').optional(),
+  lotNumber: z.string().max(60, 'Lot number must be less than 60 characters').optional(),
+  serialNumber: z.string().max(60, 'Serial number must be less than 60 characters').optional(),
 });
 
 type AdjustFormData = z.infer<typeof adjustSchema>;
@@ -68,6 +70,8 @@ export interface AdjustQuantityInput {
   quantity: number;
   reasonCode: string;
   note?: string;
+  lotNumber?: string;
+  serialNumber?: string;
 }
 
 interface AdjustQuantityDialogProps {
@@ -94,6 +98,8 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
       quantity: 1,
       reasonCode: '',
       note: '',
+      lotNumber: '',
+      serialNumber: '',
     },
   });
 
@@ -137,6 +143,8 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
       quantity: data.quantity,
       reasonCode: data.reasonCode,
       note: data.note?.trim() || undefined,
+      lotNumber: data.lotNumber?.trim() || undefined,
+      serialNumber: data.serialNumber?.trim() || undefined,
     });
     resetAndClose();
   };
@@ -240,22 +248,45 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Location <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a location..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {STOCK_LOCATIONS.map((loc) => (
-                            <SelectItem key={loc} value={loc}>{loc}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <LocationCombobox value={field.value} onChange={field.onChange} />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="lotNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lot number <span className="normal-case font-normal">optional</span></FormLabel>
+                        <FormControl>
+                          <Input placeholder="LOT-…" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="serialNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Serial number <span className="normal-case font-normal">optional</span></FormLabel>
+                        <FormControl>
+                          <Input placeholder="SN-…" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground -mt-3">
+                  Both fields are available on every part while the hardware team decides which applies where.
+                </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField

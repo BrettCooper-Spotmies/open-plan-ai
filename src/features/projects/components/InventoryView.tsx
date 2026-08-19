@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Search, Table as TableIcon, LayoutGrid, Download, Pencil, PackageSearch,
-  AlertTriangle, Truck, CheckCircle, Lock, Boxes as BoxesIcon, Layers, SlidersHorizontal,
+  AlertTriangle, Truck, CheckCircle, Lock, Boxes as BoxesIcon, Layers, SlidersHorizontal, ShoppingCart,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Drawer, DrawerContent, DrawerFooter, DrawerTitle } from '@/components/ui/drawer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useBomTree } from '@/hooks/useBom';
@@ -21,15 +22,37 @@ import {
   KNOWN_BOM_CATEGORIES, getCategoryMeta, type BOMCategory,
 } from './bomData';
 import {
-  generateMockStock, generateDemoStock, generateMockBuilds, computeCoverage, availableOf, CoveragePill, CoverageBar,
-  type StockRecord, type StockTransaction, type CoverageStatus,
+  generateMockStock, generateDemoStock, generateMockBuilds, generateMockOrders, computeCoverage, availableOf, onOrderOf,
+  CoveragePill, CoverageBar,
+  type StockRecord, type StockTransaction, type CoverageStatus, type OrderRecord,
 } from './inventoryData';
 import { HoverZoomImage, PartThumb } from './BOMShared';
 import { ReceiveStockDialog, type ReceiveStockInput } from './ReceiveStockDialog';
 import { AdjustQuantityDialog, type AdjustQuantityInput } from './AdjustQuantityDialog';
+import { PlaceOrderDialog, type PlaceOrderInput } from './PlaceOrderDialog';
 import { PartDetailSheet, type WhereUsedRow } from './PartDetailSheet';
 import { BuildsPanel } from './BuildsPanel';
 import { AlertsPanel } from './AlertsPanel';
+
+const STAT_TOOLTIPS: Record<string, string> = {
+  'On Hand': 'Physical quantity currently in stock, including anything held in quarantine.',
+  'Allocated': 'Quantity already reserved against BOM demand for planned builds.',
+  'Available': 'On Hand minus Allocated minus Quarantine — what can actually be used right now.',
+  'On Order': 'Quantity remaining on open purchase orders, not yet received.',
+};
+
+function HeaderTip({ label }: { label: string }) {
+  const tip = STAT_TOOLTIPS[label];
+  if (!tip) return <>{label}</>;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="cursor-help underline decoration-dotted underline-offset-2">{label}</span>
+      </TooltipTrigger>
+      <TooltipContent>{tip}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 function softTint(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
@@ -96,20 +119,32 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
   }, [rootNodes]);
 
   const [stock, setStock] = useState<StockRecord[]>([]);
+  const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [transactions, setTransactions] = useState<StockTransaction[]>([]);
   const seededRef = useRef(false);
   useEffect(() => {
     if (seededRef.current) return;
     if (rootNodes.length > 0) {
-      setStock(generateMockStock(rootNodes));
+      const seeded = generateMockStock(rootNodes);
+      setStock(seeded);
+      setOrders(generateMockOrders(seeded));
       seededRef.current = true;
     } else if (bomTree) {
       // BOM tree has loaded but has no parts yet — show the static demo catalog instead
       // of an empty table, so Inventory always has something to preview.
-      setStock(generateDemoStock());
+      const seeded = generateDemoStock();
+      setStock(seeded);
+      setOrders(generateMockOrders(seeded));
       seededRef.current = true;
     }
   }, [rootNodes, bomTree]);
+
+  // `onOrder` is derived from live order state rather than the static seeded field, so
+  // Receive/Order actions are reflected immediately without touching stock rows directly.
+  const displayStock = useMemo(
+    () => stock.map(r => ({ ...r, onOrder: onOrderOf(orders, r.partId) })),
+    [stock, orders]
+  );
 
   const [search, setSearch] = useState('');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
@@ -117,6 +152,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(isMobile ? 'cards' : 'table');
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
+  const [orderOpen, setOrderOpen] = useState(false);
 
   const handleReceive = (input: ReceiveStockInput) => {
     setStock(prev => {
@@ -127,6 +163,8 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
             ...r,
             onHand: r.onHand + input.quantity,
             quarantineQty: input.quarantine ? (r.quarantineQty ?? 0) + input.quantity : r.quarantineQty,
+            lotNumber: input.lotNumber ?? r.lotNumber,
+            serialNumber: input.serialNumber ?? r.serialNumber,
           }
           : r);
       }
@@ -142,9 +180,18 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
         location: input.location,
         leadTimeDays: 14,
         quarantineQty: input.quarantine ? input.quantity : undefined,
+        lotNumber: input.lotNumber,
+        serialNumber: input.serialNumber,
       };
       return [...prev, newRecord];
     });
+    if (input.orderId) {
+      setOrders(prev => prev.map(o => {
+        if (o.id !== input.orderId) return o;
+        const remainingQty = Math.max(0, o.remainingQty - input.quantity);
+        return { ...o, remainingQty, status: remainingQty === 0 ? 'received' : 'partially_received' };
+      }));
+    }
     setTransactions(prev => [{
       id: `txn-${Date.now()}`,
       partId: input.partId,
@@ -158,6 +205,46 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
       createdBy: 'You',
     }, ...prev]);
     toast.success(`Received ${input.quantity} × ${input.pn}`);
+  };
+
+  const handlePlaceOrder = (input: PlaceOrderInput) => {
+    const newOrder: OrderRecord = {
+      id: `ord-${input.partId}-${Date.now()}`,
+      partId: input.partId,
+      pn: input.pn,
+      quantity: input.quantity,
+      remainingQty: input.quantity,
+      expectedDate: input.expectedDate,
+      supplierRef: input.supplierRef,
+      unitCost: input.unitCost,
+      location: input.location,
+      status: 'open',
+      createdAt: new Date().toISOString(),
+      createdBy: 'You',
+    };
+    setOrders(prev => [newOrder, ...prev]);
+  };
+
+  const handleReleaseQuarantine = (recordId: string, qty: number) => {
+    setStock(prev => prev.map(r => {
+      if (r.id !== recordId) return r;
+      return { ...r, quarantineQty: Math.max(0, (r.quarantineQty ?? 0) - qty) };
+    }));
+    const record = stock.find(r => r.id === recordId);
+    if (record) {
+      setTransactions(prev => [{
+        id: `txn-${Date.now()}`,
+        partId: record.partId,
+        type: 'adjust',
+        direction: 'add',
+        qty,
+        location: record.location,
+        reasonCode: 'Released from quarantine',
+        createdAt: new Date().toISOString(),
+        createdBy: 'You',
+      }, ...prev]);
+    }
+    toast.success(`Released ${qty} from quarantine`);
   };
 
   const handleAdjust = (input: AdjustQuantityInput) => {
@@ -185,18 +272,18 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
     computeCoverage(r, demandByPartId.get(r.partId) ?? 0);
 
   const filteredStock = useMemo(() => {
-    return stock.filter(r => {
+    return displayStock.filter(r => {
       if (categoryFilter !== 'all' && r.cat !== categoryFilter) return false;
       if (search && !`${r.pn} ${r.name}`.toLowerCase().includes(search.toLowerCase())) return false;
       const coverage = coverageOf(r);
       if (quickFilter === 'low-coverage' && coverage === 'ready') return false;
       if (quickFilter === 'on-order' && r.onOrder <= 0) return false;
-      if (quickFilter === 'lot-serial' && !r.lotSerial) return false;
+      if (quickFilter === 'lot-serial' && !r.lotNumber && !r.serialNumber) return false;
       if (quickFilter === 'quarantine' && !(r.quarantineQty && r.quarantineQty > 0)) return false;
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stock, categoryFilter, search, quickFilter, demandByPartId]);
+  }, [displayStock, categoryFilter, search, quickFilter, demandByPartId]);
 
   // Cards view groups by category (unless a single category is already filtered), each
   // group preceded by a small "CATEGORY NAME · count" header — mirrors the design system's
@@ -213,16 +300,17 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
 
   const coverageCounts = useMemo(() => {
     const counts: Record<CoverageStatus, number> = { ready: 0, 'covered-by-order': 0, short: 0, conflict: 0 };
-    for (const r of stock) counts[coverageOf(r)]++;
+    for (const r of displayStock) counts[coverageOf(r)]++;
     return counts;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stock, demandByPartId]);
+  }, [displayStock, demandByPartId]);
 
-  const totalParts = stock.length;
+  const totalParts = displayStock.length;
   const belowCoverage = coverageCounts.short + coverageCounts.conflict;
-  const incomingCount = stock.filter(r => r.onOrder > 0).length;
+  const incomingCount = displayStock.filter(r => r.onOrder > 0).length;
+  const quarantineCount = displayStock.filter(r => (r.quarantineQty ?? 0) > 0).length;
 
-  const builds = useMemo(() => generateMockBuilds(stock, demandByPartId), [stock, demandByPartId]);
+  const builds = useMemo(() => generateMockBuilds(displayStock, demandByPartId), [displayStock, demandByPartId]);
   const [activeTab, setActiveTab] = useState('stock');
   const [openBuildId, setOpenBuildId] = useState<string | null>(null);
   const openBuild = (buildId: string) => { setActiveTab('builds'); setOpenBuildId(buildId); };
@@ -233,8 +321,8 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
 
   const openDetail = (partId: string) => { setSelectedPartId(partId); setDetailOpen(true); };
   const selectedRecord = useMemo(
-    () => stock.find(r => r.partId === selectedPartId) ?? null,
-    [stock, selectedPartId]
+    () => displayStock.find(r => r.partId === selectedPartId) ?? null,
+    [displayStock, selectedPartId]
   );
   const selectedPart = parts.find(p => p.id === selectedPartId);
   const whereUsed: WhereUsedRow[] = useMemo(() => {
@@ -246,6 +334,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
 
   const openReceiveFor = (partId?: string) => { setDialogPartId(partId); setReceiveOpen(true); };
   const openAdjustFor = (partId?: string) => { setDialogPartId(partId); setAdjustOpen(true); };
+  const openOrderFor = (partId?: string) => { setDialogPartId(partId); setOrderOpen(true); };
 
   // Mobile's Receive/New transaction shortcuts live in the app header (AppHeader), which
   // has no access to this component's local dialog state — it hands off via ?action=.
@@ -275,6 +364,10 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <Button variant="outline" onClick={() => openOrderFor()}>
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Order
+            </Button>
             <Button variant="outline" onClick={() => openReceiveFor()}>
               <Download className="h-4 w-4 mr-2" />
               Receive
@@ -292,6 +385,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
         <StatCard label="Ready to Build" value={String(coverageCounts.ready)} icon={CheckCircle} iconColor="#16A34A" />
         <StatCard label="Below Coverage" value={String(belowCoverage)} icon={AlertTriangle} iconColor="#DC2626" />
         <StatCard label="Incoming This Week" value={String(incomingCount)} icon={Truck} iconColor="#D97706" />
+        <StatCard label="In Quarantine" value={String(quarantineCount)} icon={Lock} iconColor="#7C3AED" />
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -560,10 +654,10 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                       <TableRow>
                         <TableHead className="h-9 px-3 py-2 w-[120px] text-[11px] font-medium uppercase tracking-wider">Coverage</TableHead>
                         <TableHead className="h-9 px-3 py-2 w-[260px] text-[11px] font-medium uppercase tracking-wider">Part</TableHead>
-                        <TableHead className="h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider">On Hand</TableHead>
-                        <TableHead className="hidden sm:table-cell h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider">Allocated</TableHead>
-                        <TableHead className="h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider">Available</TableHead>
-                        <TableHead className="hidden md:table-cell h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider">On Order</TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider"><HeaderTip label="On Hand" /></TableHead>
+                        <TableHead className="hidden sm:table-cell h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider"><HeaderTip label="Allocated" /></TableHead>
+                        <TableHead className="h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider"><HeaderTip label="Available" /></TableHead>
+                        <TableHead className="hidden md:table-cell h-9 px-3 py-2 text-right text-[11px] font-medium uppercase tracking-wider"><HeaderTip label="On Order" /></TableHead>
                         <TableHead className="h-9 px-3 py-2 text-[11px] font-medium uppercase tracking-wider">Location</TableHead>
                         <TableHead className="hidden lg:table-cell h-9 px-3 py-2 text-[11px] font-medium uppercase tracking-wider">Lead</TableHead>
                       </TableRow>
@@ -593,6 +687,13 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                                 <div className="min-w-0">
                                   <div className="text-sm font-medium text-foreground truncate">{r.name}</div>
                                   <div className="text-xs font-mono text-muted-foreground truncate">{r.pn}</div>
+                                  {(r.lotNumber || r.serialNumber) && (
+                                    <div className="text-[10px] text-muted-foreground truncate">
+                                      {r.lotNumber && <>Lot {r.lotNumber}</>}
+                                      {r.lotNumber && r.serialNumber && ' · '}
+                                      {r.serialNumber && <>SN {r.serialNumber}</>}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </TableCell>
@@ -654,14 +755,21 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                                     <div className="min-w-0 flex-1">
                                       <div className="text-xs font-semibold truncate" style={{ color: groupMeta.tint }}>{r.pn}</div>
                                       <div className="text-sm font-semibold text-foreground truncate">{r.name}</div>
+                                      {(r.lotNumber || r.serialNumber) && (
+                                        <div className="text-[10px] text-muted-foreground truncate">
+                                          {r.lotNumber && <>Lot {r.lotNumber}</>}
+                                          {r.lotNumber && r.serialNumber && ' · '}
+                                          {r.serialNumber && <>SN {r.serialNumber}</>}
+                                        </div>
+                                      )}
                                     </div>
-                                    {r.lotSerial && (
+                                    {(r.lotNumber || r.serialNumber) && (
                                       <Badge
                                         variant="outline"
                                         className="text-[10px] font-medium gap-1 shrink-0"
                                         style={{ color: '#7C3AED', borderColor: 'rgba(124,58,237,0.3)', background: 'rgba(124,58,237,0.08)' }}
                                       >
-                                        <Layers className="h-2.5 w-2.5" /> Lot
+                                        <Layers className="h-2.5 w-2.5" /> {r.lotNumber && r.serialNumber ? 'Lot/SN' : r.lotNumber ? 'Lot' : 'SN'}
                                       </Badge>
                                     )}
                                   </div>
@@ -678,19 +786,19 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
 
                                   <div className="grid grid-cols-4 gap-2 pt-2.5 border-t border-border">
                                     <div>
-                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">On Hand</div>
+                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide"><HeaderTip label="On Hand" /></div>
                                       <div className="text-sm font-semibold">{r.onHand}</div>
                                     </div>
                                     <div>
-                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Alloc</div>
+                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide"><HeaderTip label="Allocated" /></div>
                                       <div className="text-sm font-semibold">{r.allocated}</div>
                                     </div>
                                     <div>
-                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Avail</div>
+                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide"><HeaderTip label="Available" /></div>
                                       <div className={cn('text-sm font-semibold', available < 0 && 'text-destructive')}>{available}</div>
                                     </div>
                                     <div>
-                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Order</div>
+                                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide"><HeaderTip label="On Order" /></div>
                                       <div className="text-sm font-semibold">{r.onOrder || '—'}</div>
                                     </div>
                                   </div>
@@ -719,7 +827,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
         <TabsContent value="alerts" className="mt-4">
           <AlertsPanel
             builds={builds}
-            stock={stock}
+            stock={displayStock}
             coverageOf={coverageOf}
             onSelectPart={openDetail}
             onSelectBuild={openBuild}
@@ -733,14 +841,22 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
         onClose={() => setReceiveOpen(false)}
         orgId={orgId}
         parts={parts}
+        orders={orders}
         onReceive={handleReceive}
         initialPartId={dialogPartId}
       />
       <AdjustQuantityDialog
         isOpen={adjustOpen}
         onClose={() => setAdjustOpen(false)}
-        stock={stock}
+        stock={displayStock}
         onAdjust={handleAdjust}
+        initialPartId={dialogPartId}
+      />
+      <PlaceOrderDialog
+        isOpen={orderOpen}
+        onClose={() => setOrderOpen(false)}
+        parts={parts}
+        onPlaceOrder={handlePlaceOrder}
         initialPartId={dialogPartId}
       />
       <PartDetailSheet
@@ -749,10 +865,12 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
         status={selectedRecord ? coverageOf(selectedRecord) : 'ready'}
         part={selectedPart}
         transactions={transactions}
+        orders={orders}
         whereUsed={whereUsed}
         onClose={() => setDetailOpen(false)}
         onReceive={() => openReceiveFor(selectedPartId ?? undefined)}
         onAdjust={() => openAdjustFor(selectedPartId ?? undefined)}
+        onReleaseQuarantine={(qty) => selectedRecord && handleReleaseQuarantine(selectedRecord.id, qty)}
       />
     </div>
   );
