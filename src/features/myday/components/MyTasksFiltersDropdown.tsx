@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Filter, Flag, CheckSquare, FolderKanban, UserCheck, CalendarClock } from 'lucide-react';
+import { format } from 'date-fns';
+import { Filter, Flag, CheckSquare, FolderKanban, UserCheck, CalendarClock, CalendarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MultiSelect } from '@/components/ui/multi-select';
@@ -21,12 +23,15 @@ const typeOptions = [
   { value: 'issue', label: 'Issue' },
 ];
 
-const statusOptions = [
+const taskStatusOptions = [
   { value: 'todo', label: 'Todo' },
   { value: 'in-progress', label: 'In Progress' },
   { value: 'review', label: 'Review' },
   { value: 'done', label: 'Done' },
   { value: 'blocked', label: 'Blocked' },
+];
+
+const issueStatusOptions = [
   { value: 'open', label: 'Open' },
   { value: 'resolved', label: 'Resolved' },
   { value: 'wont-fix', label: "Won't Fix" },
@@ -68,6 +73,16 @@ export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, classN
     return Array.from(seen.entries()).map(([value, label]) => ({ value, label }));
   }, [items]);
 
+  const statusOptions = useMemo(() => {
+    const selectedTypes = filters.type || [];
+    const includeTask = selectedTypes.includes('task');
+    const includeIssue = selectedTypes.includes('issue');
+    if (includeTask && includeIssue) return [...taskStatusOptions, ...issueStatusOptions];
+    if (includeIssue) return issueStatusOptions;
+    if (includeTask) return taskStatusOptions;
+    return [];
+  }, [filters.type]);
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (filters.type?.length) count++;
@@ -75,7 +90,7 @@ export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, classN
     if (filters.priority?.length) count++;
     if (filters.projectIds?.length) count++;
     if (filters.assignedByIds?.length) count++;
-    if (filters.dueDate) count++;
+    if (filters.dueDate || filters.dueDateCustom) count++;
     return count;
   }, [filters]);
 
@@ -117,20 +132,36 @@ export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, classN
             <MultiSelect
               options={typeOptions}
               selected={filters.type || []}
-              onChange={(values) => onFiltersChange({ ...filters, type: values.length ? (values as MyDayItemType[]) : undefined })}
+              onChange={(values) => {
+                const nextTypes = values.length ? (values as MyDayItemType[]) : undefined;
+                const allowedStatuses = new Set(
+                  [
+                    ...(nextTypes?.includes('task') ? taskStatusOptions : []),
+                    ...(nextTypes?.includes('issue') ? issueStatusOptions : []),
+                  ].map((option) => option.value)
+                );
+                const nextStatus = filters.status?.filter((value) => allowedStatuses.has(value));
+                onFiltersChange({
+                  ...filters,
+                  type: nextTypes,
+                  status: nextStatus?.length ? nextStatus : undefined,
+                });
+              }}
               placeholder="All Types"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs">Status</Label>
-            <MultiSelect
-              options={statusOptions}
-              selected={filters.status || []}
-              onChange={(values) => onFiltersChange({ ...filters, status: values.length ? values : undefined })}
-              placeholder="All Status"
-            />
-          </div>
+          {statusOptions.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-xs">Status</Label>
+              <MultiSelect
+                options={statusOptions}
+                selected={filters.status || []}
+                onChange={(values) => onFiltersChange({ ...filters, status: values.length ? values : undefined })}
+                placeholder="All Status"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label className="text-xs flex items-center gap-1">
@@ -145,18 +176,20 @@ export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, classN
             />
           </div>
 
-          <div className="space-y-2">
-            <Label className="text-xs flex items-center gap-1">
-              <FolderKanban className="h-3 w-3" />
-              Project
-            </Label>
-            <MultiSelect
-              options={projectOptions}
-              selected={filters.projectIds || []}
-              onChange={(values) => onFiltersChange({ ...filters, projectIds: values.length ? values : undefined })}
-              placeholder="All Projects"
-            />
-          </div>
+          {projectOptions.length > 1 && (
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <FolderKanban className="h-3 w-3" />
+                Project
+              </Label>
+              <MultiSelect
+                options={projectOptions}
+                selected={filters.projectIds || []}
+                onChange={(values) => onFiltersChange({ ...filters, projectIds: values.length ? values : undefined })}
+                placeholder="All Projects"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label className="text-xs flex items-center gap-1">
@@ -176,27 +209,69 @@ export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, classN
               <CalendarClock className="h-3 w-3" />
               Due Date
             </Label>
-            <Select
-              value={filters.dueDate || 'all'}
-              onValueChange={(value) =>
-                onFiltersChange({
-                  ...filters,
-                  dueDate: value === 'all' ? undefined : (value as MyTasksColumnFilters['dueDate']),
-                })
-              }
-            >
-              <SelectTrigger className="h-9">
-                <SelectValue placeholder="Any Date" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Any Date</SelectItem>
-                {dueDateOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-1">
+              <Select
+                value={filters.dueDate || 'all'}
+                onValueChange={(value) =>
+                  onFiltersChange({
+                    ...filters,
+                    dueDate: value === 'all' ? undefined : (value as MyTasksColumnFilters['dueDate']),
+                    dueDateCustom: undefined,
+                  })
+                }
+              >
+                <SelectTrigger className="h-9 flex-1">
+                  <SelectValue placeholder="Any Date" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any Date</SelectItem>
+                  {dueDateOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant={filters.dueDateCustom ? 'secondary' : 'outline'}
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                  >
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <CalendarPicker
+                    mode="single"
+                    selected={filters.dueDateCustom ? new Date(filters.dueDateCustom) : undefined}
+                    onSelect={(date) =>
+                      onFiltersChange({
+                        ...filters,
+                        dueDateCustom: date ? format(date, 'yyyy-MM-dd') : undefined,
+                        dueDate: date ? undefined : filters.dueDate,
+                      })
+                    }
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            {filters.dueDateCustom && (
+              <div className="flex items-center justify-between pl-1">
+                <span className="text-xs text-muted-foreground">{format(new Date(filters.dueDateCustom), 'PPP')}</span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 px-1.5 text-xs"
+                  onClick={() => onFiltersChange({ ...filters, dueDateCustom: undefined })}
+                >
+                  Clear
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </PopoverContent>
