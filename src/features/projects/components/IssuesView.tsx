@@ -32,6 +32,7 @@ import {
   MoreHorizontal,
   Trash2,
   Calendar,
+  Loader2,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -179,7 +180,7 @@ export function IssuesView({
   const { id: routeProjectId } = useParams();
   const { user } = useAuth();
   const isMobile = useIsMobile();
-  const { data: apiIssueColumns } = useIssueColumns(routeProjectId);
+  const { data: apiIssueColumns, isLoading: isIssueColumnsLoading } = useIssueColumns(routeProjectId);
   const createIssueColumn = useCreateIssueColumn(routeProjectId);
   const updateIssueColumn = useUpdateIssueColumn(routeProjectId);
   const deleteIssueColumn = useDeleteIssueColumn(routeProjectId);
@@ -191,7 +192,7 @@ export function IssuesView({
   const [internalStatusFilter, setInternalStatusFilter] = useState<string[]>([]);
   const [localIssues, setLocalIssues] = useState<Issue[]>(issues);
   const [columns, setColumns] = useState<IssuesKanbanColumn[]>(() =>
-    apiColumnsToKanban(DEFAULT_ISSUE_COLUMNS),
+    apiColumnsToKanban(apiIssueColumns && apiIssueColumns.length > 0 ? apiIssueColumns : DEFAULT_ISSUE_COLUMNS),
   );
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -686,7 +687,12 @@ export function IssuesView({
 
   return (
     <div className="space-y-4">
-      {viewMode === 'kanban' ? (
+      {viewMode === 'kanban' && isIssueColumnsLoading && !apiIssueColumns ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <p className="text-sm">Loading board…</p>
+        </div>
+      ) : viewMode === 'kanban' ? (
         <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <Droppable droppableId="board" type="COLUMN" direction={isMobile ? 'vertical' : 'horizontal'}>
             {(provided) => (
