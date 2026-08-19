@@ -166,7 +166,7 @@ export function IssueDetailModal({
       <DialogContent
         hideClose
         className={cn(
-          'p-0 flex flex-col gap-0 overflow-hidden',
+          'p-0 flex flex-col gap-0 overflow-hidden !duration-0 data-[state=open]:!animate-none data-[state=closed]:!animate-none',
           isMobile
             ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0'
             : 'max-w-4xl max-h-[90vh]'
@@ -258,7 +258,6 @@ export function IssueDetailModal({
                 onClick={() => {
                   if (editedIssue.projectId) {
                     navigate(`/projects/${editedIssue.projectId}/issues/${editedIssue.id}/full`);
-                    onClose();
                   } else {
                     logger.warn('Could not expand issue: missing projectId', { issueId: editedIssue.id });
                   }

@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Loader2, Minimize2 } from 'lucide-react';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { IssueDetailContent } from './components/IssueDetailContent';
 import { Issue } from '@/types';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
@@ -114,15 +114,6 @@ export default function IssuePage() {
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Project
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              title="Shrink"
-              onClick={() => navigate(`/projects/${projectId}/issues/${issueId}`)}
-            >
-              <Minimize2 className="h-4 w-4" />
             </Button>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground overflow-hidden">
