@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Download, Upload, Pencil, ArrowLeftRight, ClipboardCheck, MapPin, ChevronLeft,
+  Download, ShoppingCart, Pencil, ArrowLeftRight, ClipboardCheck, MapPin, ChevronLeft,
   Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag, Unlock,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -45,6 +45,7 @@ interface PartDetailSheetProps {
   onClose: () => void;
   onReceive: () => void;
   onAdjust: () => void;
+  onOrder: () => void;
   onReleaseQuarantine: (qty: number) => void;
 }
 
@@ -68,7 +69,7 @@ function StatItem({ label, value, color }: { label: string; value: number; color
 }
 
 export function PartDetailSheet({
-  isOpen, record, status, part, transactions, orders, whereUsed, onClose, onReceive, onAdjust, onReleaseQuarantine,
+  isOpen, record, status, part, transactions, orders, whereUsed, onClose, onReceive, onAdjust, onOrder, onReleaseQuarantine,
 }: PartDetailSheetProps) {
   const isMobile = useIsMobile();
   const [releaseQty, setReleaseQty] = useState('');
@@ -219,10 +220,17 @@ export function PartDetailSheet({
             >
               <Pencil className="h-3.5 w-3.5 mr-1.5 shrink-0" /> <span className="truncate">Adjust</span>
             </Button>
+            <Button
+              className="min-w-0 sm:w-auto px-4"
+              variant="outline"
+              onClick={onOrder}
+            >
+              <ShoppingCart className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Order</span>
+            </Button>
             {!isMobile && (
               <>
                 <Button className="min-w-0 px-4" variant="outline" disabled title="Coming soon">
-                  <Upload className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Issue</span>
+                  <ArrowLeftRight className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Issue</span>
                 </Button>
                 <Button className="min-w-0 px-4" variant="outline" disabled title="Coming soon">
                   <ArrowLeftRight className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Transfer</span>

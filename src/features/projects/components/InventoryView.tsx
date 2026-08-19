@@ -921,6 +921,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
         onClose={() => setDetailOpen(false)}
         onReceive={() => openReceiveFor(selectedPartId ?? undefined)}
         onAdjust={() => openAdjustFor(selectedPartId ?? undefined)}
+        onOrder={() => openOrderFor(selectedPartId ?? undefined)}
         onReleaseQuarantine={(qty) => selectedRecord && handleReleaseQuarantine(selectedRecord.id, qty)}
       />
     </div>
