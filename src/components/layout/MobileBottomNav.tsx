@@ -129,7 +129,7 @@ export function MobileBottomNav() {
         </div>
 
         {/* Sheet items */}
-        <div className="grid grid-cols-4 gap-1 px-3 py-4">
+        <div className="grid grid-cols-3 gap-1 px-3 py-4">
           {visibleMoreNavItems.map((item) => {
             const active = isActive(item.url);
             return (
