@@ -249,11 +249,37 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
   };
 
   const handleAdjust = (input: AdjustQuantityInput) => {
-    setStock(prev => prev.map(r => {
-      if (r.partId !== input.partId || r.location !== input.location) return r;
+    setStock(prev => {
+      const existing = prev.find(r => r.partId === input.partId && r.location === input.location);
       const delta = input.direction === 'add' ? input.quantity : -input.quantity;
-      return { ...r, onHand: Math.max(0, r.onHand + delta) };
-    }));
+      if (existing) {
+        return prev.map(r => r.id === existing.id
+          ? {
+            ...r,
+            onHand: Math.max(0, r.onHand + delta),
+            lotNumber: input.lotNumber ?? r.lotNumber,
+            serialNumber: input.serialNumber ?? r.serialNumber,
+          }
+          : r);
+      }
+      // Brand-new part (created via "Add new part" in this dialog) with no existing stock
+      // row at this location yet.
+      const newRecord: StockRecord = {
+        id: `stk-${input.partId}-${input.location}`,
+        partId: input.partId,
+        pn: input.pn ?? '',
+        name: input.name ?? '',
+        cat: input.cat ?? 'assembly',
+        onHand: Math.max(0, delta),
+        allocated: 0,
+        onOrder: 0,
+        location: input.location,
+        leadTimeDays: 14,
+        lotNumber: input.lotNumber,
+        serialNumber: input.serialNumber,
+      };
+      return [...prev, newRecord];
+    });
     setTransactions(prev => [{
       id: `txn-${Date.now()}`,
       partId: input.partId,
@@ -271,6 +297,16 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
 
   const coverageOf = (r: StockRecord): CoverageStatus =>
     computeCoverage(r, demandByPartId.get(r.partId) ?? 0);
+
+  // Category filter pills reflect whatever categories actually exist in stock — including
+  // custom ones typed in via "Add new part" — not just the 7 fixed BOM presets, so a custom
+  // category never silently becomes unfilterable/ungrouped after it's created.
+  const allCategories = useMemo(() => {
+    const extra = Array.from(new Set(displayStock.map(r => r.cat))).filter(
+      cat => !(KNOWN_BOM_CATEGORIES as readonly string[]).includes(cat)
+    );
+    return [...KNOWN_BOM_CATEGORIES, ...extra];
+  }, [displayStock]);
 
   const filteredStock = useMemo(() => {
     return displayStock.filter(r => {
@@ -296,8 +332,8 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
       if (!byCat.has(r.cat)) byCat.set(r.cat, []);
       byCat.get(r.cat)!.push(r);
     }
-    return KNOWN_BOM_CATEGORIES.filter(cat => byCat.has(cat)).map(cat => ({ cat, items: byCat.get(cat)! }));
-  }, [filteredStock, categoryFilter]);
+    return allCategories.filter(cat => byCat.has(cat)).map(cat => ({ cat, items: byCat.get(cat)! }));
+  }, [filteredStock, categoryFilter, allCategories]);
 
   const coverageCounts = useMemo(() => {
     const counts: Record<CoverageStatus, number> = { ready: 0, 'covered-by-order': 0, short: 0, conflict: 0 };
@@ -490,7 +526,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                   >
                     All categories
                   </button>
-                  {KNOWN_BOM_CATEGORIES.map((cat) => {
+                  {allCategories.map((cat) => {
                     const meta = getCategoryMeta(cat);
                     const active = categoryFilter === cat;
                     return (
@@ -563,7 +599,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
                           >
                             All categories
                           </button>
-                          {KNOWN_BOM_CATEGORIES.map((cat) => {
+                          {allCategories.map((cat) => {
                             const meta = getCategoryMeta(cat);
                             const active = categoryFilter === cat;
                             return (
@@ -862,6 +898,7 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
       <AdjustQuantityDialog
         isOpen={adjustOpen}
         onClose={() => setAdjustOpen(false)}
+        orgId={orgId}
         stock={displayStock}
         onAdjust={handleAdjust}
         initialPartId={dialogPartId}

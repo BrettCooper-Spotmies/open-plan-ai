@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { bomFlatAll, type BOMNode, type BOMCategory } from './bomData';
+import { bomFlatAll, KNOWN_BOM_CATEGORIES, type BOMNode, type BOMCategory } from './bomData';
 
 export const STOCK_LOCATIONS = ['Lab Shelf A', 'Lab Shelf B', 'Incoming Dock', 'CM', 'Quarantine'] as const;
 // Locations are free-text (mirrors the BOMCategory custom-category pattern) — the presets
@@ -99,6 +99,59 @@ export function LocationCombobox({ value, onChange, placeholder = 'Select a loca
           <SelectItem key={loc} value={loc}>{loc}</SelectItem>
         ))}
         <SelectItem value={CUSTOM_LOCATION_SENTINEL}>Other (custom)…</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+const CUSTOM_CATEGORY_SENTINEL = '__custom_category__';
+
+/** Category picker for new-part creation: preset dropdown (the 7 known BOM categories) with
+ * a custom escape hatch, so a category typed here shows up as a real filter later instead of
+ * being silently limited to the fixed preset list. */
+export function CategoryCombobox({ value, onChange, placeholder = 'Select a category...' }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const [customMode, setCustomMode] = useState(
+    () => value !== '' && !(KNOWN_BOM_CATEGORIES as readonly string[]).includes(value)
+  );
+
+  useEffect(() => {
+    if (value === '') setCustomMode(false);
+  }, [value]);
+
+  if (customMode) {
+    return (
+      <div className="flex gap-2">
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Enter custom category..."
+          autoFocus
+        />
+        <Button type="button" variant="outline" size="sm" onClick={() => { setCustomMode(false); onChange(''); }}>
+          Presets
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Select
+      onValueChange={(v) => {
+        if (v === CUSTOM_CATEGORY_SENTINEL) { setCustomMode(true); onChange(''); }
+        else onChange(v);
+      }}
+      value={value}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {KNOWN_BOM_CATEGORIES.map((c) => (
+          <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>
+        ))}
+        <SelectItem value={CUSTOM_CATEGORY_SENTINEL}>Other (custom)…</SelectItem>
       </SelectContent>
     </Select>
   );

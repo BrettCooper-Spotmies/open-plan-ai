@@ -50,8 +50,8 @@ import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Download, Plus, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart } from '@/hooks/useParts';
-import { KNOWN_BOM_CATEGORIES, type ApiPartResponse, type BOMCategory } from './bomData';
-import { LocationCombobox, formatShortDate, type StockLocation, type OrderRecord } from './inventoryData';
+import { type ApiPartResponse, type BOMCategory } from './bomData';
+import { LocationCombobox, CategoryCombobox, formatShortDate, type StockLocation, type OrderRecord } from './inventoryData';
 
 const NO_ORDER_SENTINEL = '__no_order__';
 
@@ -338,19 +338,10 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, orders, onRe
                             </div>
                             <div className="space-y-1.5">
                               <Label className="text-xs">Category *</Label>
-                              <Select
+                              <CategoryCombobox
                                 value={newPart.category}
-                                onValueChange={(v) => setNewPart(prev => ({ ...prev, category: v }))}
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue placeholder="Select..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {KNOWN_BOM_CATEGORIES.map((c) => (
-                                    <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                onChange={(v) => setNewPart(prev => ({ ...prev, category: v as BOMCategory | '' }))}
+                              />
                             </div>
                             <div className="space-y-1.5">
                               <Label className="text-xs">Unit</Label>
