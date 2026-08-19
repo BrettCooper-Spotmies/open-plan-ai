@@ -50,23 +50,30 @@ export default function Inventory() {
 
   return (
     <div className="space-y-4">
-      {projects.length > 1 && (
-        <div className="flex justify-end">
-          <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-            <SelectTrigger className="w-full sm:w-[260px]">
-              <SelectValue placeholder="Select project" />
-            </SelectTrigger>
-            <SelectContent>
-              {projects.map((p) => (
-                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
       {selectedProjectId && (
         <div className="-mx-4 md:-mx-6 -mb-6">
-          <InventoryView projectId={selectedProjectId} orgId={currentOrganization.id} />
+          <InventoryView
+            projectId={selectedProjectId}
+            orgId={currentOrganization.id}
+            projectSelector={projects.length > 1 ? (
+              <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                <SelectTrigger className="w-full min-w-[220px] sm:w-[280px]">
+                  <SelectValue placeholder="Select project" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="w-full min-w-[220px] sm:w-[280px]">
+                <div className="flex h-11 items-center rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground">
+                  {projects[0]?.name}
+                </div>
+              </div>
+            )}
+          />
         </div>
       )}
     </div>

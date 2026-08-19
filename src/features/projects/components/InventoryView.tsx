@@ -85,6 +85,7 @@ function StatCard({ label, value, icon: Icon, iconColor, accent }: {
 interface InventoryViewProps {
   projectId: string;
   orgId: string;
+  projectSelector?: React.ReactNode;
 }
 
 type QuickFilter = 'all' | 'low-coverage' | 'on-order' | 'lot-serial' | 'quarantine';
@@ -97,7 +98,7 @@ const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
   { value: 'quarantine', label: 'Quarantine' },
 ];
 
-export function InventoryView({ projectId, orgId }: InventoryViewProps) {
+export function InventoryView({ projectId, orgId, projectSelector }: InventoryViewProps) {
   const isMobile = useIsMobile();
   const { data: bomTree } = useBomTree(projectId);
   const { data: partsResult } = useOrgParts(orgId);
@@ -405,16 +406,11 @@ export function InventoryView({ projectId, orgId }: InventoryViewProps) {
   return (
     <div className="space-y-4 md:space-y-6 px-4 md:px-6 pb-6">
       {isMobile ? null : (
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <BoxesIcon className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold">Inventory</h2>
-            </div>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 shrink-0">
+            {projectSelector}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center justify-start gap-2 shrink-0 lg:justify-end">
             <Button variant="outline" onClick={() => openOrderFor()}>
               <ShoppingCart className="h-4 w-4 mr-2" />
               Order
