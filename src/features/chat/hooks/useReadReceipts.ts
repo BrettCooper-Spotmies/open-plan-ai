@@ -14,14 +14,13 @@ export function useReadReceipts(
   conversationId: string | null | undefined,
   messages: ChatMessage[],
   currentUserId: string | undefined,
-  members?: ConversationMember[]
+  members: ConversationMember[] = []
 ) {
   const [memberLastReadAt, setMemberLastReadAt] = useState<Record<string, string>>({});
   const channelRef = useRef<Unsubscribe | null>(null);
 
-  const membersKey = useMemo(() => {
-    return (members || []).map((m) => `${m.id}:${m.lastReadAt || ''}`).join(',');
-  }, [members]);
+  // Stable primitive key to avoid infinite useEffect loops when members array reference changes
+  const membersKey = (members || []).map((m) => `${m.id}:${m.lastReadAt ?? ''}`).join('|');
 
   // Seed from the conversation's member list whenever it changes (e.g. on conversation switch).
   useEffect(() => {
@@ -32,7 +31,10 @@ export function useReadReceipts(
     setMemberLastReadAt((prev) => {
       const prevKeys = Object.keys(prev);
       const seedKeys = Object.keys(seed);
-      if (prevKeys.length === seedKeys.length && prevKeys.every((k) => prev[k] === seed[k])) {
+      if (
+        prevKeys.length === seedKeys.length &&
+        seedKeys.every((k) => prev[k] === seed[k])
+      ) {
         return prev;
       }
       return seed;

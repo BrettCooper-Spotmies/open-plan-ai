@@ -54,8 +54,8 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
 
   return (
     <SidebarProvider
-      defaultOpen={!preferences.sidebarCollapsed}
-      className="w-full max-w-full overflow-x-hidden min-h-screen"
+      open={!preferences.sidebarCollapsed}
+      onOpenChange={(open) => updatePreferences({ sidebarCollapsed: !open })}
     >
       <div className="h-screen flex w-full max-w-full bg-background overflow-hidden">
         {/* Sidebar hidden on mobile */}
