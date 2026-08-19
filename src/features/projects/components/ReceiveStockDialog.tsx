@@ -207,10 +207,10 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, orders, onRe
       <DialogContent
         hideClose
         className={cn(
-          'p-0 flex flex-col gap-0',
+          'p-0 flex flex-col gap-0 overflow-hidden',
           isMobile
             ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 data-[state=open]:!slide-in-from-left-0 data-[state=open]:!slide-in-from-top-0 data-[state=closed]:!slide-out-to-left-0 data-[state=closed]:!slide-out-to-top-0'
-            : 'max-w-lg'
+            : 'max-w-lg max-h-[90vh]'
         )}
       >
         <DialogHeader className="px-4 sm:px-6 py-4 pr-10 border-b shrink-0 flex-row items-start gap-3 space-y-0">
@@ -229,7 +229,7 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, orders, onRe
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 min-h-0">
-            <div className="overflow-y-auto flex-1">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               <div className="p-4 sm:p-6 space-y-5">
                 <FormField
                   control={form.control}

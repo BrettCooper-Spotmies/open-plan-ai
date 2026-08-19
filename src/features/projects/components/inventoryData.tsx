@@ -106,6 +106,15 @@ export function LocationCombobox({ value, onChange, placeholder = 'Select a loca
 
 const CUSTOM_CATEGORY_SENTINEL = '__custom_category__';
 
+function formatCategoryOptionLabel(category: string): string {
+  return category
+    .trim()
+    .split(/[_-]+|\s+/)
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 /** Category picker for new-part creation: preset dropdown (the 7 known BOM categories) with
  * a custom escape hatch, so a category typed here shows up as a real filter later instead of
  * being silently limited to the fixed preset list. */
@@ -115,23 +124,53 @@ export function CategoryCombobox({ value, onChange, placeholder = 'Select a cate
   const [customMode, setCustomMode] = useState(
     () => value !== '' && !(KNOWN_BOM_CATEGORIES as readonly string[]).includes(value)
   );
+  const [customValue, setCustomValue] = useState(
+    () => (value !== '' && !(KNOWN_BOM_CATEGORIES as readonly string[]).includes(value) ? value : '')
+  );
 
   useEffect(() => {
-    if (value === '') setCustomMode(false);
+    if (value === '') {
+      setCustomMode(false);
+      setCustomValue('');
+      return;
+    }
+
+    if (!(KNOWN_BOM_CATEGORIES as readonly string[]).includes(value)) {
+      setCustomMode(true);
+      setCustomValue(value);
+    }
   }, [value]);
 
   if (customMode) {
     return (
-      <div className="flex gap-2">
-        <Input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Enter custom category..."
-          autoFocus
-        />
-        <Button type="button" variant="outline" size="sm" onClick={() => { setCustomMode(false); onChange(''); }}>
-          Presets
-        </Button>
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Input
+            value={customValue}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+              setCustomValue(nextValue);
+              onChange(nextValue);
+            }}
+            placeholder="Enter custom category..."
+            autoFocus
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCustomMode(false);
+              setCustomValue('');
+              onChange('');
+            }}
+          >
+            Presets
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Custom categories will also appear in the inventory category chips.
+        </p>
       </div>
     );
   }
@@ -139,17 +178,22 @@ export function CategoryCombobox({ value, onChange, placeholder = 'Select a cate
   return (
     <Select
       onValueChange={(v) => {
-        if (v === CUSTOM_CATEGORY_SENTINEL) { setCustomMode(true); onChange(''); }
-        else onChange(v);
+        if (v === CUSTOM_CATEGORY_SENTINEL) {
+          setCustomMode(true);
+          setCustomValue('');
+          onChange('');
+        } else {
+          onChange(v);
+        }
       }}
-      value={value}
+      value={(KNOWN_BOM_CATEGORIES as readonly string[]).includes(value) ? value : ''}
     >
       <SelectTrigger>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>
         {KNOWN_BOM_CATEGORIES.map((c) => (
-          <SelectItem key={c} value={c} className="capitalize">{c}</SelectItem>
+          <SelectItem key={c} value={c}>{formatCategoryOptionLabel(c)}</SelectItem>
         ))}
         <SelectItem value={CUSTOM_CATEGORY_SENTINEL}>Other (custom)…</SelectItem>
       </SelectContent>
