@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2, ArrowDownToLine, CheckCircle2, AlertCircle, ChevronDown, X, Trash2 } from 'lucide-react';
+import BOMGoogleSheetsChangeList from './BOMGoogleSheetsChangeList';
 import { useGoogleSheetsImportPreview, useGoogleSheetsImportCommit } from '@/hooks/useGoogleSheets';
 import type { ImportRowPreview, ImportRowResolution, ImportCommitResult } from '@/services/googleSheets.service';
 
@@ -26,6 +27,13 @@ interface Props {
   onClose: () => void;
   projectId: string;
 }
+
+// Placeholders here stand in for values the user still has to supply, so they
+// are dimmed and italicised well below the base muted-foreground: at full
+// muted weight an example like "4" reads as a value that's already entered,
+// which is the opposite of what an unresolved required field should look like.
+const PLACEHOLDER_INPUT = 'placeholder:text-muted-foreground/50 placeholder:italic';
+const PLACEHOLDER_SELECT = 'data-[placeholder]:text-muted-foreground/50 data-[placeholder]:italic';
 
 type LeadTimeUnit = 'days' | 'weeks' | 'months';
 const UNIT_MULTIPLIER: Record<LeadTimeUnit, number> = { days: 1, weeks: 7, months: 30 };
@@ -474,14 +482,9 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                                       <Label className="text-xs font-medium text-foreground">
                                         {field}
                                       </Label>
-                                      {hasAiSuggestion && (
-                                        <span className="text-[10px] font-medium text-purple-600 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 px-1.5 py-0.5 rounded">
-                                          AI suggested — check it
-                                        </span>
-                                      )}
                                     </div>
                                     <Input
-                                      className="h-9 text-xs sm:text-sm rounded-lg"
+                                      className={`h-9 text-xs sm:text-sm rounded-lg ${PLACEHOLDER_INPUT}`}
                                       value={resolvedFieldValue(row, field)}
                                       placeholder={hasAiSuggestion ? undefined : 'Required'}
                                       onChange={(e) =>
@@ -498,17 +501,14 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                                     <Label className="text-xs font-medium text-foreground">
                                       Lead Time
                                     </Label>
-                                    <span className="text-[10px] font-medium text-purple-600 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 px-1.5 py-0.5 rounded">
-                                      AI suggested — check it
-                                    </span>
                                   </div>
                                   <div className="flex gap-2">
                                     <Input
-                                      className="h-9 text-xs sm:text-sm flex-1 rounded-lg"
+                                      className={`h-9 text-xs sm:text-sm flex-1 rounded-lg ${PLACEHOLDER_INPUT}`}
                                       type="text"
                                       inputMode="numeric"
                                       value={leadTimeValueEdits[row.rowIndex] ?? ''}
-                                      placeholder="4"
+                                      placeholder="e.g. 4"
                                       onChange={(e) => {
                                         const v = e.target.value.replace(/[^0-9]/g, '');
                                         setLeadTimeValueEdits((prev) => ({
@@ -526,7 +526,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                                         }))
                                       }
                                     >
-                                      <SelectTrigger className="h-9 w-28 text-xs rounded-lg">
+                                      <SelectTrigger className={`h-9 w-28 text-xs rounded-lg ${PLACEHOLDER_SELECT}`}>
                                         <SelectValue placeholder="Unit?" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -572,7 +572,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                     <div className="flex items-center gap-2 pt-1 pb-1">
                       <span className="text-xs text-muted-foreground">Set the same unit for all of these:</span>
                       <Select value={bulkUnit} onValueChange={(v) => applyBulkUnit(v as LeadTimeUnit)}>
-                        <SelectTrigger className="h-8 w-36 text-xs rounded-lg">
+                        <SelectTrigger className={`h-8 w-36 text-xs rounded-lg ${PLACEHOLDER_SELECT}`}>
                           <SelectValue placeholder="Pick a unit..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -613,7 +613,7 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                                   }))
                                 }
                               >
-                                <SelectTrigger className="h-8 w-28 text-xs rounded-lg">
+                                <SelectTrigger className={`h-8 w-28 text-xs rounded-lg ${PLACEHOLDER_SELECT}`}>
                                   <SelectValue placeholder="Unit?" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -688,16 +688,15 @@ export default function BOMGoogleSheetsPullDialog({ open, onClose, projectId }: 
                       {rowsByStatus['matched-changed'].length}
                     </span>
                   </div>
-                  <div className="space-y-2">
-                    {rowsByStatus['matched-changed'].map((row) => (
-                      <div key={row.rowIndex} className="text-xs flex items-baseline gap-2">
-                        <span className="font-mono font-semibold text-foreground">{row.partNumber}</span>
-                        <span className="text-muted-foreground">
-                          — updated fields: {row.changes.map((c) => c.field).join(', ')}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  <BOMGoogleSheetsChangeList
+                    rows={rowsByStatus['matched-changed'].map((row) => ({
+                      key: row.rowIndex,
+                      partNumber: row.partNumber,
+                      changes: row.changes,
+                    }))}
+                    fromLabel="Currently in BOM"
+                    toLabel="Will be updated from sheet"
+                  />
                 </div>
               )}
 
