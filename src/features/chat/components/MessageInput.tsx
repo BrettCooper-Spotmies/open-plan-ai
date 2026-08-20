@@ -41,8 +41,10 @@ interface MessageInputProps {
 
 // Keep in sync with the `max-h-[140px]` on the textarea and its highlight overlay.
 const MAX_TEXTAREA_HEIGHT = 140;
-// Two `gap-1` gutters (4px each) between the control groups and the textarea.
-const CONTROL_GAPS = 8;
+// The two gutters between the control groups and the textarea: `gap-1.5` (6px)
+// on mobile, `gap-1` (4px) on desktop.
+const CONTROL_GAPS_MOBILE = 12;
+const CONTROL_GAPS_DESKTOP = 8;
 
 const MAX_CHARS = 4000;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
@@ -471,31 +473,27 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     el.style.height = 'auto';
     let fullHeight = el.scrollHeight;
 
-    // Desktop only: the controls sit beside the textarea until the text wraps,
-    // then drop to their own row. That decision is made from how the text wraps
+    // The controls sit beside the textarea until the text wraps, then drop to
+    // their own row underneath. That decision is made from how the text wraps
     // at the *inline* width — the width the textarea has with the controls
     // beside it. Judging it at the current width would oscillate, because
     // stacking widens the textarea, which can pull the text back onto one line,
     // which would immediately un-stack it and re-wrap it.
-    if (isMobile) {
-      setIsStacked(false);
-    } else {
-      let inlineHeight = fullHeight;
-      if (isStacked) {
-        const controls =
-          (leftControlsRef.current?.offsetWidth ?? 0) +
-          (rightControlsRef.current?.offsetWidth ?? 0) +
-          CONTROL_GAPS;
-        el.style.width = Math.max(0, el.offsetWidth - controls) + 'px';
-        el.style.height = 'auto';
-        inlineHeight = el.scrollHeight;
-        el.style.width = '';
-        el.style.height = 'auto';
-        fullHeight = el.scrollHeight;
-      }
-      const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
-      setIsStacked(inlineHeight > lineHeight * 1.5);
+    let inlineHeight = fullHeight;
+    if (isStacked) {
+      const controls =
+        (leftControlsRef.current?.offsetWidth ?? 0) +
+        (rightControlsRef.current?.offsetWidth ?? 0) +
+        (isMobile ? CONTROL_GAPS_MOBILE : CONTROL_GAPS_DESKTOP);
+      el.style.width = Math.max(0, el.offsetWidth - controls) + 'px';
+      el.style.height = 'auto';
+      inlineHeight = el.scrollHeight;
+      el.style.width = '';
+      el.style.height = 'auto';
+      fullHeight = el.scrollHeight;
     }
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
+    setIsStacked(inlineHeight > lineHeight * 1.5);
 
     const height = Math.min(fullHeight, MAX_TEXTAREA_HEIGHT);
     el.style.height = height + 'px';
@@ -1167,34 +1165,46 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
 
         {/* Input bar */}
         {isMobile ? (
-          <div className="mx-auto w-full flex items-end gap-1.5">
-            {/* 😊 Emoji */}
-            <Button
-              ref={emojiButtonRef}
-              variant="ghost" size="icon" type="button"
-              className={cn(
-                'h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-yellow-500 hover:bg-accent/70 transition-colors',
-                showEmojiPicker && 'text-yellow-500 bg-yellow-500/10'
-              )}
-              title="Emoji"
-              onClick={() => setShowEmojiPicker(v => !v)}
-            >
-              <Smile className="h-5 w-5" />
-            </Button>
+          <div className={cn(
+            'mx-auto w-full flex gap-1.5',
+            // Same behaviour as desktop: one row while the text fits on a single
+            // line, and once it wraps the input takes the full width on its own
+            // row with the controls dropping in underneath it.
+            isStacked ? 'flex-wrap items-center' : 'items-end'
+          )}>
 
-            {/* + Attach */}
-            <Button
-              variant="ghost" size="icon" type="button"
-              className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-colors"
-              title="Attach files"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={readOnly}
-            >
-              <Plus className="h-5 w-5" />
-            </Button>
+            <div ref={leftControlsRef} className={cn('flex items-center gap-1.5 shrink-0', isStacked && 'order-2')}>
+              {/* 😊 Emoji */}
+              <Button
+                ref={emojiButtonRef}
+                variant="ghost" size="icon" type="button"
+                className={cn(
+                  'h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-yellow-500 hover:bg-accent/70 transition-colors',
+                  showEmojiPicker && 'text-yellow-500 bg-yellow-500/10'
+                )}
+                title="Emoji"
+                onClick={() => setShowEmojiPicker(v => !v)}
+              >
+                <Smile className="h-5 w-5" />
+              </Button>
+
+              {/* + Attach */}
+              <Button
+                variant="ghost" size="icon" type="button"
+                className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-colors"
+                title="Attach files"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={readOnly}
+              >
+                <Plus className="h-5 w-5" />
+              </Button>
+            </div>
 
             {/* Bordered message pill */}
-            <div className="flex-1 min-w-0 flex items-end gap-1 rounded-full border border-input bg-background px-4 py-[11px] min-h-[42px] focus-within:ring-2 focus-within:ring-ring/70 transition-all">
+            <div className={cn(
+              'min-w-0 flex items-end gap-1 rounded-3xl border border-input bg-background px-4 py-[11px] min-h-[42px] focus-within:ring-2 focus-within:ring-ring/70 transition-all',
+              isStacked ? 'order-1 w-full' : 'flex-1'
+            )}>
               <div className="relative flex-1 min-w-0 flex items-center">
                 <div
                   ref={mentionOverlayRef}
@@ -1225,15 +1235,17 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
               )}
             </div>
 
-            {/* Send */}
-            <Button
-              size="icon" type="button"
-              className="h-11 w-11 shrink-0 rounded-full bg-foreground text-background hover:bg-foreground/90"
-              disabled={readOnly || ((!value.trim() && pendingFiles.length === 0 && pendingEntityTags.length === 0) || isSending)}
-              onClick={handleSend}
-            >
-              {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
-            </Button>
+            <div ref={rightControlsRef} className={cn('flex items-center shrink-0', isStacked && 'order-3 ml-auto')}>
+              {/* Send */}
+              <Button
+                size="icon" type="button"
+                className="h-11 w-11 shrink-0 rounded-full bg-foreground text-background hover:bg-foreground/90"
+                disabled={readOnly || ((!value.trim() && pendingFiles.length === 0 && pendingEntityTags.length === 0) || isSending)}
+                onClick={handleSend}
+              >
+                {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
+              </Button>
+            </div>
           </div>
         ) : (
           <div className={cn(
