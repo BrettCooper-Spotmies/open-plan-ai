@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 // respective effects below — they're 600KB+ combined (mostly pptx-preview's echarts
 // dependency) and must not bloat the chunk every file preview (image, PDF, video) pays for.
 import type * as XLSXType from 'xlsx';
+import { ImageWithProgress } from '@/components/shared/ImageWithProgress';
 import { logger } from '@/services/monitoring/logger';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -557,7 +558,11 @@ export function FilePreviewDialog({
                 </button>
               )}
               {kind === 'image' ? (
-                <img src={current.url} alt={current.fileName} className="max-w-full max-h-full object-contain" />
+                <ImageWithProgress
+                  src={current.url}
+                  alt={current.fileName}
+                  className="max-w-full max-h-full object-contain"
+                />
               ) : kind === 'video' ? (
                 <video
                   src={current.url}
