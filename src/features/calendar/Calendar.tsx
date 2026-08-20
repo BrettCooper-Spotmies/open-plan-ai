@@ -220,6 +220,17 @@ const CalendarPage: React.FC = () => {
   // Filter state remains local as it's complex and might be too long for URL
   const [filters, setFilters] = React.useState<CalendarFilter>({});
 
+  // Whether the pills row below the header has anything to show. Derived here
+  // rather than left to `empty:hidden`, so an empty row occupies no height at
+  // all instead of depending on the CSS `:empty` selector matching.
+  const hasActiveFilters = Boolean(
+    filters.projectIds?.length ||
+    filters.entityType?.length ||
+    filters.priority?.length ||
+    filters.isBlocked !== undefined ||
+    filters.assignedBy?.length
+  );
+
   // "Schedule a meet" dialog state
   const [scheduleMeetOpen, setScheduleMeetOpen] = React.useState(false);
   const [scheduleMeetDate, setScheduleMeetDate] = React.useState<Date | undefined>(undefined);
@@ -554,7 +565,7 @@ const CalendarPage: React.FC = () => {
   // ── Desktop layout ─────────────────────────────────────────────────────────
   return (
     <>
-      <div className="h-full flex flex-col gap-6 animate-fade-in px-6 py-6">
+      <div className="h-full flex flex-col gap-3 animate-fade-in px-6 pt-3 pb-6">
         {/* Page Header */}
         {/* <div className="shrink-0">
           <h1 className="text-2xl font-semibold tracking-tight">Calendar</h1>
@@ -606,15 +617,17 @@ const CalendarPage: React.FC = () => {
           />
 
           {/* Active Filters */}
-          <div className="py-2 empty:hidden">
-            <CalendarFilters
-              filters={filters}
-              onFiltersChange={setFilters}
-              projects={projectsForFilter as any}
-              teamMembers={teamMembers}
-              hideTrigger
-            />
-          </div>
+          {hasActiveFilters && (
+            <div className="pt-2">
+              <CalendarFilters
+                filters={filters}
+                onFiltersChange={setFilters}
+                projects={projectsForFilter as any}
+                teamMembers={teamMembers}
+                hideTrigger
+              />
+            </div>
+          )}
         </div>
 
         {/* Calendar View */}

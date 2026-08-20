@@ -29,7 +29,10 @@ const OFFICE_MIME_TYPES = [
 ];
 
 function extOf(fileName: string, url: string): string {
-  return (fileName || url).split(/[?#]/)[0].split('.').pop()?.toLowerCase() ?? '';
+  // Strip query/hash from the URL only — a file *name* may legitimately contain
+  // '#', and one starting with it collapsed to '' here and lost its extension.
+  const source = fileName || url.split(/[?#]/)[0];
+  return source.split('.').pop()?.toLowerCase() ?? '';
 }
 
 function getYouTubeId(url: string): string | null {
@@ -161,6 +164,9 @@ export function FilePreviewDialog({
 
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const [blobLoading, setBlobLoading] = useState(false);
+  // Why the fetch failed, shown in the error state — a bare "unable to preview"
+  // is a dead end for the user and for anyone debugging it.
+  const [blobError, setBlobError] = useState<string | null>(null);
   const blobUrlRef = useRef<string | null>(null);
 
   const [numPages, setNumPages] = useState(0);
@@ -192,11 +198,18 @@ export function FilePreviewDialog({
     if (kind !== 'pdf') return;
 
     setBlobUrl(null);
+    setBlobError(null);
     setBlobLoading(true);
     let cancelled = false;
 
     fetch(current.url, { credentials: 'include' })
-      .then(r => r.blob())
+      .then(r => {
+        // Without this an error response's JSON/HTML body was wrapped in a blob
+        // and handed to react-pdf, which then reported the *file* as unreadable
+        // and hid the real failure (missing object, expired session, …).
+        if (!r.ok) throw new Error(`Server returned ${r.status} ${r.statusText}`);
+        return r.blob();
+      })
       .then(blob => {
         if (cancelled) return;
         const url = URL.createObjectURL(blob);
@@ -204,8 +217,11 @@ export function FilePreviewDialog({
         blobUrlRef.current = url;
         setBlobUrl(url);
       })
-      .catch(() => {
-        if (!cancelled) setBlobUrl(null);
+      .catch((err) => {
+        logger.error('Failed to fetch file for preview:', current.url, err);
+        if (cancelled) return;
+        setBlobUrl(null);
+        setBlobError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => {
         if (!cancelled) setBlobLoading(false);
@@ -305,9 +321,24 @@ export function FilePreviewDialog({
       }),
       import('docx-preview'),
     ])
-      .then(([blob, { renderAsync }]) => {
+      .then(([blob, mod]) => {
         if (cancelled) return;
+        // Guard the interop shape: the package is ESM-only, so a bundler that
+        // wraps it hands back the namespace under `default` instead.
+        const renderAsync = mod.renderAsync ?? (mod as unknown as { default?: typeof mod }).default?.renderAsync;
+        if (typeof renderAsync !== 'function') {
+          throw new Error('docx-preview: renderAsync export not found');
+        }
         return renderAsync(blob, container, container, { inWrapper: true, ignoreWidth: true });
+      })
+      .then(() => {
+        if (cancelled) return;
+        // renderAsync can resolve having appended nothing (a document it can't
+        // parse, or one whose body is empty). Without this the pane just sits
+        // blank with no spinner and no error, which reads as a hung preview.
+        if (!container.querySelector('.docx-wrapper, .docx')) {
+          throw new Error('docx-preview rendered no content');
+        }
       })
       .catch(err => {
         logger.warn('Failed to render docx preview', err);
@@ -679,7 +710,10 @@ export function FilePreviewDialog({
                     <Document
                       file={blobUrl}
                       onLoadSuccess={({ numPages: n }) => setNumPages(n)}
-                      onLoadError={() => setPdfError(true)}
+                      onLoadError={(err) => {
+                        logger.error('pdf.js failed to render document:', err);
+                        setPdfError(true);
+                      }}
                       loading={<Loader2 className="w-8 h-8 animate-spin text-muted-foreground mt-8" />}
                       className="flex flex-col items-center gap-4 py-4"
                     >
@@ -698,6 +732,11 @@ export function FilePreviewDialog({
                 <div className="flex flex-col items-center gap-3 text-muted-foreground">
                   <FileIcon className="w-10 h-10" />
                   <p className="text-sm">Unable to preview this file.</p>
+                  {blobError && (
+                    <p className="max-w-md text-center text-xs text-muted-foreground/80 break-all">
+                      {blobError}
+                    </p>
+                  )}
                   <Button variant="outline" size="sm" asChild>
                     <a href={current.url} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
