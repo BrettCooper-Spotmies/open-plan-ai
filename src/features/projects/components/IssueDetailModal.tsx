@@ -168,7 +168,7 @@ export function IssueDetailModal({
         className={cn(
           'p-0 flex flex-col gap-0 overflow-hidden !duration-0 data-[state=open]:!animate-none data-[state=closed]:!animate-none',
           isMobile
-            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0'
+            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0 data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom duration-300 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100'
             : 'max-w-4xl max-h-[90vh]'
         )}
         onPointerDownOutside={(e) => e.preventDefault()}
