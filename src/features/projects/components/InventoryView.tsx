@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -18,13 +18,17 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useBomTree } from '@/hooks/useBom';
 import { useOrgParts } from '@/hooks/useParts';
 import {
+  useInventoryStock, useInventoryOrders, useInventoryTransactions, useInventoryBuilds,
+  useReceiveStock, useAdjustStock, useReleaseQuarantine, usePlaceOrder, useCreateInventoryBuild,
+} from '@/hooks/useInventory';
+import {
   fromApiNode, applyPriceRollup, assignLevelLabels, bomFlatAll, formatLeadTime,
   KNOWN_BOM_CATEGORIES, getCategoryMeta, type BOMCategory,
 } from './bomData';
 import {
-  generateMockStock, generateDemoStock, generateMockBuilds, generateMockOrders, buildFromDef, computeCoverage, availableOf, onOrderOf,
+  buildFromDef, computeCoverage, availableOf, onOrderOf,
   CoveragePill, CoverageBar,
-  type StockRecord, type StockTransaction, type CoverageStatus, type OrderRecord, type BuildDef,
+  type StockRecord, type CoverageStatus,
 } from './inventoryData';
 import { HoverZoomImage, PartThumb } from './BOMShared';
 import { ReceiveStockDialog, type ReceiveStockInput } from './ReceiveStockDialog';
@@ -120,28 +124,16 @@ export function InventoryView({ projectId, orgId, projectSelector }: InventoryVi
     return map;
   }, [rootNodes]);
 
-  const [stock, setStock] = useState<StockRecord[]>([]);
-  const [orders, setOrders] = useState<OrderRecord[]>([]);
-  const [transactions, setTransactions] = useState<StockTransaction[]>([]);
-  const seededRef = useRef(false);
-  useEffect(() => {
-    if (seededRef.current) return;
+  const { data: stock = [] } = useInventoryStock(projectId);
+  const { data: orders = [] } = useInventoryOrders(projectId);
+  const { data: transactions = [] } = useInventoryTransactions(projectId);
+  const { data: builds = [] } = useInventoryBuilds(projectId);
 
-    if (rootNodes.length > 0) {
-      const seeded = generateMockStock(rootNodes);
-      setStock(seeded);
-      setOrders(generateMockOrders(seeded));
-      seededRef.current = true;
-      return;
-    }
-
-    // Even when BOM data has not loaded yet or the project has no BOM, show the frontend
-    // demo catalog so Inventory never looks empty/sparse on first load.
-    const seeded = generateDemoStock();
-    setStock(seeded);
-    setOrders(generateMockOrders(seeded));
-    seededRef.current = true;
-  }, [rootNodes]);
+  const receiveStockMutation = useReceiveStock(orgId, projectId);
+  const adjustStockMutation = useAdjustStock(orgId, projectId);
+  const releaseQuarantineMutation = useReleaseQuarantine(orgId, projectId);
+  const placeOrderMutation = usePlaceOrder(orgId, projectId);
+  const createBuildMutation = useCreateInventoryBuild(projectId);
 
   // `onOrder` is derived from live order state rather than the static seeded field, so
   // Receive/Order actions are reflected immediately without touching stock rows directly.
@@ -159,143 +151,57 @@ export function InventoryView({ projectId, orgId, projectSelector }: InventoryVi
   const [orderOpen, setOrderOpen] = useState(false);
 
   const handleReceive = (input: ReceiveStockInput) => {
-    setStock(prev => {
-      const existing = prev.find(r => r.partId === input.partId && r.location === input.location);
-      if (existing) {
-        return prev.map(r => r.id === existing.id
-          ? {
-            ...r,
-            onHand: r.onHand + input.quantity,
-            quarantineQty: input.quarantine ? (r.quarantineQty ?? 0) + input.quantity : r.quarantineQty,
-            lotNumber: input.lotNumber ?? r.lotNumber,
-            serialNumber: input.serialNumber ?? r.serialNumber,
-          }
-          : r);
-      }
-      const newRecord: StockRecord = {
-        id: `stk-${input.partId}-${input.location}`,
-        partId: input.partId,
-        pn: input.pn,
-        name: input.name,
-        cat: input.cat,
-        onHand: input.quantity,
-        allocated: 0,
-        onOrder: 0,
-        location: input.location,
-        leadTimeDays: 14,
-        quarantineQty: input.quarantine ? input.quantity : undefined,
-        lotNumber: input.lotNumber,
-        serialNumber: input.serialNumber,
-      };
-      return [...prev, newRecord];
-    });
-    if (input.orderId) {
-      setOrders(prev => prev.map(o => {
-        if (o.id !== input.orderId) return o;
-        const remainingQty = Math.max(0, o.remainingQty - input.quantity);
-        return { ...o, remainingQty, status: remainingQty === 0 ? 'received' : 'partially_received' };
-      }));
-    }
-    setTransactions(prev => [{
-      id: `txn-${Date.now()}`,
+    receiveStockMutation.mutate({
       partId: input.partId,
-      type: 'receive',
-      qty: input.quantity,
       location: input.location,
+      quantity: input.quantity,
       reference: input.reference,
-      note: input.note,
       quarantine: input.quarantine,
-      createdAt: new Date().toISOString(),
-      createdBy: 'You',
-    }, ...prev]);
-    toast.success(`Received ${input.quantity} × ${input.pn}`);
+      note: input.note,
+      orderId: input.orderId,
+      lotNumber: input.lotNumber,
+      serialNumber: input.serialNumber,
+    }, {
+      onSuccess: () => toast.success(`Received ${input.quantity} × ${input.pn}`),
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to receive stock'),
+    });
   };
 
   const handlePlaceOrder = (input: PlaceOrderInput) => {
-    const newOrder: OrderRecord = {
-      id: `ord-${input.partId}-${Date.now()}`,
+    placeOrderMutation.mutate({
       partId: input.partId,
-      pn: input.pn,
       quantity: input.quantity,
-      remainingQty: input.quantity,
       expectedDate: input.expectedDate,
       supplierRef: input.supplierRef,
       unitCost: input.unitCost,
       location: input.location,
-      status: 'open',
-      createdAt: new Date().toISOString(),
-      createdBy: 'You',
-    };
-    setOrders(prev => [newOrder, ...prev]);
+    }, {
+      onSuccess: () => toast.success(`Order placed for ${input.quantity} × ${input.pn}`),
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to place order'),
+    });
   };
 
   const handleReleaseQuarantine = (recordId: string, qty: number) => {
-    setStock(prev => prev.map(r => {
-      if (r.id !== recordId) return r;
-      return { ...r, quarantineQty: Math.max(0, (r.quarantineQty ?? 0) - qty) };
-    }));
-    const record = stock.find(r => r.id === recordId);
-    if (record) {
-      setTransactions(prev => [{
-        id: `txn-${Date.now()}`,
-        partId: record.partId,
-        type: 'adjust',
-        direction: 'add',
-        qty,
-        location: record.location,
-        reasonCode: 'Released from quarantine',
-        createdAt: new Date().toISOString(),
-        createdBy: 'You',
-      }, ...prev]);
-    }
-    toast.success(`Released ${qty} from quarantine`);
+    releaseQuarantineMutation.mutate({ stockId: recordId, qty }, {
+      onSuccess: () => toast.success(`Released ${qty} from quarantine`),
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to release quarantine'),
+    });
   };
 
   const handleAdjust = (input: AdjustQuantityInput) => {
-    setStock(prev => {
-      const existing = prev.find(r => r.partId === input.partId && r.location === input.location);
-      const delta = input.direction === 'add' ? input.quantity : -input.quantity;
-      if (existing) {
-        return prev.map(r => r.id === existing.id
-          ? {
-            ...r,
-            onHand: Math.max(0, r.onHand + delta),
-            lotNumber: input.lotNumber ?? r.lotNumber,
-            serialNumber: input.serialNumber ?? r.serialNumber,
-          }
-          : r);
-      }
-      // Brand-new part (created via "Add new part" in this dialog) with no existing stock
-      // row at this location yet.
-      const newRecord: StockRecord = {
-        id: `stk-${input.partId}-${input.location}`,
-        partId: input.partId,
-        pn: input.pn ?? '',
-        name: input.name ?? '',
-        cat: input.cat ?? 'assembly',
-        onHand: Math.max(0, delta),
-        allocated: 0,
-        onOrder: 0,
-        location: input.location,
-        leadTimeDays: 14,
-        lotNumber: input.lotNumber,
-        serialNumber: input.serialNumber,
-      };
-      return [...prev, newRecord];
-    });
-    setTransactions(prev => [{
-      id: `txn-${Date.now()}`,
+    adjustStockMutation.mutate({
       partId: input.partId,
-      type: 'adjust',
-      direction: input.direction,
-      qty: input.quantity,
       location: input.location,
+      direction: input.direction,
+      quantity: input.quantity,
       reasonCode: input.reasonCode,
       note: input.note,
-      createdAt: new Date().toISOString(),
-      createdBy: 'You',
-    }, ...prev]);
-    toast.success('Adjustment posted');
+      lotNumber: input.lotNumber,
+      serialNumber: input.serialNumber,
+    }, {
+      onSuccess: () => toast.success('Adjustment posted'),
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to post adjustment'),
+    });
   };
 
   const coverageOf = (r: StockRecord): CoverageStatus =>
@@ -350,20 +256,30 @@ export function InventoryView({ projectId, orgId, projectSelector }: InventoryVi
   const incomingCount = displayStock.filter(r => r.onOrder > 0).length;
   const quarantineCount = displayStock.filter(r => (r.quarantineQty ?? 0) > 0).length;
 
-  const [customBuildDefs, setCustomBuildDefs] = useState<BuildDef[]>([]);
-  const builds = useMemo(() => [
-    ...generateMockBuilds(displayStock, demandByPartId),
-    ...customBuildDefs.map(def => buildFromDef(def, displayStock, demandByPartId)),
-  ], [displayStock, demandByPartId, customBuildDefs]);
+  const computedBuilds = useMemo(
+    () => builds.map(def => buildFromDef(def, displayStock, demandByPartId)),
+    [builds, displayStock, demandByPartId]
+  );
   const [activeTab, setActiveTab] = useState('stock');
   const [openBuildId, setOpenBuildId] = useState<string | null>(null);
   const openBuild = (buildId: string) => { setActiveTab('builds'); setOpenBuildId(buildId); };
 
   const handleAddBuild = (input: NewBuildInput) => {
-    const newDef: BuildDef = { id: `build-${Date.now()}`, ...input };
-    setCustomBuildDefs(prev => [...prev, newDef]);
-    openBuild(newDef.id);
-    toast.success(`${newDef.name} created`);
+    createBuildMutation.mutate({
+      name: input.name,
+      type: input.type,
+      units: input.units,
+      bomRev: input.bomRev,
+      scrapPct: input.scrapPct,
+      milestone: input.milestone,
+      targetDate: input.targetDate,
+    }, {
+      onSuccess: (created) => {
+        openBuild(created.id);
+        toast.success(`${input.name} created`);
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to create build'),
+    });
   };
 
   const [selectedPartId, setSelectedPartId] = useState<string | null>(null);
@@ -864,7 +780,7 @@ export function InventoryView({ projectId, orgId, projectSelector }: InventoryVi
 
         <TabsContent value="builds" className="mt-4">
           <BuildsPanel
-            builds={builds}
+            builds={computedBuilds}
             onSelectPart={openDetail}
             openBuildId={openBuildId}
             onOpenBuildHandled={() => setOpenBuildId(null)}
@@ -874,7 +790,7 @@ export function InventoryView({ projectId, orgId, projectSelector }: InventoryVi
 
         <TabsContent value="alerts" className="mt-4">
           <AlertsPanel
-            builds={builds}
+            builds={computedBuilds}
             stock={displayStock}
             coverageOf={coverageOf}
             onSelectPart={openDetail}

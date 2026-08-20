@@ -275,6 +275,17 @@ export const ENDPOINTS = {
     SHARE: (id: string) => `/ai/conversations/${id}/share`,
     SHARED: (shareId: string) => `/ai/conversations/shared/${shareId}`,
   },
+  // Inventory
+  INVENTORY: {
+    STOCK:        (projectId: string) => `/projects/${projectId}/inventory/stock`,
+    ORDERS:       (projectId: string) => `/projects/${projectId}/inventory/orders`,
+    TRANSACTIONS: (projectId: string) => `/projects/${projectId}/inventory/transactions`,
+    BUILDS:       (projectId: string) => `/projects/${projectId}/inventory/builds`,
+    RECEIVE:            (orgId: string) => `/organizations/${orgId}/inventory/stock/receive`,
+    ADJUST:             (orgId: string) => `/organizations/${orgId}/inventory/stock/adjust`,
+    RELEASE_QUARANTINE: (orgId: string, stockId: string) => `/organizations/${orgId}/inventory/stock/${stockId}/release-quarantine`,
+    PLACE_ORDER:        (orgId: string) => `/organizations/${orgId}/inventory/orders`,
+  },
   // Uploads
   UPLOADS: {
     AVATAR: '/uploads/avatar',
