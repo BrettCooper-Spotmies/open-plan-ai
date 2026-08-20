@@ -32,6 +32,8 @@ interface ActivityFeedProps {
   activities: Activity[];
   isLoading: boolean;
   className?: string;
+  /** When provided, issue activities open in an in-place modal instead of navigating to the project page. */
+  onIssueClick?: (projectId: string, issueId: string) => void;
 }
 
 const activityIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -182,7 +184,7 @@ const activitySection: Record<string, string> = {
   issue_linked_to_task: 'issues',
 };
 
-export function ActivityFeed({ activities, isLoading, className }: ActivityFeedProps) {
+export function ActivityFeed({ activities, isLoading, className, onIssueClick }: ActivityFeedProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
@@ -264,10 +266,23 @@ export function ActivityFeed({ activities, isLoading, className }: ActivityFeedP
                 return `/projects/${activity.projectId}${section ? `/${section}` : ''}`;
               };
 
+              // Issue activities open as an overlay on the dashboard itself when a handler is
+              // given, instead of navigating away to the project page and stranding the user
+              // there once the modal is closed.
+              const isIssueDeepLink = !isDeletion && activity.entityType === 'issue' && !!activity.entityId;
+              const handleClick = () => {
+                if (!isClickable) return;
+                if (isIssueDeepLink && onIssueClick) {
+                  onIssueClick(activity.projectId, activity.entityId!);
+                  return;
+                }
+                navigate(targetPath());
+              };
+
               return (
                 <div
                   key={activity.id}
-                  onClick={() => isClickable && navigate(targetPath())}
+                  onClick={handleClick}
                   className={cn(
                     'flex items-start gap-3 py-2.5 border-b border-border/50 last:border-0 transition-colors px-2 rounded-md',
                     isClickable && 'hover:bg-muted/30 cursor-pointer',

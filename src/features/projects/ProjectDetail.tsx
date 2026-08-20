@@ -1284,6 +1284,22 @@ export default function ProjectDetail() {
         toast.warning('Task created but some attachments failed to upload');
       }
     }
+
+    if (newTask.comments && newTask.comments.length > 0 && created?.id) {
+      try {
+        await Promise.all(
+          newTask.comments.map(comment =>
+            commentsService.create({
+              content: comment.content,
+              entity_id: created.id,
+              entity_type: 'task',
+            })
+          )
+        );
+      } catch {
+        toast.warning('Task created but some comments failed to save');
+      }
+    }
   };
 
   const handleTaskUpdate = async (updatedTask: Task, onError?: () => void) => {
