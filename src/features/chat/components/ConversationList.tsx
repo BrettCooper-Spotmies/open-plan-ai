@@ -203,6 +203,14 @@ export function ConversationList({
                   </div>
                 </>
               )}
+              {searchQuery.trim() && (
+                <PeopleList
+                  users={filteredPeople}
+                  onSelect={handleSelectPerson}
+                  onlineUserIds={onlineUserIds}
+                  searchQuery={searchQuery}
+                />
+              )}
               {regularConversations.map((conv) => (
                 <ConversationItem
                   key={conv.id}
@@ -217,12 +225,14 @@ export function ConversationList({
                   onDeleteChat={onDeleteChat ? () => onDeleteChat(conv.id) : undefined}
                 />
               ))}
-              <PeopleList
-                users={filteredPeople}
-                onSelect={handleSelectPerson}
-                onlineUserIds={onlineUserIds}
-                searchQuery={searchQuery}
-              />
+              {!searchQuery.trim() && (
+                <PeopleList
+                  users={filteredPeople}
+                  onSelect={handleSelectPerson}
+                  onlineUserIds={onlineUserIds}
+                  searchQuery={searchQuery}
+                />
+              )}
               {isCreatingDM && (
                 <div className="flex items-center gap-3 px-3 py-2 animate-pulse">
                   <Skeleton className="h-8 w-8 rounded-full" />

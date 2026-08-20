@@ -21,6 +21,10 @@ interface Props {
   onClose: () => void;
   projectId: string;
   linkStatus: GoogleSheetsLinkStatus | undefined;
+  // Called instead of onClose after a sheet is successfully linked, so the
+  // caller can hand straight off to the Pull review rather than just closing.
+  // Optional — without it, linking falls back to a plain close.
+  onLinked?: () => void;
 }
 
 function GoogleSheetsLogo({ className = 'w-5 h-5' }: { className?: string }) {
@@ -31,7 +35,7 @@ function GoogleSheetsLogo({ className = 'w-5 h-5' }: { className?: string }) {
   );
 }
 
-export default function BOMGoogleSheetsLinkDialog({ open, onClose, projectId, linkStatus }: Props) {
+export default function BOMGoogleSheetsLinkDialog({ open, onClose, projectId, linkStatus, onLinked }: Props) {
   const [url, setUrl] = useState('');
   const [tabs, setTabs] = useState<SheetTab[] | null>(null);
   const [selectedTab, setSelectedTab] = useState<string>('');
@@ -63,7 +67,16 @@ export default function BOMGoogleSheetsLinkDialog({ open, onClose, projectId, li
   const handleLink = async () => {
     if (!selectedTab) return;
     await linkSheet.mutateAsync({ spreadsheetUrl: url.trim(), sheetTabName: selectedTab });
-    handleClose();
+    resetLinkForm();
+    // Linking only records which sheet this BOM mirrors — the sheet's rows
+    // still have to be reconciled in. Hand straight off to the Pull review
+    // so the first sync happens as part of setting the link up, instead of
+    // leaving the user on an unchanged BOM to find Pull in the menu. Still a
+    // preview: nothing writes until they confirm there. A relink to a
+    // different sheet takes the same path, since the new sheet's rows need
+    // reconciling just as much.
+    if (onLinked) onLinked();
+    else onClose();
   };
 
   const handleUnlink = async () => {
@@ -84,7 +97,7 @@ export default function BOMGoogleSheetsLinkDialog({ open, onClose, projectId, li
                 Link a Google Sheet
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground mt-1 leading-normal">
-                One sheet syncs with this project's BOM. Nothing syncs automatically — Pull and Push always show a full review before anything writes.
+                One sheet syncs with this project's BOM. Linking opens the Pull review right away — nothing syncs automatically, and nothing writes until you confirm.
               </DialogDescription>
             </div>
           </div>
