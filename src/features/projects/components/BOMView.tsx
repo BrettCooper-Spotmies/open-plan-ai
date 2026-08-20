@@ -1792,6 +1792,11 @@ export function BOMView({
         onClose={() => { setSheetsLinkOpen(false); onAddClose?.(); }}
         projectId={projectId}
         linkStatus={sheetsLinkStatus}
+        // A fresh link is only useful once the sheet's rows are actually in
+        // the BOM, so linking chains straight into Pull. onAddClose is not
+        // called here on purpose — when this came from the Add Part chooser
+        // the flow is still running, and Pull's own onClose ends it.
+        onLinked={() => { setSheetsLinkOpen(false); setSheetsPullOpen(true); }}
       />
       <BOMGoogleSheetsPullDialog
         open={sheetsPullOpen}

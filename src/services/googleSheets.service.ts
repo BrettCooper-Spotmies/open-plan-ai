@@ -73,6 +73,10 @@ export interface ExportPreview {
   renamedHeaders: ExportRenamedHeader[];
   newPartRows: string[];
   changedRows: ExportChangedRow[];
+  // Document/image URL columns that differ from the sheet. Always written on
+  // confirm — unlike changedRows, these aren't gated by a toggle, since files
+  // can only be attached in the app and never edited from the sheet side.
+  changedAttachments: ExportChangedRow[];
   unchangedCount: number;
   totalRows: number;
 }

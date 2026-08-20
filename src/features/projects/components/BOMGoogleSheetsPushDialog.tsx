@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, ArrowUpFromLine, CheckCircle2, AlertCircle } from 'lucide-react';
+import BOMGoogleSheetsChangeList from './BOMGoogleSheetsChangeList';
 import { useGoogleSheetsExportPreview, useGoogleSheetsExportCommit } from '@/hooks/useGoogleSheets';
 import type { ExportCommitResult } from '@/services/googleSheets.service';
 
@@ -53,7 +54,8 @@ export default function BOMGoogleSheetsPushDialog({ open, onClose, projectId }: 
     data.newFields.length === 0 &&
     data.renamedHeaders.length === 0 &&
     data.newPartRows.length === 0 &&
-    data.changedRows.length === 0;
+    data.changedRows.length === 0 &&
+    (data.changedAttachments?.length ?? 0) === 0;
 
   const handleConfirm = async () => {
     const res = await commit.mutateAsync({ addNewFields, updateChangedColumns, renameHeaders });
@@ -203,6 +205,22 @@ export default function BOMGoogleSheetsPushDialog({ open, onClose, projectId }: 
                   </span>
                 </button>
               )}
+              {(data.changedAttachments?.length ?? 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('push-section-attachments');
+                    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-sky-200 dark:border-sky-900/50 bg-sky-50/50 dark:bg-sky-950/20 text-sky-700 dark:text-sky-300 hover:bg-sky-100/70 dark:hover:bg-sky-900/40 transition-colors cursor-pointer"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                  Documents &amp; images
+                  <span className="px-1.5 py-0.5 rounded-full bg-sky-100 dark:bg-sky-900/40 text-[10.5px] font-bold">
+                    {data.changedAttachments.length}
+                  </span>
+                </button>
+              )}
               {data.unchangedCount > 0 && (
                 <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-border bg-muted/40 text-muted-foreground">
                   <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60" />
@@ -280,16 +298,43 @@ export default function BOMGoogleSheetsPushDialog({ open, onClose, projectId }: 
                       </div>
                       <Switch checked={updateChangedColumns} onCheckedChange={setUpdateChangedColumns} />
                     </div>
-                    <div className="max-h-48 overflow-y-auto space-y-1.5 pt-1">
-                      {data.changedRows.map((row) => (
-                        <div key={row.partNumber} className="text-xs flex items-baseline gap-2">
-                          <span className="font-mono font-semibold text-foreground">{row.partNumber}</span>{' '}
-                          <span className="text-muted-foreground">
-                            — updated: {row.changes.map((c) => c.field).join(', ')}
-                          </span>
-                        </div>
-                      ))}
+                    <BOMGoogleSheetsChangeList
+                      className="pt-1"
+                      rows={data.changedRows.map((row) => ({
+                        key: row.partNumber,
+                        partNumber: row.partNumber,
+                        changes: row.changes,
+                      }))}
+                      fromLabel="Currently in sheet"
+                      toLabel="Will be written from BOM"
+                    />
+                  </div>
+                )}
+
+                {(data.changedAttachments?.length ?? 0) > 0 && (
+                  <div id="push-section-attachments" className="rounded-2xl border border-border/80 bg-card p-5 space-y-3 shadow-2xs">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-foreground">
+                          {data.changedAttachments.length} part(s) have documents or images to sync.
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Public file links, written to the sheet automatically — files are attached in the app,
+                          so there's nothing on the sheet side to preserve.
+                        </p>
+                      </div>
+                      <Badge variant="secondary" className="text-[11px] rounded-md shrink-0">Always synced</Badge>
                     </div>
+                    <BOMGoogleSheetsChangeList
+                      className="pt-1"
+                      rows={data.changedAttachments.map((row) => ({
+                        key: `att-${row.partNumber}`,
+                        partNumber: row.partNumber,
+                        changes: row.changes,
+                      }))}
+                      fromLabel="Currently in sheet"
+                      toLabel="Will be written from BOM"
+                    />
                   </div>
                 )}
 
