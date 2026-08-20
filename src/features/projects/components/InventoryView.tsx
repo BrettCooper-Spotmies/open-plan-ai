@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useQueries } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Search, Table as TableIcon, LayoutGrid, Download, Pencil, PackageSearch,
@@ -15,7 +16,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useBomTree } from '@/hooks/useBom';
+import { useProjects } from '@/hooks/useProjects';
+import { bomService } from '@/services/bom.service';
+import { queryKeys } from '@/lib/queryClient';
 import { useOrgParts } from '@/hooks/useParts';
 import {
   useInventoryStock, useInventoryOrders, useInventoryTransactions, useInventoryBuilds,
@@ -87,9 +90,7 @@ function StatCard({ label, value, icon: Icon, iconColor, accent }: {
 }
 
 interface InventoryViewProps {
-  projectId: string;
   orgId: string;
-  projectSelector?: React.ReactNode;
 }
 
 type QuickFilter = 'all' | 'low-coverage' | 'on-order' | 'lot-serial' | 'quarantine';
@@ -102,18 +103,33 @@ const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
   { value: 'quarantine', label: 'Quarantine' },
 ];
 
-export function InventoryView({ projectId, orgId, projectSelector }: InventoryViewProps) {
+export function InventoryView({ orgId }: InventoryViewProps) {
   const isMobile = useIsMobile();
-  const { data: bomTree } = useBomTree(projectId);
+  const { data: projects = [] } = useProjects();
   const { data: partsResult } = useOrgParts(orgId);
   const parts = useMemo(() => partsResult?.data ?? [], [partsResult]);
 
+  // BOM demand is aggregated across every project in the org — stock/coverage here is
+  // organization-wide, not scoped to a single project's BOM.
+  const bomTreeQueries = useQueries({
+    queries: projects.map((p) => ({
+      queryKey: queryKeys.bom.tree(p.id),
+      queryFn: () => bomService.getTree(p.id),
+      staleTime: 30 * 1000,
+    })),
+  });
+
   const rootNodes = useMemo(() => {
-    if (!bomTree) return [];
-    const nodes = bomTree.roots.map(r => applyPriceRollup(fromApiNode(r)));
-    assignLevelLabels(nodes);
-    return nodes;
-  }, [bomTree]);
+    const all = [];
+    for (const q of bomTreeQueries) {
+      if (!q.data) continue;
+      const nodes = q.data.roots.map(r => applyPriceRollup(fromApiNode(r)));
+      assignLevelLabels(nodes);
+      all.push(...nodes);
+    }
+    return all;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bomTreeQueries.map(q => q.dataUpdatedAt).join(',')]);
 
   const demandByPartId = useMemo(() => {
     const map = new Map<string, number>();
@@ -124,16 +140,16 @@ export function InventoryView({ projectId, orgId, projectSelector }: InventoryVi
     return map;
   }, [rootNodes]);
 
-  const { data: stock = [] } = useInventoryStock(projectId);
-  const { data: orders = [] } = useInventoryOrders(projectId);
-  const { data: transactions = [] } = useInventoryTransactions(projectId);
-  const { data: builds = [] } = useInventoryBuilds(projectId);
+  const { data: stock = [] } = useInventoryStock(orgId);
+  const { data: orders = [] } = useInventoryOrders(orgId);
+  const { data: transactions = [] } = useInventoryTransactions(orgId);
+  const { data: builds = [] } = useInventoryBuilds(orgId);
 
-  const receiveStockMutation = useReceiveStock(orgId, projectId);
-  const adjustStockMutation = useAdjustStock(orgId, projectId);
-  const releaseQuarantineMutation = useReleaseQuarantine(orgId, projectId);
-  const placeOrderMutation = usePlaceOrder(orgId, projectId);
-  const createBuildMutation = useCreateInventoryBuild(projectId);
+  const receiveStockMutation = useReceiveStock(orgId);
+  const adjustStockMutation = useAdjustStock(orgId);
+  const releaseQuarantineMutation = useReleaseQuarantine(orgId);
+  const placeOrderMutation = usePlaceOrder(orgId);
+  const createBuildMutation = useCreateInventoryBuild(orgId);
 
   // `onOrder` is derived from live order state rather than the static seeded field, so
   // Receive/Order actions are reflected immediately without touching stock rows directly.
@@ -273,6 +289,7 @@ export function InventoryView({ projectId, orgId, projectSelector }: InventoryVi
       scrapPct: input.scrapPct,
       milestone: input.milestone,
       targetDate: input.targetDate,
+      projectId: input.projectId,
     }, {
       onSuccess: (created) => {
         openBuild(created.id);
@@ -322,10 +339,7 @@ export function InventoryView({ projectId, orgId, projectSelector }: InventoryVi
   return (
     <div className="space-y-4 md:space-y-6 px-4 md:px-6 pb-6">
       {isMobile ? null : (
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0 shrink-0">
-            {projectSelector}
-          </div>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-end">
           <div className="flex flex-wrap items-center justify-start gap-2 shrink-0 lg:justify-end">
             <Button variant="outline" onClick={() => openOrderFor()}>
               <ShoppingCart className="h-4 w-4 mr-2" />
@@ -785,6 +799,7 @@ export function InventoryView({ projectId, orgId, projectSelector }: InventoryVi
             openBuildId={openBuildId}
             onOpenBuildHandled={() => setOpenBuildId(null)}
             onAddBuild={handleAddBuild}
+            projects={projects}
           />
         </TabsContent>
 

@@ -195,10 +195,10 @@ export const queryKeys = {
   // Inventory
   inventory: {
     all:          ['inventory'] as const,
-    stock:        (projectId: string) => ['inventory', 'stock', projectId] as const,
-    orders:       (projectId: string) => ['inventory', 'orders', projectId] as const,
-    transactions: (projectId: string) => ['inventory', 'transactions', projectId] as const,
-    builds:       (projectId: string) => ['inventory', 'builds', projectId] as const,
+    stock:        (orgId: string) => ['inventory', 'stock', orgId] as const,
+    orders:       (orgId: string) => ['inventory', 'orders', orgId] as const,
+    transactions: (orgId: string) => ['inventory', 'transactions', orgId] as const,
+    builds:       (orgId: string) => ['inventory', 'builds', orgId] as const,
   },
 
   supportLinks: {

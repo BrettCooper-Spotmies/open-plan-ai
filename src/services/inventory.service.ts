@@ -175,24 +175,24 @@ export interface CreateBuildDto {
 // ─── Service ────────────────────────────────────────────────────────────────────
 
 export const inventoryService = {
-  async listStock(projectId: string): Promise<ApiStockRecord[]> {
-    return apiClient.get<ApiStockRecord[]>(ENDPOINTS.INVENTORY.STOCK(projectId));
+  async listStock(orgId: string): Promise<ApiStockRecord[]> {
+    return apiClient.get<ApiStockRecord[]>(ENDPOINTS.INVENTORY.STOCK(orgId));
   },
 
-  async listOrders(projectId: string): Promise<ApiOrderRecord[]> {
-    return apiClient.get<ApiOrderRecord[]>(ENDPOINTS.INVENTORY.ORDERS(projectId));
+  async listOrders(orgId: string): Promise<ApiOrderRecord[]> {
+    return apiClient.get<ApiOrderRecord[]>(ENDPOINTS.INVENTORY.ORDERS(orgId));
   },
 
-  async listTransactions(projectId: string): Promise<ApiStockTransaction[]> {
-    return apiClient.get<ApiStockTransaction[]>(ENDPOINTS.INVENTORY.TRANSACTIONS(projectId));
+  async listTransactions(orgId: string): Promise<ApiStockTransaction[]> {
+    return apiClient.get<ApiStockTransaction[]>(ENDPOINTS.INVENTORY.TRANSACTIONS(orgId));
   },
 
-  async listBuilds(projectId: string): Promise<ApiBuildDef[]> {
-    return apiClient.get<ApiBuildDef[]>(ENDPOINTS.INVENTORY.BUILDS(projectId));
+  async listBuilds(orgId: string): Promise<ApiBuildDef[]> {
+    return apiClient.get<ApiBuildDef[]>(ENDPOINTS.INVENTORY.BUILDS(orgId));
   },
 
   async createBuild(projectId: string, dto: CreateBuildDto): Promise<ApiBuildDef> {
-    return apiClient.post<ApiBuildDef>(ENDPOINTS.INVENTORY.BUILDS(projectId), dto);
+    return apiClient.post<ApiBuildDef>(ENDPOINTS.INVENTORY.BUILDS_CREATE(projectId), dto);
   },
 
   async receiveStock(orgId: string, dto: ReceiveStockDto): Promise<ApiStockRecord> {
