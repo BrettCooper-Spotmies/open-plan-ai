@@ -15,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -48,7 +49,9 @@ import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Minus, Pencil, Plus, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { REASON_CODES, STOCK_LOCATIONS, type StockLocation, type StockRecord } from './inventoryData';
+import { useCreatePart } from '@/hooks/useParts';
+import { type BOMCategory } from './bomData';
+import { REASON_CODES, LocationCombobox, CategoryCombobox, type StockLocation, type StockRecord } from './inventoryData';
 
 const adjustSchema = z.object({
   partId: z.string().min(1, 'Select a part'),
@@ -57,33 +60,48 @@ const adjustSchema = z.object({
   quantity: z.coerce.number().int().min(1, 'Quantity must be at least 1'),
   reasonCode: z.string().min(1, 'Reason code is required'),
   note: z.string().max(300, 'Note must be less than 300 characters').optional(),
+  lotNumber: z.string().max(60, 'Lot number must be less than 60 characters').optional(),
+  serialNumber: z.string().max(60, 'Serial number must be less than 60 characters').optional(),
 });
 
 type AdjustFormData = z.infer<typeof adjustSchema>;
 
 export interface AdjustQuantityInput {
   partId: string;
+  pn?: string;
+  name?: string;
+  cat?: BOMCategory;
   location: StockLocation;
   direction: 'add' | 'remove';
   quantity: number;
   reasonCode: string;
   note?: string;
+  lotNumber?: string;
+  serialNumber?: string;
 }
 
 interface AdjustQuantityDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  orgId: string;
   stock: StockRecord[];
   onAdjust: (input: AdjustQuantityInput) => void;
   /** Preselect a part (e.g. opened from that part's detail sheet) instead of starting on the picker. */
   initialPartId?: string;
 }
 
-export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initialPartId }: AdjustQuantityDialogProps) {
+const emptyNewPart = { partNumber: '', name: '', description: '', category: '' as BOMCategory | '', manufacturer: '', mpn: '', unit: 'EA' };
+
+export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, onAdjust, initialPartId }: AdjustQuantityDialogProps) {
   const isMobile = useIsMobile();
   const [selectedRecord, setSelectedRecord] = useState<StockRecord | null>(null);
   const [partPickerOpen, setPartPickerOpen] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [showAddPart, setShowAddPart] = useState(false);
+  const [newPart, setNewPart] = useState(emptyNewPart);
+  const [createdPart, setCreatedPart] = useState<{ id: string; partNumber: string; name: string; category: BOMCategory } | null>(null);
+
+  const createPart = useCreatePart(orgId);
 
   const form = useForm<AdjustFormData>({
     resolver: zodResolver(adjustSchema),
@@ -94,6 +112,8 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
       quantity: 1,
       reasonCode: '',
       note: '',
+      lotNumber: '',
+      serialNumber: '',
     },
   });
 
@@ -109,11 +129,14 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialPartId]);
 
-  const isFormDirty = form.formState.isDirty;
+  const isFormDirty = form.formState.isDirty || showAddPart;
 
   const resetAndClose = () => {
     form.reset();
     setSelectedRecord(null);
+    setShowAddPart(false);
+    setNewPart(emptyNewPart);
+    setCreatedPart(null);
     onClose();
   };
 
@@ -125,19 +148,62 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
     }
   };
 
+  const handleCreatePart = async () => {
+    if (!newPart.partNumber.trim() || !newPart.name.trim() || !newPart.category) {
+      toast.error('Part number, name, and category are required');
+      return;
+    }
+    try {
+      const created = await createPart.mutateAsync({
+        partNumber: newPart.partNumber.trim(),
+        name: newPart.name.trim(),
+        description: newPart.description.trim() || newPart.name.trim(),
+        category: newPart.category,
+        manufacturer: newPart.manufacturer.trim() || undefined,
+        mpn: newPart.mpn.trim() || undefined,
+        unit: newPart.unit || 'EA',
+      });
+      setSelectedRecord(null);
+      setCreatedPart({ id: created.id, partNumber: created.partNumber, name: created.name, category: created.category });
+      form.setValue('partId', created.id, { shouldDirty: true, shouldValidate: true });
+      setShowAddPart(false);
+      setNewPart(emptyNewPart);
+      toast.success(`Part ${created.partNumber} created`);
+    } catch {
+      toast.error('Failed to create part');
+    }
+  };
+
   const handleSubmit = (data: AdjustFormData) => {
-    if (!selectedRecord) {
+    if (selectedRecord) {
+      onAdjust({
+        partId: selectedRecord.partId,
+        location: data.location as StockLocation,
+        direction: data.direction,
+        quantity: data.quantity,
+        reasonCode: data.reasonCode,
+        note: data.note?.trim() || undefined,
+        lotNumber: data.lotNumber?.trim() || undefined,
+        serialNumber: data.serialNumber?.trim() || undefined,
+      });
+    } else if (createdPart) {
+      onAdjust({
+        partId: createdPart.id,
+        pn: createdPart.partNumber,
+        name: createdPart.name,
+        cat: createdPart.category,
+        location: data.location as StockLocation,
+        direction: data.direction,
+        quantity: data.quantity,
+        reasonCode: data.reasonCode,
+        note: data.note?.trim() || undefined,
+        lotNumber: data.lotNumber?.trim() || undefined,
+        serialNumber: data.serialNumber?.trim() || undefined,
+      });
+    } else {
       toast.error('Select a part to adjust');
       return;
     }
-    onAdjust({
-      partId: selectedRecord.partId,
-      location: data.location as StockLocation,
-      direction: data.direction,
-      quantity: data.quantity,
-      reasonCode: data.reasonCode,
-      note: data.note?.trim() || undefined,
-    });
     resetAndClose();
   };
 
@@ -146,10 +212,10 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
       <DialogContent
         hideClose
         className={cn(
-          'p-0 flex flex-col gap-0',
+          'p-0 flex flex-col gap-0 overflow-hidden',
           isMobile
             ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 data-[state=open]:!slide-in-from-left-0 data-[state=open]:!slide-in-from-top-0 data-[state=closed]:!slide-out-to-left-0 data-[state=closed]:!slide-out-to-top-0'
-            : 'max-w-lg'
+            : 'max-w-lg max-h-[90vh]'
         )}
       >
         <DialogHeader className="px-4 sm:px-6 py-4 pr-10 border-b shrink-0 flex-row items-start gap-3 space-y-0">
@@ -168,67 +234,160 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 min-h-0">
-            <div className="overflow-y-auto flex-1">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               <div className="p-4 sm:p-6 space-y-5">
                 <FormField
                   control={form.control}
                   name="partId"
                   render={() => (
                     <FormItem>
-                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Part <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
-                      <Popover open={partPickerOpen} onOpenChange={setPartPickerOpen}>
-                        <PopoverTrigger asChild>
-                          <FormControl>
+                      <div className="flex items-center justify-between">
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Part <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                        {!showAddPart && (
+                          <Button
+                            type="button"
+                            variant="link"
+                            size="sm"
+                            className="h-auto p-0 text-xs"
+                            onClick={() => setShowAddPart(true)}
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Add new part
+                          </Button>
+                        )}
+                      </div>
+
+                      {!showAddPart ? (
+                        <Popover open={partPickerOpen} onOpenChange={setPartPickerOpen}>
+                          <PopoverTrigger asChild>
+                            <FormControl>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                role="combobox"
+                                className={cn(
+                                  'w-full justify-between font-normal',
+                                  !selectedRecord && !createdPart && 'text-muted-foreground'
+                                )}
+                              >
+                                {selectedRecord
+                                  ? `${selectedRecord.pn} — ${selectedRecord.name}`
+                                  : createdPart
+                                    ? `${createdPart.partNumber} — ${createdPart.name}`
+                                    : 'Select a part...'}
+                                <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </FormControl>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[420px] p-0" align="start">
+                            <Command>
+                              <CommandInput placeholder="Search stocked parts..." />
+                              <CommandList>
+                                <CommandEmpty>No stocked parts found.</CommandEmpty>
+                                <CommandGroup>
+                                  {stock.map((r) => (
+                                    <CommandItem
+                                      key={r.id}
+                                      value={`${r.pn} ${r.name}`}
+                                      onSelect={() => {
+                                        setSelectedRecord(r);
+                                        setCreatedPart(null);
+                                        form.setValue('partId', r.partId, { shouldDirty: true, shouldValidate: true });
+                                        form.setValue('location', r.location, { shouldDirty: true, shouldValidate: true });
+                                        setPartPickerOpen(false);
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          'mr-2 h-4 w-4',
+                                          selectedRecord?.id === r.id ? 'opacity-100' : 'opacity-0'
+                                        )}
+                                      />
+                                      <div className="flex flex-col min-w-0">
+                                        <span className="text-sm truncate">{r.pn} — {r.name}</span>
+                                        <span className="text-xs text-muted-foreground truncate">
+                                          {r.location} · On hand {r.onHand}
+                                        </span>
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">New part</span>
                             <Button
                               type="button"
-                              variant="outline"
-                              role="combobox"
-                              className={cn(
-                                'w-full justify-between font-normal',
-                                !selectedRecord && 'text-muted-foreground'
-                              )}
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => { setShowAddPart(false); setNewPart(emptyNewPart); }}
                             >
-                              {selectedRecord ? `${selectedRecord.pn} — ${selectedRecord.name}` : 'Select a part...'}
-                              <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                              <X className="h-3.5 w-3.5" />
                             </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[420px] p-0" align="start">
-                          <Command>
-                            <CommandInput placeholder="Search stocked parts..." />
-                            <CommandList>
-                              <CommandEmpty>No stocked parts found.</CommandEmpty>
-                              <CommandGroup>
-                                {stock.map((r) => (
-                                  <CommandItem
-                                    key={r.id}
-                                    value={`${r.pn} ${r.name}`}
-                                    onSelect={() => {
-                                      setSelectedRecord(r);
-                                      form.setValue('partId', r.partId, { shouldDirty: true, shouldValidate: true });
-                                      form.setValue('location', r.location, { shouldDirty: true, shouldValidate: true });
-                                      setPartPickerOpen(false);
-                                    }}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        'mr-2 h-4 w-4',
-                                        selectedRecord?.id === r.id ? 'opacity-100' : 'opacity-0'
-                                      )}
-                                    />
-                                    <div className="flex flex-col min-w-0">
-                                      <span className="text-sm truncate">{r.pn} — {r.name}</span>
-                                      <span className="text-xs text-muted-foreground truncate">
-                                        {r.location} · On hand {r.onHand}
-                                      </span>
-                                    </div>
-                                  </CommandItem>
-                                ))}
-                              </CommandGroup>
-                            </CommandList>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Part Number *</Label>
+                              <Input
+                                value={newPart.partNumber}
+                                onChange={(e) => setNewPart(prev => ({ ...prev, partNumber: e.target.value }))}
+                                placeholder="e.g. EV-PWR-099"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Name *</Label>
+                              <Input
+                                value={newPart.name}
+                                onChange={(e) => setNewPart(prev => ({ ...prev, name: e.target.value }))}
+                                placeholder="Part name"
+                              />
+                            </div>
+                            <div className="space-y-1.5 sm:col-span-2">
+                              <Label className="text-xs">Category *</Label>
+                              <CategoryCombobox
+                                value={newPart.category}
+                                onChange={(v) => setNewPart(prev => ({ ...prev, category: v as BOMCategory | '' }))}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Unit</Label>
+                              <Input
+                                value={newPart.unit}
+                                onChange={(e) => setNewPart(prev => ({ ...prev, unit: e.target.value }))}
+                                placeholder="EA"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Manufacturer</Label>
+                              <Input
+                                value={newPart.manufacturer}
+                                onChange={(e) => setNewPart(prev => ({ ...prev, manufacturer: e.target.value }))}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">MPN</Label>
+                              <Input
+                                value={newPart.mpn}
+                                onChange={(e) => setNewPart(prev => ({ ...prev, mpn: e.target.value }))}
+                              />
+                            </div>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="w-full"
+                            disabled={createPart.isPending}
+                            onClick={handleCreatePart}
+                          >
+                            {createPart.isPending ? 'Creating...' : 'Create & select part'}
+                          </Button>
+                        </div>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -240,22 +399,45 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Location <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a location..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {STOCK_LOCATIONS.map((loc) => (
-                            <SelectItem key={loc} value={loc}>{loc}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FormControl>
+                        <LocationCombobox value={field.value} onChange={field.onChange} />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="lotNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lot number <span className="normal-case font-normal">optional</span></FormLabel>
+                        <FormControl>
+                          <Input placeholder="LOT-…" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="serialNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Serial number <span className="normal-case font-normal">optional</span></FormLabel>
+                        <FormControl>
+                          <Input placeholder="SN-…" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground -mt-3">
+                  Both fields are available on every part while the hardware team decides which applies where.
+                </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <FormField
@@ -349,7 +531,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, stock, onAdjust, initial
 
             <DialogFooter className="flex-row justify-end gap-2 space-x-0 sm:space-x-0 px-4 sm:px-6 py-4 border-t shrink-0">
               <Button type="button" variant="outline" className="flex-1" onClick={attemptClose}>Cancel</Button>
-              <Button type="submit" className="flex-1" disabled={!selectedRecord}>Post adjustment</Button>
+              <Button type="submit" className="flex-1" disabled={!selectedRecord && !createdPart}>Post adjustment</Button>
             </DialogFooter>
           </form>
         </Form>

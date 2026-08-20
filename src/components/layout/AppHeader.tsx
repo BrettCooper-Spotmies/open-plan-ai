@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useMatch, useNavigate } from 'react-router-dom';
-import { Sun, Moon, ChevronLeft, BarChart3, Plus, Users, Bug, Sparkles, Download } from 'lucide-react';
+import { Sun, Moon, ChevronLeft, BarChart3, Plus, Users, Bug, Sparkles, Download, ShoppingCart, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';
@@ -173,6 +173,15 @@ export function AppHeader() {
               variant="outline"
               size="icon"
               className="h-9 w-9 rounded-lg"
+              onClick={() => navigate('/inventory?action=order')}
+              title="Place order"
+            >
+              <ShoppingCart className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9 rounded-lg"
               onClick={() => navigate('/inventory?action=receive')}
               title="Receive stock"
             >
@@ -184,7 +193,7 @@ export function AppHeader() {
               onClick={() => navigate('/inventory?action=adjust')}
               title="New transaction"
             >
-              <Plus className="h-4 w-4" />
+              <Pencil className="h-4 w-4" />
             </Button>
           </>
         ) : isMobileChatList ? (

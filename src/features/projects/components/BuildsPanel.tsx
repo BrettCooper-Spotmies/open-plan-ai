@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getCategoryMeta } from './bomData';
 import { CoveragePill, formatShortDate, type Build } from './inventoryData';
+import { NewBuildDialog, type NewBuildInput } from './NewBuildDialog';
 
 // Maps bomData's BOM_CAT_META.iconName strings to the actual icon component.
 const CATEGORY_ICON_MAP: Record<string, React.ElementType> = { Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag };
@@ -25,13 +26,15 @@ interface BuildsPanelProps {
   onSelectPart: (partId: string) => void;
   openBuildId?: string | null;
   onOpenBuildHandled?: () => void;
+  onAddBuild: (input: NewBuildInput) => void;
 }
 
-export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHandled }: BuildsPanelProps) {
+export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHandled, onAddBuild }: BuildsPanelProps) {
   const isMobile = useIsMobile();
   const [selectedBuildId, setSelectedBuildId] = useState(builds[0]?.id);
   const [mobileSearch, setMobileSearch] = useState('');
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [newBuildOpen, setNewBuildOpen] = useState(false);
   const selectedBuild = builds.find(b => b.id === selectedBuildId) ?? builds[0];
 
   // Alerts tab hands off a build to open here — jump to it and, on mobile, pop the detail dialog.
@@ -44,11 +47,17 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
 
   if (!selectedBuild) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          No builds yet.
-        </CardContent>
-      </Card>
+      <>
+        <Card>
+          <CardContent className="py-12 text-center space-y-3">
+            <p className="text-sm text-muted-foreground">No builds yet.</p>
+            <Button size="sm" onClick={() => setNewBuildOpen(true)}>
+              <Plus className="h-4 w-4 mr-1.5" /> New build
+            </Button>
+          </CardContent>
+        </Card>
+        <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} />
+      </>
     );
   }
 
@@ -60,14 +69,19 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
 
     return (
       <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search builds..."
-            value={mobileSearch}
-            onChange={(e) => setMobileSearch(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search builds..."
+              value={mobileSearch}
+              onChange={(e) => setMobileSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Button size="icon" variant="outline" className="h-10 w-10 shrink-0" onClick={() => setNewBuildOpen(true)} title="New build">
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
 
         {filteredBuilds.length === 0 ? (
@@ -229,6 +243,7 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
             </div>
           </DialogContent>
         </Dialog>
+        <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} />
       </div>
     );
   }
@@ -239,7 +254,7 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
       <div className="w-full lg:w-72 shrink-0 rounded-xl border border-border bg-card p-3 lg:sticky lg:top-6">
         <div className="flex items-center justify-between mb-3 px-1">
           <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Builds</h3>
-          <Button size="icon" variant="outline" className="h-7 w-7" disabled title="Coming soon">
+          <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setNewBuildOpen(true)} title="New build">
             <Plus className="h-4 w-4" />
           </Button>
         </div>
@@ -393,6 +408,7 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
           </Table>
         </div>
       </div>
+      <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} />
     </div>
   );
 }

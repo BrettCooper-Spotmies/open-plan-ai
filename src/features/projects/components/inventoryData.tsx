@@ -6,10 +6,17 @@
 // "mock data only" precedent as requirementsData.ts: local types + a seed generator, with
 // the ledger held in the InventoryView orchestrator's local state.
 
-import { bomFlatAll, type BOMNode, type BOMCategory } from './bomData';
+import { useState, useEffect } from 'react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { bomFlatAll, KNOWN_BOM_CATEGORIES, type BOMNode, type BOMCategory } from './bomData';
 
 export const STOCK_LOCATIONS = ['Lab Shelf A', 'Lab Shelf B', 'Incoming Dock', 'CM', 'Quarantine'] as const;
-export type StockLocation = typeof STOCK_LOCATIONS[number];
+// Locations are free-text (mirrors the BOMCategory custom-category pattern) — the presets
+// above are just suggestions surfaced in pickers, not a closed set the hardware team is
+// still deciding per-part-type constraints for.
+export type StockLocation = string;
 
 export type CoverageStatus = 'ready' | 'covered-by-order' | 'short' | 'conflict';
 
@@ -24,9 +31,174 @@ export interface StockRecord {
   onOrder: number;
   location: StockLocation;
   leadTimeDays: number;
-  lotSerial?: string;
+  lotNumber?: string;
+  serialNumber?: string;
   quarantineQty?: number;
   imageUrl?: string;   // part photo, when the catalog entry has one — falls back to a category icon
+}
+
+export interface OrderRecord {
+  id: string;
+  partId: string;
+  pn: string;
+  quantity: number;
+  remainingQty: number;
+  expectedDate: string;   // ISO
+  supplierRef?: string;
+  unitCost?: number;
+  location: string;
+  status: 'open' | 'partially_received' | 'received' | 'cancelled';
+  createdAt: string;
+  createdBy: string;
+}
+
+const CUSTOM_LOCATION_SENTINEL = '__custom_location__';
+
+/** Location picker: preset dropdown with a "custom" escape hatch — same pattern as
+ * BOMCategory's free-text + preset-list combo (bomData.ts). */
+export function LocationCombobox({ value, onChange, placeholder = 'Select a location...' }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const [customMode, setCustomMode] = useState(
+    () => value !== '' && !(STOCK_LOCATIONS as readonly string[]).includes(value)
+  );
+
+  useEffect(() => {
+    if (value === '') setCustomMode(false);
+  }, [value]);
+
+  if (customMode) {
+    return (
+      <div className="flex gap-2">
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Enter custom location..."
+          autoFocus
+        />
+        <Button type="button" variant="outline" size="sm" onClick={() => { setCustomMode(false); onChange(''); }}>
+          Presets
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Select
+      onValueChange={(v) => {
+        if (v === CUSTOM_LOCATION_SENTINEL) { setCustomMode(true); onChange(''); }
+        else onChange(v);
+      }}
+      value={value}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {STOCK_LOCATIONS.map((loc) => (
+          <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+        ))}
+        <SelectItem value={CUSTOM_LOCATION_SENTINEL}>Other (custom)…</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+const CUSTOM_CATEGORY_SENTINEL = '__custom_category__';
+
+function formatCategoryOptionLabel(category: string): string {
+  return category
+    .trim()
+    .split(/[_-]+|\s+/)
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/** Category picker for new-part creation: preset dropdown (the 7 known BOM categories) with
+ * a custom escape hatch, so a category typed here shows up as a real filter later instead of
+ * being silently limited to the fixed preset list. */
+export function CategoryCombobox({ value, onChange, placeholder = 'Select a category...' }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const [customMode, setCustomMode] = useState(
+    () => value !== '' && !(KNOWN_BOM_CATEGORIES as readonly string[]).includes(value)
+  );
+  const [customValue, setCustomValue] = useState(
+    () => (value !== '' && !(KNOWN_BOM_CATEGORIES as readonly string[]).includes(value) ? value : '')
+  );
+
+  useEffect(() => {
+    if (value === '') {
+      setCustomMode(false);
+      setCustomValue('');
+      return;
+    }
+
+    if (!(KNOWN_BOM_CATEGORIES as readonly string[]).includes(value)) {
+      setCustomMode(true);
+      setCustomValue(value);
+    }
+  }, [value]);
+
+  if (customMode) {
+    return (
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Input
+            value={customValue}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+              setCustomValue(nextValue);
+              onChange(nextValue);
+            }}
+            placeholder="Enter custom category..."
+            autoFocus
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCustomMode(false);
+              setCustomValue('');
+              onChange('');
+            }}
+          >
+            Presets
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Custom categories will also appear in the inventory category chips.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <Select
+      onValueChange={(v) => {
+        if (v === CUSTOM_CATEGORY_SENTINEL) {
+          setCustomMode(true);
+          setCustomValue('');
+          onChange('');
+        } else {
+          onChange(v);
+        }
+      }}
+      value={(KNOWN_BOM_CATEGORIES as readonly string[]).includes(value) ? value : ''}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {KNOWN_BOM_CATEGORIES.map((c) => (
+          <SelectItem key={c} value={c}>{formatCategoryOptionLabel(c)}</SelectItem>
+        ))}
+        <SelectItem value={CUSTOM_CATEGORY_SENTINEL}>Other (custom)…</SelectItem>
+      </SelectContent>
+    </Select>
+  );
 }
 
 export interface StockTransaction {
@@ -53,7 +225,15 @@ export const REASON_CODES = [
   'Consumed outside system',
 ] as const;
 
-export const availableOf = (r: StockRecord): number => r.onHand - r.allocated;
+export const availableOf = (r: StockRecord): number => r.onHand - r.allocated - (r.quarantineQty ?? 0);
+
+/** Sum of remaining qty across a part's open/partially-received orders — `onOrder` is
+ * derived from real order state rather than a static seeded field. */
+export function onOrderOf(orders: OrderRecord[], partId: string): number {
+  return orders
+    .filter(o => o.partId === partId && (o.status === 'open' || o.status === 'partially_received'))
+    .reduce((sum, o) => sum + o.remainingQty, 0);
+}
 
 /**
  * demandQty is the BOM quantity-required for this part (from BOMNode.qty). Coverage is
@@ -148,7 +328,7 @@ export function generateMockStock(bomNodes: BOMNode[]): StockRecord[] {
       location,
       leadTimeDays: n.leadTime || 14,
       quarantineQty: r > 0.9 ? Math.max(1, Math.round(onHand * 0.1)) : undefined,
-      lotSerial: r > 0.8 && r <= 0.9 ? `LOT-${n.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
+      lotNumber: r > 0.8 && r <= 0.9 ? `LOT-${n.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
       imageUrl: r > 0.75 && r <= 0.9 ? `https://picsum.photos/seed/${encodeURIComponent(n.pn)}/400` : undefined,
     };
   });
@@ -162,24 +342,45 @@ export function generateMockStock(bomNodes: BOMNode[]): StockRecord[] {
 const DEMO_PART_DEFS: { pn: string; name: string; cat: BOMCategory; demand: number; leadTime: number }[] = [
   { pn: 'ASM-1000', name: 'EVSE Charging Station Assembly', cat: 'assembly', demand: 1, leadTime: 21 },
   { pn: 'ASM-1010', name: 'Charging Cable Reel Assembly',   cat: 'assembly', demand: 1, leadTime: 18 },
-  { pn: 'PWR-2001',  name: 'AC-DC Power Supply Module 3.3kW', cat: 'power', demand: 1, leadTime: 28 },
-  { pn: 'PWR-2015',  name: 'Relay Contactor 32A',              cat: 'power', demand: 2, leadTime: 14 },
-  { pn: 'PWR-2030',  name: 'EMI Filter Module',                cat: 'power', demand: 1, leadTime: 10 },
-  { pn: 'CTL-3001',  name: 'Main Control PCB (ESP32)',         cat: 'control', demand: 1, leadTime: 35 },
-  { pn: 'CTL-3012',  name: 'RS-485 Communication Module',      cat: 'control', demand: 1, leadTime: 12 },
-  { pn: 'CTL-3020',  name: '4G/LTE Cellular Modem',            cat: 'control', demand: 1, leadTime: 40 },
-  { pn: 'CON-4001',  name: 'Type 2 Charging Connector',        cat: 'connector', demand: 1, leadTime: 21 },
-  { pn: 'CON-4010',  name: 'CCS Combo Connector',               cat: 'connector', demand: 1, leadTime: 30 },
-  { pn: 'CON-4020',  name: 'Charging Cable 5m, 32A',            cat: 'connector', demand: 1, leadTime: 15 },
-  { pn: 'ENC-5001',  name: 'IP65 Outdoor Enclosure',            cat: 'enclosure', demand: 1, leadTime: 25 },
-  { pn: 'ENC-5010',  name: 'Mounting Bracket Kit',              cat: 'enclosure', demand: 1, leadTime: 9 },
-  { pn: 'ENC-5020',  name: 'Cable Gland Set',                   cat: 'enclosure', demand: 4, leadTime: 7 },
-  { pn: 'HMI-6001',  name: '7" Touch Display',                  cat: 'hmi', demand: 1, leadTime: 32 },
-  { pn: 'HMI-6010',  name: 'Status LED Ring',                   cat: 'hmi', demand: 1, leadTime: 11 },
-  { pn: 'HMI-6020',  name: 'RFID Card Reader',                  cat: 'hmi', demand: 1, leadTime: 20 },
-  { pn: 'SAF-7001',  name: 'RCD Type B 30mA',                   cat: 'safety', demand: 1, leadTime: 17 },
-  { pn: 'SAF-7010',  name: 'Surge Protection Device',           cat: 'safety', demand: 1, leadTime: 13 },
-  { pn: 'SAF-7020',  name: 'Emergency Stop Button',             cat: 'safety', demand: 1, leadTime: 8 },
+  { pn: 'ASM-1020', name: 'Pedestal Mount Assembly',        cat: 'assembly', demand: 1, leadTime: 16 },
+  { pn: 'ASM-1030', name: 'Wallbox Final Assembly',         cat: 'assembly', demand: 1, leadTime: 14 },
+  { pn: 'ASM-1040', name: 'Power Distribution Subassembly', cat: 'assembly', demand: 1, leadTime: 19 },
+  { pn: 'PWR-2001', name: 'AC-DC Power Supply Module 3.3kW', cat: 'power', demand: 1, leadTime: 28 },
+  { pn: 'PWR-2015', name: 'Relay Contactor 32A',             cat: 'power', demand: 2, leadTime: 14 },
+  { pn: 'PWR-2030', name: 'EMI Filter Module',               cat: 'power', demand: 1, leadTime: 10 },
+  { pn: 'PWR-2040', name: 'DC Fuse 80A',                     cat: 'power', demand: 2, leadTime: 9 },
+  { pn: 'PWR-2050', name: 'Power Metering Module',           cat: 'power', demand: 1, leadTime: 22 },
+  { pn: 'PWR-2060', name: 'Auxiliary Power Board',           cat: 'power', demand: 1, leadTime: 12 },
+  { pn: 'CTL-3001', name: 'Main Control PCB (ESP32)',        cat: 'control', demand: 1, leadTime: 35 },
+  { pn: 'CTL-3012', name: 'RS-485 Communication Module',     cat: 'control', demand: 1, leadTime: 12 },
+  { pn: 'CTL-3020', name: '4G/LTE Cellular Modem',           cat: 'control', demand: 1, leadTime: 40 },
+  { pn: 'CTL-3030', name: 'Ethernet Gateway Board',          cat: 'control', demand: 1, leadTime: 18 },
+  { pn: 'CTL-3040', name: 'CAN Interface Module',            cat: 'control', demand: 1, leadTime: 15 },
+  { pn: 'CTL-3050', name: 'Secure Element Chip Board',       cat: 'control', demand: 1, leadTime: 24 },
+  { pn: 'CON-4001', name: 'Type 2 Charging Connector',       cat: 'connector', demand: 1, leadTime: 21 },
+  { pn: 'CON-4010', name: 'CCS Combo Connector',             cat: 'connector', demand: 1, leadTime: 30 },
+  { pn: 'CON-4020', name: 'Charging Cable 5m, 32A',          cat: 'connector', demand: 1, leadTime: 15 },
+  { pn: 'CON-4030', name: 'Cable Harness Assembly',          cat: 'connector', demand: 2, leadTime: 13 },
+  { pn: 'CON-4040', name: 'Terminal Block 6-pin',            cat: 'connector', demand: 4, leadTime: 6 },
+  { pn: 'CON-4050', name: 'RJ45 Panel Connector',            cat: 'connector', demand: 1, leadTime: 8 },
+  { pn: 'ENC-5001', name: 'IP65 Outdoor Enclosure',          cat: 'enclosure', demand: 1, leadTime: 25 },
+  { pn: 'ENC-5010', name: 'Mounting Bracket Kit',            cat: 'enclosure', demand: 1, leadTime: 9 },
+  { pn: 'ENC-5020', name: 'Cable Gland Set',                 cat: 'enclosure', demand: 4, leadTime: 7 },
+  { pn: 'ENC-5030', name: 'Aluminum Front Panel',            cat: 'enclosure', demand: 1, leadTime: 11 },
+  { pn: 'ENC-5040', name: 'Locking Door Kit',                cat: 'enclosure', demand: 1, leadTime: 10 },
+  { pn: 'ENC-5050', name: 'Thermal Pad Set',                 cat: 'enclosure', demand: 2, leadTime: 5 },
+  { pn: 'HMI-6001', name: '7" Touch Display',                cat: 'hmi', demand: 1, leadTime: 32 },
+  { pn: 'HMI-6010', name: 'Status LED Ring',                 cat: 'hmi', demand: 1, leadTime: 11 },
+  { pn: 'HMI-6020', name: 'RFID Card Reader',                cat: 'hmi', demand: 1, leadTime: 20 },
+  { pn: 'HMI-6030', name: 'Speaker Buzzer Module',           cat: 'hmi', demand: 1, leadTime: 6 },
+  { pn: 'HMI-6040', name: 'Capacitive Button PCB',           cat: 'hmi', demand: 1, leadTime: 14 },
+  { pn: 'HMI-6050', name: 'Indicator Light Pipe',            cat: 'hmi', demand: 2, leadTime: 7 },
+  { pn: 'SAF-7001', name: 'RCD Type B 30mA',                 cat: 'safety', demand: 1, leadTime: 17 },
+  { pn: 'SAF-7010', name: 'Surge Protection Device',         cat: 'safety', demand: 1, leadTime: 13 },
+  { pn: 'SAF-7020', name: 'Emergency Stop Button',           cat: 'safety', demand: 1, leadTime: 8 },
+  { pn: 'SAF-7030', name: 'Door Interlock Switch',           cat: 'safety', demand: 1, leadTime: 9 },
+  { pn: 'SAF-7040', name: 'Thermal Cutoff Sensor',           cat: 'safety', demand: 2, leadTime: 7 },
+  { pn: 'SAF-7050', name: 'Ground Fault Monitor',            cat: 'safety', demand: 1, leadTime: 16 },
 ];
 
 export function generateDemoStock(): StockRecord[] {
@@ -204,9 +405,31 @@ export function generateDemoStock(): StockRecord[] {
       location,
       leadTimeDays: d.leadTime,
       quarantineQty: r > 0.9 ? Math.max(1, Math.round(onHand * 0.1)) : undefined,
-      lotSerial: r > 0.8 && r <= 0.9 ? `LOT-${d.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
+      lotNumber: r > 0.8 && r <= 0.9 ? `LOT-${d.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
     };
   });
+}
+
+/**
+ * Seeds one open OrderRecord per stock row that already has demo `onOrder` > 0, so the
+ * order/receive flow starts populated consistent with today's demo numbers instead of empty.
+ */
+export function generateMockOrders(stock: StockRecord[]): OrderRecord[] {
+  const now = new Date();
+  return stock
+    .filter(r => r.onOrder > 0)
+    .map(r => ({
+      id: `ord-${r.partId}`,
+      partId: r.partId,
+      pn: r.pn,
+      quantity: r.onOrder,
+      remainingQty: r.onOrder,
+      expectedDate: addDays(now, r.leadTimeDays),
+      location: r.location,
+      status: 'open' as const,
+      createdAt: now.toISOString(),
+      createdBy: 'Seed',
+    }));
 }
 
 export interface BuildLine {
@@ -242,11 +465,24 @@ export interface Build {
   longestLead: BuildLine | null;
 }
 
-const BUILD_DEFS = [
+export interface BuildDef {
+  id: string;
+  name: string;
+  type: string;
+  units: number;
+  bomRev: string;
+  scrapPct: number;
+  milestone: string;
+  /** User-entered target date (new builds). Legacy seeded builds omit this and fall back to
+   * a synthetic lateness offset so their numbers stay stable across re-renders. */
+  targetDate?: string;
+}
+
+const BUILD_DEFS: BuildDef[] = [
   { id: 'evt', name: 'EVT Build', type: 'EVT', units: 5, bomRev: 'Rev B', scrapPct: 5, milestone: 'EVT Complete' },
   { id: 'dvt', name: 'DVT Build', type: 'DVT', units: 25, bomRev: 'Rev C', scrapPct: 3, milestone: 'DVT Build Complete' },
   { id: 'pvt', name: 'PVT Build', type: 'PVT', units: 100, bomRev: 'Rev C', scrapPct: 2, milestone: 'PVT Kickoff' },
-] as const;
+];
 
 function addDays(date: Date, days: number): string {
   const d = new Date(date);
@@ -254,47 +490,61 @@ function addDays(date: Date, days: number): string {
   return d.toISOString();
 }
 
+function diffDays(laterIso: string, earlierIso: string): number {
+  return Math.round((new Date(laterIso).getTime() - new Date(earlierIso).getTime()) / 86400000);
+}
+
 export function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
 }
 
 /**
- * Builds one "Build" per fixed EVT/DVT/PVT phase, scaling each stocked part's real BOM
- * demand (qty-per-unit from demandByPartId) by that phase's unit count, then reusing
- * computeCoverage against the scaled requirement — so larger builds naturally show more
- * shortages against the same on-hand/on-order stock, same as a real MRP netting would.
+ * Computes one "Build" from a def, scaling each stocked part's real BOM demand (qty-per-unit
+ * from demandByPartId) by the def's unit count, then reusing computeCoverage against the
+ * scaled requirement — so larger builds naturally show more shortages against the same
+ * on-hand/on-order stock, same as a real MRP netting would.
  */
-export function generateMockBuilds(stock: StockRecord[], demandByPartId: Map<string, number>): Build[] {
+export function buildFromDef(def: BuildDef, stock: StockRecord[], demandByPartId: Map<string, number>): Build {
   const now = new Date();
-  return BUILD_DEFS.map((def) => {
-    const lines: BuildLine[] = stock.map((r) => {
-      const qtyPerUnit = demandByPartId.get(r.partId) ?? 1;
-      const required = qtyPerUnit * def.units;
-      const status = computeCoverage(r, required);
-      return {
-        partId: r.partId, pn: r.pn, name: r.name, cat: r.cat,
-        qtyPerUnit, uom: 'EA',
-        required, available: availableOf(r), allocated: r.allocated, onOrder: r.onOrder,
-        leadTimeDays: r.leadTimeDays, status,
-      };
-    });
-
-    const readyCount = lines.filter(l => l.status === 'ready').length;
-    const onOrderCount = lines.filter(l => l.status === 'covered-by-order').length;
-    const shortLines = lines.filter(l => l.status === 'short' || l.status === 'conflict');
-    const longestLead = shortLines.length
-      ? shortLines.reduce((max, l) => (l.leadTimeDays > (max?.leadTimeDays ?? 0) ? l : max), null as BuildLine | null)
-      : null;
-
-    const daysLate = shortLines.length ? Math.round(30 + seededRandom(def.id) * 150) : 0;
-    const projectedDate = addDays(now, longestLead?.leadTimeDays ?? 0);
-    const targetDate = addDays(new Date(projectedDate), -daysLate);
-
+  const lines: BuildLine[] = stock.map((r) => {
+    const qtyPerUnit = demandByPartId.get(r.partId) ?? 1;
+    const required = qtyPerUnit * def.units;
+    const status = computeCoverage(r, required);
     return {
-      id: def.id, name: def.name, type: def.type, units: def.units,
-      bomRev: def.bomRev, scrapPct: def.scrapPct, linkedMilestone: def.milestone,
-      targetDate, projectedDate, daysLate,
-      lines, readyCount, onOrderCount, shortLines, longestLead,
+      partId: r.partId, pn: r.pn, name: r.name, cat: r.cat,
+      qtyPerUnit, uom: 'EA',
+      required, available: availableOf(r), allocated: r.allocated, onOrder: r.onOrder,
+      leadTimeDays: r.leadTimeDays, status,
     };
   });
+
+  const readyCount = lines.filter(l => l.status === 'ready').length;
+  const onOrderCount = lines.filter(l => l.status === 'covered-by-order').length;
+  const shortLines = lines.filter(l => l.status === 'short' || l.status === 'conflict');
+  const longestLead = shortLines.length
+    ? shortLines.reduce((max, l) => (l.leadTimeDays > (max?.leadTimeDays ?? 0) ? l : max), null as BuildLine | null)
+    : null;
+
+  const projectedDate = addDays(now, longestLead?.leadTimeDays ?? 0);
+
+  let targetDate: string;
+  let daysLate: number;
+  if (def.targetDate) {
+    targetDate = def.targetDate;
+    daysLate = shortLines.length ? Math.max(0, diffDays(projectedDate, targetDate)) : 0;
+  } else {
+    daysLate = shortLines.length ? Math.round(30 + seededRandom(def.id) * 150) : 0;
+    targetDate = addDays(new Date(projectedDate), -daysLate);
+  }
+
+  return {
+    id: def.id, name: def.name, type: def.type, units: def.units,
+    bomRev: def.bomRev, scrapPct: def.scrapPct, linkedMilestone: def.milestone,
+    targetDate, projectedDate, daysLate,
+    lines, readyCount, onOrderCount, shortLines, longestLead,
+  };
+}
+
+export function generateMockBuilds(stock: StockRecord[], demandByPartId: Map<string, number>): Build[] {
+  return BUILD_DEFS.map((def) => buildFromDef(def, stock, demandByPartId));
 }
