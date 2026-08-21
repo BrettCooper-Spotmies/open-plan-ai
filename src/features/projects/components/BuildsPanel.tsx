@@ -225,7 +225,8 @@ export function BuildsPanel({ orgId, builds, onSelectPart, openBuildId, onOpenBu
 
               <div className="space-y-2">
                 {selectedBuild.lines.map((l) => {
-                  const shortfall = l.required > l.available ? l.available - l.required : 0;
+                  const shortfall =
+                    l.required > l.available + l.onOrder ? l.available + l.onOrder - l.required : 0;
                   const meta = getCategoryMeta(l.cat);
                   const CategoryIcon = CATEGORY_ICON_MAP[meta.iconName] ?? Tag;
                   return (
@@ -406,7 +407,8 @@ export function BuildsPanel({ orgId, builds, onSelectPart, openBuildId, onOpenBu
             </TableHeader>
             <TableBody>
               {selectedBuild.lines.map((l) => {
-                const shortfall = l.required > l.available ? l.available - l.required : 0;
+                const shortfall =
+                  l.required > l.available + l.onOrder ? l.available + l.onOrder - l.required : 0;
                 const meta = getCategoryMeta(l.cat);
                 const CategoryIcon = CATEGORY_ICON_MAP[meta.iconName] ?? Tag;
                 return (
