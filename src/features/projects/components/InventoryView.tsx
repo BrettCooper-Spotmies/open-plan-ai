@@ -935,6 +935,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
         parts={parts}
         partProjects={projectsByPartId}
         onAdjust={handleAdjust}
+        onPlaceOrder={handlePlaceOrder}
         initialPartId={dialogPartId}
       />
       <PlaceOrderDialog
