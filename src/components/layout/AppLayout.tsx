@@ -35,6 +35,16 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
   useProjectMembershipRealtime();
   useConversationMembershipRealtime();
 
+  // Inside the app shell `main` is the only scroll container. Without this the
+  // document scrolls too — the shell is 100vh, but anything that overflows it
+  // grows the page — and the two scrollbars end up stacked at the right edge
+  // (most visible on long pages like Projects in list view).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.add('app-shell-locked');
+    return () => root.classList.remove('app-shell-locked');
+  }, []);
+
   // Apply compact mode class to <html>
   useEffect(() => {
     const root = document.documentElement;
@@ -54,13 +64,13 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
 
   return (
     <SidebarProvider
-      open={!preferences.sidebarCollapsed}
-      onOpenChange={(open) => updatePreferences({ sidebarCollapsed: !open })}
+      defaultOpen={!preferences.sidebarCollapsed}
+      className="w-full max-w-full h-screen max-h-screen overflow-hidden"
     >
-      <div className="h-screen flex w-full bg-background overflow-hidden">
+      <div className="h-screen flex w-full max-w-full bg-background overflow-hidden">
         {/* Sidebar hidden on mobile */}
         {!isMobile && <AppSidebar />}
-        <div className={`flex-1 flex flex-col h-full min-h-0 min-w-0 `}>
+        <div className="flex-1 flex flex-col h-full min-h-0 min-w-0 w-full max-w-full overflow-hidden">
           {showAppHeader && <AppHeader />}
 
           {/* Persistent warning banner whenever the selected organization is closed.
@@ -103,7 +113,7 @@ export function AppLayout({ children, noPadding }: AppLayoutProps) {
 
           <main
             className={[
-              noPadding ? 'flex-1 min-h-0 overflow-hidden' : `flex-1 min-h-0 overflow-y-auto ${isMobile ? 'overflow-x-hidden p-4' : 'p-6'}`,
+              noPadding ? 'flex-1 min-h-0 overflow-hidden w-full max-w-full' : `flex-1 min-h-0 overflow-y-auto w-full max-w-full ${isMobile ? 'overflow-x-hidden px-4 pb-4 pt-0' : 'p-6'}`,
               showMobileBottomNav ? 'pb-24' : '',
             ].join(' ')}
           >

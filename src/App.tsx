@@ -223,14 +223,6 @@ function AppShell() {
               }
             />
             <Route
-              path="/team"
-              element={
-                <Suspense fallback={<AppLayoutSkeleton variant="team" />}>
-                  <Team />
-                </Suspense>
-              }
-            />
-            <Route
               path="/settings"
               element={
                 <Suspense fallback={<AppLayoutSkeleton variant="settings" />}>
@@ -282,6 +274,14 @@ function AppShell() {
 
           {/* ── Routes without content padding ───────────────── */}
           <Route element={<AppLayoutOutlet noPadding />}>
+            <Route
+              path="/team"
+              element={
+                <Suspense fallback={<AppLayoutSkeleton variant="team" />}>
+                  <Team />
+                </Suspense>
+              }
+            />
             <Route
               path="/assistant"
               element={

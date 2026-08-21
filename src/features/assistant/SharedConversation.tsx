@@ -8,7 +8,7 @@ import { Logo } from '@/components/Logo';
 import { queryKeys } from '@/lib/queryClient';
 import { assistantService } from '@/services/assistant.service';
 import { AssistantTranscript } from './components/AssistantTranscript';
-import { resolveConversationScopeLabel } from './assistantData';
+import { resolveConversationScopeLabel, type AssistantProposal } from './assistantData';
 
 // Standalone public page — deliberately outside GuestRoute/ProtectedRoute/
 // AppLayoutOutlet (see App.tsx), so it builds its own minimal chrome rather
@@ -84,6 +84,10 @@ export default function SharedConversation() {
             onAnswer={() => {}}
             isAnswering={false}
             readOnly
+            proposalsByMessageId={(data.proposals ?? []).reduce<Record<string, AssistantProposal[]>>((acc, p) => {
+              (acc[p.messageId] ??= []).push(p);
+              return acc;
+            }, {})}
           />
         </>
       )}
