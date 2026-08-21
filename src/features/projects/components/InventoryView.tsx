@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Drawer, DrawerContent, DrawerFooter, DrawerTitle } from '@/components/ui/drawer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -68,9 +69,9 @@ function softTint(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function StatCard({ label, value, icon: Icon, iconColor, accent }: {
+function StatCard({ label, value, icon: Icon, iconColor, accent, loading }: {
   label: string; value: string; icon: React.ElementType;
-  iconColor: string; accent?: boolean;
+  iconColor: string; accent?: boolean; loading?: boolean;
 }) {
   return (
     <div className={cn('bg-card rounded-lg px-3.5 py-2.5 flex-1 min-w-[140px] border flex items-center gap-2.5', accent ? 'border-primary/25' : 'border-border')}>
@@ -81,9 +82,13 @@ function StatCard({ label, value, icon: Icon, iconColor, accent }: {
         <Icon className="w-4 h-4" style={{ color: iconColor }} />
       </span>
       <span className="min-w-0">
-        <span className="block text-lg font-bold leading-tight truncate" style={{ color: accent ? iconColor : undefined }}>
-          {value}
-        </span>
+        {loading ? (
+          <Skeleton className="h-5 w-10 mb-1" />
+        ) : (
+          <span className="block text-lg font-bold leading-tight truncate" style={{ color: accent ? iconColor : undefined }}>
+            {value}
+          </span>
+        )}
         <span className="block text-[11px] text-muted-foreground truncate">{label}</span>
       </span>
     </div>
@@ -107,7 +112,7 @@ const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
 export function InventoryView({ orgId }: InventoryViewProps) {
   const isMobile = useIsMobile();
   const { data: projects = [] } = useProjects();
-  const { data: partsResult } = useOrgParts(orgId, { limit: 100 });
+  const { data: partsResult, isLoading: isPartsLoading } = useOrgParts(orgId, { limit: 100 });
   const parts = useMemo(() => partsResult?.data ?? [], [partsResult]);
 
   // BOM demand is aggregated across every project in the org — stock/coverage here is
@@ -161,7 +166,8 @@ export function InventoryView({ orgId }: InventoryViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bomTreeQueries.map(q => q.dataUpdatedAt).join(','), projects]);
 
-  const { data: stock = [] } = useInventoryStock(orgId);
+  const { data: stock = [], isLoading: isStockLoading } = useInventoryStock(orgId);
+  const isInventoryLoading = isPartsLoading || isStockLoading;
   const { data: orders = [] } = useInventoryOrders(orgId);
   const { data: transactions = [] } = useInventoryTransactions(orgId);
   const { data: builds = [] } = useInventoryBuilds(orgId);
@@ -401,11 +407,11 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       )}
 
       <div className={cn('gap-2.5', isMobile ? 'grid grid-cols-2' : 'flex flex-wrap md:gap-3')}>
-        <StatCard label="Total Parts" value={String(totalParts)} icon={BoxesIcon} iconColor="#2563EB" accent />
-        <StatCard label="Ready to Build" value={String(coverageCounts.ready)} icon={CheckCircle} iconColor="#16A34A" />
-        <StatCard label="Below Coverage" value={String(belowCoverage)} icon={AlertTriangle} iconColor="#DC2626" />
-        <StatCard label="Incoming This Week" value={String(incomingCount)} icon={Truck} iconColor="#D97706" />
-        <StatCard label="In Quarantine" value={String(quarantineCount)} icon={Lock} iconColor="#7C3AED" />
+        <StatCard label="Total Parts" value={String(totalParts)} icon={BoxesIcon} iconColor="#2563EB" accent loading={isInventoryLoading} />
+        <StatCard label="Ready to Build" value={String(coverageCounts.ready)} icon={CheckCircle} iconColor="#16A34A" loading={isInventoryLoading} />
+        <StatCard label="Below Coverage" value={String(belowCoverage)} icon={AlertTriangle} iconColor="#DC2626" loading={isInventoryLoading} />
+        <StatCard label="Incoming This Week" value={String(incomingCount)} icon={Truck} iconColor="#D97706" loading={isInventoryLoading} />
+        <StatCard label="In Quarantine" value={String(quarantineCount)} icon={Lock} iconColor="#7C3AED" loading={isInventoryLoading} />
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -602,7 +608,21 @@ export function InventoryView({ orgId }: InventoryViewProps) {
 
               {isMobile ? (
                 <div className="space-y-5">
-                  {cardGroups.length === 0 ? (
+                  {isInventoryLoading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <div key={`skeleton-${i}`} className="rounded-xl border border-border bg-card p-3">
+                          <div className="flex items-start gap-2.5">
+                            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-3 w-20" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : cardGroups.length === 0 ? (
                     <div className="py-12 text-center text-muted-foreground">
                       <PackageSearch className="h-6 w-6 mx-auto mb-2 opacity-50" />
                       <div className="text-sm">No parts match your filters</div>
@@ -683,7 +703,31 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredStock.length === 0 ? (
+                      {isInventoryLoading ? (
+                        Array.from({ length: 8 }).map((_, i) => (
+                          <TableRow key={`skeleton-${i}`}>
+                            <TableCell className="px-3 py-2 align-top">
+                              <Skeleton className="h-5 w-16 mb-1.5" />
+                              <Skeleton className="h-1.5 w-full" />
+                            </TableCell>
+                            <TableCell className="px-3 py-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <Skeleton className="h-8 w-8 rounded-md shrink-0" />
+                                <div className="min-w-0 flex-1 space-y-1.5">
+                                  <Skeleton className="h-4 w-32" />
+                                  <Skeleton className="h-3 w-20" />
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="px-3 py-2 text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                            <TableCell className="hidden sm:table-cell px-3 py-2 text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                            <TableCell className="px-3 py-2 text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                            <TableCell className="hidden md:table-cell px-3 py-2 text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                            <TableCell className="px-3 py-2"><Skeleton className="h-5 w-16" /></TableCell>
+                            <TableCell className="hidden lg:table-cell px-3 py-2"><Skeleton className="h-4 w-12" /></TableCell>
+                          </TableRow>
+                        ))
+                      ) : filteredStock.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-10">
                             <PackageSearch className="h-6 w-6 mx-auto mb-2 opacity-50" />
@@ -743,7 +787,21 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                 </div>
               ) : (
                 <div className="space-y-5">
-                  {cardGroups.length === 0 ? (
+                  {isInventoryLoading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <div key={`skeleton-${i}`} className="rounded-xl border border-border bg-card p-3">
+                          <div className="flex items-start gap-2.5">
+                            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-3 w-20" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : cardGroups.length === 0 ? (
                     <div className="py-12 text-center text-muted-foreground">
                       <PackageSearch className="h-6 w-6 mx-auto mb-2 opacity-50" />
                       <div className="text-sm">No parts match your filters</div>
