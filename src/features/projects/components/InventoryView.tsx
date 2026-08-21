@@ -107,7 +107,7 @@ const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
 export function InventoryView({ orgId }: InventoryViewProps) {
   const isMobile = useIsMobile();
   const { data: projects = [] } = useProjects();
-  const { data: partsResult } = useOrgParts(orgId);
+  const { data: partsResult } = useOrgParts(orgId, { limit: 100 });
   const parts = useMemo(() => partsResult?.data ?? [], [partsResult]);
 
   // BOM demand is aggregated across every project in the org — stock/coverage here is
