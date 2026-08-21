@@ -260,6 +260,23 @@ export const ENDPOINTS = {
     DISCONNECT: (orgId: string) => `/organizations/${orgId}/integrations/google-drive/disconnect`,
     STATUS: (orgId: string) => `/organizations/${orgId}/integrations/google-drive/status`,
   },
+  // Google Sheets integration (BOM sync, see GOOGLE_SHEETS_BOM_INTEGRATION.md).
+  // Connects once per org — exactly like Drive above — from Integrations;
+  // each project then just links a spreadsheet, reusing that org's connection.
+  GOOGLE_SHEETS: {
+    CONNECT: (orgId: string) => `/organizations/${orgId}/integrations/google-sheets/connect`,
+    DISCONNECT: (orgId: string) => `/organizations/${orgId}/integrations/google-sheets/disconnect`,
+    ORG_STATUS: (orgId: string) => `/organizations/${orgId}/integrations/google-sheets/status`,
+    LINK_STATUS: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/link-status`,
+    TABS: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/tabs`,
+    LINK: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/link`,
+    UNLINK: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/unlink`,
+    COLUMN_MAPPING: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/column-mapping`,
+    EXPORT_PREVIEW: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/export-preview`,
+    EXPORT_COMMIT: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/export-commit`,
+    IMPORT_PREVIEW: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/import-preview`,
+    IMPORT_COMMIT: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/import-commit`,
+  },
   // AI Assistant (Ask — read-only, Phase 1). Deliberately separate from the
   // /conversations/* namespace above, which is the team-chat feature.
   AI_CONVERSATIONS: {
@@ -286,6 +303,13 @@ export const ENDPOINTS = {
     ADJUST:             (orgId: string) => `/organizations/${orgId}/inventory/stock/adjust`,
     RELEASE_QUARANTINE: (orgId: string, stockId: string) => `/organizations/${orgId}/inventory/stock/${stockId}/release-quarantine`,
     PLACE_ORDER:        (orgId: string) => `/organizations/${orgId}/inventory/orders`,
+    },
+  // Act (phase 2) proposals
+  AI_PROPOSALS: {
+    CONFIRM: (proposalId: string) => `/ai/proposals/${proposalId}/confirm`,
+    REJECT: (proposalId: string) => `/ai/proposals/${proposalId}/reject`,
+    BY_ID: (proposalId: string) => `/ai/proposals/${proposalId}`,
+    BY_CONVERSATION: (conversationId: string) => `/ai/conversations/${conversationId}/proposals`,
   },
   // Uploads
   UPLOADS: {
