@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Reply, Forward, ChevronLeft, ChevronRight, Trash2, Pin, PinOff, Bookmark } from 'lucide-react';
+import { Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Reply, Forward, ChevronLeft, ChevronRight, Trash2, Pin, PinOff, Bookmark, ImageOff } from 'lucide-react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -183,6 +183,9 @@ export function MediaGroupBubble({
   const containerAspect = visible.length === 2 ? 'aspect-[2/1]' : 'aspect-square';
 
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  // Undecodable uploads (truncated or edited files) used to leave a blank tile
+  // in the grid — keep the tile and name the file instead.
+  const [failedImageIds, setFailedImageIds] = useState<Set<string>>(new Set());
   const [isHovered, setIsHovered] = useState(false);
   const [isMoreEmojiOpen, setIsMoreEmojiOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -238,7 +241,7 @@ export function MediaGroupBubble({
     return (
       <div className={cn('flex gap-2 px-4', isOwn ? 'flex-row-reverse' : 'flex-row')}>
         {isGroupChat && <div className="w-8 shrink-0" />}
-        <div className={cn('flex flex-col max-w-[70%] min-w-0', isOwn ? 'items-end' : 'items-start')}>
+        <div className={cn('flex flex-col max-w-[70%] md:max-w-[min(70%,calc(100%_-_15rem))] min-w-0', isOwn ? 'items-end' : 'items-start')}>
           <div className="rounded-2xl px-3 py-2 text-sm italic text-muted-foreground bg-muted/50 border border-dashed border-border">
             🚫 {messages.length} photos were deleted by {first.deletedByName || first.senderName}
           </div>
@@ -260,7 +263,7 @@ export function MediaGroupBubble({
         </div>
       )}
 
-      <div className={cn('flex flex-col max-w-[70%] min-w-0', isOwn ? 'items-end' : 'items-start')}>
+      <div className={cn('flex flex-col max-w-[70%] md:max-w-[min(70%,calc(100%_-_15rem))] min-w-0', isOwn ? 'items-end' : 'items-start')}>
         {showSenderInfo && !isOwn && isGroupChat && (
           <span className="text-xs text-muted-foreground font-medium mb-0.5 px-1">{first.senderName}</span>
         )}
@@ -359,20 +362,28 @@ export function MediaGroupBubble({
           >
             {visible.map((img, i) => {
               const isLastVisibleWithMore = hiddenCount > 0 && i === visible.length - 1;
+              const failed = failedImageIds.has(messages[i].id);
               return (
                 <button
                   key={messages[i].id}
                   type="button"
                   className={cn('relative group w-full h-full overflow-hidden', tileClass(i, visible.length))}
-                  onClick={(e) => { e.stopPropagation(); setLightboxIndex(i); }}
-                  title="Click to view"
+                  onClick={(e) => { e.stopPropagation(); if (!failed) setLightboxIndex(i); }}
+                  title={failed ? "This image can't be displayed" : 'Click to view'}
                 >
-                  <img
-                    src={img.url}
-                    alt={img.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
+                  {failed ? (
+                    <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-muted px-2 text-muted-foreground">
+                      <ImageOff className="h-5 w-5 shrink-0" />
+                      <span className="w-full truncate text-center text-[10px]">{img.name}</span>
+                    </div>
+                  ) : (
+                    <img
+                      src={img.url}
+                      alt={img.name}
+                      className="w-full h-full object-cover"
+                      onError={() => setFailedImageIds((prev) => new Set(prev).add(messages[i].id))}
+                    />
+                  )}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                   {isLastVisibleWithMore && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
