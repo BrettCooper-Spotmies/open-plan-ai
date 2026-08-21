@@ -6,6 +6,7 @@ import {
   fromApiOrder,
   fromApiTransaction,
   fromApiBuild,
+  fromApiBuildBomLine,
   type ReceiveStockDto,
   type AdjustQuantityDto,
   type PlaceOrderDto,
@@ -44,6 +45,17 @@ export function useInventoryBuilds(orgId: string | undefined) {
     queryKey: queryKeys.inventory.builds(orgId ?? ''),
     queryFn:  async () => (await inventoryService.listBuilds(orgId!)).map(fromApiBuild),
     enabled:  !!orgId,
+  });
+}
+
+// BOM lines for a single build, scoped to that build's own project BOM — see
+// inventory.service.ts (backend) getBuildBomLines / inventoryData.tsx buildFromDef.
+export function useBuildBomLines(orgId: string | undefined, buildId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.inventory.buildBomLines(orgId ?? '', buildId ?? ''),
+    queryFn:  async () => (await inventoryService.getBuildBomLines(orgId!, buildId!)).map(fromApiBuildBomLine),
+    enabled:  !!orgId && !!buildId,
+    staleTime: 30 * 1000,
   });
 }
 
@@ -94,5 +106,27 @@ export function useCreateInventoryBuild(orgId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.builds(orgId) });
     },
+  });
+}
+
+function invalidateBuild(queryClient: ReturnType<typeof useQueryClient>, orgId: string, buildId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.builds(orgId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.buildBomLines(orgId, buildId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.inventory.stock(orgId) });
+}
+
+export function useAllocateBuild(orgId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (buildId: string) => inventoryService.allocateBuild(orgId, buildId),
+    onSuccess: (_data, buildId) => invalidateBuild(queryClient, orgId, buildId),
+  });
+}
+
+export function useKitBuild(orgId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (buildId: string) => inventoryService.kitBuild(orgId, buildId),
+    onSuccess: (_data, buildId) => invalidateBuild(queryClient, orgId, buildId),
   });
 }

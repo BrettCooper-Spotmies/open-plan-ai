@@ -1,6 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
-import type { StockRecord, OrderRecord, StockTransaction, BuildDef } from '@/features/projects/components/inventoryData';
+import type { StockRecord, OrderRecord, StockTransaction, BuildDef, BuildBomLine } from '@/features/projects/components/inventoryData';
 
 // ─── API response shapes (match backend inventory.types.ts responses) ─────────
 
@@ -52,6 +52,7 @@ export interface ApiStockTransaction {
 
 export interface ApiBuildDef {
   id: string;
+  projectId: string;
   name: string;
   type: string;
   units: number;
@@ -59,6 +60,36 @@ export interface ApiBuildDef {
   scrapPct: number;
   milestone: string | null;
   targetDate: string | null;
+  status: 'planned' | 'allocated' | 'kitted';
+}
+
+export interface ApiBuildBomLine {
+  partId: string;
+  pn: string;
+  name: string;
+  cat: string;
+  qtyPerUnit: number;
+  uom: string;
+  onHand: number;
+  allocated: number;
+  onOrder: number;
+  leadTimeDays: number;
+  required: number;
+  shortage: number;
+}
+
+export interface ApiAllocateBuildLineResult {
+  partId: string;
+  pn: string;
+  required: number;
+  allocated: number;
+  shortage: number;
+}
+
+export interface ApiAllocateBuildResponse {
+  build: ApiBuildDef;
+  lines: ApiAllocateBuildLineResult[];
+  fullyAllocated: boolean;
 }
 
 // ─── Adapters ───────────────────────────────────────────────────────────────────
@@ -118,6 +149,7 @@ export function fromApiTransaction(r: ApiStockTransaction): StockTransaction {
 export function fromApiBuild(r: ApiBuildDef): BuildDef {
   return {
     id: r.id,
+    projectId: r.projectId,
     name: r.name,
     type: r.type,
     units: r.units,
@@ -125,6 +157,24 @@ export function fromApiBuild(r: ApiBuildDef): BuildDef {
     scrapPct: r.scrapPct,
     milestone: r.milestone ?? '',
     targetDate: r.targetDate ?? undefined,
+    status: r.status,
+  };
+}
+
+export function fromApiBuildBomLine(r: ApiBuildBomLine): BuildBomLine {
+  return {
+    partId: r.partId,
+    pn: r.pn,
+    name: r.name,
+    cat: r.cat as BuildBomLine['cat'],
+    qtyPerUnit: r.qtyPerUnit,
+    uom: r.uom,
+    onHand: r.onHand,
+    allocated: r.allocated,
+    onOrder: r.onOrder,
+    leadTimeDays: r.leadTimeDays,
+    required: r.required,
+    shortage: r.shortage,
   };
 }
 
@@ -191,6 +241,10 @@ export const inventoryService = {
     return apiClient.get<ApiBuildDef[]>(ENDPOINTS.INVENTORY.BUILDS(orgId));
   },
 
+  async getBuildBomLines(orgId: string, buildId: string): Promise<ApiBuildBomLine[]> {
+    return apiClient.get<ApiBuildBomLine[]>(ENDPOINTS.INVENTORY.BUILD_BOM_LINES(orgId, buildId));
+  },
+
   async createBuild(projectId: string, dto: CreateBuildDto): Promise<ApiBuildDef> {
     return apiClient.post<ApiBuildDef>(ENDPOINTS.INVENTORY.BUILDS_CREATE(projectId), dto);
   },
@@ -209,5 +263,13 @@ export const inventoryService = {
 
   async placeOrder(orgId: string, dto: PlaceOrderDto): Promise<ApiOrderRecord> {
     return apiClient.post<ApiOrderRecord>(ENDPOINTS.INVENTORY.PLACE_ORDER(orgId), dto);
+  },
+
+  async allocateBuild(orgId: string, buildId: string): Promise<ApiAllocateBuildResponse> {
+    return apiClient.post<ApiAllocateBuildResponse>(ENDPOINTS.INVENTORY.ALLOCATE_BUILD(orgId, buildId), {});
+  },
+
+  async kitBuild(orgId: string, buildId: string): Promise<ApiBuildDef> {
+    return apiClient.post<ApiBuildDef>(ENDPOINTS.INVENTORY.KIT_BUILD(orgId, buildId), {});
   },
 };

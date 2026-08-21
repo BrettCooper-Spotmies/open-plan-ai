@@ -199,6 +199,7 @@ export const queryKeys = {
     orders:       (orgId: string) => ['inventory', 'orders', orgId] as const,
     transactions: (orgId: string) => ['inventory', 'transactions', orgId] as const,
     builds:       (orgId: string) => ['inventory', 'builds', orgId] as const,
+    buildBomLines: (orgId: string, buildId: string) => ['inventory', 'builds', orgId, buildId, 'bom-lines'] as const,
   },
 
   supportLinks: {

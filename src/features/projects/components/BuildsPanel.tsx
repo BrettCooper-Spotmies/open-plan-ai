@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAllocateBuild, useKitBuild } from '@/hooks/useInventory';
 import { getCategoryMeta } from './bomData';
 import { CoveragePill, formatShortDate, type Build } from './inventoryData';
 import { NewBuildDialog, type NewBuildInput } from './NewBuildDialog';
@@ -22,21 +23,34 @@ const CATEGORY_ICON_MAP: Record<string, React.ElementType> = { Zap, Cpu, Package
 const BUILD_TYPE_TINT: Record<string, string> = { EVT: '#7C3AED', DVT: '#2563EB', PVT: '#16A34A' };
 
 interface BuildsPanelProps {
+  orgId: string;
   builds: Build[];
   onSelectPart: (partId: string) => void;
   openBuildId?: string | null;
   onOpenBuildHandled?: () => void;
   onAddBuild: (input: NewBuildInput) => void;
+  onGenerateShortageOrder: (partId?: string) => void;
   projects: { id: string; name: string }[];
 }
 
-export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHandled, onAddBuild, projects }: BuildsPanelProps) {
+export function BuildsPanel({ orgId, builds, onSelectPart, openBuildId, onOpenBuildHandled, onAddBuild, onGenerateShortageOrder, projects }: BuildsPanelProps) {
   const isMobile = useIsMobile();
   const [selectedBuildId, setSelectedBuildId] = useState(builds[0]?.id);
   const [mobileSearch, setMobileSearch] = useState('');
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [newBuildOpen, setNewBuildOpen] = useState(false);
   const selectedBuild = builds.find(b => b.id === selectedBuildId) ?? builds[0];
+
+  const allocateMutation = useAllocateBuild(orgId);
+  const kitMutation = useKitBuild(orgId);
+
+  const canKit = !!selectedBuild && selectedBuild.status === 'allocated';
+  const isKitted = selectedBuild?.status === 'kitted';
+  const handleAutoAllocate = () => { if (selectedBuild) allocateMutation.mutate(selectedBuild.id); };
+  const handleMarkKitted = () => { if (selectedBuild) kitMutation.mutate(selectedBuild.id); };
+  const handleGenerateShortage = () => {
+    onGenerateShortageOrder(selectedBuild?.shortLines[0]?.partId);
+  };
 
   // Alerts tab hands off a build to open here — jump to it and, on mobile, pop the detail dialog.
   useEffect(() => {
@@ -182,14 +196,30 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
               )}
 
               <div className="flex flex-col gap-2">
-                <Button className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left" disabled title="Coming soon">
-                  <ClipboardCheck className="h-4 w-4 mr-2 shrink-0" /> Auto-allocate available
+                <Button
+                  className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left"
+                  disabled={isKitted || allocateMutation.isPending}
+                  onClick={handleAutoAllocate}
+                >
+                  <ClipboardCheck className="h-4 w-4 mr-2 shrink-0" />
+                  {allocateMutation.isPending ? 'Allocating…' : 'Auto-allocate available'}
                 </Button>
-                <Button className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left" variant="outline" disabled title="Coming soon">
+                <Button
+                  className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left"
+                  variant="outline"
+                  disabled={selectedBuild.shortLines.length === 0}
+                  onClick={handleGenerateShortage}
+                >
                   <Truck className="h-4 w-4 mr-2 shrink-0" /> Generate shortage → Procurement
                 </Button>
-                <Button className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left" variant="outline" disabled title="Coming soon">
-                  <CheckCircle className="h-4 w-4 mr-2 shrink-0" /> Mark kitted
+                <Button
+                  className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left"
+                  variant="outline"
+                  disabled={!canKit || kitMutation.isPending}
+                  onClick={handleMarkKitted}
+                >
+                  <CheckCircle className="h-4 w-4 mr-2 shrink-0" />
+                  {isKitted ? 'Kitted' : kitMutation.isPending ? 'Marking…' : 'Mark kitted'}
                 </Button>
               </div>
 
@@ -347,14 +377,16 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
         )}
 
         <div className="flex flex-wrap gap-2">
-          <Button disabled title="Coming soon">
-            <ClipboardCheck className="h-4 w-4 mr-2" /> Auto-allocate available
+          <Button disabled={isKitted || allocateMutation.isPending} onClick={handleAutoAllocate}>
+            <ClipboardCheck className="h-4 w-4 mr-2" />
+            {allocateMutation.isPending ? 'Allocating…' : 'Auto-allocate available'}
           </Button>
-          <Button variant="outline" disabled title="Coming soon">
+          <Button variant="outline" disabled={selectedBuild.shortLines.length === 0} onClick={handleGenerateShortage}>
             <Truck className="h-4 w-4 mr-2" /> Generate shortage → Procurement
           </Button>
-          <Button variant="outline" disabled title="Coming soon">
-            <CheckCircle className="h-4 w-4 mr-2" /> Mark kitted
+          <Button variant="outline" disabled={!canKit || kitMutation.isPending} onClick={handleMarkKitted}>
+            <CheckCircle className="h-4 w-4 mr-2" />
+            {isKitted ? 'Kitted' : kitMutation.isPending ? 'Marking…' : 'Mark kitted'}
           </Button>
         </div>
 

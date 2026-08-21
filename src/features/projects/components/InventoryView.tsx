@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useProjects } from '@/hooks/useProjects';
 import { bomService } from '@/services/bom.service';
+import { inventoryService, fromApiBuildBomLine } from '@/services/inventory.service';
 import { queryKeys } from '@/lib/queryClient';
 import { useOrgParts } from '@/hooks/useParts';
 import {
@@ -282,9 +283,21 @@ export function InventoryView({ orgId }: InventoryViewProps) {
   const incomingCount = displayStock.filter(r => r.onOrder > 0).length;
   const quarantineCount = displayStock.filter(r => (r.quarantineQty ?? 0) > 0).length;
 
+  // Each build's BOM Line table is scoped to that build's own project BOM (fetched per-build,
+  // same useQueries pattern as bomTreeQueries above) — NOT the org-wide `displayStock` list, so
+  // a build only shows rows for parts actually in its BOM instead of every stocked part in the org.
+  const buildBomLineQueries = useQueries({
+    queries: builds.map((b) => ({
+      queryKey: queryKeys.inventory.buildBomLines(orgId, b.id),
+      queryFn: async () => (await inventoryService.getBuildBomLines(orgId, b.id)).map(fromApiBuildBomLine),
+      staleTime: 30 * 1000,
+    })),
+  });
+
   const computedBuilds = useMemo(
-    () => builds.map(def => buildFromDef(def, displayStock, demandByPartId)),
-    [builds, displayStock, demandByPartId]
+    () => builds.map((def, i) => buildFromDef(def, buildBomLineQueries[i]?.data ?? [])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [builds, buildBomLineQueries.map(q => q.dataUpdatedAt).join(',')]
   );
   const [activeTab, setActiveTab] = useState('stock');
   const [openBuildId, setOpenBuildId] = useState<string | null>(null);
@@ -804,11 +817,13 @@ export function InventoryView({ orgId }: InventoryViewProps) {
 
         <TabsContent value="builds" className="mt-4">
           <BuildsPanel
+            orgId={orgId}
             builds={computedBuilds}
             onSelectPart={openDetail}
             openBuildId={openBuildId}
             onOpenBuildHandled={() => setOpenBuildId(null)}
             onAddBuild={handleAddBuild}
+            onGenerateShortageOrder={openOrderFor}
             projects={projects}
           />
         </TabsContent>
