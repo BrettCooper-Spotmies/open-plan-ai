@@ -158,6 +158,13 @@ export function InventoryView({ orgId }: InventoryViewProps) {
     [stock, orders]
   );
 
+  // Receive/Place order only make sense for parts that already have a stock row — a part that
+  // only exists inside a BOM and has never been stocked isn't orderable/receivable yet.
+  const stockedParts = useMemo(() => {
+    const stockPartIds = new Set(stock.map(r => r.partId));
+    return parts.filter(p => stockPartIds.has(p.id));
+  }, [parts, stock]);
+
   const [search, setSearch] = useState('');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -819,7 +826,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
         isOpen={receiveOpen}
         onClose={() => setReceiveOpen(false)}
         orgId={orgId}
-        parts={parts}
+        parts={stockedParts}
         orders={orders}
         onReceive={handleReceive}
         initialPartId={dialogPartId}
@@ -829,13 +836,14 @@ export function InventoryView({ orgId }: InventoryViewProps) {
         onClose={() => setAdjustOpen(false)}
         orgId={orgId}
         stock={displayStock}
+        parts={parts}
         onAdjust={handleAdjust}
         initialPartId={dialogPartId}
       />
       <PlaceOrderDialog
         isOpen={orderOpen}
         onClose={() => setOrderOpen(false)}
-        parts={parts}
+        parts={stockedParts}
         onPlaceOrder={handlePlaceOrder}
         initialPartId={dialogPartId}
       />

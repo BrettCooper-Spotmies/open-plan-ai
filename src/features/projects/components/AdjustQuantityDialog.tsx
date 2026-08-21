@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -50,8 +50,16 @@ import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Minus, Pencil, Plus, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart } from '@/hooks/useParts';
-import { type BOMCategory } from './bomData';
+import { type ApiPartResponse, type BOMCategory } from './bomData';
 import { REASON_CODES, LocationCombobox, CategoryCombobox, type StockLocation, type StockRecord } from './inventoryData';
+
+interface PickerPart {
+  partId: string;
+  pn: string;
+  name: string;
+  location: string;
+  onHand: number;
+}
 
 const adjustSchema = z.object({
   partId: z.string().min(1, 'Select a part'),
@@ -85,6 +93,7 @@ interface AdjustQuantityDialogProps {
   onClose: () => void;
   orgId: string;
   stock: StockRecord[];
+  parts: ApiPartResponse[];
   onAdjust: (input: AdjustQuantityInput) => void;
   /** Preselect a part (e.g. opened from that part's detail sheet) instead of starting on the picker. */
   initialPartId?: string;
@@ -92,9 +101,9 @@ interface AdjustQuantityDialogProps {
 
 const emptyNewPart = { partNumber: '', name: '', description: '', category: '' as BOMCategory | '', manufacturer: '', mpn: '', unit: 'EA' };
 
-export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, onAdjust, initialPartId }: AdjustQuantityDialogProps) {
+export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onAdjust, initialPartId }: AdjustQuantityDialogProps) {
   const isMobile = useIsMobile();
-  const [selectedRecord, setSelectedRecord] = useState<StockRecord | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<PickerPart | null>(null);
   const [partPickerOpen, setPartPickerOpen] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showAddPart, setShowAddPart] = useState(false);
@@ -102,6 +111,17 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, onAdjust, 
   const [createdPart, setCreatedPart] = useState<{ id: string; partNumber: string; name: string; category: BOMCategory } | null>(null);
 
   const createPart = useCreatePart(orgId);
+
+  // Include every part, not just parts that already have a stock row — a part only referenced
+  // from a BOM (never received) still needs to be selectable when starting a new transaction.
+  const pickerParts = useMemo<PickerPart[]>(() => {
+    const stockPartIds = new Set(stock.map(r => r.partId));
+    const fromStock: PickerPart[] = stock.map(r => ({ partId: r.partId, pn: r.pn, name: r.name, location: r.location, onHand: r.onHand }));
+    const fromPartsOnly: PickerPart[] = parts
+      .filter(p => !stockPartIds.has(p.id))
+      .map(p => ({ partId: p.id, pn: p.partNumber, name: p.name, location: '', onHand: 0 }));
+    return [...fromStock, ...fromPartsOnly];
+  }, [stock, parts]);
 
   const form = useForm<AdjustFormData>({
     resolver: zodResolver(adjustSchema),
@@ -119,7 +139,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, onAdjust, 
 
   useEffect(() => {
     if (isOpen && initialPartId) {
-      const match = stock.find(r => r.partId === initialPartId);
+      const match = pickerParts.find(r => r.partId === initialPartId);
       if (match) {
         setSelectedRecord(match);
         form.setValue('partId', match.partId, { shouldValidate: true });
@@ -281,13 +301,13 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, onAdjust, 
                           </PopoverTrigger>
                           <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[420px] p-0" align="start">
                             <Command>
-                              <CommandInput placeholder="Search stocked parts..." />
+                              <CommandInput placeholder="Search parts..." />
                               <CommandList>
-                                <CommandEmpty>No stocked parts found.</CommandEmpty>
+                                <CommandEmpty>No parts found.</CommandEmpty>
                                 <CommandGroup>
-                                  {stock.map((r) => (
+                                  {pickerParts.map((r) => (
                                     <CommandItem
-                                      key={r.id}
+                                      key={r.partId}
                                       value={`${r.pn} ${r.name}`}
                                       onSelect={() => {
                                         setSelectedRecord(r);
@@ -300,13 +320,13 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, onAdjust, 
                                       <Check
                                         className={cn(
                                           'mr-2 h-4 w-4',
-                                          selectedRecord?.id === r.id ? 'opacity-100' : 'opacity-0'
+                                          selectedRecord?.partId === r.partId ? 'opacity-100' : 'opacity-0'
                                         )}
                                       />
                                       <div className="flex flex-col min-w-0">
                                         <span className="text-sm truncate">{r.pn} — {r.name}</span>
                                         <span className="text-xs text-muted-foreground truncate">
-                                          {r.location} · On hand {r.onHand}
+                                          {r.location ? `${r.location} · On hand ${r.onHand}` : 'Not yet stocked'}
                                         </span>
                                       </div>
                                     </CommandItem>
