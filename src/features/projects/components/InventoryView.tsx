@@ -242,7 +242,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
   };
 
   const handleAdjust = (input: AdjustQuantityInput) => {
-    adjustStockMutation.mutate({
+    const dto = {
       partId: input.partId,
       location: input.location,
       direction: input.direction,
@@ -251,7 +251,9 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       note: input.note,
       lotNumber: input.lotNumber,
       serialNumber: input.serialNumber,
-    }, {
+    };
+    console.table(Object.entries(dto).map(([field, value]) => ({ field, value: JSON.stringify(value), type: typeof value })));
+    adjustStockMutation.mutate(dto, {
       onSuccess: () => toast.success('Adjustment posted'),
       onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to post adjustment'),
     });
