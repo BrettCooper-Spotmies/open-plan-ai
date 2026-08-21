@@ -153,6 +153,9 @@ export function InventoryView({ orgId }: InventoryViewProps) {
 
   // `onOrder` is derived from live order state rather than the static seeded field, so
   // Receive/Order actions are reflected immediately without touching stock rows directly.
+  // Note: `allocated` is intentionally left as-is here (always 0 from the backend, which never
+  // writes reservations) — `availableOf`/`computeCoverage` already subtract BOM demand via the
+  // `demandByPartId` param, so overriding `allocated` with that same demand would double-count it.
   const displayStock = useMemo(
     () => stock.map(r => ({ ...r, onOrder: onOrderOf(orders, r.partId) })),
     [stock, orders]
@@ -611,7 +614,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                                     <div className="text-[10px] text-muted-foreground uppercase tracking-wide">On Hand</div>
                                   </div>
                                   <div>
-                                    <div className="text-sm font-semibold">{r.allocated}</div>
+                                    <div className="text-sm font-semibold">{demandByPartId.get(r.partId) ?? 0}</div>
                                     <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Alloc</div>
                                   </div>
                                   <div>
@@ -682,7 +685,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                               </div>
                             </TableCell>
                             <TableCell className="px-3 py-2 text-right">{r.onHand}</TableCell>
-                            <TableCell className="hidden sm:table-cell px-3 py-2 text-right">{r.allocated}</TableCell>
+                            <TableCell className="hidden sm:table-cell px-3 py-2 text-right">{demandByPartId.get(r.partId) ?? 0}</TableCell>
                             <TableCell className={cn('px-3 py-2 text-right font-semibold', available < 0 && 'text-destructive')}>
                               {available}
                             </TableCell>
@@ -775,7 +778,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                                     </div>
                                     <div>
                                       <div className="text-[10px] text-muted-foreground uppercase tracking-wide"><HeaderTip label="Allocated" /></div>
-                                      <div className="text-sm font-semibold">{r.allocated}</div>
+                                      <div className="text-sm font-semibold">{demandByPartId.get(r.partId) ?? 0}</div>
                                     </div>
                                     <div>
                                       <div className="text-[10px] text-muted-foreground uppercase tracking-wide"><HeaderTip label="Available" /></div>
