@@ -50,7 +50,7 @@ import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Minus, Pencil, Plus, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart } from '@/hooks/useParts';
-import { type ApiPartResponse, type BOMCategory } from './bomData';
+import { type ApiPartResponse, type BOMCategory, getCategoryMeta } from './bomData';
 import { REASON_CODES, LocationCombobox, CategoryCombobox, type StockLocation, type StockRecord } from './inventoryData';
 
 interface PickerPart {
@@ -59,6 +59,8 @@ interface PickerPart {
   name: string;
   location: string;
   onHand: number;
+  cat?: BOMCategory;
+  projects: string[];
 }
 
 const adjustSchema = z.object({
@@ -97,11 +99,13 @@ interface AdjustQuantityDialogProps {
   onAdjust: (input: AdjustQuantityInput) => void;
   /** Preselect a part (e.g. opened from that part's detail sheet) instead of starting on the picker. */
   initialPartId?: string;
+  /** Project name(s) each part is used in, keyed by partId — helps disambiguate similarly-named parts in the picker. */
+  partProjects?: Map<string, string[]>;
 }
 
 const emptyNewPart = { partNumber: '', name: '', description: '', category: '' as BOMCategory | '', manufacturer: '', mpn: '', unit: 'EA' };
 
-export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onAdjust, initialPartId }: AdjustQuantityDialogProps) {
+export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onAdjust, initialPartId, partProjects }: AdjustQuantityDialogProps) {
   const isMobile = useIsMobile();
   const [selectedRecord, setSelectedRecord] = useState<PickerPart | null>(null);
   const [partPickerOpen, setPartPickerOpen] = useState(false);
@@ -116,12 +120,12 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   // from a BOM (never received) still needs to be selectable when starting a new transaction.
   const pickerParts = useMemo<PickerPart[]>(() => {
     const stockPartIds = new Set(stock.map(r => r.partId));
-    const fromStock: PickerPart[] = stock.map(r => ({ partId: r.partId, pn: r.pn, name: r.name, location: r.location, onHand: r.onHand }));
+    const fromStock: PickerPart[] = stock.map(r => ({ partId: r.partId, pn: r.pn, name: r.name, location: r.location, onHand: r.onHand, cat: r.cat, projects: partProjects?.get(r.partId) ?? [] }));
     const fromPartsOnly: PickerPart[] = parts
       .filter(p => !stockPartIds.has(p.id))
-      .map(p => ({ partId: p.id, pn: p.partNumber, name: p.name, location: '', onHand: 0 }));
+      .map(p => ({ partId: p.id, pn: p.partNumber, name: p.name, location: '', onHand: 0, cat: p.category, projects: partProjects?.get(p.id) ?? [] }));
     return [...fromStock, ...fromPartsOnly];
-  }, [stock, parts]);
+  }, [stock, parts, partProjects]);
 
   const form = useForm<AdjustFormData>({
     resolver: zodResolver(adjustSchema),
@@ -323,11 +327,29 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                                           selectedRecord?.partId === r.partId ? 'opacity-100' : 'opacity-0'
                                         )}
                                       />
-                                      <div className="flex flex-col min-w-0">
-                                        <span className="text-sm truncate">{r.pn} — {r.name}</span>
-                                        <span className="text-xs text-muted-foreground truncate">
-                                          {r.location ? `${r.location} · On hand ${r.onHand}` : 'Not yet stocked'}
-                                        </span>
+                                      <div className="flex flex-col min-w-0 gap-0.5">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                          <span className="text-sm truncate">{r.pn} — {r.name}</span>
+                                          {r.projects.length > 0 && (
+                                            <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary truncate max-w-[120px]">
+                                              {r.projects.join(', ')}
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          {r.cat && (
+                                            <span className="flex items-center gap-1 shrink-0">
+                                              <span
+                                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                                style={{ background: getCategoryMeta(r.cat).tint }}
+                                              />
+                                              <span className="text-xs text-muted-foreground">{getCategoryMeta(r.cat).label}</span>
+                                            </span>
+                                          )}
+                                          <span className="text-xs text-muted-foreground truncate">
+                                            {r.cat && '· '}{r.location ? `${r.location} · On hand ${r.onHand}` : 'Not yet stocked'}
+                                          </span>
+                                        </div>
                                       </div>
                                     </CommandItem>
                                   ))}

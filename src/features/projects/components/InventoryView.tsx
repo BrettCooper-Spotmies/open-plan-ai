@@ -141,6 +141,26 @@ export function InventoryView({ orgId }: InventoryViewProps) {
     return map;
   }, [rootNodes]);
 
+  // Which project(s) a part is used in — a part can appear in more than one project's BOM,
+  // so this tracks every project name that references it, not just one.
+  const projectsByPartId = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    projects.forEach((p, i) => {
+      const data = bomTreeQueries[i]?.data;
+      if (!data) return;
+      const nodes = data.roots.map(r => fromApiNode(r));
+      for (const n of bomFlatAll(nodes)) {
+        if (!n._partId) continue;
+        if (!map.has(n._partId)) map.set(n._partId, new Set());
+        map.get(n._partId)!.add(p.name);
+      }
+    });
+    const result = new Map<string, string[]>();
+    map.forEach((names, partId) => result.set(partId, Array.from(names)));
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bomTreeQueries.map(q => q.dataUpdatedAt).join(','), projects]);
+
   const { data: stock = [] } = useInventoryStock(orgId);
   const { data: orders = [] } = useInventoryOrders(orgId);
   const { data: transactions = [] } = useInventoryTransactions(orgId);
@@ -855,6 +875,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
         orgId={orgId}
         stock={displayStock}
         parts={parts}
+        partProjects={projectsByPartId}
         onAdjust={handleAdjust}
         initialPartId={dialogPartId}
       />
