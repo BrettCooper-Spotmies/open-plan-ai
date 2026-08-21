@@ -15,7 +15,9 @@ import {
   ASSISTANT_CATEGORIES,
   ASSISTANT_SUGGESTIONS,
   buildAskSuggestions,
+  buildActSuggestions,
   scopeLabelToBackend,
+  type AssistantCategoryId,
   type AssistantScope,
   type AssistantFocusEntity,
   type AiMessageAttachment,
@@ -23,6 +25,13 @@ import {
 import { isMessageTooLargeError, MESSAGE_TOO_LARGE_NOTICE, useAssistantConversation } from '../hooks/useAssistantConversation';
 import { useCreateAssistantConversation } from '../hooks/useAssistantConversations';
 import { EMPTY_ASSISTANT_DRAFT, EMPTY_ASSISTANT_FILES, useAssistantDraftStore } from '../stores/useAssistantDraftStore';
+
+/** "ask" / "ask or act" / "ask, act, or build" — Oxford comma to match how the categories row itself reads left to right. */
+function joinCategoryLabels(labels: string[]): string {
+  if (labels.length <= 1) return labels[0] ?? '';
+  const allButLast = labels.slice(0, -1).join(', ');
+  return `${allButLast}${labels.length > 2 ? ',' : ''} or ${labels[labels.length - 1]}`;
+}
 
 interface AssistantPanelProps {
   variant?: 'page' | 'widget';
@@ -69,6 +78,11 @@ export function AssistantPanel({
     toolStatus,
     pendingQuestions,
     liveCard,
+    proposalsByMessageId,
+    confirmProposal,
+    rejectProposal,
+    confirmingProposalId,
+    rejectingProposalId,
     sendMessage,
     editMessage,
     selectMessageVersion,
@@ -98,6 +112,13 @@ export function AssistantPanel({
   const hasActiveConversation = !!conversationId;
   const visibleCategories = ASSISTANT_CATEGORIES.filter((category) => !category.hidden);
   const askSuggestions = useMemo(() => buildAskSuggestions(projects), [projects]);
+  const actSuggestions = useMemo(() => buildActSuggestions(projects), [projects]);
+  // Categories whose chips are generated from the org's real projects (vs. ASSISTANT_SUGGESTIONS' static
+  // 'build' entries) — both need the same "no projects yet" empty state instead of an empty chip list.
+  const dynamicSuggestionsByCategory: Partial<Record<AssistantCategoryId, typeof askSuggestions>> = {
+    ask: askSuggestions,
+    act: actSuggestions,
+  };
 
   useEffect(() => {
     // isStreaming flipping true is the normal path (a successful send started
@@ -307,6 +328,11 @@ export function AssistantPanel({
           isAnswering={isAnswering}
           liveCard={liveCard}
           onSendMessage={sendMessage}
+          proposalsByMessageId={proposalsByMessageId}
+          onConfirmProposal={confirmProposal}
+          onRejectProposal={rejectProposal}
+          confirmingProposalId={confirmingProposalId}
+          rejectingProposalId={rejectingProposalId}
         />
       ) : (
         <ScrollArea className="flex-1 min-h-0">
@@ -318,8 +344,20 @@ export function AssistantPanel({
               <div className="min-w-0">
                 <h2 className="text-lg font-semibold text-foreground">OpenPlan Assistant</h2>
                 <p className="text-sm text-muted-foreground">
-                  Hi {firstName} — <span className="font-semibold text-foreground">ask</span> me anything about
-                  status, blockers, BOM health, or changes across OpenPlan.
+                  {visibleCategories.length > 1 ? (
+                    <>
+                      Hi {firstName} — I can{' '}
+                      <span className="font-semibold text-foreground">
+                        {joinCategoryLabels(visibleCategories.map((c) => c.label.toLowerCase()))}
+                      </span>{' '}
+                      across OpenPlan.
+                    </>
+                  ) : (
+                    <>
+                      Hi {firstName} — <span className="font-semibold text-foreground">ask</span> me anything about
+                      status, blockers, BOM health, or changes across OpenPlan.
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -337,7 +375,8 @@ export function AssistantPanel({
             </div>
 
             {visibleCategories.map((category) => {
-              if (category.id === 'ask' && !projectsLoading && projects.length === 0) {
+              const isDynamicCategory = category.id in dynamicSuggestionsByCategory;
+              if (isDynamicCategory && !projectsLoading && projects.length === 0) {
                 return (
                   <div key={category.id} className="space-y-2">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -345,13 +384,13 @@ export function AssistantPanel({
                     </p>
                     <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-muted/20 px-3.5 py-6 text-center">
                       <FolderPlus className="h-5 w-5 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Add some projects to start chatting about them.</p>
+                      <p className="text-sm text-muted-foreground">Add some projects to get started.</p>
                     </div>
                   </div>
                 );
               }
               const suggestions =
-                category.id === 'ask' ? askSuggestions : ASSISTANT_SUGGESTIONS.filter((s) => s.category === category.id);
+                dynamicSuggestionsByCategory[category.id] ?? ASSISTANT_SUGGESTIONS.filter((s) => s.category === category.id);
               if (suggestions.length === 0) return null;
               return (
                 <div key={category.id} className="space-y-2">
