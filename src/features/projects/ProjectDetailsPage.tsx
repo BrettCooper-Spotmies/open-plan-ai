@@ -3,7 +3,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   AlertTriangle,
   Building2,
-  ChevronLeft,
   FileText,
   Flag,
   Layers,
@@ -29,6 +28,7 @@ import { resolveFileUrl } from '@/utils/fileUrl';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
 import { useProjectMembers } from '@/hooks/useProjectTeam';
+import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import { useProjectAttachments } from '@/hooks/useProjectAttachments';
 import { useProjectLinks } from '@/hooks/useProjectLinks';
 import {
@@ -36,7 +36,6 @@ import {
   formatDisplayDate,
   getAttachmentMimeType,
   isImageAttachment,
-  stageColors,
   stageLabels,
 } from './utils/projectDisplay';
 
@@ -99,11 +98,11 @@ export default function ProjectDetailsPage() {
   const { data: attachments = [] } = useProjectAttachments(id);
   const { data: links = [] } = useProjectLinks(id);
 
-  const canEdit = (() => {
-    if (!project || !user?.id) return false;
-    if (project.createdBy === user.id) return true;
-    return (project.myRole || '').toLowerCase() === 'admin';
-  })();
+  // Everything this page shows except Stage is behind an Admin-only endpoint
+  // (`PUT /projects/:id`), so Edit is Admin-or-creator — the same rule the
+  // projects list applies to its own Edit action.
+  const { isProjectAdmin } = useProjectPermissions(id);
+  const canEdit = isProjectAdmin || (!!project && !!user?.id && project.createdBy === user.id);
 
   if (isLoading) return <AppLayoutSkeleton variant="detail" />;
 
@@ -138,26 +137,15 @@ export default function ProjectDetailsPage() {
 
   return (
     <div className="w-full min-w-0 space-y-6 pb-10">
-      {/* ── Page header ── */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 gap-1 px-2 text-muted-foreground hover:text-foreground"
-            onClick={() => navigate(`/projects/${id}`)}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Back
-          </Button>
-          <h1 className="truncate text-2xl font-bold tracking-tight">{project.name}</h1>
-          {project.stage && (
-            <Badge variant="secondary" className={cn('shrink-0', stageColors[stageKey] || stageColors.concept)}>
-              {stageLabels[stageKey] || project.stage}
-            </Badge>
-          )}
+      {/* ── Page header ── the app header above already carries back, project
+          name and stage badge for every /projects/:id route, so this row names
+          the page instead of repeating the project and leaving the actions
+          floating on an otherwise empty line. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+        <div className="min-w-0">
+          <h1 className="text-lg font-semibold tracking-tight">Project Details</h1>
+          <p className="text-sm text-muted-foreground">Scope, timeline, team and workspace at a glance</p>
         </div>
-
         <div className="flex shrink-0 items-center gap-2">
           <Button variant="outline" className="gap-2" onClick={() => navigate(`/projects/${id}`)}>
             <LayoutGrid className="h-4 w-4" />
