@@ -27,9 +27,10 @@ interface BuildsPanelProps {
   openBuildId?: string | null;
   onOpenBuildHandled?: () => void;
   onAddBuild: (input: NewBuildInput) => void;
+  projects: { id: string; name: string }[];
 }
 
-export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHandled, onAddBuild }: BuildsPanelProps) {
+export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHandled, onAddBuild, projects }: BuildsPanelProps) {
   const isMobile = useIsMobile();
   const [selectedBuildId, setSelectedBuildId] = useState(builds[0]?.id);
   const [mobileSearch, setMobileSearch] = useState('');
@@ -56,7 +57,7 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
             </Button>
           </CardContent>
         </Card>
-        <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} />
+        <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} projects={projects} />
       </>
     );
   }
@@ -243,7 +244,7 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
             </div>
           </DialogContent>
         </Dialog>
-        <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} />
+        <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} projects={projects} />
       </div>
     );
   }
@@ -408,7 +409,7 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
           </Table>
         </div>
       </div>
-      <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} />
+      <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} projects={projects} />
     </div>
   );
 }

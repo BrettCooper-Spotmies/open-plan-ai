@@ -44,19 +44,21 @@ const buildSchema = z.object({
   scrapPct: z.coerce.number().min(0).max(100),
   milestone: z.string().max(60, 'Milestone must be less than 60 characters').optional(),
   targetDate: z.string().optional(),
+  projectId: z.string().min(1, 'Select a project'),
 });
 
 type BuildFormData = z.infer<typeof buildSchema>;
 
-export type NewBuildInput = Omit<BuildDef, 'id'>;
+export type NewBuildInput = Omit<BuildDef, 'id'> & { projectId: string };
 
 interface NewBuildDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onAddBuild: (input: NewBuildInput) => void;
+  projects: { id: string; name: string }[];
 }
 
-export function NewBuildDialog({ isOpen, onClose, onAddBuild }: NewBuildDialogProps) {
+export function NewBuildDialog({ isOpen, onClose, onAddBuild, projects }: NewBuildDialogProps) {
   const isMobile = useIsMobile();
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
@@ -70,6 +72,7 @@ export function NewBuildDialog({ isOpen, onClose, onAddBuild }: NewBuildDialogPr
       scrapPct: 0,
       milestone: '',
       targetDate: '',
+      projectId: projects[0]?.id ?? '',
     },
   });
 
@@ -97,6 +100,7 @@ export function NewBuildDialog({ isOpen, onClose, onAddBuild }: NewBuildDialogPr
       scrapPct: data.scrapPct,
       milestone: data.milestone?.trim() || `${data.name.trim()} Complete`,
       targetDate: data.targetDate ? new Date(data.targetDate).toISOString() : undefined,
+      projectId: data.projectId,
     });
     resetAndClose();
   };
@@ -130,6 +134,29 @@ export function NewBuildDialog({ isOpen, onClose, onAddBuild }: NewBuildDialogPr
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 min-h-0">
             <div className="overflow-y-auto flex-1">
               <div className="p-4 sm:p-6 space-y-5">
+                <FormField
+                  control={form.control}
+                  name="projectId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Project <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select project..." />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {projects.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   control={form.control}
                   name="name"
