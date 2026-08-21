@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { attachmentsService } from '@/services/attachments.service';
-import { format, isBefore, isAfter, parseISO } from 'date-fns';
+import { format, isBefore, isAfter, parseISO, startOfDay } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -668,6 +668,11 @@ export const TaskDetailModal = ({
 
     if (!editedTask.startDate) {
       toast.error('Start date is required');
+      return;
+    }
+
+    if (isBefore(startOfDay(parseISO(editedTask.startDate)), startOfDay(new Date()))) {
+      toast.error('Start date cannot be in the past');
       return;
     }
 
@@ -1652,7 +1657,12 @@ export const TaskDetailModal = ({
                               handleFieldChange('startDate', toDateOnly(date || undefined));
                               setIsStartDatePopoverOpen(false);
                             }}
+                            fromDate={mode === 'create' ? startOfDay(new Date()) : undefined}
                             disabled={(date) => {
+                              // New tasks can only start today or later
+                              if (mode === 'create' && isBefore(startOfDay(date), startOfDay(new Date()))) {
+                                return true;
+                              }
                               if (editedTask.dueDate) {
                                 return isAfter(date, parseISO(editedTask.dueDate));
                               }
