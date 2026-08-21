@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
@@ -253,6 +253,13 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     resetAndClose();
   };
 
+  // Required fields (Reason code / Expected date) can sit below the fold in a scrolled dialog —
+  // without this, a blocked submit looks like the button did nothing.
+  const handleInvalid = (errors: FieldErrors<AdjustFormData>) => {
+    const firstMessage = Object.values(errors)[0]?.message;
+    toast.error(typeof firstMessage === 'string' ? firstMessage : 'Fill in all required fields before submitting');
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && attemptClose()}>
       <DialogContent
@@ -281,7 +288,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 min-h-0">
+          <form onSubmit={form.handleSubmit(handleSubmit, handleInvalid)} className="flex flex-col flex-1 min-h-0">
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               <div className="p-4 sm:p-6 space-y-5">
                 <FormField
