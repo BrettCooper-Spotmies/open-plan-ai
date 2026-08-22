@@ -44,6 +44,7 @@ const ProjectDetail = lazy(() => import("./features/projects/ProjectDetail"));
 const IssuePage     = lazy(() => import("./features/projects/IssuePage"));
 const NewProject    = lazy(() => import("./features/projects/NewProject"));
 const EditProject   = lazy(() => import("./features/projects/EditProject"));
+const ProjectDetailsPage = lazy(() => import("./features/projects/ProjectDetailsPage"));
 const Team          = lazy(() => import("./features/team"));
 const Settings      = lazy(() => import("./features/settings"));
 const EditOrganizationSettings = lazy(() => import("./features/settings/EditOrganizationSettings"));
@@ -195,6 +196,14 @@ function AppShell() {
               element={
                 <Suspense fallback={<AppLayoutSkeleton variant="project-detail" />}>
                   <ProjectDetail />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/projects/:id/details"
+              element={
+                <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                  <ProjectDetailsPage />
                 </Suspense>
               }
             />
