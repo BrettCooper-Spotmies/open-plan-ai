@@ -31,6 +31,9 @@ export interface ApiOrderRecord {
   supplierRef: string | null;
   unitCost: number | null;
   location: string;
+  note: string | null;
+  lotNumber: string | null;
+  serialNumber: string | null;
   status: 'open' | 'partially_received' | 'received' | 'cancelled';
   createdAt: string;
   createdBy: string;
@@ -125,6 +128,9 @@ export function fromApiOrder(r: ApiOrderRecord): OrderRecord {
     supplierRef: r.supplierRef ?? undefined,
     unitCost: r.unitCost ?? undefined,
     location: r.location,
+    note: r.note ?? undefined,
+    lotNumber: r.lotNumber ?? undefined,
+    serialNumber: r.serialNumber ?? undefined,
     status: r.status,
     createdAt: r.createdAt,
     createdBy: r.createdBy,
@@ -214,6 +220,9 @@ export interface PlaceOrderDto {
   supplierRef?: string;
   unitCost?: number;
   location: string;
+  note?: string;
+  lotNumber?: string;
+  serialNumber?: string;
 }
 
 export interface CreateBuildDto {
