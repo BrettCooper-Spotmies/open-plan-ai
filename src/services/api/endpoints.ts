@@ -298,12 +298,15 @@ export const ENDPOINTS = {
     ORDERS:       (orgId: string) => `/organizations/${orgId}/inventory/orders`,
     TRANSACTIONS: (orgId: string) => `/organizations/${orgId}/inventory/transactions`,
     BUILDS:       (orgId: string) => `/organizations/${orgId}/inventory/builds`,
+    BUILD_BOM_LINES: (orgId: string, buildId: string) => `/organizations/${orgId}/inventory/builds/${buildId}/bom-lines`,
     BUILDS_CREATE:      (projectId: string) => `/projects/${projectId}/inventory/builds`,
     RECEIVE:            (orgId: string) => `/organizations/${orgId}/inventory/stock/receive`,
     ADJUST:             (orgId: string) => `/organizations/${orgId}/inventory/stock/adjust`,
     RELEASE_QUARANTINE: (orgId: string, stockId: string) => `/organizations/${orgId}/inventory/stock/${stockId}/release-quarantine`,
     PLACE_ORDER:        (orgId: string) => `/organizations/${orgId}/inventory/orders`,
-    },
+    ALLOCATE_BUILD:     (orgId: string, buildId: string) => `/organizations/${orgId}/inventory/builds/${buildId}/allocate`,
+    KIT_BUILD:          (orgId: string, buildId: string) => `/organizations/${orgId}/inventory/builds/${buildId}/kit`,
+  },
   // Act (phase 2) proposals
   AI_PROPOSALS: {
     CONFIRM: (proposalId: string) => `/ai/proposals/${proposalId}/confirm`,
