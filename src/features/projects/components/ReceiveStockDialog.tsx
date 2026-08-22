@@ -86,6 +86,7 @@ export interface ReceiveStockInput {
 interface ReceiveStockDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  orgId: string;
   parts: ApiPartResponse[];
   orders: OrderRecord[];
   onReceive: (input: ReceiveStockInput) => void;
@@ -93,11 +94,12 @@ interface ReceiveStockDialogProps {
   initialPartId?: string;
 }
 
-export function ReceiveStockDialog({ isOpen, onClose, parts, orders, onReceive, initialPartId }: ReceiveStockDialogProps) {
+export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, orders, onReceive, initialPartId }: ReceiveStockDialogProps) {
   const isMobile = useIsMobile();
   const [selectedPart, setSelectedPart] = useState<ApiPartResponse | null>(null);
   const [partPickerOpen, setPartPickerOpen] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const { data: knownLocations = [] } = useLocations(orgId);
 
   // Receiving is a PO-fulfillment action — only parts with a remaining balance on an open
   // order are eligible to receive against here.
@@ -310,7 +312,7 @@ export function ReceiveStockDialog({ isOpen, onClose, parts, orders, onReceive, 
                     <FormItem>
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Destination location <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                       <FormControl>
-                        <LocationCombobox value={field.value} onChange={field.onChange} />
+                        <LocationCombobox value={field.value} onChange={field.onChange} knownLocations={knownLocations} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

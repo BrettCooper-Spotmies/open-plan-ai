@@ -386,6 +386,12 @@ export function PartDetailSheet({
                         <span className="font-medium text-right">{o.description}</span>
                       </div>
                     )}
+                    {o.purpose && (
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="text-muted-foreground shrink-0">Purpose</span>
+                        <span className="font-medium text-right">{o.purpose}</span>
+                      </div>
+                    )}
                     {o.status === 'partially_received' && (
                       <div className="text-xs text-muted-foreground">Partially received — {o.quantity - o.remainingQty} of {o.quantity} so far</div>
                     )}

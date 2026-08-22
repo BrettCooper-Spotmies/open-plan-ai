@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Popover,
   PopoverContent,
@@ -75,17 +76,19 @@ export interface PlaceOrderInput {
 interface PlaceOrderDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  orgId: string;
   parts: ApiPartResponse[];
   onPlaceOrder: (input: PlaceOrderInput) => void;
   /** Preselect a part (e.g. opened from that part's detail sheet) instead of starting on the picker. */
   initialPartId?: string;
 }
 
-export function PlaceOrderDialog({ isOpen, onClose, parts, onPlaceOrder, initialPartId }: PlaceOrderDialogProps) {
+export function PlaceOrderDialog({ isOpen, onClose, orgId, parts, onPlaceOrder, initialPartId }: PlaceOrderDialogProps) {
   const isMobile = useIsMobile();
   const [selectedPart, setSelectedPart] = useState<ApiPartResponse | null>(null);
   const [partPickerOpen, setPartPickerOpen] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const { data: knownLocations = [] } = useLocations(orgId);
 
   const form = useForm<OrderFormData>({
     resolver: zodResolver(orderSchema),
@@ -277,7 +280,7 @@ export function PlaceOrderDialog({ isOpen, onClose, parts, onPlaceOrder, initial
                     <FormItem>
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Destination location <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                       <FormControl>
-                        <LocationCombobox value={field.value} onChange={field.onChange} />
+                        <LocationCombobox value={field.value} onChange={field.onChange} knownLocations={knownLocations} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

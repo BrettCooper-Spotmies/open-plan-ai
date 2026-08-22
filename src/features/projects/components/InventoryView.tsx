@@ -231,6 +231,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       location: input.location,
       note: input.note,
       description: input.description,
+      purpose: input.purpose,
       lotNumber: input.lotNumber,
       serialNumber: input.serialNumber,
     }, {
@@ -936,6 +937,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       <ReceiveStockDialog
         isOpen={receiveOpen}
         onClose={() => setReceiveOpen(false)}
+        orgId={orgId}
         parts={stockedParts}
         orders={orders}
         onReceive={handleReceive}
@@ -955,6 +957,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       <PlaceOrderDialog
         isOpen={orderOpen}
         onClose={() => setOrderOpen(false)}
+        orgId={orgId}
         parts={stockedParts}
         onPlaceOrder={handlePlaceOrder}
         initialPartId={dialogPartId}

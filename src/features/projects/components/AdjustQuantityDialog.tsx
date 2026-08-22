@@ -70,6 +70,7 @@ const adjustSchema = z.object({
   note: z.string().max(300, 'Note must be less than 300 characters').optional(),
   description: z.string().max(500, 'Description must be less than 500 characters').optional(),
   orderNote: z.string().max(500, 'Notes must be less than 500 characters').optional(),
+  purpose: z.string().max(500, 'Purpose must be less than 500 characters').optional(),
   trackBy: z.enum(['lot', 'serial']),
   lotNumber: z.string().max(60, 'Lot number must be less than 60 characters').optional(),
   serialNumbers: z.array(z.string().max(60, 'Serial number must be less than 60 characters')).optional(),
@@ -161,6 +162,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       note: '',
       description: '',
       orderNote: '',
+      purpose: '',
       trackBy: 'lot',
       lotNumber: '',
       serialNumbers: [''],
@@ -310,6 +312,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         supplierRef: data.note?.trim() || undefined,
         note: data.orderNote?.trim() || undefined,
         description: data.description?.trim() || undefined,
+        purpose: data.purpose?.trim() || undefined,
         lotNumber: data.trackBy === 'lot' ? (data.lotNumber?.trim() || undefined) : undefined,
         serialNumber: data.trackBy === 'serial'
           ? (data.serialNumbers ?? []).map(s => s.trim()).filter(Boolean).join(', ') || undefined
@@ -782,6 +785,28 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     </FormItem>
                   )}
                 />
+
+                {stockStatus === 'place_order' && (
+                  <FormField
+                    control={form.control}
+                    name="purpose"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Purpose <span className="normal-case font-normal">optional</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Why is this being ordered?"
+                            className="min-h-[70px] resize-none"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {stockStatus === 'place_order' && (
                   <FormField
