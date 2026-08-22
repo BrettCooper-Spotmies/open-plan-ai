@@ -236,7 +236,14 @@ function NotesCard({ nodeId, currentUserId }: { nodeId: string; currentUserId: s
                           ref={editRef}
                           value={editText}
                           onChange={e => setEditText(e.target.value)}
-                          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSaveEdit(note.id); if (e.key === 'Escape') setEditId(null); }}
+                          onKeyDown={e => {
+                            if (e.key === 'Escape') { setEditId(null); return; }
+                            // Shift+Enter keeps the newline; plain Enter (and ⌘/Ctrl+Enter) saves.
+                            // isComposing guards IME candidate selection, which also fires Enter.
+                            if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+                            e.preventDefault();
+                            handleSaveEdit(note.id);
+                          }}
                           className="w-full text-xs text-foreground bg-muted border border-border rounded-md px-2.5 py-1.5 resize-none outline-none focus:ring-1 focus:ring-primary/40 min-h-[56px]"
                         />
                         <div className="flex items-center gap-1.5 justify-end">
@@ -251,7 +258,7 @@ function NotesCard({ nodeId, currentUserId }: { nodeId: string; currentUserId: s
                         </div>
                       </div>
                     ) : (
-                      <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">{note.content}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-words">{note.content}</p>
                     )}
                   </div>
                 </div>
@@ -272,8 +279,14 @@ function NotesCard({ nodeId, currentUserId }: { nodeId: string; currentUserId: s
               ref={textareaRef}
               value={draft}
               onChange={e => setDraft(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleAddNote(); }}
-              placeholder="Add a note… (⌘↵ to submit)"
+              onKeyDown={e => {
+                // Shift+Enter keeps the newline; plain Enter (and ⌘/Ctrl+Enter) submits.
+                // isComposing guards IME candidate selection, which also fires Enter.
+                if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return;
+                e.preventDefault();
+                handleAddNote();
+              }}
+              placeholder="Add a note… (↵ to submit, ⇧↵ for a new line)"
               rows={1}
               className="w-full text-xs text-foreground bg-background border border-border rounded-lg px-3 py-2 resize-none outline-none focus:ring-1 focus:ring-primary/40 placeholder:text-muted-foreground/50 overflow-hidden"
             />
