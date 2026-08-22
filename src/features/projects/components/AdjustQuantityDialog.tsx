@@ -627,29 +627,6 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   </div>
                 )}
 
-                {stockStatus === 'in_stock' && <FormField
-                  control={form.control}
-                  name="reasonCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reason code <span className="text-muted-foreground">optional</span></FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select reason..." />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {REASON_CODES.map((r) => (
-                            <SelectItem key={r} value={r}>{r}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />}
-
                 <FormField
                   control={form.control}
                   name="note"
