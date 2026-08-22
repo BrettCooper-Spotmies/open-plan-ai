@@ -250,6 +250,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       quantity: input.quantity,
       reasonCode: input.reasonCode,
       note: input.note,
+      description: input.description,
       lotNumber: input.lotNumber,
       serialNumber: input.serialNumber,
     };

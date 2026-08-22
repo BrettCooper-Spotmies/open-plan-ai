@@ -42,7 +42,7 @@ import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { cn } from '@/lib/utils';
 import { Boxes, Camera, Check, ChevronsUpDown, Minus, Pencil, Plus, ShoppingCart, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useCreatePart } from '@/hooks/useParts';
+import { useCreatePart, useUpdatePart } from '@/hooks/useParts';
 import { type ApiPartResponse, type BOMCategory, getCategoryMeta } from './bomData';
 import { LocationCombobox, CategoryCombobox, type StockLocation, type StockRecord } from './inventoryData';
 import type { PlaceOrderInput } from './PlaceOrderDialog';
@@ -60,12 +60,14 @@ interface PickerPart {
 const adjustSchema = z.object({
   partId: z.string().min(1, 'Select a part'),
   location: z.string().min(1, 'Select a location'),
+  category: z.string().min(1, 'Select a category'),
   stockStatus: z.enum(['in_stock', 'place_order']),
   direction: z.enum(['add', 'remove']),
   quantity: z.coerce.number().int().min(1, 'Quantity must be at least 1'),
   reasonCode: z.string().optional(),
   expectedDate: z.string().optional(),
   note: z.string().max(300, 'Note must be less than 300 characters').optional(),
+  description: z.string().max(500, 'Description must be less than 500 characters').optional(),
   trackBy: z.enum(['lot', 'serial']),
   lotNumber: z.string().max(60, 'Lot number must be less than 60 characters').optional(),
   serialNumbers: z.array(z.string().max(60, 'Serial number must be less than 60 characters')).optional(),
@@ -94,6 +96,7 @@ export interface AdjustQuantityInput {
   quantity: number;
   reasonCode: string;
   note?: string;
+  description?: string;
   lotNumber?: string;
   serialNumber?: string;
   image?: File;
@@ -128,6 +131,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
 
   const createPart = useCreatePart(orgId);
+  const updatePart = useUpdatePart();
 
   // Include every part, not just parts that already have a stock row — a part only referenced
   // from a BOM (never received) still needs to be selectable when starting a new transaction.
@@ -145,12 +149,14 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     defaultValues: {
       partId: '',
       location: '',
+      category: '',
       stockStatus: 'in_stock',
       direction: 'add',
       quantity: 1,
       reasonCode: '',
       expectedDate: '',
       note: '',
+      description: '',
       trackBy: 'lot',
       lotNumber: '',
       serialNumbers: [''],
@@ -186,6 +192,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         setSelectedRecord(match);
         form.setValue('partId', match.partId, { shouldValidate: true });
         form.setValue('location', match.location, { shouldValidate: true });
+        form.setValue('category', match.cat ?? '', { shouldValidate: true });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -255,6 +262,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       setSelectedRecord(null);
       setCreatedPart({ id: created.id, partNumber: created.partNumber, name: created.name, category: created.category });
       form.setValue('partId', created.id, { shouldDirty: true, shouldValidate: true });
+      form.setValue('category', created.category, { shouldDirty: true, shouldValidate: true });
       setShowAddPart(false);
       setNewPart(emptyNewPart);
       toast.success(`Part ${created.partNumber} created`);
@@ -263,7 +271,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     }
   };
 
-  const handleSubmit = (data: AdjustFormData) => {
+  const handleSubmit = async (data: AdjustFormData) => {
     const part = selectedRecord
       ? { partId: selectedRecord.partId, pn: selectedRecord.pn, name: selectedRecord.name, cat: selectedRecord.cat }
       : createdPart
@@ -275,12 +283,23 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       return;
     }
 
+    // Category defaults from the selected part but is editable here — if the user changed it,
+    // that's a recategorization of the part itself (there's no per-transaction category column).
+    if (selectedRecord && data.category && data.category !== part.cat) {
+      try {
+        await updatePart.mutateAsync({ partId: part.partId, dto: { category: data.category as BOMCategory } });
+      } catch {
+        toast.error("Transaction saved, but couldn't update the part's category");
+      }
+    }
+    const cat = (data.category || part.cat) as BOMCategory | undefined;
+
     if (data.stockStatus === 'place_order') {
       onPlaceOrder({
         partId: part.partId,
         pn: part.pn,
         name: part.name,
-        cat: part.cat,
+        cat,
         quantity: data.quantity,
         expectedDate: data.expectedDate as string,
         location: data.location,
@@ -292,12 +311,13 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       for (const serialNumber of data.serialNumbers ?? []) {
         onAdjust({
           partId: part.partId,
-          ...(selectedRecord ? {} : { pn: part.pn, name: part.name, cat: part.cat }),
+          ...(selectedRecord ? {} : { pn: part.pn, name: part.name, cat }),
           location: data.location as StockLocation,
           direction: data.direction,
           quantity: 1,
           reasonCode: data.reasonCode as string,
           note: data.note?.trim() || undefined,
+          description: data.description?.trim() || undefined,
           serialNumber: serialNumber.trim(),
           image: image ?? undefined,
         });
@@ -305,12 +325,13 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     } else {
       onAdjust({
         partId: part.partId,
-        ...(selectedRecord ? {} : { pn: part.pn, name: part.name, cat: part.cat }),
+        ...(selectedRecord ? {} : { pn: part.pn, name: part.name, cat }),
         location: data.location as StockLocation,
         direction: data.direction,
         quantity: data.quantity,
         reasonCode: data.reasonCode as string,
         note: data.note?.trim() || undefined,
+        description: data.description?.trim() || undefined,
         lotNumber: data.lotNumber?.trim() || undefined,
         image: image ?? undefined,
       });
@@ -414,6 +435,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                                         setCreatedPart(null);
                                         form.setValue('partId', r.partId, { shouldDirty: true, shouldValidate: true });
                                         form.setValue('location', r.location, { shouldDirty: true, shouldValidate: true });
+                                        form.setValue('category', r.cat ?? '', { shouldDirty: true, shouldValidate: true });
                                         setPartPickerOpen(false);
                                       }}
                                     >
@@ -530,6 +552,25 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     </FormItem>
                   )}
                 />
+
+                {!showAddPart && (
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Category <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                        <FormControl>
+                          <CategoryCombobox value={field.value} onChange={field.onChange} placeholder="Select a part first..." />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Defaults to the part&apos;s category — change it here to recategorize the part.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <FormField
                   control={form.control}
@@ -728,6 +769,28 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     </FormItem>
                   )}
                 />
+
+                {stockStatus === 'in_stock' && (
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Description <span className="normal-case font-normal">optional</span>
+                        </FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Optional description..."
+                            className="min-h-[70px] resize-none"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">

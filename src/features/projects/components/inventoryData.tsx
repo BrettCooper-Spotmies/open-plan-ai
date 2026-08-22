@@ -211,6 +211,7 @@ export interface StockTransaction {
   reference?: string;              // receive only — PO / expected-receipt reference
   reasonCode?: string;             // adjust only
   note?: string;
+  description?: string;            // adjust only
   quarantine?: boolean;            // receive only
   createdAt: string;
   createdBy: string;

@@ -46,6 +46,7 @@ export interface ApiStockTransaction {
   reference: string | null;
   reasonCode: string | null;
   note: string | null;
+  description: string | null;
   quarantine: boolean;
   createdAt: string;
   createdBy: string;
@@ -141,6 +142,7 @@ export function fromApiTransaction(r: ApiStockTransaction): StockTransaction {
     reference: r.reference ?? undefined,
     reasonCode: r.reasonCode ?? undefined,
     note: r.note ?? undefined,
+    description: r.description ?? undefined,
     quarantine: r.quarantine,
     createdAt: r.createdAt,
     createdBy: r.createdBy,
@@ -200,6 +202,7 @@ export interface AdjustQuantityDto {
   quantity: number;
   reasonCode: string;
   note?: string;
+  description?: string;
   lotNumber?: string;
   serialNumber?: string;
 }
