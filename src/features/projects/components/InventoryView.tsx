@@ -13,11 +13,13 @@ import { Badge } from '@/components/ui/badge';
 import { Drawer, DrawerContent, DrawerFooter, DrawerTitle } from '@/components/ui/drawer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useProjects } from '@/hooks/useProjects';
 import { bomService } from '@/services/bom.service';
+import { inventoryService, fromApiBuildBomLine } from '@/services/inventory.service';
 import { queryKeys } from '@/lib/queryClient';
 import { useOrgParts } from '@/hooks/useParts';
 import {
@@ -67,9 +69,9 @@ function softTint(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-function StatCard({ label, value, icon: Icon, iconColor, accent }: {
+function StatCard({ label, value, icon: Icon, iconColor, accent, loading }: {
   label: string; value: string; icon: React.ElementType;
-  iconColor: string; accent?: boolean;
+  iconColor: string; accent?: boolean; loading?: boolean;
 }) {
   return (
     <div className={cn('bg-card rounded-lg px-3.5 py-2.5 flex-1 min-w-[140px] border flex items-center gap-2.5', accent ? 'border-primary/25' : 'border-border')}>
@@ -80,9 +82,13 @@ function StatCard({ label, value, icon: Icon, iconColor, accent }: {
         <Icon className="w-4 h-4" style={{ color: iconColor }} />
       </span>
       <span className="min-w-0">
-        <span className="block text-lg font-bold leading-tight truncate" style={{ color: accent ? iconColor : undefined }}>
-          {value}
-        </span>
+        {loading ? (
+          <Skeleton className="h-5 w-10 mb-1" />
+        ) : (
+          <span className="block text-lg font-bold leading-tight truncate" style={{ color: accent ? iconColor : undefined }}>
+            {value}
+          </span>
+        )}
         <span className="block text-[11px] text-muted-foreground truncate">{label}</span>
       </span>
     </div>
@@ -106,7 +112,7 @@ const QUICK_FILTERS: { value: QuickFilter; label: string }[] = [
 export function InventoryView({ orgId }: InventoryViewProps) {
   const isMobile = useIsMobile();
   const { data: projects = [] } = useProjects();
-  const { data: partsResult } = useOrgParts(orgId);
+  const { data: partsResult, isLoading: isPartsLoading } = useOrgParts(orgId, { limit: 100 });
   const parts = useMemo(() => partsResult?.data ?? [], [partsResult]);
 
   // BOM demand is aggregated across every project in the org — stock/coverage here is
@@ -140,7 +146,28 @@ export function InventoryView({ orgId }: InventoryViewProps) {
     return map;
   }, [rootNodes]);
 
-  const { data: stock = [] } = useInventoryStock(orgId);
+  // Which project(s) a part is used in — a part can appear in more than one project's BOM,
+  // so this tracks every project name that references it, not just one.
+  const projectsByPartId = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    projects.forEach((p, i) => {
+      const data = bomTreeQueries[i]?.data;
+      if (!data) return;
+      const nodes = data.roots.map(r => fromApiNode(r));
+      for (const n of bomFlatAll(nodes)) {
+        if (!n._partId) continue;
+        if (!map.has(n._partId)) map.set(n._partId, new Set());
+        map.get(n._partId)!.add(p.name);
+      }
+    });
+    const result = new Map<string, string[]>();
+    map.forEach((names, partId) => result.set(partId, Array.from(names)));
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bomTreeQueries.map(q => q.dataUpdatedAt).join(','), projects]);
+
+  const { data: stock = [], isLoading: isStockLoading } = useInventoryStock(orgId);
+  const isInventoryLoading = isPartsLoading || isStockLoading;
   const { data: orders = [] } = useInventoryOrders(orgId);
   const { data: transactions = [] } = useInventoryTransactions(orgId);
   const { data: builds = [] } = useInventoryBuilds(orgId);
@@ -153,10 +180,20 @@ export function InventoryView({ orgId }: InventoryViewProps) {
 
   // `onOrder` is derived from live order state rather than the static seeded field, so
   // Receive/Order actions are reflected immediately without touching stock rows directly.
+  // Note: `allocated` is intentionally left as-is here (always 0 from the backend, which never
+  // writes reservations) — `availableOf`/`computeCoverage` already subtract BOM demand via the
+  // `demandByPartId` param, so overriding `allocated` with that same demand would double-count it.
   const displayStock = useMemo(
     () => stock.map(r => ({ ...r, onOrder: onOrderOf(orders, r.partId) })),
     [stock, orders]
   );
+
+  // Receive/Place order only make sense for parts that already have a stock row — a part that
+  // only exists inside a BOM and has never been stocked isn't orderable/receivable yet.
+  const stockedParts = useMemo(() => {
+    const stockPartIds = new Set(stock.map(r => r.partId));
+    return parts.filter(p => stockPartIds.has(p.id));
+  }, [parts, stock]);
 
   const [search, setSearch] = useState('');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
@@ -205,7 +242,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
   };
 
   const handleAdjust = (input: AdjustQuantityInput) => {
-    adjustStockMutation.mutate({
+    const dto = {
       partId: input.partId,
       location: input.location,
       direction: input.direction,
@@ -214,7 +251,9 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       note: input.note,
       lotNumber: input.lotNumber,
       serialNumber: input.serialNumber,
-    }, {
+    };
+    console.table(Object.entries(dto).map(([field, value]) => ({ field, value: JSON.stringify(value), type: typeof value })));
+    adjustStockMutation.mutate(dto, {
       onSuccess: () => toast.success('Adjustment posted'),
       onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to post adjustment'),
     });
@@ -272,9 +311,21 @@ export function InventoryView({ orgId }: InventoryViewProps) {
   const incomingCount = displayStock.filter(r => r.onOrder > 0).length;
   const quarantineCount = displayStock.filter(r => (r.quarantineQty ?? 0) > 0).length;
 
+  // Each build's BOM Line table is scoped to that build's own project BOM (fetched per-build,
+  // same useQueries pattern as bomTreeQueries above) — NOT the org-wide `displayStock` list, so
+  // a build only shows rows for parts actually in its BOM instead of every stocked part in the org.
+  const buildBomLineQueries = useQueries({
+    queries: builds.map((b) => ({
+      queryKey: queryKeys.inventory.buildBomLines(orgId, b.id),
+      queryFn: async () => (await inventoryService.getBuildBomLines(orgId, b.id)).map(fromApiBuildBomLine),
+      staleTime: 30 * 1000,
+    })),
+  });
+
   const computedBuilds = useMemo(
-    () => builds.map(def => buildFromDef(def, displayStock, demandByPartId)),
-    [builds, displayStock, demandByPartId]
+    () => builds.map((def, i) => buildFromDef(def, buildBomLineQueries[i]?.data ?? [])),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [builds, buildBomLineQueries.map(q => q.dataUpdatedAt).join(',')]
   );
   const [activeTab, setActiveTab] = useState('stock');
   const [openBuildId, setOpenBuildId] = useState<string | null>(null);
@@ -358,11 +409,11 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       )}
 
       <div className={cn('gap-2.5', isMobile ? 'grid grid-cols-2' : 'flex flex-wrap md:gap-3')}>
-        <StatCard label="Total Parts" value={String(totalParts)} icon={BoxesIcon} iconColor="#2563EB" accent />
-        <StatCard label="Ready to Build" value={String(coverageCounts.ready)} icon={CheckCircle} iconColor="#16A34A" />
-        <StatCard label="Below Coverage" value={String(belowCoverage)} icon={AlertTriangle} iconColor="#DC2626" />
-        <StatCard label="Incoming This Week" value={String(incomingCount)} icon={Truck} iconColor="#D97706" />
-        <StatCard label="In Quarantine" value={String(quarantineCount)} icon={Lock} iconColor="#7C3AED" />
+        <StatCard label="Total Parts" value={String(totalParts)} icon={BoxesIcon} iconColor="#2563EB" accent loading={isInventoryLoading} />
+        <StatCard label="Ready to Build" value={String(coverageCounts.ready)} icon={CheckCircle} iconColor="#16A34A" loading={isInventoryLoading} />
+        <StatCard label="Below Coverage" value={String(belowCoverage)} icon={AlertTriangle} iconColor="#DC2626" loading={isInventoryLoading} />
+        <StatCard label="Incoming This Week" value={String(incomingCount)} icon={Truck} iconColor="#D97706" loading={isInventoryLoading} />
+        <StatCard label="In Quarantine" value={String(quarantineCount)} icon={Lock} iconColor="#7C3AED" loading={isInventoryLoading} />
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -559,7 +610,21 @@ export function InventoryView({ orgId }: InventoryViewProps) {
 
               {isMobile ? (
                 <div className="space-y-5">
-                  {cardGroups.length === 0 ? (
+                  {isInventoryLoading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <div key={`skeleton-${i}`} className="rounded-xl border border-border bg-card p-3">
+                          <div className="flex items-start gap-2.5">
+                            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-3 w-20" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : cardGroups.length === 0 ? (
                     <div className="py-12 text-center text-muted-foreground">
                       <PackageSearch className="h-6 w-6 mx-auto mb-2 opacity-50" />
                       <div className="text-sm">No parts match your filters</div>
@@ -604,7 +669,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                                     <div className="text-[10px] text-muted-foreground uppercase tracking-wide">On Hand</div>
                                   </div>
                                   <div>
-                                    <div className="text-sm font-semibold">{r.allocated}</div>
+                                    <div className="text-sm font-semibold">{demandByPartId.get(r.partId) ?? 0}</div>
                                     <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Alloc</div>
                                   </div>
                                   <div>
@@ -640,7 +705,31 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredStock.length === 0 ? (
+                      {isInventoryLoading ? (
+                        Array.from({ length: 8 }).map((_, i) => (
+                          <TableRow key={`skeleton-${i}`}>
+                            <TableCell className="px-3 py-2 align-top">
+                              <Skeleton className="h-5 w-16 mb-1.5" />
+                              <Skeleton className="h-1.5 w-full" />
+                            </TableCell>
+                            <TableCell className="px-3 py-2">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <Skeleton className="h-8 w-8 rounded-md shrink-0" />
+                                <div className="min-w-0 flex-1 space-y-1.5">
+                                  <Skeleton className="h-4 w-32" />
+                                  <Skeleton className="h-3 w-20" />
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="px-3 py-2 text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                            <TableCell className="hidden sm:table-cell px-3 py-2 text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                            <TableCell className="px-3 py-2 text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                            <TableCell className="hidden md:table-cell px-3 py-2 text-right"><Skeleton className="h-4 w-8 ml-auto" /></TableCell>
+                            <TableCell className="px-3 py-2"><Skeleton className="h-5 w-16" /></TableCell>
+                            <TableCell className="hidden lg:table-cell px-3 py-2"><Skeleton className="h-4 w-12" /></TableCell>
+                          </TableRow>
+                        ))
+                      ) : filteredStock.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-10">
                             <PackageSearch className="h-6 w-6 mx-auto mb-2 opacity-50" />
@@ -675,7 +764,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                               </div>
                             </TableCell>
                             <TableCell className="px-3 py-2 text-right">{r.onHand}</TableCell>
-                            <TableCell className="hidden sm:table-cell px-3 py-2 text-right">{r.allocated}</TableCell>
+                            <TableCell className="hidden sm:table-cell px-3 py-2 text-right">{demandByPartId.get(r.partId) ?? 0}</TableCell>
                             <TableCell className={cn('px-3 py-2 text-right font-semibold', available < 0 && 'text-destructive')}>
                               {available}
                             </TableCell>
@@ -700,7 +789,21 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                 </div>
               ) : (
                 <div className="space-y-5">
-                  {cardGroups.length === 0 ? (
+                  {isInventoryLoading ? (
+                    <div className="space-y-2">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <div key={`skeleton-${i}`} className="rounded-xl border border-border bg-card p-3">
+                          <div className="flex items-start gap-2.5">
+                            <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-3 w-20" />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : cardGroups.length === 0 ? (
                     <div className="py-12 text-center text-muted-foreground">
                       <PackageSearch className="h-6 w-6 mx-auto mb-2 opacity-50" />
                       <div className="text-sm">No parts match your filters</div>
@@ -768,7 +871,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                                     </div>
                                     <div>
                                       <div className="text-[10px] text-muted-foreground uppercase tracking-wide"><HeaderTip label="Allocated" /></div>
-                                      <div className="text-sm font-semibold">{r.allocated}</div>
+                                      <div className="text-sm font-semibold">{demandByPartId.get(r.partId) ?? 0}</div>
                                     </div>
                                     <div>
                                       <div className="text-[10px] text-muted-foreground uppercase tracking-wide"><HeaderTip label="Available" /></div>
@@ -794,11 +897,13 @@ export function InventoryView({ orgId }: InventoryViewProps) {
 
         <TabsContent value="builds" className="mt-4">
           <BuildsPanel
+            orgId={orgId}
             builds={computedBuilds}
             onSelectPart={openDetail}
             openBuildId={openBuildId}
             onOpenBuildHandled={() => setOpenBuildId(null)}
             onAddBuild={handleAddBuild}
+            onGenerateShortageOrder={openOrderFor}
             projects={projects}
           />
         </TabsContent>
@@ -819,7 +924,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
         isOpen={receiveOpen}
         onClose={() => setReceiveOpen(false)}
         orgId={orgId}
-        parts={parts}
+        parts={stockedParts}
         orders={orders}
         onReceive={handleReceive}
         initialPartId={dialogPartId}
@@ -829,13 +934,16 @@ export function InventoryView({ orgId }: InventoryViewProps) {
         onClose={() => setAdjustOpen(false)}
         orgId={orgId}
         stock={displayStock}
+        parts={parts}
+        partProjects={projectsByPartId}
         onAdjust={handleAdjust}
+        onPlaceOrder={handlePlaceOrder}
         initialPartId={dialogPartId}
       />
       <PlaceOrderDialog
         isOpen={orderOpen}
         onClose={() => setOrderOpen(false)}
-        parts={parts}
+        parts={stockedParts}
         onPlaceOrder={handlePlaceOrder}
         initialPartId={dialogPartId}
       />

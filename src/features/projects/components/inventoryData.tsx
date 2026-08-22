@@ -327,10 +327,14 @@ export interface Build {
   onOrderCount: number;
   shortLines: BuildLine[];
   longestLead: BuildLine | null;
+  status: BuildStatus;
 }
+
+export type BuildStatus = 'planned' | 'allocated' | 'kitted';
 
 export interface BuildDef {
   id: string;
+  projectId: string;
   name: string;
   type: string;
   units: number;
@@ -340,6 +344,26 @@ export interface BuildDef {
   /** User-entered target date (new builds). Legacy seeded builds omit this and fall back to
    * a synthetic lateness offset so their numbers stay stable across re-renders. */
   targetDate?: string;
+  status: BuildStatus;
+}
+
+/** One row of a build's own project BOM, joined server-side with current org stock — see
+ * inventory.service.ts `getBuildBomLines` (backend) / `useBuildBomLines` (frontend hook).
+ * Replaces the old client-side `stock.map(...)` over the *entire org's* stock list, which
+ * rendered one BOM-line row per org-wide inventory part instead of per part in this build's BOM. */
+export interface BuildBomLine {
+  partId: string;
+  pn: string;
+  name: string;
+  cat: BOMCategory;
+  qtyPerUnit: number;
+  uom: string;
+  onHand: number;
+  allocated: number;
+  onOrder: number;
+  leadTimeDays: number;
+  required: number;
+  shortage: number;
 }
 
 function addDays(date: Date, days: number): string {
@@ -357,21 +381,30 @@ export function formatShortDate(iso: string): string {
 }
 
 /**
- * Computes one "Build" from a def, scaling each stocked part's real BOM demand (qty-per-unit
- * from demandByPartId) by the def's unit count, then reusing computeCoverage against the
- * scaled requirement — so larger builds naturally show more shortages against the same
+ * Computes one "Build" from a def, scaling each BOM line's real demand (qty-per-unit, from
+ * this build's own project BOM) by the def's unit count, then reusing computeCoverage against
+ * the scaled requirement — so larger builds naturally show more shortages against the same
  * on-hand/on-order stock, same as a real MRP netting would.
+ *
+ * `bomLines` is scoped to this build's project BOM (one row per part actually used in it) —
+ * NOT the org-wide stock list, so builds from different projects/BOMs never bleed into each
+ * other's line tables.
  */
-export function buildFromDef(def: BuildDef, stock: StockRecord[], demandByPartId: Map<string, number>): Build {
+export function buildFromDef(def: BuildDef, bomLines: BuildBomLine[]): Build {
   const now = new Date();
-  const lines: BuildLine[] = stock.map((r) => {
-    const qtyPerUnit = demandByPartId.get(r.partId) ?? 1;
+  const lines: BuildLine[] = bomLines.map((r) => {
+    const qtyPerUnit = r.qtyPerUnit || 1;
     const required = qtyPerUnit * def.units;
-    const status = computeCoverage(r, required);
+    const stockLike: StockRecord = {
+      id: r.partId, partId: r.partId, pn: r.pn, name: r.name, cat: r.cat,
+      onHand: r.onHand, allocated: r.allocated, onOrder: r.onOrder,
+      location: '', leadTimeDays: r.leadTimeDays,
+    };
+    const status = computeCoverage(stockLike, required);
     return {
       partId: r.partId, pn: r.pn, name: r.name, cat: r.cat,
-      qtyPerUnit, uom: 'EA',
-      required, available: availableOf(r), allocated: r.allocated, onOrder: r.onOrder,
+      qtyPerUnit, uom: r.uom,
+      required, available: availableOf(stockLike), allocated: r.allocated, onOrder: r.onOrder,
       leadTimeDays: r.leadTimeDays, status,
     };
   });
@@ -400,6 +433,7 @@ export function buildFromDef(def: BuildDef, stock: StockRecord[], demandByPartId
     bomRev: def.bomRev, scrapPct: def.scrapPct, linkedMilestone: def.milestone,
     targetDate, projectedDate, daysLate,
     lines, readyCount, onOrderCount, shortLines, longestLead,
+    status: def.status,
   };
 }
 

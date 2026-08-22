@@ -127,6 +127,14 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, orders, onRe
     : [];
 
   useEffect(() => {
+    if (openOrdersForPart.length === 1 && !form.getValues('orderId')) {
+      form.setValue('orderId', openOrdersForPart[0].id);
+      form.setValue('location', openOrdersForPart[0].location ?? form.getValues('location'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPart, openOrdersForPart.length]);
+
+  useEffect(() => {
     if (isOpen && initialPartId) {
       const match = parts.find(p => p.id === initialPartId);
       if (match) {
