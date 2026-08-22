@@ -43,6 +43,7 @@ import { cn } from '@/lib/utils';
 import { Boxes, Camera, Check, ChevronsUpDown, Minus, Pencil, Plus, ShoppingCart, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart, useUpdatePart } from '@/hooks/useParts';
+import { useLocations } from '@/hooks/useLocations';
 import { type ApiPartResponse, type BOMCategory, getCategoryMeta } from './bomData';
 import { LocationCombobox, CategoryCombobox, type StockLocation, type StockRecord } from './inventoryData';
 import type { PlaceOrderInput } from './PlaceOrderDialog';
@@ -133,6 +134,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
 
   const createPart = useCreatePart(orgId);
   const updatePart = useUpdatePart();
+  const { data: knownLocations = [] } = useLocations(orgId);
 
   // Include every part, not just parts that already have a stock row — a part only referenced
   // from a BOM (never received) still needs to be selectable when starting a new transaction.
@@ -587,7 +589,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     <FormItem>
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Location <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                       <FormControl>
-                        <LocationCombobox value={field.value} onChange={field.onChange} />
+                        <LocationCombobox value={field.value} onChange={field.onChange} knownLocations={knownLocations} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

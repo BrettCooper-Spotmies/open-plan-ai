@@ -39,6 +39,7 @@ import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, ShoppingCart, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useLocations } from '@/hooks/useLocations';
 import { type ApiPartResponse, type BOMCategory } from './bomData';
 import { LocationCombobox } from './inventoryData';
 
@@ -141,6 +142,7 @@ export function PlaceOrderDialog({ isOpen, onClose, parts, onPlaceOrder, initial
       supplierRef: data.supplierRef?.trim() || undefined,
       unitCost: data.unitCost === '' || data.unitCost === undefined ? undefined : Number(data.unitCost),
       location: data.location,
+      purpose: data.purpose?.trim() || undefined,
     });
     resetAndClose();
     toast.success(`Order placed for ${data.quantity} × ${selectedPart.partNumber}`);
@@ -311,6 +313,24 @@ export function PlaceOrderDialog({ isOpen, onClose, parts, onPlaceOrder, initial
                     )}
                   />
                 </div>
+
+                <FormField
+                  control={form.control}
+                  name="purpose"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Purpose <span className="normal-case font-normal">optional</span></FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Why is this being ordered?"
+                          className="min-h-[70px] resize-none"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
             </div>
 

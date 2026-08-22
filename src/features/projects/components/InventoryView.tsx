@@ -936,7 +936,6 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       <ReceiveStockDialog
         isOpen={receiveOpen}
         onClose={() => setReceiveOpen(false)}
-        orgId={orgId}
         parts={stockedParts}
         orders={orders}
         onReceive={handleReceive}
