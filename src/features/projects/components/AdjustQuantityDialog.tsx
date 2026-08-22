@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useForm, type FieldErrors } from 'react-hook-form';
+import { useForm, useFieldArray, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
@@ -16,13 +16,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
   Popover,
@@ -51,7 +44,7 @@ import { Boxes, Camera, Check, ChevronsUpDown, Minus, Pencil, Plus, ShoppingCart
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart } from '@/hooks/useParts';
 import { type ApiPartResponse, type BOMCategory, getCategoryMeta } from './bomData';
-import { REASON_CODES, LocationCombobox, CategoryCombobox, type StockLocation, type StockRecord } from './inventoryData';
+import { LocationCombobox, CategoryCombobox, type StockLocation, type StockRecord } from './inventoryData';
 import type { PlaceOrderInput } from './PlaceOrderDialog';
 
 interface PickerPart {
@@ -73,11 +66,19 @@ const adjustSchema = z.object({
   reasonCode: z.string().optional(),
   expectedDate: z.string().optional(),
   note: z.string().max(300, 'Note must be less than 300 characters').optional(),
+  trackBy: z.enum(['lot', 'serial']),
   lotNumber: z.string().max(60, 'Lot number must be less than 60 characters').optional(),
-  serialNumber: z.string().max(60, 'Serial number must be less than 60 characters').optional(),
+  serialNumbers: z.array(z.string().max(60, 'Serial number must be less than 60 characters')).optional(),
 }).superRefine((data, ctx) => {
   if (data.stockStatus === 'place_order' && !data.expectedDate) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Expected date is required', path: ['expectedDate'] });
+  }
+  if (data.stockStatus === 'in_stock' && data.trackBy === 'serial') {
+    (data.serialNumbers ?? []).forEach((sn, index) => {
+      if (!sn.trim()) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Enter a serial number for every unit', path: ['serialNumbers', index] });
+      }
+    });
   }
 });
 
@@ -150,12 +151,33 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       reasonCode: '',
       expectedDate: '',
       note: '',
+      trackBy: 'lot',
       lotNumber: '',
-      serialNumber: '',
+      serialNumbers: [''],
     },
   });
 
+  const { fields: serialFields, append: appendSerials, remove: removeSerials } = useFieldArray({
+    control: form.control,
+    name: 'serialNumbers',
+  });
+
   const stockStatus = form.watch('stockStatus');
+  const trackBy = form.watch('trackBy');
+  const quantity = form.watch('quantity');
+
+  // Keep one serial-number input per unit — grows/shrinks as quantity changes while serial tracking is active.
+  useEffect(() => {
+    if (stockStatus !== 'in_stock' || trackBy !== 'serial') return;
+    const targetLength = Math.min(Math.max(Math.trunc(Number(quantity)) || 1, 1), 200);
+    const diff = targetLength - serialFields.length;
+    if (diff > 0) {
+      appendSerials(Array.from({ length: diff }, () => ''));
+    } else if (diff < 0) {
+      removeSerials(Array.from({ length: -diff }, (_, i) => serialFields.length - 1 - i));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stockStatus, trackBy, quantity]);
 
   useEffect(() => {
     if (isOpen && initialPartId) {
@@ -264,6 +286,22 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         location: data.location,
         supplierRef: data.note?.trim() || undefined,
       });
+    } else if (data.trackBy === 'serial') {
+      // Backend transaction rows hold one serial number each, so a serialized quantity fans out
+      // into one ledger entry per unit instead of a single entry carrying the whole quantity.
+      for (const serialNumber of data.serialNumbers ?? []) {
+        onAdjust({
+          partId: part.partId,
+          ...(selectedRecord ? {} : { pn: part.pn, name: part.name, cat: part.cat }),
+          location: data.location as StockLocation,
+          direction: data.direction,
+          quantity: 1,
+          reasonCode: data.reasonCode as string,
+          note: data.note?.trim() || undefined,
+          serialNumber: serialNumber.trim(),
+          image: image ?? undefined,
+        });
+      }
     } else {
       onAdjust({
         partId: part.partId,
@@ -274,7 +312,6 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         reasonCode: data.reasonCode as string,
         note: data.note?.trim() || undefined,
         lotNumber: data.lotNumber?.trim() || undefined,
-        serialNumber: data.serialNumber?.trim() || undefined,
         image: image ?? undefined,
       });
     }
@@ -508,38 +545,6 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   )}
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="lotNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lot number <span className="normal-case font-normal">optional</span></FormLabel>
-                        <FormControl>
-                          <Input placeholder="LOT-…" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="serialNumber"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Serial number <span className="normal-case font-normal">optional</span></FormLabel>
-                        <FormControl>
-                          <Input placeholder="SN-…" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground -mt-3">
-                  Both fields are available on every part while the hardware team decides which applies where.
-                </p>
-
                 <FormField
                   control={form.control}
                   name="stockStatus"
@@ -594,6 +599,83 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                         </FormItem>
                       )}
                     />
+
+                    <FormField
+                      control={form.control}
+                      name="trackBy"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Track by</FormLabel>
+                          <FormControl>
+                            <ToggleGroup
+                              type="single"
+                              value={field.value}
+                              onValueChange={(v) => v && field.onChange(v)}
+                              className="justify-start gap-2"
+                            >
+                              <ToggleGroupItem
+                                value="lot"
+                                variant="outline"
+                                className="gap-1.5 flex-1 border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                              >
+                                Lot number
+                              </ToggleGroupItem>
+                              <ToggleGroupItem
+                                value="serial"
+                                variant="outline"
+                                className="gap-1.5 flex-1 border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                              >
+                                Serial number
+                              </ToggleGroupItem>
+                            </ToggleGroup>
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground">
+                            {field.value === 'serial'
+                              ? 'One serial number is required per unit — the inputs below track the quantity above.'
+                              : 'One lot number covers the entire quantity.'}
+                          </p>
+                        </FormItem>
+                      )}
+                    />
+
+                    {trackBy === 'lot' ? (
+                      <FormField
+                        control={form.control}
+                        name="lotNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lot number <span className="normal-case font-normal">optional</span></FormLabel>
+                            <FormControl>
+                              <Input placeholder="LOT-…" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ) : (
+                      <div className="space-y-2">
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Serial numbers <span className="text-destructive" aria-hidden="true">*</span>
+                        </FormLabel>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {serialFields.map((serialField, index) => (
+                            <FormField
+                              key={serialField.id}
+                              control={form.control}
+                              name={`serialNumbers.${index}` as const}
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Input placeholder={`SN-… (unit ${index + 1})`} {...field} />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
