@@ -20,6 +20,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useProjects } from '@/hooks/useProjects';
 import { bomService } from '@/services/bom.service';
 import { inventoryService, fromApiBuildBomLine } from '@/services/inventory.service';
+import { attachmentsService } from '@/services/attachments.service';
 import { queryKeys } from '@/lib/queryClient';
 import { useOrgParts } from '@/hooks/useParts';
 import {
@@ -254,7 +255,14 @@ export function InventoryView({ orgId }: InventoryViewProps) {
     };
     console.table(Object.entries(dto).map(([field, value]) => ({ field, value: JSON.stringify(value), type: typeof value })));
     adjustStockMutation.mutate(dto, {
-      onSuccess: () => toast.success('Adjustment posted'),
+      onSuccess: (result) => {
+        toast.success('Adjustment posted');
+        if (input.image && result.transactionId) {
+          attachmentsService
+            .upload({ entityId: result.transactionId, entityType: 'inventory_transaction', file: input.image })
+            .catch(() => toast.error('Adjustment saved, but the image failed to upload'));
+        }
+      },
       onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to post adjustment'),
     });
   };

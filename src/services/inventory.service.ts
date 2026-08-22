@@ -18,6 +18,7 @@ export interface ApiStockRecord {
   lotNumber: string | null;
   serialNumber: string | null;
   quarantineQty: number;
+  transactionId?: string;
 }
 
 export interface ApiOrderRecord {

@@ -47,7 +47,7 @@ import {
 } from '@/components/ui/form';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { cn } from '@/lib/utils';
-import { Boxes, Check, ChevronsUpDown, Minus, Pencil, Plus, ShoppingCart, X } from 'lucide-react';
+import { Boxes, Camera, Check, ChevronsUpDown, Minus, Pencil, Plus, ShoppingCart, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart } from '@/hooks/useParts';
 import { type ApiPartResponse, type BOMCategory, getCategoryMeta } from './bomData';
@@ -95,6 +95,7 @@ export interface AdjustQuantityInput {
   note?: string;
   lotNumber?: string;
   serialNumber?: string;
+  image?: File;
 }
 
 interface AdjustQuantityDialogProps {
@@ -122,6 +123,8 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   const [showAddPart, setShowAddPart] = useState(false);
   const [newPart, setNewPart] = useState(emptyNewPart);
   const [createdPart, setCreatedPart] = useState<{ id: string; partNumber: string; name: string; category: BOMCategory } | null>(null);
+  const [image, setImage] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
 
   const createPart = useCreatePart(orgId);
 
@@ -166,7 +169,33 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialPartId]);
 
-  const isFormDirty = form.formState.isDirty || showAddPart;
+  const isFormDirty = form.formState.isDirty || showAddPart || !!image;
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImage(file);
+    setImagePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(file);
+    });
+  };
+
+  const handleRemoveImage = () => {
+    setImage(null);
+    setImagePreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const resetAndClose = () => {
     form.reset();
@@ -174,6 +203,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     setShowAddPart(false);
     setNewPart(emptyNewPart);
     setCreatedPart(null);
+    handleRemoveImage();
     onClose();
   };
 
@@ -245,6 +275,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         note: data.note?.trim() || undefined,
         lotNumber: data.lotNumber?.trim() || undefined,
         serialNumber: data.serialNumber?.trim() || undefined,
+        image: image ?? undefined,
       });
     }
     resetAndClose();
@@ -638,6 +669,42 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     </FormItem>
                   )}
                 />
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Image <span className="normal-case font-normal">optional</span>
+                  </Label>
+                  {imagePreviewUrl ? (
+                    <div className="relative w-fit">
+                      <img
+                        src={imagePreviewUrl}
+                        alt="Attached"
+                        className="h-24 w-24 rounded-md object-cover border"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="icon"
+                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow"
+                        onClick={handleRemoveImage}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <label className="flex items-center gap-2 w-fit px-3 py-2 rounded-md border border-dashed cursor-pointer text-sm text-muted-foreground hover:bg-muted/40 transition-colors">
+                      <Camera className="h-4 w-4" />
+                      Add photo
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={handleImageSelect}
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
             </div>
 
