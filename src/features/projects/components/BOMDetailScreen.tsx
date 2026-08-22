@@ -546,6 +546,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       initialPrice: payload.price > 0 ? payload.price : undefined,
       initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
       initialSuppliers: payload.suppliers?.length ? payload.suppliers.map(s => ({ ...s, price: parseFloat(s.price) || 0 })) : undefined,
+      customFields: payload.customFields?.length ? payload.customFields : undefined,
     });
     const node = await createNode.mutateAsync({
       partId: part.id, quantity: payload.qty, unit: payload.uom,
@@ -942,6 +943,9 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                     <Field label="Category">{meta.label}</Field>
                     <Field label="Sub-components">{children.length}</Field>
                     <Field label="Traceability links">{node.req.length}</Field>
+                    {Array.isArray(node.customFields) && node.customFields.map((cf, i) => (
+                      <Field key={i} label={cf.label}>{cf.value}</Field>
+                    ))}
                   </div>
                 </div>
               </div>
