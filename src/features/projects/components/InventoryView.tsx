@@ -229,6 +229,10 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       supplierRef: input.supplierRef,
       unitCost: input.unitCost,
       location: input.location,
+      note: input.note,
+      description: input.description,
+      lotNumber: input.lotNumber,
+      serialNumber: input.serialNumber,
     }, {
       onSuccess: () => toast.success(`Order placed for ${input.quantity} × ${input.pn}`),
       onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to place order'),

@@ -362,6 +362,30 @@ export function PartDetailSheet({
                         <span className="font-medium">{o.supplierRef}</span>
                       </div>
                     )}
+                    {o.lotNumber && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Lot number</span>
+                        <span className="font-medium">{o.lotNumber}</span>
+                      </div>
+                    )}
+                    {o.serialNumber && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Serial number</span>
+                        <span className="font-medium truncate max-w-[60%]" title={o.serialNumber}>{o.serialNumber}</span>
+                      </div>
+                    )}
+                    {o.note && (
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="text-muted-foreground shrink-0">Notes</span>
+                        <span className="font-medium text-right">{o.note}</span>
+                      </div>
+                    )}
+                    {o.description && (
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="text-muted-foreground shrink-0">Description</span>
+                        <span className="font-medium text-right">{o.description}</span>
+                      </div>
+                    )}
                     {o.status === 'partially_received' && (
                       <div className="text-xs text-muted-foreground">Partially received — {o.quantity - o.remainingQty} of {o.quantity} so far</div>
                     )}

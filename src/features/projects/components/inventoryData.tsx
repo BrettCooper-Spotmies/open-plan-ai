@@ -47,6 +47,10 @@ export interface OrderRecord {
   supplierRef?: string;
   unitCost?: number;
   location: string;
+  note?: string;
+  description?: string;
+  lotNumber?: string;
+  serialNumber?: string;
   status: 'open' | 'partially_received' | 'received' | 'cancelled';
   createdAt: string;
   createdBy: string;

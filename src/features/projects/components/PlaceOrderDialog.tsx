@@ -63,6 +63,10 @@ export interface PlaceOrderInput {
   supplierRef?: string;
   unitCost?: number;
   location: string;
+  note?: string;
+  description?: string;
+  lotNumber?: string;
+  serialNumber?: string;
 }
 
 interface PlaceOrderDialogProps {
