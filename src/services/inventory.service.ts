@@ -44,7 +44,7 @@ export interface ApiOrderRecord {
 export interface ApiStockTransaction {
   id: string;
   partId: string;
-  type: 'receive' | 'adjust';
+  type: 'receive' | 'adjust' | 'allocate' | 'deallocate';
   direction: 'add' | 'remove' | null;
   qty: number;
   location: string;

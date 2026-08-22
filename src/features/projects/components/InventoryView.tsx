@@ -23,6 +23,7 @@ import { inventoryService, fromApiBuildBomLine } from '@/services/inventory.serv
 import { attachmentsService } from '@/services/attachments.service';
 import { queryKeys } from '@/lib/queryClient';
 import { useOrgParts } from '@/hooks/useParts';
+import { useOrganizationMembers } from '@/hooks/useProjectTeam';
 import {
   useInventoryStock, useInventoryOrders, useInventoryTransactions, useInventoryBuilds,
   useReceiveStock, useAdjustStock, useReleaseQuarantine, usePlaceOrder, useCreateInventoryBuild,
@@ -172,6 +173,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
   const { data: orders = [] } = useInventoryOrders(orgId);
   const { data: transactions = [] } = useInventoryTransactions(orgId);
   const { data: builds = [] } = useInventoryBuilds(orgId);
+  const { data: members = [] } = useOrganizationMembers(orgId);
 
   const receiveStockMutation = useReceiveStock(orgId);
   const adjustStockMutation = useAdjustStock(orgId);
@@ -968,6 +970,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
         status={selectedRecord ? coverageOf(selectedRecord) : 'ready'}
         part={selectedPart}
         transactions={transactions}
+        members={members}
         orders={orders}
         whereUsed={whereUsed}
         onClose={() => setDetailOpen(false)}

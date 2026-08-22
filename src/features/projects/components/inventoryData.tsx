@@ -218,7 +218,7 @@ export function CategoryCombobox({ value, onChange, placeholder = 'Select a cate
 export interface StockTransaction {
   id: string;
   partId: string;
-  type: 'receive' | 'adjust';
+  type: 'receive' | 'adjust' | 'allocate' | 'deallocate';
   direction?: 'add' | 'remove';   // adjust only
   qty: number;
   location: StockLocation;
