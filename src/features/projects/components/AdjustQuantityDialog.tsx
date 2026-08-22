@@ -76,9 +76,6 @@ const adjustSchema = z.object({
   lotNumber: z.string().max(60, 'Lot number must be less than 60 characters').optional(),
   serialNumber: z.string().max(60, 'Serial number must be less than 60 characters').optional(),
 }).superRefine((data, ctx) => {
-  if (data.stockStatus === 'in_stock' && !data.reasonCode) {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Reason code is required', path: ['reasonCode'] });
-  }
   if (data.stockStatus === 'place_order' && !data.expectedDate) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Expected date is required', path: ['expectedDate'] });
   }
@@ -604,7 +601,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   name="reasonCode"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reason code <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Reason code <span className="text-muted-foreground">optional</span></FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -617,7 +614,6 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                           ))}
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground">Required — adjustments are audited.</p>
                       <FormMessage />
                     </FormItem>
                   )}
