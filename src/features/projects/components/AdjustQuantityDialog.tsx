@@ -552,41 +552,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                 />
 
                 {stockStatus === 'in_stock' ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="direction"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Direction</FormLabel>
-                          <FormControl>
-                            <ToggleGroup
-                              type="single"
-                              value={field.value}
-                              onValueChange={(v) => v && field.onChange(v)}
-                              className="justify-start gap-2"
-                            >
-                              <ToggleGroupItem
-                                value="add"
-                                variant="outline"
-                                className="gap-1.5 flex-1 border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
-                              >
-                                <Plus className="h-3.5 w-3.5" /> Add
-                              </ToggleGroupItem>
-                              <ToggleGroupItem
-                                value="remove"
-                                variant="outline"
-                                className="gap-1.5 flex-1 border-input data-[state=on]:bg-destructive data-[state=on]:text-destructive-foreground data-[state=on]:border-destructive"
-                              >
-                                <Minus className="h-3.5 w-3.5" /> Remove
-                              </ToggleGroupItem>
-                            </ToggleGroup>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
+                  <div className="grid grid-cols-1 gap-4">
                     <FormField
                       control={form.control}
                       name="quantity"
