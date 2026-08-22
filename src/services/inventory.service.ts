@@ -33,6 +33,7 @@ export interface ApiOrderRecord {
   location: string;
   note: string | null;
   description: string | null;
+  purpose: string | null;
   lotNumber: string | null;
   serialNumber: string | null;
   status: 'open' | 'partially_received' | 'received' | 'cancelled';
@@ -131,6 +132,7 @@ export function fromApiOrder(r: ApiOrderRecord): OrderRecord {
     location: r.location,
     note: r.note ?? undefined,
     description: r.description ?? undefined,
+    purpose: r.purpose ?? undefined,
     lotNumber: r.lotNumber ?? undefined,
     serialNumber: r.serialNumber ?? undefined,
     status: r.status,
@@ -224,6 +226,7 @@ export interface PlaceOrderDto {
   location: string;
   note?: string;
   description?: string;
+  purpose?: string;
   lotNumber?: string;
   serialNumber?: string;
 }

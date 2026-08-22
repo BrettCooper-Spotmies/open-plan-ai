@@ -49,6 +49,7 @@ const orderSchema = z.object({
   supplierRef: z.string().max(60, 'Reference must be less than 60 characters').optional(),
   unitCost: z.union([z.coerce.number().min(0), z.literal('')]).optional(),
   location: z.string().min(1, 'Select a destination location'),
+  purpose: z.string().max(500, 'Purpose must be less than 500 characters').optional(),
 });
 
 type OrderFormData = z.infer<typeof orderSchema>;
@@ -65,6 +66,7 @@ export interface PlaceOrderInput {
   location: string;
   note?: string;
   description?: string;
+  purpose?: string;
   lotNumber?: string;
   serialNumber?: string;
 }
@@ -93,6 +95,7 @@ export function PlaceOrderDialog({ isOpen, onClose, parts, onPlaceOrder, initial
       supplierRef: '',
       unitCost: '',
       location: '',
+      purpose: '',
     },
   });
 
