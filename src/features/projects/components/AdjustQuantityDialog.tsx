@@ -731,6 +731,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                           <FormControl>
                             <Input placeholder="LOT-…" {...field} />
                           </FormControl>
+                          <p className="text-xs text-muted-foreground">Groups this quantity under one batch ID so it can be traced back for recalls or quality checks.</p>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -776,6 +777,11 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                           {...field}
                         />
                       </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        {stockStatus === 'place_order'
+                          ? 'Reference the supplier or purchase order this line is billed against, for reconciliation.'
+                          : 'Explain why this adjustment was made, for the audit trail.'}
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -797,6 +803,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                             {...field}
                           />
                         </FormControl>
+                        <p className="text-xs text-muted-foreground">Add context for the team receiving this order — special handling, delivery instructions, etc.</p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -818,6 +825,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                           {...field}
                         />
                       </FormControl>
+                      <p className="text-xs text-muted-foreground">Free-form details about this transaction — condition, packaging, or anything worth flagging later.</p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -827,6 +835,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Image <span className="normal-case font-normal">optional</span>
                   </Label>
+                  <p className="text-xs text-muted-foreground">Attach a photo of the parts, packing slip, or any damage for reference.</p>
                   {imagePreviewUrl ? (
                     <div className="relative w-fit">
                       <img
