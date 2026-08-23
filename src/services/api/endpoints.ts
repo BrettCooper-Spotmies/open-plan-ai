@@ -124,6 +124,7 @@ export const ENDPOINTS = {
   ISSUES: {
     LIST: (projectId: string) => `/projects/${projectId}/issues`,
     LIST_ALL: (projectId: string) => `/projects/${projectId}/issues/all`,
+    MY_ALL: '/issues/me/all',
     CREATE: (projectId: string) => `/projects/${projectId}/issues`,
     BY_ID: (id: string) => `/issues/${id}`,
     STATUS: (id: string) => `/issues/${id}/status`,
