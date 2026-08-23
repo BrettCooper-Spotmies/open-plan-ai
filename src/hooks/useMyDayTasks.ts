@@ -74,11 +74,11 @@ export function useMyDayTasks(filter: MyDayFilter = 'all', statusFilter?: string
     // disappears from the list immediately, unless the user explicitly filters for "Done".
     const taskItems: MyDayItem[] = rawTasks
       .filter(task =>
-        matchesFilter(getDueDateStatus(task.dueDate), filter) &&
+        matchesFilter(getDueDateStatus(task.dueDate, task.startDate), filter) &&
         (task.status !== 'done' || includeDone)
       )
       .map(task => {
-        const dueDateStatus = getDueDateStatus(task.dueDate);
+        const dueDateStatus = getDueDateStatus(task.dueDate, task.startDate);
         return {
           id: task.id,
           itemType: 'task' as const,
