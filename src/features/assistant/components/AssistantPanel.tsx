@@ -122,6 +122,17 @@ export function AssistantPanel({
         projects.find((p) => p.id === activeConversationSummary!.projectId)?.name,
       )
     : null;
+  // Conversation title + scope, shown inline as a card at the top of the
+  // transcript (page variant only) instead of floating in the global
+  // AppHeader — keeps it scoped to the Assistant page's own content instead
+  // of bleeding into shared chrome.
+  const activeConversationTitle = activeConversationSummary?.title || 'New conversation';
+  const activeConversationScopeLabel = activeConversationSummary
+    ? resolveConversationScopeLabel(
+        activeConversationSummary.scope,
+        projects.find((p) => p.id === activeConversationSummary.projectId)?.name,
+      )
+    : null;
   // Picking a project from the popover on an existing, still-unscoped
   // (all_projects) conversation locks it server-side right away — the
   // explicit-click counterpart to assistantLoop.ts's automatic lock, which
@@ -356,6 +367,20 @@ export function AssistantPanel({
           <div className="flex flex-col items-center gap-2 text-primary">
             <Paperclip className="h-8 w-8" />
             <p className="text-sm font-semibold">Drop files to attach</p>
+          </div>
+        </div>
+      )}
+      {hasActiveConversation && !isWidget && activeConversationSummary && (
+        <div className="shrink-0 px-4 py-2 md:px-6">
+          <div className="mx-auto flex max-w-3xl">
+            <div className="min-w-0 flex gap-2 items-center">
+              <h1 className="truncate text-sm font-semibold leading-tight text-foreground">
+                {activeConversationTitle}
+              </h1>
+              {activeConversationScopeLabel && (
+                <p className=" bg-muted/20 border border-border rounded-lg p-2 py-1 truncate text-xs text-muted-foreground">{activeConversationScopeLabel}</p>
+              )}
+            </div>
           </div>
         </div>
       )}
