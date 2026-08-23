@@ -370,43 +370,55 @@ export function AssistantPanel({
           </div>
         </div>
       )}
-      {hasActiveConversation && !isWidget && activeConversationSummary && (
-        <div className="shrink-0 px-4 py-2 md:px-6">
-          <div className="mx-auto flex max-w-3xl">
-            <div className="min-w-0 flex gap-2 items-center">
-              <h1 className="truncate text-sm font-semibold leading-tight text-foreground">
-                {activeConversationTitle}
-              </h1>
-              {activeConversationScopeLabel && (
-                <p className=" bg-muted/20 border border-border rounded-lg p-2 py-1 truncate text-xs text-muted-foreground">{activeConversationScopeLabel}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
       {hasActiveConversation ? (
-        <AssistantTranscript
-          key={conversationId ?? 'new'}
-          messages={transcriptMessages}
-          messageVersions={messageVersions}
-          onEditMessage={editMessage}
-          onSelectVersion={selectMessageVersion}
-          streamingText={streamingText}
-          isStreaming={effectivelyStreaming}
-          toolStatus={toolStatus}
-          pendingQuestions={pendingQuestions}
-          onAnswer={answerQuestion}
-          isAnswering={isAnswering}
-          liveCard={liveCard}
-          onSendMessage={sendMessage}
-          proposalsByMessageId={proposalsByMessageId}
-          onConfirmProposal={confirmProposal}
-          onRejectProposal={rejectProposal}
-          onReviseProposal={reviseProposal}
-          confirmingProposalId={confirmingProposalId}
-          rejectingProposalId={rejectingProposalId}
-          revisingProposalId={revisingProposalId}
-        />
+        <div className="relative flex flex-1 min-h-0 flex-col">
+          {/* Overlays the top of the scrollable transcript rather than sitting
+              in normal flow, so messages scrolling past underneath fade out
+              under the gradient instead of getting clipped by a hard edge. */}
+          {!isWidget && activeConversationSummary && (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 z-10 px-4 pb-8 pt-4 md:px-6"
+              style={{
+                background:
+                  'linear-gradient(to bottom, hsl(var(--background)) 55%, hsl(var(--background) / 0) 100%)',
+              }}
+            >
+              <div className="pointer-events-auto mx-auto flex max-w-3xl items-center gap-2">
+                <h1 className="truncate text-sm font-semibold leading-tight text-foreground">
+                  {activeConversationTitle}
+                </h1>
+                {activeConversationScopeLabel && (
+                  <span className="shrink-0 truncate rounded-lg border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
+                    {activeConversationScopeLabel}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          <AssistantTranscript
+            key={conversationId ?? 'new'}
+            messages={transcriptMessages}
+            messageVersions={messageVersions}
+            onEditMessage={editMessage}
+            onSelectVersion={selectMessageVersion}
+            streamingText={streamingText}
+            isStreaming={effectivelyStreaming}
+            toolStatus={toolStatus}
+            pendingQuestions={pendingQuestions}
+            onAnswer={answerQuestion}
+            isAnswering={isAnswering}
+            liveCard={liveCard}
+            onSendMessage={sendMessage}
+            proposalsByMessageId={proposalsByMessageId}
+            onConfirmProposal={confirmProposal}
+            onRejectProposal={rejectProposal}
+            onReviseProposal={reviseProposal}
+            confirmingProposalId={confirmingProposalId}
+            rejectingProposalId={rejectingProposalId}
+            revisingProposalId={revisingProposalId}
+            withHeaderOffset={!isWidget && !!activeConversationSummary}
+          />
+        </div>
       ) : (
         <ScrollArea className="flex-1 min-h-0">
           <div className={cn('mx-auto flex flex-col gap-6', isWidget ? 'max-w-full p-4' : 'max-w-3xl p-4 md:p-6')}>
