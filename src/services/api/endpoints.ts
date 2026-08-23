@@ -39,6 +39,7 @@ export const ENDPOINTS = {
     ALL_TASKS: (orgId: string) => `/organizations/${orgId}/tasks`,
     ALL_ISSUES: (orgId: string) => `/organizations/${orgId}/issues`,
     ALL_MILESTONES: (orgId: string) => `/organizations/${orgId}/milestones`,
+    ALL_MODULES: (orgId: string) => `/organizations/${orgId}/hardware-modules`,
     ALL_MEETINGS: (orgId: string) => `/organizations/${orgId}/meetings`,
     DASHBOARD: (orgId: string) => `/organizations/${orgId}/dashboard`,
     LOGO: (orgId: string) => `/organizations/${orgId}/logo`,
