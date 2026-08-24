@@ -2,6 +2,7 @@ import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
 import { config } from '@/config';
 import { logger } from '@/services/monitoring/logger';
+import { notificationPreferencesService } from '@/services/notificationPreferences.service';
 
 // ─── Support detection ─────────────────────────────────────────────────────────
 
@@ -57,20 +58,17 @@ export async function hasLiveSubscription(): Promise<boolean> {
 // ─── Subscribe / unsubscribe ───────────────────────────────────────────────────
 
 /**
- * Requests notification permission (must be called from a user gesture —
- * e.g. a settings toggle click, never on page load) and, if granted,
- * subscribes to push and registers the subscription with the backend.
- * Returns false without throwing if unsupported, denied, or misconfigured.
+ * Registers (or reuses) a PushManager subscription and posts it to the
+ * backend. Assumes permission is already 'granted' — does not prompt.
+ * Shared by subscribeToPush() (after a fresh permission grant) and
+ * reconcilePushSubscription() (silent re-subscribe on an already-granted
+ * permission whose subscription died).
  */
-export async function subscribeToPush(): Promise<boolean> {
-  if (!isPushSupported()) return false;
+async function doSubscribe(): Promise<boolean> {
   if (!config.push.vapidPublicKey) {
     logger.error('VITE_VAPID_PUBLIC_KEY is not set — cannot subscribe to push');
     return false;
   }
-
-  const permission = await Notification.requestPermission();
-  if (permission !== 'granted') return false;
 
   try {
     const registration = await registerServiceWorker();
@@ -98,6 +96,21 @@ export async function subscribeToPush(): Promise<boolean> {
 }
 
 /**
+ * Requests notification permission (must be called from a user gesture —
+ * e.g. a settings toggle click, never on page load) and, if granted,
+ * subscribes to push and registers the subscription with the backend.
+ * Returns false without throwing if unsupported, denied, or misconfigured.
+ */
+export async function subscribeToPush(): Promise<boolean> {
+  if (!isPushSupported()) return false;
+
+  const permission = await Notification.requestPermission();
+  if (permission !== 'granted') return false;
+
+  return doSubscribe();
+}
+
+/**
  * Unsubscribes the current browser from push and removes the subscription
  * from the backend. Safe to call even if never subscribed.
  */
@@ -115,4 +128,47 @@ export async function unsubscribeFromPush(): Promise<void> {
   } catch (error) {
     logger.error('Failed to unsubscribe from push notifications:', error);
   }
+}
+
+// ─── Reconciliation ─────────────────────────────────────────────────────────────
+
+/**
+ * Keeps the saved `pushEnabled` preference honest against what the browser
+ * can actually deliver. Meant to run once per app load (not just when the
+ * user opens Settings) so a permission change is caught before the user
+ * notices notifications silently stopped.
+ *
+ * - permission denied/reset: the user can't receive push no matter what the
+ *   preference says — turn it off server-side.
+ * - permission granted but no live subscription (killed by the push service,
+ *   or the user revoked-then-re-granted permission and the browser dropped
+ *   the old subscription): silently re-subscribe. The user already opted in
+ *   once — only the browser-level permission state changed — so this
+ *   resumes push without asking them to find the toggle again.
+ * - permission granted with a live subscription: nothing to do.
+ *
+ * No-ops entirely if the user never turned push on in the first place.
+ */
+export async function reconcilePushSubscription(): Promise<void> {
+  if (!isPushSupported()) return;
+
+  let prefs;
+  try {
+    prefs = await notificationPreferencesService.getPreferences();
+  } catch (error) {
+    logger.error('Failed to load notification preferences for push reconciliation:', error);
+    return;
+  }
+  if (!prefs.pushEnabled) return;
+
+  const permission = Notification.permission;
+
+  if (permission === 'granted') {
+    if (await hasLiveSubscription()) return;
+    if (await doSubscribe()) return;
+    // Subscribe failed for a reason other than permission (e.g. misconfigured
+    // VAPID key) — fall through to marking the preference off below.
+  }
+
+  await notificationPreferencesService.updatePreferences({ pushEnabled: false });
 }
