@@ -241,11 +241,27 @@ export function SlashBlockEditor({ initialBlocks, onChange, readOnly = false }: 
     }
   };
 
+  // Recalculates a block textarea's height from its actual content, not just
+  // on the keystroke that grew it. Passed as `ref` (an inline function, so
+  // React re-invokes it on every render) rather than a useEffect, because a
+  // row whose content arrived via initialBlocks on load, a slash-command
+  // insert, or a paste never fires the textarea's own `input` DOM event —
+  // the onInput handlers below only catch live typing. Without this, such a
+  // row stayed stuck at its one-line height while wrapped content overflowed
+  // into the textarea's native scrollbar, whose tiny step buttons show up
+  // right next to the block's icon/checkbox and read as a rendering glitch.
+  const autoResizeTextarea = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
   const renderBlockContent = (block: EditorBlock, blockIndex: number) => {
     switch (block.type) {
       case 'text':
         return (
           <Textarea
+            ref={autoResizeTextarea}
             id={`editor-block-${block.id}`}
             value={block.content}
             onChange={(e) => handleContentChange(block.id, e.target.value)}
@@ -303,11 +319,12 @@ export function SlashBlockEditor({ initialBlocks, onChange, readOnly = false }: 
           <div className="flex gap-2 items-start w-full">
             <span className="text-2xl leading-[1.5rem]">•</span>
             <Textarea
+              ref={autoResizeTextarea}
               id={`editor-block-${block.id}`}
               value={block.content}
               onChange={(e) => handleContentChange(block.id, e.target.value)}
               onKeyDown={(e) => handleKeyDown(e, block)}
-              className="min-h-[24px] flex-1 resize-none border-none shadow-none focus-visible:ring-0 p-0 text-base bg-transparent"
+              className="min-h-[24px] flex-1 resize-none border-none shadow-none focus-visible:ring-0 p-0 text-base overflow-hidden bg-transparent"
               placeholder="List item"
               readOnly={readOnly}
               rows={1}
@@ -332,11 +349,12 @@ export function SlashBlockEditor({ initialBlocks, onChange, readOnly = false }: 
           <div className="flex gap-2 items-start w-full">
             <span className="font-medium mt-0.5">{num}.</span>
             <Textarea
+              ref={autoResizeTextarea}
               id={`editor-block-${block.id}`}
               value={block.content}
               onChange={(e) => handleContentChange(block.id, e.target.value)}
               onKeyDown={(e) => handleKeyDown(e, block)}
-              className="min-h-[24px] flex-1 resize-none border-none shadow-none focus-visible:ring-0 p-0 text-base bg-transparent"
+              className="min-h-[24px] flex-1 resize-none border-none shadow-none focus-visible:ring-0 p-0 text-base overflow-hidden bg-transparent"
               placeholder="Numbered item"
               readOnly={readOnly}
               rows={1}
@@ -362,12 +380,13 @@ export function SlashBlockEditor({ initialBlocks, onChange, readOnly = false }: 
               {block.checked && <CheckSquare className="w-3 h-3" />}
             </div>
             <Textarea
+              ref={autoResizeTextarea}
               id={`editor-block-${block.id}`}
               value={block.content}
               onChange={(e) => handleContentChange(block.id, e.target.value)}
               onKeyDown={(e) => handleKeyDown(e, block)}
               className={cn(
-                "min-h-[24px] flex-1 resize-none border-none shadow-none focus-visible:ring-0 p-0 text-base bg-transparent transition-all",
+                "min-h-[24px] flex-1 resize-none border-none shadow-none focus-visible:ring-0 p-0 text-base overflow-hidden bg-transparent transition-all",
                 block.checked && "line-through text-muted-foreground"
               )}
               placeholder="To-do item"
@@ -486,7 +505,17 @@ export function SlashBlockEditor({ initialBlocks, onChange, readOnly = false }: 
                     {...provided.draggableProps}
                     style={provided.draggableProps.style}
                     className={cn(
-                      "relative group pl-8 -ml-8 flex items-start transition-opacity",
+                      // pl-12 (48px) reserves a real gutter (no cancelling
+                      // -ml-8, which used to erase it back to 0 and spill the
+                      // handle over the checkbox and past whatever padding
+                      // the consumer container happened to have) for the
+                      // absolutely-positioned drag handle + options menu
+                      // below. That group is two 20px icon buttons (p-1
+                      // around a 12px icon) plus a 4px gap between them —
+                      // 44px total — so anything less than that (32px was
+                      // tried first) still let the second icon spill onto
+                      // the checkbox even though the first one now fit.
+                      "relative group pl-12 flex items-start transition-opacity",
                       snapshot.isDragging && "opacity-50 z-50"
                     )}
                   >
