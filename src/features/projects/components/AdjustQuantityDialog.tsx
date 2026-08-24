@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -40,7 +40,7 @@ import {
 } from '@/components/ui/form';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { cn } from '@/lib/utils';
-import { Boxes, Camera, Check, ChevronsUpDown, Minus, Pencil, Plus, ShoppingCart, X } from 'lucide-react';
+import { Boxes, Camera, Check, ChevronsUpDown, ImagePlus, Minus, Pencil, Plus, ShoppingCart, Upload, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart, useUpdatePart } from '@/hooks/useParts';
 import { useLocations } from '@/hooks/useLocations';
@@ -122,6 +122,9 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   const [createdPart, setCreatedPart] = useState<{ id: string; partNumber: string; name: string; category: BOMCategory } | null>(null);
   const [image, setImage] = useState<File | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const createPart = useCreatePart(orgId);
   const updatePart = useUpdatePart();
@@ -180,16 +183,82 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
 
   const isFormDirty = form.formState.isDirty || showAddPart || !!image;
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
+  const applyImageFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
     setImage(file);
     setImagePreviewUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return URL.createObjectURL(file);
     });
   };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    applyImageFile(file);
+  };
+
+  const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingImage(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    applyImageFile(file);
+  };
+
+  const handleCloseCamera = () => {
+    setCameraStream((prev) => {
+      prev?.getTracks().forEach((track) => track.stop());
+      return null;
+    });
+  };
+
+  const handleOpenCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      setCameraStream(stream);
+    } catch {
+      toast.error('Camera access was denied or unavailable');
+    }
+  };
+
+  const handleCapturePhoto = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) return;
+      applyImageFile(new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+      handleCloseCamera();
+    }, 'image/jpeg', 0.92);
+  };
+
+  useEffect(() => {
+    if (cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+    }
+  }, [cameraStream]);
+
+  // The camera light must turn off the moment the dialog closes, not just when the user
+  // explicitly cancels the preview — otherwise the stream keeps running in the background.
+  useEffect(() => {
+    if (!isOpen) handleCloseCamera();
+  }, [isOpen]);
+
+  useEffect(() => {
+    return () => {
+      handleCloseCamera();
+    };
+  }, []);
 
   const handleRemoveImage = () => {
     setImage(null);
@@ -213,6 +282,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     setNewPart(emptyNewPart);
     setCreatedPart(null);
     handleRemoveImage();
+    handleCloseCamera();
     onClose();
   };
 
@@ -727,7 +797,26 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Image <span className="normal-case font-normal">optional</span>
                   </Label>
-                  {imagePreviewUrl ? (
+                  {cameraStream ? (
+                    <div className="space-y-2">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full max-w-xs rounded-md border bg-black aspect-video object-cover"
+                      />
+                      <div className="flex items-center gap-2">
+                        <Button type="button" size="sm" onClick={handleCapturePhoto}>
+                          <Camera className="h-3.5 w-3.5 mr-1.5" />
+                          Capture
+                        </Button>
+                        <Button type="button" size="sm" variant="outline" onClick={handleCloseCamera}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : imagePreviewUrl ? (
                     <div className="relative w-fit">
                       <img
                         src={imagePreviewUrl}
@@ -745,17 +834,38 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                       </Button>
                     </div>
                   ) : (
-                    <label className="flex items-center gap-2 w-fit px-3 py-2 rounded-md border border-dashed cursor-pointer text-sm text-muted-foreground hover:bg-muted/40 transition-colors">
-                      <Camera className="h-4 w-4" />
-                      Add photo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="hidden"
-                        onChange={handleImageSelect}
-                      />
-                    </label>
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
+                      onDragLeave={() => setIsDraggingImage(false)}
+                      onDrop={handleImageDrop}
+                      className={cn(
+                        'flex flex-col items-center justify-center gap-2 rounded-md border border-dashed px-4 py-6 text-center transition-colors',
+                        isDraggingImage ? 'border-primary bg-primary/5' : 'border-input'
+                      )}
+                    >
+                      <ImagePlus className="h-5 w-5 text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">Drag & drop an image here</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors">
+                          <Upload className="h-3.5 w-3.5" />
+                          Browse files
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleImageSelect}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={handleOpenCamera}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors"
+                        >
+                          <Camera className="h-3.5 w-3.5" />
+                          Take photo
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>
