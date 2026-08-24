@@ -92,6 +92,10 @@ interface PartDetailSheetProps {
   /** Whether this part is a BOM line on at least one build in the Builds tab — Allocate is
    * meaningless (and disabled) if no build actually needs this part. */
   hasBuildDemand: boolean;
+  /** True only when every build that needs this part already has it fully covered (per that
+   * build's own ledger-tracked allocation, not the stock row's pooled `allocated`) — so the
+   * button can't go "Allocated" while some other build still has an outstanding shortfall. */
+  isFullyAllocated: boolean;
   onClose: () => void;
   onReceive: () => void;
   onAdjust: () => void;
@@ -122,7 +126,7 @@ function StatItem({ label, value, color }: { label: string; value: number; color
 }
 
 export function PartDetailSheet({
-  isOpen, record, status, part, transactions, members = [], orders, whereUsed, hasBuildDemand, onClose,
+  isOpen, record, status, part, transactions, members = [], orders, whereUsed, hasBuildDemand, isFullyAllocated, onClose,
   onReceive, onAdjust, onOrder, onIssue, onTransfer, onAllocate, onReleaseQuarantine,
 }: PartDetailSheetProps) {
   const isMobile = useIsMobile();
@@ -311,17 +315,19 @@ export function PartDetailSheet({
                   className="min-w-0 px-4"
                   variant="outline"
                   onClick={onAllocate}
-                  disabled={!hasBuildDemand || record.allocated > 0}
+                  disabled={!hasBuildDemand || isFullyAllocated || availableOf(record) <= 0}
                   title={
                     !hasBuildDemand
                       ? 'Not used in any build'
-                      : record.allocated > 0
-                        ? 'Already allocated'
-                        : undefined
+                      : isFullyAllocated
+                        ? 'Already allocated to every build that needs it'
+                        : availableOf(record) <= 0
+                          ? 'No available stock to allocate'
+                          : undefined
                   }
                 >
                   <ClipboardCheck className="h-4 w-4 mr-2 shrink-0" />
-                  <span className="truncate">{record.allocated > 0 ? 'Allocated' : 'Allocate'}</span>
+                  <span className="truncate">{isFullyAllocated ? 'Allocated' : 'Allocate'}</span>
                 </Button>
               </>
             )}

@@ -376,19 +376,22 @@ export function InventoryView({ orgId }: InventoryViewProps) {
   );
 
   // Which build(s) actually need a given part (i.e. it's a BOM line on that build's own
-  // project BOM) — gates the part-detail modal's Allocate button (disabled if no build
-  // needs this part at all) and scopes its build picker to only the relevant builds,
-  // instead of every build in the org.
-  const buildsByPartId = useMemo(() => {
-    const map = new Map<string, BuildDef[]>();
+  // project BOM), with that build's own required-vs-allocated for the line — gates the
+  // part-detail modal's Allocate button and scopes its build picker to only the relevant
+  // builds, instead of every build in the org. Deliberately keyed off each build's own
+  // ledger-tracked line.allocated (per buildId), NOT the stock row's pooled `allocated`
+  // (shared across every build using this part) — a part can be fully allocated to one
+  // build while a different build that also needs it still has zero, and the pooled
+  // number alone can't tell those apart.
+  const buildLineEntriesByPartId = useMemo(() => {
+    const map = new Map<string, { build: BuildDef; required: number; allocated: number }[]>();
     computedBuilds.forEach((cb, i) => {
       const def = builds[i];
       if (!def) return;
-      const partIds = new Set(cb.lines.map(l => l.partId));
-      partIds.forEach((pid) => {
-        const list = map.get(pid) ?? [];
-        list.push(def);
-        map.set(pid, list);
+      cb.lines.forEach((line) => {
+        const list = map.get(line.partId) ?? [];
+        list.push({ build: def, required: line.required, allocated: line.allocated });
+        map.set(line.partId, list);
       });
     });
     return map;
@@ -426,7 +429,12 @@ export function InventoryView({ orgId }: InventoryViewProps) {
     [displayStock, selectedPartId]
   );
   const selectedPart = parts.find(p => p.id === selectedPartId);
-  const allocatableBuildsForSelected = selectedPartId ? (buildsByPartId.get(selectedPartId) ?? []) : [];
+  const buildEntriesForSelected = selectedPartId ? (buildLineEntriesByPartId.get(selectedPartId) ?? []) : [];
+  const hasBuildDemandForSelected = buildEntriesForSelected.length > 0;
+  // Only offer builds that still have an outstanding shortfall on this part — a build
+  // already fully covered has nothing left to allocate.
+  const allocatableBuildsForSelected = buildEntriesForSelected.filter((e) => e.allocated < e.required);
+  const isFullyAllocatedForSelected = hasBuildDemandForSelected && allocatableBuildsForSelected.length === 0;
   const whereUsed: WhereUsedRow[] = useMemo(() => {
     if (!selectedPartId) return [];
     return bomFlatAll(rootNodes)
@@ -1045,7 +1053,8 @@ export function InventoryView({ orgId }: InventoryViewProps) {
         members={members}
         orders={orders}
         whereUsed={whereUsed}
-        hasBuildDemand={allocatableBuildsForSelected.length > 0}
+        hasBuildDemand={hasBuildDemandForSelected}
+        isFullyAllocated={isFullyAllocatedForSelected}
         onClose={() => setDetailOpen(false)}
         onReceive={() => openReceiveFor(selectedPartId ?? undefined)}
         onAdjust={() => openAdjustFor(selectedPartId ?? undefined)}

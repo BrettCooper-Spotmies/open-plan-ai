@@ -39,17 +39,23 @@ export interface AllocateStockInput {
   quantity: number;
 }
 
+export interface AllocatableBuildEntry {
+  build: BuildDef;
+  required: number;
+  allocated: number;
+}
+
 interface AllocateStockDialogProps {
   isOpen: boolean;
   onClose: () => void;
   record: StockRecord | null;
-  builds: BuildDef[];
+  builds: AllocatableBuildEntry[];
   onAllocate: (input: AllocateStockInput) => void;
 }
 
 export function AllocateStockDialog({ isOpen, onClose, record, builds, onAllocate }: AllocateStockDialogProps) {
   const isMobile = useIsMobile();
-  const allocatableBuilds = builds.filter((b) => b.status !== 'kitted');
+  const allocatableBuilds = builds.filter((e) => e.build.status !== 'kitted');
 
   const form = useForm<AllocateFormData>({
     resolver: zodResolver(allocateSchema),
@@ -61,8 +67,22 @@ export function AllocateStockDialog({ isOpen, onClose, record, builds, onAllocat
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, record?.id]);
 
+  const available = record ? availableOf(record) : 0;
+
+  const selectedBuildId = form.watch('buildId');
+  const selectedEntry = allocatableBuilds.find((e) => e.build.id === selectedBuildId);
+  // Quantity always mirrors the build's outstanding requirement (capped by what's actually
+  // free at this location) — it isn't a free-typed number, so there's no way to over- or
+  // under-allocate relative to what the build still needs.
+  const outstandingForSelected = selectedEntry ? Math.max(0, selectedEntry.required - selectedEntry.allocated) : 0;
+  const defaultQuantity = Math.min(outstandingForSelected, available);
+
+  useEffect(() => {
+    if (selectedBuildId) form.setValue('quantity', Math.max(0, defaultQuantity));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBuildId, defaultQuantity]);
+
   if (!record) return null;
-  const available = availableOf(record);
 
   const handleSubmit = (data: AllocateFormData) => {
     if (data.quantity > available) {
@@ -128,8 +148,8 @@ export function AllocateStockDialog({ isOpen, onClose, record, builds, onAllocat
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {allocatableBuilds.map((b) => (
-                              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                            {allocatableBuilds.map((e) => (
+                              <SelectItem key={e.build.id} value={e.build.id}>{e.build.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -148,8 +168,13 @@ export function AllocateStockDialog({ isOpen, onClose, record, builds, onAllocat
                         Quantity <span className="text-destructive" aria-hidden="true">*</span>
                       </FormLabel>
                       <FormControl>
-                        <Input type="number" min={1} max={available} {...field} />
+                        <Input type="number" readOnly disabled {...field} />
                       </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        {selectedEntry
+                          ? `Set to the build's outstanding requirement (capped by what's available here).`
+                          : 'Select a build to set the quantity.'}
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -159,7 +184,11 @@ export function AllocateStockDialog({ isOpen, onClose, record, builds, onAllocat
 
             <DialogFooter className="flex-row justify-end gap-2 space-x-0 sm:space-x-0 px-4 sm:px-6 py-4 border-t shrink-0">
               <Button type="button" variant="outline" className="flex-1" onClick={onClose}>Cancel</Button>
-              <Button type="submit" className="flex-1" disabled={available <= 0 || allocatableBuilds.length === 0}>
+              <Button
+                type="submit"
+                className="flex-1"
+                disabled={available <= 0 || allocatableBuilds.length === 0 || !selectedBuildId || defaultQuantity <= 0}
+              >
                 Allocate
               </Button>
             </DialogFooter>
