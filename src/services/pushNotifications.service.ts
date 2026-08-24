@@ -36,6 +36,24 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
   return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
 }
 
+/**
+ * Whether this browser currently holds a live PushManager subscription.
+ * Distinct from the backend's `pushEnabled` preference: the preference can
+ * say "on" while the underlying subscription is actually dead (e.g. the push
+ * service rejected it and the backend cleaned it up server-side) — this is
+ * the only way to know the two have drifted apart.
+ */
+export async function hasLiveSubscription(): Promise<boolean> {
+  if (!isPushSupported()) return false;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration('/sw.js');
+    const subscription = await registration?.pushManager.getSubscription();
+    return Boolean(subscription);
+  } catch {
+    return false;
+  }
+}
+
 // ─── Subscribe / unsubscribe ───────────────────────────────────────────────────
 
 /**

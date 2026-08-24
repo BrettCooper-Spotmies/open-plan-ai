@@ -56,7 +56,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { profileService } from '@/services/profile.service';
 import { notificationPreferencesService, NotificationPreferences } from '@/services/notificationPreferences.service';
-import { subscribeToPush, unsubscribeFromPush, getPermissionState } from '@/services/pushNotifications.service';
+import { subscribeToPush, unsubscribeFromPush, getPermissionState, hasLiveSubscription } from '@/services/pushNotifications.service';
 import { organizationsService, OrganizationSettings } from '@/services/organizations.service';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { useAppTheme } from '@/hooks/useAppTheme';
@@ -134,8 +134,20 @@ const Settings = () => {
     setNotificationPrefsLoading(true);
     notificationPreferencesService
       .getPreferences()
-      .then((prefs) => {
-        if (!cancelled) setNotificationPrefs(prefs);
+      .then(async (prefs) => {
+        if (cancelled) return;
+        setNotificationPrefs(prefs);
+
+        // The saved preference can drift from reality: the push service can
+        // reject a stale subscription server-side (see push.worker.ts's 410
+        // cleanup) without anything telling the browser or this preference
+        // row. Reconcile on load so the toggle never shows "on" for a
+        // connection that's actually dead — the user would otherwise never
+        // know why notifications stopped arriving.
+        if (prefs.pushEnabled && !(await hasLiveSubscription())) {
+          const corrected = await notificationPreferencesService.updatePreferences({ pushEnabled: false });
+          if (!cancelled) setNotificationPrefs(corrected);
+        }
       })
       .catch((error) => {
         logger.error('Error loading notification preferences:', error);
