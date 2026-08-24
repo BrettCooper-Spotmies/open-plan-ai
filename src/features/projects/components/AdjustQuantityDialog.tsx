@@ -138,6 +138,13 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     return [...fromStock, ...fromPartsOnly];
   }, [stock, parts, partProjects]);
 
+  // Custom categories already in use (created via "Add new part") — mirrors InventoryView's
+  // allCategories so they're selectable here too, not just filterable on the inventory page.
+  const extraCategories = useMemo(
+    () => Array.from(new Set(parts.map(p => p.category))),
+    [parts]
+  );
+
   const form = useForm<AdjustFormData>({
     resolver: zodResolver(adjustSchema),
     defaultValues: {
@@ -470,6 +477,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                               <CategoryCombobox
                                 value={newPart.category}
                                 onChange={(v) => setNewPart(prev => ({ ...prev, category: v as BOMCategory | '' }))}
+                                extraCategories={extraCategories}
                               />
                             </div>
                             <div className="space-y-1.5">
@@ -519,7 +527,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                       <FormItem>
                         <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Category <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                         <FormControl>
-                          <CategoryCombobox value={field.value} onChange={field.onChange} placeholder="Select a part first..." />
+                          <CategoryCombobox value={field.value} onChange={field.onChange} placeholder="Select a part first..." extraCategories={extraCategories} />
                         </FormControl>
                         <p className="text-xs text-muted-foreground">
                           Defaults to the part&apos;s category — change it here to recategorize the part.
