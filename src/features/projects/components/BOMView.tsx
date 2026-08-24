@@ -79,6 +79,8 @@ import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMRejectDialog } from './BOMRejectDialog';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
+import { NewBuildDialog, type NewBuildInput } from './NewBuildDialog';
+import { useCreateInventoryBuild } from '@/hooks/useInventory';
 import BOMGoogleSheetsLinkDialog from './BOMGoogleSheetsLinkDialog';
 import BOMGoogleSheetsPullDialog from './BOMGoogleSheetsPullDialog';
 import BOMGoogleSheetsPushDialog from './BOMGoogleSheetsPushDialog';

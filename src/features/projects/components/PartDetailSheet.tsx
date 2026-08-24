@@ -53,6 +53,12 @@ function describeTransaction(t: StockTransaction): TransactionMeta {
   if (t.type === 'deallocate') {
     return { label: 'Deallocated', detail: t.note ?? t.description, Icon: ClipboardCheck, color: '#64748B' };
   }
+  if (t.type === 'issue') {
+    return { label: 'Issued', detail: t.reasonCode ?? t.note ?? t.description, Icon: ArrowLeftRight, color: '#DC2626' };
+  }
+  if (t.type === 'transfer') {
+    return { label: 'Transferred', detail: t.reference ? `To ${t.reference}` : t.note, Icon: ArrowLeftRight, color: '#2563EB' };
+  }
   // adjust
   if (t.reasonCode === 'Released from quarantine') {
     return { label: 'Released from quarantine', detail: t.note, Icon: Unlock, color: '#0EA5E9' };
@@ -83,10 +89,16 @@ interface PartDetailSheetProps {
   members?: TeamMember[];
   orders: OrderRecord[];
   whereUsed: WhereUsedRow[];
+  /** Whether this part is a BOM line on at least one build in the Builds tab — Allocate is
+   * meaningless (and disabled) if no build actually needs this part. */
+  hasBuildDemand: boolean;
   onClose: () => void;
   onReceive: () => void;
   onAdjust: () => void;
   onOrder: () => void;
+  onIssue: () => void;
+  onTransfer: () => void;
+  onAllocate: () => void;
   onReleaseQuarantine: (qty: number) => void;
 }
 
@@ -110,7 +122,8 @@ function StatItem({ label, value, color }: { label: string; value: number; color
 }
 
 export function PartDetailSheet({
-  isOpen, record, status, part, transactions, members = [], orders, whereUsed, onClose, onReceive, onAdjust, onOrder, onReleaseQuarantine,
+  isOpen, record, status, part, transactions, members = [], orders, whereUsed, hasBuildDemand, onClose,
+  onReceive, onAdjust, onOrder, onIssue, onTransfer, onAllocate, onReleaseQuarantine,
 }: PartDetailSheetProps) {
   const isMobile = useIsMobile();
   const [releaseQty, setReleaseQty] = useState('');
@@ -276,14 +289,39 @@ export function PartDetailSheet({
             </Button>
             {!isMobile && (
               <>
-                <Button className="min-w-0 px-4" variant="outline" disabled title="Coming soon">
+                <Button
+                  className="min-w-0 px-4"
+                  variant="outline"
+                  onClick={onIssue}
+                  disabled={availableOf(record) <= 0}
+                  title={availableOf(record) <= 0 ? 'No available stock to issue' : undefined}
+                >
                   <ArrowLeftRight className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Issue</span>
                 </Button>
-                <Button className="min-w-0 px-4" variant="outline" disabled title="Coming soon">
+                <Button
+                  className="min-w-0 px-4"
+                  variant="outline"
+                  onClick={onTransfer}
+                  disabled={availableOf(record) <= 0}
+                  title={availableOf(record) <= 0 ? 'No available stock to transfer' : undefined}
+                >
                   <ArrowLeftRight className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Transfer</span>
                 </Button>
-                <Button className="min-w-0 px-4" variant="outline" disabled title="Coming soon">
-                  <ClipboardCheck className="h-4 w-4 mr-2 shrink-0" /> <span className="truncate">Allocate</span>
+                <Button
+                  className="min-w-0 px-4"
+                  variant="outline"
+                  onClick={onAllocate}
+                  disabled={!hasBuildDemand || record.allocated > 0}
+                  title={
+                    !hasBuildDemand
+                      ? 'Not used in any build'
+                      : record.allocated > 0
+                        ? 'Already allocated'
+                        : undefined
+                  }
+                >
+                  <ClipboardCheck className="h-4 w-4 mr-2 shrink-0" />
+                  <span className="truncate">{record.allocated > 0 ? 'Allocated' : 'Allocate'}</span>
                 </Button>
               </>
             )}
