@@ -1,8 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus } from 'lucide-react';
-// import { LayoutGrid, List } from 'lucide-react'; // Kanban view hidden — re-enable if Kanban toggle is restored
+import { Plus, LayoutGrid, List } from 'lucide-react';
 import { MyDayStats } from './components/MyDayStats';
-// import { MyDayKanbanView } from './components/MyDayKanbanView'; // Kanban view hidden
+import { MyDayKanbanView } from './components/MyDayKanbanView';
 import { MyDayListView } from './components/MyDayListView';
 import { MyDayGroupBySelector } from './components/MyDayGroupBySelector';
 import { MyTasksFiltersDropdown } from './components/MyTasksFiltersDropdown';
@@ -47,6 +46,7 @@ export default function MyDay() {
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
   const [groupBy, setGroupBy] = useState<MyDayGroupBy>('progress');
   const [filter, setFilter] = useState<MyDayFilter>('today');
+  const [view, setView] = useState<'list' | 'kanban'>('list');
   const [columnFilters, setColumnFilters] = useState<MyTasksColumnFilters>({});
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
 
@@ -165,38 +165,6 @@ export default function MyDay() {
       toast.error(`Failed to update ${item.itemType} status`);
     }
   };
-
-  // Kanban view hidden — handleChecklistToggle was only used by MyDayKanbanView
-  // const handleChecklistToggle = async (taskId: string, itemId: string) => {
-  //   const item = userTasks.find(t => t.id === taskId);
-  //   if (!item) return;
-  //
-  //   try {
-  //     const checklist = item.itemType === 'task' ? item.originalTask?.checklist : item.originalIssue?.checklist;
-  //     if (!checklist) return;
-  //
-  //     const updatedChecklist = checklist.map(checklistItem =>
-  //       checklistItem.id === itemId ? { ...checklistItem, completed: !checklistItem.completed } : checklistItem
-  //     );
-  //
-  //     if (item.itemType === 'task') {
-  //       await updateTaskMutation.mutateAsync({
-  //         projectId: item.projectId,
-  //         taskId,
-  //         updates: { checklist: updatedChecklist },
-  //       });
-  //     } else {
-  //       await updateIssueMutation.mutateAsync({
-  //         projectId: item.projectId,
-  //         issueId: taskId,
-  //         updates: { checklist: updatedChecklist },
-  //       });
-  //     }
-  //   } catch (error) {
-  //     logger.error('Failed to toggle checklist item:', error);
-  //     toast.error('Failed to update checklist');
-  //   }
-  // };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
@@ -340,6 +308,27 @@ export default function MyDay() {
           </Tabs>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="flex items-center rounded-lg border p-0.5 h-9 shrink-0">
+              <Button
+                size="sm"
+                variant={view === 'list' ? 'secondary' : 'ghost'}
+                className="h-8 px-2 rounded-md"
+                onClick={() => setView('list')}
+                aria-label="List view"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant={view === 'kanban' ? 'secondary' : 'ghost'}
+                className="h-8 px-2 rounded-md"
+                onClick={() => setView('kanban')}
+                aria-label="Kanban view"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+            </div>
+
             <MyTasksFiltersDropdown
               items={userTasks}
               filters={columnFilters}
@@ -358,36 +347,32 @@ export default function MyDay() {
           </div>
         </div>
 
-        {/* List content */}
+        {/* Content */}
         <div className="grid grid-cols-1 w-full min-w-0">
           <div className="min-h-[400px] w-full min-w-0">
-            {/* Kanban view hidden
             {view === 'kanban' ? (
               <MyDayKanbanView
+                tasks={filteredTasks}
+                onTaskClick={handleTaskClick}
+                onStatusUpdate={handleStatusUpdate}
+              />
+            ) : (
+              <MyDayListView
                 tasks={filteredTasks}
                 groupBy={groupBy}
                 onTaskClick={handleTaskClick}
                 onStatusUpdate={handleStatusUpdate}
-                onChecklistToggle={handleChecklistToggle}
+                emptyMessage={
+                  userTasks.length > 0
+                    ? 'No tasks or issues match the selected filters. Try clearing a filter.'
+                    : filter === 'overdue'
+                      ? "You're all caught up — nothing assigned to you is overdue."
+                      : filter === 'today'
+                        ? 'No tasks or issues assigned to you are due today.'
+                        : 'You have no active tasks assigned to you. Check the Projects page to see available work.'
+                }
               />
-            ) : (
-            */}
-            <MyDayListView
-              tasks={filteredTasks}
-              groupBy={groupBy}
-              onTaskClick={handleTaskClick}
-              onStatusUpdate={handleStatusUpdate}
-              emptyMessage={
-                userTasks.length > 0
-                  ? 'No tasks or issues match the selected filters. Try clearing a filter.'
-                  : filter === 'overdue'
-                    ? "You're all caught up — nothing assigned to you is overdue."
-                    : filter === 'today'
-                      ? 'No tasks or issues assigned to you are due today.'
-                      : 'You have no active tasks assigned to you. Check the Projects page to see available work.'
-              }
-            />
-            {/* )} */}
+            )}
           </div>
         </div>
       </div>
