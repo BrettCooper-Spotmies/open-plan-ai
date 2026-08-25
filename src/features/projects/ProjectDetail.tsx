@@ -1176,6 +1176,7 @@ export default function ProjectDetail() {
         due_date: newMilestonePartial.date || null,
         description: newMilestonePartial.description || null,
         status: newMilestonePartial.completed ? 'completed' : 'upcoming',
+        assignee_id: newMilestonePartial.assignee?.id || null,
       });
 
       // Link tasks if any were selected during creation
@@ -1220,6 +1221,7 @@ export default function ProjectDetail() {
         due_date: updatedMilestone.date || null,
         description: updatedMilestone.description || null,
         status: updatedMilestone.completed ? undefined : (updatedMilestone.status || null),
+        assignee_id: updatedMilestone.assignee?.id || null,
       },
     });
 
@@ -1777,6 +1779,7 @@ export default function ProjectDetail() {
               tasks={project.tasks || []}
               issues={project.issues || []}
               modules={modules}
+              assignableMembers={projectMembers}
               viewMode={milestoneViewMode}
               projectStartDate={project.startDate ? new Date(project.startDate) : undefined}
               searchQuery={milestoneSearchQuery}
@@ -1925,6 +1928,7 @@ export default function ProjectDetail() {
           tasks={project.tasks || []}
           issues={project.issues || []}
           modules={modules}
+          assignableMembers={projectMembers}
           isOpen={!!milestoneId}
           onClose={() => navigate(`/projects/${id}/milestones`)}
           onUpdate={handleMilestoneUpdate}
