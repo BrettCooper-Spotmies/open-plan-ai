@@ -79,6 +79,7 @@ export function fromApiIssue(raw: Record<string, unknown>): Issue {
     title: raw.title as string,
     description: (raw.description as string) ?? '',
     projectId: (raw.projectId ?? raw.project_id) as string,
+    number: raw.number as number,
     moduleId: (raw.moduleId as string) || undefined,
     category: raw.category as IssueCategory,
     severity: (raw.severity as IssueSeverity) ?? 'minor',

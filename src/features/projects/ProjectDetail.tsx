@@ -1733,6 +1733,7 @@ export default function ProjectDetail() {
               tasks={filteredTasks}
               allTasks={project.tasks || []}
               projectId={project.id}
+              projectCode={project.code}
               milestones={project.milestones || []}
               issues={project.issues || []}
               modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
@@ -1756,6 +1757,7 @@ export default function ProjectDetail() {
               issues={project.issues || []}
               teamMembers={projectMembers}
               projectId={project.id}
+              projectCode={project.code}
               viewMode={moduleViewMode}
               onViewModeChange={setModuleViewMode}
               searchQuery={moduleSearchQuery}
@@ -1789,6 +1791,7 @@ export default function ProjectDetail() {
           <TabsContent value="issues" className="mt-6">
             <IssuesView
               issues={project.issues || []}
+              projectCode={project.code}
               viewMode={issueViewMode}
               tasks={project.tasks || []}
               teamMembers={projectMembers}
@@ -1869,6 +1872,7 @@ export default function ProjectDetail() {
         modules={modules}
         milestones={project.milestones || []}
         projectId={id}
+        projectCode={project.code}
         onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
         assignableMembers={projectMembers}
         statusOptions={(boardColumns ?? []).map((c) => ({
@@ -1892,6 +1896,7 @@ export default function ProjectDetail() {
           modules={modules}
           milestones={project.milestones || []}
           projectId={id}
+          projectCode={project.code}
           onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
           assignableMembers={organizationMembers}
           statusOptions={(boardColumns ?? []).map((c) => ({
@@ -1938,6 +1943,7 @@ export default function ProjectDetail() {
           onDelete={handleIssueDelete}
           userProjectRole={project?.myRole}
           mode="view"
+          projectCode={project.code}
         />
       )}
 

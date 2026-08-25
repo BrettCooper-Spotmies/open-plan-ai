@@ -470,6 +470,7 @@ const CalendarPage: React.FC = () => {
             }
           }}
           allTasks={getProjectTasks(selectedTask.projectId || '')}
+          projectCode={projects.find(p => p.id === selectedTask.projectId)?.code}
         />
       )}
 
@@ -524,6 +525,7 @@ const CalendarPage: React.FC = () => {
             }
           }}
           tasks={getProjectTasks(selectedIssue.projectId)}
+          projectCode={projects.find(p => p.id === selectedIssue.projectId)?.code}
         />
       )}
 

@@ -25,7 +25,7 @@ export const issuesService = {
    * (see useMyDayTasks.ts), which fired one /projects/:id/issues/all call
    * per project on every load.
    */
-  async getMyIssues(organizationId?: string): Promise<Array<Issue & { projectName: string }>> {
+  async getMyIssues(organizationId?: string): Promise<Array<Issue & { projectName: string; projectCode: string | null }>> {
     const url = organizationId
       ? `${ENDPOINTS.ISSUES.MY_ALL}?organizationId=${encodeURIComponent(organizationId)}`
       : ENDPOINTS.ISSUES.MY_ALL;
@@ -33,6 +33,7 @@ export const issuesService = {
     return (data || []).map((raw) => ({
       ...fromApiIssue(raw),
       projectName: (raw.projectName as string) ?? '',
+      projectCode: (raw.projectCode as string) ?? null,
     }));
   },
 
