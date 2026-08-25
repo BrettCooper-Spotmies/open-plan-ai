@@ -686,6 +686,7 @@ const CalendarPage: React.FC = () => {
         open={rescheduleMeetOpen}
         onOpenChange={setRescheduleMeetOpen}
         meeting={meetingToReschedule}
+        teamMembers={teamMembers}
       />
     </>
   );
