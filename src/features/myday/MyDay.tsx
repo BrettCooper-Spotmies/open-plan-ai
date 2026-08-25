@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, LayoutGrid, List } from 'lucide-react';
+import { Plus, LayoutGrid, List, Search } from 'lucide-react';
 import { MyDayStats } from './components/MyDayStats';
 import { MyDayKanbanView } from './components/MyDayKanbanView';
 import { MyDayListView } from './components/MyDayListView';
@@ -9,6 +9,7 @@ import { TaskDetailModal } from '@/features/projects/components/TaskDetailModal'
 import { IssueDetailModal } from '@/features/projects/components/IssueDetailModal';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
 import { Task, Issue, TaskStatus, IssueStatus, MyDayGroupBy, MyDayFilter, MyTasksColumnFilters } from '@/types';
@@ -48,6 +49,7 @@ export default function MyDay() {
   const [filter, setFilter] = useState<MyDayFilter>('today');
   const [view, setView] = useState<'list' | 'kanban'>('list');
   const [columnFilters, setColumnFilters] = useState<MyTasksColumnFilters>({});
+  const [searchQuery, setSearchQuery] = useState('');
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
 
   // Fetch dynamic data
@@ -90,7 +92,20 @@ export default function MyDay() {
 
   // Column filters (type/status/priority/project/assignedBy/dueDate) apply on top of the date filter
   const filteredTasks = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
     return userTasks.filter((item) => {
+      if (query) {
+        const haystack = [
+          item.title,
+          item.description,
+          item.projectName,
+          ...item.assignees.map((a) => a.name),
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(query)) return false;
+      }
       if (columnFilters.type?.length && !columnFilters.type.includes(item.itemType)) return false;
       if (columnFilters.status?.length && !columnFilters.status.includes(item.status)) return false;
       if (columnFilters.priority?.length && (!item.priority || !columnFilters.priority.includes(item.priority))) return false;
@@ -109,7 +124,7 @@ export default function MyDay() {
       }
       return true;
     });
-  }, [userTasks, columnFilters]);
+  }, [userTasks, columnFilters, searchQuery]);
 
   const { needsAttention, readyToWork, waitingBlocked } = useMemo(() => {
     return categorizeMyDayItems(allDayItems);
@@ -308,6 +323,17 @@ export default function MyDay() {
           </Tabs>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="relative shrink-0">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="h-9 w-[140px] sm:w-[200px] pl-8 text-xs sm:text-sm"
+              />
+            </div>
+
             <div className="flex items-center rounded-lg border p-0.5 h-9 shrink-0">
               <Button
                 size="sm"
