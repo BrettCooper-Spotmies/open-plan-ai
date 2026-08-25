@@ -228,6 +228,24 @@ export const chatService = {
     return mapChatMessage(data);
   },
 
+  async sendFileMessage(
+    conversationId: string,
+    file: File,
+    caption?: string,
+    replyToMessageId?: string
+  ): Promise<ChatMessage> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (caption) formData.append('caption', caption);
+    if (replyToMessageId) formData.append('replyToMessageId', replyToMessageId);
+    const res = await apiClient.raw.post<{ success: boolean; data: any }>(
+      ENDPOINTS.CONVERSATIONS.FILE_MESSAGE(conversationId),
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } },
+    );
+    return mapChatMessage(res.data.data);
+  },
+
   /**
    * Forwards a message to another conversation. Text messages are re-sent as-is;
    * file/image messages are re-fetched from their stored URL and re-uploaded, since
@@ -334,15 +352,17 @@ export const chatService = {
 
   async getReachableUsers(orgId?: string): Promise<ReachableUser[]> {
     try {
-      const params = orgId
-        ? `?q=&limit=100&orgId=${encodeURIComponent(orgId)}`
+      const cleanOrgId = orgId && orgId.trim().length > 0 ? orgId.trim() : undefined;
+      const params = cleanOrgId
+        ? `?q=&limit=100&orgId=${encodeURIComponent(cleanOrgId)}`
         : '?q=&limit=100';
       const users: ReachableUser[] = await apiClient.get(`${ENDPOINTS.USERS.SEARCH}${params}`);
-      return users.map((u) => ({
+      return (users || []).map((u) => ({
         ...u,
         avatarUrl: resolveFileUrl(u.avatarUrl) ?? u.avatarUrl,
       }));
-    } catch {
+    } catch (err) {
+      logger.error('Failed to fetch reachable users:', err);
       return [];
     }
   },

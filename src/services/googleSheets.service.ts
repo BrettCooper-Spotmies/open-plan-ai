@@ -122,11 +122,15 @@ export interface ImportRowPreview {
   /** Sheet columns with no BOM field behind them — imported into Additional Fields. */
   customFields: Record<string, string>;
   missingRequiredFields: string[];
-  aiSuggestions: Partial<Record<'Part Name' | 'Description' | 'Category', string>>;
+  aiSuggestions: Partial<Record<'Description' | 'Category', string>>;
   leadTimeRaw: string | null;
   leadTimeDays: number | null;
   leadTimeAmbiguous: boolean;
   leadTimeRequired: boolean;
+  /** Currency symbol/code read off the Unit Price cell or column header (e.g. "INR", "USD"), or null when neither carries a currency signal. */
+  detectedCurrency: string | null;
+  /** True when detectedCurrency differs from the organization's configured currency. Independent of `status` — a row can be needs-input and currency-mismatched at once — so check this directly rather than relying on status alone. */
+  currencyMismatch: boolean;
   changes: ExportFieldChange[];
 }
 
@@ -152,6 +156,8 @@ export interface ImportPreview {
   /** The column the structure was read from, so the user can confirm it's the right one. */
   hierarchyColumn: string | null;
   maxDepth: number;
+  /** The organization's configured currency (Settings → Organization) — what every row's Unit Price is checked against. */
+  orgCurrencyCode: string;
   rows: ImportRowPreview[];
   deletedParts: ImportDeletedPartPreview[];
 }
