@@ -215,7 +215,12 @@ interface AssistantProposalFormProps {
 }
 
 export function AssistantProposalForm({ entityType, projectId, formState, onSubmit, onCancel }: AssistantProposalFormProps) {
-  const initial = formState.mode === 'single' ? (formState.fields ?? {}) : { [formState.sharedFields?.[0]?.field ?? '']: formState.sharedFields?.[0]?.value };
+  const rawInitial = formState.mode === 'single' ? (formState.fields ?? {}) : { [formState.sharedFields?.[0]?.field ?? '']: formState.sharedFields?.[0]?.value };
+  // Milestones default to "Automatic" (null → computed from tasks) when the model doesn't propose
+  // a status, which reads as a fake status option to the user — default the form to On Track instead.
+  const initial = entityType === 'milestone' && 'status' in rawInitial && (rawInitial.status === null || rawInitial.status === undefined)
+    ? { ...rawInitial, status: 'on-track' }
+    : rawInitial;
   const [values, setValues] = useState<Record<string, unknown>>(initial);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
