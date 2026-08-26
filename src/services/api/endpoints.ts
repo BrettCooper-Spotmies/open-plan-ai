@@ -316,6 +316,7 @@ export const ENDPOINTS = {
     ALLOCATE_STOCK:     (orgId: string, stockId: string) => `/organizations/${orgId}/inventory/stock/${stockId}/allocate`,
     RELEASE_QUARANTINE: (orgId: string, stockId: string) => `/organizations/${orgId}/inventory/stock/${stockId}/release-quarantine`,
     PLACE_ORDER:        (orgId: string) => `/organizations/${orgId}/inventory/orders`,
+    MARK_ORDER_ORDERED: (orgId: string, orderId: string) => `/organizations/${orgId}/inventory/orders/${orderId}/mark-ordered`,
     ALLOCATE_BUILD:     (orgId: string, buildId: string) => `/organizations/${orgId}/inventory/builds/${buildId}/allocate`,
     KIT_BUILD:          (orgId: string, buildId: string) => `/organizations/${orgId}/inventory/builds/${buildId}/kit`,
   },
