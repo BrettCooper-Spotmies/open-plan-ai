@@ -1044,7 +1044,6 @@ export function InventoryView({ orgId }: InventoryViewProps) {
             openBuildId={openBuildId}
             onOpenBuildHandled={() => setOpenBuildId(null)}
             onAddBuild={handleAddBuild}
-            onGenerateShortageOrder={openOrderFor}
             projects={projects}
           />
         </TabsContent>

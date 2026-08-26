@@ -103,6 +103,19 @@ export interface ApiAllocateBuildResponse {
   fullyAllocated: boolean;
 }
 
+export interface ApiShortageOrderLineResult {
+  partId: string;
+  pn: string;
+  quantityOrdered: number;
+  orderId: string;
+  action: 'created' | 'updated';
+}
+
+export interface ApiGenerateShortageOrdersResponse {
+  build: ApiBuildDef;
+  lines: ApiShortageOrderLineResult[];
+}
+
 // ─── Adapters ───────────────────────────────────────────────────────────────────
 
 export function fromApiStock(r: ApiStockRecord): StockRecord {
@@ -337,6 +350,17 @@ export const inventoryService = {
 
   async allocateBuild(orgId: string, buildId: string): Promise<ApiAllocateBuildResponse> {
     return apiClient.post<ApiAllocateBuildResponse>(ENDPOINTS.INVENTORY.ALLOCATE_BUILD(orgId, buildId), {});
+  },
+
+  async generateShortageOrders(
+    orgId: string,
+    buildId: string,
+    partIds: string[],
+  ): Promise<ApiGenerateShortageOrdersResponse> {
+    return apiClient.post<ApiGenerateShortageOrdersResponse>(
+      ENDPOINTS.INVENTORY.GENERATE_SHORTAGE_ORDERS(orgId, buildId),
+      { partIds },
+    );
   },
 
   async kitBuild(orgId: string, buildId: string): Promise<ApiBuildDef> {
