@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FolderPlus, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useProjects } from '@/hooks/useProjects';
@@ -524,7 +523,7 @@ export function AssistantPanel({
           />
         </div>
       ) : (
-        <ScrollArea className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <div
             className={cn(
               'mx-auto flex min-h-full flex-col items-center justify-center gap-5',
@@ -558,7 +557,7 @@ export function AssistantPanel({
               )
             )}
           </div>
-        </ScrollArea>
+        </div>
       )}
 
       {hasActiveConversation && (
