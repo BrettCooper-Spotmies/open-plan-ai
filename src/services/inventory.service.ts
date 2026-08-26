@@ -269,7 +269,7 @@ export interface CreateBuildDto {
   scrapPct: number;
   milestone?: string;
   targetDate?: string;
-  assigneeId?: string;
+  assigneeId: string;
 }
 
 // ─── Service ────────────────────────────────────────────────────────────────────

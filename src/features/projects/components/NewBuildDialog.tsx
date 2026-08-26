@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -63,11 +62,12 @@ const buildSchema = z.object({
   milestone: z.string().max(60, 'Milestone must be less than 60 characters').optional(),
   targetDate: z.string().optional(),
   projectId: z.string().min(1, 'Select a project'),
+  assigneeId: z.string().min(1, 'Select an assignee'),
 });
 
 type BuildFormData = z.infer<typeof buildSchema>;
 
-export type NewBuildInput = Omit<BuildDef, 'id' | 'assignee'> & { projectId: string; assigneeId?: string };
+export type NewBuildInput = Omit<BuildDef, 'id' | 'assignee'> & { projectId: string; assigneeId: string };
 
 interface NewBuildDialogProps {
   isOpen: boolean;
@@ -96,6 +96,7 @@ export function NewBuildDialog({ isOpen, onClose, onAddBuild, projects, lockedPr
       milestone: '',
       targetDate: '',
       projectId: lockedProjectId ?? projects[0]?.id ?? '',
+      assigneeId: '',
     },
   });
 
@@ -104,11 +105,16 @@ export function NewBuildDialog({ isOpen, onClose, onAddBuild, projects, lockedPr
   const selectedProjectId = form.watch('projectId') || lockedProjectId;
   const { data: projectMembers = [] } = useProjectMembers(selectedProjectId);
 
+  const pickAssignee = (member: TeamMember | null) => {
+    setAssignee(member);
+    form.setValue('assigneeId', member?.id ?? '', { shouldValidate: form.formState.isSubmitted });
+  };
+
   // Clear a previously picked assignee if the project changes and they're no longer a
   // member of the newly selected project.
   useEffect(() => {
     if (assignee && !projectMembers.some(m => m.id === assignee.id)) {
-      setAssignee(null);
+      pickAssignee(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProjectId, projectMembers]);
@@ -139,7 +145,7 @@ export function NewBuildDialog({ isOpen, onClose, onAddBuild, projects, lockedPr
       milestone: data.milestone?.trim() || `${data.name.trim()} Complete`,
       targetDate: data.targetDate ? new Date(data.targetDate).toISOString() : undefined,
       projectId: data.projectId,
-      assigneeId: assignee?.id,
+      assigneeId: data.assigneeId,
     });
     resetAndClose();
   };
@@ -317,78 +323,74 @@ export function NewBuildDialog({ isOpen, onClose, onAddBuild, projects, lockedPr
                   )}
                 />
 
-                <div className="space-y-2">
-                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Assigned to <span className="normal-case font-normal">optional</span></Label>
-                  <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-full justify-start text-left font-normal"
-                      >
-                        {assignee ? (
-                          <span className="flex items-center gap-2">
-                            <Avatar className="h-5 w-5">
-                              <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
-                              <AvatarFallback className="text-[10px]">{assignee.initials}</AvatarFallback>
-                            </Avatar>
-                            {assignee.name}
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-2 text-muted-foreground">
-                            <User className="h-4 w-4" />
-                            Unassigned
-                          </span>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="p-0 w-[260px]" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search members..." />
-                        <CommandList>
-                          <CommandEmpty>No members found.</CommandEmpty>
-                          <CommandGroup>
-                            {assignee && (
-                              <CommandItem
-                                value="unassign"
-                                onSelect={() => {
-                                  setAssignee(null);
-                                  setIsAssigneePopoverOpen(false);
-                                }}
-                                className="cursor-pointer text-muted-foreground"
-                              >
-                                <X className="h-3.5 w-3.5 mr-1" />
-                                Unassign
-                              </CommandItem>
-                            )}
-                            {projectMembers
-                              .slice()
-                              .sort((a, b) => a.name.localeCompare(b.name))
-                              .map(member => (
-                                <CommandItem
-                                  key={member.id}
-                                  value={`${member.id} ${member.name}`}
-                                  onSelect={() => {
-                                    setAssignee(member);
-                                    setIsAssigneePopoverOpen(false);
-                                  }}
-                                  className="cursor-pointer"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <Avatar className="h-5 w-5">
-                                      <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
-                                      <AvatarFallback className="text-[9px]">{member.initials}</AvatarFallback>
-                                    </Avatar>
-                                    {member.name}
-                                  </div>
-                                </CommandItem>
-                              ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
+                <FormField
+                  control={form.control}
+                  name="assigneeId"
+                  render={() => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Assigned to <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                      <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className="w-full justify-start text-left font-normal"
+                            >
+                              {assignee ? (
+                                <span className="flex items-center gap-2">
+                                  <Avatar className="h-5 w-5">
+                                    <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
+                                    <AvatarFallback className="text-[10px]">{assignee.initials}</AvatarFallback>
+                                  </Avatar>
+                                  {assignee.name}
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-2 text-muted-foreground">
+                                  <User className="h-4 w-4" />
+                                  Select a member...
+                                </span>
+                              )}
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="p-0 w-[260px]" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search members..." />
+                            <CommandList>
+                              <CommandEmpty>No members found.</CommandEmpty>
+                              <CommandGroup>
+                                {projectMembers
+                                  .slice()
+                                  .sort((a, b) => a.name.localeCompare(b.name))
+                                  .map(member => (
+                                    <CommandItem
+                                      key={member.id}
+                                      value={`${member.id} ${member.name}`}
+                                      onSelect={() => {
+                                        pickAssignee(member);
+                                        setIsAssigneePopoverOpen(false);
+                                      }}
+                                      className="cursor-pointer"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Avatar className="h-5 w-5">
+                                          <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
+                                          <AvatarFallback className="text-[9px]">{member.initials}</AvatarFallback>
+                                        </Avatar>
+                                        {member.name}
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
             </div>
 

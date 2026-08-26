@@ -1144,6 +1144,7 @@ export function BOMView({
       milestone: input.milestone,
       targetDate: input.targetDate,
       projectId: input.projectId,
+      assigneeId: input.assigneeId,
     }, {
       onSuccess: () => toast.success(`${input.name} created`),
       onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to create build'),
