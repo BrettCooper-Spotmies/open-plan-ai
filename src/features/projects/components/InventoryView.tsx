@@ -504,14 +504,23 @@ export function InventoryView({ orgId }: InventoryViewProps) {
 
   // Mobile's Receive/New transaction shortcuts live in the app header (AppHeader), which
   // has no access to this component's local dialog state — it hands off via ?action=.
+  // The BOM toolbar's build picker deep-links the same way via ?tab=builds&buildId=.
   const [searchParams, setSearchParams] = useSearchParams();
   useEffect(() => {
     const action = searchParams.get('action');
     if (action === 'receive') openReceiveFor();
     else if (action === 'adjust') openAdjustFor();
     else if (action === 'order') openOrderFor();
-    if (action) {
-      setSearchParams((prev) => { prev.delete('action'); return prev; }, { replace: true });
+
+    const tab = searchParams.get('tab');
+    const buildId = searchParams.get('buildId');
+    if (tab === 'builds') {
+      if (buildId) openBuild(buildId);
+      else setActiveTab('builds');
+    }
+
+    if (action || tab || buildId) {
+      setSearchParams((prev) => { prev.delete('action'); prev.delete('tab'); prev.delete('buildId'); return prev; }, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
