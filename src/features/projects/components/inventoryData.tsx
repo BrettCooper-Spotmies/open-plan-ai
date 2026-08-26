@@ -348,6 +348,13 @@ export interface BuildLine {
   status: CoverageStatus;
 }
 
+/** Basic user info for a build's assignee — mirrors the backend's inventory.types.ts shape. */
+export interface BuildAssignee {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
 export interface Build {
   id: string;
   name: string;
@@ -365,6 +372,7 @@ export interface Build {
   shortLines: BuildLine[];
   longestLead: BuildLine | null;
   status: BuildStatus;
+  assignee: BuildAssignee | null;
 }
 
 export type BuildStatus = 'planned' | 'allocated' | 'kitted';
@@ -382,6 +390,7 @@ export interface BuildDef {
    * a synthetic lateness offset so their numbers stay stable across re-renders. */
   targetDate?: string;
   status: BuildStatus;
+  assignee: BuildAssignee | null;
 }
 
 /** One row of a build's own project BOM, joined server-side with current org stock — see
@@ -470,7 +479,7 @@ export function buildFromDef(def: BuildDef, bomLines: BuildBomLine[]): Build {
     bomRev: def.bomRev, scrapPct: def.scrapPct, linkedMilestone: def.milestone,
     targetDate, projectedDate, daysLate,
     lines, readyCount, onOrderCount, shortLines, longestLead,
-    status: def.status,
+    status: def.status, assignee: def.assignee,
   };
 }
 

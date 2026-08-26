@@ -171,6 +171,11 @@ export function BuildsPanel({ orgId, builds, onSelectPart, openBuildId, onOpenBu
               <p className="text-sm text-muted-foreground">
                 BOM {selectedBuild.bomRev} · {selectedBuild.units} units · scrap {selectedBuild.scrapPct}% · linked to{' '}
                 <span className="font-medium text-foreground">{selectedBuild.linkedMilestone}</span>
+                {selectedBuild.assignee && (
+                  <>
+                    {' '}· Assigned to <span className="font-medium text-foreground">{selectedBuild.assignee.name}</span>
+                  </>
+                )}
               </p>
 
               <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
@@ -352,6 +357,11 @@ export function BuildsPanel({ orgId, builds, onSelectPart, openBuildId, onOpenBu
         <p className="text-sm text-muted-foreground">
           BOM {selectedBuild.bomRev} · {selectedBuild.units} units · scrap {selectedBuild.scrapPct}% · linked to{' '}
           <span className="font-medium text-foreground">{selectedBuild.linkedMilestone}</span>
+          {selectedBuild.assignee && (
+            <>
+              {' '}· Assigned to <span className="font-medium text-foreground">{selectedBuild.assignee.name}</span>
+            </>
+          )}
         </p>
 
         <div className="flex items-center justify-between gap-4 flex-wrap rounded-lg border p-3">

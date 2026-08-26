@@ -1,6 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
-import type { StockRecord, OrderRecord, StockTransaction, BuildDef, BuildBomLine } from '@/features/projects/components/inventoryData';
+import type { StockRecord, OrderRecord, StockTransaction, BuildDef, BuildBomLine, BuildAssignee } from '@/features/projects/components/inventoryData';
 
 // ─── API response shapes (match backend inventory.types.ts responses) ─────────
 
@@ -69,6 +69,7 @@ export interface ApiBuildDef {
   milestone: string | null;
   targetDate: string | null;
   status: 'planned' | 'allocated' | 'kitted';
+  assignee: BuildAssignee | null;
 }
 
 export interface ApiBuildBomLine {
@@ -173,6 +174,7 @@ export function fromApiBuild(r: ApiBuildDef): BuildDef {
     milestone: r.milestone ?? '',
     targetDate: r.targetDate ?? undefined,
     status: r.status,
+    assignee: r.assignee ?? null,
   };
 }
 
@@ -267,6 +269,7 @@ export interface CreateBuildDto {
   scrapPct: number;
   milestone?: string;
   targetDate?: string;
+  assigneeId?: string;
 }
 
 // ─── Service ────────────────────────────────────────────────────────────────────

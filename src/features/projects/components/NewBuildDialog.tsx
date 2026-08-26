@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -20,6 +21,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   Form,
   FormControl,
@@ -30,8 +45,11 @@ import {
 } from '@/components/ui/form';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { cn } from '@/lib/utils';
-import { Layers, Lock, X } from 'lucide-react';
+import { Layers, Lock, User, X } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useProjectMembers } from '@/hooks/useProjectTeam';
+import { resolveFileUrl } from '@/utils/fileUrl';
+import type { TeamMember } from '@/types';
 import type { BuildDef } from './inventoryData';
 
 const BUILD_TYPES = ['EVT', 'DVT', 'PVT', 'Custom'] as const;
@@ -49,7 +67,7 @@ const buildSchema = z.object({
 
 type BuildFormData = z.infer<typeof buildSchema>;
 
-export type NewBuildInput = Omit<BuildDef, 'id'> & { projectId: string };
+export type NewBuildInput = Omit<BuildDef, 'id' | 'assignee'> & { projectId: string; assigneeId?: string };
 
 interface NewBuildDialogProps {
   isOpen: boolean;
@@ -63,6 +81,8 @@ interface NewBuildDialogProps {
 export function NewBuildDialog({ isOpen, onClose, onAddBuild, projects, lockedProjectId }: NewBuildDialogProps) {
   const isMobile = useIsMobile();
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [assignee, setAssignee] = useState<TeamMember | null>(null);
+  const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
   const lockedProjectName = projects.find(p => p.id === lockedProjectId)?.name ?? lockedProjectId ?? '';
 
   const form = useForm<BuildFormData>({
@@ -79,10 +99,25 @@ export function NewBuildDialog({ isOpen, onClose, onAddBuild, projects, lockedPr
     },
   });
 
-  const isFormDirty = form.formState.isDirty;
+  // Assignee choices are scoped to whichever project is currently selected in the form —
+  // a build's assignee must be a member of that build's own project.
+  const selectedProjectId = form.watch('projectId') || lockedProjectId;
+  const { data: projectMembers = [] } = useProjectMembers(selectedProjectId);
+
+  // Clear a previously picked assignee if the project changes and they're no longer a
+  // member of the newly selected project.
+  useEffect(() => {
+    if (assignee && !projectMembers.some(m => m.id === assignee.id)) {
+      setAssignee(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProjectId, projectMembers]);
+
+  const isFormDirty = form.formState.isDirty || assignee !== null;
 
   const resetAndClose = () => {
     form.reset();
+    setAssignee(null);
     onClose();
   };
 
@@ -104,6 +139,7 @@ export function NewBuildDialog({ isOpen, onClose, onAddBuild, projects, lockedPr
       milestone: data.milestone?.trim() || `${data.name.trim()} Complete`,
       targetDate: data.targetDate ? new Date(data.targetDate).toISOString() : undefined,
       projectId: data.projectId,
+      assigneeId: assignee?.id,
     });
     resetAndClose();
   };
@@ -280,6 +316,79 @@ export function NewBuildDialog({ isOpen, onClose, onAddBuild, projects, lockedPr
                     </FormItem>
                   )}
                 />
+
+                <div className="space-y-2">
+                  <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Assigned to <span className="normal-case font-normal">optional</span></Label>
+                  <Popover open={isAssigneePopoverOpen} onOpenChange={setIsAssigneePopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal"
+                      >
+                        {assignee ? (
+                          <span className="flex items-center gap-2">
+                            <Avatar className="h-5 w-5">
+                              <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
+                              <AvatarFallback className="text-[10px]">{assignee.initials}</AvatarFallback>
+                            </Avatar>
+                            {assignee.name}
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-2 text-muted-foreground">
+                            <User className="h-4 w-4" />
+                            Unassigned
+                          </span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0 w-[260px]" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search members..." />
+                        <CommandList>
+                          <CommandEmpty>No members found.</CommandEmpty>
+                          <CommandGroup>
+                            {assignee && (
+                              <CommandItem
+                                value="unassign"
+                                onSelect={() => {
+                                  setAssignee(null);
+                                  setIsAssigneePopoverOpen(false);
+                                }}
+                                className="cursor-pointer text-muted-foreground"
+                              >
+                                <X className="h-3.5 w-3.5 mr-1" />
+                                Unassign
+                              </CommandItem>
+                            )}
+                            {projectMembers
+                              .slice()
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map(member => (
+                                <CommandItem
+                                  key={member.id}
+                                  value={`${member.id} ${member.name}`}
+                                  onSelect={() => {
+                                    setAssignee(member);
+                                    setIsAssigneePopoverOpen(false);
+                                  }}
+                                  className="cursor-pointer"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Avatar className="h-5 w-5">
+                                      <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
+                                      <AvatarFallback className="text-[9px]">{member.initials}</AvatarFallback>
+                                    </Avatar>
+                                    {member.name}
+                                  </div>
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
             </div>
 

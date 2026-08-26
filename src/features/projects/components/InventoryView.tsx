@@ -465,6 +465,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       milestone: input.milestone,
       targetDate: input.targetDate,
       projectId: input.projectId,
+      assigneeId: input.assigneeId,
     }, {
       onSuccess: (created) => {
         openBuild(created.id);
