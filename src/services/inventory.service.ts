@@ -54,6 +54,8 @@ export interface ApiStockTransaction {
   description: string | null;
   quarantine: boolean;
   buildId: string | null;
+  lotNumber: string | null;
+  serialNumber: string | null;
   createdAt: string;
   createdBy: string;
 }
@@ -157,6 +159,8 @@ export function fromApiTransaction(r: ApiStockTransaction): StockTransaction {
     description: r.description ?? undefined,
     quarantine: r.quarantine,
     buildId: r.buildId ?? undefined,
+    lotNumber: r.lotNumber ?? undefined,
+    serialNumber: r.serialNumber ?? undefined,
     createdAt: r.createdAt,
     createdBy: r.createdBy,
   };

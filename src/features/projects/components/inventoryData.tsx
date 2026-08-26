@@ -249,6 +249,8 @@ export interface StockTransaction {
   description?: string;            // adjust only
   quarantine?: boolean;            // receive only
   buildId?: string;                // allocate/deallocate/issue only
+  lotNumber?: string;               // receive/adjust only
+  serialNumber?: string;            // receive/adjust only
   createdAt: string;
   createdBy: string;
 }
