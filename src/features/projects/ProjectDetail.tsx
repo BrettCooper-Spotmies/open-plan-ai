@@ -1497,6 +1497,10 @@ export default function ProjectDetail() {
                     <TooltipContent>Project Details</TooltipContent>
                   </Tooltip>
                 )}
+                {/* Team Popover */}
+                <div className="hidden md:block">
+                  <ProjectTeamButton projectId={id!} />
+                </div>
                 {/* Start Chat */}
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1513,10 +1517,6 @@ export default function ProjectDetail() {
                   </TooltipTrigger>
                   <TooltipContent>Chat</TooltipContent>
                 </Tooltip>
-                {/* Team Popover */}
-                <div className="hidden md:block">
-                  <ProjectTeamButton projectId={id!} />
-                </div>
                 {/* Critical Issues Badge */}
                 {/* {criticalIssuesCount > 0 && (
                 <Badge variant="destructive" className="gap-1 shrink-0 hidden sm:inline-flex">
