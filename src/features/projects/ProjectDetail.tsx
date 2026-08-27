@@ -8,6 +8,7 @@ import { GateView } from './components/GateView';
 import { RiskView } from './components/RiskView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 
 import { Label } from '@/components/ui/label';
@@ -1479,32 +1480,39 @@ export default function ProjectDetail() {
                 {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
                 {/* Project details — the full record (description, dates,
                     departments, links). Unreachable from inside the project
-                    before this. Moved to the second-row toolbar for Issues. */}
-                {section !== 'issues' && section !== 'tasks' && section !== 'modules' && section !== 'milestones' && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9 gap-1.5 whitespace-nowrap rounded-lg px-2 md:px-3"
-                    onClick={() => navigate(`/projects/${id}/details`)}
-                    title="Project details"
-                  >
-                    <FolderOpen className="h-4 w-4" />
-                    <span className="hidden md:inline">Project Details</span>
-                  </Button>
+                    before this. */}
+                {!isMobile && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-9 w-9 rounded-lg shrink-0"
+                        onClick={() => navigate(`/projects/${id}/details`)}
+                      >
+                        <FolderOpen className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Project Details</TooltipContent>
+                  </Tooltip>
                 )}
                 {/* Start Chat */}
-                <Button
-                  type="button"
-                  variant={isChatPanelOpen ? 'secondary' : 'outline'}
-                  size="sm"
-                  className="h-9 gap-1.5 whitespace-nowrap rounded-lg hidden sm:flex"
-                  onClick={handleStartProjectChat}
-                  disabled={isStartingChat || !canStartProjectChat}
-                >
-                  {isStartingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                  <span className="hidden md:inline">Chat</span>
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant={isChatPanelOpen ? 'secondary' : 'outline'}
+                      size="icon"
+                      className="h-9 w-9 rounded-lg hidden sm:flex shrink-0"
+                      onClick={handleStartProjectChat}
+                      disabled={isStartingChat || !canStartProjectChat}
+                    >
+                      {isStartingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Chat</TooltipContent>
+                </Tooltip>
                 {/* Team Popover */}
                 <div className="hidden md:block">
                   <ProjectTeamButton projectId={id!} />
@@ -1615,21 +1623,8 @@ export default function ProjectDetail() {
                       </Button>
                     )}
                   </div>
-                  {/* Right: Project Details + View toggle + Filter */}
+                  {/* Right: View toggle + Filter */}
                   <div className="flex items-center gap-2 shrink-0">
-                    {!isMobile && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 gap-1.5 whitespace-nowrap rounded-lg px-2 md:px-3"
-                        onClick={() => navigate(`/projects/${id}/details`)}
-                        title="Project details"
-                      >
-                        <FolderOpen className="h-4 w-4" />
-                        <span className="hidden md:inline">Project Details</span>
-                      </Button>
-                    )}
                     <ViewControls
                       viewMode={viewMode}
                       onViewModeChange={setViewMode}
@@ -1679,19 +1674,8 @@ export default function ProjectDetail() {
                       </Button>
                     )}
                   </div>
-                  {/* Right: Project Details + View toggle (desktop/tablet only — mobile always uses the card view) */}
+                  {/* Right: View toggle (desktop/tablet only — mobile always uses the card view) */}
                   <div className="hidden md:flex items-center gap-2 shrink-0">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-9 gap-1.5 whitespace-nowrap rounded-lg px-2 md:px-3"
-                      onClick={() => navigate(`/projects/${id}/details`)}
-                      title="Project details"
-                    >
-                      <FolderOpen className="h-4 w-4" />
-                      <span className="hidden md:inline">Project Details</span>
-                    </Button>
                     <ModuleViewControls
                       viewMode={moduleViewMode}
                       onViewModeChange={setModuleViewMode}
@@ -1731,21 +1715,8 @@ export default function ProjectDetail() {
                       </Button>
                     )}
                   </div>
-                  {/* Right: Project Details + View toggle */}
+                  {/* Right: View toggle */}
                   <div className="flex items-center gap-2 shrink-0">
-                    {!isMobile && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 gap-1.5 whitespace-nowrap rounded-lg px-2 md:px-3"
-                        onClick={() => navigate(`/projects/${id}/details`)}
-                        title="Project details"
-                      >
-                        <FolderOpen className="h-4 w-4" />
-                        <span className="hidden md:inline">Project Details</span>
-                      </Button>
-                    )}
                     <MilestoneViewControls
                       viewMode={milestoneViewMode}
                       onViewModeChange={setMilestoneViewMode}
@@ -1785,21 +1756,8 @@ export default function ProjectDetail() {
                       </Button>
                     )}
                   </div>
-                  {/* Right: Project Details + View toggle + Filter */}
+                  {/* Right: View toggle + Filter */}
                   <div className="flex items-center gap-2 shrink-0">
-                    {!isMobile && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-9 gap-1.5 whitespace-nowrap rounded-lg px-2 md:px-3"
-                        onClick={() => navigate(`/projects/${id}/details`)}
-                        title="Project details"
-                      >
-                        <FolderOpen className="h-4 w-4" />
-                        <span className="hidden md:inline">Project Details</span>
-                      </Button>
-                    )}
                     <IssueViewControls
                       viewMode={issueViewMode}
                       onViewModeChange={setIssueViewMode}
