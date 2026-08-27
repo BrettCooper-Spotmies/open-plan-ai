@@ -24,7 +24,11 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   Loader2,
+  ListTodo,
+  Calendar as CalendarIcon,
+  BarChart3,
 } from 'lucide-react';
+import { useFeatureTogglesStore, type ToggleableFeature } from '@/stores/useFeatureTogglesStore';
 import { useGoogleMeetStore } from './stores/useGoogleMeetStore';
 import { useGoogleMeetStatus } from './hooks/useGoogleMeetStatus';
 import { googleMeetService } from '@/services/googleMeet.service';
@@ -43,6 +47,9 @@ interface Integration {
   description: string;
   logo: LogoSpec;
   color: string;
+  // Set only for sidebar features that are toggled on/off from here rather
+  // than "Coming soon" placeholders or OAuth connectors.
+  feature?: ToggleableFeature;
 }
 
 interface Section {
@@ -55,11 +62,28 @@ const SECTIONS: Section[] = [
     title: 'Features',
     items: [
       {
-        id: 'requirements',
-        name: 'Requirements',
-        description: 'Trace requirements through tasks, modules, and ECOs for full coverage.',
-        logo: { kind: 'icon', icon: ClipboardList },
-        color: '#2563EB',
+        id: 'my-tasks',
+        name: 'My Tasks',
+        description: 'A personal, cross-project view of everything assigned to you.',
+        logo: { kind: 'icon', icon: ListTodo },
+        color: '#7C3AED',
+        feature: 'my-tasks',
+      },
+      {
+        id: 'calendar',
+        name: 'Calendar',
+        description: 'See tasks, milestones, and due dates laid out across a calendar.',
+        logo: { kind: 'icon', icon: CalendarIcon },
+        color: '#DB2777',
+        feature: 'calendar',
+      },
+      {
+        id: 'reports',
+        name: 'Reports',
+        description: 'Roll up project progress, burndown, and team activity into reports.',
+        logo: { kind: 'icon', icon: BarChart3 },
+        color: '#0891B2',
+        feature: 'reports',
       },
       {
         id: 'inventory',
@@ -67,6 +91,14 @@ const SECTIONS: Section[] = [
         description: 'Track on-hand stock, allocations, and shortages against your BOMs.',
         logo: { kind: 'icon', icon: Boxes },
         color: '#D97706',
+        feature: 'inventory',
+      },
+      {
+        id: 'requirements',
+        name: 'Requirements',
+        description: 'Trace requirements through tasks, modules, and ECOs for full coverage.',
+        logo: { kind: 'icon', icon: ClipboardList },
+        color: '#2563EB',
       },
       {
         id: 'gate-reviews',
@@ -212,6 +244,9 @@ export default function Integrations() {
   // Google Sheets connects once per org, same as Drive/Meet below — each
   // project then just links a spreadsheet from its own BOM, reusing this
   // connection (see BOMPartSheet.tsx's Sourcing tab).
+  const enabledFeatures = useFeatureTogglesStore((s) => s.enabled);
+  const setFeatureEnabled = useFeatureTogglesStore((s) => s.setFeatureEnabled);
+
   const { data: sheetsStatus, isLoading: isSheetsStatusLoading } = useGoogleSheetsOrgStatus(currentOrganization?.id);
   const disconnectSheets = useDisconnectGoogleSheets(currentOrganization?.id);
   const isSheetsConnected = !!sheetsStatus?.connected;
@@ -406,6 +441,8 @@ export default function Integrations() {
                 const isGoogleMeet = integration.id === 'google-meet';
                 const isGoogleDrive = integration.id === 'google-drive';
                 const isGoogleSheets = integration.id === 'google-sheets';
+                const isFeatureToggle = !!integration.feature;
+                const isFeatureEnabled = integration.feature ? enabledFeatures[integration.feature] : false;
 
                 return (
                   <Card key={integration.id} className="relative overflow-hidden">
@@ -452,6 +489,17 @@ export default function Integrations() {
                             <Badge variant="outline" className="gap-1 text-[11px] border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                               <CheckCircle2 className="h-3 w-3" />
                               Connected
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-[11px]">
+                              Available
+                            </Badge>
+                          )
+                        ) : isFeatureToggle ? (
+                          isFeatureEnabled ? (
+                            <Badge variant="outline" className="gap-1 text-[11px] border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Enabled
                             </Badge>
                           ) : (
                             <Badge variant="secondary" className="text-[11px]">
@@ -542,6 +590,26 @@ export default function Integrations() {
                             title={!isOrgAdmin ? 'Only an organization admin can connect Google Sheets' : undefined}
                           >
                             Connect
+                          </Button>
+                        )
+                      ) : isFeatureToggle ? (
+                        isFeatureEnabled ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-4 w-full"
+                            onClick={() => setFeatureEnabled(integration.feature!, false)}
+                          >
+                            Disable
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="mt-4 w-full"
+                            onClick={() => setFeatureEnabled(integration.feature!, true)}
+                          >
+                            Enable
                           </Button>
                         )
                       ) : (
