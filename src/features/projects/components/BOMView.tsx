@@ -223,7 +223,7 @@ function GoogleSheetsToolbarMenu({
               disabled={unlinkSheet.isPending}
             >
               <Unlink className="w-3.5 h-3.5 shrink-0" />
-              <span>Disconnect</span>
+              <span>Disconnect sheet</span>
             </button>
           </div>
         </div>
@@ -898,9 +898,9 @@ function ListView({
 // ── Mobile-only status pill (short label, matches the mobile design spec) ──
 const MOBILE_STATUS_STYLE: Record<BOMStatus, { bg: string; color: string; label: string }> = {
   approved: { bg: 'rgba(34,197,94,0.12)', color: '#16A34A', label: 'Approved' },
-  pending:  { bg: 'rgba(245,158,11,0.14)', color: '#D97706', label: 'Pending' },
+  pending: { bg: 'rgba(245,158,11,0.14)', color: '#D97706', label: 'Pending' },
   rejected: { bg: 'rgba(220,38,38,0.12)', color: '#DC2626', label: 'Rejected' },
-  draft:    { bg: 'rgba(100,116,139,0.12)', color: '#64748B', label: 'Draft' },
+  draft: { bg: 'rgba(100,116,139,0.12)', color: '#64748B', label: 'Draft' },
 };
 function MobileStatusPill({ status }: { status: BOMStatus }) {
   const s = MOBILE_STATUS_STYLE[status];
@@ -1342,29 +1342,29 @@ export function BOMView({
   const handleAddPart = async (payload: BOMPartPayload) => {
     try {
       const part = await createPart.mutateAsync({
-        partNumber:          payload.pn,
-        name:                payload.name,
-        description:         payload.desc,
-        category:            payload.category,
-        manufacturer:        payload.manufacturer || undefined,
-        distributor:         payload.distributor  || undefined,
-        mpn:                 payload.mpn          || undefined,
-        unit:                payload.uom,
-        initialStatus:       payload.status,
-        initialRev:          payload.rev,
-        initialPrice:        payload.price > 0 ? payload.price : undefined,
+        partNumber: payload.pn,
+        name: payload.name,
+        description: payload.desc,
+        category: payload.category,
+        manufacturer: payload.manufacturer || undefined,
+        distributor: payload.distributor || undefined,
+        mpn: payload.mpn || undefined,
+        unit: payload.uom,
+        initialStatus: payload.status,
+        initialRev: payload.rev,
+        initialPrice: payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
-        initialSuppliers:    payload.suppliers?.length ? payload.suppliers : undefined,
+        initialSuppliers: payload.suppliers?.length ? payload.suppliers : undefined,
         // Additional Fields from the form — dropped here until now, so anything
         // typed into that section vanished the moment the part was created.
-        customFields:        payload.customFields?.length ? payload.customFields : undefined,
+        customFields: payload.customFields?.length ? payload.customFields : undefined,
       });
       const node = await createNode.mutateAsync({
-        partId:   part.id,
+        partId: part.id,
         quantity: payload.qty,
-        unit:     payload.uom,
-        status:   toNodeStatus(payload.status),
-        ownerId:  payload.ownerId ?? null,
+        unit: payload.uom,
+        status: toNodeStatus(payload.status),
+        ownerId: payload.ownerId ?? null,
       });
       // Upload any documents attached in the form
       await saveBomDocs(node.id, payload);
@@ -1385,30 +1385,30 @@ export function BOMView({
     if (!createSubNode) return;
     try {
       const part = await createPart.mutateAsync({
-        partNumber:          payload.pn,
-        name:                payload.name,
-        description:         payload.desc,
-        category:            payload.category,
-        manufacturer:        payload.manufacturer || undefined,
-        distributor:         payload.distributor  || undefined,
-        mpn:                 payload.mpn          || undefined,
-        unit:                payload.uom,
-        initialStatus:       payload.status,
-        initialRev:          payload.rev,
-        initialPrice:        payload.price > 0 ? payload.price : undefined,
+        partNumber: payload.pn,
+        name: payload.name,
+        description: payload.desc,
+        category: payload.category,
+        manufacturer: payload.manufacturer || undefined,
+        distributor: payload.distributor || undefined,
+        mpn: payload.mpn || undefined,
+        unit: payload.uom,
+        initialStatus: payload.status,
+        initialRev: payload.rev,
+        initialPrice: payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
-        initialSuppliers:    payload.suppliers?.length ? payload.suppliers : undefined,
+        initialSuppliers: payload.suppliers?.length ? payload.suppliers : undefined,
         // Additional Fields from the form — dropped here until now, so anything
         // typed into that section vanished the moment the part was created.
-        customFields:        payload.customFields?.length ? payload.customFields : undefined,
+        customFields: payload.customFields?.length ? payload.customFields : undefined,
       });
       const node = await createNode.mutateAsync({
-        partId:   part.id,
+        partId: part.id,
         quantity: payload.qty,
-        unit:     payload.uom,
-        status:   toNodeStatus(payload.status),
+        unit: payload.uom,
+        status: toNodeStatus(payload.status),
         parentId: createSubNode.id,
-        ownerId:  payload.ownerId ?? null,
+        ownerId: payload.ownerId ?? null,
       });
       await saveBomDocs(node.id, payload);
       await Promise.all(payload.req.map(requirementId => addRequirement.mutateAsync({ nodeId: node.id, requirementId })));
@@ -1512,10 +1512,10 @@ export function BOMView({
 
   const gridRows = useMemo(() => allNodes.filter(pred), [allNodes, pred]);
 
-  const totalCount    = bomTree?.totalNodes    ?? allNodes.length;
+  const totalCount = bomTree?.totalNodes ?? allNodes.length;
   const approvedCount = bomTree?.approvedCount ?? allNodes.filter(n => n.status === 'approved').length;
-  const pendingCount  = bomTree?.pendingCount  ?? allNodes.filter(n => n.status === 'pending').length;
-  const totalCost     = useMemo(() => rootNodes.reduce((s, n) => s + n.price * n.qty, 0), [rootNodes]);
+  const pendingCount = bomTree?.pendingCount ?? allNodes.filter(n => n.status === 'pending').length;
+  const totalCost = useMemo(() => rootNodes.reduce((s, n) => s + n.price * n.qty, 0), [rootNodes]);
 
   if (treeLoading) return <BOMViewSkeleton />;
 
