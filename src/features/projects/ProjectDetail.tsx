@@ -33,6 +33,7 @@ import { ModulesSection, ModuleViewControls } from './components/ModulesSection'
 import { MilestonesView } from './components/MilestonesView';
 import { IssuesView } from './components/IssuesView';
 import { SupportLinksSheet } from './components/SupportLinksSheet';
+import { useFeatureTogglesStore } from '@/stores/useFeatureTogglesStore';
 import { ProjectDetailSkeleton } from './components/ProjectDetailSkeleton';
 import { ProjectProgressPopover } from './components/ProjectProgressPopover';
 import { AddModuleDialog } from './components/AddModuleDialog';
@@ -539,6 +540,7 @@ export default function ProjectDetail() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { id, tab: tabParam, partId, ecoId, taskId, moduleId, milestoneId, issueId } = useParams();
+  const isSupportFeatureEnabled = useFeatureTogglesStore((s) => s.enabled.support);
 
   // The /bom/:partId, /eng-changes/:ecoId, /tasks/:taskId, /modules/:moduleId,
   // /milestones/:milestoneId, and /issues/:issueId routes encode the section as a
@@ -1551,7 +1553,7 @@ export default function ProjectDetail() {
                 )}
                 {section === 'issues' && !isMobile && (
                   <>
-                    {id && <SupportLinksSheet projectId={id} />}
+                    {id && isSupportFeatureEnabled && <SupportLinksSheet projectId={id} />}
                     <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddIssueDialogOpen(true)}>
                       <Plus className="h-4 w-4" />
                       <span className="hidden md:inline">Report Issue</span>

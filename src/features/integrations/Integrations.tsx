@@ -27,6 +27,7 @@ import {
   ListTodo,
   Calendar as CalendarIcon,
   BarChart3,
+  LifeBuoy,
 } from 'lucide-react';
 import { useFeatureTogglesStore, type ToggleableFeature } from '@/stores/useFeatureTogglesStore';
 import { useGoogleMeetStore } from './stores/useGoogleMeetStore';
@@ -92,6 +93,14 @@ const SECTIONS: Section[] = [
         logo: { kind: 'icon', icon: Boxes },
         color: '#D97706',
         feature: 'inventory',
+      },
+      {
+        id: 'support',
+        name: 'Support',
+        description: 'Adds a Support API button to a project\'s Issues tab for managing customer-support intake links.',
+        logo: { kind: 'icon', icon: LifeBuoy },
+        color: '#DC2626',
+        feature: 'support',
       },
       {
         id: 'requirements',
