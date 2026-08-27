@@ -129,11 +129,11 @@ function GoogleSheetsToolbarMenu({
       return (
         <button
           type="button"
-          title="Link a Google Sheet"
+          title="Link a Sheet"
           onClick={onManage}
           className="relative w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-card text-foreground hover:bg-muted transition-colors shrink-0"
         >
-          <GoogleSheetsLogo className="w-4 h-4 text-emerald-600" />
+          <GoogleSheetsLogo className="w-4 h-4 text-muted-foreground" />
         </button>
       );
     }
@@ -143,8 +143,8 @@ function GoogleSheetsToolbarMenu({
         onClick={onManage}
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted cursor-pointer transition-colors"
       >
-        <GoogleSheetsLogo className="w-3.5 h-3.5 text-emerald-600" />
-        Google Sheets
+        <GoogleSheetsLogo className="w-3.5 h-3.5 text-muted-foreground" />
+        Sheets
       </button>
     );
   }
@@ -154,18 +154,16 @@ function GoogleSheetsToolbarMenu({
       <PopoverTrigger asChild>
         {compact ? (
           <button
-            title="Google Sheets"
-            className="relative w-8 h-8 flex items-center justify-center rounded-lg border border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/40 transition-colors shrink-0"
+            title="Sheets"
+            className="relative w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-card text-foreground hover:bg-muted transition-colors shrink-0"
           >
-            <GoogleSheetsLogo className="w-4 h-4 text-emerald-600" />
-            <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <GoogleSheetsLogo className="w-4 h-4 text-muted-foreground" />
           </button>
         ) : (
-          <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100/50 dark:hover:bg-emerald-900/40 cursor-pointer transition-colors shadow-xs">
-            <GoogleSheetsLogo className="w-3.5 h-3.5 text-emerald-600" />
-            Google Sheets
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            <ChevronDown className="w-3 h-3 text-emerald-600/80 -mr-0.5" />
+          <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-card text-foreground hover:bg-muted cursor-pointer transition-colors shadow-xs">
+            <GoogleSheetsLogo className="w-3.5 h-3.5 text-muted-foreground" />
+            Sheets
+            <ChevronDown className="w-3 h-3 text-muted-foreground -mr-0.5" />
           </button>
         )}
       </PopoverTrigger>
@@ -270,7 +268,7 @@ function NewBuildToolbarMenu({
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border bg-card text-foreground border-border hover:bg-muted cursor-pointer transition-colors"
           >
             <Layers className="w-3.5 h-3.5" />
-            New Build
+            Builds
             <ChevronDown className="w-3 h-3 text-muted-foreground -mr-0.5" />
           </button>
         )}
@@ -305,7 +303,7 @@ function NewBuildToolbarMenu({
             <button
               type="button"
               onClick={onAddBuild}
-              className="w-full flex items-center gap-2 text-xs font-medium text-foreground hover:text-primary transition-colors py-1.5 px-1 rounded cursor-pointer"
+              className="w-full flex items-center justify-center gap-2 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors py-1.5 px-1 rounded-lg cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               Add a build
