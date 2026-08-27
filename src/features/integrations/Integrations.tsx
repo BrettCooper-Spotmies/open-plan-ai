@@ -110,53 +110,6 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    title: 'Core Integrations',
-    items: [
-      {
-        id: 'solidworks',
-        name: 'SolidWorks',
-        description: 'Sync CAD assemblies, parts, and revisions from SolidWorks into your BOM.',
-        logo: { kind: 'image', src: solidworksLogo, alt: 'SolidWorks' },
-        color: '#ED1C24',
-      },
-      {
-        id: 'altium',
-        name: 'Altium Designer',
-        description: 'Pull PCB designs, schematics, and component data from Altium Designer.',
-        logo: { kind: 'image', src: altiumLogo, alt: 'Altium Designer' },
-        color: '#0091DA',
-      },
-      {
-        id: 'arena-plm',
-        name: 'Arena PLM',
-        description: 'Keep BOMs, ECOs, and item masters in sync with Arena PLM.',
-        logo: { kind: 'image', src: arenaLogo, alt: 'Arena PLM' },
-        color: '#40AA1D',
-      },
-      {
-        id: 'kicad',
-        name: 'KiCad',
-        description: 'Import open-source PCB designs and component libraries from KiCad.',
-        logo: { kind: 'svg', path: LOGO_PATHS.kicad },
-        color: '#314CB0',
-      },
-      {
-        id: 'orcad',
-        name: 'OrCAD',
-        description: 'Bring schematic capture and PCB layout data in from OrCAD.',
-        logo: { kind: 'image', src: orcadLogo, alt: 'OrCAD' },
-        color: '#E31837',
-      },
-      {
-        id: 'fusion-360',
-        name: 'Fusion 360',
-        description: 'Link mechanical CAD models and BOMs straight from Fusion 360.',
-        logo: { kind: 'image', src: fusion360Logo, alt: 'Fusion 360' },
-        color: '#FF6B00',
-      },
-    ],
-  },
-  {
     title: 'Connectors',
     items: [
       {
@@ -228,6 +181,53 @@ const SECTIONS: Section[] = [
         description: 'Generate and link requirement documents and specs straight from Google Docs.',
         logo: { kind: 'svg', path: LOGO_PATHS.googleDocs },
         color: '#4285F4',
+      },
+    ],
+  },
+  {
+    title: 'Core Integrations',
+    items: [
+      {
+        id: 'solidworks',
+        name: 'SolidWorks',
+        description: 'Sync CAD assemblies, parts, and revisions from SolidWorks into your BOM.',
+        logo: { kind: 'image', src: solidworksLogo, alt: 'SolidWorks' },
+        color: '#ED1C24',
+      },
+      {
+        id: 'altium',
+        name: 'Altium Designer',
+        description: 'Pull PCB designs, schematics, and component data from Altium Designer.',
+        logo: { kind: 'image', src: altiumLogo, alt: 'Altium Designer' },
+        color: '#0091DA',
+      },
+      {
+        id: 'arena-plm',
+        name: 'Arena PLM',
+        description: 'Keep BOMs, ECOs, and item masters in sync with Arena PLM.',
+        logo: { kind: 'image', src: arenaLogo, alt: 'Arena PLM' },
+        color: '#40AA1D',
+      },
+      {
+        id: 'kicad',
+        name: 'KiCad',
+        description: 'Import open-source PCB designs and component libraries from KiCad.',
+        logo: { kind: 'svg', path: LOGO_PATHS.kicad },
+        color: '#314CB0',
+      },
+      {
+        id: 'orcad',
+        name: 'OrCAD',
+        description: 'Bring schematic capture and PCB layout data in from OrCAD.',
+        logo: { kind: 'image', src: orcadLogo, alt: 'OrCAD' },
+        color: '#E31837',
+      },
+      {
+        id: 'fusion-360',
+        name: 'Fusion 360',
+        description: 'Link mechanical CAD models and BOMs straight from Fusion 360.',
+        logo: { kind: 'image', src: fusion360Logo, alt: 'Fusion 360' },
+        color: '#FF6B00',
       },
     ],
   },
