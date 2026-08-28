@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useState, useLayoutEffect, useRef } from 'react';
 import { format, parseISO, startOfMonth, startOfToday } from 'date-fns';
 import {
   Dialog,
@@ -159,7 +159,13 @@ export function MilestoneDetailModal({
     setMilestoneDateCalendarMonth(startOfMonth(parseISO(editedMilestone.date)));
   }, [editedMilestone?.id, editedMilestone?.date, isMilestoneDateOpen]);
 
-  useEffect(() => {
+  // useLayoutEffect (not useEffect) — this modal instance is reused across
+  // different milestones opened one after another, so a regular useEffect
+  // (which runs after paint) would show a frame of the PREVIOUS milestone's
+  // data before this reset catches up: a visible flash when switching
+  // milestones quickly (same fix applied to IssueDetailModal/Content and
+  // TaskDetailModal).
+  useLayoutEffect(() => {
     // Only set initial state when opening modal with a new milestone.
     // Seed linkedTaskIds/linkedModuleIds from the real link state (which includes
     // tasks/modules linked via their own milestoneId, not just the milestone's own

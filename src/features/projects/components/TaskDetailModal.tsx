@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { attachmentsService } from '@/services/attachments.service';
 import { format, isBefore, isAfter, parseISO, startOfDay } from 'date-fns';
 import {
@@ -568,8 +568,12 @@ export const TaskDetailModal = ({
     return () => { cancelled = true; };
   }, [isOpen, task?.id, mode]);
 
-  // Initialize form baselines once per modal session key
-  useEffect(() => {
+  // Initialize form baselines once per modal session key. useLayoutEffect
+  // (not useEffect) — this modal instance is reused across different tasks
+  // opened one after another, so a regular useEffect (which runs after
+  // paint) would show a frame of the PREVIOUS task's data before this reset
+  // catches up: a visible flash when switching tasks quickly.
+  useLayoutEffect(() => {
     if (!isOpen) {
       setInitializedForKey(null);
       setPreviewingFile(null);

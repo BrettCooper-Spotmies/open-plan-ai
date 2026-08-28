@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { format, parseISO, startOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -315,7 +315,14 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pendingFiles]);
 
-    useEffect(() => {
+    // useLayoutEffect (not useEffect) for both of the effects below — this
+    // component instance is reused across different issues opened one after
+    // another (only the `issue` prop changes), and the outer modal that seeds
+    // it now also resets synchronously via useLayoutEffect. A regular
+    // useEffect here runs after paint, so there'd still be a frame showing
+    // the PREVIOUS issue's title/description/advanced-mode state before this
+    // catches up — a visible flash when switching issues quickly.
+    useLayoutEffect(() => {
         if (issue) {
             // Preserve loaded comments only when staying on the same issue —
             // they're fetched separately via API and would otherwise leak
@@ -327,7 +334,7 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
         }
     }, [issue]);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         // Set advanced-description mode from the loaded issue's own data — on if
         // it has blocks, off otherwise. This component instance is reused across
         // different issues (only the `issue` prop changes), so without the
