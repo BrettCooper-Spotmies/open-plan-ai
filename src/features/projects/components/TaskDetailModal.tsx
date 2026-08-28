@@ -1411,7 +1411,7 @@ export const TaskDetailModal = ({
                   ) : (
                     <DropdownMenuItem
                       onClick={handleUpdateTask}
-                      disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask}
+                      disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask || !isFormDirty}
                     >
                       <Check className="h-4 w-4 mr-2" />
                       Update Task
