@@ -307,6 +307,7 @@ export interface Activity {
   | 'issue_created'
   | 'issue_resolved'
   | 'issue_updated'
+  | 'issue_deleted'
   | 'issue_assigned'
   | 'issue_linked_to_task'
   | 'project_created'
