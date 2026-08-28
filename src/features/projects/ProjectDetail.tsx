@@ -269,16 +269,23 @@ function DateFilterSelect({
             selected={draftRange}
             onSelect={(range) => setDraftRange(range ?? {})}
           />
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-muted-foreground">
-              {draftRange.from
-                ? `${format(draftRange.from, 'PP')}${draftRange.to && draftRange.to.getTime() !== draftRange.from.getTime() ? ` – ${format(draftRange.to, 'PP')}` : ''}`
-                : 'Pick a start date, then an end date'}
-            </span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 text-xs whitespace-nowrap">
+              <span>
+                <span className="text-muted-foreground">From </span>
+                <span className="font-medium">{draftRange.from ? format(draftRange.from, 'PP') : '—'}</span>
+              </span>
+              <span>
+                <span className="text-muted-foreground">To </span>
+                <span className="font-medium">
+                  {draftRange.to ? format(draftRange.to, 'PP') : (draftRange.from ? format(draftRange.from, 'PP') : '—')}
+                </span>
+              </span>
+            </div>
             <Button
               type="button"
               size="sm"
-              className="h-7 px-3 text-xs"
+              className="h-7 px-3 text-xs shrink-0"
               disabled={!draftRange.from}
               onClick={applyRange}
             >
