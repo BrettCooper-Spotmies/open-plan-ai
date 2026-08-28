@@ -26,7 +26,7 @@ async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
   );
 }
 
-// New parts can only be added as 'approved' or 'pending' (see BOMPartSheet's
+// New parts can only be added as 'approved' or 'draft' (see BOMPartSheet's
 // add-mode status toggle); narrow to what useCreateBomNode's DTO accepts.
 function toNodeStatus(status: BOMStatus): 'approved' | 'pending' | 'draft' {
   return status === 'rejected' ? 'pending' : status;
