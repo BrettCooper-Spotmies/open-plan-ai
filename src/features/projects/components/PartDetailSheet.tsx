@@ -292,6 +292,8 @@ export function PartDetailSheet({
             <Button
               className="min-w-0 sm:w-auto px-4"
               onClick={onReceive}
+              disabled={record.onOrder <= 0}
+              title={record.onOrder <= 0 ? 'No orders available for this part' : undefined}
             >
               <Download className="h-3.5 w-3.5 mr-1.5 shrink-0" /> <span className="truncate">Receive</span>
             </Button>
