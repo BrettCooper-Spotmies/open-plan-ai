@@ -5,11 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MultiSelect } from '@/components/ui/multi-select';
-import { Filter, Flag, Clock, User, Boxes, Target, Tag, ChevronDown, ChevronLeft } from 'lucide-react';
+import { Filter, Flag, Clock, User, Boxes, Target, Tag, ChevronDown } from 'lucide-react';
 
 const BASE_DATE_OPTIONS = [
   { value: 'today', label: 'Today' },
@@ -31,7 +32,7 @@ function DateFilterSelect({
   onChange: (value: { preset?: string; custom?: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<'list' | 'calendar'>('list');
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const allOptions = [...extraOptions, ...BASE_DATE_OPTIONS];
   const displayLabel = custom
     ? format(new Date(custom), 'PPP')
@@ -43,13 +44,7 @@ function DateFilterSelect({
         <Clock className="h-3 w-3" />
         {label}
       </Label>
-      <Popover
-        open={open}
-        onOpenChange={(next) => {
-          setOpen(next);
-          if (!next) setView('list');
-        }}
-      >
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
             type="button"
@@ -60,56 +55,54 @@ function DateFilterSelect({
             <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          {view === 'list' ? (
-            <div className="py-1 min-w-[10rem]">
+        <PopoverContent className="w-48 p-1" align="end" sideOffset={4}>
+          <div className="flex flex-col">
+            <button
+              type="button"
+              className="w-full text-left px-2.5 py-1.5 text-sm rounded-sm hover:bg-accent"
+              onClick={() => { onChange({ preset: undefined, custom: undefined }); setOpen(false); }}
+            >
+              Any Date
+            </button>
+            {allOptions.map((opt) => (
               <button
+                key={opt.value}
                 type="button"
-                className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent"
-                onClick={() => { onChange({ preset: undefined, custom: undefined }); setOpen(false); }}
+                className="w-full text-left px-2.5 py-1.5 text-sm rounded-sm hover:bg-accent"
+                onClick={() => { onChange({ preset: opt.value, custom: undefined }); setOpen(false); }}
               >
-                Any Date
+                {opt.label}
               </button>
-              {allOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent"
-                  onClick={() => { onChange({ preset: opt.value, custom: undefined }); setOpen(false); }}
-                >
-                  {opt.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent"
-                onClick={() => setView('calendar')}
-              >
-                Custom...
-              </button>
-            </div>
-          ) : (
-            <div>
-              <button
-                type="button"
-                className="w-full flex items-center gap-1 px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
-                onClick={() => setView('list')}
-              >
-                <ChevronLeft className="h-3 w-3" />
-                Back
-              </button>
-              <CalendarPicker
-                mode="single"
-                selected={custom ? new Date(custom) : undefined}
-                onSelect={(date) => {
-                  onChange({ preset: undefined, custom: date ? format(date, 'yyyy-MM-dd') : undefined });
-                  setOpen(false);
-                }}
-              />
-            </div>
-          )}
+            ))}
+            <button
+              type="button"
+              className="w-full text-left px-2.5 py-1.5 text-sm rounded-sm hover:bg-accent"
+              onClick={() => { setOpen(false); setCalendarOpen(true); }}
+            >
+              Custom...
+            </button>
+          </div>
         </PopoverContent>
       </Popover>
+      <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
+        <DialogContent
+          className="w-auto max-w-fit p-4"
+          onPointerDownOutside={() => {}}
+          onInteractOutside={() => {}}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-sm">{label}</DialogTitle>
+          </DialogHeader>
+          <CalendarPicker
+            mode="single"
+            selected={custom ? new Date(custom) : undefined}
+            onSelect={(date) => {
+              onChange({ preset: undefined, custom: date ? format(date, 'yyyy-MM-dd') : undefined });
+              setCalendarOpen(false);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
       {custom && (
         <div className="flex items-center justify-between pl-1">
           <span className="text-xs text-muted-foreground">{format(new Date(custom), 'PPP')}</span>
@@ -191,17 +184,19 @@ export function TaskFiltersDropdown({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-72" align="end">
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="font-medium text-sm">Filter Tasks</h4>
-            {activeFilterCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearAll} className="h-6 px-2 text-xs">
-                Clear all
-              </Button>
-            )}
-          </div>
-
+      <PopoverContent
+        className="w-72 p-0 flex flex-col overflow-hidden max-h-[var(--radix-popover-content-available-height)]"
+        align="end"
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+          <h4 className="font-medium text-sm">Filter Tasks</h4>
+          {activeFilterCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearAll} className="h-6 px-2 text-xs">
+              Clear all
+            </Button>
+          )}
+        </div>
+        <div className="space-y-4 p-4 overflow-y-auto min-h-0">
           {/* Status Filter */}
           <div className="space-y-2">
             <Label className="text-xs flex items-center gap-1">
