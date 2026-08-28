@@ -371,9 +371,11 @@ export interface TaskFilter {
   updatedBy?: string[];
   milestoneId?: string;
   dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
-  dueDateCustom?: string; // exact date (yyyy-MM-dd) picked from the calendar, overrides dueDate preset
+  dueDateCustom?: string; // start of a custom range (yyyy-MM-dd) picked from the calendar, overrides dueDate preset
+  dueDateCustomTo?: string; // end of the custom range (yyyy-MM-dd), inclusive; same as dueDateCustom for a single-day pick
   completedDate?: 'today' | 'this-week' | 'this-month';
-  completedDateCustom?: string; // exact date (yyyy-MM-dd) picked from the calendar, overrides completedDate preset
+  completedDateCustom?: string; // start of a custom range (yyyy-MM-dd) picked from the calendar, overrides completedDate preset
+  completedDateCustomTo?: string; // end of the custom range (yyyy-MM-dd), inclusive; same as completedDateCustom for a single-day pick
   tags?: string[];
   hasBlockers?: boolean;
 }

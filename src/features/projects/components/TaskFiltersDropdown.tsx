@@ -22,21 +22,42 @@ function DateFilterSelect({
   label,
   preset,
   custom,
+  customTo,
   extraOptions = [],
   onChange,
 }: {
   label: string;
   preset?: string;
-  custom?: string;
+  custom?: string; // start of a custom range (yyyy-MM-dd); same as customTo for a single-day pick
+  customTo?: string; // end of a custom range (yyyy-MM-dd), inclusive
   extraOptions?: { value: string; label: string }[];
-  onChange: (value: { preset?: string; custom?: string }) => void;
+  onChange: (value: { preset?: string; custom?: string; customTo?: string }) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [draftRange, setDraftRange] = useState<{ from?: Date; to?: Date }>({});
   const allOptions = [...extraOptions, ...BASE_DATE_OPTIONS];
+  const isRange = !!custom && !!customTo && custom !== customTo;
   const displayLabel = custom
-    ? format(new Date(custom), 'PPP')
+    ? (isRange ? `${format(new Date(custom), 'PP')} – ${format(new Date(customTo!), 'PP')}` : format(new Date(custom), 'PPP'))
     : (allOptions.find((o) => o.value === preset)?.label ?? 'Any Date');
+
+  const openCalendar = () => {
+    setOpen(false);
+    setDraftRange({
+      from: custom ? new Date(custom) : undefined,
+      to: customTo ? new Date(customTo) : undefined,
+    });
+    setCalendarOpen(true);
+  };
+
+  const applyRange = () => {
+    if (!draftRange.from) return;
+    const from = format(draftRange.from, 'yyyy-MM-dd');
+    const to = format(draftRange.to ?? draftRange.from, 'yyyy-MM-dd');
+    onChange({ preset: undefined, custom: from, customTo: to });
+    setCalendarOpen(false);
+  };
 
   return (
     <div className="space-y-2">
@@ -60,7 +81,7 @@ function DateFilterSelect({
             <button
               type="button"
               className="w-full text-left px-2.5 py-1.5 text-sm rounded-sm hover:bg-accent"
-              onClick={() => { onChange({ preset: undefined, custom: undefined }); setOpen(false); }}
+              onClick={() => { onChange({ preset: undefined, custom: undefined, customTo: undefined }); setOpen(false); }}
             >
               Any Date
             </button>
@@ -69,7 +90,7 @@ function DateFilterSelect({
                 key={opt.value}
                 type="button"
                 className="w-full text-left px-2.5 py-1.5 text-sm rounded-sm hover:bg-accent"
-                onClick={() => { onChange({ preset: opt.value, custom: undefined }); setOpen(false); }}
+                onClick={() => { onChange({ preset: opt.value, custom: undefined, customTo: undefined }); setOpen(false); }}
               >
                 {opt.label}
               </button>
@@ -77,7 +98,7 @@ function DateFilterSelect({
             <button
               type="button"
               className="w-full text-left px-2.5 py-1.5 text-sm rounded-sm hover:bg-accent"
-              onClick={() => { setOpen(false); setCalendarOpen(true); }}
+              onClick={openCalendar}
             >
               Custom...
             </button>
@@ -94,24 +115,44 @@ function DateFilterSelect({
             <DialogTitle className="text-sm">{label}</DialogTitle>
           </DialogHeader>
           <CalendarPicker
-            mode="single"
-            selected={custom ? new Date(custom) : undefined}
-            onSelect={(date) => {
-              onChange({ preset: undefined, custom: date ? format(date, 'yyyy-MM-dd') : undefined });
-              setCalendarOpen(false);
-            }}
+            mode="range"
+            selected={draftRange}
+            onSelect={(range) => setDraftRange(range ?? {})}
           />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 text-xs whitespace-nowrap">
+              <span>
+                <span className="text-muted-foreground">From </span>
+                <span className="font-medium">{draftRange.from ? format(draftRange.from, 'PP') : '—'}</span>
+              </span>
+              <span>
+                <span className="text-muted-foreground">To </span>
+                <span className="font-medium">
+                  {draftRange.to ? format(draftRange.to, 'PP') : (draftRange.from ? format(draftRange.from, 'PP') : '—')}
+                </span>
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 px-3 text-xs shrink-0"
+              disabled={!draftRange.from}
+              onClick={applyRange}
+            >
+              Apply
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
       {custom && (
         <div className="flex items-center justify-between pl-1">
-          <span className="text-xs text-muted-foreground">{format(new Date(custom), 'PPP')}</span>
+          <span className="text-xs text-muted-foreground">{displayLabel}</span>
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="h-5 px-1.5 text-xs"
-            onClick={() => onChange({ preset: undefined, custom: undefined })}
+            onClick={() => onChange({ preset: undefined, custom: undefined, customTo: undefined })}
           >
             Clear
           </Button>
@@ -266,11 +307,13 @@ export function TaskFiltersDropdown({
             label="Due Date"
             preset={filters.dueDate}
             custom={filters.dueDateCustom}
+            customTo={filters.dueDateCustomTo}
             extraOptions={dueDateExtraOptions}
-            onChange={({ preset, custom }) => onFiltersChange({
+            onChange={({ preset, custom, customTo }) => onFiltersChange({
               ...filters,
               dueDate: preset as TaskFilter['dueDate'],
               dueDateCustom: custom,
+              dueDateCustomTo: customTo,
             })}
           />
 
@@ -279,10 +322,12 @@ export function TaskFiltersDropdown({
             label="Completion Date"
             preset={filters.completedDate}
             custom={filters.completedDateCustom}
-            onChange={({ preset, custom }) => onFiltersChange({
+            customTo={filters.completedDateCustomTo}
+            onChange={({ preset, custom, customTo }) => onFiltersChange({
               ...filters,
               completedDate: preset as TaskFilter['completedDate'],
               completedDateCustom: custom,
+              completedDateCustomTo: customTo,
             })}
           />
 
