@@ -328,12 +328,14 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
     }, [issue]);
 
     useEffect(() => {
-        // Auto-enable advanced description if the loaded issue already has blocks.
+        // Set advanced-description mode from the loaded issue's own data — on if
+        // it has blocks, off otherwise. This component instance is reused across
+        // different issues (only the `issue` prop changes), so without the
+        // unconditional else branch, toggling it on for one issue would leak into
+        // every issue opened afterward instead of reflecting each issue's own state.
         // Keyed on issue id (not the whole issue object) so this only runs when
         // switching issues, not on every keystroke while editing a draft.
-        if (issue?.descriptionBlocks && issue.descriptionBlocks.length > 0) {
-            setIsAdvancedDescription(true);
-        }
+        setIsAdvancedDescription(!!(issue?.descriptionBlocks && issue.descriptionBlocks.length > 0));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [issue?.id]);
 
