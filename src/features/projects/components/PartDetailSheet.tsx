@@ -504,6 +504,18 @@ export function PartDetailSheet({
                       <span className="text-muted-foreground">Expected</span>
                       <span className="font-medium">{formatShortDate(o.expectedDate)}</span>
                     </div>
+                    {o.leadTimeDays !== undefined && o.leadTimeDays !== null && o.leadTimeDays > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Lead time</span>
+                        <span className="font-medium">{formatLeadTime(o.leadTimeDays)}</span>
+                      </div>
+                    )}
+                    {record.leadTimeDays > 0 && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Part lead time</span>
+                        <span className="font-medium">{formatLeadTime(record.leadTimeDays)}</span>
+                      </div>
+                    )}
                     {o.supplierRef && (
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">Supplier / PO</span>
@@ -545,7 +557,6 @@ export function PartDetailSheet({
                     )}
                   </div>
                 ))}
-                <div className="text-xs text-muted-foreground">Lead time: {formatLeadTime(record.leadTimeDays)}</div>
               </>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-8">Nothing on order.</p>

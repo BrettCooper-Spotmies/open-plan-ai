@@ -44,6 +44,7 @@ export interface OrderRecord {
   quantity: number;
   remainingQty: number;
   expectedDate: string;   // ISO
+  leadTimeDays?: number;
   supplierRef?: string;
   unitCost?: number;
   location: string;
@@ -339,6 +340,7 @@ export interface StockTransaction {
   buildId?: string;                // allocate/deallocate/issue only
   lotNumber?: string;               // receive/adjust only
   serialNumber?: string;            // receive/adjust only
+  leadTimeDays?: number;            // adjust only; user-entered lead time from New transaction
   createdAt: string;
   createdBy: string;
 }
