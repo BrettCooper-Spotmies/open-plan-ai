@@ -348,7 +348,7 @@ export type ModuleViewMode = 'kanban' | 'list';
 // My Day specific types
 export type MyDayView = 'kanban' | 'list';
 export type MyDayGroupBy = 'project' | 'progress' | 'dueDate' | 'priority';
-export type MyDayFilter = 'all' | 'today' | 'overdue';
+export type MyDayFilter = 'all' | 'today' | 'overdue' | 'completed';
 
 export interface MyTasksColumnFilters {
   type?: MyDayItemType[];
