@@ -159,11 +159,11 @@ export function IssueDetailModal({
   };
 
   const handleUpdateIssue = async () => {
-    if (editedIssue) {
+    if (editedIssue && isDirty) {
       onUpdate(editedIssue);
       await issueContentRef.current?.commitPendingComments();
-      onClose();
     }
+    onClose();
   };
 
   return (
@@ -229,7 +229,7 @@ export function IssueDetailModal({
                 ) : (
                   <DropdownMenuItem
                     onClick={handleUpdateIssue}
-                    disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
+                    disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory || !isDirty}
                   >
                     <Check className="h-4 w-4 mr-2" />
                     Update Issue
@@ -316,7 +316,7 @@ export function IssueDetailModal({
             <Button
               className="w-full"
               onClick={handleUpdateIssue}
-              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
+              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory || !isDirty}
             >
               Update Issue
             </Button>
@@ -359,8 +359,8 @@ export function IssueDetailModal({
             <Button variant="outline" onClick={attemptClose}>Cancel</Button>
             <Button
               onClick={handleUpdateIssue}
-              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
-              title={canEditIssue ? undefined : editLockTitle}
+              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory || !isDirty}
+              title={canEditIssue ? undefined : (isDirty ? editLockTitle : 'No changes to save')}
             >
               Update Issue
             </Button>

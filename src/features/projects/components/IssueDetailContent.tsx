@@ -160,6 +160,33 @@ const formatFileSize = (bytes: number) => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const serializeIssueForDirtyCheck = (issue: Issue): string => {
+    const attachmentSnapshot = (issue.attachments || [])
+        .map(a => ({ id: a.id, filename: a.filename, fileType: a.fileType, fileSize: a.fileSize, url: a.url }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+
+    return JSON.stringify({
+        title: issue.title || '',
+        description: issue.description || '',
+        descriptionBlocks: issue.descriptionBlocks || null,
+        category: issue.category,
+        categoryOther: issue.categoryOther || '',
+        severity: issue.severity,
+        status: issue.status,
+        moduleId: issue.moduleId || null,
+        dueDate: issue.dueDate || null,
+        resolution: issue.resolution || '',
+        assigneeIds: (issue.assignees || []).map(a => a.id).sort(),
+        tags: [...(issue.tags || [])].sort(),
+        blockedBy: [...(issue.blockedBy || [])].sort(),
+        blocksTaskIds: [...(issue.blocksTaskIds || [])].sort(),
+        checklist: issue.checklist || [],
+        comments: issue.comments || [],
+        videoLinks: issue.videoLinks || [],
+        attachments: attachmentSnapshot,
+    });
+};
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Draft issues use a client-generated `issue-${Date.now()}` id until the create
 // mutation resolves — guard against firing comment/attachment fetches with it.
@@ -188,6 +215,10 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
     // and hasn't switched it on yet. Uncontrolled callers (e.g. IssuePage) stay always-editable.
     const isMobileFieldsLocked = isMobileLayout && isMobileEditMode === false;
     const [editedIssue, setEditedIssue] = useState<Issue | null>(issue);
+    // Snapshot of the issue as it was when this dialog instance mounted — never
+    // updated afterward — so we can tell whether the user actually changed
+    // anything before firing an update + success toast on a no-op Save.
+    const initialIssueSnapshotRef = useRef(issue ? serializeIssueForDirtyCheck(issue) : '');
     const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
     const [newComment, setNewComment] = useState('');
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -356,6 +387,11 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [issue?.id, mode]);
+
+    const isIssueDirty = useMemo(
+        () => !!editedIssue && initialIssueSnapshotRef.current !== '' && serializeIssueForDirtyCheck(editedIssue) !== initialIssueSnapshotRef.current,
+        [editedIssue]
+    );
 
     if (!editedIssue) return null;
 
@@ -2280,7 +2316,7 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
                                             setIsSaving(false);
                                         }
                                     }}
-                                    disabled={isSaving || isUploading}
+                                    disabled={isSaving || isUploading || !isIssueDirty}
                                     className="min-w-[120px]"
                                 >
                                     {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

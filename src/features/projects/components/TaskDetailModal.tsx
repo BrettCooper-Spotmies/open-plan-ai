@@ -3071,7 +3071,7 @@ export const TaskDetailModal = ({
               <Button
                 className="w-full"
                 onClick={handleUpdateTask}
-                disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask}
+                disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask || !isFormDirty}
               >
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Update Task
@@ -3105,8 +3105,8 @@ export const TaskDetailModal = ({
                 </Button>
                 <Button
                   onClick={handleUpdateTask}
-                  disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask}
-                  title={canEditTask ? undefined : editLockTitle}
+                  disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask || !isFormDirty}
+                  title={canEditTask ? undefined : (isFormDirty ? editLockTitle : 'No changes to save')}
                 >
                   {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Update Task
