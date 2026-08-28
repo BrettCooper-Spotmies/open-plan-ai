@@ -10,7 +10,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { KNOWN_BOM_CATEGORIES, type BOMCategory } from './bomData';
+import { KNOWN_BOM_CATEGORIES, UOM_OPTIONS, type BOMCategory } from './bomData';
 
 export const STOCK_LOCATIONS = ['Lab Shelf A', 'Lab Shelf B', 'Incoming Dock', 'CM', 'Quarantine'] as const;
 // Locations are free-text (mirrors the BOMCategory custom-category pattern) — the presets
@@ -231,6 +231,94 @@ export function CategoryCombobox({ value, onChange, placeholder = 'Select a cate
           <SelectItem key={c} value={c}>{formatCategoryOptionLabel(c)}</SelectItem>
         ))}
         <SelectItem value={CUSTOM_CATEGORY_SENTINEL}>Other (custom)…</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+const CUSTOM_UNIT_SENTINEL = '__custom_unit__';
+
+/** Unit-of-measure picker for new-part creation: preset dropdown (UOM_OPTIONS from bomData.ts —
+ * the same list BOMPartSheet's UOM toggle buttons use) with a custom escape hatch, so a unit
+ * typed here isn't limited to the fixed preset list. */
+export function UnitCombobox({ value, onChange, placeholder = 'Select a unit...' }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const options = UOM_OPTIONS as readonly string[];
+
+  const [customMode, setCustomMode] = useState(
+    () => value !== '' && !options.includes(value)
+  );
+  const [customValue, setCustomValue] = useState(
+    () => (value !== '' && !options.includes(value) ? value : '')
+  );
+
+  useEffect(() => {
+    if (value === '') {
+      setCustomMode(false);
+      setCustomValue('');
+      return;
+    }
+
+    if (!options.includes(value)) {
+      setCustomMode(true);
+      setCustomValue(value);
+    }
+  }, [value, options]);
+
+  if (customMode) {
+    return (
+      <div className="flex gap-2">
+        <Input
+          value={customValue}
+          onChange={(e) => {
+            const nextValue = e.target.value;
+            setCustomValue(nextValue);
+            onChange(nextValue);
+          }}
+          placeholder="Enter custom unit..."
+          autoFocus
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setCustomMode(false);
+            setCustomValue('');
+            onChange('');
+          }}
+        >
+          Presets
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Select
+      onValueChange={(v) => {
+        if (v === CUSTOM_UNIT_SENTINEL) {
+          // Deferred a tick — see LocationCombobox/CategoryCombobox's identical comment above.
+          setTimeout(() => {
+            setCustomMode(true);
+            setCustomValue('');
+            onChange('');
+          }, 0);
+        } else {
+          onChange(v);
+        }
+      }}
+      value={options.includes(value) ? value : ''}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((u) => (
+          <SelectItem key={u} value={u}>{u}</SelectItem>
+        ))}
+        <SelectItem value={CUSTOM_UNIT_SENTINEL}>Custom...</SelectItem>
       </SelectContent>
     </Select>
   );

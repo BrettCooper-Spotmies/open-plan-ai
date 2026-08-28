@@ -45,7 +45,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart, useUpdatePart } from '@/hooks/useParts';
 import { useLocations } from '@/hooks/useLocations';
 import { type ApiPartResponse, type BOMCategory, getCategoryMeta } from './bomData';
-import { LocationCombobox, CategoryCombobox, type StockLocation, type StockRecord } from './inventoryData';
+import { LocationCombobox, CategoryCombobox, UnitCombobox, type StockLocation, type StockRecord } from './inventoryData';
 import type { PlaceOrderInput } from './PlaceOrderDialog';
 
 interface PickerPart {
@@ -561,10 +561,9 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                             </div>
                             <div className="space-y-1.5">
                               <Label className="text-xs">Unit</Label>
-                              <Input
+                              <UnitCombobox
                                 value={newPart.unit}
-                                onChange={(e) => setNewPart(prev => ({ ...prev, unit: e.target.value }))}
-                                placeholder="EA"
+                                onChange={(v) => setNewPart(prev => ({ ...prev, unit: v }))}
                               />
                             </div>
                             <div className="space-y-1.5">
