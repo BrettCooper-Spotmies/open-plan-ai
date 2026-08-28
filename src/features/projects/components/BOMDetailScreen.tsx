@@ -588,7 +588,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       const leadTimeChanged = payload.leadTime !== activeRev.leadTime;
       await Promise.all([
         updateNode.mutateAsync({ nodeId: originalNode.id, dto: { quantity: payload.qty, unit: payload.uom } }),
-        updatePart.mutateAsync({ partId: originalNode._partId, dto: { name: payload.name, description: payload.desc, manufacturer: payload.manufacturer || undefined, distributor: payload.distributor || undefined, mpn: payload.mpn || undefined, customFields: payload.customFields } }),
+        updatePart.mutateAsync({ partId: originalNode._partId, dto: { name: payload.name, description: payload.desc, category: payload.category, manufacturer: payload.manufacturer || undefined, distributor: payload.distributor || undefined, mpn: payload.mpn || undefined, customFields: payload.customFields } }),
         ...(priceChanged || leadTimeChanged ? [createRev.mutateAsync({
           partId: originalNode._partId,
           dto: {
