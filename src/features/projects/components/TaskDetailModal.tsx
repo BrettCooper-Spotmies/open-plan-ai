@@ -1606,12 +1606,12 @@ export const TaskDetailModal = ({
                                     }}
                                     className="cursor-pointer"
                                   >
-                                    <div className="flex items-center gap-2">
-                                      <Avatar className="h-5 w-5">
+                                    <div className="flex items-start gap-2">
+                                      <Avatar className="h-5 w-5 mt-0.5 shrink-0">
                                         <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
                                         <AvatarFallback className="text-[9px]">{member.initials}</AvatarFallback>
                                       </Avatar>
-                                      {member.name}
+                                      <span className="min-w-0">{member.name}</span>
                                     </div>
                                   </CommandItem>
                                 ))}
