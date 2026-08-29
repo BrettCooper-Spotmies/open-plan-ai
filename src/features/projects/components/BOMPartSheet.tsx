@@ -12,6 +12,10 @@ import { resolveFileUrl } from '@/utils/fileUrl';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -495,44 +499,75 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   // validation
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  // ── Dirty tracking: snapshot of form state as it was when the dialog was (re)opened,
+  // so Escape/close-attempts can warn before discarding anything the user typed. ──
+  const [confirmClose, setConfirmClose] = useState(false);
+  const normDoc = (d: DocValue | null | undefined) =>
+    !d ? null : d.kind === 'file' ? { kind: 'file', name: d.file.name, size: d.file.size } : d;
+  const normSections = (ts: TechFileSection[]) => ts.map(s => ({ id: s.id, value: s.value.map(normDoc) }));
+  const baselineRef = useRef<string>('');
   // Reset all form state when the dialog opens so stale data never shows.
   useEffect(() => {
     if (!open) return;
-    setPn(node?.pn ?? '');
+    const iPn = node?.pn ?? '';
     // In edit mode, fall back to the part number when name is empty so the form
     // shows the same identifier the detail view heading displays.
-    setName(isEdit ? (node?.name || node?.pn || '') : (node?.name ?? ''));
-    setDesc(node?.desc ?? '');
-    setCategory(node?.cat ?? 'assembly');
-    setStatus(node?.status ?? 'draft');
-    setRev(node?.rev ?? 'A');
-    setQty(String(node?.qty ?? 1));
-    setUom(node?.uom ?? 'EA');
-    setManufacturer(node?.manufacturer ?? '');
-    setSuppliers(
-      node?.suppliers?.length
-        ? node.suppliers.map(s => ({ ...s }))
-        : [{ distributor: node?.distributor ?? '', price: node?.price ? String(node.price) : '', calcFromSubparts: node?.price === 0 }]
-    );
+    const iName = isEdit ? (node?.name || node?.pn || '') : (node?.name ?? '');
+    const iDesc = node?.desc ?? '';
+    const iCategory = node?.cat ?? 'assembly';
+    const iStatus = node?.status ?? 'draft';
+    const iRev = node?.rev ?? 'A';
+    const iQty = String(node?.qty ?? 1);
+    const iUom = node?.uom ?? 'EA';
+    const iManufacturer = node?.manufacturer ?? '';
+    const iSuppliers = node?.suppliers?.length
+      ? node.suppliers.map(s => ({ ...s }))
+      : [{ distributor: node?.distributor ?? '', price: node?.price ? String(node.price) : '', calcFromSubparts: node?.price === 0 }];
     const lt = deriveLeadTime(node?.leadTime ?? 0);
+    const iMpn = node?.mpn ?? '';
+    const iReq = node?.req ?? [];
+    const iCustomFields = Array.isArray(node?.customFields) ? node.customFields : [];
+    const iVersionMode = 'same' as const;
+    const iNewRevLabel = node ? nextRev(node.rev) : 'B';
+    const iChangeNotes = '';
+
+    setPn(iPn);
+    setName(iName);
+    setDesc(iDesc);
+    setCategory(iCategory);
+    setStatus(iStatus);
+    setRev(iRev);
+    setQty(iQty);
+    setUom(iUom);
+    setManufacturer(iManufacturer);
+    setSuppliers(iSuppliers);
     setLeadTime(lt.value);
     setLeadTimeUnit(lt.unit);
-    setMpn(node?.mpn ?? '');
+    setMpn(iMpn);
     setSelectedOwner(null);
     setOwnerPopover(false);
-    setReq(node?.req ?? []);
+    setReq(iReq);
     setReqInput('');
     setDocPhoto(null);
     setTechSections(DEFAULT_TECH_SECTIONS.map(s => ({ ...s, value: [] })));
     setDocsPopulated(false);
     setIsAddingSection(false);
     setNewSectionName('');
-    setCustomFields(Array.isArray(node?.customFields) ? node.customFields : []);
-    setVersionMode('same');
-    setNewRevLabel(node ? nextRev(node.rev) : 'B');
-    setChangeNotes('');
+    setCustomFields(iCustomFields);
+    setVersionMode(iVersionMode);
+    setNewRevLabel(iNewRevLabel);
+    setChangeNotes(iChangeNotes);
     setErrors({});
     setActiveTab('details');
+    setConfirmClose(false);
+
+    baselineRef.current = JSON.stringify({
+      pn: iPn, name: iName, desc: iDesc, category: iCategory, status: iStatus, rev: iRev,
+      qty: iQty, uom: iUom, manufacturer: iManufacturer, suppliers: iSuppliers,
+      leadTime: lt.value, leadTimeUnit: lt.unit, mpn: iMpn, ownerId: null, req: iReq,
+      customFields: iCustomFields, versionMode: iVersionMode, newRevLabel: iNewRevLabel, changeNotes: iChangeNotes,
+      docPhoto: null, techSections: normSections(DEFAULT_TECH_SECTIONS.map(s => ({ ...s, value: [] }))),
+    });
   }, [open, node?.id, JSON.stringify(node?.customFields)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Map the node's owner to a project member once members are loaded
@@ -544,7 +579,14 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
         : node.owner
           ? projectMembers.find(m => m.name === node.owner)
           : null;
-      if (match) setSelectedOwner(match);
+      if (match) {
+        setSelectedOwner(match);
+        // Auto-matched owner is part of the original state, not a user edit — fold it into the baseline.
+        try {
+          const baseline = JSON.parse(baselineRef.current);
+          baselineRef.current = JSON.stringify({ ...baseline, ownerId: match.id });
+        } catch { /* baseline not initialized yet */ }
+      }
     }
   }, [open, isEdit, node, projectMembers, selectedOwner]);
 
@@ -552,43 +594,51 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   useEffect(() => {
     if (!open || !isEdit || !node?.id || docsLoading || docsPopulated) return;
 
+    let photoValue: DocValue | null = null;
     const photoDoc = existingDocs.find(isImageAttachment);
     if (photoDoc) {
       const url = resolveFileUrl(photoDoc.fileUrl);
       if (url) {
-        setDocPhoto({ kind: 'existing', id: photoDoc.id, url, fileName: photoDoc.fileName });
+        photoValue = { kind: 'existing', id: photoDoc.id, url, fileName: photoDoc.fileName };
+        setDocPhoto(photoValue);
       }
     }
 
+    let sectionsValue = DEFAULT_TECH_SECTIONS.map(s => ({ ...s, value: [] as DocValue[] }));
     const nonImageDocs = existingDocs.filter(d => !isImageAttachment(d));
     if (nonImageDocs.length > 0) {
-      setTechSections(ts => {
-        const updated = ts.map(s => ({ ...s, value: [] as DocValue[] }));
-        const orphans: DocValue[] = [];
-        for (const doc of nonImageDocs) {
-          const url = resolveFileUrl(doc.fileUrl);
-          if (!url) continue;
-          const entry: DocValue = { kind: 'existing', id: doc.id, url, fileName: doc.fileName };
-          const ext = (doc.fileName || doc.fileUrl || '').split('.').pop()?.toLowerCase().split(/[?#]/)[0] ?? '';
-          if (doc.mimeType === 'application/pdf' || ext === 'pdf') {
-            updated.find(s => s.id === 'datasheet')?.value.push(entry) ?? orphans.push(entry);
-          } else if (['step', 'stp', 'iges', 'igs', 'stl'].includes(ext)) {
-            updated.find(s => s.id === '3dmodel')?.value.push(entry) ?? orphans.push(entry);
-          } else if (['kicad_mod', 'kicad_pcb', 'lib', 'lbr'].includes(ext)) {
-            updated.find(s => s.id === 'footprint')?.value.push(entry) ?? orphans.push(entry);
-          } else {
-            orphans.push(entry);
-          }
+      const updated = sectionsValue.map(s => ({ ...s, value: [] as DocValue[] }));
+      const orphans: DocValue[] = [];
+      for (const doc of nonImageDocs) {
+        const url = resolveFileUrl(doc.fileUrl);
+        if (!url) continue;
+        const entry: DocValue = { kind: 'existing', id: doc.id, url, fileName: doc.fileName };
+        const ext = (doc.fileName || doc.fileUrl || '').split('.').pop()?.toLowerCase().split(/[?#]/)[0] ?? '';
+        if (doc.mimeType === 'application/pdf' || ext === 'pdf') {
+          updated.find(s => s.id === 'datasheet')?.value.push(entry) ?? orphans.push(entry);
+        } else if (['step', 'stp', 'iges', 'igs', 'stl'].includes(ext)) {
+          updated.find(s => s.id === '3dmodel')?.value.push(entry) ?? orphans.push(entry);
+        } else if (['kicad_mod', 'kicad_pcb', 'lib', 'lbr'].includes(ext)) {
+          updated.find(s => s.id === 'footprint')?.value.push(entry) ?? orphans.push(entry);
+        } else {
+          orphans.push(entry);
         }
-        if (orphans.length > 0) {
-          return [...updated, { id: 'existing-other', label: 'Other Files', hint: 'Existing attachments', accept: '*/*', icon: Paperclip, value: orphans }];
-        }
-        return updated;
-      });
+      }
+      sectionsValue = orphans.length > 0
+        ? [...updated, { id: 'existing-other', label: 'Other Files', hint: 'Existing attachments', accept: '*/*', icon: Paperclip, value: orphans }]
+        : updated;
+      setTechSections(sectionsValue);
     }
 
     setDocsPopulated(true);
-  }, [open, isEdit, node?.id, docsLoading, existingDocs, docsPopulated]);
+    // Server-loaded attachments are part of the original state, not a user edit — fold into baseline.
+    try {
+      const baseline = JSON.parse(baselineRef.current);
+      baselineRef.current = JSON.stringify({
+        ...baseline, docPhoto: normDoc(photoValue), techSections: normSections(sectionsValue),
+      });
+    } catch { /* baseline not initialized yet */ }
+  }, [open, isEdit, node?.id, docsLoading, existingDocs, docsPopulated]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lock background scroll while the mobile full-page flow covers the viewport.
   useEffect(() => {
@@ -597,6 +647,21 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = prev; };
   }, [isMobile, open]);
+
+  const isDirty = JSON.stringify({
+    pn, name, desc, category, status, rev, qty, uom, manufacturer, suppliers,
+    leadTime, leadTimeUnit, mpn, ownerId: selectedOwner?.id ?? null, req,
+    customFields, versionMode, newRevLabel, changeNotes,
+    docPhoto: normDoc(docPhoto), techSections: normSections(techSections),
+  }) !== baselineRef.current;
+
+  // Route every close attempt (Escape, backdrop X, Cancel, mobile back-out) through here so
+  // unsaved changes get a confirm step instead of silently vanishing.
+  const requestClose = () => {
+    if (saving) return;
+    if (isDirty) { setConfirmClose(true); return; }
+    onClose();
+  };
 
   const addReq = () => {
     const v = reqInput.trim().toUpperCase();
@@ -755,7 +820,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
       if (saving) return;
       if (activeTab === 'history') { setActiveTab('documents'); return; }
       if (stepIdx > 0) { setErrors({}); setActiveTab(TABS[stepIdx - 1]); return; }
-      onClose();
+      requestClose();
     };
 
     return (
@@ -784,7 +849,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                       <History className="w-4 h-4" />
                     </button>
                   )}
-                  <button type="button" onClick={onClose} disabled={saving}
+                  <button type="button" onClick={requestClose} disabled={saving}
                     className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-foreground disabled:opacity-50">
                     <X className="w-4 h-4" />
                   </button>
@@ -1300,7 +1365,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
 
             {/* Footer */}
             <div className="shrink-0 border-t border-border px-4 py-3 flex items-center gap-3 bg-card">
-              <Button variant="outline" className="flex-1" onClick={onClose} disabled={saving}>Cancel</Button>
+              <Button variant="outline" className="flex-1" onClick={requestClose} disabled={saving}>Cancel</Button>
               {activeTab === 'history' ? (
                 <Button className="flex-1 gap-1.5" onClick={() => setActiveTab('documents')}>Done</Button>
               ) : activeTab !== 'documents' ? (
@@ -1331,13 +1396,29 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
           onClose={() => setShowRejectDialog(false)}
           onConfirm={handleRejectConfirm}
         />
+
+        {/* Discard-changes confirmation (unsaved edits) */}
+        <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
+          <AlertDialogContent className="z-[300]">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+              <AlertDialogDescription>
+                You have unsaved changes to this part. Closing now will discard them.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep Editing</AlertDialogCancel>
+              <AlertDialogAction onClick={() => onClose()}>Discard</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </>
     );
   }
 
   return (
     <>
-      <Dialog open={open} onOpenChange={v => { if (!v && !saving) onClose(); }}>
+      <Dialog open={open} onOpenChange={v => { if (!v) requestClose(); }}>
         <DialogContent className="max-w-[1200px] w-[92vw] p-0 gap-0 flex flex-col overflow-hidden"
           style={{ maxHeight: '90vh', minHeight: '75vh' }}>
 
@@ -1974,7 +2055,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                   : <span className="text-xs text-muted-foreground">Step {wizardIndex(activeTab) + 1} of {TABS.length}</span>}
             </div>
             <div className="flex gap-2 shrink-0">
-              <Button variant="outline" size="default" className="px-5" onClick={onClose} disabled={saving}>Cancel</Button>
+              <Button variant="outline" size="default" className="px-5" onClick={requestClose} disabled={saving}>Cancel</Button>
               {(activeTab === 'history' || wizardIndex(activeTab) > 0) && (
                 <Button variant="outline" size="default" className="gap-1.5 px-4" disabled={saving}
                   onClick={() => { setErrors({}); setActiveTab(activeTab === 'history' ? 'documents' : TABS[wizardIndex(activeTab) - 1]); }}>
@@ -2011,6 +2092,22 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
         onClose={() => setShowRejectDialog(false)}
         onConfirm={handleRejectConfirm}
       />
+
+      {/* Discard-changes confirmation (unsaved edits) */}
+      <AlertDialog open={confirmClose} onOpenChange={setConfirmClose}>
+        <AlertDialogContent className="z-[300]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes to this part. Closing now will discard them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={() => onClose()}>Discard</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
