@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/select';
 import { cn, getDisplayId } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { renamePastedImageFile } from '@/utils/pastedFile';
 import { FilePreviewDialog, FilePreviewTarget, getVideoThumbnail } from '@/components/FilePreviewDialog';
 import {
     Calendar as CalendarIcon,
@@ -612,7 +613,7 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
         for (const item of Array.from(items)) {
             if (item.kind === 'file' && item.type.startsWith('image/')) {
                 const file = item.getAsFile();
-                if (file) imageFiles.push(file);
+                if (file) imageFiles.push(renamePastedImageFile(file, imageFiles.length));
             }
         }
         if (imageFiles.length === 0) return;
