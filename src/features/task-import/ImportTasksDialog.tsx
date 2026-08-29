@@ -410,7 +410,7 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
                 </div>
               )}
 
-              <div className="flex items-end gap-2 pt-4 border-t">
+              <div className="shrink-0 pt-4 border-t">
                 <input
                   ref={attachInputRef}
                   type="file"
@@ -422,31 +422,39 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
                     e.target.value = '';
                   }}
                 />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 h-10 w-10"
-                  onClick={() => attachInputRef.current?.click()}
-                  disabled={sending}
-                  title="Attach another file"
-                >
-                  <Paperclip className="h-4 w-4" />
-                </Button>
-                <Textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Ask the AI to fix a row, or explain what to change…"
-                  className="min-h-[40px] max-h-[120px] resize-none"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      void handleSend();
-                    }
-                  }}
-                />
-                <Button size="icon" className="shrink-0 h-10 w-10" onClick={handleSend} disabled={sending || !draft.trim()}>
-                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
+                <div className="flex items-end gap-1 rounded-2xl border border-input bg-background py-1 pl-1 pr-1.5 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 h-9 w-9 self-end rounded-full text-muted-foreground hover:text-foreground"
+                    onClick={() => attachInputRef.current?.click()}
+                    disabled={sending}
+                    title="Attach another file"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+                  <Textarea
+                    rows={1}
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder="Ask the AI to fix a row, or explain what to change…"
+                    className="min-h-9 max-h-[120px] resize-none self-center border-0 bg-transparent px-1.5 py-2 leading-[20px] shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        void handleSend();
+                      }
+                    }}
+                  />
+                  <Button
+                    size="icon"
+                    className="shrink-0 h-9 w-9 self-end rounded-full"
+                    onClick={handleSend}
+                    disabled={sending || !draft.trim()}
+                  >
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
             </div>
           )}
