@@ -422,7 +422,7 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
                     e.target.value = '';
                   }}
                 />
-                <div className="flex items-end gap-1 rounded-2xl border border-input bg-background py-1 pl-1 pr-1.5 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
+                <div className="flex items-end gap-1 rounded-2xl border border-input bg-background py-1 pl-1 pr-1.5 shadow-sm ring-offset-background transition-shadow focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
                   <Button
                     variant="ghost"
                     size="icon"
