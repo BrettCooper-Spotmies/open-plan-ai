@@ -76,7 +76,6 @@ interface AddMilestoneDialogProps {
   modules: Module[];
   issues: Issue[];
   assignableMembers?: TeamMember[];
-  /** Aligns the calendar with the project schedule when picking a target date */
   projectStartDate?: Date;
 }
 
@@ -88,7 +87,6 @@ export function AddMilestoneDialog({
   modules,
   issues,
   assignableMembers = [],
-  projectStartDate,
 }: AddMilestoneDialogProps) {
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
@@ -117,8 +115,11 @@ export function AddMilestoneDialog({
   useLayoutEffect(() => {
     if (!isOpen) return;
     const picked = form.getValues('date');
-    setTargetDateCalendarMonth(startOfMonth(picked ?? projectStartDate ?? new Date()));
-  }, [isOpen, projectStartDate, form]);
+    // Default to the present month, not the project's start month — a project
+    // that started a while ago would otherwise open the calendar on a past
+    // month the user has to manually page forward from.
+    setTargetDateCalendarMonth(startOfMonth(picked ?? new Date()));
+  }, [isOpen, form]);
 
   const handleSubmit = (data: MilestoneFormData) => {
     const milestone: Omit<Milestone, 'id'> = {
