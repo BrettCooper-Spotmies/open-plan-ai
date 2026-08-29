@@ -5,7 +5,7 @@
  * Assistant panel) per the confirmed design — see the task-import feature
  * plan. Three internal stages: upload -> chat (review + resolve) -> result.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -29,6 +29,7 @@ type Stage = 'upload' | 'chat' | 'result';
 export function ImportTasksDialog({ open, onClose, projectId }: Props) {
   const [stage, setStage] = useState<Stage>('upload');
   const [jobId, setJobId] = useState<string | null>(null);
+  const [pendingFileName, setPendingFileName] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -45,6 +46,7 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
   function reset() {
     setStage('upload');
     setJobId(null);
+    setPendingFileName(null);
     setUploadError(null);
     setDraft('');
     setResult(null);
@@ -62,17 +64,27 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
       return;
     }
     setUploadError(null);
+    setPendingFileName(file.name);
     setUploading(true);
     try {
       const job = await taskImportService.startImport(projectId, file);
       setJobId(job.jobId);
       setStage('chat');
     } catch (err) {
+      setPendingFileName(null);
       setUploadError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
   }
+
+  const job = flow.job;
+
+  useEffect(() => {
+    if (job?.sourceFileName) {
+      setPendingFileName(job.sourceFileName);
+    }
+  }, [job?.sourceFileName]);
 
   async function handleSend() {
     if (!draft.trim()) return;
@@ -118,7 +130,6 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
     }
   }
 
-  const job = flow.job;
   // The latest proposal for this conversation, whatever its current status —
   // not filtered to 'pending' only. ImportProposalCard itself renders the
   // right thing for every status (editable review, importing spinner,
@@ -129,7 +140,8 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
   // createdAt descending (see proposals.repository.ts's listByConversation).
   const latestProposal = flow.conversation?.proposals[0] ?? null;
   const messages = flow.conversation?.messages.filter((m) => m.role === 'user' || m.role === 'assistant') ?? [];
-  const isProcessing = job && !['awaiting_review', 'completed', 'failed'].includes(job.status);
+  const hasReviewContent = messages.length > 0 || !!latestProposal || !!flow.liveError || !!commitError;
+  const isProcessing = uploading || !job || !['awaiting_review', 'completed', 'failed'].includes(job.status) || !hasReviewContent;
   const isFailed = job?.status === 'failed';
 
   return (
@@ -142,7 +154,7 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
             {stage === 'chat' && !isFailed && (
               <span className="flex items-center gap-1.5 truncate">
                 <FileSpreadsheet className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{job?.sourceFileName}</span>
+                <span className="truncate">{pendingFileName ?? job?.sourceFileName ?? 'Preparing import…'}</span>
               </span>
             )}
             {stage === 'chat' && isFailed && 'This file couldn’t be imported'}
@@ -212,7 +224,14 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
           {stage === 'chat' && isProcessing && (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
               <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Reading {job?.sourceFileName}…</p>
+              <p className="text-sm text-muted-foreground">
+                {uploading
+                  ? `Uploading ${pendingFileName ?? 'your file'}…`
+                  : `Reading ${pendingFileName ?? job?.sourceFileName ?? 'your file'}…`}
+              </p>
+              <p className="text-xs text-muted-foreground max-w-sm">
+                The AI is extracting tasks and preparing the review.
+              </p>
             </div>
           )}
 
