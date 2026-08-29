@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Zap, Cpu, Package, Box, Monitor, Shield, Layers, ChevronsUpDown, Tag,
-  CheckCircle, GitBranch, Save, Plus, X, ChevronRight, ChevronLeft,
+  GitBranch, Save, Plus, X, ChevronRight, ChevronLeft,
   FileText, ImageIcon, Upload, Paperclip, AlertCircle, Link as LinkIcon,
   Check, XCircle, History, Loader2,
   FileSpreadsheet, ExternalLink,
@@ -447,7 +447,6 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   const { data: projectMembers = [] } = useProjectMembers(projectId);
   const { data: project } = useProjectDetail(projectId);
   const projectRole = (project?.myRole || '').toLowerCase();
-  const canEditStatus = projectRole === 'admin' || projectRole === 'maintainer';
   const isAdmin = projectRole === 'admin';
 
   const decideApprovalRequest = useDecideApprovalRequest(projectId);
@@ -887,54 +886,35 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                     {errors.category && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.category}</p>}
                   </FL>
 
-                  <FL label="Status">
-                    {!isEdit ? (
-                      <>
+                  {/* New parts always start as Draft — advance via the review flow
+                      (Draft → Pending → Approved/Rejected), not a manual toggle. */}
+                  {isEdit && (
+                    <FL label="Status">
+                      {node?.status === 'pending' && activeRequest && (isAssignedApprover || isAdmin) ? (
                         <div className="flex gap-2">
-                          {(['draft', 'approved'] as BOMStatus[]).map(s => (
-                            <button key={s} type="button" disabled={!canEditStatus}
-                              onClick={() => canEditStatus && setStatus(s)}
-                              title={canEditStatus ? undefined : 'Only project managers or admins can change part status'}
-                              className={cn(
-                                'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors',
-                                status === s ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground',
-                                canEditStatus ? '' : 'opacity-60'
-                              )}>
-                              {s === 'approved'
-                                ? <CheckCircle className="w-4 h-4" style={{ color: '#16A34A' }} />
-                                : <FileText className="w-4 h-4" style={{ color: '#64748B' }} />}
-                              {s === 'approved' ? 'Approved' : 'Draft'}
-                            </button>
-                          ))}
+                          <button type="button" disabled={decideApprovalRequest.isPending} onClick={handleApproveClick}
+                            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium disabled:opacity-50">
+                            {decideApprovalRequest.isPending
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <Check className="w-4 h-4" style={{ color: '#16A34A' }} />}
+                            Approve
+                          </button>
+                          <button type="button" disabled={decideApprovalRequest.isPending} onClick={() => setShowRejectDialog(true)}
+                            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium disabled:opacity-50">
+                            <XCircle className="w-4 h-4" style={{ color: '#DC2626' }} />
+                            Reject
+                          </button>
                         </div>
-                        {!canEditStatus && (
-                          <p className="text-[11px] text-muted-foreground mt-1.5">Only project managers or admins can change part status.</p>
-                        )}
-                      </>
-                    ) : node?.status === 'pending' && activeRequest && (isAssignedApprover || isAdmin) ? (
-                      <div className="flex gap-2">
-                        <button type="button" disabled={decideApprovalRequest.isPending} onClick={handleApproveClick}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium disabled:opacity-50">
-                          {decideApprovalRequest.isPending
-                            ? <Loader2 className="w-4 h-4 animate-spin" />
-                            : <Check className="w-4 h-4" style={{ color: '#16A34A' }} />}
-                          Approve
-                        </button>
-                        <button type="button" disabled={decideApprovalRequest.isPending} onClick={() => setShowRejectDialog(true)}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium disabled:opacity-50">
-                          <XCircle className="w-4 h-4" style={{ color: '#DC2626' }} />
-                          Reject
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 h-9">
-                        <BOMStatusPill status={node?.status ?? 'pending'} />
-                        {node?.status === 'pending' && !activeRequest && (
-                          <span className="text-[11px] text-muted-foreground">Not yet sent for review.</span>
-                        )}
-                      </div>
-                    )}
-                  </FL>
+                      ) : (
+                        <div className="flex items-center gap-2 h-9">
+                          <BOMStatusPill status={node?.status ?? 'pending'} />
+                          {node?.status === 'pending' && !activeRequest && (
+                            <span className="text-[11px] text-muted-foreground">Not yet sent for review.</span>
+                          )}
+                        </div>
+                      )}
+                    </FL>
+                  )}
 
                   <FL label="Owner / Handled By" required>
                     <Popover open={ownerPopover} onOpenChange={setOwnerPopover}>
@@ -1428,56 +1408,37 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
 
                 {/* Right col */}
                 <div className="space-y-5">
-                  <FL label="Status">
-                    {!isEdit ? (
-                      <>
+                  {/* New parts always start as Draft — advance via the review flow
+                      (Draft → Pending → Approved/Rejected), not a manual toggle. */}
+                  {isEdit && (
+                    <FL label="Status">
+                      {node?.status === 'pending' && activeRequest && (isAssignedApprover || isAdmin) ? (
                         <div className="flex gap-2">
-                          {(['draft', 'approved'] as BOMStatus[]).map(s => (
-                            <button key={s} type="button" disabled={!canEditStatus}
-                              onClick={() => canEditStatus && setStatus(s)}
-                              title={canEditStatus ? undefined : 'Only project managers or admins can change part status'}
-                              className={cn(
-                                'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-colors',
-                                status === s ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground hover:bg-muted',
-                                canEditStatus ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 hover:bg-card'
-                              )}>
-                              {s === 'approved'
-                                ? <CheckCircle className="w-4 h-4" style={{ color: '#16A34A' }} />
-                                : <FileText className="w-4 h-4" style={{ color: '#64748B' }} />}
-                              {s === 'approved' ? 'Approved' : 'Draft'}
-                            </button>
-                          ))}
+                          <button type="button" disabled={decideApprovalRequest.isPending}
+                            onClick={handleApproveClick}
+                            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            {decideApprovalRequest.isPending
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <Check className="w-4 h-4" style={{ color: '#16A34A' }} />}
+                            Approve
+                          </button>
+                          <button type="button" disabled={decideApprovalRequest.isPending}
+                            onClick={() => setShowRejectDialog(true)}
+                            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                            <XCircle className="w-4 h-4" style={{ color: '#DC2626' }} />
+                            Reject
+                          </button>
                         </div>
-                        {!canEditStatus && (
-                          <p className="text-[11px] text-muted-foreground mt-1.5">Only project managers or admins can change part status.</p>
-                        )}
-                      </>
-                    ) : node?.status === 'pending' && activeRequest && (isAssignedApprover || isAdmin) ? (
-                      <div className="flex gap-2">
-                        <button type="button" disabled={decideApprovalRequest.isPending}
-                          onClick={handleApproveClick}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                          {decideApprovalRequest.isPending
-                            ? <Loader2 className="w-4 h-4 animate-spin" />
-                            : <Check className="w-4 h-4" style={{ color: '#16A34A' }} />}
-                          Approve
-                        </button>
-                        <button type="button" disabled={decideApprovalRequest.isPending}
-                          onClick={() => setShowRejectDialog(true)}
-                          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg border border-border bg-card text-foreground text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                          <XCircle className="w-4 h-4" style={{ color: '#DC2626' }} />
-                          Reject
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 h-9">
-                        <BOMStatusPill status={node?.status ?? 'pending'} />
-                        {node?.status === 'pending' && !activeRequest && (
-                          <span className="text-[11px] text-muted-foreground">Not yet sent for review.</span>
-                        )}
-                      </div>
-                    )}
-                  </FL>
+                      ) : (
+                        <div className="flex items-center gap-2 h-9">
+                          <BOMStatusPill status={node?.status ?? 'pending'} />
+                          {node?.status === 'pending' && !activeRequest && (
+                            <span className="text-[11px] text-muted-foreground">Not yet sent for review.</span>
+                          )}
+                        </div>
+                      )}
+                    </FL>
+                  )}
 
                   <FL label="Owner / Handled By" required>
                     <Popover open={ownerPopover} onOpenChange={setOwnerPopover}>
