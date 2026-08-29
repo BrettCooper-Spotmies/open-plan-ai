@@ -546,7 +546,9 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       distributor: payload.distributor || undefined,
       mpn: payload.mpn || undefined,
       unit: payload.uom,
-      initialStatus: payload.status,
+      // The Part's initial revision has no 'draft'/'rejected' state — only the
+      // BOM node does.
+      initialStatus: payload.status === 'approved' ? 'approved' : 'pending',
       initialRev: payload.rev,
       initialPrice: payload.price > 0 ? payload.price : undefined,
       initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
