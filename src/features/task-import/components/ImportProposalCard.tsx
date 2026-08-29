@@ -134,7 +134,7 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
       )}
 
       {isPending && (
-        <div className="flex items-center justify-between gap-3 pt-1">
+        <div className="flex items-center justify-between gap-3 pt-1 animate-fade-in">
           <span className={cn('text-xs text-muted-foreground leading-relaxed', compact && 'text-[11px]')}>
             {blockedCount > 0
               ? `${preview.cleanCount} will be imported now, ${blockedCount} blocked until fixed`

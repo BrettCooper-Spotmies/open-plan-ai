@@ -137,7 +137,18 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
     setDraft('');
     setSending(true);
     try {
-      await flow.sendMessage(content);
+      const sent = await flow.sendMessage(content);
+      // Swap the temp id for the real server id the instant it's known —
+      // otherwise, once the conversation refetch confirms this message, its
+      // id won't match the optimistic bubble's, React treats them as two
+      // different elements, unmounts the old one and mounts a fresh one,
+      // and that remount (plus the entrance animation replaying) is what
+      // shows up as a brief width/layout glitch right as "Sending…" clears.
+      if (sent?.messageId) {
+        setPendingUserMessages((current) =>
+          current.map((message) => (message.id === optimisticId ? { ...message, id: sent.messageId } : message)),
+        );
+      }
     } catch {
       // flow.sendMessage already surfaces the failure via flow.liveError —
       // just undo the optimistic bubble and give the user their draft back.
@@ -231,6 +242,13 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
       optimistic: true,
     }));
   const messages = [...confirmedMessages, ...optimisticMessages];
+  // Identity+status fingerprint, not just messages.length — an optimistic
+  // "Sending…" bubble resolving into its confirmed twin moves one entry
+  // from optimisticMessages to confirmedMessages without changing the count,
+  // so a length-only dependency below misses it and the view stops tracking
+  // the bottom right as that bubble's height shrinks (the "Sending…" line
+  // disappearing), which yanks older messages back into view.
+  const messagesSignature = messages.map((m) => `${m.id}:${'optimistic' in m && m.optimistic ? 1 : 0}`).join(',');
   const hasReviewContent = messages.length > 0 || !!latestProposal || !!flow.liveError || !!commitError;
   const hasChatStarted = messages.length > 0;
   const isProcessing = uploading || !job || !['awaiting_review', 'completed', 'failed'].includes(job.status) || !hasReviewContent;
@@ -247,7 +265,7 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
     const viewport = scrollAreaRef.current;
     if (!viewport) return;
     viewport.scrollTop = viewport.scrollHeight;
-  }, [stage, isProcessing, messages.length, latestProposal?.id, latestProposal?.status, flow.liveError, commitError, flow.pendingQuestion]);
+  }, [stage, isProcessing, messagesSignature, latestProposal?.id, latestProposal?.status, flow.liveError, commitError, flow.pendingQuestion]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
@@ -363,7 +381,7 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
                   <div
                     key={m.id}
                     className={cn(
-                      'text-sm rounded-xl px-3.5 py-2.5 max-w-[85%] leading-relaxed',
+                      'text-sm rounded-xl px-3.5 py-2.5 max-w-[85%] leading-relaxed animate-fade-in',
                       m.role === 'user' ? 'bg-primary text-primary-foreground ml-auto' : 'bg-muted',
                       'optimistic' in m && m.optimistic && 'opacity-80',
                     )}
@@ -375,22 +393,28 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
                   </div>
                 ))}
                 {flow.pendingQuestion && (
-                  <AssistantQuestionCard
-                    questions={flow.pendingQuestion}
-                    onSubmit={handleAnswerQuestion}
-                    disabled={sending}
-                  />
+                  <div className="animate-fade-in">
+                    <AssistantQuestionCard
+                      questions={flow.pendingQuestion}
+                      onSubmit={handleAnswerQuestion}
+                      disabled={sending}
+                    />
+                  </div>
                 )}
                 {showAssistantWorking && (
-                  <div className="bg-muted text-sm rounded-xl px-3.5 py-2.5 max-w-[85%]">
+                  <div className="bg-muted text-sm rounded-xl px-3.5 py-2.5 max-w-[85%] animate-fade-in">
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      <span>Fixing the issues and updating the task preview…</span>
+                      <span className="flex items-center gap-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:-0.3s]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce [animation-delay:-0.15s]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-current animate-bounce" />
+                      </span>
+                      <span>Thinking…</span>
                     </div>
                   </div>
                 )}
                 {(flow.liveError || commitError) && (
-                  <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive">
+                  <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-sm text-destructive animate-fade-in">
                     <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
                     <span>{commitError ?? flow.liveError}</span>
                   </div>
@@ -398,7 +422,16 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
               </div>
 
               {latestProposal && (
-                <div className="shrink-0 pt-1">
+                <div
+                  // Keyed on a fingerprint of the proposal's actual content
+                  // (not just its id) so every meaningful change — rows
+                  // added, warnings resolved, status flip — remounts this
+                  // block and replays the fade-in instead of the card's
+                  // height snapping instantly between states (e.g. the
+                  // "Import N tasks" button appearing/disappearing).
+                  key={`${latestProposal.id}-${(latestProposal.preview as ImportProposalPreview)?.itemCount}-${(latestProposal.preview as ImportProposalPreview)?.cleanCount}-${latestProposal.status}`}
+                  className="shrink-0 pt-1 animate-fade-in"
+                >
                   <ImportProposalCard
                     preview={latestProposal.preview as ImportProposalPreview}
                     status={latestProposal.status}

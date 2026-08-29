@@ -100,13 +100,14 @@ export function useTaskImportFlow(projectId: string, jobId: string | null) {
   }, [conversationId, projectId, jobId, queryClient, refetchConversation]);
 
   const sendMessage = useCallback(
-    async (content: string) => {
-      if (!jobId) return;
+    async (content: string): Promise<{ messageId: string } | undefined> => {
+      if (!jobId) return undefined;
       setLiveError(null);
       setAssistantWorking(true);
       try {
-        await taskImportService.sendMessage(projectId, jobId, content);
+        const result = await taskImportService.sendMessage(projectId, jobId, content);
         refetchConversation();
+        return result;
       } catch (err) {
         // The request never made it to a job the socket could report on, so
         // there's no ai:error coming to clear this — reset it here or the
