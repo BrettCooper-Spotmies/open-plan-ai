@@ -1999,6 +1999,7 @@ export function BOMView({
           open={!!createSubNode}
           onClose={() => setCreateSubNode(null)}
           onSave={handleAddSubcomponent}
+          isSubPart
         />
       )}
 

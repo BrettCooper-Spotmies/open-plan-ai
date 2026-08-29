@@ -1299,6 +1299,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
         open={showCreateNewSub}
         onClose={() => setShowCreateNewSub(false)}
         onSave={handleNewSubSaved}
+        isSubPart
       />
 
       {/* Import Sub-components from Excel */}

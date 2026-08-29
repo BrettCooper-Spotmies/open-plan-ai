@@ -96,6 +96,7 @@ interface Props {
   onClose: () => void;
   onSave: (payload: BOMPartPayload) => void | Promise<void>;
   resubmitMode?: boolean;   // true when editing a rejected node — save also resubmits for review
+  isSubPart?: boolean;      // add mode only — creating a sub-component under a parent part, not a top-level part
 }
 
 // ── Draft persistence (Add mode only — Edit mode already reflects saved server state) ──
@@ -443,7 +444,7 @@ function PhotoUpload({ value, onChange }: { value: DocValue | null; onChange: (v
 }
 
 // ── Main component ─────────────────────────────────────────────────
-export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSave, resubmitMode }: Props) {
+export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSave, resubmitMode, isSubPart }: Props) {
   const isEdit = mode === 'edit';
   const isMobile = useIsMobile();
 
@@ -835,7 +836,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
                   <ChevronLeft className="w-4 h-4" />
                 </button>
                 <h2 className="text-base font-semibold text-foreground flex items-center gap-2 min-w-0 justify-center truncate">
-                  {isEdit ? 'Edit Part' : 'Add New Part'}
+                  {isEdit ? 'Edit Part' : isSubPart ? 'Add New Sub Part' : 'Add New Part'}
                   {isEdit && node && (
                     <span className="text-xs font-mono font-normal text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
                       {node.pn}
@@ -1425,7 +1426,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
           {/* ── Header ── */}
           <DialogHeader className="px-7 py-5 border-b border-border shrink-0">
             <DialogTitle className="text-lg font-semibold flex items-center gap-2.5">
-              {isEdit ? 'Edit Part' : 'Add New Part'}
+              {isEdit ? 'Edit Part' : isSubPart ? 'Add New Sub Part' : 'Add New Part'}
               {isEdit && node && (
                 <span className="text-sm font-mono font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-md">
                   {node.pn}
