@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { format, parseISO, startOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/select';
 import { cn, getDisplayId } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { renamePastedImageFile } from '@/utils/pastedFile';
 import { FilePreviewDialog, FilePreviewTarget, getVideoThumbnail } from '@/components/FilePreviewDialog';
 import {
     Calendar as CalendarIcon,
@@ -160,6 +161,33 @@ const formatFileSize = (bytes: number) => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const serializeIssueForDirtyCheck = (issue: Issue): string => {
+    const attachmentSnapshot = (issue.attachments || [])
+        .map(a => ({ id: a.id, filename: a.filename, fileType: a.fileType, fileSize: a.fileSize, url: a.url }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+
+    return JSON.stringify({
+        title: issue.title || '',
+        description: issue.description || '',
+        descriptionBlocks: issue.descriptionBlocks || null,
+        category: issue.category,
+        categoryOther: issue.categoryOther || '',
+        severity: issue.severity,
+        status: issue.status,
+        moduleId: issue.moduleId || null,
+        dueDate: issue.dueDate || null,
+        resolution: issue.resolution || '',
+        assigneeIds: (issue.assignees || []).map(a => a.id).sort(),
+        tags: [...(issue.tags || [])].sort(),
+        blockedBy: [...(issue.blockedBy || [])].sort(),
+        blocksTaskIds: [...(issue.blocksTaskIds || [])].sort(),
+        checklist: issue.checklist || [],
+        comments: issue.comments || [],
+        videoLinks: issue.videoLinks || [],
+        attachments: attachmentSnapshot,
+    });
+};
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Draft issues use a client-generated `issue-${Date.now()}` id until the create
 // mutation resolves — guard against firing comment/attachment fetches with it.
@@ -188,6 +216,10 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
     // and hasn't switched it on yet. Uncontrolled callers (e.g. IssuePage) stay always-editable.
     const isMobileFieldsLocked = isMobileLayout && isMobileEditMode === false;
     const [editedIssue, setEditedIssue] = useState<Issue | null>(issue);
+    // Snapshot of the issue as it was when this dialog instance mounted — never
+    // updated afterward — so we can tell whether the user actually changed
+    // anything before firing an update + success toast on a no-op Save.
+    const initialIssueSnapshotRef = useRef(issue ? serializeIssueForDirtyCheck(issue) : '');
     const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
     const [newComment, setNewComment] = useState('');
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -284,7 +316,14 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pendingFiles]);
 
-    useEffect(() => {
+    // useLayoutEffect (not useEffect) for both of the effects below — this
+    // component instance is reused across different issues opened one after
+    // another (only the `issue` prop changes), and the outer modal that seeds
+    // it now also resets synchronously via useLayoutEffect. A regular
+    // useEffect here runs after paint, so there'd still be a frame showing
+    // the PREVIOUS issue's title/description/advanced-mode state before this
+    // catches up — a visible flash when switching issues quickly.
+    useLayoutEffect(() => {
         if (issue) {
             // Preserve loaded comments only when staying on the same issue —
             // they're fetched separately via API and would otherwise leak
@@ -296,13 +335,15 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
         }
     }, [issue]);
 
-    useEffect(() => {
-        // Auto-enable advanced description if the loaded issue already has blocks.
+    useLayoutEffect(() => {
+        // Set advanced-description mode from the loaded issue's own data — on if
+        // it has blocks, off otherwise. This component instance is reused across
+        // different issues (only the `issue` prop changes), so without the
+        // unconditional else branch, toggling it on for one issue would leak into
+        // every issue opened afterward instead of reflecting each issue's own state.
         // Keyed on issue id (not the whole issue object) so this only runs when
         // switching issues, not on every keystroke while editing a draft.
-        if (issue?.descriptionBlocks && issue.descriptionBlocks.length > 0) {
-            setIsAdvancedDescription(true);
-        }
+        setIsAdvancedDescription(!!(issue?.descriptionBlocks && issue.descriptionBlocks.length > 0));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [issue?.id]);
 
@@ -356,6 +397,11 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
         return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [issue?.id, mode]);
+
+    const isIssueDirty = useMemo(
+        () => !!editedIssue && initialIssueSnapshotRef.current !== '' && serializeIssueForDirtyCheck(editedIssue) !== initialIssueSnapshotRef.current,
+        [editedIssue]
+    );
 
     if (!editedIssue) return null;
 
@@ -567,7 +613,7 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
         for (const item of Array.from(items)) {
             if (item.kind === 'file' && item.type.startsWith('image/')) {
                 const file = item.getAsFile();
-                if (file) imageFiles.push(file);
+                if (file) imageFiles.push(renamePastedImageFile(file, imageFiles.length));
             }
         }
         if (imageFiles.length === 0) return;
@@ -951,13 +997,13 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
                                                             onSelect={() => {
                                                                 handleFieldChange('assignees', [...(editedIssue.assignees || []), member]);
                                                             }}
-                                                            className="cursor-pointer"
+                                                            className="cursor-pointer items-start"
                                                         >
-                                                            <Avatar className="h-5 w-5 mr-2">
+                                                            <Avatar className="h-5 w-5 mr-2 mt-0.5 shrink-0">
                                                                 <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
                                                                 <AvatarFallback className="text-[9px]">{member.initials}</AvatarFallback>
                                                             </Avatar>
-                                                            {member.name}
+                                                            <span className="min-w-0">{member.name}</span>
                                                         </CommandItem>
                                                     ))}
                                             </CommandGroup>
@@ -2280,7 +2326,7 @@ export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDeta
                                             setIsSaving(false);
                                         }
                                     }}
-                                    disabled={isSaving || isUploading}
+                                    disabled={isSaving || isUploading || !isIssueDirty}
                                     className="min-w-[120px]"
                                 >
                                     {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

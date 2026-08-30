@@ -307,6 +307,7 @@ export interface Activity {
   | 'issue_created'
   | 'issue_resolved'
   | 'issue_updated'
+  | 'issue_deleted'
   | 'issue_assigned'
   | 'issue_linked_to_task'
   | 'project_created'
@@ -314,7 +315,37 @@ export interface Activity {
   | 'project_assigned'
   | 'project_deleted'
   | 'project_member_added'
-  | 'dependency_added';
+  | 'dependency_added'
+  | 'bom.node_created'
+  | 'bom.node_deleted'
+  | 'bom.part_created'
+  | 'bom.part_updated'
+  | 'bom.part_deleted'
+  | 'module_created'
+  | 'module_updated'
+  | 'module_deleted'
+  | 'tag_created'
+  | 'tag_updated'
+  | 'tag_deleted'
+  | 'task_column_created'
+  | 'task_column_updated'
+  | 'task_column_deleted'
+  | 'issue_column_created'
+  | 'issue_column_updated'
+  | 'issue_column_deleted'
+  | 'org_created'
+  | 'org_deleted'
+  | 'inventory.stock_received'
+  | 'inventory.stock_adjusted'
+  | 'inventory.quarantine_released'
+  | 'inventory.stock_issued'
+  | 'inventory.stock_transferred'
+  | 'inventory.stock_allocated'
+  | 'inventory.order_placed'
+  | 'inventory.build_created'
+  | 'inventory.build_allocated'
+  | 'inventory.build_kitted'
+  | 'inventory.shortage_ordered';
   title: string;
   description: string;
   user: TeamMember;
@@ -348,7 +379,7 @@ export type ModuleViewMode = 'kanban' | 'list';
 // My Day specific types
 export type MyDayView = 'kanban' | 'list';
 export type MyDayGroupBy = 'project' | 'progress' | 'dueDate' | 'priority';
-export type MyDayFilter = 'all' | 'today' | 'overdue';
+export type MyDayFilter = 'all' | 'today' | 'overdue' | 'completed';
 
 export interface MyTasksColumnFilters {
   type?: MyDayItemType[];
@@ -371,9 +402,11 @@ export interface TaskFilter {
   updatedBy?: string[];
   milestoneId?: string;
   dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
-  dueDateCustom?: string; // exact date (yyyy-MM-dd) picked from the calendar, overrides dueDate preset
+  dueDateCustom?: string; // start of a custom range (yyyy-MM-dd) picked from the calendar, overrides dueDate preset
+  dueDateCustomTo?: string; // end of the custom range (yyyy-MM-dd), inclusive; same as dueDateCustom for a single-day pick
   completedDate?: 'today' | 'this-week' | 'this-month';
-  completedDateCustom?: string; // exact date (yyyy-MM-dd) picked from the calendar, overrides completedDate preset
+  completedDateCustom?: string; // start of a custom range (yyyy-MM-dd) picked from the calendar, overrides completedDate preset
+  completedDateCustomTo?: string; // end of the custom range (yyyy-MM-dd), inclusive; same as completedDateCustom for a single-day pick
   tags?: string[];
   hasBlockers?: boolean;
 }
