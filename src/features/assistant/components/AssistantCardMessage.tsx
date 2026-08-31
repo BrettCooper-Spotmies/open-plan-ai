@@ -508,6 +508,10 @@ const BOM_FLAG_META: Record<BomCardFlag, { label: string; badgeClass: string }> 
     label: 'Long-lead',
     badgeClass: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
   },
+  missing_lead_time: {
+    label: 'Missing lead time',
+    badgeClass: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
+  },
   missing_mfr_pn: {
     label: 'Missing mfr PN',
     badgeClass: 'border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400',
@@ -728,6 +732,9 @@ export function AssistantCardMessage({ card, createdAt, onFollowUp, readOnly }: 
                 <div className="flex flex-wrap gap-1.5">
                   {card.singleSourcedCount > 0 && <BomFlagCountBadge flag="single_sourced" count={card.singleSourcedCount} />}
                   {card.longLeadCount > 0 && <BomFlagCountBadge flag="long_lead" count={card.longLeadCount} />}
+                  {card.missingLeadTimeCount != null && card.missingLeadTimeCount > 0 && (
+                    <BomFlagCountBadge flag="missing_lead_time" count={card.missingLeadTimeCount} />
+                  )}
                   {card.missingMfrPnCount > 0 && <BomFlagCountBadge flag="missing_mfr_pn" count={card.missingMfrPnCount} />}
                   {card.missingApprovalCount > 0 && (
                     <BomFlagCountBadge flag="missing_approval" count={card.missingApprovalCount} />

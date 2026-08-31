@@ -207,7 +207,7 @@ export interface CardItem {
   entityType?: CardItemEntityType;
 }
 
-export type BomCardFlag = 'single_sourced' | 'long_lead' | 'missing_mfr_pn' | 'missing_approval';
+export type BomCardFlag = 'single_sourced' | 'long_lead' | 'missing_lead_time' | 'missing_mfr_pn' | 'missing_approval';
 
 export interface BomCardItem {
   id: string;
@@ -284,6 +284,8 @@ export interface AssistantBomCard extends AssistantCardBase {
   rolledUpCost?: number;
   singleSourcedCount: number;
   longLeadCount: number;
+  /** Absent on cards persisted before this field existed. */
+  missingLeadTimeCount?: number;
   missingMfrPnCount: number;
   missingApprovalCount: number;
   // The BOM page's status stat cards — only set for an approval-progress question.
