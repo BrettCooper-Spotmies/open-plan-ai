@@ -19,6 +19,7 @@ export interface CreatePartDto {
   mpn?: string;
   unit?: string;
   notes?: string;
+  imageUrl?: string | null;
   // Initial revision overrides
   initialStatus?: BOMStatus;
   initialRev?: string;

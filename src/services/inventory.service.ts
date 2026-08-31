@@ -1,5 +1,6 @@
 import { apiClient } from '@/services/api/client';
 import { ENDPOINTS } from '@/services/api/endpoints';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import type { StockRecord, OrderRecord, StockTransaction, BuildDef, BuildBomLine, BuildAssignee } from '@/features/projects/components/inventoryData';
 
 // ─── API response shapes (match backend inventory.types.ts responses) ─────────
@@ -10,6 +11,7 @@ export interface ApiStockRecord {
   pn: string;
   name: string;
   cat: string;
+  imageUrl: string | null;
   onHand: number;
   allocated: number;
   onOrder: number;
@@ -135,6 +137,7 @@ export function fromApiStock(r: ApiStockRecord): StockRecord {
     lotNumber: r.lotNumber ?? undefined,
     serialNumber: r.serialNumber ?? undefined,
     quarantineQty: r.quarantineQty || undefined,
+    imageUrl: resolveFileUrl(r.imageUrl) ?? undefined,
   };
 }
 
