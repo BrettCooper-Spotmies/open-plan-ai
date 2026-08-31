@@ -1267,19 +1267,20 @@ export function IssuesView({
           )}
         </div>
       ) : (
-        <div className="rounded-lg border border-t-0 bg-background">
-          <Table containerClassName="relative w-full overflow-visible">
-            <TableHeader className="bg-background">
-              <TableRow className="bg-background">
-                <TableHead className="w-[80px] sticky z-10 bg-background border-t will-change-transform" style={{ top: stickyOffset }}>Priority</TableHead>
-                <TableHead className="w-[300px] sticky z-10 bg-background border-t will-change-transform" style={{ top: stickyOffset }}>Issue</TableHead>
-                <TableHead className="sticky z-10 bg-background border-t will-change-transform" style={{ top: stickyOffset }}>Category</TableHead>
-                <TableHead className="sticky z-10 bg-background border-t will-change-transform" style={{ top: stickyOffset }}>Status</TableHead>
-                <TableHead className="sticky z-10 bg-background border-t will-change-transform" style={{ top: stickyOffset }}>Blocking</TableHead>
-                <TableHead className="sticky z-10 bg-background border-t will-change-transform" style={{ top: stickyOffset }}>Assigned</TableHead>
-                <TableHead className="sticky z-10 bg-background border-t will-change-transform" style={{ top: stickyOffset }}>Reported</TableHead>
-              </TableRow>
-            </TableHeader>
+        <div className="rounded-lg border">
+          <div className="max-h-[calc(100vh-320px)] min-h-[240px] overflow-y-auto">
+            <Table containerClassName="relative w-full overflow-visible">
+              <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
+                <TableRow className="bg-background">
+                  <TableHead className="w-[80px] sticky top-0 z-10 bg-background">Priority</TableHead>
+                  <TableHead className="w-[300px] sticky top-0 z-10 bg-background">Issue</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-background">Category</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-background">Status</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-background">Blocking</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-background">Assigned</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-background">Reported</TableHead>
+                </TableRow>
+              </TableHeader>
             <TableBody>
               {paginatedIssues.length === 0 ? (
                 <TableRow>
@@ -1381,6 +1382,7 @@ export function IssuesView({
             </TableBody>
           </Table>
         </div>
+      </div>
       )}
 
       {viewMode !== 'kanban' && !isMobile && issuesPaginationControls}
