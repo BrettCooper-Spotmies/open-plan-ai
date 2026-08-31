@@ -752,3 +752,48 @@ export function validateLevels(rows: ParsedImportRow[]): Map<number, string> {
   }
   return issues;
 }
+
+/**
+ * Flags rows that would create a duplicate BOM node: a part number that's already
+ * present under the same target parent, either as one of that parent's *existing*
+ * children (re-importing a sheet after it was imported once already) or repeated
+ * more than once within the sheet itself under the same resolved parent. Reusing
+ * the same `bom_parts` catalog row (row.existingPart) is fine and intentional —
+ * this only guards against attaching it as a second sibling node.
+ * Only rows that already passed validateLevels are checked, since a level-chain
+ * error means the row's resolved parent can't be trusted.
+ */
+export function validateDuplicateParts(
+  rows: ParsedImportRow[],
+  levelIssues: Map<number, string>,
+  // Nodes that already sit where this import's level-0 rows would land — the
+  // target parent's existing children, or the BOM's existing top-level nodes
+  // when importing with no parent (see BOMImportSubcomponentsDialog).
+  existingSiblings: BOMNode[],
+): Map<number, string> {
+  const issues = new Map<number, string>();
+  const rootKey = '__root__';
+  // parentKeyStack[N] = the key of the parent that level-N rows attach to.
+  const parentKeyStack: string[] = [rootKey];
+  const seenByParent = new Map<string, Set<string>>([
+    [rootKey, new Set(existingSiblings.map(c => c.pn.trim().toLowerCase()))],
+  ]);
+
+  for (const row of rows) {
+    if (row.errors.length > 0 || levelIssues.has(row.rowNumber)) continue;
+    const parentKey = parentKeyStack[row.level] ?? rootKey;
+    const pnKey = row.partNumber.trim().toLowerCase();
+    const seen = seenByParent.get(parentKey) ?? new Set<string>();
+    if (pnKey && seen.has(pnKey)) {
+      issues.set(row.rowNumber, `${row.partNumber} already exists under this parent`);
+    } else if (pnKey) {
+      seen.add(pnKey);
+      seenByParent.set(parentKey, seen);
+    }
+    // This row becomes the parent for deeper rows — keyed by its own row number
+    // since it has no real id yet.
+    parentKeyStack[row.level + 1] = `row:${row.rowNumber}`;
+    parentKeyStack.length = row.level + 2;
+  }
+  return issues;
+}

@@ -2036,6 +2036,7 @@ export function BOMView({
           onClose={() => { setAddImportOpen(false); onAddClose?.(); }}
           projectId={projectId}
           orgId={orgId}
+          rootNodes={rootNodes}
           onImported={expandNodes}
         />
       )}
