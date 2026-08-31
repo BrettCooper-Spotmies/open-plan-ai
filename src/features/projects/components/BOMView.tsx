@@ -1285,13 +1285,20 @@ export function BOMView({
     prevAddOpen.current = addOpen;
   }, [addOpen]);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
   const [rejectTarget, setRejectTarget] = useState<BOMNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BOMNode | null>(null);
   const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('bom_view') as ViewMode) ?? 'list');
   const [filterOpen, setFilterOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [filters, setFilters] = useState<BOMFilters>({ ...EMPTY_FILTERS });
+  // The toolbar's All/Approved/Pending/Rejected quick-tab is a single-select shortcut
+  // over the same status filter the drawer's Status chips edit — it reads/writes
+  // filters.statuses directly instead of keeping its own state, so the two controls
+  // can never disagree (e.g. tab="Approved" + drawer chip="Pending" would otherwise
+  // AND together into an always-empty result with no indication why).
+  const filterStatus: 'all' | BOMStatus = filters.statuses.length === 1 ? filters.statuses[0] : 'all';
+  const setFilterStatus = (id: 'all' | BOMStatus) =>
+    setFilters(f => ({ ...f, statuses: id === 'all' ? [] : [id] }));
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem('bom_expanded');
     if (saved) { try { return JSON.parse(saved); } catch { /* ignore */ } }
@@ -1580,7 +1587,6 @@ export function BOMView({
     const q = search.toLowerCase();
     if (q && !(row.pn.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.desc.toLowerCase().includes(q) ||
       row.manufacturer.toLowerCase().includes(q) || row.mpn.toLowerCase().includes(q))) return false;
-    if (filterStatus !== 'all' && row.status !== filterStatus) return false;
     if (filters.statuses.length && !filters.statuses.includes(row.status)) return false;
     if (filters.units.length && !filters.units.includes(row.uom)) return false;
     if (filters.manufacturers.length && !filters.manufacturers.includes(row.manufacturer)) return false;
@@ -1601,9 +1607,9 @@ export function BOMView({
       }
     }
     return true;
-  }, [search, filterStatus, filters]);
+  }, [search, filters]);
 
-  const filtersActive = !!search || filterStatus !== 'all' || activeCount > 0;
+  const filtersActive = !!search || activeCount > 0;
 
   const listRows = useMemo(() => {
     if (!filtersActive) return bomFlatten(rootNodes, expanded);
