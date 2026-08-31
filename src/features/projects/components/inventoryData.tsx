@@ -25,6 +25,8 @@ export interface StockRecord {
   partId: string;   // links to ApiPartResponse.id in the real Parts catalog
   pn: string;
   name: string;
+  mpn?: string;
+  manufacturer?: string;
   cat: BOMCategory;
   onHand: number;
   allocated: number;

@@ -10,6 +10,8 @@ export interface ApiStockRecord {
   partId: string;
   pn: string;
   name: string;
+  mpn: string | null;
+  manufacturer: string | null;
   cat: string;
   imageUrl: string | null;
   onHand: number;
@@ -129,6 +131,8 @@ export function fromApiStock(r: ApiStockRecord): StockRecord {
     partId: r.partId,
     pn: r.pn,
     name: r.name,
+    mpn: r.mpn ?? undefined,
+    manufacturer: r.manufacturer ?? undefined,
     cat: r.cat,
     onHand: r.onHand,
     allocated: r.allocated,
