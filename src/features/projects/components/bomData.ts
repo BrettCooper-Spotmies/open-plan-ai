@@ -620,6 +620,21 @@ export function parseSubcomponentImportRows(
   rows: Record<string, unknown>[],
   existingParts: ApiPartResponse[],
 ): ParsedImportRow[] {
+  // Sheets get imported under a parent that already exists in the BOM (the dialog's
+  // target part), so users naturally treat that parent as an implicit "level 0" and
+  // number every direct sub-component 1, 2, 3… instead of restarting at 0. That's
+  // still a valid, flat/nested hierarchy — just uniformly shifted — so normalize by
+  // the lowest well-formed level actually present instead of requiring literal 0.
+  const parsedLevels = rows.map((row) => {
+    const levelRaw = pickField(row, colAliases('Level'));
+    if (levelRaw === '') return { valid: true, level: 0 };
+    const n = parseInt(levelRaw, 10);
+    const valid = Number.isInteger(n) && n >= 0 && String(n) === levelRaw.trim();
+    return { valid, level: valid ? n : 0 };
+  });
+  const validLevels = parsedLevels.filter(r => r.valid).map(r => r.level);
+  const levelOffset = validLevels.length > 0 ? Math.min(...validLevels) : 0;
+
   return rows.map((row, i) => {
     const errors: string[] = [];
 
@@ -630,7 +645,7 @@ export function parseSubcomponentImportRows(
       if (!Number.isInteger(n) || n < 0 || String(n) !== levelRaw.trim()) {
         errors.push('Level must be a non-negative integer');
       } else {
-        level = n;
+        level = n - levelOffset;
       }
     }
 
