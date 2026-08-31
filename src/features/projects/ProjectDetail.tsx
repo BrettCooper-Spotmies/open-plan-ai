@@ -1463,6 +1463,13 @@ export default function ProjectDetail() {
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => navigate(`/projects/${id}/${v}`)} className="w-full">
+          {/* Nothing inside this bar renders once a part/ECO detail or mobile module
+              detail is open (both conditional blocks below check the same three
+              flags) — so gate the sticky wrapper itself too. Otherwise it still
+              occupies its padding+border as an empty strip pinned at top:0,
+              overlapping whatever scrolls underneath it (e.g. BOMDetailScreen's
+              own header, which scrolls in its own inner container). */}
+          {!partId && !ecoId && !isMobileModuleDetailOpen && (
           <div ref={setStickyHeaderEl} className="sticky top-0 z-20 bg-background -mx-4 px-4 pt-2.5 pb-2.5 border-b md:pt-0 md:mx-0 md:px-0 md:pb-2.5 will-change-transform">
             {!partId && !ecoId && !isMobileModuleDetailOpen && (
               <div className="flex flex-row md:items-center justify-between gap-2 w-full pb-1">
@@ -1823,6 +1830,7 @@ export default function ProjectDetail() {
               </div>
             )}
           </div>
+          )}
 
           <TabsContent value="tasks" className="mt-6">
             <TasksSection
