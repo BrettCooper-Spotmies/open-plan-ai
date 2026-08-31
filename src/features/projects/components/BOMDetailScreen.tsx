@@ -1015,37 +1015,48 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   </button>
                 </div>
               ) : (
-                children.map((c, i) => (
-                  <div
-                    key={c.id}
-                    onClick={() => onNavigate(c.id)}
-                    className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors"
-                    style={{ borderBottom: i < children.length - 1 ? '1px solid var(--border)' : undefined }}
-                  >
-                    <PartImageThumb nodeId={c.id} cat={c.cat} size={34} />
-                    <div className="flex-1 min-w-0">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="text-sm font-medium text-foreground truncate">{c.name || c.desc}</div>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-sm break-words">{c.name || c.desc}</TooltipContent>
-                      </Tooltip>
-                      <div className="text-[11px] font-medium font-mono text-muted-foreground truncate">{c.pn}</div>
+                // Each row is ~54px (34px thumb + py-2.5 padding) — 324px caps the
+                // list at 6 visible rows before it scrolls internally, so a part
+                // with many sub-components doesn't push the rest of the page down.
+                <div className="max-h-[324px] overflow-y-auto">
+                  {children.map((c, i) => (
+                    <div
+                      key={c.id}
+                      onClick={() => onNavigate(c.id)}
+                      className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors"
+                      style={{ borderBottom: i < children.length - 1 ? '1px solid var(--border)' : undefined }}
+                    >
+                      <PartImageThumb nodeId={c.id} cat={c.cat} size={34} />
+                      <div className="flex-1 min-w-0">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="text-sm font-medium text-foreground truncate">{c.name || c.desc}</div>
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-sm break-words">{c.name || c.desc}</TooltipContent>
+                        </Tooltip>
+                        <div className="text-[11px] font-medium font-mono text-muted-foreground truncate">{c.pn}</div>
+                      </div>
+                      <span className="text-xs text-muted-foreground tabular-nums shrink-0">{c.qty} {c.uom}</span>
+                      <span className="text-sm text-foreground tabular-nums w-20 text-right shrink-0">{formatCurrency(c.price)}</span>
+                      <BOMStatusPill status={c.status} />
+                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
                     </div>
-                    <span className="text-xs text-muted-foreground tabular-nums shrink-0">{c.qty} {c.uom}</span>
-                    <span className="text-sm text-foreground tabular-nums w-20 text-right shrink-0">{formatCurrency(c.price)}</span>
-                    <BOMStatusPill status={c.status} />
-                    <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </Card>
 
-            {/* Where Used — always visible */}
+            {/* Where Used — always visible.
+                `path` is the full root→node ancestor chain (bomPath), so dropping
+                the last entry (the node itself) leaves just its parents. Empty
+                means this node has no parent, i.e. it's a top-level assembly. */}
             <Card title="Where Used">
               {path.slice(0, -1).length === 0 ? (
                 <p className="text-xs text-muted-foreground">This is the top-level assembly — not used inside any other part.</p>
               ) : (
+                // Breadcrumb trail: each ancestor is a clickable chip that navigates
+                // up to it, followed by a chevron; the current node is appended last
+                // as a non-clickable chip so the whole path reads root → ... → here.
                 <div className="flex items-center gap-2 flex-wrap">
                   {path.slice(0, -1).map((p) => (
                     <div key={p.id} className="flex items-center gap-2">
