@@ -27,7 +27,7 @@ import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useAuth } from '@/contexts/AuthContext';
 import { BOMSendForReviewModal } from './BOMSendForReviewModal';
 import { BOMApprovalReviewCard } from './BOMApprovalReviewCard';
-import { uploadBomDocumentFile, addBomDocumentLink, useBomDocuments, isImageAttachment } from '@/hooks/useBomDocuments';
+import { uploadBomDocumentFile, addBomDocumentLink, deleteBomDocument, useBomDocuments, isImageAttachment, type BomAttachment } from '@/hooks/useBomDocuments';
 import { useCurrency } from '@/hooks/useCurrency';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { useBomNotes, useAddBomNote, useUpdateBomNote, useDeleteBomNote } from '@/hooks/useBomNotes';
@@ -39,12 +39,18 @@ function getInitials(name: string | undefined | null): string {
   return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
-async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
+// `existingDocs` is the attachment set the server had *before* this save — anything in
+// there that's no longer present in the payload (removed, or swapped for a new file/url)
+// must be explicitly deleted, since dropping it from local state alone never reaches the backend.
+async function saveBomDocs(nodeId: string, payload: BOMPartPayload, existingDocs: BomAttachment[] = []) {
   const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? []), ...(payload.docCustom ?? [])].filter(Boolean) as DocValue[];
   const newDocs = docs.filter(d => d.kind !== 'existing');
-  await Promise.allSettled(
-    newDocs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName)),
-  );
+  const keptIds = new Set(docs.filter(d => d.kind === 'existing').map(d => d.id));
+  const removedDocs = existingDocs.filter(d => !keptIds.has(d.id));
+  await Promise.allSettled([
+    ...removedDocs.map(d => deleteBomDocument(d.id)),
+    ...newDocs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName)),
+  ]);
 }
 
 // ── Add Sub-component Dialog ───────────────────────────────────────
@@ -613,7 +619,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       ]);
     }
     // Upload any documents attached in the edit form
-    await saveBomDocs(originalNode.id, payload);
+    await saveBomDocs(originalNode.id, payload, nodeDocs ?? []);
     queryClient.invalidateQueries({ queryKey: ['bom-documents', originalNode.id] });
 
     // Sync requirement traceability links
