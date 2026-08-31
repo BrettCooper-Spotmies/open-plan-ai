@@ -83,6 +83,7 @@ export interface ApiBuildBomLine {
   pn: string;
   name: string;
   cat: string;
+  imageUrl: string | null;
   qtyPerUnit: number;
   uom: string;
   onHand: number;
@@ -208,6 +209,7 @@ export function fromApiBuildBomLine(r: ApiBuildBomLine): BuildBomLine {
     pn: r.pn,
     name: r.name,
     cat: r.cat as BuildBomLine['cat'],
+    imageUrl: resolveFileUrl(r.imageUrl) ?? undefined,
     qtyPerUnit: r.qtyPerUnit,
     uom: r.uom,
     onHand: r.onHand,
