@@ -49,6 +49,12 @@ function toNodeStatus(status: BOMStatus): 'approved' | 'pending' | 'draft' {
   return status === 'rejected' ? 'pending' : status;
 }
 
+// The Part's initial revision has no 'draft'/'rejected' state — only the BOM
+// node does (see toNodeStatus above). Narrow to what createPart's DTO accepts.
+function toInitialRevisionStatus(status: BOMStatus): 'approved' | 'pending' {
+  return status === 'approved' ? 'approved' : 'pending';
+}
+
 function softTint(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
   return `rgba(${r},${g},${b},${alpha})`;
@@ -1378,7 +1384,7 @@ export function BOMView({
         distributor: payload.distributor || undefined,
         mpn: payload.mpn || undefined,
         unit: payload.uom,
-        initialStatus: payload.status,
+        initialStatus: toInitialRevisionStatus(payload.status),
         initialRev: payload.rev,
         initialPrice: payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
@@ -1422,7 +1428,7 @@ export function BOMView({
         distributor: payload.distributor || undefined,
         mpn: payload.mpn || undefined,
         unit: payload.uom,
-        initialStatus: payload.status,
+        initialStatus: toInitialRevisionStatus(payload.status),
         initialRev: payload.rev,
         initialPrice: payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
@@ -2013,6 +2019,7 @@ export function BOMView({
           open={!!createSubNode}
           onClose={() => setCreateSubNode(null)}
           onSave={handleAddSubcomponent}
+          isSubPart
         />
       )}
 
