@@ -73,15 +73,30 @@ export interface BOMNode {
   _reqLinks?: ApiReqLinkResponse[];  // raw requirement links (id + requirementId) — needed to remove a link by id
 }
 
+export type LeadTimeOp = 'any' | 'lt' | 'gt' | 'eq';
+export type LeadTimeUnit = 'days' | 'weeks' | 'months';
+
 export const EMPTY_FILTERS = {
-  priceMin: '', priceMax: '', leadMin: '', leadMax: '',
+  priceMin: '', priceMax: '',
+  leadOp: 'any' as LeadTimeOp,
+  leadValue: '',
+  leadUnit: 'days' as LeadTimeUnit,
   units: [] as string[], suppliers: [] as string[],
   manufacturers: [] as string[], statuses: [] as BOMStatus[],
+  categories: [] as string[],
   owners: [] as string[],
   bomType: 'all' as 'all' | 'top' | 'catalog',
   mpn: '',
 };
 export type BOMFilters = typeof EMPTY_FILTERS;
+
+// Converts a lead-time filter value in weeks/months to days — BOMNode.leadTime is
+// always stored in days, so comparisons need a common unit.
+export function leadTimeValueToDays(value: number, unit: LeadTimeUnit): number {
+  if (unit === 'weeks') return value * 7;
+  if (unit === 'months') return value * 30;
+  return value;
+}
 
 // ── Category metadata ─────────────────────────────────────────────
 export const BOM_CAT_META: Record<BOMCategory, { tint: string; label: string; iconName: string }> = {
