@@ -1442,9 +1442,10 @@ export default function ProjectDetail() {
 
   const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'wont-fix').length || 0;
   const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'wont-fix').length || 0;
+  const openTasksCount = project.tasks?.filter(t => t.status !== 'done').length || 0;
 
   const tabBadges: Partial<Record<ProjectTabId, { count: number; variant: 'secondary' | 'destructive' }>> = {
-    tasks: { count: (project.tasks || []).length, variant: 'secondary' },
+    tasks: { count: openTasksCount, variant: 'secondary' },
     modules: { count: modules.length, variant: 'secondary' },
     milestones: { count: (project.milestones || []).length, variant: 'secondary' },
     ...(openIssuesCount > 0
