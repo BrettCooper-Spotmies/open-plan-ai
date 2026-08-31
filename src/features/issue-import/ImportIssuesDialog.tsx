@@ -49,7 +49,13 @@ function toFriendlyImportError(errorSummary: string | null | undefined): string 
     return 'We couldn’t understand this file as an issue list. Try uploading a clearer issue document, spreadsheet, or CSV with issue titles and optional assignee, severity, or category columns.';
   }
 
-  if (normalized.includes('not relevant') || normalized.includes('doesn\'t appear to actually contain issue data') || normalized.includes('no reported issues')) {
+  if (
+    normalized.includes('not relevant') ||
+    normalized.includes('doesn\'t look like it describes issues') ||
+    normalized.includes('doesn\'t look like an issue list') ||
+    normalized.includes('no reported issues') ||
+    normalized.includes('no issues could be found')
+  ) {
     return 'This file doesn’t seem to contain importable issues. Try a file that clearly lists reported problems or defects.';
   }
 
@@ -322,7 +328,7 @@ export function ImportIssuesDialog({ open, onClose, projectId }: Props) {
             </div>
           )}
 
-          {stage === 'chat' && isProcessing && (
+          {stage === 'chat' && isProcessing && !isFailed && (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
               <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
               <p className="text-sm text-muted-foreground">

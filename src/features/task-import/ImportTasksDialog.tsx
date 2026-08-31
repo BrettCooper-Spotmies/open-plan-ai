@@ -50,7 +50,13 @@ function toFriendlyImportError(errorSummary: string | null | undefined): string 
     return 'We couldn’t understand this file as a task list. Try uploading a clearer task document, spreadsheet, or CSV with task names and optional assignee, due date, or priority columns.';
   }
 
-  if (normalized.includes('not relevant') || normalized.includes('doesn\'t appear to actually contain task data') || normalized.includes('no actionable items')) {
+  if (
+    normalized.includes('not relevant') ||
+    normalized.includes('doesn\'t look like it describes tasks') ||
+    normalized.includes('doesn\'t look like a task list') ||
+    normalized.includes('no actionable tasks') ||
+    normalized.includes('no tasks could be found')
+  ) {
     return 'This file doesn’t seem to contain importable tasks. Try a file that clearly lists task names or action items.';
   }
 
@@ -344,7 +350,7 @@ export function ImportTasksDialog({ open, onClose, projectId }: Props) {
             </div>
           )}
 
-          {stage === 'chat' && isProcessing && (
+          {stage === 'chat' && isProcessing && !isFailed && (
             <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
               <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
