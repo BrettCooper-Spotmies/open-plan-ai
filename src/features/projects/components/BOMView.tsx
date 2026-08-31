@@ -1634,7 +1634,14 @@ export function BOMView({
     // (the row still exists, just deleted) but never appear in the live tree.
     // Part number is the one thing guaranteed unique among *live* parts, so it
     // is the most reliable fallback once the id-based lookups come up empty.
-    const node = (selected && bomFind(selected, rootNodes))
+    const selectedNode = selected ? bomFind(selected, rootNodes) : null;
+    // bomNodeId and partId are captured together as a pair (e.g. by an ECO's
+    // affected-parts snapshot) and should agree. A node id can still resolve
+    // in the live tree yet have since been reassigned to a different part —
+    // trust it only when the two actually match, otherwise fall through to
+    // resolving by the part id/number directly so a stale node id can't
+    // silently surface the wrong part.
+    const node = (selectedNode && (!fallbackPartId || selectedNode._partId === fallbackPartId) ? selectedNode : null)
       || (fallbackPartId ? allNodes.find(n => n._partId === fallbackPartId) ?? null : null)
       || (fallbackPn ? allNodes.find(n => n.pn === fallbackPn) ?? null : null);
     if (node) return (

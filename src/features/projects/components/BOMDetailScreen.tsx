@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -20,6 +21,9 @@ import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, bomCountAll, de
 import { BOMStatusPill, ReqTag, PartThumb, PartImageThumb, ImageViewerModal } from './BOMShared';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
+import { StatusPill } from './ECOShared';
+import { fromApiEcoByPart, statusMeta } from './ecoData';
+import { useEcosByPart } from '@/hooks/useECOs';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { usePartRevisions, useCreatePart, useUpdatePart, useCreateRevision } from '@/hooks/useParts';
 import { useCreateBomNode, useUpdateBomNode, useDeleteBomNode, useAddRequirement, useRemoveRequirement, useCreateApprovalRequest, useDecideApprovalRequest, useBomNodeApprovals, useBomApprovalRequests, useActiveBomApprovalRequest } from '@/hooks/useBom';
@@ -452,6 +456,11 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const { formatCurrency } = useCurrency();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
+
+  // ── Engineering Changes that reference this part ──
+  const { data: apiRelatedEcos, isLoading: relatedEcosLoading } = useEcosByPart(projectId, originalNode._partId);
+  const relatedEcos = useMemo(() => (apiRelatedEcos ?? []).map(fromApiEcoByPart), [apiRelatedEcos]);
 
   // ── Uploaded documents — pull the product photo (first image attachment) ──
   const { data: nodeDocs } = useBomDocuments(originalNode.id);
@@ -1298,6 +1307,50 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
 
             {/* Documents */}
             <BOMDocuments nodeId={originalNode.id} />
+
+            {/* Engineering Changes referencing this part */}
+            <Card
+              title="Engineering Changes"
+              action={relatedEcos.length > 0 && (
+                <span className="text-[11px] text-muted-foreground">{relatedEcos.length}</span>
+              )}
+              noPad
+            >
+              {relatedEcosLoading ? (
+                <div className="p-4 flex flex-col gap-2">
+                  <Skeleton className="h-9 w-full rounded-lg" />
+                  <Skeleton className="h-9 w-full rounded-lg" />
+                </div>
+              ) : relatedEcos.length === 0 ? (
+                <div className="p-4 text-xs text-muted-foreground text-center">
+                  No ECOs reference this part yet
+                </div>
+              ) : (
+                <div className="flex flex-col divide-y divide-border">
+                  {relatedEcos.map(eco => (
+                    <button
+                      key={eco.id}
+                      onClick={() => navigate(`/projects/${projectId}/eng-changes/${eco.id}`)}
+                      className="flex items-center justify-between gap-2 px-4 py-2.5 text-left hover:bg-muted/60 transition-colors cursor-pointer"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[12.5px] font-semibold text-foreground font-mono">{eco.num}</span>
+                          <StatusPill meta={statusMeta(eco.status)} />
+                        </div>
+                        <div className="text-[11.5px] text-muted-foreground truncate mt-0.5">{eco.title}</div>
+                        {(eco.revFrom || eco.revTo) && (
+                          <div className="text-[10.5px] text-muted-foreground/70 font-mono mt-0.5">
+                            Rev {eco.revFrom || '—'} → {eco.revTo || '—'}
+                          </div>
+                        )}
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </Card>
           </div>
         </div>
       </div>
