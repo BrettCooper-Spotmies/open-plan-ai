@@ -339,6 +339,9 @@ const Field = ({ label, children, mono }: { label: string; children: React.React
   </div>
 );
 
+// Toggle to bring the "Where Used" card back — see its usage below.
+const SHOW_WHERE_USED = false;
+
 const Card = ({ title, action, children, noPad }: {
   title?: string; action?: React.ReactNode; children: React.ReactNode; noPad?: boolean;
 }) => (
@@ -1046,10 +1049,11 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
               )}
             </Card>
 
-            {/* Where Used — always visible.
-                `path` is the full root→node ancestor chain (bomPath), so dropping
-                the last entry (the node itself) leaves just its parents. Empty
-                means this node has no parent, i.e. it's a top-level assembly. */}
+            {/* Where Used — hidden per request (kept, not deleted, in case it's
+                wanted back). Same `path` data as the Hierarchy card below; the
+                "top-level assembly" message it showed was confusing right next
+                to Hierarchy's own breadcrumb of the same node. */}
+            {SHOW_WHERE_USED && (
             <Card title="Where Used">
               {path.slice(0, -1).length === 0 ? (
                 <p className="text-xs text-muted-foreground">This is the top-level assembly — not used inside any other part.</p>
@@ -1077,6 +1081,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                 </div>
               )}
             </Card>
+            )}
 
             {/* Requirements traceability */}
             <Card title="Requirements Traceability">
