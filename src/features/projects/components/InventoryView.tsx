@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import {
   Search, Table as TableIcon, LayoutGrid, Download, Pencil, PackageSearch,
   AlertTriangle, Truck, CheckCircle, Lock, Boxes as BoxesIcon, Layers, SlidersHorizontal, ShoppingCart, Clock,
+  ChevronDown,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -255,6 +256,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
   const [search, setSearch] = useState('');
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [categoriesExpanded, setCategoriesExpanded] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'cards'>(isMobile ? 'cards' : 'table');
   const [receiveOpen, setReceiveOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
@@ -677,34 +679,52 @@ export function InventoryView({ orgId }: InventoryViewProps) {
               </div>
 
               {!isMobile && (
-                <div className="flex gap-1.5 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0 sm:flex-wrap pb-0.5">
-                  <button
-                    onClick={() => setCategoryFilter('all')}
+                <div className="flex items-start gap-1">
+                  <div
                     className={cn(
-                      'shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors',
-                      categoryFilter === 'all'
-                        ? 'bg-foreground text-background border-foreground'
-                        : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
+                      'flex gap-1.5 -mx-4 px-4 sm:mx-0 sm:px-0 pb-0.5',
+                      categoriesExpanded
+                        ? 'flex-wrap'
+                        : 'overflow-x-auto no-scrollbar flex-nowrap'
                     )}
                   >
-                    All categories
+                    <button
+                      onClick={() => setCategoryFilter('all')}
+                      className={cn(
+                        'shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors',
+                        categoryFilter === 'all'
+                          ? 'bg-foreground text-background border-foreground'
+                          : 'bg-background text-muted-foreground border-input hover:bg-accent hover:text-accent-foreground'
+                      )}
+                    >
+                      All categories
+                    </button>
+                    {allCategories.map((cat) => {
+                      const meta = getCategoryMeta(cat);
+                      const active = categoryFilter === cat;
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => setCategoryFilter(cat)}
+                          className="shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors"
+                          style={active
+                            ? { background: meta.tint, color: '#fff', borderColor: meta.tint }
+                            : { background: 'transparent', color: meta.tint, borderColor: `${meta.tint}40` }}
+                        >
+                          {meta.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setCategoriesExpanded((v) => !v)}
+                    aria-label={categoriesExpanded ? 'Show fewer categories' : 'Show all categories'}
+                    aria-expanded={categoriesExpanded}
+                    title={categoriesExpanded ? 'Show fewer categories' : 'Show all categories'}
+                    className="shrink-0 mt-0.5 p-1 rounded-full border border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+                  >
+                    <ChevronDown className={cn('w-3.5 h-3.5 transition-transform', categoriesExpanded && 'rotate-180')} />
                   </button>
-                  {allCategories.map((cat) => {
-                    const meta = getCategoryMeta(cat);
-                    const active = categoryFilter === cat;
-                    return (
-                      <button
-                        key={cat}
-                        onClick={() => setCategoryFilter(cat)}
-                        className="shrink-0 px-3 py-1 rounded-full text-xs font-medium border transition-colors"
-                        style={active
-                          ? { background: meta.tint, color: '#fff', borderColor: meta.tint }
-                          : { background: 'transparent', color: meta.tint, borderColor: `${meta.tint}40` }}
-                      >
-                        {meta.label}
-                      </button>
-                    );
-                  })}
                 </div>
               )}
 
