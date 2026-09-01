@@ -33,11 +33,15 @@ export interface ImportRowPreview {
   issues: string[];
   /** false only when the row is missing its required title (or was explicitly skipped in chat) — every other issue is informational and still imports. */
   importable: boolean;
+  /** true when an issue with this title already exists in the project — skipped on commit, not re-created. */
+  alreadyImported: boolean;
 }
 
 export interface ImportProposalPreview {
   itemCount: number;
   cleanCount: number;
+  /** Rows skipped because an issue with the same title already exists — a subset of (itemCount - cleanCount). */
+  duplicateCount: number;
   rows: ImportRowPreview[];
 }
 

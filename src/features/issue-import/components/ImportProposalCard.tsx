@@ -36,8 +36,12 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
   // A row is only ever blocked by a missing title (or an explicit skip) —
   // everything else (unmatched assignee/module, unrecognized severity/
   // category) is a note: the row still imports, just without that optional
-  // field set.
+  // field set. Rows whose title already exists in the project are a separate
+  // bucket — skipped, but nothing the user needs to "fix".
+  const duplicateCount = preview.duplicateCount ?? preview.rows.filter((r) => r.alreadyImported).length;
   const blockedCount = preview.itemCount - preview.cleanCount;
+  const missingTitleCount = blockedCount - duplicateCount;
+  const allAlreadyImported = duplicateCount > 0 && duplicateCount === preview.itemCount;
   const advisoryCount = preview.rows.filter((r) => r.importable && r.issues.length > 0).length;
   const hasWarnings = advisoryCount > 0;
 
@@ -59,10 +63,20 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
             <XCircle className="h-3 w-3" />
             Failed
           </Badge>
-        ) : blockedCount > 0 ? (
+        ) : allAlreadyImported ? (
+          <Badge variant="outline" className="gap-1.5 text-muted-foreground py-1">
+            <CheckCircle2 className="h-3 w-3" />
+            Already imported
+          </Badge>
+        ) : missingTitleCount > 0 ? (
           <Badge variant="outline" className="gap-1.5 text-destructive border-destructive/40 py-1">
             <XCircle className="h-3 w-3" />
-            {blockedCount} blocked
+            {missingTitleCount} blocked
+          </Badge>
+        ) : duplicateCount > 0 ? (
+          <Badge variant="outline" className="gap-1.5 text-amber-600 border-amber-300 py-1">
+            <AlertCircle className="h-3 w-3" />
+            {duplicateCount} already imported
           </Badge>
         ) : advisoryCount > 0 ? (
           <Badge variant="outline" className="gap-1.5 text-amber-600 border-amber-300 py-1">
@@ -80,7 +94,7 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
       {showRows ? (
         <div className={cn('overflow-y-auto rounded-lg border divide-y', compact ? 'max-h-40' : 'max-h-72')}>
           {preview.rows.map((row, i) => (
-            <div key={i} className={cn(compact ? 'p-3 text-sm flex flex-col gap-1' : 'p-3.5 text-sm flex flex-col gap-1.5', !row.importable && 'bg-destructive/5')}>
+            <div key={i} className={cn(compact ? 'p-3 text-sm flex flex-col gap-1' : 'p-3.5 text-sm flex flex-col gap-1.5', row.alreadyImported ? 'bg-muted/60' : !row.importable && 'bg-destructive/5')}>
               <div className="flex items-center justify-between gap-3">
                 <span className={cn('font-medium truncate', compact && 'text-[13px]')}>{row.title}</span>
                 {row.severity && (
@@ -101,10 +115,12 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
                 <div
                   className={cn(
                     compact ? 'text-[11px] flex items-start gap-1.5 pt-0.5' : 'text-xs flex items-start gap-1.5 pt-0.5',
-                    row.importable ? 'text-amber-600' : 'text-destructive',
+                    row.alreadyImported ? 'text-muted-foreground' : row.importable ? 'text-amber-600' : 'text-destructive',
                   )}
                 >
-                  {row.importable ? (
+                  {row.alreadyImported ? (
+                    <CheckCircle2 className="h-3 w-3 mt-0.5 shrink-0" />
+                  ) : row.importable ? (
                     <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
                   ) : (
                     <XCircle className="h-3 w-3 mt-0.5 shrink-0" />
@@ -144,13 +160,17 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
       {isPending && (
         <div className="flex items-center justify-between gap-3 pt-1 animate-fade-in">
           <span className={cn('text-xs text-muted-foreground leading-relaxed', compact && 'text-[11px]')}>
-            {blockedCount > 0
-              ? `${preview.cleanCount} will be imported now, ${blockedCount} blocked until fixed`
-              : hasWarnings
-                ? `Resolve the noted rows before importing all ${preview.itemCount} issue${preview.itemCount === 1 ? '' : 's'}`
-                : `All ${preview.itemCount} will be imported`}
+            {allAlreadyImported
+              ? `All ${preview.itemCount} issue${preview.itemCount === 1 ? '' : 's'} in this file ${preview.itemCount === 1 ? 'is' : 'are'} already in this project — nothing to import.`
+              : missingTitleCount > 0
+                ? `${preview.cleanCount} will be imported now, ${missingTitleCount} blocked until fixed${duplicateCount > 0 ? `, ${duplicateCount} already imported` : ''}`
+                : duplicateCount > 0
+                  ? `${preview.cleanCount} will be imported now, ${duplicateCount} already imported and skipped`
+                  : hasWarnings
+                    ? `Resolve the noted rows before importing all ${preview.itemCount} issue${preview.itemCount === 1 ? '' : 's'}`
+                    : `All ${preview.itemCount} will be imported`}
           </span>
-          {!hasWarnings && (
+          {!hasWarnings && !allAlreadyImported && (
             <Button size="sm" onClick={onCommit} disabled={committing || preview.cleanCount === 0} className="shrink-0">
               {committing && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
               Import {preview.cleanCount} issue{preview.cleanCount === 1 ? '' : 's'}
