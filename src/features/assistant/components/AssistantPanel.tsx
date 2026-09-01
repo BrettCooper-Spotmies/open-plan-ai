@@ -107,7 +107,7 @@ export function AssistantPanel({
   // warm, so this is free.
   const { data: allConversations = [] } = useAssistantConversations();
   const activeConversationSummary = conversationId
-    ? allConversations.find((c) => c.id === conversationId)
+    ? allConversations.find((c) => c?.id === conversationId)
     : undefined;
   const isActiveConversationLocked =
     !!activeConversationSummary && activeConversationSummary.scope !== 'all_projects';
