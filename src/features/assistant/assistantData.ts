@@ -362,6 +362,17 @@ export interface AssistantEcoDetailCard extends AssistantDetailCardBase {
   targetDate?: string;
   owner?: string;
   originatingEcr?: string;
+  /** All below: at-a-glance ECO facts, absent on cards persisted before they existed. */
+  reason?: string;
+  /** Preformatted, e.g. "Date — 2026-09-01" / "S/N break — 1050". */
+  effectivity?: string;
+  scheduleImpact?: string;
+  /** Preformatted, e.g. "+$4.55/unit · $12,400 one-time". */
+  costImpact?: string;
+  recertRequired?: boolean;
+  firmwareCoupling?: boolean;
+  affectedPartCount?: number;
+  affectedModuleCount?: number;
 }
 
 export interface AssistantModuleDetailCard extends AssistantDetailCardBase {
@@ -562,7 +573,18 @@ export interface ProposalItemCreate {
   fields: ProposalField[];
 }
 
-export type ProposalItem = ProposalItemUpdate | ProposalItemCreate;
+/** A removal. Carries `fields` (identifying detail + what goes with it) rather than before/after changes — there is no "to" side. */
+export interface ProposalItemDelete {
+  index: number;
+  kind: 'delete';
+  title: string;
+  deepLink?: ProposalDeepLink;
+  fields: ProposalField[];
+}
+
+export type ProposalItem = ProposalItemUpdate | ProposalItemCreate | ProposalItemDelete;
+
+export type ProposalActionKind = 'create' | 'update' | 'delete' | 'mixed';
 
 export interface ProposalWarning {
   code: string;
@@ -574,7 +596,7 @@ export interface ProposalPreview {
   /** Null for a personal (no-project) task proposal — a task creation with no project signal defaults there instead of asking which project. */
   destination: { projectId: string | null; projectName: string; inferredFrom: 'explicit' | 'pinned' | 'scope' | 'personal' };
   entityType: string;
-  actionKind: 'create' | 'update' | 'mixed';
+  actionKind: ProposalActionKind;
   itemCount: number;
   noopCount: number;
   items: ProposalItem[];
@@ -584,7 +606,7 @@ export interface ProposalPreview {
 
 export interface ProposalItemResult {
   index: number;
-  kind: 'create' | 'update';
+  kind: 'create' | 'update' | 'delete';
   status: 'succeeded' | 'failed';
   entityType: string;
   entityId?: string;
@@ -638,7 +660,7 @@ export interface AssistantProposal {
   projectId: string | null;
   toolName: string;
   entityType: string;
-  actionKind: 'create' | 'update' | 'mixed';
+  actionKind: ProposalActionKind;
   preview: ProposalPreview;
   summary: string;
   warnings: string[];

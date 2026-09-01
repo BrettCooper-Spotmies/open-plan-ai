@@ -802,10 +802,11 @@ export function AssistantCardMessage({ card, createdAt, onFollowUp, readOnly }: 
               <>
                 <StatusPill status={card.status} />
                 {card.description && <p className="text-sm text-muted-foreground">{card.description}</p>}
-                {(card.priority || card.changeClass) && (
+                {(card.priority || card.changeClass || card.reason) && (
                   <div className="flex flex-wrap gap-1.5">
                     {card.priority && <TagBadge category="Priority">{titleCase(card.priority)}</TagBadge>}
                     {card.changeClass && <TagBadge category="Change Class">Class {card.changeClass}</TagBadge>}
+                    {card.reason && <TagBadge category="Reason">{titleCase(card.reason)}</TagBadge>}
                   </div>
                 )}
                 <DetailFacts>
@@ -815,6 +816,29 @@ export function AssistantCardMessage({ card, createdAt, onFollowUp, readOnly }: 
                       <Fact key="target" icon={Calendar} text={`Target ${format(target, 'MMM d')}`} />
                     ) : null;
                   })()}
+                  {card.effectivity ? <Fact key="eff" icon={Flag} text={card.effectivity} /> : null}
+                  {card.scheduleImpact ? (
+                    <Fact key="sched" icon={Clock} text={`${titleCase(card.scheduleImpact)} schedule impact`} />
+                  ) : null}
+                  {card.costImpact ? <Fact key="cost" icon={DollarSign} text={card.costImpact} /> : null}
+                  {card.affectedPartCount != null || card.affectedModuleCount ? (
+                    <Fact
+                      key="affected"
+                      icon={Package}
+                      text={[
+                        card.affectedPartCount != null
+                          ? `${card.affectedPartCount} affected part${card.affectedPartCount === 1 ? '' : 's'}`
+                          : null,
+                        card.affectedModuleCount
+                          ? `${card.affectedModuleCount} module${card.affectedModuleCount === 1 ? '' : 's'}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    />
+                  ) : null}
+                  {card.recertRequired ? <Fact key="recert" icon={ShieldAlert} text="Recertification required" /> : null}
+                  {card.firmwareCoupling ? <Fact key="fw" icon={Link2} text="Firmware dependency" /> : null}
                   {card.owner ? <PersonFact key="owner" name={card.owner} /> : null}
                   {card.originatingEcr ? <Fact key="ecr" icon={Link2} text={card.originatingEcr} /> : null}
                 </DetailFacts>
